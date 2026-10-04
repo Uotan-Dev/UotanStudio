@@ -50,9 +50,7 @@ internal static class DeliveryRecoveryUpdater
         if (!File.Exists(source)) throw new FileNotFoundException("Missing embedded Recovery updater asset.", source);
         if (!File.Exists(path) || new FileInfo(path).Length != new FileInfo(source).Length)
             File.Copy(source, path, true);
-        if (!OperatingSystem.IsWindows())
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
-                | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        DeliveryUnixPermissions.SetExecutable(path);
         return path;
     }
 

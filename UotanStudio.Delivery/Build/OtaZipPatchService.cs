@@ -2,6 +2,8 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Payload;
 
 namespace UotanStudio.Services.Delivery;
@@ -317,12 +319,11 @@ public static class OtaZipPatchService
 
         var output = Path.GetFullPath(outputPath);
         Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-        var suffix = ".tmp-" + Guid.NewGuid().ToString("N");
-        var staged = output + suffix + ".zip";
-        var provisional = output + suffix + ".provisional.zip";
-        var propertiesPath = output + suffix + ".properties";
-        var metadataPath = output + suffix + ".metadata";
-        var certificatePath = output + suffix + ".otacert";
+        var staged = TempFileHelper.CreateAdjacentPath(output) + ".zip";
+        var provisional = TempFileHelper.CreateAdjacentPath(output) + ".provisional.zip";
+        var propertiesPath = TempFileHelper.CreateAdjacentPath(output) + ".properties";
+        var metadataPath = TempFileHelper.CreateAdjacentPath(output) + ".metadata";
+        var certificatePath = TempFileHelper.CreateAdjacentPath(output) + ".otacert";
         try
         {
             var payloadProperties = await CreatePayloadPropertiesAsync(options.PayloadPath, cancellationToken)
@@ -504,7 +505,7 @@ public static class OtaZipPatchService
             throw new InvalidDataException("Replacing payload.bin also requires payload_properties.txt.");
 
         var output = Path.GetFullPath(outputPath);
-        var temporary = output + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(output);
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(output)!);
@@ -639,9 +640,13 @@ public static class OtaZipPatchService
                         && metadataHash.Length > 0)
                     {
                         using var metadataInput = payload.Open();
-                        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                        CopyExactly(metadataInput, new HashingStream(hash), actualMetadataSize);
-                        var actualMetadataHash = Convert.ToBase64String(hash.GetHashAndReset());
+                        using var hashSink = new HashingWriteStream(Stream.Null, leaveOpen: true);
+                        try { StreamCopy.CopyExactly(metadataInput, hashSink, actualMetadataSize); }
+                        catch (EndOfStreamException)
+                        {
+                            throw new EndOfStreamException("Unexpected end of Payload while reading manifest.");
+                        }
+                        var actualMetadataHash = Convert.ToBase64String(hashSink.GetHashAndReset());
                         if (!string.Equals(actualMetadataHash, metadataHash, StringComparison.Ordinal))
                             errors.Add("METADATA_HASH does not match the CrAU manifest bytes.");
                     }
@@ -660,10 +665,10 @@ public static class OtaZipPatchService
                 errors.Add($"FILE_SIZE={declaredSize} does not match payload.bin length {fileSize}.");
             if (properties.TryGetValue("FILE_HASH", out var declaredHash) && declaredHash.Length > 0)
             {
-                using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                using var hashSink = new HashingWriteStream(Stream.Null, leaveOpen: true);
                 using var hashInput = payload.Open();
-                hashInput.CopyTo(new HashingStream(hash));
-                var actualHash = Convert.ToBase64String(hash.GetHashAndReset());
+                hashInput.CopyTo(hashSink);
+                var actualHash = Convert.ToBase64String(hashSink.GetHashAndReset());
                 if (!string.Equals(actualHash, declaredHash, StringComparison.Ordinal))
                     errors.Add("FILE_HASH does not match payload.bin.");
             }
@@ -713,15 +718,22 @@ public static class OtaZipPatchService
         }
 
         input.Position = 0;
-        using var metadataHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        await CopyExactlyAsync(input, new HashingStream(metadataHash), checked((long)metadataSize), cancellationToken)
-            .ConfigureAwait(false);
+        using var metadataSink = new HashingWriteStream(Stream.Null, leaveOpen: true);
+        try
+        {
+            await StreamCopy.CopyExactlyAsync(input, metadataSink,
+                checked((long)metadataSize), cancellationToken).ConfigureAwait(false);
+        }
+        catch (EndOfStreamException)
+        {
+            throw new EndOfStreamException("Unexpected end of Payload while hashing metadata.");
+        }
         input.Position = 0;
         var fileHash = await SHA256.HashDataAsync(input, cancellationToken).ConfigureAwait(false);
         var text =
             $"FILE_HASH={Convert.ToBase64String(fileHash)}\n" +
             $"FILE_SIZE={input.Length}\n" +
-            $"METADATA_HASH={Convert.ToBase64String(metadataHash.GetHashAndReset())}\n" +
+            $"METADATA_HASH={Convert.ToBase64String(metadataSink.GetHashAndReset())}\n" +
             $"METADATA_SIZE={metadataSize}\n";
         return (text, metadataSize);
     }
@@ -795,61 +807,4 @@ public static class OtaZipPatchService
         }
     }
 
-    private static void CopyExactly(Stream input, Stream output, long count)
-    {
-        var buffer = new byte[64 * 1024];
-        while (count > 0)
-        {
-            var read = input.Read(buffer, 0, (int)Math.Min(buffer.Length, count));
-            if (read == 0) throw new EndOfStreamException("Unexpected end of Payload while reading manifest.");
-            output.Write(buffer, 0, read);
-            count -= read;
-        }
-    }
-
-    private static async Task CopyExactlyAsync(
-        Stream input,
-        Stream output,
-        long count,
-        CancellationToken cancellationToken)
-    {
-        var buffer = new byte[64 * 1024];
-        while (count > 0)
-        {
-            var read = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, count)), cancellationToken)
-                .ConfigureAwait(false);
-            if (read == 0)
-            {
-                throw new EndOfStreamException("Unexpected end of Payload while hashing metadata.");
-            }
-            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-            count -= read;
-        }
-    }
-
-    private sealed class HashingStream(IncrementalHash hash) : Stream
-    {
-        public override bool CanRead => false;
-        public override bool CanSeek => false;
-        public override bool CanWrite => true;
-        public override long Length => 0;
-        public override long Position { get => 0; set => throw new NotSupportedException(); }
-        public override void Flush() { }
-        public override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => hash.AppendData(buffer, offset, count);
-        public override void Write(ReadOnlySpan<byte> buffer) => hash.AppendData(buffer);
-        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-        {
-            hash.AppendData(buffer, offset, count);
-            return Task.CompletedTask;
-        }
-        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            hash.AppendData(buffer.Span);
-            return ValueTask.CompletedTask;
-        }
-    }
 }

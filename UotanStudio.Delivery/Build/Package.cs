@@ -10,8 +10,10 @@ using SharpCompress.Writers;
 using SharpCompress.Writers.Zip;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.BootSecurity.Avb;
+using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.CareMap;
 using UotanStudio.Firmware.OtaDelta.Dat;
+using UotanStudio.Firmware.OtaDelta.Diff;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -183,9 +185,7 @@ internal static partial class DeliveryPackageBuilder
             Directory.CreateDirectory(meta);
             await File.WriteAllTextAsync(Path.Combine(meta, "update-binary"), plan.Scripts.GetValueOrDefault("update-binary", RecoveryScript(plan)), new UTF8Encoding(false), token);
             await File.WriteAllTextAsync(Path.Combine(meta, "updater-script"), "#Powered by UotanStudio\n", new UTF8Encoding(false), token);
-            if (!OperatingSystem.IsWindows())
-                File.SetUnixFileMode(Path.Combine(meta, "update-binary"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
-                    | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+            DeliveryUnixPermissions.SetExecutable(Path.Combine(meta, "update-binary"));
         }
     }
 
@@ -331,34 +331,11 @@ internal static partial class DeliveryPackageBuilder
         try
         {
             await using var input = File.OpenRead(source);
-            using var decoder = new BrotliDecoder();
             await using var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true);
-            var buffer = new byte[65536];
-            var decoded = new byte[65536];
-            long total = 0;
-            var available = 0;
-            var status = OperationStatus.NeedMoreData;
-            while (true)
-            {
-                token.ThrowIfCancellationRequested();
-                if (status == OperationStatus.NeedMoreData)
-                {
-                    var read = await input.ReadAsync(buffer.AsMemory(available), token);
-                    if (read == 0) throw new InvalidDataException("Truncated Brotli DAT patch.");
-                    available += read;
-                }
-                status = decoder.Decompress(buffer.AsSpan(0, available), decoded, out var consumed, out var written);
-                if (status == OperationStatus.InvalidData) throw new InvalidDataException("Invalid Brotli DAT patch.");
-                available -= consumed;
-                buffer.AsSpan(consumed, available).CopyTo(buffer);
-                total = checked(total + written);
-                if (total > 64L * 1024 * 1024 * 1024) throw new InvalidDataException("DAT patch exceeds 64 GiB.");
-                await output.WriteAsync(decoded.AsMemory(0, written), token);
-                if (status != OperationStatus.Done) continue;
-                if (available != 0 || await input.ReadAsync(buffer.AsMemory(0, 1), token) != 0)
-                    throw new InvalidDataException("Trailing data after Brotli DAT patch.");
-                return temporary;
-            }
+            await using var capped = new CappedWriteStream(output, 64L * 1024 * 1024 * 1024, token);
+            using var strict = new StrictBrotliReadStream(input);
+            await strict.CopyToAsync(capped, token);
+            return temporary;
         }
         catch { File.Delete(temporary); throw; }
     }

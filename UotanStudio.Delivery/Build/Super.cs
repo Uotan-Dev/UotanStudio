@@ -2,6 +2,7 @@ using System.Text;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Services.Delivery;
@@ -72,7 +73,7 @@ internal static class DeliverySuperBuilder
         metadata.BlockDevices[0] = metadata.BlockDevices[0] with { PartitionName = Encoding.UTF8.GetBytes(options.DeviceName) };
         _ = MetadataWriter.SerializeMetadata(metadata);
         var raw = output + ".raw-" + Guid.NewGuid().ToString("N");
-        var temporary = output + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(output);
         try
         {
             if (options.Empty)

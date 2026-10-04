@@ -119,7 +119,7 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
         if (!string.IsNullOrWhiteSpace(local))
         {
             await DeliveryOutputService.CopyFileAsync(local, Path.Combine(target, exe), token).ConfigureAwait(false);
-            SetExecutable(Path.Combine(target, exe));
+            DeliveryUnixPermissions.SetExecutable(Path.Combine(target, exe));
             return;
         }
         progress?.Report(new(75, "Preparing tools", Stage: "Delivery_ProgressTools", Detail: name + " zstd"));
@@ -146,7 +146,7 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
     {
         var cached = await AcquireAsync(package, progress, token).ConfigureAwait(false);
         await DeliveryOutputService.CopyFileAsync(cached, Path.Combine(target, fileName), token).ConfigureAwait(false);
-        SetExecutable(Path.Combine(target, fileName));
+        DeliveryUnixPermissions.SetExecutable(Path.Combine(target, fileName));
     }
 
     /// <summary>
@@ -255,14 +255,7 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
                 await output.WriteAsync(buffer.AsMemory(0, count), token).ConfigureAwait(false);
             }
             if (written != entry.Length) throw new EndOfStreamException("Tool entry truncated.");
-            SetExecutable(path);
+            DeliveryUnixPermissions.SetExecutable(path);
         }
-    }
-
-    private static void SetExecutable(string path)
-    {
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path,
-            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead
-            | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
     }
 }

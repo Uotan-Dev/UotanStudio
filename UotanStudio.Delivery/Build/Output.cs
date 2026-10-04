@@ -285,9 +285,8 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                     if (name == "updater-script" || name == "update-binary") continue;
                     var path = Path.Combine(stage, name);
                     await File.WriteAllTextAsync(path, contents, new UTF8Encoding(false), token).ConfigureAwait(false);
-                    if (!OperatingSystem.IsWindows() && name.EndsWith(".sh"))
-                        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
-                            | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+                    if (name.EndsWith(".sh"))
+                        DeliveryUnixPermissions.SetExecutable(path);
                 }
                 var payloadNotice = plan.Payload.SigningKeyPath.Length == 0 ? "Unsigned full payload. " : "RSA SHA-256 signed full payload. ";
                 var selfInstaller = plan.Recovery && !plan.PackPayload && !plan.PackSuper || plan.PackSuper && !plan.Super.Empty;
