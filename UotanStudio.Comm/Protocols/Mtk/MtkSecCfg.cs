@@ -10,13 +10,14 @@ namespace UotanStudio.Comm.Protocols.Mtk.Security;
 /// mtkclient Library/Hardware/seccfg.py:11-116 with the partition-level selection rules at
 /// Library/DA/xflash/extension/xflash.py:564-602 and Library/DA/legacy/extension/legacy.py:165-200.
 /// Reading is pure and allocates nothing on the device. Writing is limited to the two states the
-/// evidence names and only for layouts whose integrity transform is reproducible off-device;
-/// the hardware SEJ variants (seccfg.py:55-62 and :269-274) are refused instead of approximated.
+/// evidence names. The software transform is reproduced off-device; the hardware SEJ variants
+/// (seccfg.py:55-62 and :269-274) stay refused unless a caller supplies an
+/// <see cref="IMtkSecCfgHashEngine"/> bound to the running target.
 /// <para>此处复现的每条布局规则、常量与状态转换均来自 mtkclient Library/Hardware/seccfg.py:11-116，
 /// 分区级选择规则见 Library/DA/xflash/extension/xflash.py:564-602 与
 /// Library/DA/legacy/extension/legacy.py:165-200。读取是纯函数且不在设备上分配。写入只限于证据命名的
-/// 两个状态，且仅在完整性变换可在设备外复现的布局上提供；硬件 SEJ 变体（seccfg.py:55-62 与 :269-274）
-/// 一律拒绝而非近似。</para>
+/// 两个状态。软件变换在设备外复现；硬件 SEJ 变体（seccfg.py:55-62 与 :269-274）在调用方未提供绑定到
+/// 运行中目标的 <see cref="IMtkSecCfgHashEngine"/> 时仍被拒绝。</para>
 /// </remarks>
 public static class MtkSecCfg
 {
@@ -240,6 +241,69 @@ public static class MtkSecCfg
     public static byte[] CreateVersion4(MtkSecCfgV4Report report, MtkSecCfgLockIntent intent)
     {
         ArgumentNullException.ThrowIfNull(report);
+        ValidateVersion4Rewrite(report, intent);
+
+        if (report.HashKind != MtkSecCfgHashKind.Software)
+        {
+            throw new NotSupportedException(
+                "The stored hash is not protected by the software transform, so rewriting it requires the target SEJ engine.");
+        }
+
+        var header = BuildVersion4Header(report, intent);
+        var hash = SoftwareTransform(SHA256.HashData(header), encrypt: true);
+        return BuildVersion4Image(header, hash);
+    }
+
+    /// <summary>Builds the image that closes or opens a version 4 configuration whose stored hash is
+    /// protected by a target-driven hardware engine.
+    /// <para>构造关闭或打开版本 4 配置的镜像，其存储摘要由目标驱动的硬件引擎保护。</para></summary>
+    /// <remarks>
+    /// The digest recomputation, the dword order and the zero padding follow seccfg.py:89-102; only the
+    /// hash transform is delegated to <paramref name="engine"/>, using exactly the variant the read
+    /// resolved for the stored hash.
+    /// <para>摘要重算、双字顺序与补零遵循 seccfg.py:89-102；只有摘要变换交给 <paramref name="engine"/>，
+    /// 且使用的正是读取阶段为存储摘要解析出的那一个变体。</para>
+    /// </remarks>
+    /// <param name="report">A report decoded by <see cref="TryReadVersion4Async"/> with a resolved hardware
+    /// hash kind. <para>由 <see cref="TryReadVersion4Async"/> 解码且硬件摘要种类已解析的报告。</para></param>
+    /// <param name="intent">The requested state transition. 请求的状态转换。</param>
+    /// <param name="engine">The target-driven transform engine. 目标驱动的变换引擎。</param>
+    /// <param name="cancellationToken">Cancellation for every target exchange.
+    /// <para>每次目标交换的取消令牌。</para></param>
+    /// <returns>The padded image, exactly a multiple of <see cref="ImageAlignment"/> bytes.
+    /// <para>补白后的镜像，长度恰为 <see cref="ImageAlignment"/> 的整数倍。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="report"/> or <paramref name="engine"/> is null.
+    /// <para><paramref name="report"/> 或 <paramref name="engine"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="intent"/> is undefined.
+    /// <para><paramref name="intent"/> 未定义。</para></exception>
+    /// <exception cref="InvalidOperationException">The configuration already carries the requested state.
+    /// <para>配置已处于请求状态。</para></exception>
+    /// <exception cref="NotSupportedException">The declared size contradicts the documented layout, or the
+    /// hash kind is <see cref="MtkSecCfgHashKind.Unresolved"/>.
+    /// <para>声明大小与已记载布局矛盾，或摘要种类为 <see cref="MtkSecCfgHashKind.Unresolved"/>。</para></exception>
+    public static async Task<byte[]> CreateVersion4Async(MtkSecCfgV4Report report, MtkSecCfgLockIntent intent,
+        IMtkSecCfgHashEngine engine, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        ArgumentNullException.ThrowIfNull(engine);
+        ValidateVersion4Rewrite(report, intent);
+
+        if (report.HashKind is MtkSecCfgHashKind.Software or MtkSecCfgHashKind.Unresolved)
+        {
+            throw new NotSupportedException(
+                report.HashKind == MtkSecCfgHashKind.Software
+                    ? "The software transform is applied by the synchronous writer."
+                    : "The hash kind is unresolved, so no documented transform can be applied.");
+        }
+
+        var header = BuildVersion4Header(report, intent);
+        var hash = await engine.TransformAsync(report.HashKind, SHA256.HashData(header), encrypt: true,
+            cancellationToken).ConfigureAwait(false);
+        return BuildVersion4Image(header, hash);
+    }
+
+    private static void ValidateVersion4Rewrite(MtkSecCfgV4Report report, MtkSecCfgLockIntent intent)
+    {
         if (intent == MtkSecCfgLockIntent.Lock && report.LockStateRaw == LockStateWrittenWhenClosed)
         {
             throw new InvalidOperationException("The configuration is already closed.");
@@ -250,18 +314,15 @@ public static class MtkSecCfg
             throw new InvalidOperationException("The configuration is already open.");
         }
 
-        if (report.HashKind != MtkSecCfgHashKind.Software)
-        {
-            throw new NotSupportedException(
-                "The stored hash is not protected by the software transform, so rewriting it requires the target SEJ engine.");
-        }
-
         if (report.Size != Version4AgreedSize)
         {
             throw new NotSupportedException(
                 $"The declared structure size 0x{report.Size:X} does not agree with the documented version 4 reader and writer layout.");
         }
+    }
 
+    private static byte[] BuildVersion4Header(MtkSecCfgV4Report report, MtkSecCfgLockIntent intent)
+    {
         var (lockState, criticalLockState) = intent switch
         {
             MtkSecCfgLockIntent.Lock => (LockStateWrittenWhenClosed, CriticalLockStateWrittenWhenClosed),
@@ -277,12 +338,71 @@ public static class MtkSecCfg
         BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(16), criticalLockState);
         BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(20), report.RuntimeRaw);
         BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(24), EndFlag);
-        var hash = SoftwareTransform(SHA256.HashData(header), encrypt: true);
+        return header;
+    }
+
+    private static byte[] BuildVersion4Image(byte[] header, byte[] hash)
+    {
         var image = new byte[checked(Version4HeaderLength + hash.Length)];
         header.CopyTo(image, 0);
         hash.CopyTo(image.AsSpan(Version4HeaderLength));
         var padded = (image.Length + ImageAlignment - 1) / ImageAlignment * ImageAlignment;
         return padded == image.Length ? image : [.. image, .. new byte[padded - image.Length]];
+    }
+
+    /// <summary>Decodes a version 4 secure-boot configuration image, resolving hardware-protected hash
+    /// variants through a target-driven engine when the software transform does not match.
+    /// <para>解码版本 4 安全启动配置镜像；软件变换不匹配时，通过目标驱动的引擎解析硬件保护的摘要变体。</para></summary>
+    /// <remarks>
+    /// The probe order follows seccfg.py:100-115: software first, then the version 3 engine variant without
+    /// the legacy bring-up, the same variant with it, and finally the first-generation engine variant.
+    /// <para>试探顺序遵循 seccfg.py:100-115：先软件，再不带遗留启动序列的版本 3 引擎变体、带遗留启动序列的
+    /// 同一变体，最后是第一代引擎变体。</para>
+    /// </remarks>
+    /// <param name="image">The exact partition bytes read from the device.
+    /// <para>从设备读取的分区原始字节。</para></param>
+    /// <param name="engine">The optional target-driven engine. 可选的目标驱动引擎。</param>
+    /// <param name="cancellationToken">Cancellation for every target exchange.
+    /// <para>每次目标交换的取消令牌。</para></param>
+    /// <returns>The decoded report, or <see langword="null"/> when neither documented header matches or no
+    /// transform explained the stored hash. <para>解码结果；头部都不匹配或没有任何变换能解释存储摘要时为
+    /// <see langword="null"/>。</para></returns>
+    public static async Task<MtkSecCfgV4Report?> TryReadVersion4Async(ReadOnlyMemory<byte> image,
+        IMtkSecCfgHashEngine? engine, CancellationToken cancellationToken = default)
+    {
+        if (!TryReadVersion4(image.Span, out var report) || report is null)
+        {
+            return null;
+        }
+
+        if (report.HashKind != MtkSecCfgHashKind.Unresolved || engine is null)
+        {
+            return report;
+        }
+
+        var storedHash = image.Span.Slice((int)report.Size - 0x20, 0x20).ToArray();
+        var computed = Convert.FromHexString(report.ComputedHashHex);
+        foreach (var legacy in new[] { false, true })
+        {
+            var kind = legacy ? MtkSecCfgHashKind.HardwareV3Legacy : MtkSecCfgHashKind.HardwareV3;
+            var decrypted = await engine.TransformAsync(kind, storedHash, encrypt: false, cancellationToken)
+                .ConfigureAwait(false);
+            if (decrypted.AsSpan().SequenceEqual(computed))
+            {
+                return report with { HashKind = kind };
+            }
+        }
+
+        {
+            var decrypted = await engine.TransformAsync(MtkSecCfgHashKind.Hardware, storedHash, encrypt: false,
+                cancellationToken).ConfigureAwait(false);
+            if (decrypted.AsSpan().SequenceEqual(computed))
+            {
+                return report with { HashKind = MtkSecCfgHashKind.Hardware };
+            }
+        }
+
+        return report;
     }
 
     /// <summary>Validates that a caller-supplied image carries one of the documented headers and is

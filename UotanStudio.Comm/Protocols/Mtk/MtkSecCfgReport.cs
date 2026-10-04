@@ -108,18 +108,33 @@ public enum MtkSecCfgRuntimeState
 /// <summary>Which transformation protected the version 4 configuration hash.
 /// <para>用于保护版本 4 配置摘要的变换方式。</para></summary>
 /// <remarks>
-/// The reference client probes the stored hash against three transforms in order,
-/// software first, then two hardware engine variants (seccfg.py:51-63). Only the software
-/// variant is reproducible off-device, so the hardware variants are reported as
-/// <see cref="Unresolved"/> unless a caller supplies evidence for them.
-/// <para>参考客户端按顺序对存储的摘要试探三种变换：先软件，再两种硬件引擎变体（seccfg.py:51-63）。
-/// 只有在设备外可复现的是软件变体，因此在调用方未提供证据时，硬件变体上报为 <see cref="Unresolved"/>。</para>
+/// The reference client probes the stored hash against several transforms in order, software first, then
+/// the hardware engine variants (seccfg.py:51-63 and :100-115). Only the software variant is reproducible
+/// off-device, so the hardware variants are reported as <see cref="Unresolved"/> unless a caller supplies a
+/// target-driven <c>IMtkSecCfgHashEngine</c>.
+/// <para>参考客户端按顺序对存储的摘要试探多种变换：先软件，再硬件引擎变体（seccfg.py:51-63 与 :100-115）。
+/// 只有软件变体可在设备外复现，因此调用方未提供目标驱动的 <c>IMtkSecCfgHashEngine</c> 时，硬件变体上报为
+/// <see cref="Unresolved"/>。</para>
 /// </remarks>
 public enum MtkSecCfgHashKind
 {
     /// <summary>The software transform reproduced by <see cref="MtkSecCfg"/> matched the stored hash.
     /// <para><see cref="MtkSecCfg"/> 复现的软件变换与存储摘要匹配。</para></summary>
     Software,
+    /// <summary>The version 3 hardware engine variant without the legacy bring-up matched the stored hash
+    /// (seccfg.py:106, <c>hwcrypto_sej.py</c> <c>sej_sec_cfg_hw_V3</c> with <c>legacy=False</c>).
+    /// <para>不带遗留启动序列的版本 3 硬件引擎变体与存储摘要匹配（seccfg.py:106，<c>hwcrypto_sej.py</c> 的
+    /// <c>sej_sec_cfg_hw_V3</c> 且 <c>legacy=False</c>）。</para></summary>
+    HardwareV3,
+    /// <summary>The version 3 hardware engine variant with the legacy bring-up matched the stored hash
+    /// (seccfg.py:110, <c>hwcrypto_sej.py</c> <c>sej_sec_cfg_hw_V3</c> with <c>legacy=True</c>).
+    /// <para>带遗留启动序列的版本 3 硬件引擎变体与存储摘要匹配（seccfg.py:110，<c>hwcrypto_sej.py</c> 的
+    /// <c>sej_sec_cfg_hw_V3</c> 且 <c>legacy=True</c>）。</para></summary>
+    HardwareV3Legacy,
+    /// <summary>The first-generation hardware engine variant matched the stored hash
+    /// (seccfg.py:114, <c>hwcrypto_sej.py</c> <c>sej_sec_cfg_hw</c>).
+    /// <para>第一代硬件引擎变体与存储摘要匹配（seccfg.py:114，<c>hwcrypto_sej.py</c> 的 <c>sej_sec_cfg_hw</c>）。</para></summary>
+    Hardware,
     /// <summary>No reproducible transform matched; the target may use a hardware engine.
     /// <para>没有可复现的变换匹配；目标可能使用硬件引擎。</para></summary>
     Unresolved

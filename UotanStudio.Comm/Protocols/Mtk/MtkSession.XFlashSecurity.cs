@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Comm.Protocols.Mtk.HwCrypto;
 using UotanStudio.Comm.Protocols.Mtk.Security;
 using UotanStudio.Firmware.BlockImage.Gpt;
 
@@ -341,10 +342,10 @@ public sealed partial class MtkSession
     /// <exception cref="UnauthorizedAccessException"><paramref name="confirmWrite"/> is
     /// <see langword="false"/>; no bytes were written and the session keeps its stage.
     /// <para><paramref name="confirmWrite"/> 为 <see langword="false"/>；未写入任何字节，会话保持原阶段。</para></exception>
-    /// <exception cref="NotSupportedException">The layout needs a hardware integrity transform, the
-    /// declared size contradicts the documented layout, or the located range exceeds the four MiB
-    /// ceiling; the session keeps its stage in every case.
-    /// <para>该布局需要硬件完整性变换、声明大小与已记载布局矛盾，或定位到的范围超过 4 MiB 上限；
+    /// <exception cref="NotSupportedException">The stored hash could not be resolved through the
+    /// target SEJ engine, the declared size contradicts the documented layout, or the located range
+    /// exceeds the four MiB ceiling; the session keeps its stage in every case.
+    /// <para>无法经目标 SEJ 引擎解析存储摘要、声明大小与已记载布局矛盾，或定位到的范围超过 4 MiB 上限；
     /// 每种情况下会话都保持原阶段。</para></exception>
     /// <exception cref="InvalidOperationException">The configuration already has the requested state.
     /// <para>配置已处于请求的状态。</para></exception>
@@ -368,13 +369,18 @@ public sealed partial class MtkSession
             try
             {
                 var (view, image) = await ReadXFlashSecCfgOwnedAsync(partitionId, cancellationToken).ConfigureAwait(false);
-                if (view.Version4 is null)
+                IMtkSejRegisterAccess? registerAccess = null;
+                if (view.Version4 is not null && view.Version4.HashKind != MtkSecCfgHashKind.Software)
                 {
-                    throw new NotSupportedException(
-                        "The version 3 layout cannot be rewritten off-device because its integrity transform lives in the target SEJ engine.");
+                    var channel = RequireXFlashSecurityCustomStage();
+                    registerAccess = new SejRegisterAccess(
+                        async (address, token) => BinaryPrimitives.ReadUInt32LittleEndian(
+                            await ReadXFlashSecurityRegisterAsync(channel, address, token).ConfigureAwait(false)),
+                        (address, value, token) => WriteXFlashSecurityRegisterAsync(channel, address, value, token));
                 }
 
-                var replacement = MtkSecCfg.CreateVersion4(view.Version4, intent);
+                var replacement = await CreateSecCfgReplacementAsync(view, image, intent, registerAccess,
+                    cancellationToken).ConfigureAwait(false);
                 return await WriteXFlashSecCfgOwnedAsync(view, replacement, confirmWrite, cancellationToken)
                     .ConfigureAwait(false);
             }

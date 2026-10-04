@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Comm.Protocols.Mtk.HwCrypto;
 using UotanStudio.Comm.Protocols.Mtk.Security;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
@@ -222,9 +223,10 @@ public sealed partial class MtkSession
     /// <exception cref="UnauthorizedAccessException"><paramref name="confirmWrite"/> is
     /// <see langword="false"/>; no bytes were written and the session keeps its stage.
     /// <para><paramref name="confirmWrite"/> 为 <see langword="false"/>；未写入任何字节，会话保持原阶段。</para></exception>
-    /// <exception cref="NotSupportedException">The layout needs a hardware integrity transform, or
-    /// the located range exceeds the four MiB ceiling; the session keeps its stage in every case.
-    /// <para>该布局需要硬件完整性变换，或定位到的范围超过 4 MiB 上限；每种情况下会话都保持原阶段。</para></exception>
+    /// <exception cref="NotSupportedException">The stored hash could not be resolved through the
+    /// target SEJ engine, or the located range exceeds the four MiB ceiling; the session keeps its
+    /// stage in every case.
+    /// <para>无法经目标 SEJ 引擎解析存储摘要，或定位到的范围超过 4 MiB 上限；每种情况下会话都保持原阶段。</para></exception>
     /// <exception cref="InvalidOperationException">The configuration already has the requested state.
     /// <para>配置已处于请求的状态。</para></exception>
     /// <exception cref="MtkProtocolException">Any exchange failed; the Legacy family faults.
@@ -246,14 +248,16 @@ public sealed partial class MtkSession
         {
             try
             {
-                var (view, _) = await ReadLegacySecCfgOwnedAsync(partitionId, cancellationToken).ConfigureAwait(false);
-                if (view.Version4 is null)
+                var (view, image) = await ReadLegacySecCfgOwnedAsync(partitionId, cancellationToken).ConfigureAwait(false);
+                IMtkSejRegisterAccess? registerAccess = null;
+                if (view.Version4 is not null && view.Version4.HashKind != MtkSecCfgHashKind.Software)
                 {
-                    throw new NotSupportedException(
-                        "The version 3 layout cannot be rewritten off-device because its integrity transform lives in the target SEJ engine.");
+                    registerAccess = new SejRegisterAccess(ReadLegacySecurityRegisterAsync,
+                        WriteLegacySecurityRegisterAsync);
                 }
 
-                var replacement = MtkSecCfg.CreateVersion4(view.Version4, intent);
+                var replacement = await CreateSecCfgReplacementAsync(view, image, intent, registerAccess,
+                    cancellationToken).ConfigureAwait(false);
                 return await WriteLegacySecCfgOwnedAsync(view, replacement, confirmWrite, cancellationToken)
                     .ConfigureAwait(false);
             }
