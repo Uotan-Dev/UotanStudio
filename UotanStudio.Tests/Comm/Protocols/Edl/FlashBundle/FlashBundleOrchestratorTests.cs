@@ -709,6 +709,12 @@ public class FlashBundleOrchestratorTests
                     return [rawAck, readPayload, finalAck];
                 }
 
+                if (text.Contains("<getsha256digest", StringComparison.Ordinal))
+                {
+                    return [Encoding.UTF8.GetBytes(
+                        "<data><response value=\"NAK\" rawmode=\"false\"/></data>")];
+                }
+
                 return [];
             }
         };
