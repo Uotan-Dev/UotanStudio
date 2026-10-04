@@ -215,6 +215,7 @@
     <x:String x:Key="Flash_MtkStorageKind">Storage type</x:String>
     <x:String x:Key="Flash_MtkAutoMatch">Match loader entry by chip id</x:String>
     <x:String x:Key="Flash_MtkKeyDir">SLA key directory</x:String>
+    <x:String x:Key="Flash_MtkAuthFile">DAA auth file (--auth)</x:String>
     <x:String x:Key="Flash_MtkBaud">Serial baud rate</x:String>
     <x:String x:Key="Flash_MtkAttachAgent">Attach running agent</x:String>
     <x:String x:Key="Flash_MtkExploitBypass">Allow BootROM exploit bypass (explicit authorization)</x:String>

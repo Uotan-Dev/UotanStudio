@@ -358,6 +358,14 @@
                                     AutomationProperties.Name="{DynamicResource Flash_MtkKeyDir}" />
                             <TextBlock Name="MtkKeyDirText" TextTrimming="CharacterEllipsis"
                                        FontSize="12" Opacity="0.8" />
+                            <!-- 显式认证文件可选；选择后按上游 auth 文件约定随 E2 原样发送，优先于密钥目录。 -->
+                            <!-- The explicit auth file is optional; when selected it is sent verbatim with E2 per the upstream auth-file convention and wins over the key directory. -->
+                            <Button Name="ChooseMtkAuthFileButton" Classes="pane-action"
+                                    Click="OnChooseMtkAuthFileClick"
+                                    Content="{DynamicResource Flash_MtkAuthFile}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkAuthFile}" />
+                            <TextBlock Name="MtkAuthFileText" TextTrimming="CharacterEllipsis"
+                                       FontSize="12" Opacity="0.8" />
                             <TextBlock Name="MtkBaudLabel" Text="{DynamicResource Flash_MtkBaud}"
                                        FontSize="12" Opacity="0.8" />
                             <ComboBox Name="MtkBaudBox" Height="32" VerticalContentAlignment="Center"

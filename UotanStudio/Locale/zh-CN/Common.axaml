@@ -215,6 +215,7 @@
     <x:String x:Key="Flash_MtkStorageKind">存储类型</x:String>
     <x:String x:Key="Flash_MtkAutoMatch">按芯片身份自动匹配加载器条目</x:String>
     <x:String x:Key="Flash_MtkKeyDir">SLA 密钥目录</x:String>
+    <x:String x:Key="Flash_MtkAuthFile">DAA 认证文件（--auth）</x:String>
     <x:String x:Key="Flash_MtkBaud">串口波特率</x:String>
     <x:String x:Key="Flash_MtkAttachAgent">附加已运行代理</x:String>
     <x:String x:Key="Flash_MtkExploitBypass">允许 BootROM 利用绕过（需显式授权）</x:String>

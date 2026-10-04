@@ -135,6 +135,7 @@ public partial class FlashView : UserControl
     private IReadOnlyList<MtkLoaderEntryInfo> _mtkLoaderEntries = [];
     private MtkEmiParameters? _mtkEmi;
     private string? _mtkKeyDirectory;
+    private string? _mtkAuthFile;
     private bool? _wide;
     private bool? _packageButtonsStacked;
     private DeviceViewModel? _deviceViewModel;
@@ -2217,6 +2218,24 @@ public partial class FlashView : UserControl
             : $"{LanguageService.Instance.GetString("Flash_MtkKeyDir")}: {_mtkKeyDirectory}");
     }
 
+    private async void OnChooseMtkAuthFileClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(this) is not { } topLevel) return;
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Flash_MtkAuthFile"),
+            AllowMultiple = false,
+            FileTypeFilter = [FilePickerFileTypes.All]
+        });
+        if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
+        _mtkAuthFile = File.Exists(path) ? path : null;
+        MtkAuthFileText.Text = _mtkAuthFile is { } file ? Path.GetFileName(file) : string.Empty;
+        ToolTip.SetTip(MtkAuthFileText, _mtkAuthFile ?? string.Empty);
+        AppendLog(_mtkAuthFile is null
+            ? LanguageService.Instance.GetString("Flash_MtkAuthFile")
+            : $"{LanguageService.Instance.GetString("Flash_MtkAuthFile")}: {_mtkAuthFile}");
+    }
+
     private static MtkEmiParameters ReadEmi(string path)
     {
         using (var stream = File.OpenRead(path))
@@ -3575,9 +3594,7 @@ public partial class FlashView : UserControl
                     SlaKeyProvider = _mtkKeyDirectory is { } manualKeys
                         ? new MtkDirectoryKeyStore(manualKeys)
                         : null,
-                    BootResourceProvider = _mtkKeyDirectory is { } manualResourceKeys
-                        ? new MtkDirectoryKeyStore(manualResourceKeys)
-                        : null
+                    BootResourceProvider = BuildMtkBootResourceProvider()
                 };
                 if (protocol == MtkDaProtocol.Legacy)
                 {
@@ -3630,11 +3647,23 @@ public partial class FlashView : UserControl
             StorageKind = kind,
             EmiParameters = _mtkEmi,
             SlaKeyProvider = _mtkKeyDirectory is { } keys ? new MtkDirectoryKeyStore(keys) : null,
-            BootResourceProvider = _mtkKeyDirectory is { } resourceKeys
-                ? new MtkDirectoryKeyStore(resourceKeys)
-                : null
+            BootResourceProvider = BuildMtkBootResourceProvider()
         });
     }
+
+    /// <summary>
+    /// <para>构造 DAA 启动资源提供方：显式认证文件按上游 --auth 约定优先，否则回退到密钥目录。</para>
+    /// Builds the DAA boot resource provider: the explicit auth file wins per the upstream --auth
+    /// convention, otherwise the key directory is used.
+    /// </summary>
+    /// <returns>The provider, or null when nothing was selected.
+    /// <para>资源提供方；未选择任何内容时为 null。</para></returns>
+    private IMtkBootResourceProvider? BuildMtkBootResourceProvider()
+        => _mtkAuthFile is { } authFile
+            ? new MtkFileBootResourceProvider(authenticationPath: authFile)
+            : _mtkKeyDirectory is { } directory
+                ? new MtkDirectoryKeyStore(directory)
+                : null;
 
     /// <summary>
     /// <para>把所选 scatter 分区回读到用户目录；与刷写共用本面板的连接选择，并逐行显示字节进度。</para>
