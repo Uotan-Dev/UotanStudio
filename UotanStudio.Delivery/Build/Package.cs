@@ -113,8 +113,14 @@ internal static partial class DeliveryPackageBuilder
             var streaming = $"payload.bin:{payload.Offset}:{payload.Size},payload_properties.txt:{properties.Offset}:{properties.Size},metadata:{meta.Offset}:{meta.Size}";
             var all = $"payload_metadata.bin:{payload.Offset}:{metadataLength}," + streaming;
             if (all.Length > 512) throw new InvalidDataException("OTA property ranges exceed reserved metadata space.");
-            File.Delete(path);
-            await WriteZip(metadata + Properties(streaming, all));
+            var suffix = Encoding.UTF8.GetBytes(Properties(streaming, all));
+            var reserved = Encoding.UTF8.GetBytes(Properties("", ""));
+            if (suffix.Length != reserved.Length) throw new InvalidDataException("OTA property ranges exceed reserved metadata space.");
+            await using (var patch = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                patch.Position = meta.Offset + Encoding.UTF8.GetByteCount(metadata);
+                patch.Write(suffix);
+            }
             var actual = ReadStoredRanges(path);
             if (ranges.Any(p => actual[p.Key] != p.Value)) throw new InvalidDataException("OTA ZIP entry offsets changed while finalizing metadata.");
             if (plan.Package.SigningKeyPath.Length > 0) await SignAsync(path, plan.Package, token, signingKeys);
@@ -310,7 +316,7 @@ internal static partial class DeliveryPackageBuilder
         Report(0);
         using var hashAlgorithm = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         await using var output = Entry(zip, member).Open();
-        var buffer = new byte[65536];
+        var buffer = new byte[1024 * 1024];
         long written = 0;
         int read;
         while ((read = await input.ReadAsync(buffer, token).ConfigureAwait(false)) != 0)
@@ -391,7 +397,7 @@ internal static partial class DeliveryPackageBuilder
         using var publicKey = cert.GetRSAPublicKey() ?? throw new InvalidDataException("外层证书需要 RSA 公钥。");
         if (!key.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(publicKey.ExportSubjectPublicKeyInfo()))
             throw new InvalidDataException("外层签名私钥与证书不匹配。");
-        await using var file = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None, 65536, true);
+        await using var file = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None, 1024 * 1024, true);
         if (file.Length < 22) throw new InvalidDataException("Invalid ZIP.");
         file.Position = file.Length - 22;
         var tail = new byte[22]; await file.ReadExactlyAsync(tail, token);
@@ -399,7 +405,7 @@ internal static partial class DeliveryPackageBuilder
             throw new InvalidDataException("ZIP already has a comment.");
         file.Position = 0;
         using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var buffer = new byte[65536]; long remaining = file.Length - 2;
+        var buffer = new byte[1024 * 1024]; long remaining = file.Length - 2;
         while (remaining > 0)
         {
             var count = await file.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), token);

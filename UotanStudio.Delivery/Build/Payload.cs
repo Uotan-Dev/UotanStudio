@@ -193,7 +193,7 @@ internal static class DeliveryPayloadBuilder
         input.Position = 0;
         using var metadata = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var file = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var buffer = new byte[65536];
+        var buffer = new byte[1024 * 1024];
         long remaining = size;
         while (remaining > 0)
         {

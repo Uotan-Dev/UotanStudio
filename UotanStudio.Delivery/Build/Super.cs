@@ -1,7 +1,9 @@
 using System.Text;
+using System.Threading;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 
@@ -31,14 +33,18 @@ internal static class DeliverySuperBuilder
 
     /// <summary>
     /// <para>构建 LP 元数据并写出完整 Super 镜像或独立的 super_empty.img（含可选的稀疏与 Zstd 阶段）。
-    /// 在分配 extent 前先按容量预检，使容量超限的报错给出实际数值而不是裸参数名。</para>
+    /// 在分配 extent 前先按容量预检，使容量超限的报错给出实际数值而不是裸参数名。
+    /// 分区 extent 在写入前已在 LP 元数据中分配且互不重叠，因此分区解码与写入按
+    /// <see cref="FirmwareParallelism.Workers"/> 并发执行，最终镜像字节与完成顺序无关。</para>
     /// Builds the LP metadata and writes the full Super image or the standalone super_empty.img, including optional Sparse
     /// and Zstd stages. Capacity is pre-checked before allocating extents so an over-capacity error reports actual numbers
-    /// rather than a bare parameter name.
+    /// rather than a bare parameter name. Partition extents are allocated and non-overlapping before any data is written,
+    /// so partitions decode and write concurrently up to <see cref="FirmwareParallelism.Workers"/> and the final image bytes
+    /// are independent of completion order.
     /// </summary>
     internal static Task BuildAsync(IReadOnlyList<DeliveryFile> files, DeliverySuperOptions options, string output,
         IProgress<double>? progress = null, CancellationToken token = default,
-        IProgress<DeliveryProgress>? detailProgress = null) => Task.Run(() =>
+        IProgress<DeliveryProgress>? detailProgress = null) => Task.Run(async () =>
     {
         if (options.DeviceSize > long.MaxValue) throw new InvalidDataException("Super size exceeds stream limits.");
         DeliverySuperCapacity.ValidateDeviceSize(options);
@@ -84,34 +90,41 @@ internal static class DeliverySuperBuilder
             }
             else
             {
-                using (var stream = new FileStream(raw, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+                using (var stream = new FileStream(raw, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1024 * 1024))
                 {
                     stream.SetLength((long)options.DeviceSize);
                     MetadataWriter.WriteToImageStream(stream, metadata);
-                    long done = 0;
-                    var total = lengths.Sum();
-                    detailProgress?.Report(new(0, "Building Super", (0, total), "Delivery_ProgressSuper"));
-                    for (var i = 0; i < partitions.Count; i++)
-                    {
-                        token.ThrowIfCancellationRequested();
-                        if (lengths[i] == 0) continue;
-                        var part = metadata.Partitions[i];
-                        var extent = metadata.Extents[(int)part.FirstExtentIndex];
-                        stream.Position = checked((long)extent.TargetData * 512);
-                        using var source = SparseReader.ImportAuto(partitions[i].SourcePath);
-                        using var bounded = new CountingWriteStream(stream, lengths[i], true, token);
-                        using var tracked = new DeliveryWriteProgressStream(bounded, value =>
-                        {
-                            var percent = (done + value) * 75.0 / Math.Max(1, total);
-                            progress?.Report(percent);
-                            detailProgress?.Report(new(percent, "Building Super", (done + value, total), "Delivery_ProgressSuper"));
-                        }, token);
-                        source.WriteRawToStream(tracked);
-                        if (bounded.BytesWritten != lengths[i]) throw new InvalidDataException("Partition size changed during build.");
-                        done += lengths[i];
-                        detailProgress?.Report(new(done * 75.0 / Math.Max(1, total), "Building Super", (done, total), "Delivery_ProgressSuper"));
-                    }
                 }
+                long done = 0;
+                var total = lengths.Sum();
+                detailProgress?.Report(new(0, "Building Super", (0, total), "Delivery_ProgressSuper"));
+                var workers = Math.Max(1, Math.Min(partitions.Count, FirmwareParallelism.Workers));
+                await Parallel.ForEachAsync(Enumerable.Range(0, partitions.Count),
+                    new ParallelOptions { MaxDegreeOfParallelism = workers, CancellationToken = token },
+                    (i, ct) =>
+                {
+                    if (lengths[i] == 0) return ValueTask.CompletedTask;
+                    var part = metadata.Partitions[i];
+                    var extent = metadata.Extents[(int)part.FirstExtentIndex];
+                    using var source = SparseReader.ImportAuto(partitions[i].SourcePath);
+                    using var partition = new FileStream(raw, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite, 1024 * 1024);
+                    partition.Position = checked((long)extent.TargetData * 512);
+                    long local = 0;
+                    using var bounded = new CountingWriteStream(partition, lengths[i], true, ct);
+                    using var tracked = new DeliveryWriteProgressStream(bounded, value =>
+                    {
+                        var cumulative = Interlocked.Add(ref done, value - local);
+                        local = value;
+                        var percent = cumulative * 75.0 / Math.Max(1, total);
+                        progress?.Report(percent);
+                        detailProgress?.Report(new(percent, "Building Super", (cumulative, total), "Delivery_ProgressSuper"));
+                    }, ct);
+                    source.WriteRawToStream(tracked);
+                    if (bounded.BytesWritten != lengths[i]) throw new InvalidDataException("Partition size changed during build.");
+                    return ValueTask.CompletedTask;
+                });
+                token.ThrowIfCancellationRequested();
+                detailProgress?.Report(new(75.0, "Building Super", (total, total), "Delivery_ProgressSuper"));
                 if (options.Sparse)
                 {
                     using var input = File.OpenRead(raw);

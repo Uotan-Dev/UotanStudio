@@ -243,7 +243,8 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                                     (input.Position, input.Length), "Delivery_ProgressCompress")), token);
                             ZstdCompressor.Compress(input, tracked, new CompressionOptions
                             {
-                                Level = DeliverySuperOptions.ResolveZstdLevel(plan.Super)
+                                Level = DeliverySuperOptions.ResolveZstdLevel(plan.Super),
+                                MaxDegreeOfParallelism = FirmwareParallelism.Workers
                             });
                         }, token).ConfigureAwait(false);
                         File.Delete(superOutput);
@@ -309,11 +310,12 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
             if (plan.PackPayload && !plan.OrganizeDirectory)
                 File.Delete(Path.Combine(imageDirectory, "payload_properties.txt"));
             var stagedFiles = Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
-            await VerifyStagedEquivalenceAsync(plan, stage, progress, token).ConfigureAwait(false);
+            var (_, stagedHashes) = await VerifyStagedEquivalenceWithHashesAsync(plan, stage, progress, token).ConfigureAwait(false);
             if (plan.OrganizeDirectory)
             {
                 long totalBytes = 0;
-                foreach (var file in stagedFiles) totalBytes = checked(totalBytes + new FileInfo(file).Length);
+                foreach (var file in stagedFiles)
+                    if (!stagedHashes.ContainsKey(file)) totalBytes = checked(totalBytes + new FileInfo(file).Length);
                 long processedBytes = 0;
                 progress?.Report(new(90, "Verifying output", Stage: "Delivery_ProgressVerify", Bytes: (0, totalBytes)));
                 var hashLines = new string[stagedFiles.Length];
@@ -323,6 +325,12 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                     new ParallelOptions { MaxDegreeOfParallelism = degree, CancellationToken = token },
                     async (i, ct) =>
                     {
+                        var line = Path.GetRelativePath(stage, stagedFiles[i]).Replace('\\', '/');
+                        if (stagedHashes.TryGetValue(stagedFiles[i], out var cached))
+                        {
+                            hashLines[i] = cached + "  " + line;
+                            return;
+                        }
                         var buffer = new byte[1024 * 1024];
                         await using var input = new FileStream(stagedFiles[i], FileMode.Open, FileAccess.Read, FileShare.Read,
                             1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
@@ -339,8 +347,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                         var hash = hashAlgorithm.GetHashAndReset();
                         hashAlgorithm.Dispose();
                         if (input.Length != fileLength) throw new IOException("Output changed while verifying.");
-                        hashLines[i] = Convert.ToHexString(hash).ToLowerInvariant() + "  "
-                            + Path.GetRelativePath(stage, stagedFiles[i]).Replace('\\', '/');
+                        hashLines[i] = Convert.ToHexString(hash).ToLowerInvariant() + "  " + line;
                     }).ConfigureAwait(false);
                 var hashes = new StringBuilder();
                 foreach (var line in hashLines) hashes.AppendLine(line);
@@ -399,16 +406,30 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     /// </summary>
     internal static async Task<IReadOnlyList<DeliveryStagedEquivalence>> VerifyStagedEquivalenceAsync(DeliveryPlan plan, string stage,
         IProgress<DeliveryProgress>? progress, CancellationToken token)
+        => (await VerifyStagedEquivalenceWithHashesAsync(plan, stage, progress, token).ConfigureAwait(false)).Rows;
+
+    /// <summary>
+    /// <para>与 <see cref="VerifyStagedEquivalenceAsync"/> 相同的等价校验，同时返回每个已评估字节维度的暂存镜像
+    /// SHA-256（小写十六进制，键为暂存绝对路径），供 checksums.sha256 阶段复用，避免对同一批 GB 级镜像再做一次
+    /// 全量读取。</para>
+    /// Performs the same equivalence verification as <see cref="VerifyStagedEquivalenceAsync"/> and additionally returns the
+    /// SHA-256 of every staged image whose byte dimension was evaluated (lowercase hexadecimal, keyed by the staged absolute
+    /// path) so the checksums.sha256 stage can reuse them instead of re-reading the same multi-gigabyte images.
+    /// </summary>
+    internal static async Task<(IReadOnlyList<DeliveryStagedEquivalence> Rows, IReadOnlyDictionary<string, string> StagedSha256)>
+        VerifyStagedEquivalenceWithHashesAsync(DeliveryPlan plan, string stage,
+        IProgress<DeliveryProgress>? progress, CancellationToken token)
     {
         var results = new List<DeliveryStagedEquivalence>();
-        if (!plan.OrganizeDirectory) return results;
+        var stagedHashes = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!plan.OrganizeDirectory) return (results, stagedHashes);
         var indices = new List<int>();
         for (var i = 0; i < plan.Files.Count; i++)
         {
             if (plan.Files[i].Generated || plan.Files[i].SourcePath.Length == 0) continue;
             indices.Add(i);
         }
-        var evaluated = new DeliveryStagedEquivalence?[indices.Count];
+        var evaluated = new (DeliveryStagedEquivalence Result, string? StagedSha256)?[indices.Count];
         var failures = new Exception?[indices.Count];
         var degree = Math.Max(1, Math.Min(indices.Count, FirmwareParallelism.Workers));
         await Parallel.ForEachAsync(
@@ -426,7 +447,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                 progress?.Report(new(90, "Verifying image equivalence",
                     Stage: "Delivery_ProgressEquivalence", Detail: file.FileName));
                 var result = await EvaluateStagedEquivalenceAsync(file, staged, plan.PackSuper, ct).ConfigureAwait(false);
-                var failure = result.RequiredFailure;
+                var failure = result.Result.RequiredFailure;
                 if (failure is not null)
                 {
                     failures[slot] = new IOException(failure);
@@ -438,8 +459,12 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         // sequential pass would have thrown first, preserving fail-fast observable behavior.
         foreach (var failure in failures)
             if (failure is not null) throw failure;
-        foreach (var result in evaluated)
-            if (result is not null) results.Add(result);
+        for (var slot = 0; slot < evaluated.Length; slot++)
+        {
+            if (evaluated[slot] is not { } entry) continue;
+            results.Add(entry.Result);
+            if (entry.StagedSha256 is { } hash) stagedHashes[OrganizedImagePath(plan, stage, plan.Files[indices[slot]])] = hash;
+        }
         if (results.Count > 0)
         {
             var summary = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -449,7 +474,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
             foreach (var result in results) summary[result.FileName] = result.Format();
             progress?.Report(new(90, "Image equivalence verified", Stage: "Delivery_ProgressEquivalence", Metadata: summary));
         }
-        return results;
+        return (results, stagedHashes);
     }
 
     /// <summary>
@@ -464,13 +489,17 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     /// on disk, since otherwise the evidence describes a different file. The inherited byte verdict stays readable in
     /// Details, while the report's byte dimension is always replaced by delivery's own copy check.
     /// </summary>
-    internal static async Task<DeliveryStagedEquivalence> EvaluateStagedEquivalenceAsync(DeliveryFile file,
+    /// <returns>The equivalence row plus the staged image's lowercase SHA-256 when the byte dimension was evaluated,
+    /// otherwise <see langword="null"/> for the hash.
+    /// <para>等价结果行；评估了字节维度时附带暂存镜像的小写 SHA-256，否则为 <see langword="null"/>。</para></returns>
+    internal static async Task<(DeliveryStagedEquivalence Result, string? StagedSha256)> EvaluateStagedEquivalenceAsync(DeliveryFile file,
         string stagedPath, bool expandedToLogicalImage, CancellationToken token)
     {
         var details = file.RebuildEquivalence ?? new Dictionary<string, string>();
         var required = new List<DeliveryEquivalenceDimension>();
         var inherited = false;
         FirmwareEquivalenceState byteState = FirmwareEquivalenceState.NotEvaluated;
+        string? stagedSha256 = null;
         if (!expandedToLogicalImage)
         {
             required.Add(DeliveryEquivalenceDimension.Byte);
@@ -483,11 +512,24 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                 inherited = true;
             }
 
-            byteState = await Task.Run(() =>
+            (byteState, stagedSha256) = await Task.Run(() =>
             {
                 using var produced = new FileStream(stagedPath, FileMode.Open, FileAccess.Read, FileShare.Read,
                     1024 * 1024, FileOptions.SequentialScan);
-                return FilesystemEquivalenceReport.EvaluateByteEquivalence(produced, sourceHash, sourceLength, token);
+                if (produced.Length != sourceLength) return (FirmwareEquivalenceState.NotEquivalent, null);
+                using var hashing = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                var buffer = new byte[1024 * 1024];
+                int read;
+                while ((read = produced.Read(buffer, 0, buffer.Length)) != 0)
+                {
+                    token.ThrowIfCancellationRequested();
+                    hashing.AppendData(buffer, 0, read);
+                }
+                var hash = Convert.ToHexString(hashing.GetHashAndReset()).ToLowerInvariant();
+                var state = string.Equals(hash, sourceHash, StringComparison.OrdinalIgnoreCase)
+                    ? FirmwareEquivalenceState.Equivalent
+                    : FirmwareEquivalenceState.NotEquivalent;
+                return (state, (string?)hash);
             }, token).ConfigureAwait(false);
         }
 
@@ -498,14 +540,14 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         }
 
         var provenance = FilesystemEquivalenceReport.FromMetadata(details);
-        return new DeliveryStagedEquivalence(file.FileName, new FilesystemEquivalenceReport
+        return (new DeliveryStagedEquivalence(file.FileName, new FilesystemEquivalenceReport
         {
             ByteEquivalence = byteState,
             StructureEquivalence = inherited ? provenance.StructureEquivalence : FirmwareEquivalenceState.NotEvaluated,
             ContentEquivalence = inherited ? provenance.ContentEquivalence : FirmwareEquivalenceState.NotEvaluated,
             CapacityEquivalence = inherited ? provenance.CapacityEquivalence : FirmwareEquivalenceState.NotEvaluated,
             Details = details,
-        }, required);
+        }, required), stagedSha256);
     }
 
     /// <summary>
@@ -592,10 +634,11 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         bool expandSparse = false)
     {
         await using var input = expandSparse ? MetadataReader.OpenImage(source)
-            : new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true);
-        await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true);
+            : new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, true);
         var length = input.Length;
-        var buffer = new byte[65536];
+        var buffer = new byte[1024 * 1024];
         long copied = 0, last = 0;
         while (copied < length)
         {
