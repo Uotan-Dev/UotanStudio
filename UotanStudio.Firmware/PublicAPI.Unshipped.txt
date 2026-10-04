@@ -371,3 +371,104 @@ override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.Read(System.S
 override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
 override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.SetLength(long value) -> void
 override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.Write(byte[]! buffer, int offset, int count) -> void
+UotanStudio.Firmware.CompoundFile.CompoundFileCorruptedException
+UotanStudio.Firmware.CompoundFile.CompoundFileCorruptedException.CompoundFileCorruptedException(string! message) -> void
+UotanStudio.Firmware.CompoundFile.CompoundFileEntry
+UotanStudio.Firmware.CompoundFile.CompoundFileEntry.FullPath.get -> string!
+UotanStudio.Firmware.CompoundFile.CompoundFileEntry.Id.get -> int
+UotanStudio.Firmware.CompoundFile.CompoundFileEntry.Name.get -> string!
+UotanStudio.Firmware.CompoundFile.CompoundFileEntry.StartSector.get -> uint
+UotanStudio.Firmware.CompoundFile.CompoundFileEntry.StreamSize.get -> long
+UotanStudio.Firmware.CompoundFile.CompoundFileEntry.Type.get -> UotanStudio.Firmware.CompoundFile.CompoundFileEntryType
+UotanStudio.Firmware.CompoundFile.CompoundFileEntryType
+UotanStudio.Firmware.CompoundFile.CompoundFileEntryType.Root = 2 -> UotanStudio.Firmware.CompoundFile.CompoundFileEntryType
+UotanStudio.Firmware.CompoundFile.CompoundFileEntryType.Storage = 1 -> UotanStudio.Firmware.CompoundFile.CompoundFileEntryType
+UotanStudio.Firmware.CompoundFile.CompoundFileEntryType.Stream = 0 -> UotanStudio.Firmware.CompoundFile.CompoundFileEntryType
+UotanStudio.Firmware.CompoundFile.CompoundFileException
+UotanStudio.Firmware.CompoundFile.CompoundFileException.CompoundFileException(string! message) -> void
+UotanStudio.Firmware.CompoundFile.CompoundFileException.CompoundFileException(string! message, System.Exception! innerException) -> void
+UotanStudio.Firmware.CompoundFile.CompoundFileReader
+UotanStudio.Firmware.CompoundFile.CompoundFileReader.Dispose() -> void
+UotanStudio.Firmware.CompoundFile.CompoundFileReader.Entries.get -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.CompoundFile.CompoundFileEntry!>!
+UotanStudio.Firmware.CompoundFile.CompoundFileReader.GetStreamBlockLayout(UotanStudio.Firmware.CompoundFile.CompoundFileEntry! entry) -> UotanStudio.Firmware.CompoundFile.CompoundFileStreamLayout!
+static UotanStudio.Firmware.CompoundFile.CompoundFileReader.OpenAsync(string! path, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.CompoundFile.CompoundFileReader!>!
+UotanStudio.Firmware.CompoundFile.CompoundFileReader.OpenStream(UotanStudio.Firmware.CompoundFile.CompoundFileEntry! entry) -> System.IO.Stream!
+UotanStudio.Firmware.CompoundFile.CompoundFileReader.SectorSize.get -> uint
+UotanStudio.Firmware.CompoundFile.CompoundFileReader.TryGetEntryByPath(string! path) -> UotanStudio.Firmware.CompoundFile.CompoundFileEntry?
+UotanStudio.Firmware.CompoundFile.CompoundFileStream
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.CanRead.get -> bool
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.CanSeek.get -> bool
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.CanWrite.get -> bool
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.Flush() -> void
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.Length.get -> long
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.Position.get -> long
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.Position.set -> void
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.Read(byte[]! buffer, int offset, int count) -> int
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.Read(System.Span<byte> buffer) -> int
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.ReadByte() -> int
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.SetLength(long value) -> void
+override UotanStudio.Firmware.CompoundFile.CompoundFileStream.Write(byte[]! buffer, int offset, int count) -> void
+UotanStudio.Firmware.CompoundFile.CompoundFileStreamLayout
+UotanStudio.Firmware.CompoundFile.CompoundFileStreamLayout.BlockOffsets.get -> long[]!
+UotanStudio.Firmware.CompoundFile.CompoundFileStreamLayout.BlockSize.get -> int
+UotanStudio.Firmware.CompoundFile.InvalidCompoundFileMagicException
+UotanStudio.Firmware.CompoundFile.InvalidCompoundFileMagicException.InvalidCompoundFileMagicException(string! message) -> void
+UotanStudio.Firmware.CompoundFile.UnsupportedCompoundFileVersionException
+UotanStudio.Firmware.CompoundFile.UnsupportedCompoundFileVersionException.MajorVersion.get -> ushort
+UotanStudio.Firmware.CompoundFile.UnsupportedCompoundFileVersionException.UnsupportedCompoundFileVersionException(ushort majorVersion) -> void
+UotanStudio.Firmware.Radio.Qcn.InvalidQcnFormatException
+UotanStudio.Firmware.Radio.Qcn.InvalidQcnFormatException.InvalidQcnFormatException(string! message) -> void
+UotanStudio.Firmware.Radio.Qcn.QcnDocument
+UotanStudio.Firmware.Radio.Qcn.QcnDocument.FileVersion.get -> System.Collections.Generic.IReadOnlyList<ushort>!
+UotanStudio.Firmware.Radio.Qcn.QcnDocument.Items.get -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.Radio.Qcn.QcnNvItem!>!
+UotanStudio.Firmware.Radio.Qcn.QcnDocument.MobilePropertyInfo.get -> UotanStudio.Firmware.Radio.Qcn.QcnMobilePropertyInfo?
+UotanStudio.Firmware.Radio.Qcn.QcnDocument.NvItemArrayStreamPaths.get -> System.Collections.Generic.IReadOnlyList<string!>!
+UotanStudio.Firmware.Radio.Qcn.QcnException
+UotanStudio.Firmware.Radio.Qcn.QcnException.QcnException(string! message) -> void
+UotanStudio.Firmware.Radio.Qcn.QcnException.QcnException(string! message, System.Exception! innerException) -> void
+UotanStudio.Firmware.Radio.Qcn.QcnImeiCodec
+const UotanStudio.Firmware.Radio.Qcn.QcnImeiCodec.DigitCount = 15 -> int
+const UotanStudio.Firmware.Radio.Qcn.QcnImeiCodec.EncodedLength = 9 -> int
+static UotanStudio.Firmware.Radio.Qcn.QcnImeiCodec.ComputeCheckDigit(System.ReadOnlySpan<char> digits) -> char
+static UotanStudio.Firmware.Radio.Qcn.QcnImeiCodec.TryDecode(System.ReadOnlySpan<byte> data, out string? imei, out bool checkDigitValid) -> bool
+static UotanStudio.Firmware.Radio.Qcn.QcnImeiCodec.TryEncode(System.ReadOnlySpan<char> imei, System.Span<byte> destination) -> bool
+UotanStudio.Firmware.Radio.Qcn.QcnItemCodecs
+static UotanStudio.Firmware.Radio.Qcn.QcnItemCodecs.DecodeMac(System.ReadOnlySpan<byte> data) -> string?
+static UotanStudio.Firmware.Radio.Qcn.QcnItemCodecs.DecodeReversedHex(System.ReadOnlySpan<byte> data, int length) -> string?
+static UotanStudio.Firmware.Radio.Qcn.QcnItemCodecs.DecodeSpc(System.ReadOnlySpan<byte> data) -> string?
+static UotanStudio.Firmware.Radio.Qcn.QcnItemCodecs.TryEncodeMac(System.ReadOnlySpan<char> text, System.Span<byte> destination) -> bool
+static UotanStudio.Firmware.Radio.Qcn.QcnItemCodecs.TryEncodeReversedHex(System.ReadOnlySpan<char> hex, System.Span<byte> destination) -> bool
+static UotanStudio.Firmware.Radio.Qcn.QcnItemCodecs.TryEncodeSpc(System.ReadOnlySpan<char> spc, System.Span<byte> destination) -> bool
+UotanStudio.Firmware.Radio.Qcn.QcnKnownItem
+UotanStudio.Firmware.Radio.Qcn.QcnKnownItem.Category.get -> string!
+UotanStudio.Firmware.Radio.Qcn.QcnKnownItem.Name.get -> string!
+UotanStudio.Firmware.Radio.Qcn.QcnKnownItems
+static UotanStudio.Firmware.Radio.Qcn.QcnKnownItems.TryGet(ushort id, out UotanStudio.Firmware.Radio.Qcn.QcnKnownItem? item) -> bool
+UotanStudio.Firmware.Radio.Qcn.QcnMobilePropertyInfo
+UotanStudio.Firmware.Radio.Qcn.QcnMobilePropertyInfo.Efs.get -> uint
+UotanStudio.Firmware.Radio.Qcn.QcnMobilePropertyInfo.MobileModelNo.get -> ushort
+UotanStudio.Firmware.Radio.Qcn.QcnMobilePropertyInfo.QpstVersion.get -> string!
+UotanStudio.Firmware.Radio.Qcn.QcnMobilePropertyInfo.SwVersion.get -> string!
+UotanStudio.Firmware.Radio.Qcn.QcnMobilePropertyInfo.VersionMajor.get -> byte
+UotanStudio.Firmware.Radio.Qcn.QcnMobilePropertyInfo.VersionMinor.get -> byte
+UotanStudio.Firmware.Radio.Qcn.QcnNvItem
+const UotanStudio.Firmware.Radio.Qcn.QcnNvItem.DataLength = 128 -> int
+const UotanStudio.Firmware.Radio.Qcn.QcnNvItem.RecordLength = 136 -> int
+UotanStudio.Firmware.Radio.Qcn.QcnNvItem.Data.get -> byte[]!
+UotanStudio.Firmware.Radio.Qcn.QcnNvItem.EffectiveLength.get -> int
+UotanStudio.Firmware.Radio.Qcn.QcnNvItem.Flags.get -> ushort
+UotanStudio.Firmware.Radio.Qcn.QcnNvItem.Id.get -> ushort
+UotanStudio.Firmware.Radio.Qcn.QcnNvItem.Ordinal.get -> int
+UotanStudio.Firmware.Radio.Qcn.QcnNvItem.RecordIndex.get -> int
+UotanStudio.Firmware.Radio.Qcn.QcnNvItem.SourceStreamPath.get -> string!
+UotanStudio.Firmware.Radio.Qcn.QcnPatchMismatchException
+UotanStudio.Firmware.Radio.Qcn.QcnPatchMismatchException.QcnPatchMismatchException(string! message) -> void
+UotanStudio.Firmware.Radio.Qcn.QcnReader
+const UotanStudio.Firmware.Radio.Qcn.QcnReader.MaxRecords = 262144 -> int
+const UotanStudio.Firmware.Radio.Qcn.QcnReader.MaxSourceFileSize = 67108864 -> long
+const UotanStudio.Firmware.Radio.Qcn.QcnReader.MaxStreamSize = 16777216 -> long
+static UotanStudio.Firmware.Radio.Qcn.QcnReader.ParseAsync(string! path, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.Radio.Qcn.QcnDocument!>!
+UotanStudio.Firmware.Radio.Qcn.QcnWriter
+static UotanStudio.Firmware.Radio.Qcn.QcnWriter.PatchAsync(string! path, System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.Radio.Qcn.QcnNvItem!>! items, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
