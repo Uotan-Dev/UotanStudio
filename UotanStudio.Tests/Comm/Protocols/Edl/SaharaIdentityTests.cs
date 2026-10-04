@@ -130,6 +130,74 @@ public sealed partial class SaharaTests
         Assert.Equal(1ul, session.Sahara!.DeviceIdentity!.SerialNumber);
     }
 
+    [Fact]
+    public async Task HandshakeAsync_Version3Identity_QueriesChipIdV3AndToleratesRefusedReads()
+    {
+        using var transport = new ScriptedCommTransport();
+        transport.Enqueue(BuildHelloPacket(minVersion: 3, version: 3));
+        EnqueueCommandReady(transport);
+        EnqueueIdentityResponse(transport, 1, [7, 0, 0, 0]);
+        var v3Payload = new byte[46];
+        BinaryPrimitives.WriteUInt32LittleEndian(v3Payload.AsSpan(0), 0xAABBCCDD);
+        BinaryPrimitives.WriteUInt32LittleEndian(v3Payload.AsSpan(36), 0x00195069);
+        BinaryPrimitives.WriteUInt16LittleEndian(v3Payload.AsSpan(40), 0);
+        BinaryPrimitives.WriteUInt16LittleEndian(v3Payload.AsSpan(42), 0x0001);
+        BinaryPrimitives.WriteUInt16LittleEndian(v3Payload.AsSpan(44), 0x0017);
+        EnqueueIdentityResponse(transport, 0x0A, v3Payload);
+        EnqueueRefusedIdentity(transport);
+        EnqueueRefusedIdentity(transport);
+        EnqueueHello(transport, minVersion: 3, version: 3);
+        EnqueueReadData(transport, 13, 0, 16);
+        EnqueueEndOfImage(transport, 0);
+        EnqueueDoneResponse(transport, 1);
+        var protocol = new SaharaProtocol(transport) { QueryIdentityBeforeUpload = true };
+
+        await protocol.HandshakeAsync(ImagesWithFirehose(), TestContext.Current.CancellationToken);
+
+        var identity = Assert.IsType<SaharaDeviceIdentity>(protocol.DeviceIdentity);
+        Assert.Equal(3u, identity.ProtocolVersion);
+        Assert.Equal(0xAABBCCDDu, identity.ChipIdentifierV3);
+        Assert.Equal(7ul, identity.SerialNumber);
+        Assert.Equal((0x00195069ul << 32) | (0x0017ul << 16) | 0x0001ul, identity.HardwareId);
+        Assert.Equal(0ul, identity.SblVersion);
+        Assert.Equal(string.Empty, identity.OemPublicKeyHashHex);
+        Assert.Equal(3u, protocol.NegotiatedProtocolVersion);
+        Assert.Equal(3u, MemoryMarshal.Read<SaharaHelloResponsePacket>(transport.Writes[0]).Version);
+    }
+
+    [Fact]
+    public async Task HandshakeAsync_Version3ImageOnly_EchoesVersionAndKeepsReadDataPull()
+    {
+        var transport = new ScriptedCommTransport();
+        transport.Enqueue(BuildHelloPacket(minVersion: 1, version: 3));
+        EnqueueReadData(transport, imageId: (uint)SaharaImageId.Firehose, offset: 0, length: 16);
+        EnqueueEndOfImage(transport, status: 0);
+        EnqueueDoneResponse(transport, status: 1);
+        EnqueueCommandReady(transport);
+
+        var protocol = new SaharaProtocol(transport);
+        var mode = await protocol.HandshakeAsync(
+            new Dictionary<uint, Stream> { [(uint)SaharaImageId.Firehose] = new MemoryStream(new byte[16]) },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SaharaMode.ImageTxPending, mode);
+        Assert.Equal(3u, protocol.NegotiatedProtocolVersion);
+        Assert.Equal(3u, MemoryMarshal.Read<SaharaHelloResponsePacket>(transport.Writes[0]).Version);
+        Assert.Equal(SaharaCommand.Done, ParseHeader(transport.Writes[2]).Command);
+    }
+
+    private static void EnqueueRefusedIdentity(ScriptedCommTransport transport)
+    {
+        var packet = new SaharaEndOfImagePacket
+        {
+            Command = SaharaCommand.EndOfImage,
+            Length = (uint)Marshal.SizeOf<SaharaEndOfImagePacket>(),
+            ImageId = (uint)SaharaImageId.Firehose,
+            Status = 1
+        };
+        transport.Enqueue(StructToBytes(packet));
+    }
+
     private static void EnqueueIdentityResponse(ScriptedCommTransport transport, uint command, byte[] bytes)
     {
         EnqueueIdentityHeader(transport, command, (uint)bytes.Length);

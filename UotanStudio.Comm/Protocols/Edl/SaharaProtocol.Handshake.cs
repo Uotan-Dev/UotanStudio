@@ -237,13 +237,38 @@ public sealed partial class SaharaProtocol
                     waitingForHello = false;
                     break;
                 default:
-                    throw new SaharaException($"Unexpected Sahara command: {header.Command}");
+                    throw DescribeUnsupportedSaharaCommand((uint)header.Command);
             }
         }
 
         HandshakeComplete?.Invoke(this, mode);
         return mode;
     }
+
+    /// <summary>
+    /// Builds the failure for commands the host deliberately does not implement, so a
+    /// protocol 3.0 target reports a specific reason instead of an unknown-command error.
+    /// <para>为主机刻意不实现的命令构造失败信息，使协议 3.0 目标报告具体原因而不是未知命令错误。</para>
+    /// </summary>
+    /// <remarks>
+    /// No public reference implementation (linux-msm/qdl, bkerler/edl) performs the version
+    /// 3.0 WRITE_DATA image push, so the transfer layout is not transcribed from evidence and
+    /// is refused rather than approximated.
+    /// <para>没有公开参考实现（linux-msm/qdl、bkerler/edl）执行版本 3.0 的 WRITE_DATA 镜像推送，
+    /// 其传输布局缺乏可转录的证据，因此拒绝而不是近似实现。</para>
+    /// </remarks>
+    /// <param name="command">The command code reported by the device.
+    /// <para>设备报告的命令码。</para></param>
+    /// <returns>The exception to surface to the caller.
+    /// <para>向调用方抛出的异常。</para></returns>
+    private static SaharaException DescribeUnsupportedSaharaCommand(uint command) => command switch
+    {
+        (uint)SaharaCommand.ResetState => new SaharaException(
+            "The device sent RESET_STATE (protocol version 2.9); the host implements image transfer only."),
+        (uint)SaharaCommand.WriteData => new SaharaException(
+            "The device requested the protocol version 3.0 WRITE_DATA image push, which has no public reference implementation and is not supported by this host."),
+        _ => new SaharaException($"Unexpected Sahara command: {command}")
+    };
 
     private Task AcknowledgeImageHelloAsync(SaharaHelloPacket hello, CancellationToken token)
     {
@@ -252,11 +277,12 @@ public sealed partial class SaharaProtocol
         {
             throw new SaharaException($"Image transfer requires ImageTxPending, received {hello.Mode}.");
         }
+        NegotiatedProtocolVersion = Math.Min(hello.Version, EdlConstants.SaharaHostMaxProtocolVersion);
         return WriteStructAsync(new SaharaHelloResponsePacket
         {
             Command = SaharaCommand.HelloResponse,
             Length = (uint)Marshal.SizeOf<SaharaHelloResponsePacket>(),
-            Version = Math.Min(hello.Version, EdlConstants.SaharaVersion),
+            Version = NegotiatedProtocolVersion.Value,
             MinVersion = EdlConstants.SaharaHostCompatibleVersion,
             Mode = SaharaMode.ImageTxPending
         }, token);
@@ -287,9 +313,10 @@ public sealed partial class SaharaProtocol
     private static void ValidateHello(SaharaHelloPacket hello)
     {
         ValidateCommand(hello.Command, SaharaCommand.Hello, hello.Length, (uint)Marshal.SizeOf<SaharaHelloPacket>());
-        if (hello.MinVersion > EdlConstants.SaharaVersion)
+        if (hello.MinVersion > EdlConstants.SaharaHostMaxProtocolVersion)
         {
-            throw new SaharaException($"Device requires min protocol version {hello.MinVersion}, host supports {EdlConstants.SaharaVersion}.");
+            throw new SaharaException(
+                $"Device requires min protocol version {hello.MinVersion}, host supports {EdlConstants.SaharaHostMaxProtocolVersion}.");
         }
         if (hello.Version < EdlConstants.SaharaMinVersion || hello.MinVersion > hello.Version)
         {

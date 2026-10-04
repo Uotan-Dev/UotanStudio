@@ -65,6 +65,17 @@ public sealed partial class SaharaProtocol(ICommTransport transport, int? timeou
     public bool FirehoseAlreadyRunning { get; private set; }
 
     /// <summary>
+    /// Gets the protocol version acknowledged to the device during the most recent HELLO exchange,
+    /// or <see langword="null"/> before any HELLO was answered. Version 3 targets keep the
+    /// READ_DATA pull-based image transfer; only the chip-identity query changes.
+    /// <para>获取最近一次 HELLO 交换中向设备确认的协议版本；尚未应答 HELLO 时为
+    /// <see langword="null"/>。版本 3 目标保留 READ_DATA 拉取式镜像传输，仅芯片身份查询方式改变。</para>
+    /// </summary>
+    /// <value>The acknowledged version, at most <see cref="EdlConstants.SaharaHostMaxProtocolVersion"/>.
+    /// <para>已确认的版本号，至多为 <see cref="EdlConstants.SaharaHostMaxProtocolVersion"/>。</para></value>
+    public uint? NegotiatedProtocolVersion { get; private set; }
+
+    /// <summary>
     /// Raised when the handshake completes.
     /// <para>握手完成时触发。</para>
     /// </summary>

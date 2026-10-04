@@ -215,7 +215,7 @@ public partial class SaharaTests
     public async Task HandshakeAsync_MinVersionTooHigh_Throws()
     {
         var transport = new ScriptedCommTransport();
-        transport.Enqueue(BuildHelloPacket(minVersion: 3));
+        transport.Enqueue(BuildHelloPacket(minVersion: 4, version: 4));
 
         var sahara = new SaharaProtocol(transport);
         var exception = await Assert.ThrowsAsync<SaharaException>(
@@ -268,19 +268,56 @@ public partial class SaharaTests
         Assert.Equal(12, Marshal.SizeOf<SaharaDoneResponsePacket>());
     }
 
+    [Fact]
+    public async Task HandshakeAsync_WriteDataCommand_ReportsVersion3Refusal()
+    {
+        var transport = new ScriptedCommTransport();
+        EnqueueHello(transport);
+        EnqueueRawCommand(transport, SaharaCommand.WriteData);
+
+        var sahara = new SaharaProtocol(transport);
+        var exception = await Assert.ThrowsAsync<SaharaException>(
+            () => sahara.HandshakeAsync(ImagesWithFirehose(), TestContext.Current.CancellationToken));
+        Assert.Contains("WRITE_DATA", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("3.0", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HandshakeAsync_ResetStateCommand_ReportsRefusal()
+    {
+        var transport = new ScriptedCommTransport();
+        EnqueueHello(transport);
+        EnqueueRawCommand(transport, SaharaCommand.ResetState);
+
+        var sahara = new SaharaProtocol(transport);
+        var exception = await Assert.ThrowsAsync<SaharaException>(
+            () => sahara.HandshakeAsync(ImagesWithFirehose(), TestContext.Current.CancellationToken));
+        Assert.Contains("RESET_STATE", exception.Message, StringComparison.Ordinal);
+    }
+
+    private static void EnqueueRawCommand(ScriptedCommTransport transport, SaharaCommand command)
+    {
+        var packet = new SaharaPacketHeader
+        {
+            Command = command,
+            Length = (uint)Marshal.SizeOf<SaharaPacketHeader>()
+        };
+        transport.Enqueue(StructToBytes(packet));
+    }
+
     private static IReadOnlyDictionary<uint, Stream> ImagesWithFirehose(int size = 4096)
         => new Dictionary<uint, Stream> { [(uint)SaharaImageId.Firehose] = new MemoryStream(new byte[size]) };
 
-    private static void EnqueueHello(ScriptedCommTransport transport, uint minVersion = 1)
-        => transport.Enqueue(BuildHelloPacket(minVersion));
+    private static void EnqueueHello(ScriptedCommTransport transport, uint minVersion = 1, uint version = EdlConstants.SaharaVersion)
+        => transport.Enqueue(BuildHelloPacket(minVersion, version));
 
-    private static byte[] BuildHelloPacket(uint minVersion = 1)
+    private static byte[] BuildHelloPacket(uint minVersion = 1, uint version = EdlConstants.SaharaVersion)
     {
         var hello = new SaharaHelloPacket
         {
             Command = SaharaCommand.Hello,
             Length = (uint)Marshal.SizeOf<SaharaHelloPacket>(),
-            Version = EdlConstants.SaharaVersion,
+            Version = version,
             MinVersion = minVersion,
             MaxCommandLength = 3,
             Mode = SaharaMode.ImageTxPending

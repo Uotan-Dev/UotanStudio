@@ -25,6 +25,20 @@ internal static class EdlConstants
     public const uint SaharaHostCompatibleVersion = 1;
 
     /// <summary>
+    /// Maximum Sahara protocol version the host negotiates. Version 3 targets keep the
+    /// READ_DATA pull-based image transfer and only change the chip-identity query.
+    /// <para>主机协商的最高 Sahara 协议版本。版本 3 目标保留 READ_DATA 拉取式镜像传输，
+    /// 仅芯片身份查询方式改变。</para>
+    /// </summary>
+    public const uint SaharaHostMaxProtocolVersion = 3;
+
+    /// <summary>
+    /// SAHARA_EXEC_CMD_READ_CHIP_ID_V3 command-mode client command (protocol version 3).
+    /// <para>SAHARA_EXEC_CMD_READ_CHIP_ID_V3 命令模式客户端命令（协议版本 3）。</para>
+    /// </summary>
+    public const uint SaharaExecCmdReadChipIdV3 = 0x0A;
+
+    /// <summary>
     /// Default maximum packet length when not negotiated.
     /// <para>未协商时的默认最大包长度。</para>
     /// </summary>
@@ -137,6 +151,18 @@ internal static class EdlConstants
     /// <para>Sahara READ_DATA64 命令码。</para>
     /// </summary>
     public const uint SaharaCmdReadData64 = 0x12;
+
+    /// <summary>
+    /// SAHARA_RESET_STATE command, introduced with protocol version 2.9.
+    /// <para>SAHARA_RESET_STATE 命令，随协议版本 2.9 引入。</para>
+    /// </summary>
+    public const uint SaharaCmdResetState = 0x13;
+
+    /// <summary>
+    /// SAHARA_WRITE_DATA command, introduced with protocol version 3.0 as a host-driven image push.
+    /// <para>SAHARA_WRITE_DATA 命令，随协议版本 3.0 引入，是主机主动推送镜像的方式。</para>
+    /// </summary>
+    public const uint SaharaCmdWriteData = 0x14;
 
     /// <summary>
     /// Largest Sahara memory-debug region table the host will buffer, mirroring the reference
@@ -488,6 +514,18 @@ internal enum SaharaCommand : uint
     /// <para>READ_DATA64 命令。</para>
     /// </summary>
     ReadData64 = EdlConstants.SaharaCmdReadData64,
+
+    /// <summary>
+    /// RESET_STATE command (protocol version 2.9).
+    /// <para>RESET_STATE 命令（协议版本 2.9）。</para>
+    /// </summary>
+    ResetState = EdlConstants.SaharaCmdResetState,
+
+    /// <summary>
+    /// WRITE_DATA command (protocol version 3.0, host-driven image push).
+    /// <para>WRITE_DATA 命令（协议版本 3.0，主机主动推送镜像）。</para>
+    /// </summary>
+    WriteData = EdlConstants.SaharaCmdWriteData,
 }
 
 /// <summary>
