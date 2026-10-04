@@ -95,7 +95,11 @@ public enum EditorOpenMode
 
     /// <summary>Open the Qualcomm image analysis workspace explicitly.
     /// <para>显式打开 Qualcomm 镜像分析工作区。</para></summary>
-    Qualcomm
+    Qualcomm,
+
+    /// <summary>Open the Qualcomm QCN NV backup in the structured QCN editor.
+    /// <para>以结构化 QCN 编辑器打开 Qualcomm QCN NV 备份。</para></summary>
+    Qcn
 }
 
 /// <summary>
@@ -160,6 +164,11 @@ public static class FileOpenMode
         if (IsApkExtension(ext))
         {
             return EditorOpenMode.Apk;
+        }
+
+        if (IsQcnExtension(ext))
+        {
+            return EditorOpenMode.Qcn;
         }
 
         if (IsDtsExtension(ext))
@@ -420,6 +429,15 @@ public static class FileOpenMode
     /// </summary>
     public static bool IsApkExtension(string? ext) =>
         ext is not null && ext.Equals(".apk", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <para>是否为 QCN 扩展名。注意 OLE2/CFB 魔数与 .doc/.msi 共用，因此仅按扩展名路由，
+    /// 非 QCN 内容在编辑器加载时给出本地化错误。</para>
+    /// Whether the extension is a QCN one. The OLE2/CFB magic is shared with .doc/.msi files, so
+    /// routing is extension-only; non-QCN content surfaces a localized error at load time.
+    /// </summary>
+    public static bool IsQcnExtension(string? ext) =>
+        ext is not null && ext.Equals(".qcn", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// <para>是否为 DTS 设备树源文件扩展名。</para>

@@ -37,6 +37,7 @@ internal static class ViewModelViewRegistry
         [typeof(DexEditorViewModel)] = () => new DexEditorView(),
         [typeof(ElfInfoViewModel)] = () => new ElfInfoView(),
         [typeof(QualcommImageViewModel)] = () => new QualcommImageView(),
+        [typeof(QcnEditorViewModel)] = () => new QcnEditorView(),
         [typeof(ManifestEditorViewModel)] = () => new ManifestEditorView(),
         [typeof(PartitionEditorViewModel)] = () => new PartitionEditorView(),
         [typeof(ArscEditorViewModel)] = () => new ArscEditorView(),

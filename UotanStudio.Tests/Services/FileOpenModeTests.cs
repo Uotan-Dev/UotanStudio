@@ -278,4 +278,21 @@ public class FileOpenModeTests
         Assert.Equal(EditorOpenMode.Apk, FileOpenMode.ResolveMode("app.apk", zip));
         Assert.Equal(EditorOpenMode.Dex, FileOpenMode.ResolveMode("lib.jar", zip));
     }
+
+    [Fact]
+    public void QcnExtensionRoutesToQcnEditor()
+    {
+        Assert.Equal(EditorOpenMode.Qcn, FileOpenMode.ResolveMode("backup.qcn"));
+        Assert.Equal(EditorOpenMode.Qcn, FileOpenMode.ResolveMode("BACKUP.QCN"));
+        Assert.True(FileOpenMode.IsQcnExtension(".qcn"));
+        Assert.False(FileOpenMode.IsQcnExtension(".doc"));
+    }
+
+    [Fact]
+    public void Ole2MagicAloneDoesNotRouteToQcnEditor()
+    {
+        var ole2 = new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 };
+        Assert.NotEqual(EditorOpenMode.Qcn, FileOpenMode.ResolveMode("document.doc", ole2));
+        Assert.NotEqual(EditorOpenMode.Qcn, FileOpenMode.ResolveMode("installer", ole2));
+    }
 }

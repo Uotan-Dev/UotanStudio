@@ -217,6 +217,12 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        if (mode == EditorOpenMode.Qcn)
+        {
+            await OpenQcnAsync(path);
+            return;
+        }
+
         if (mode == EditorOpenMode.Log)
         {
             await OpenLogAsync(path);
@@ -385,6 +391,21 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     public Task OpenQualcommAsync(string path) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new QualcommImageViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath));
+
+    /// <summary>
+    /// <para>在文档区以结构化 QCN 编辑器打开指定的 QCN 文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="QcnEditorViewModel"/>。</para>
+    /// Opens the given QCN file in the structured QCN editor in the document area: focuses it if
+    /// already open; otherwise creates and loads a <see cref="QcnEditorViewModel"/>.
+    /// </summary>
+    /// <param name="path">
+    /// <para>要打开的 QCN 文件路径。</para>
+    /// The path of the QCN file to open.
+    /// </param>
+    public Task OpenQcnAsync(string path) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new QcnEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
         static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
