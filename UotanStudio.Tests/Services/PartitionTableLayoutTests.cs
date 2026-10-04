@@ -180,7 +180,7 @@ public sealed class PartitionTableLayoutTests
 
         var array = new byte[ArrayBytes];
         standard.AsSpan((int)GptTable.EntriesStartLba * SectorSize, entries.Count * GptTable.EntrySize).CopyTo(array);
-        var arrayCrc = GptTable.Crc32(array);
+        var arrayCrc = System.IO.Hashing.Crc32.HashToUInt32(array);
         array.CopyTo(image, PrimaryEntriesSector * SectorSize);
         array.CopyTo(image, BackupEntriesSector * SectorSize);
 
@@ -211,7 +211,7 @@ public sealed class PartitionTableLayoutTests
         BinaryPrimitives.WriteUInt32LittleEndian(header[80..], DeclaredSlots);
         BinaryPrimitives.WriteUInt32LittleEndian(header[GptTable.EntriesCrcOffset..], arrayCrc);
         BinaryPrimitives.WriteUInt32LittleEndian(header[GptTable.HeaderCrcOffset..], 0);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[GptTable.HeaderCrcOffset..], GptTable.Crc32(header));
+        BinaryPrimitives.WriteUInt32LittleEndian(header[GptTable.HeaderCrcOffset..], System.IO.Hashing.Crc32.HashToUInt32(header));
     }
 
     private static void FillUnmodelledSectors(byte[] image)

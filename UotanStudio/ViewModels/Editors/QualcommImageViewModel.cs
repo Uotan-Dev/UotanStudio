@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Executable.Qualcomm;
 using UotanStudio.Services;
 
@@ -175,7 +176,7 @@ public partial class QualcommImageViewModel : Document
         {
             var target = Path.GetFullPath(path);
             var directory = Path.GetDirectoryName(target)!;
-            temporary = target + ".tmp-" + Guid.NewGuid().ToString("N");
+            temporary = TempFileHelper.CreateAdjacentPath(target);
             Directory.CreateDirectory(directory);
             await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write,
                 FileShare.None, 65536, FileOptions.Asynchronous))
@@ -210,7 +211,7 @@ public partial class QualcommImageViewModel : Document
             {
                 try
                 {
-                    File.Delete(temporary);
+                    TempFileHelper.SafeDelete(temporary);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {

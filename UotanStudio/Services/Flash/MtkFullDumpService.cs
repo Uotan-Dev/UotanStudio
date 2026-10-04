@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using UotanStudio.Comm.Protocols.Mtk;
+using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Services.Flash;
 
@@ -83,13 +84,12 @@ internal static class MtkFullDumpService
             await using (var staging = new FileStream(stagingPath, FileMode.CreateNew, FileAccess.Write,
                 FileShare.None, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
-                using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                using var counting = new HashingStream(staging, hash);
+                using var hashingDestination = new HashingWriteStream(staging, leaveOpen: true);
                 for (var offset = 0L; offset < target.RequestedBytes;)
                 {
                     ct.ThrowIfCancellationRequested();
                     var length = (int)Math.Min(target.ChunkBytes, target.RequestedBytes - offset);
-                    await target.Read(session, offset, length, counting, ct).ConfigureAwait(false);
+                    await target.Read(session, offset, length, hashingDestination, ct).ConfigureAwait(false);
                     offset += length;
                     progress?.Report(new FlashProgress(target.RegionName, Percent(offset, target.RequestedBytes),
                         $"Read {offset} of {target.RequestedBytes} bytes of the {family} user area..."));
@@ -103,7 +103,7 @@ internal static class MtkFullDumpService
                         "were reported, so the destination was left untouched.");
                 }
 
-                sha256Hex = Convert.ToHexString(hash.GetHashAndReset());
+                sha256Hex = Convert.ToHexString(hashingDestination.GetHashAndReset());
             }
 
             ct.ThrowIfCancellationRequested();
@@ -304,50 +304,6 @@ internal static class MtkFullDumpService
             }
 
             return new MtkDumpTarget(regionName, reportedCapacityBytes, requested, chunkBytes, read);
-        }
-    }
-
-    /// <summary>Forwards written bytes to a staging file while feeding one incremental SHA-256.
-    /// <para>将写入的字节转发到暂存文件，同时更新一份增量 SHA-256。</para></summary>
-    private sealed class HashingStream(Stream destination, IncrementalHash hash) : Stream
-    {
-        public override bool CanRead => false;
-        public override bool CanSeek => false;
-        public override bool CanWrite => true;
-        public override long Length => destination.Length;
-        public override long Position
-        {
-            get => throw new NotSupportedException();
-            set => throw new NotSupportedException();
-        }
-
-        public override void Flush() => destination.Flush();
-        public override Task FlushAsync(CancellationToken cancellationToken) =>
-            destination.FlushAsync(cancellationToken);
-
-        public override int Read(byte[] buffer, int offset, int count) =>
-            throw new NotSupportedException("A staging hash stream is write-only.");
-        public override long Seek(long offset, SeekOrigin origin) =>
-            throw new NotSupportedException("A staging hash stream is write-only.");
-        public override void SetLength(long value) =>
-            throw new NotSupportedException("A staging hash stream is write-only.");
-
-        public override void Write(byte[] buffer, int offset, int count)
-        {
-            hash.AppendData(buffer.AsSpan(offset, count));
-            destination.Write(buffer, offset, count);
-        }
-
-        public override void Write(ReadOnlySpan<byte> buffer)
-        {
-            hash.AppendData(buffer);
-            destination.Write(buffer);
-        }
-
-        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            hash.AppendData(buffer.Span);
-            return destination.WriteAsync(buffer, cancellationToken);
         }
     }
 }

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services.Mcp;
@@ -411,7 +412,7 @@ public class SettingsPersistenceService
             }
 
             var json = JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings);
-            var tempPath = _settingsFilePath + ".tmp";
+            var tempPath = TempFileHelper.CreateAdjacentPath(_settingsFilePath);
             try
             {
                 File.WriteAllText(tempPath, json);

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Messages;
 using UotanStudio.Services;
@@ -215,7 +216,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
             if (!File.Exists(path) || File.GetLastWriteTimeUtc(path) != _loadedWriteTime)
                 throw new IOException($"The file changed outside the editor: {path}");
             var text = Text;
-            temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
+            temporary = TempFileHelper.CreateAdjacentPath(path);
             await File.WriteAllTextAsync(temporary, text, _textEncoding);
             if (File.GetLastWriteTimeUtc(path) != _loadedWriteTime)
                 throw new IOException($"The file changed outside the editor: {path}");
@@ -225,7 +226,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
         }
         finally
         {
-            try { if (temporary is not null) File.Delete(temporary); }
+            try { TempFileHelper.SafeDelete(temporary); }
             finally { _saveGate.Release(); }
         }
     }
@@ -234,7 +235,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
     internal async Task SaveAsAsync(string path)
     {
         await _saveGate.WaitAsync();
-        var temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(path);
         try
         {
             var text = Text;
@@ -247,8 +248,8 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
         }
         finally
         {
-            try { if (File.Exists(temporary)) File.Delete(temporary); }
-            finally { _saveGate.Release(); }
+            TempFileHelper.SafeDelete(temporary);
+            _saveGate.Release();
         }
     }
 

@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO.Hashing;
 using System.Text;
 
 namespace UotanStudio.Models;
@@ -134,27 +135,6 @@ public static class GptTable
     public static readonly Guid DefaultTypeGuid = new("0FC63DAF-8483-4772-8E79-3D69D8477DE4");
 
     /// <summary>
-    /// <para>计算 IEEE CRC-32 校验和（多项式 0xEDB88320，初值/异或输出 0xFFFFFFFF）。</para>
-    /// Computes the IEEE CRC-32 checksum (polynomial 0xEDB88320, init/XOR-out 0xFFFFFFFF).
-    /// </summary>
-    public static uint Crc32(ReadOnlySpan<byte> data)
-    {
-        unchecked
-        {
-            var crc = 0xFFFF_FFFFu;
-            foreach (var b in data)
-            {
-                crc ^= b;
-                for (var i = 0; i < 8; i++)
-                {
-                    crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB8_8320u : crc >> 1;
-                }
-            }
-            return ~crc;
-        }
-    }
-
-    /// <summary>
     /// <para>检查给定字节是否在扇区对齐偏移上携带 GPT 签名（<c>EFI PART</c>）。</para>
     /// Checks whether the given bytes carry the GPT signature (<c>EFI PART</c>) at a sector-aligned offset.
     /// </summary>
@@ -261,10 +241,10 @@ public static class GptTable
             }
 
             var header = result.AsSpan((int)copy.HeaderOffset, copy.HeaderSize);
-            BinaryPrimitives.WriteUInt32LittleEndian(header[EntriesCrcOffset..], Crc32(array));
+            BinaryPrimitives.WriteUInt32LittleEndian(header[EntriesCrcOffset..], Crc32.HashToUInt32(array));
             BinaryPrimitives.WriteUInt32LittleEndian(header[80..], (uint)slotCount);
             BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], 0);
-            BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], Crc32(header));
+            BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], Crc32.HashToUInt32(header));
         }
 
         return result;
@@ -333,7 +313,7 @@ public static class GptTable
         Span<byte> scratch = stackalloc byte[SectorSize];
         header.CopyTo(scratch);
         BinaryPrimitives.WriteUInt32LittleEndian(scratch[HeaderCrcOffset..], 0);
-        return stored == Crc32(scratch[..headerSize]);
+        return stored == Crc32.HashToUInt32(scratch[..headerSize]);
     }
 
     /// <summary>
@@ -380,7 +360,7 @@ public static class GptTable
 
     private static bool ChecksumMatches(byte[] image, long offset, int arrayBytes, uint expectedCrc) =>
         offset >= 0 && offset + arrayBytes <= image.Length
-        && Crc32(image.AsSpan((int)offset, arrayBytes)) == expectedCrc;
+        && Crc32.HashToUInt32(image.AsSpan((int)offset, arrayBytes)) == expectedCrc;
 
     private static long FreeBytesAfter(byte[] image, IReadOnlyList<GptCopy> copies, GptCopy copy)
     {

@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Google.Protobuf;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;
@@ -161,13 +162,13 @@ internal static class SourceContainerMetadataService
             if (bytes.Length > MaximumBytes) throw new InvalidDataException("Source configuration exceeds its size limit.");
             var path = GetPath(root, settings.Kind);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            var temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
+            var temporary = TempFileHelper.CreateAdjacentPath(path);
             try
             {
                 await File.WriteAllBytesAsync(temporary, bytes).ConfigureAwait(false);
                 File.Move(temporary, path, overwrite: true);
             }
-            finally { File.Delete(temporary); }
+            finally { TempFileHelper.SafeDelete(temporary); }
         }).ConfigureAwait(false);
     }
 }

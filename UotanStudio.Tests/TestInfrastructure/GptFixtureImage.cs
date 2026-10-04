@@ -53,8 +53,8 @@ internal static class GptFixtureImage
                 slot[56..(56 + Math.Min(entry.Name.Length, GptTable.MaxNameUnits) * 2)]);
         }
 
-        BinaryPrimitives.WriteUInt32LittleEndian(header[GptTable.EntriesCrcOffset..], GptTable.Crc32(array));
-        BinaryPrimitives.WriteUInt32LittleEndian(header[GptTable.HeaderCrcOffset..], GptTable.Crc32(header));
+        BinaryPrimitives.WriteUInt32LittleEndian(header[GptTable.EntriesCrcOffset..], System.IO.Hashing.Crc32.HashToUInt32(array));
+        BinaryPrimitives.WriteUInt32LittleEndian(header[GptTable.HeaderCrcOffset..], System.IO.Hashing.Crc32.HashToUInt32(header));
         return image;
     }
 

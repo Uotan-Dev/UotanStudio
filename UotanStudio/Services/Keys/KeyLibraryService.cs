@@ -7,6 +7,7 @@ using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Firmware.AndroidMeta.Apk;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Services.Keys;
 
@@ -325,7 +326,7 @@ public sealed class KeyLibraryService
             return path;
         }
 
-        var temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(path);
         try
         {
             using var privateKey = LoadPrivateKey(PrivatePath(key));
@@ -335,7 +336,7 @@ public sealed class KeyLibraryService
         }
         finally
         {
-            File.Delete(temporary);
+            TempFileHelper.SafeDelete(temporary);
         }
         return EnsureAvbPublicKey(key);
     }
