@@ -121,10 +121,18 @@ public sealed partial class FirehoseProtocol
             {
                 throw new InvalidDataException("The raw source length changed after the acknowledged write.");
             }
-            using var comparison = new ReadBackComparisonStream(source, partitionName);
-            await ReadToStreamCoreAsync(comparison, start, sectors, "partition.bin", region,
-                cancellationToken).ConfigureAwait(false);
-            await comparison.CompleteAsync(cancellationToken).ConfigureAwait(false);
+            if (await TryVerifyProgramWithTargetDigestOwnedAsync(source, start, sectors, region,
+                    cancellationToken).ConfigureAwait(false))
+            {
+                Log("On-target digest verification passed for the named partition write.");
+            }
+            else
+            {
+                using var comparison = new ReadBackComparisonStream(source, partitionName);
+                await ReadToStreamCoreAsync(comparison, start, sectors, "partition.bin", region,
+                    cancellationToken).ConfigureAwait(false);
+                await comparison.CompleteAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
         cancellationToken.ThrowIfCancellationRequested();
         ThrowIfDisposed();

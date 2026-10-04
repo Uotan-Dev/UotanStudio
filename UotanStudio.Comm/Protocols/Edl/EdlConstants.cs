@@ -39,6 +39,42 @@ internal static class EdlConstants
     public const uint SaharaExecCmdReadChipIdV3 = 0x0A;
 
     /// <summary>
+    /// SAHARA_EXEC_CMD_NOP command-mode client command.
+    /// <para>SAHARA_EXEC_CMD_NOP 命令模式客户端命令。</para>
+    /// </summary>
+    public const uint SaharaExecCmdNop = 0x00;
+
+    /// <summary>
+    /// SAHARA_EXEC_CMD_SWITCH_TO_DMSS_DLOAD command-mode client command.
+    /// <para>SAHARA_EXEC_CMD_SWITCH_TO_DMSS_DLOAD 命令模式客户端命令。</para>
+    /// </summary>
+    public const uint SaharaExecCmdSwitchToDmssDload = 0x04;
+
+    /// <summary>
+    /// SAHARA_EXEC_CMD_SWITCH_TO_STREAM_DLOAD command-mode client command.
+    /// <para>SAHARA_EXEC_CMD_SWITCH_TO_STREAM_DLOAD 命令模式客户端命令。</para>
+    /// </summary>
+    public const uint SaharaExecCmdSwitchToStreamDload = 0x05;
+
+    /// <summary>
+    /// SAHARA_EXEC_CMD_READ_DEBUG_DATA command-mode client command.
+    /// <para>SAHARA_EXEC_CMD_READ_DEBUG_DATA 命令模式客户端命令。</para>
+    /// </summary>
+    public const uint SaharaExecCmdReadDebugData = 0x06;
+
+    /// <summary>
+    /// SAHARA_EXEC_CMD_GET_COMMAND_ID_LIST command-mode client command.
+    /// <para>SAHARA_EXEC_CMD_GET_COMMAND_ID_LIST 命令模式客户端命令。</para>
+    /// </summary>
+    public const uint SaharaExecCmdGetCommandIdList = 0x08;
+
+    /// <summary>
+    /// SAHARA_EXEC_CMD_GET_TRAINING_DATA command-mode client command.
+    /// <para>SAHARA_EXEC_CMD_GET_TRAINING_DATA 命令模式客户端命令。</para>
+    /// </summary>
+    public const uint SaharaExecCmdGetTrainingData = 0x09;
+
+    /// <summary>
     /// Default maximum packet length when not negotiated.
     /// <para>未协商时的默认最大包长度。</para>
     /// </summary>

@@ -234,6 +234,13 @@
                             <ComboBox Name="EdlSerialPortBox" Height="32"
                                       IsVisible="{Binding #EdlSerialFlashButton.IsVisible}"
                                       AutomationProperties.Name="{DynamicResource Flash_EdlSerialPort}" />
+                            <TextBlock Text="{DynamicResource Flash_EdlSerialBaud}"
+                                       IsVisible="{Binding #EdlSerialFlashButton.IsVisible}"
+                                       FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="EdlSerialBaudBox" Height="32"
+                                      VerticalContentAlignment="Center" HorizontalAlignment="Stretch"
+                                      IsVisible="{Binding #EdlSerialFlashButton.IsVisible}"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlSerialBaud}" />
                             <Button Name="EraseSelectedButton" Classes="pane-action"
                                     Click="OnEraseSelectedClick"
                                     Content="{DynamicResource Flash_EraseSelected}" />
@@ -590,6 +597,10 @@
                                     Click="OnEdlReadStorageInfoClick"
                                     Content="{DynamicResource Flash_EdlReadStorageInfo}"
                                     AutomationProperties.Name="{DynamicResource Flash_EdlReadStorageInfo}" />
+                            <TextBlock Text="{DynamicResource Flash_EdlLun}" FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="EdlLunBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlLun}" />
                             <Button Name="EdlChooseProgrammerButton" Classes="pane-action"
                                     Click="OnEdlChooseProgrammerClick"
                                     Content="{DynamicResource Flash_EdlChooseProgrammer}"
@@ -638,6 +649,15 @@
                             <TextBox Name="EdlProjectIdBox" Height="32" VerticalContentAlignment="Center"
                                      PlaceholderText="{DynamicResource Flash_EdlProjectId}"
                                      AutomationProperties.Name="{DynamicResource Flash_EdlProjectId}" />
+                            <!-- 小米固定鉴权数据按上游 xiaomi 模块约定为 256 字节凭据块，挑战原样忽略。 -->
+                            <!-- The Xiaomi fixed auth data is a 256-byte credential blob per the upstream xiaomi
+                                 module convention; the challenge is ignored verbatim. -->
+                            <Button Name="ChooseEdlXiaomiAuthFileButton" Classes="pane-action" IsVisible="False"
+                                    Click="OnChooseEdlXiaomiAuthFileClick"
+                                    Content="{DynamicResource Flash_EdlXiaomiAuthFile}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlXiaomiAuthFile}" />
+                            <TextBlock Name="EdlXiaomiAuthFileText" TextTrimming="CharacterEllipsis"
+                                       IsVisible="False" FontSize="12" Opacity="0.8" />
                             <TextBox Name="EdlSerialBox" Height="32" VerticalContentAlignment="Center"
                                      PlaceholderText="{DynamicResource Flash_EdlSerial}"
                                      AutomationProperties.Name="{DynamicResource Flash_EdlSerial}" />
@@ -691,6 +711,39 @@
                                     Click="OnEdlSetActiveSlotClick"
                                     Content="{DynamicResource Flash_EdlSetActiveSlotApply}"
                                     AutomationProperties.Name="{DynamicResource Flash_EdlSetActiveSlotApply}" />
+                            <!-- 调试级内存写入与复制都直接改写目标内存，因此两次确认且默认隐藏于 UFS 操作之前。 -->
+                            <!-- Debug-grade memory writes and copies change target memory directly, so both ask twice
+                                 and sit before the UFS operations. -->
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <TextBox Name="EdlPokeAddressBox" Grid.Column="0" Height="32" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Flash_EdlPokeAddressHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_EdlPokeAddressHint}" />
+                                <TextBox Name="EdlPokeDataBox" Grid.Column="1" Height="32" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Flash_EdlPokeDataHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_EdlPokeDataHint}" />
+                            </Grid>
+                            <CheckBox Name="EdlPokeConfirmBox" Content="{DynamicResource Flash_MtkPokeConfirm}"
+                                      HorizontalAlignment="Left"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkPokeConfirm}" />
+                            <Button Name="EdlPokeButton" Classes="pane-action"
+                                    Click="OnEdlPokeClick"
+                                    Content="{DynamicResource Flash_EdlPoke}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlPoke}" />
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                <TextBox Name="EdlMemcpySourceBox" Grid.Column="0" Height="32" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Flash_EdlMemcpySourceHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_EdlMemcpySourceHint}" />
+                                <TextBox Name="EdlMemcpySizeBox" Grid.Column="1" Height="32" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Flash_EdlMemcpySizeHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_EdlMemcpySizeHint}" />
+                                <TextBox Name="EdlMemcpyDestBox" Grid.Column="2" Height="32" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Flash_EdlPokeAddressHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_EdlPokeAddressHint}" />
+                            </Grid>
+                            <Button Name="EdlMemcpyButton" Classes="pane-action"
+                                    Click="OnEdlMemcpyClick"
+                                    Content="{DynamicResource Flash_EdlMemcpy}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlMemcpy}" />
                             <!-- UFS provisioning 只吃外部描述符文件：预览不写设备，提交前必须确认，非 UFS 存储由服务层拒绝。 -->
                             <!-- UFS provisioning takes an external descriptor profile: the preview writes nothing, the
                                  submission needs confirmation, and non-UFS storage is refused by the service layer. -->

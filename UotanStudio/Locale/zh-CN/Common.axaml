@@ -156,7 +156,6 @@
     <x:String x:Key="Flash_EraseSelected">擦除选中分区</x:String>
     <x:String x:Key="Flash_DisableVbmeta">禁用 vbmeta 校验</x:String>
     <x:String x:Key="Flash_DeleteCow">删除COW分区</x:String>
-    <x:String x:Key="Flash_UseAdb">使用ADB</x:String>
     <x:String x:Key="Flash_ModeMismatch">所选设备模式或权限不支持此刷机包及操作。</x:String>
     <x:String x:Key="Flash_FlashEdlBundle">刷写完整 EDL 包</x:String>
     <x:String x:Key="Flash_AddRoot">添加 Root</x:String>
@@ -168,7 +167,6 @@
     <x:String x:Key="Flash_Log">日志</x:String>
     <x:String x:Key="Flash_ClearLog">清空</x:String>
     <x:String x:Key="Flash_LogPlaceholder">刷写日志输出</x:String>
-    <x:String x:Key="Flash_RefreshDevices">刷新设备</x:String>
     <x:String x:Key="Flash_FolderOnly">请选择刷机包、镜像目录或 HTTP(S) Payload 链接。</x:String>
     <x:String x:Key="Flash_ImagesLoaded">个镜像已加载</x:String>
     <x:String x:Key="Flash_DeviceChanged">所选设备已变化，请刷新并重新确认。</x:String>
@@ -201,7 +199,6 @@
     <x:String x:Key="Flash_SkipAbsentSources">跳过缺少镜像的分区</x:String>
     <x:String x:Key="Flash_ContinueOnFailure">单个分区失败后继续</x:String>
     <x:String x:Key="Flash_NoDevice">未选择设备</x:String>
-    <x:String x:Key="Flash_RkdlLoaderMissing">缺少瑞芯微 loader。</x:String>
     <x:String x:Key="Flash_Mtk">MTK 串口下载</x:String>
     <x:String x:Key="Flash_MtkPorts">串口号</x:String>
     <x:String x:Key="Flash_MtkRefreshPorts">刷新端口</x:String>
@@ -318,6 +315,9 @@
     <x:String x:Key="Flash_EdlAuthNone">不鉴权</x:String>
     <x:String x:Key="Flash_EdlProjectAuth">OnePlus 项目校验</x:String>
     <x:String x:Key="Flash_EdlNothingAuth">Nothing 项目校验（ntprojectverify）</x:String>
+    <x:String x:Key="Flash_EdlXiaomiAuth">小米签名（固定鉴权数据）</x:String>
+    <x:String x:Key="Flash_EdlXiaomiAuthFile">选择小米签名文件</x:String>
+    <x:String x:Key="Flash_EdlXiaomiAuthInvalid">小米签名文件必须恰好为 256 字节。</x:String>
     <x:String x:Key="Flash_EdlNothingProjectUnknown">Nothing 目录中没有该项目号，不猜测未知项目的令牌常数：</x:String>
     <x:String x:Key="Flash_EdlOnePlusModel">设备项目</x:String>
     <x:String x:Key="Flash_EdlOnePlusModelFormat">{0}（{1}）</x:String>
@@ -378,6 +378,51 @@
     <x:String x:Key="Flash_EdlUfsProvisionConfirm">provisioning 会真实建立描述符声明的逻辑单元，空盘上无法撤销；预览不写出任何字节。确定继续？</x:String>
     <x:String x:Key="Flash_EdlUfsReset">复位 UFS 设备</x:String>
     <x:String x:Key="Flash_EdlUfsResetConfirm">将请求设备复位 UFS 链路，当前 firehose 会话随之结束。确定继续？</x:String>
+    <x:String x:Key="Flash_CompressedSuperEmptyUnsupported">不支持压缩的 super_empty 镜像。</x:String>
+    <x:String x:Key="Flash_ImageNameInvalid">镜像文件名不是合法的分区名。</x:String>
+    <x:String x:Key="Flash_RootPackageUnsupported">所选文件不是受支持的 Magisk 或 KernelSU 包。</x:String>
+    <x:String x:Key="Flash_MissingExtractedImage">解压产物缺失：{0}</x:String>
+    <x:String x:Key="Flash_EdlImageMismatch">EDL 镜像 {0} 与 rawprogram 清单不再一致。</x:String>
+    <x:String x:Key="Flash_EdlGptProgrammed">已按设备 GPT 写入 EDL 分区“{0}”（写入 {1} 字节，校验 {2} 字节）。</x:String>
+    <x:String x:Key="Flash_EdlEraseRangeUnknown">rawprogram 条目“{0}”未声明 num_partition_sectors，无法确定擦除范围。</x:String>
+    <x:String x:Key="Flash_EdlEraseFailed">擦除“{0}”失败。响应：{1}</x:String>
+    <x:String x:Key="Flash_EdlPowerNotAcknowledged">目标未确认该请求。{0}</x:String>
+    <x:String x:Key="Flash_EdlPoke">内存写入（调试）</x:String>
+    <x:String x:Key="Flash_EdlPokeAddressHint">地址（十六进制）</x:String>
+    <x:String x:Key="Flash_EdlPokeDataHint">十六进制字节（最多 8 个）</x:String>
+    <x:String x:Key="Flash_EdlPokeConfirm">向目标内存的指定地址写入原始字节？该调试命令可能使正在运行的 programmer 崩溃。</x:String>
+    <x:String x:Key="Flash_EdlPokeInvalid">请输入有效的十六进制地址与 1-8 字节的十六进制数据。</x:String>
+    <x:String x:Key="Flash_EdlMemcpy">内存复制（调试）</x:String>
+    <x:String x:Key="Flash_EdlMemcpySourceHint">源地址（十六进制）</x:String>
+    <x:String x:Key="Flash_EdlMemcpySizeHint">字节数（最多 16 MiB）</x:String>
+    <x:String x:Key="Flash_EdlActiveSlotDetected">活动槽位：{0}</x:String>
+    <x:String x:Key="Flash_EdlLun">物理区域（LUN）</x:String>
+    <x:String x:Key="Flash_EdlSerialBaud">串口波特率</x:String>
+    <x:String x:Key="Flash_MtkLoggingOnlyHint">所选 MTK 端口仅支持日志输出，无法执行刷写命令。</x:String>
+    <x:String x:Key="Flash_MtkLoaderNoEntries">该 loader 配置没有可用的 DA1/DA2 区域对。</x:String>
+    <x:String x:Key="Flash_MtkRpmbModeFrames">按序号读取帧</x:String>
+    <x:String x:Key="Flash_MtkRpmbModeByteRange">按字节范围读取</x:String>
+    <x:String x:Key="Flash_MtkRpmbModeFullArea">读取整个 RPMB 区域</x:String>
+    <x:String x:Key="Flash_MtkSecCfgIntentLock">上锁（状态 1）</x:String>
+    <x:String x:Key="Flash_MtkSecCfgIntentUnlock">解锁（状态 3）</x:String>
+    <x:String x:Key="Flash_MtkOemKeySoftwareOtp">SEJ 软件一次性编程密钥</x:String>
+    <x:String x:Key="Flash_MtkOemKeyRpmb">RPMB 密钥</x:String>
+    <x:String x:Key="Flash_MtkPayloadStageOnePatcher">默认修补桩</x:String>
+    <x:String x:Key="Flash_MtkPayloadStageOneGeneric">阶段一加载桩</x:String>
+    <x:String x:Key="Flash_MtkPayloadGenericLoader">精简加载桩</x:String>
+    <x:String x:Key="Flash_MtkPayloadBromDump">Boot ROM 读取桩</x:String>
+    <x:String x:Key="Flash_MtkPayloadSramDump">静态 RAM 读取桩</x:String>
+    <x:String x:Key="Flash_MtkPayloadUartDump">串口输出读取桩</x:String>
+    <x:String x:Key="Flash_MtkPayloadPreloaderDump">preloader 读取桩</x:String>
+    <x:String x:Key="Flash_MtkPayloadReboot">重启桩</x:String>
+    <x:String x:Key="Flash_MtkPayloadChipProfile">芯片配置负载</x:String>
+    <x:String x:Key="Flash_MtkFamilyKamakiri">Kamakiri（看门狗溢出）</x:String>
+    <x:String x:Key="Flash_MtkFamilyKamakiri2">Kamakiri 2</x:String>
+    <x:String x:Key="Flash_MtkFamilyKamakiriPreloader">经 preloader 的 Kamakiri</x:String>
+    <x:String x:Key="Flash_MtkFamilyAmonet">Amonet</x:String>
+    <x:String x:Key="Flash_MtkFamilyHashimoto">Hashimoto</x:String>
+    <x:String x:Key="Settings_FlashAutoBackup">刷写前备份分区</x:String>
+    <x:String x:Key="Settings_FlashAutoBackupDescription">刷写分区前自动按当前协议备份该分区。</x:String>
 
     <!-- 视图定位器 -->
     <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>
@@ -626,6 +671,22 @@
     <x:String x:Key="Dock_Partition_Unallocated">未分配</x:String>
     <x:String x:Key="Dock_Partition_CapacityFormat">容量：{0} 扇区（{1}）</x:String>
     <x:String x:Key="Dock_Partition_UsedFormat">已用至：{0} 扇区（{1}）</x:String>
+
+    <!-- QcnEditor -->
+    <x:String x:Key="Dock_Qcn_Save">保存</x:String>
+    <x:String x:Key="Dock_Qcn_Items">NV 条目</x:String>
+    <x:String x:Key="Dock_Qcn_Search">搜索 id 或名称</x:String>
+    <x:String x:Key="Dock_Qcn_Properties">条目属性</x:String>
+    <x:String x:Key="Dock_Qcn_NoSelection">选择一个 NV 条目以查看并编辑其数据。</x:String>
+    <x:String x:Key="Dock_Qcn_Structured">结构化值</x:String>
+    <x:String x:Key="Dock_Qcn_StructuredInvalid">值无效，条目数据未修改。</x:String>
+    <x:String x:Key="Dock_Qcn_ImeiCheckInvalid">警告：Luhn 校验位与前 14 位不一致。</x:String>
+    <x:String x:Key="Dock_Qcn_Data">原始数据（128 字节）</x:String>
+    <x:String x:Key="Dock_Qcn_ItemId">条目 Id</x:String>
+    <x:String x:Key="Dock_Qcn_Name">名称</x:String>
+    <x:String x:Key="Dock_Qcn_Stream">所在流</x:String>
+    <x:String x:Key="Dock_Qcn_Length">有效长度</x:String>
+    <x:String x:Key="Dock_Qcn_Busy">正在解析 QCN，请稍候…</x:String>
 
     <!-- Compare tools -->
     <x:String x:Key="Compare_Equal">相等</x:String>
@@ -922,6 +983,7 @@
     <x:String x:Key="Explorer_OpenAsAuto">自动识别</x:String>
     <x:String x:Key="Explorer_OpenAsElf">ELF 二进制信息</x:String>
     <x:String x:Key="Explorer_OpenAsQualcomm">Qualcomm 镜像分析</x:String>
+    <x:String x:Key="Explorer_OpenAsQcn">QCN NV 备份</x:String>
     <x:String x:Key="Explorer_OpenAsPartition">分区表</x:String>
     <x:String x:Key="UserError_OperationFailed">操作未完成。请查看错误详情。</x:String>
     <x:String x:Key="UserError_Details">错误详情（原始信息）：</x:String>
@@ -960,4 +1022,7 @@
     <x:String x:Key="UserError_PartitionSizeInvalid">分区大小值无效：{0}</x:String>
     <x:String x:Key="UserError_PartitionOverlap">分区“{0}”与分区“{1}”重叠。</x:String>
     <x:String x:Key="UserError_PluginUnavailable">插件不可用。请检查兼容性和所需依赖。</x:String>
+    <x:String x:Key="UserError_QcnUnrecognized">该文件不是 Qualcomm QCN NV 备份文件。</x:String>
+    <x:String x:Key="UserError_QcnLoadFailed">读取 QCN 文件失败。</x:String>
+    <x:String x:Key="UserError_QcnSaveFailed">保存 QCN 文件失败。</x:String>
 </ResourceDictionary>

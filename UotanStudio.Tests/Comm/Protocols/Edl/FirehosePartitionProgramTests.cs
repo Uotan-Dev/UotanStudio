@@ -36,7 +36,7 @@ public partial class FirehoseGptTests
         var commands = ProgramCommands(transport).ToArray();
         Assert.Single(commands, command => command.Name == "program");
         Assert.DoesNotContain(commands, command => command.Name == "erase");
-        Assert.Equal(verify ? 8 : 7, transport.Writes.Count - before);
+        Assert.Equal(verify ? 9 : 7, transport.Writes.Count - before);
         using var exclusive = File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
     }
 
@@ -134,8 +134,8 @@ public partial class FirehoseGptTests
         Assert.NotNull(queued);
         Assert.True((await queued).IsAck);
 
-        Assert.Equal(new[] { "program", "read", "nop" },
-            ProgramCommands(transport).TakeLast(3).Select(command => command.Name.LocalName));
+        Assert.Equal(new[] { "program", "getsha256digest", "read", "nop" },
+            ProgramCommands(transport).TakeLast(4).Select(command => command.Name.LocalName));
     }
 
     [Fact]

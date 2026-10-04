@@ -224,6 +224,16 @@ public sealed partial class FirehoseProtocol
     public async Task<(FirehoseResponse Response, byte[] Data)> PeekAsync(long sizeInBytes, long address, CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        return await PeekCoreAsync(sizeInBytes, address, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs the peek exchange on an already-owned operation lease; the caller must hold the lease.
+    /// <para>在已持有的操作租约上执行 peek 交换；调用方必须已持有该租约。</para>
+    /// </summary>
+    internal async Task<(FirehoseResponse Response, byte[] Data)> PeekCoreAsync(long sizeInBytes, long address,
+        CancellationToken cancellationToken)
+    {
         ArgumentOutOfRangeException.ThrowIfNegative(address);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeInBytes);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(sizeInBytes, 16 * 1024 * 1024);

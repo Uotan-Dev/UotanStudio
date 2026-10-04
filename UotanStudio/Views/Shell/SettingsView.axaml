@@ -85,7 +85,7 @@
                 <StackPanel Spacing="8">
                     <TextBlock Text="{DynamicResource Settings_General}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />
-                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto" Margin="0,4">
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_AutoSave}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <ToggleSwitch Grid.Row="0" Grid.Column="1"
@@ -94,6 +94,12 @@
                                    VerticalAlignment="Center" FontSize="13" />
                         <ToggleSwitch Grid.Row="1" Grid.Column="1"
                                       IsChecked="{Binding DebugMode, Mode=TwoWay}" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Settings_FlashAutoBackup}"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <ToggleSwitch Grid.Row="2" Grid.Column="1"
+                                      IsChecked="{Binding FlashAutoBackup, Mode=TwoWay}" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,4,0,0" FontSize="12" Opacity="0.7"
+                                   Text="{DynamicResource Settings_FlashAutoBackupDescription}" TextWrapping="Wrap" />
                     </Grid>
                 </StackPanel>
 

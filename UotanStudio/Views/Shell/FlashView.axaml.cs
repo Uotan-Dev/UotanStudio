@@ -108,12 +108,14 @@ public partial class FlashView : UserControl
     private string? _rootPackagePath;
     private readonly Dictionary<FlashPartitionEntry, RawProgramEntry> _edlEntries = [];
     private string? _edlProgrammer;
+    private byte[]? _edlXiaomiAuthData;
 
 
     private const int EdlAuthKindNone = 0;
     private const int EdlAuthKindDemacia = 1;
     private const int EdlAuthKindOnePlusProject = 2;
     private const int EdlAuthKindNothingProject = 3;
+    private const int EdlAuthKindXiaomi = 4;
     private readonly List<string> _edlOnePlusModelIds = [];
     private IReadOnlyList<string> _edlProgrammerCandidates = [];
     private string? _edlProgrammerOverride;
@@ -141,6 +143,12 @@ public partial class FlashView : UserControl
     private DeviceViewModel? _deviceViewModel;
     private DetectedDevice? SelectedDevice => _deviceViewModel?.SelectedDevice?.Device;
 
+    /// <summary>
+    /// <para>取界面选择的 EDL 物理区域（LUN）；未选择时使用主区域 0。</para>
+    /// The EDL physical region (LUN) selected on the page; the primary region 0 when none is picked.
+    /// </summary>
+    private int SelectedEdlLun => EdlLunBox.SelectedItem is int lun ? lun : 0;
+
     /// <summary><para>构造页面并应用当前宽度的布局。</para>Creates the page and applies the layout for the current width.</summary>
     public FlashView()
     {
@@ -150,25 +158,61 @@ public partial class FlashView : UserControl
         MtkStorageKindBox.SelectedIndex = 0;
         MtkBaudBox.ItemsSource = new[] { 115200, 921600, 460800, 230400 };
         MtkBaudBox.SelectedIndex = 0;
-        MtkExploitFamilyBox.ItemsSource = new[] { LanguageService.Instance.GetString("Flash_MtkExploitAutoFamily") }
-            .Concat(Enum.GetNames<MtkExploitFamily>()).ToArray();
-        var payloadSources = Enum.GetNames<MtkExploitPayloadSource>();
-        MtkExploitPayloadBox.ItemsSource = payloadSources;
-        MtkExploitPayloadBox.SelectedIndex = Array.IndexOf(payloadSources,
+        EdlSerialBaudBox.ItemsSource = new[] { 115200, 921600, 460800, 230400 };
+        EdlSerialBaudBox.SelectedIndex = 0;
+        EdlLunBox.ItemsSource = Enumerable.Range(0, 8).ToArray();
+        EdlLunBox.SelectedIndex = 0;
+        var initializers = LanguageService.Instance;
+        MtkExploitFamilyBox.ItemsSource = new[]
+        {
+            initializers.GetString("Flash_MtkExploitAutoFamily"),
+            initializers.GetString("Flash_MtkFamilyKamakiri"),
+            initializers.GetString("Flash_MtkFamilyKamakiri2"),
+            initializers.GetString("Flash_MtkFamilyKamakiriPreloader"),
+            initializers.GetString("Flash_MtkFamilyAmonet"),
+            initializers.GetString("Flash_MtkFamilyHashimoto"),
+        };
+        var payloadNames = Enum.GetNames<MtkExploitPayloadSource>();
+        MtkExploitPayloadBox.ItemsSource = new[]
+        {
+            initializers.GetString("Flash_MtkPayloadStageOnePatcher"),
+            initializers.GetString("Flash_MtkPayloadStageOneGeneric"),
+            initializers.GetString("Flash_MtkPayloadGenericLoader"),
+            initializers.GetString("Flash_MtkPayloadBromDump"),
+            initializers.GetString("Flash_MtkPayloadSramDump"),
+            initializers.GetString("Flash_MtkPayloadUartDump"),
+            initializers.GetString("Flash_MtkPayloadPreloaderDump"),
+            initializers.GetString("Flash_MtkPayloadReboot"),
+            initializers.GetString("Flash_MtkPayloadChipProfile"),
+        };
+        MtkExploitPayloadBox.SelectedIndex = Array.IndexOf(payloadNames,
             nameof(MtkExploitPayloadSource.ChipProfilePayload));
-        MtkRpmbModeBox.ItemsSource = Enum.GetNames<MtkRpmbCaptureMode>();
+        MtkRpmbModeBox.ItemsSource = new[]
+        {
+            initializers.GetString("Flash_MtkRpmbModeFrames"),
+            initializers.GetString("Flash_MtkRpmbModeByteRange"),
+            initializers.GetString("Flash_MtkRpmbModeFullArea"),
+        };
         MtkRpmbModeBox.SelectedIndex = 0;
         MtkRpmbOffsetBox.Text = "0";
         MtkRpmbLengthBox.Text = "8";
-        MtkSecCfgLockBox.ItemsSource = Enum.GetNames<MtkSecCfgLockIntent>();
-        MtkOemKeyKindBox.ItemsSource = Enum.GetNames<MtkOemKeyKind>();
-        var initializers = LanguageService.Instance;
+        MtkSecCfgLockBox.ItemsSource = new[]
+        {
+            initializers.GetString("Flash_MtkSecCfgIntentLock"),
+            initializers.GetString("Flash_MtkSecCfgIntentUnlock"),
+        };
+        MtkOemKeyKindBox.ItemsSource = new[]
+        {
+            initializers.GetString("Flash_MtkOemKeySoftwareOtp"),
+            initializers.GetString("Flash_MtkOemKeyRpmb"),
+        };
         EdlAuthKindBox.ItemsSource = new[]
         {
             initializers.GetString("Flash_EdlAuthNone"),
             initializers.GetString("Flash_EdlDemaciaAuth"),
             initializers.GetString("Flash_EdlProjectAuth"),
             initializers.GetString("Flash_EdlNothingAuth"),
+            initializers.GetString("Flash_EdlXiaomiAuth"),
         };
         EdlAuthKindBox.SelectedIndex = EdlAuthKindNone;
         _edlOnePlusModelIds.AddRange(EdlOnePlusProjectCatalog.ProjectIds);
@@ -470,7 +514,8 @@ public partial class FlashView : UserControl
                     Path.GetFileName(path).Equals("super_empty.img.zst", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!path.EndsWith(".img", StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidDataException("Compressed super_empty is not supported.");
+                        throw new InvalidDataException(
+                            LanguageService.Instance.GetString("Flash_CompressedSuperEmptyUnsupported"));
                     _ = FlashSuperEmptyService.Prepare(path);
                     _model.Partitions.Add(new FlashPartitionEntry
                     {
@@ -510,7 +555,8 @@ public partial class FlashView : UserControl
                 if (length == 0 || name.Length is < 1 or > 128 ||
                     !name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
                 {
-                    throw new InvalidDataException("Image name is not a valid partition name.");
+                    throw new InvalidDataException(
+                        LanguageService.Instance.GetString("Flash_ImageNameInvalid"));
                 }
 
                 _model.Partitions.Add(new FlashPartitionEntry
@@ -830,7 +876,8 @@ public partial class FlashView : UserControl
                 .DetectAsync(path);
             if (!FlashRootImage.IsSupportedPackage(detection))
             {
-                throw new InvalidDataException("The selected file is not a supported Magisk or KernelSU package.");
+                throw new InvalidDataException(
+                    LanguageService.Instance.GetString("Flash_RootPackageUnsupported"));
             }
             _rootPackagePath = path;
             AddRootBox.IsEnabled = true;
@@ -887,7 +934,9 @@ public partial class FlashView : UserControl
         VerifyAfterFlashBox.IsEnabled = !busy &&
             (protocol is DeviceProtocolKind.Edl or DeviceProtocolKind.Rkdl || _mtkResolution is not null);
         _model.SelectedDeviceText = SelectedDevice is { } device
-            ? $"{device.ProtocolLabel} · {device.DisplayName}"
+            ? device.Protocol is DeviceProtocolKind.Mtk && device.State == "logging"
+                ? $"{device.ProtocolLabel} · {device.DisplayName} — {LanguageService.Instance.GetString("Flash_MtkLoggingOnlyHint")}"
+                : $"{device.ProtocolLabel} · {device.DisplayName}"
             : LanguageService.Instance.GetString("Flash_NoDevice");
     }
 
@@ -938,6 +987,21 @@ public partial class FlashView : UserControl
         }
 
         var language = LanguageService.Instance;
+        if (EdlAuthKindBox.SelectedIndex == EdlAuthKindXiaomi)
+        {
+            if (_edlXiaomiAuthData is not { } authData)
+            {
+                AppendLog(language.GetString("Flash_EdlXiaomiAuthInvalid"));
+                return false;
+            }
+
+            initialization = WithEdlCompatibility(new EdlInitializationOptions
+            {
+                XiaomiAuthenticationProvider = new EdlXiaomiAuthFileProvider(authData),
+            }, netType, qudRecovery, pendingCompletion, authTimeoutMs);
+            return true;
+        }
+
         if (!ulong.TryParse(EdlSerialBox.Text?.Trim(), System.Globalization.NumberStyles.None,
                 System.Globalization.CultureInfo.InvariantCulture, out var serial) || serial == 0)
         {
@@ -1062,11 +1126,49 @@ public partial class FlashView : UserControl
     private void OnEdlAuthKindChanged(object? source, SelectionChangedEventArgs e)
     {
         var catalogue = EdlAuthKindBox.SelectedIndex == EdlAuthKindOnePlusProject;
+        var xiaomi = EdlAuthKindBox.SelectedIndex == EdlAuthKindXiaomi;
         EdlOnePlusModelBox.IsVisible = catalogue;
-        EdlProjectIdBox.IsEnabled = !catalogue;
+        EdlProjectIdBox.IsEnabled = !catalogue && !xiaomi;
+        ChooseEdlXiaomiAuthFileButton.IsVisible = xiaomi;
+        EdlXiaomiAuthFileText.IsVisible = xiaomi;
         if (catalogue && EdlOnePlusModelBox.SelectedIndex < 0)
         {
             EdlProjectIdBox.Text = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// <para>选择小米固定鉴权数据文件；上游 xiaomi 模块的凭据块恰好为 256 字节，挑战请求原样忽略。</para>
+    /// Picks the Xiaomi fixed auth-data file; the upstream xiaomi module's credential blob is exactly
+    /// 256 bytes and the challenge request is ignored verbatim.
+    /// </summary>
+    private async void OnChooseEdlXiaomiAuthFileClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(this) is not { } topLevel) return;
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Flash_EdlXiaomiAuthFile"),
+            AllowMultiple = false,
+            FileTypeFilter = [FilePickerFileTypes.All]
+        });
+        if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
+        try
+        {
+            var data = await File.ReadAllBytesAsync(path);
+            if (data.Length != 256)
+            {
+                throw new InvalidDataException(LanguageService.Instance.GetString("Flash_EdlXiaomiAuthInvalid"));
+            }
+            _edlXiaomiAuthData = data;
+            EdlXiaomiAuthFileText.Text = Path.GetFileName(path);
+            ToolTip.SetTip(EdlXiaomiAuthFileText, path);
+            AppendLog(Path.GetFileName(path));
+        }
+        catch (Exception ex)
+        {
+            _edlXiaomiAuthData = null;
+            EdlXiaomiAuthFileText.Text = string.Empty;
+            AppendLog(ex.Message);
         }
     }
 
@@ -1577,7 +1679,7 @@ public partial class FlashView : UserControl
                     new SerialConnectionOptions
                     {
                         PortName = serialPort!,
-                        BaudRate = 115200,
+                        BaudRate = EdlSerialBaudBox.SelectedItem is int baud ? baud : 115200,
                         Handshake = Handshake.None
                     },
                     _loadedPath, programmerPath,
@@ -1878,7 +1980,8 @@ public partial class FlashView : UserControl
                                 !Path.GetFullPath(manifestEntry.SourceFile).Equals(
                                     Path.GetFullPath(row.FilePath), StringComparison.OrdinalIgnoreCase)))
                             {
-                                throw new InvalidDataException("EDL image no longer matches its rawprogram entry.");
+                                throw new InvalidDataException(string.Format(
+                                    language.GetString("Flash_EdlImageMismatch"), row.Name));
                             }
 
                             SetRowRunning(row, "Flash_Status_Flashing");
@@ -1895,15 +1998,14 @@ public partial class FlashView : UserControl
                                 var firehose = await ConfigureEdlAsync(edl, initialization,
                                     cancellation.Token).ConfigureAwait(true);
                                 var snapshot = deviceGpt ??= await firehose.ReadGptAsync(
-                                    cancellationToken: cancellation.Token).ConfigureAwait(true);
+                                    SelectedEdlLun, cancellation.Token).ConfigureAwait(true);
                                 var written = await firehose.ProgramRawPartitionFromFileAsync(snapshot, row.Name,
                                     row.FilePath, verify: verify, cancellationToken: cancellation.Token).ConfigureAwait(true);
                                 result = new FlashResult
                                 {
                                     Success = true,
-                                    Summary = $"EDL partition '{row.Name}' programmed from the device GPT " +
-                                        $"({written.AcknowledgedBytes} bytes, verified {written.VerifiedBytes}). " +
-                                        "已按设备 GPT 写入该分区。"
+                                    Summary = string.Format(language.GetString("Flash_EdlGptProgrammed"),
+                                        row.Name, written.AcknowledgedBytes, written.VerifiedBytes)
                                 };
                             }
 
@@ -1978,7 +2080,11 @@ public partial class FlashView : UserControl
                             : _oppoPath is not null ? _oppoEntries[entry.Name].OutputName
                             : entry.Name + ".img";
                         var image = Path.Combine(output, filename);
-                        if (!File.Exists(image)) throw new InvalidDataException($"Missing extracted image: {filename}");
+                        if (!File.Exists(image))
+                        {
+                            throw new InvalidDataException(string.Format(
+                                language.GetString("Flash_MissingExtractedImage"), filename));
+                        }
                         prepared[entry] = image;
                     }
                 }
@@ -2149,7 +2255,8 @@ public partial class FlashView : UserControl
             var entries = await MtkScatterPackage.ListUsableLoaderEntriesAsync(path, CancellationToken.None);
             if (entries.Count == 0)
             {
-                throw new InvalidDataException("The loader profile exposes no usable DA1/DA2 region pair.");
+                throw new InvalidDataException(
+                    LanguageService.Instance.GetString("Flash_MtkLoaderNoEntries"));
             }
 
             _mtkLoaderPath = path;
@@ -2273,8 +2380,8 @@ public partial class FlashView : UserControl
             {
                 var firehose = await ConfigureEdlAsync(edl, initialization, CancellationToken.None)
                     .ConfigureAwait(true);
-                var geometry = await firehose.GetStorageGeometryAsync(0, CancellationToken.None).ConfigureAwait(true);
-                var snapshot = await firehose.ReadGptAsync(0, CancellationToken.None).ConfigureAwait(true);
+                var geometry = await firehose.GetStorageGeometryAsync(SelectedEdlLun, CancellationToken.None).ConfigureAwait(true);
+                var snapshot = await firehose.ReadGptAsync(SelectedEdlLun, CancellationToken.None).ConfigureAwait(true);
                 return (geometry, snapshot, edl.Capabilities);
             }, CancellationToken.None);
             EdlStorageInfoText.Text = string.Format(
@@ -2282,6 +2389,11 @@ public partial class FlashView : UserControl
                 info.geometry.SectorSize, info.geometry.SectorCount,
                 info.geometry.CapacityBytes / 1024d / 1024d / 1024d,
                 info.snapshot.Table.Partitions.Count);
+            if (FirehoseProtocol.DetectActiveSlot(info.snapshot) is { } activeSlot)
+            {
+                EdlStorageInfoText.Text += Environment.NewLine + string.Format(
+                    LanguageService.Instance.GetString("Flash_EdlActiveSlotDetected"), activeSlot);
+            }
             AppendLog(EdlStorageInfoText.Text);
             if (info.Capabilities is { } capabilities)
             {
@@ -2385,13 +2497,14 @@ public partial class FlashView : UserControl
                     var entry = _edlEntries.TryGetValue(row, out var manifestEntry)
                         ? manifestEntry
                         : EdlGptPartitionService.ResolveEntry(
-                            deviceGpt ??= await firehose.ReadGptAsync(cancellationToken: cancellation.Token).ConfigureAwait(true),
+                            deviceGpt ??= await firehose.ReadGptAsync(SelectedEdlLun,
+                                cancellationToken: cancellation.Token).ConfigureAwait(true),
                             row.Name);
                     var displayName = entry.Label.Length > 0 ? entry.Label : entry.Filename;
                     if (entry.NumPartitionSectors <= 0)
                     {
-                        throw new InvalidDataException(
-                            $"rawprogram entry '{displayName}' has no num_partition_sectors; EDL erase cannot determine the range.");
+                        throw new InvalidDataException(string.Format(
+                            language.GetString("Flash_EdlEraseRangeUnknown"), displayName));
                     }
 
                     SetRowRunning(row, "Flash_Status_Erasing");
@@ -2399,8 +2512,9 @@ public partial class FlashView : UserControl
                         entry.PhysicalPartitionNumber, cancellation.Token).ConfigureAwait(true);
                     if (!response.IsAck)
                     {
-                        throw new InvalidOperationException(
-                            $"Erase failed for '{displayName}'. Response: {EdlFailureText.Describe(response)} 擦除失败。");
+                        throw new InvalidOperationException(string.Format(
+                            language.GetString("Flash_EdlEraseFailed"), displayName,
+                            EdlFailureText.Describe(response)));
                     }
 
                     AppendLog(displayName);
@@ -2462,8 +2576,8 @@ public partial class FlashView : UserControl
             var result = await App.DeviceMonitor.RunEdlAsync(device, async edl =>
             {
                 var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token).ConfigureAwait(true);
-                return await EdlGptPartitionService.RepairGptCoreAsync(firehose, progress, cancellation.Token)
-                    .ConfigureAwait(true);
+                return await EdlGptPartitionService.RepairGptCoreAsync(firehose, progress,
+                    SelectedEdlLun, cancellation.Token).ConfigureAwait(true);
             }, cancellation.Token);
             AppendLog(result.Summary);
         }
@@ -2537,7 +2651,7 @@ public partial class FlashView : UserControl
     /// </summary>
     private async void OnEdlResetClick(object? sender, RoutedEventArgs e)
         => await RunEdlPowerRequestAsync("Flash_EdlReset", "Flash_EdlResetConfirm", "Flash_EdlResetDone",
-            firehose => firehose.ResetAsync(CancellationToken.None));
+            (firehose, cancellationToken) => firehose.ResetAsync(cancellationToken));
 
     /// <summary>
     /// <para>断电重启之外的三种电源类请求（关机、回到 EDL、切换活动分区）与复位共用同一条路径：同一次确认、
@@ -2548,7 +2662,7 @@ public partial class FlashView : UserControl
     /// </summary>
     private void OnEdlPowerOffClick(object? sender, RoutedEventArgs e)
         => _ = RunEdlPowerRequestAsync("Flash_EdlPowerOff", "Flash_EdlPowerOffConfirm", "Flash_EdlPowerOffDone",
-            firehose => firehose.PowerOffAsync());
+            (firehose, cancellationToken) => firehose.PowerOffAsync(cancellationToken));
 
     /// <summary>
     /// <para>让设备从 firehose 会话回到 EDL 下载模式。</para>
@@ -2556,7 +2670,7 @@ public partial class FlashView : UserControl
     /// </summary>
     private void OnEdlResetToEdlClick(object? sender, RoutedEventArgs e)
         => _ = RunEdlPowerRequestAsync("Flash_EdlResetToEdl", "Flash_EdlResetToEdlConfirm",
-            "Flash_EdlResetToEdlDone", firehose => firehose.ResetToEdlAsync());
+            "Flash_EdlResetToEdlDone", (firehose, cancellationToken) => firehose.ResetToEdlAsync(cancellationToken));
 
     /// <summary>
     /// <para>把槽位文本归一化为可发送的小写标识：参考实现两种谱系分别以 <c>slot="a"</c> 与
@@ -2589,7 +2703,157 @@ public partial class FlashView : UserControl
         }
 
         await RunEdlPowerRequestAsync("Flash_EdlSetActiveSlot", "Flash_EdlSetActiveSlotConfirm",
-            "Flash_EdlSetActiveSlotDone", firehose => firehose.SetActivePartitionAsync(slot));
+            "Flash_EdlSetActiveSlotDone",
+            (firehose, cancellationToken) => firehose.SetActivePartitionAsync(slot, cancellationToken));
+    }
+
+    /// <summary>
+    /// <para>解析界面输入的十六进制地址；不允许负数且必须可解析。</para>
+    /// Parses a hexadecimal address from the page; negatives and malformed text are refused.
+    /// </summary>
+    private static bool TryReadEdlHexString(string? text, out long value)
+    {
+        value = 0;
+        return long.TryParse(text?.Trim().Replace(" ", string.Empty), System.Globalization.NumberStyles.HexNumber,
+            System.Globalization.CultureInfo.InvariantCulture, out value) && value >= 0;
+    }
+
+    /// <summary>
+    /// <para>向目标内存写入最多 8 字节：需要勾选不可逆确认，再经对话框二次确认。</para>
+    /// Writes up to 8 bytes of target memory: the irreversible-write box must be ticked and the dialog
+    /// confirmed a second time.
+    /// </summary>
+    private async void OnEdlPokeClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
+            TopLevel.GetTopLevel(this) is not Window owner) return;
+        var language = LanguageService.Instance;
+        if (!TryReadEdlHexString(EdlPokeAddressBox.Text, out var address))
+        {
+            AppendLog(language.GetString("Flash_EdlPokeInvalid"));
+            return;
+        }
+
+        byte[] payload;
+        try
+        {
+            payload = Convert.FromHexString(EdlPokeDataBox.Text?.Trim() ?? string.Empty);
+        }
+        catch (FormatException)
+        {
+            AppendLog(language.GetString("Flash_EdlPokeInvalid"));
+            return;
+        }
+
+        if (payload.Length is < 1 or > 8)
+        {
+            AppendLog(language.GetString("Flash_EdlPokeInvalid"));
+            return;
+        }
+
+        if (EdlPokeConfirmBox.IsChecked != true)
+        {
+            AppendLog(language.GetString("Flash_MtkPokeConfirmRequired"));
+            return;
+        }
+
+        _confirming = true;
+        bool confirmed;
+        try
+        {
+            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_EdlPoke"),
+                language.GetString("Flash_EdlPokeConfirm"));
+        }
+        finally { _confirming = false; }
+        if (!confirmed) return;
+        if (!TryBuildEdlInitialization(out var initialization)) return;
+
+        SetBusy(true);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        CancelFlashButton.IsEnabled = true;
+        try
+        {
+            var response = await App.DeviceMonitor.RunEdlAsync(device, async edl =>
+            {
+                var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token).ConfigureAwait(true);
+                return await firehose.PokeAsync(address, payload, cancellation.Token).ConfigureAwait(true);
+            }, cancellation.Token);
+            AppendLog(response.IsAck
+                ? $"0x{address:X} ← {Convert.ToHexString(payload)}"
+                : $"{language.GetString("Flash_EdlPowerNotAcknowledged")}");
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            _flashCancellation = null;
+            CancelFlashButton.IsEnabled = false;
+            SetBusy(false);
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// <para>在目标内存内按 8 字节步长复制一段有界范围；写目标前需对话框确认。</para>
+    /// Copies a bounded range inside target memory in 8-byte steps; the dialog must be confirmed before
+    /// the destination is touched.
+    /// </summary>
+    private async void OnEdlMemcpyClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
+            TopLevel.GetTopLevel(this) is not Window owner) return;
+        var language = LanguageService.Instance;
+        if (!TryReadEdlHexString(EdlMemcpySourceBox.Text, out var source) ||
+            !TryReadEdlHexString(EdlMemcpyDestBox.Text, out var destination) ||
+            !long.TryParse(EdlMemcpySizeBox.Text?.Trim(),
+                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture,
+                out var size) || size is < 1 or > 16 * 1024 * 1024)
+        {
+            AppendLog(language.GetString("Flash_EdlPokeInvalid"));
+            return;
+        }
+
+        _confirming = true;
+        bool confirmed;
+        try
+        {
+            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_EdlMemcpy"),
+                language.GetString("Flash_EdlPokeConfirm"));
+        }
+        finally { _confirming = false; }
+        if (!confirmed) return;
+        if (!TryBuildEdlInitialization(out var initialization)) return;
+
+        SetBusy(true);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        CancelFlashButton.IsEnabled = true;
+        try
+        {
+            await App.DeviceMonitor.RunEdlAsync(device, async edl =>
+            {
+                var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token).ConfigureAwait(true);
+                var response = await firehose.MemcpyAsync(destination, source, size, cancellation.Token)
+                    .ConfigureAwait(true);
+                if (!response.IsAck)
+                {
+                    throw new InvalidOperationException("The target rejected the memcpy poke.");
+                }
+
+                return true;
+            }, cancellation.Token);
+            AppendLog($"0x{source:X} → 0x{destination:X} ({size} B)");
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            _flashCancellation = null;
+            CancelFlashButton.IsEnabled = false;
+            SetBusy(false);
+            UpdateEdlButton();
+        }
     }
 
     /// <summary>
@@ -2600,7 +2864,7 @@ public partial class FlashView : UserControl
     /// retirement stays the protocol layer's concern.
     /// </summary>
     private async Task RunEdlPowerRequestAsync(string titleKey, string confirmKey, string doneKey,
-        Func<FirehoseProtocol, Task<FirehoseResponse>> request)
+        Func<FirehoseProtocol, CancellationToken, Task<FirehoseResponse>> request)
     {
         if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } ||
             TopLevel.GetTopLevel(this) is not Window owner) return;
@@ -2617,26 +2881,32 @@ public partial class FlashView : UserControl
         if (!TryBuildEdlInitialization(out var initialization)) return;
 
         SetBusy(true);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        CancelFlashButton.IsEnabled = true;
         try
         {
             await App.DeviceMonitor.RunEdlAsync(current, async edl =>
             {
-                var firehose = await ConfigureEdlAsync(edl, initialization, CancellationToken.None)
+                var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token)
                     .ConfigureAwait(true);
-                var response = await request(firehose).ConfigureAwait(true);
+                var response = await request(firehose, cancellation.Token).ConfigureAwait(true);
                 if (!response.IsAck)
                 {
-                    throw new InvalidOperationException(
-                        $"The target did not acknowledge the request. {EdlFailureText.Describe(response)}");
+                    throw new InvalidOperationException(string.Format(
+                        language.GetString("Flash_EdlPowerNotAcknowledged"), EdlFailureText.Describe(response)));
                 }
 
                 return true;
-            }, CancellationToken.None);
+            }, cancellation.Token);
             AppendLog(language.GetString(doneKey));
         }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendLog(ex.Message); }
         finally
         {
+            _flashCancellation = null;
+            CancelFlashButton.IsEnabled = false;
             SetBusy(false);
             UpdateEdlButton();
         }
@@ -2853,7 +3123,7 @@ public partial class FlashView : UserControl
                 if (generalized)
                 {
                     numDiskSectors = (await firehose.GetStorageGeometryAsync(
-                        0, cancellation.Token).ConfigureAwait(true)).SectorCount;
+                        SelectedEdlLun, cancellation.Token).ConfigureAwait(true)).SectorCount;
                 }
 
                 FirehoseGptSnapshot? deviceGpt = null;
@@ -2863,7 +3133,8 @@ public partial class FlashView : UserControl
                     var entry = _edlEntries.TryGetValue(row, out var manifestEntry)
                         ? manifestEntry
                         : EdlGptPartitionService.ResolveEntry(
-                            deviceGpt ??= await firehose.ReadGptAsync(cancellationToken: cancellation.Token).ConfigureAwait(true),
+                            deviceGpt ??= await firehose.ReadGptAsync(SelectedEdlLun,
+                                cancellationToken: cancellation.Token).ConfigureAwait(true),
                             row.Name);
                     SetRowRunning(row, "Flash_Status_Flashing");
                     readbackRow = row;

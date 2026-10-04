@@ -312,7 +312,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 Assert.NotNull(kindBox);
                 Assert.NotNull(modelBox);
                 Assert.NotNull(projectBox);
-                Assert.Equal(4, kindBox!.Items.Count);
+                Assert.Equal(5, kindBox!.Items.Count);
                 Assert.Equal(0, kindBox.SelectedIndex);
                 Assert.False(modelBox!.IsVisible);
                 Assert.True(projectBox!.IsEnabled);
@@ -346,6 +346,52 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 Assert.True(projectBox.IsEnabled);
                 Assert.NotEqual(kindBox.Items[2]?.ToString(), kindBox.Items[3]?.ToString());
                 Assert.False(string.IsNullOrWhiteSpace(kindBox.Items[3]?.ToString()));
+
+                kindBox.SelectedIndex = 4;
+                view.UpdateLayout();
+                Assert.False(modelBox.IsVisible);
+                Assert.False(projectBox.IsEnabled);
+                Assert.True(view.FindControl<Button>("ChooseEdlXiaomiAuthFileButton")!.IsVisible);
+                Assert.False(string.IsNullOrWhiteSpace(kindBox.Items[4]?.ToString()));
+                return Task.CompletedTask;
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task EdlTuningControls_DefaultsAndAdvancedButtons_ArePresentInEdlPane()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var view = new FlashView();
+                var window = new Window { Content = view, Width = 960, Height = 800 };
+                try
+                {
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    var baud = view.FindControl<ComboBox>("EdlSerialBaudBox")!;
+                    var lun = view.FindControl<ComboBox>("EdlLunBox")!;
+                    Assert.Equal([115200, 921600, 460800, 230400], (int[])baud.ItemsSource!);
+                    Assert.Equal(115200, baud.SelectedItem);
+                    Assert.Equal(0, baud.SelectedIndex);
+                    Assert.Equal([0, 1, 2, 3, 4, 5, 6, 7], (int[])lun.ItemsSource!);
+                    Assert.Equal(0, lun.SelectedItem);
+                    var pane = view.FindControl<StackPanel>("EdlPane")!;
+                    var poke = view.FindControl<Button>("EdlPokeButton")!;
+                    var memcpy = view.FindControl<Button>("EdlMemcpyButton")!;
+                    Assert.Contains(pane, poke.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                    Assert.Contains(pane, memcpy.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                }
+                finally
+                {
+                    window.Close();
+                }
+
                 return Task.CompletedTask;
             }, TestContext.Current.CancellationToken);
         }
@@ -879,9 +925,9 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Theory]
-    [InlineData("en-US", "Run BootROM bypass", "Read RPMB area", "Kamakiri",
+    [InlineData("en-US", "Run BootROM bypass", "Read RPMB area", "Kamakiri (watchdog overflow)",
         "Allow volatile security-control register writes (required by every bypass family)")]
-    [InlineData("zh-CN", "运行 BootROM 绕过", "读取 RPMB 区域", "Kamakiri",
+    [InlineData("zh-CN", "运行 BootROM 绕过", "读取 RPMB 区域", "Kamakiri（看门狗溢出）",
         "允许易失安全控制寄存器写入（所有绕过家族都需要）")]
     public async Task MtkUsbOnlyActions_LocalizedControls_FollowTheLanguageAndEnumOrder(
         string language, string bypassLabel, string rpmbLabel, string familyItem, string volatileLabel)
@@ -987,12 +1033,12 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Theory]
-    [InlineData("en-US", "Read secure-boot configuration", "Write secure-boot lock state", "Lock",
-        "Read eFuse cell range", "Preview OEM key submission")]
-    [InlineData("zh-CN", "读取安全启动配置", "写入安全启动锁定状态", "Lock",
-        "读取 eFuse 单元区间", "预览 OEM 密钥提交内容")]
+    [InlineData("en-US", "Read secure-boot configuration", "Write secure-boot lock state", "Lock (state 1)",
+        "Unlock (state 3)", "Read eFuse cell range", "Preview OEM key submission")]
+    [InlineData("zh-CN", "读取安全启动配置", "写入安全启动锁定状态", "上锁（状态 1）",
+        "解锁（状态 3）", "读取 eFuse 单元区间", "预览 OEM 密钥提交内容")]
     public async Task MtkSecurityControls_LocalizedLabelsAndDefaults_MatchTheChosenLanguage(
-        string language, string readLabel, string applyLabel, string firstIntent,
+        string language, string readLabel, string applyLabel, string firstIntent, string secondIntent,
         string efuseRangeLabel, string previewLabel)
     {
         Task dispatch;
@@ -1015,7 +1061,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     Assert.Equal(readLabel, read.Content?.ToString());
                     Assert.Equal(applyLabel, apply.Content?.ToString());
                     Assert.Equal("0", partition.Text);
-                    Assert.Equal([firstIntent, "Unlock"], intents.Items.Cast<object?>().Select(item => item?.ToString()));
+                    Assert.Equal([firstIntent, secondIntent], intents.Items.Cast<object?>().Select(item => item?.ToString()));
                     Assert.Equal(0, intents.SelectedIndex);
                     var pane = view.FindControl<StackPanel>("MtkPane")!;
                     Assert.Contains(read, pane.Children);
@@ -1167,10 +1213,12 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Theory]
-    [InlineData("en-US", "Program OEM key", "OEM key class")]
-    [InlineData("zh-CN", "写入 OEM 密钥", "OEM 密钥类别")]
+    [InlineData("en-US", "Program OEM key", "OEM key class",
+        new[] { "SEJ software one-time-program key", "RPMB key" })]
+    [InlineData("zh-CN", "写入 OEM 密钥", "OEM 密钥类别",
+        new[] { "SEJ 软件一次性编程密钥", "RPMB 密钥" })]
     public async Task MtkOemKeyControls_LocalizedLabelsAndKindItems_MatchTheChosenLanguage(
-        string language, string programLabel, string kindLabel)
+        string language, string programLabel, string kindLabel, string[] kindItems)
     {
         Task dispatch;
         using (ExecutionContext.SuppressFlow())
@@ -1190,8 +1238,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     var key = view.FindControl<TextBox>("MtkOemKeyHexBox")!;
                     Assert.Equal(programLabel, program.Content?.ToString());
                     Assert.Equal(kindLabel, LanguageService.Instance.GetString("Flash_MtkOemKeyKind"));
-                    Assert.Equal(["SoftwareOneTimeProgramKey", "ReplayProtectedAreaKey"],
-                        kinds.Items.Cast<object?>().Select(item => item?.ToString()));
+                    Assert.Equal(kindItems, kinds.Items.Cast<object?>().Select(item => item?.ToString()));
                     Assert.Equal(0, kinds.SelectedIndex);
                     Assert.True(string.IsNullOrEmpty(key.Text));
                     var pane = view.FindControl<StackPanel>("MtkPane")!;

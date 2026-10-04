@@ -1,10 +1,37 @@
 using System.Buffers.Binary;
+using UotanStudio.Comm.Protocols.Common.Evidence;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
+
+/// <summary>USB link speeds the XFlash download agent can report.
+/// <para>XFlash 下载代理可能上报的 USB 链路速度。</para></summary>
+public enum MtkXFlashUsbSpeedKind
+{
+    /// <summary>Full-speed operation; the reference reconnects after raising it
+    /// (Library/DA/xflash/xflash_lib.py:1024-1026).
+    /// <para>全速运行；参考在该状态下会提速后重连（Library/DA/xflash/xflash_lib.py:1024-1026）。</para></summary>
+    FullSpeed,
+    /// <summary>High-speed operation (Library/DA/xflash/xflash_lib.py:652).
+    /// <para>高速运行（Library/DA/xflash/xflash_lib.py:652）。</para></summary>
+    HighSpeed,
+    /// <summary>Super-speed operation (Library/DA/xflash/xflash_lib.py:652).
+    /// <para>超高速运行（Library/DA/xflash/xflash_lib.py:652）。</para></summary>
+    SuperSpeed
+}
+
+/// <summary>The USB speed the XFlash agent reports after a speed switch.
+/// <para>XFlash 代理在速度切换后上报的 USB 速度。</para></summary>
+/// <param name="Kind">The decoded speed. 解码后的速度。</param>
+/// <param name="Text">The exact ASCII speed token returned by the agent.
+/// <para>代理返回的精确 ASCII 速度标记。</para></param>
+public sealed record MtkXFlashUsbSpeed(MtkXFlashUsbSpeedKind Kind, string Text);
 
 public sealed partial class MtkSession
 {
     private const uint XFlashSync = 0x434E5953;
+    private const uint XFlashSwitchUsbSpeed = 0x01000B;
+    private const uint XFlashUsbSpeedVendorMagic = 0x0E8D2001;
+    private const uint XFlashGetUsbSpeed = 0x04000B;
     private MtkXFlashChannel? _xflash;
     private MtkXFlashConnectionAgent? _xflashConnectionAgent;
     private bool _xflashExternalRamInitialized;
@@ -141,6 +168,89 @@ public sealed partial class MtkSession
         var payload = new byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(payload, value);
         await channel.SendAsync(1, payload, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Switches the XFlash agent to a higher USB speed and reports the speed it applies.
+    /// <para>将 XFlash 代理切换到更高的 USB 速度，并报告其实际生效的速度。</para></summary>
+    /// <remarks>
+    /// The switch mirrors <c>set_usb_speed</c> of Library/DA/xflash/xflash_lib.py:657-667: the
+    /// <c>SWITCH_USB_SPEED</c> code is sent as a bare protocol word (Library/DA/xflash/xflash_param
+    /// .py:16), each send is followed by a status, and the second frame carries the
+    /// <c>0x0E8D2001</c> vendor magic. Unlike the reference, which returns a bare <c>True</c>, this
+    /// path then issues the documented <c>GET_USB_SPEED</c> device-control query
+    /// (Library/DA/xflash/xflash_lib.py:647-655) so the caller receives the speed token the agent
+    /// actually applies. The exchange belongs to the stage-two connection flow
+    /// (Library/DA/xflash/xflash_lib.py:1024-1035), so it is refused before stage two.
+    /// <para>切换过程与 Library/DA/xflash/xflash_lib.py:657-667 的 <c>set_usb_speed</c> 一致：<c>
+    /// SWITCH_USB_SPEED</c> 码作为裸协议字发送（Library/DA/xflash/xflash_param.py:16），每次发送后读取
+    /// 状态，第二帧携带 <c>0x0E8D2001</c> 厂商魔数。与只返回 <c>True</c> 的参考不同，本路径随后发起已记载
+    /// 的 <c>GET_USB_SPEED</c> 器件控制查询（Library/DA/xflash/xflash_lib.py:647-655），让调用方拿到代理
+    /// 实际生效的速度标记。该交换属于二阶段连接流程（Library/DA/xflash/xflash_lib.py:1024-1035），因此
+    /// 阶段一之前会被拒绝。</para>
+    /// </remarks>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>The decoded speed together with the exact agent token.
+    /// <para>解码后的速度以及代理返回的精确标记。</para></returns>
+    /// <exception cref="InvalidOperationException">DA2 has not started, the transport is disconnected
+    /// or the channel is gone. <para>DA2 未启动、传输已断开或通道已失效。</para></exception>
+    /// <exception cref="MtkProtocolException">A status was rejected or the speed token is unknown;
+    /// the XFlash family faults. <para>某状态被拒绝或速度标记未知；XFlash 家族进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
+    public async Task<MtkXFlashUsbSpeed> SetXFlashUsbSpeedAsync(CancellationToken cancellationToken = default)
+    {
+        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var channel = RequireXFlashSecurityCustomStage();
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                await SendXFlashWordAsync(channel, XFlashSwitchUsbSpeed, cancellationToken).ConfigureAwait(false);
+                await ReadXFlashStatusAsync(channel, "USB speed switch", cancellationToken).ConfigureAwait(false);
+                await SendXFlashWordAsync(channel, XFlashUsbSpeedVendorMagic, cancellationToken)
+                    .ConfigureAwait(false);
+                await ReadXFlashStatusAsync(channel, "USB speed vendor identifier", cancellationToken)
+                    .ConfigureAwait(false);
+                var reply = await QueryXFlashControlAsync(channel, XFlashGetUsbSpeed, cancellationToken, 64)
+                    .ConfigureAwait(false);
+                var speed = DecodeXFlashUsbSpeed(reply);
+                RecordSecurityEvidence("xflash-usb-speed", CommandOutcomeKind.Completed,
+                    $"The agent switched USB speed and reports {speed.Text}.", Convert.ToHexString(reply));
+                return speed;
+            }
+            catch
+            {
+                FaultXFlashSecurity();
+                throw;
+            }
+        }
+        finally
+        {
+            _operation.Release();
+        }
+    }
+
+    private static MtkXFlashUsbSpeed DecodeXFlashUsbSpeed(byte[] reply)
+    {
+        if (reply.AsSpan().SequenceEqual("full-speed"u8))
+        {
+            return new MtkXFlashUsbSpeed(MtkXFlashUsbSpeedKind.FullSpeed, "full-speed");
+        }
+        if (reply.AsSpan().SequenceEqual("high-speed"u8))
+        {
+            return new MtkXFlashUsbSpeed(MtkXFlashUsbSpeedKind.HighSpeed, "high-speed");
+        }
+        if (reply.AsSpan().SequenceEqual("super-speed"u8))
+        {
+            return new MtkXFlashUsbSpeed(MtkXFlashUsbSpeedKind.SuperSpeed, "super-speed");
+        }
+        throw new MtkProtocolException(
+            $"Unrecognized XFlash USB speed reply ({reply.Length} bytes); expected full-speed, high-speed " +
+            "or super-speed.");
     }
 
     private async Task ReadXFlashStatusAsync(MtkXFlashChannel channel, string operation, CancellationToken cancellationToken,

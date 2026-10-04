@@ -270,6 +270,13 @@ public sealed partial class FirehoseProtocol
             throw new ArgumentException("Data stream must be seekable for read-back verification.", nameof(dataStream));
         }
 
+        if (await TryVerifyProgramWithTargetDigestOwnedAsync(dataStream, startSector, numSectors,
+                physicalPartition, cancellationToken).ConfigureAwait(false))
+        {
+            Log($"On-target digest verification passed for {filename}, sectors={numSectors}");
+            return;
+        }
+
         Log($"Starting read-back verification for {filename}, sectors={numSectors}");
 
         using var comparison = new ReadBackComparisonStream(dataStream, filename);

@@ -1,4 +1,5 @@
 using UotanStudio.Comm.Protocols.Bootrom;
+using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Devices.Discovery;
@@ -11,11 +12,13 @@ namespace UotanStudio.Comm.Devices.Discovery;
 public static class UsbProtocolClassifier
 {
     /// <summary>
-    /// Classifies the device as <c>edl</c>, <c>mtk</c> or <c>rkdl</c> from its bootrom VID/PID pair,
-    /// otherwise from the first interface matching a known debug-bridge triple
-    /// (<c>ff/42/1</c> adb, <c>ff/42/3</c> fastboot, <c>ff/50/1</c> hdc); when no per-interface
-    /// enumeration took place it falls back to the flattened interface descriptor.
-    /// <para>先按 bootrom 的 VID/PID 对分类为 <c>edl</c>、<c>mtk</c> 或 <c>rkdl</c>；否则按首个匹配已知
+    /// Classifies the device as <c>edl</c>, <c>mtk</c> or <c>rkdl</c> from its bootrom VID/PID pair —
+    /// the MediaTek branch also accepts the OEM rebranded download ports the reference client filters
+    /// on (LG 0x1004, OPPO 0x22D9, Sony 0x0FCE) — otherwise from the first interface matching a known
+    /// debug-bridge triple (<c>ff/42/1</c> adb, <c>ff/42/3</c> fastboot, <c>ff/50/1</c> hdc); when no
+    /// per-interface enumeration took place it falls back to the flattened interface descriptor.
+    /// <para>先按 bootrom 的 VID/PID 对分类为 <c>edl</c>、<c>mtk</c> 或 <c>rkdl</c>——联发科分支同时接受
+    /// 参考客户端过滤所用的 OEM 换牌下载端口（LG 0x1004、OPPO 0x22D9、Sony 0x0FCE）；否则按首个匹配已知
     /// 调试桥三元组（<c>ff/42/1</c> adb、<c>ff/42/3</c> fastboot、<c>ff/50/1</c> hdc）的接口分类；
     /// 未做逐接口枚举时回退到扁平化的接口描述符。</para>
     /// </summary>
@@ -103,6 +106,8 @@ public static class UsbProtocolClassifier
         if (vendorId == 0x05C6 && product is 0x9008 or 0x9006 or 0x900E or 0x901D or 0x9307)
             return "edl";
         if (vendorId == 0x0E8D && product is 0x0003 or 0x2000 or 0x2001)
+            return "mtk";
+        if (MtkFactory.IsOemDownloadPort(vendorId, product))
             return "mtk";
         if (vendorId == RkdlConstants.RockchipVid &&
             ((product >> 8) != 0 || RkdlConstants.KnownLoaderProductIds.Contains(product)))

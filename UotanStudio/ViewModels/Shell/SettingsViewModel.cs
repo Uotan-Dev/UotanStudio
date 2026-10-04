@@ -140,6 +140,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private LanguageInfo _selectedLanguage = LanguageInfo.SystemLanguage;
     private ThemeMode _selectedThemeMode;
     private bool _autoSave;
+    private bool _flashAutoBackup;
     private bool _debugMode;
     private bool _erofsLegacyCompatibility;
 
@@ -352,6 +353,16 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// <para>获取或设置刷写分区前是否自动按当前协议备份该分区。</para>
+    /// Gets or sets whether a partition is backed up over the selected protocol before it is flashed.
+    /// </summary>
+    public bool FlashAutoBackup
+    {
+        get => _flashAutoBackup;
+        set { if (SetProperty(ref _flashAutoBackup, value)) DebouncedSaveSettings(); }
+    }
+
+    /// <summary>
     /// <para>获取或设置是否启用调试模式（开启后日志显示 Trace/Debug 级别详细诊断信息）。</para>
     /// Gets or sets whether debug mode is enabled (when on, logs show Trace/Debug level diagnostic details).
     /// </summary>
@@ -409,6 +420,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
               ?? new LanguageInfo(settings.CultureName, settings.CultureName, settings.CultureName);
         _selectedThemeMode = settings.ThemeMode;
         _autoSave = settings.AutoSave;
+        _flashAutoBackup = settings.AutoBackupBeforeFlash;
         _debugMode = settings.DebugMode;
 
         LogService.Instance.ApplyDebugMode(_debugMode);
@@ -503,6 +515,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.CultureName = _selectedLanguage.IsSystemLanguage ? string.Empty : _selectedLanguage.CultureName;
         _appSettings.ThemeMode = _selectedThemeMode;
         _appSettings.AutoSave = _autoSave;
+        _appSettings.AutoBackupBeforeFlash = _flashAutoBackup;
         _appSettings.DebugMode = _debugMode;
         _appSettings.ErofsLegacyCompatibility = _erofsLegacyCompatibility;
 

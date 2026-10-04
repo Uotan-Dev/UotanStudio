@@ -244,6 +244,61 @@ public static partial class FirehoseXmlBuilder
     }
 
     /// <summary>
+    /// Builds the &lt;getsha256digest&gt; XML command asking the target to hash a flash range
+    /// (reference <c>edlclient/Library/firehose.py</c> cmd_getsha256digest, qdl <c>src/firehose.c</c>
+    /// firehose_getsha256digest).
+    /// <para>构建 &lt;getsha256digest&gt; XML 命令，请求目标对一段闪存范围计算哈希
+    /// （参考 <c>edlclient/Library/firehose.py</c> 的 cmd_getsha256digest 与 qdl <c>src/firehose.c</c>
+    /// 的 firehose_getsha256digest）。</para>
+    /// </summary>
+    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
+    /// <param name="numPartitionSectors">The number of sectors to hash. <para>待计算哈希的扇区数。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <returns>The getsha256digest XML string. <para>getsha256digest XML 字符串。</para></returns>
+    public static string BuildGetSha256Digest(long sectorSizeInBytes, long numPartitionSectors,
+        int physicalPartitionNumber, long startSector)
+    {
+        var sb = new StringBuilder();
+        sb.Append(EdlConstants.XmlHeader);
+        sb.Append(EdlConstants.DataOpen);
+        sb.Append($"<getsha256digest SECTOR_SIZE_IN_BYTES=\"{sectorSizeInBytes}\"");
+        sb.Append($" num_partition_sectors=\"{numPartitionSectors}\"");
+        sb.Append($" physical_partition_number=\"{physicalPartitionNumber}\"");
+        sb.Append($" start_sector=\"{startSector}\"");
+        sb.Append(" />\n");
+        sb.Append(EdlConstants.DataClose);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Builds the &lt;poke&gt; XML command writing a bounded big-endian hex literal to target memory
+    /// (reference <c>edlclient/Library/firehose.py</c> cmd_poke; some programmers spell the size
+    /// attribute <c>SizeInBytes</c>, hence the case switch).
+    /// <para>构建 &lt;poke&gt; XML 命令，向目标内存写入有界的大端十六进制字面量
+    /// （参考 <c>edlclient/Library/firehose.py</c> 的 cmd_poke；部分 programmer 将大小属性拼写成
+    /// <c>SizeInBytes</c>，因此提供大小写切换）。</para>
+    /// </summary>
+    /// <param name="address">The target memory address. <para>目标内存地址。</para></param>
+    /// <param name="sizeInBytes">The number of bytes to write (1-8). <para>待写入字节数（1-8）。</para></param>
+    /// <param name="valueHex">The big-endian hex literal with the <c>0x</c> prefix.
+    /// <para>带 <c>0x</c> 前缀的大端十六进制字面量。</para></param>
+    /// <param name="uppercaseSize">Whether the size attribute uses the <c>SizeInBytes</c> spelling.
+    /// <para>大小属性是否使用 <c>SizeInBytes</c> 拼写。</para></param>
+    /// <returns>The poke XML string. <para>poke XML 字符串。</para></returns>
+    public static string BuildPoke(long address, int sizeInBytes, string valueHex, bool uppercaseSize = false)
+    {
+        var sizeAttribute = uppercaseSize ? "SizeInBytes" : "size_in_bytes";
+        var sb = new StringBuilder();
+        sb.Append(EdlConstants.XmlHeader);
+        sb.Append(EdlConstants.DataOpen);
+        sb.Append($"<poke address64=\"{address}\" {sizeAttribute}=\"{sizeInBytes}\" value64=\"{EscapeXml(valueHex)}\"");
+        sb.Append(" />\n");
+        sb.Append(EdlConstants.DataClose);
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Escapes XML special characters in the specified value.
     /// <para>转义指定值中的 XML 特殊字符。</para>
     /// </summary>

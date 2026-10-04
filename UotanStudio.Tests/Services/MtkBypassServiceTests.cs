@@ -14,7 +14,7 @@ public sealed class MtkBypassServiceTests
 {
     private const int IdentityWriteCount = 7;
     private const ushort MultiFamilyChip = 0x0766;
-    private const ushort SolePreloaderChip = 0x0507;
+    private const ushort SolePreloaderChip = 0x0571;
     private const ushort UndocumentedChip = 0x0001;
     private const uint AuthenticatedConfiguration = 0x17;
     private const int PatchedPayloadLength = 1336;
@@ -252,7 +252,7 @@ public sealed class MtkBypassServiceTests
         var error = await Assert.ThrowsAsync<NotSupportedException>(() => MtkBypassService.RunAsync(session,
             AuthorisedRequest(MtkExploitFamily.Kamakiri), null, TestContext.Current.CancellationToken));
 
-        Assert.Contains("var1", error.Message);
+        Assert.Contains("brom_payload_addr", error.Message);
         Assert.Equal(IdentityWriteCount, pipe.Writes.Count);
         Assert.Empty(device.ControlTransfers);
     }

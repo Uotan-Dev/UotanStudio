@@ -191,14 +191,15 @@ internal static class EdlGptPartitionService
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
-            return await RepairGptCoreAsync(firehose, progress, ct).ConfigureAwait(false);
+            return await RepairGptCoreAsync(firehose, progress, physicalPartition: 0, ct).ConfigureAwait(false);
         }, ct);
 
     internal static async Task<FlashResult> RepairGptCoreAsync(FirehoseProtocol firehose,
-        IProgress<FlashProgress>? progress, CancellationToken ct)
+        IProgress<FlashProgress>? progress, int physicalPartition, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(firehose);
-        var snapshot = await firehose.ReadGptAsync(cancellationToken: ct).ConfigureAwait(false);
+        ArgumentOutOfRangeException.ThrowIfNegative(physicalPartition);
+        var snapshot = await firehose.ReadGptAsync(physicalPartition, cancellationToken: ct).ConfigureAwait(false);
         var requests = PlanGptWrite(snapshot.Table, snapshot.Geometry.SectorSize,
             snapshot.Geometry.SectorCount, snapshot.Geometry.PhysicalPartitionNumber);
         var programmed = 0L;
@@ -220,7 +221,7 @@ internal static class EdlGptPartitionService
                 $"Programmed {request.Bytes.Length} bytes at LBA {request.StartSector}. 已在 LBA {request.StartSector} 写入 {request.Bytes.Length} 字节。"));
         }
 
-        var reread = await firehose.ReadGptAsync(cancellationToken: ct).ConfigureAwait(false);
+        var reread = await firehose.ReadGptAsync(physicalPartition, cancellationToken: ct).ConfigureAwait(false);
         if (!string.Equals(reread.Table.MetadataSha256, snapshot.Table.MetadataSha256, StringComparison.Ordinal))
         {
             throw new InvalidDataException(

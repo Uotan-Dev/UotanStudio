@@ -156,7 +156,6 @@
     <x:String x:Key="Flash_EraseSelected">Erase selected</x:String>
     <x:String x:Key="Flash_DisableVbmeta">Disable vbmeta verification</x:String>
     <x:String x:Key="Flash_DeleteCow">Delete COW partition</x:String>
-    <x:String x:Key="Flash_UseAdb">Use ADB</x:String>
     <x:String x:Key="Flash_ModeMismatch">The selected device mode or its permissions do not support this package and operation.</x:String>
     <x:String x:Key="Flash_FlashEdlBundle">Flash complete EDL bundle</x:String>
     <x:String x:Key="Flash_AddRoot">Add Root</x:String>
@@ -168,7 +167,6 @@
     <x:String x:Key="Flash_Log">Log</x:String>
     <x:String x:Key="Flash_ClearLog">Clear</x:String>
     <x:String x:Key="Flash_LogPlaceholder">Flash log output</x:String>
-    <x:String x:Key="Flash_RefreshDevices">Refresh devices</x:String>
     <x:String x:Key="Flash_FolderOnly">Select a package, image folder, or HTTP(S) Payload URL.</x:String>
     <x:String x:Key="Flash_ImagesLoaded">images loaded</x:String>
     <x:String x:Key="Flash_DeviceChanged">The selected device changed. Refresh and confirm again.</x:String>
@@ -201,7 +199,6 @@
     <x:String x:Key="Flash_SkipAbsentSources">Skip partitions whose image is missing</x:String>
     <x:String x:Key="Flash_ContinueOnFailure">Continue after a failed partition</x:String>
     <x:String x:Key="Flash_NoDevice">No device selected</x:String>
-    <x:String x:Key="Flash_RkdlLoaderMissing">Rockchip loader is missing.</x:String>
     <x:String x:Key="Flash_Mtk">MTK serial download</x:String>
     <x:String x:Key="Flash_MtkPorts">Serial port</x:String>
     <x:String x:Key="Flash_MtkRefreshPorts">Refresh ports</x:String>
@@ -318,6 +315,9 @@
     <x:String x:Key="Flash_EdlAuthNone">No authentication</x:String>
     <x:String x:Key="Flash_EdlProjectAuth">OnePlus project verification</x:String>
     <x:String x:Key="Flash_EdlNothingAuth">Nothing project verification (ntprojectverify)</x:String>
+    <x:String x:Key="Flash_EdlXiaomiAuth">Xiaomi signature (fixed auth data)</x:String>
+    <x:String x:Key="Flash_EdlXiaomiAuthFile">Select Xiaomi signature file</x:String>
+    <x:String x:Key="Flash_EdlXiaomiAuthInvalid">The Xiaomi signature file must contain exactly 256 bytes.</x:String>
     <x:String x:Key="Flash_EdlNothingProjectUnknown">The Nothing catalogue has no entry for this project id, so no token constants are guessed:</x:String>
     <x:String x:Key="Flash_EdlOnePlusModel">Device project</x:String>
     <x:String x:Key="Flash_EdlOnePlusModelFormat">{0} ({1})</x:String>
@@ -378,6 +378,51 @@
     <x:String x:Key="Flash_EdlUfsProvisionConfirm">Provisioning creates the logical units the profile declares and cannot be undone on a blank device; the preview writes nothing. Continue?</x:String>
     <x:String x:Key="Flash_EdlUfsReset">Reset the UFS device</x:String>
     <x:String x:Key="Flash_EdlUfsResetConfirm">The device is asked to reset its UFS link, which ends the current firehose session. Continue?</x:String>
+    <x:String x:Key="Flash_CompressedSuperEmptyUnsupported">Compressed super_empty images are not supported.</x:String>
+    <x:String x:Key="Flash_ImageNameInvalid">The image file name is not a valid partition name.</x:String>
+    <x:String x:Key="Flash_RootPackageUnsupported">The selected file is not a supported Magisk or KernelSU package.</x:String>
+    <x:String x:Key="Flash_MissingExtractedImage">Extracted image is missing: {0}</x:String>
+    <x:String x:Key="Flash_EdlImageMismatch">EDL image {0} no longer matches its rawprogram entry.</x:String>
+    <x:String x:Key="Flash_EdlGptProgrammed">EDL partition '{0}' programmed from the device GPT ({1} bytes written, {2} bytes verified).</x:String>
+    <x:String x:Key="Flash_EdlEraseRangeUnknown">rawprogram entry '{0}' declares no num_partition_sectors; the erase range cannot be determined.</x:String>
+    <x:String x:Key="Flash_EdlEraseFailed">Failed to erase '{0}'. Response: {1}</x:String>
+    <x:String x:Key="Flash_EdlPowerNotAcknowledged">The target did not acknowledge the request. {0}</x:String>
+    <x:String x:Key="Flash_EdlPoke">Poke memory (debug)</x:String>
+    <x:String x:Key="Flash_EdlPokeAddressHint">Address (hex)</x:String>
+    <x:String x:Key="Flash_EdlPokeDataHint">Hex bytes (max 8)</x:String>
+    <x:String x:Key="Flash_EdlPokeConfirm">Write raw bytes to target memory at the given address? This debug command can crash the running programmer.</x:String>
+    <x:String x:Key="Flash_EdlPokeInvalid">Enter a valid hexadecimal address and 1-8 bytes of hex data.</x:String>
+    <x:String x:Key="Flash_EdlMemcpy">Copy memory (debug)</x:String>
+    <x:String x:Key="Flash_EdlMemcpySourceHint">Source address (hex)</x:String>
+    <x:String x:Key="Flash_EdlMemcpySizeHint">Bytes (max 16 MiB)</x:String>
+    <x:String x:Key="Flash_EdlActiveSlotDetected">Active slot: {0}</x:String>
+    <x:String x:Key="Flash_EdlLun">Physical region (LUN)</x:String>
+    <x:String x:Key="Flash_EdlSerialBaud">Serial baud rate</x:String>
+    <x:String x:Key="Flash_MtkLoggingOnlyHint">The selected MTK port is logging-only and cannot run flashing commands.</x:String>
+    <x:String x:Key="Flash_MtkLoaderNoEntries">The loader profile exposes no usable DA1/DA2 region pair.</x:String>
+    <x:String x:Key="Flash_MtkRpmbModeFrames">Read frames by index</x:String>
+    <x:String x:Key="Flash_MtkRpmbModeByteRange">Read byte range</x:String>
+    <x:String x:Key="Flash_MtkRpmbModeFullArea">Read whole RPMB area</x:String>
+    <x:String x:Key="Flash_MtkSecCfgIntentLock">Lock (state 1)</x:String>
+    <x:String x:Key="Flash_MtkSecCfgIntentUnlock">Unlock (state 3)</x:String>
+    <x:String x:Key="Flash_MtkOemKeySoftwareOtp">SEJ software one-time-program key</x:String>
+    <x:String x:Key="Flash_MtkOemKeyRpmb">RPMB key</x:String>
+    <x:String x:Key="Flash_MtkPayloadStageOnePatcher">Default patcher stub</x:String>
+    <x:String x:Key="Flash_MtkPayloadStageOneGeneric">Stage-one loader stub</x:String>
+    <x:String x:Key="Flash_MtkPayloadGenericLoader">Minimal loader stub</x:String>
+    <x:String x:Key="Flash_MtkPayloadBromDump">Boot ROM dump stub</x:String>
+    <x:String x:Key="Flash_MtkPayloadSramDump">Static RAM dump stub</x:String>
+    <x:String x:Key="Flash_MtkPayloadUartDump">UART output dump stub</x:String>
+    <x:String x:Key="Flash_MtkPayloadPreloaderDump">Preloader dump stub</x:String>
+    <x:String x:Key="Flash_MtkPayloadReboot">Reboot stub</x:String>
+    <x:String x:Key="Flash_MtkPayloadChipProfile">Chip profile payload</x:String>
+    <x:String x:Key="Flash_MtkFamilyKamakiri">Kamakiri (watchdog overflow)</x:String>
+    <x:String x:Key="Flash_MtkFamilyKamakiri2">Kamakiri 2</x:String>
+    <x:String x:Key="Flash_MtkFamilyKamakiriPreloader">Kamakiri via preloader</x:String>
+    <x:String x:Key="Flash_MtkFamilyAmonet">Amonet</x:String>
+    <x:String x:Key="Flash_MtkFamilyHashimoto">Hashimoto</x:String>
+    <x:String x:Key="Settings_FlashAutoBackup">Back up partitions before flashing</x:String>
+    <x:String x:Key="Settings_FlashAutoBackupDescription">Automatically back up a partition over the selected protocol before it is flashed.</x:String>
 
     <!-- ViewLocator -->
     <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>
@@ -626,6 +671,22 @@
     <x:String x:Key="Dock_Partition_Unallocated">Free space</x:String>
     <x:String x:Key="Dock_Partition_CapacityFormat">Capacity: {0} sectors ({1})</x:String>
     <x:String x:Key="Dock_Partition_UsedFormat">Used through: {0} sectors ({1})</x:String>
+
+    <!-- QcnEditor -->
+    <x:String x:Key="Dock_Qcn_Save">Save</x:String>
+    <x:String x:Key="Dock_Qcn_Items">NV Items</x:String>
+    <x:String x:Key="Dock_Qcn_Search">Search id or name</x:String>
+    <x:String x:Key="Dock_Qcn_Properties">Item Properties</x:String>
+    <x:String x:Key="Dock_Qcn_NoSelection">Select an NV item to inspect and edit its data.</x:String>
+    <x:String x:Key="Dock_Qcn_Structured">Structured Value</x:String>
+    <x:String x:Key="Dock_Qcn_StructuredInvalid">Invalid value; the item data was left unchanged.</x:String>
+    <x:String x:Key="Dock_Qcn_ImeiCheckInvalid">Warning: the Luhn check digit does not match the 14-digit prefix.</x:String>
+    <x:String x:Key="Dock_Qcn_Data">Raw Data (128 bytes)</x:String>
+    <x:String x:Key="Dock_Qcn_ItemId">Item Id</x:String>
+    <x:String x:Key="Dock_Qcn_Name">Name</x:String>
+    <x:String x:Key="Dock_Qcn_Stream">Stream</x:String>
+    <x:String x:Key="Dock_Qcn_Length">Effective Length</x:String>
+    <x:String x:Key="Dock_Qcn_Busy">Parsing QCN, please wait…</x:String>
 
     <!-- Compare tools -->
     <x:String x:Key="Compare_Equal">Equal</x:String>
@@ -922,6 +983,7 @@
     <x:String x:Key="Explorer_OpenAsAuto">Automatic detection</x:String>
     <x:String x:Key="Explorer_OpenAsElf">ELF binary information</x:String>
     <x:String x:Key="Explorer_OpenAsQualcomm">Qualcomm image analysis</x:String>
+    <x:String x:Key="Explorer_OpenAsQcn">QCN NV backup</x:String>
     <x:String x:Key="Explorer_OpenAsPartition">Partition table</x:String>
     <x:String x:Key="UserError_OperationFailed">The operation could not be completed. See the error details.</x:String>
     <x:String x:Key="UserError_Details">Error details (original message):</x:String>
@@ -960,4 +1022,7 @@
     <x:String x:Key="UserError_PartitionSizeInvalid">Invalid partition size value: {0}</x:String>
     <x:String x:Key="UserError_PartitionOverlap">Partition "{0}" overlaps partition "{1}".</x:String>
     <x:String x:Key="UserError_PluginUnavailable">The plugin is unavailable. Check compatibility and required dependencies.</x:String>
+    <x:String x:Key="UserError_QcnUnrecognized">The file is not a Qualcomm QCN NV backup.</x:String>
+    <x:String x:Key="UserError_QcnLoadFailed">Failed to read the QCN file.</x:String>
+    <x:String x:Key="UserError_QcnSaveFailed">Failed to save the QCN file.</x:String>
 </ResourceDictionary>
