@@ -303,7 +303,7 @@ internal static class MiscToolHandlers
             {
                 await using var stream = new FileStream(temporary, FileMode.Open, FileAccess.Read, FileShare.Read,
                     131072, FileOptions.Asynchronous | FileOptions.SequentialScan);
-                actual = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
+                actual = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false)).ToLowerInvariant();
                 if (!string.Equals(actual, sha256, StringComparison.OrdinalIgnoreCase))
                 {
                     return new ToolResult(false,

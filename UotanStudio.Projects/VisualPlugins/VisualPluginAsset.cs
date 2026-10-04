@@ -44,8 +44,8 @@ public sealed class VisualPluginAsset
     /// <para>十六进制表示的 SHA-256 身份。</para>
     /// </summary>
     /// <value>
-    /// Uppercase hex digest of the resource content; comparisons during copies ignore case, and bundle entry names use its lowercase form.
-    /// <para>资源内容的大写十六进制摘要；复制时的比较不区分大小写，包内条目名使用其小写形式。</para>
+    /// Lowercase hex digest of the resource content; comparisons during copies ignore case, and bundle entry names use its lowercase form.
+    /// <para>资源内容的小写十六进制摘要；复制时的比较不区分大小写，包内条目名使用其小写形式。</para>
     /// </value>
     public string Sha256 { get; set; } = string.Empty;
 
@@ -86,8 +86,8 @@ public sealed class VisualPluginAsset
     /// <para>取消增量哈希；取消会向上传播且不会返回资源。</para>
     /// </param>
     /// <returns>
-    /// Asset carrying the file's display name, exact length, uppercase-hex SHA-256 and full source path.
-    /// <para>包含文件显示名、精确长度、大写十六进制 SHA-256 和完整源路径的资源。</para>
+    /// Asset carrying the file's display name, exact length, lowercase-hex SHA-256 and full source path.
+    /// <para>包含文件显示名、精确长度、小写十六进制 SHA-256 和完整源路径的资源。</para>
     /// </returns>
     /// <exception cref="ArgumentException"><paramref name="path"/> is null, empty, or contains invalid characters.
     /// <para><paramref name="path"/> 为 null、空或包含无效字符。</para></exception>
@@ -131,7 +131,7 @@ public sealed class VisualPluginAsset
             Id = id,
             Name = Path.GetFileName(path),
             Length = length,
-            Sha256 = Convert.ToHexString(hash.GetHashAndReset()),
+            Sha256 = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant(),
             SourcePath = Path.GetFullPath(path)
         };
     }
