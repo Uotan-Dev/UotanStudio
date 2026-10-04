@@ -1,3 +1,4 @@
+using System.Buffers;
 using UotanStudio.Firmware.Compression.Internal;
 using ZstdSharp;
 
@@ -86,7 +87,12 @@ public static class ZstdCompressor
 
     /// <summary>
     /// Streaming zstd compression: pipes through ZstdSharp's CompressionStream without full buffering, suitable for large inputs.
-    /// <para>流式 Zstd 压缩：基于 ZstdSharp 的 CompressionStream 直接管道， 无需整块缓冲，适合大输入。</para>
+    /// When <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is above 1 and the input is seekable with at least two
+    /// 1 MiB chunks, chunks are compressed concurrently into independent frames and concatenated in chunk order, matching
+    /// the byte-array overload; otherwise a single frame is produced.
+    /// <para>流式 Zstd 压缩：基于 ZstdSharp 的 CompressionStream 直接管道， 无需整块缓冲，适合大输入。当
+    /// <see cref="CompressionOptions.MaxDegreeOfParallelism"/> 大于 1 且输入可寻址并至少包含两个 1 MiB 块时，各块并发
+    /// 压缩为独立帧并按块序串接，与字节数组重载语义一致；否则生成单帧。</para>
     /// </summary>
     /// <param name="input">Readable source stream, consumed to its end and left open.
     /// <para>可读源流，读取到末尾并保持打开。</para></param>
@@ -111,12 +117,73 @@ public static class ZstdCompressor
 
         try
         {
+            if (TryCompressParallel(input, output, options))
+            {
+                return;
+            }
             using var compressor = new CompressionStream(new NonDisposingStream(output), options?.Level ?? 3);
             input.CopyTo(compressor);
         }
         catch (Exception ex)
         {
             throw new CompressionException("ZSTD 压缩失败", ex);
+        }
+    }
+
+    /// <summary>
+    /// Compresses a seekable stream through parallel per-chunk frames when parallelism is requested and at least two
+    /// chunks exist; otherwise returns <see langword="false"/> and the caller keeps its single-frame sequential path.
+    /// <para>在请求并行且至少存在两个块时，把可寻址流按块并发压缩为独立帧；否则返回 <see langword="false"/>，
+    /// 调用方保持单帧串行路径。</para>
+    /// </summary>
+    private static bool TryCompressParallel(Stream input, Stream output, CompressionOptions? options)
+    {
+        if (!input.CanSeek || options?.MaxDegreeOfParallelism is null or <= 1)
+        {
+            return false;
+        }
+        var remaining = input.Length - input.Position;
+        var chunkSize = ParallelCompression.DefaultChunkSize;
+        var chunkCount = (int)Math.Min(int.MaxValue, (remaining + chunkSize - 1) / chunkSize);
+        var degree = Parallelism.Resolve(options.MaxDegreeOfParallelism, chunkCount);
+        if (degree <= 1 || chunkCount < 2)
+        {
+            return false;
+        }
+
+        var buffers = new byte[degree][];
+        var compressed = new byte[degree][];
+        for (var slot = 0; slot < degree; slot++)
+        {
+            buffers[slot] = ArrayPool<byte>.Shared.Rent(chunkSize);
+        }
+        try
+        {
+            for (var chunk = 0; chunk < chunkCount; chunk += degree)
+            {
+                var batch = Math.Min(degree, chunkCount - chunk);
+                for (var slot = 0; slot < batch; slot++)
+                {
+                    var start = (chunk + slot) * (long)chunkSize;
+                    var count = (int)Math.Min(chunkSize, remaining - start);
+                    var buffer = buffers[slot];
+                    input.ReadExactly(buffer, 0, count);
+                    compressed[slot] = CompressChunk(buffer, 0, count, options);
+                }
+                for (var slot = 0; slot < batch; slot++)
+                {
+                    output.Write(compressed[slot], 0, compressed[slot].Length);
+                    compressed[slot] = null!;
+                }
+            }
+            return true;
+        }
+        finally
+        {
+            for (var slot = 0; slot < buffers.Length; slot++)
+            {
+                ArrayPool<byte>.Shared.Return(buffers[slot]);
+            }
         }
     }
 

@@ -10,6 +10,8 @@ namespace UotanStudio.Firmware.Core.Checksums;
 /// </summary>
 public static class RockchipCrc32
 {
+    private static readonly uint[] Table = BuildTable();
+
     /// <summary>
     /// Computes the Rockchip CRC-32 of the data starting from <paramref name="seed"/>. To checksum a
     /// stream in chunks, pass the previous return value as the next <paramref name="seed"/>.
@@ -34,13 +36,25 @@ public static class RockchipCrc32
         var crc = seed;
         foreach (var value in data)
         {
-            crc ^= (uint)value << 24;
-            for (var bit = 0; bit < 8; bit++)
-            {
-                crc = (crc & 0x80000000) != 0 ? (crc << 1) ^ 0x04C10DB7u : crc << 1;
-            }
+            crc = (crc << 8) ^ Table[(byte)(crc >> 24) ^ value];
         }
 
         return crc;
+    }
+
+    private static uint[] BuildTable()
+    {
+        var table = new uint[256];
+        for (var value = 0; value < 256; value++)
+        {
+            uint entry = (uint)value << 24;
+            for (var bit = 0; bit < 8; bit++)
+            {
+                entry = (entry & 0x80000000) != 0 ? (entry << 1) ^ 0x04C10DB7u : entry << 1;
+            }
+            table[value] = entry;
+        }
+
+        return table;
     }
 }

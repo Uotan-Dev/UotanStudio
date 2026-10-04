@@ -437,7 +437,12 @@ public static class SparseImageConverter
             return;
         }
 
-        var buffer = ArrayPool<byte>.Shared.Rent((int)blockSize);
+        // Classification reads whole windows (multiples of blockSize) instead of one block per
+        // ReadExactly call: multi-GB images otherwise issue millions of 4 KiB reads on the hot path.
+        const uint ClassifyWindowBytes = 4 * 1024 * 1024;
+        var windowBlocks = Math.Max(1U, ClassifyWindowBytes / blockSize);
+        var windowBytes = checked(windowBlocks * blockSize);
+        var buffer = ArrayPool<byte>.Shared.Rent((int)windowBytes);
         try
         {
             const byte KindZero = 1, KindFill = 2, KindRaw = 3;
@@ -470,43 +475,52 @@ public static class SparseImageConverter
                 blocks = 0;
             }
 
-            for (var block = 0U; block < totalBlocks; block++)
+            for (var windowStart = 0U; windowStart < totalBlocks;)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var thisBlockBytes = (int)Math.Min(blockSize, totalLength - (long)block * blockSize);
-                input.ReadExactly(buffer, 0, thisBlockBytes);
-                if (thisBlockBytes < (int)blockSize)
+                var windowCount = (uint)Math.Min(windowBlocks, totalBlocks - windowStart);
+                var windowLength = (int)Math.Min(windowBytes, totalLength - (long)windowStart * blockSize);
+                input.ReadExactly(buffer, 0, windowLength);
+                if (windowLength < (int)windowBytes)
                 {
-                    Array.Clear(buffer, thisBlockBytes, (int)blockSize - thisBlockBytes);
+                    Array.Clear(buffer, windowLength, (int)windowBytes - windowLength);
                 }
 
-                byte nextKind;
-                var nextFill = 0u;
-                if (IsZeroBlock(buffer, (int)blockSize))
+                for (var offset = 0U; offset < windowCount; offset++)
                 {
-                    nextKind = KindZero;
-                }
-                else if (thisBlockBytes == (int)blockSize && IsUniformFill(buffer, out nextFill))
-                {
-                    nextKind = KindFill;
-                }
-                else
-                {
-                    nextKind = KindRaw;
-                }
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var block = windowStart + offset;
+                    var thisBlockBytes = (int)Math.Min(blockSize, totalLength - (long)block * blockSize);
+                    var blockSpan = buffer.AsSpan((int)offset * (int)blockSize, (int)blockSize);
 
-                if (kind != 0 && (nextKind != kind || (nextKind == KindFill && nextFill != fillValue)))
-                {
-                    Flush();
+                    byte nextKind;
+                    var nextFill = 0u;
+                    if (IsZeroBlock(blockSpan))
+                    {
+                        nextKind = KindZero;
+                    }
+                    else if (thisBlockBytes == (int)blockSize && IsUniformFill(blockSpan, out nextFill))
+                    {
+                        nextKind = KindFill;
+                    }
+                    else
+                    {
+                        nextKind = KindRaw;
+                    }
+
+                    if (kind != 0 && (nextKind != kind || (nextKind == KindFill && nextFill != fillValue)))
+                    {
+                        Flush();
+                    }
+                    if (kind == 0)
+                    {
+                        kind = nextKind;
+                        fillValue = nextFill;
+                        startBlock = block;
+                        startByte = (long)block * blockSize;
+                    }
+                    blocks++;
                 }
-                if (kind == 0)
-                {
-                    kind = nextKind;
-                    fillValue = nextFill;
-                    startBlock = block;
-                    startByte = (long)block * blockSize;
-                }
-                blocks++;
+                windowStart += windowCount;
             }
             Flush();
 
@@ -567,24 +581,14 @@ public static class SparseImageConverter
         }
     }
 
-    private static bool IsZeroBlock(byte[] buffer, int length)
-    {
-        for (var i = 0; i < length; i++)
-        {
-            if (buffer[i] != 0)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
+    private static bool IsZeroBlock(ReadOnlySpan<byte> block) => block.IndexOfAnyExcept((byte)0) < 0;
 
-    private static bool IsUniformFill(byte[] buffer, out uint value)
+    private static bool IsUniformFill(ReadOnlySpan<byte> block, out uint value)
     {
-        value = BinaryPrimitives.ReadUInt32LittleEndian(buffer);
-        for (var i = 4; i < buffer.Length; i += 4)
+        value = BinaryPrimitives.ReadUInt32LittleEndian(block);
+        for (var i = 4; i + 4 <= block.Length; i += 4)
         {
-            if (BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(i, 4)) != value)
+            if (BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(i, 4)) != value)
             {
                 return false;
             }
