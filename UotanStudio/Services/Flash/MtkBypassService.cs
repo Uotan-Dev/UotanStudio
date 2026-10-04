@@ -34,6 +34,18 @@ internal sealed record MtkBypassRequest
     /// </value>
     public bool AllowUnsafeVolatileWrite { get; init; }
 
+    /// <summary>Gets whether the caller opts the Kamakiri driver into brute-forcing the Boot ROM control index
+    /// (var1) when the chip table records none for the queried hardware.
+    /// <para>获取调用方是否让 Kamakiri 驱动在芯片表未为所查询硬件记录 Boot ROM 控制索引（var1）时暴力枚举该索引。</para></summary>
+    /// <value>
+    /// <see langword="false"/> by default. Only the Kamakiri family honours it; every other family still requires
+    /// its recorded registers, so this flag is threaded straight into the session options without a host-side
+    /// family decision.
+    /// <para>默认为 <see langword="false"/>。只有 Kamakiri 家族理会它；其余家族仍要求各自记录的寄存器，因此该标志被
+    /// 直接透传给会话选项，宿主不在此处做家族判断。</para>
+    /// </value>
+    public bool AllowUnknownVar1Brute { get; init; }
+
     /// <summary>Gets the exploit family to run, or <see langword="null"/> to ask for the single family the chip
     /// table documents. <para>获取要运行的漏洞家族，或为 <see langword="null"/> 以请求芯片表唯一记录的家族。</para></summary>
     /// <value>
@@ -176,6 +188,7 @@ internal static class MtkBypassService
         {
             AllowExploitBypass = request.AllowExploitBypass,
             AllowVolatileMemoryWrite = request.AllowUnsafeVolatileWrite,
+            AllowUnknownVar1Brute = request.AllowUnknownVar1Brute,
             Family = request.Family,
             Payload = request.Payload,
             MaximumPayloadLength = request.MaximumPayloadLength,

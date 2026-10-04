@@ -154,8 +154,11 @@ public partial class FlashView : UserControl
     {
         InitializeComponent();
         DataContext = _model;
-        MtkStorageKindBox.ItemsSource = new[] { "eMMC", "UFS" };
+        MtkStorageKindBox.ItemsSource = new[] { "eMMC", "UFS", "NOR", "NAND", "Auto" };
         MtkStorageKindBox.SelectedIndex = 0;
+        MtkCrashModeBox.ItemsSource = Enum.GetNames<MtkDaCrashMode>();
+        MtkCrashModeBox.SelectedIndex = 0;
+        MtkExploitFamilyBox.SelectionChanged += (_, _) => UpdateEdlButton();
         MtkBaudBox.ItemsSource = new[] { 115200, 921600, 460800, 230400 };
         MtkBaudBox.SelectedIndex = 0;
         EdlSerialBaudBox.ItemsSource = new[] { 115200, 921600, 460800, 230400 };
@@ -965,6 +968,7 @@ public partial class FlashView : UserControl
         var netType = EdlNetTypeBox.IsChecked == true;
         var qudRecovery = EdlQudRecoveryBox.IsChecked == true;
         var pendingCompletion = EdlPendingCompletionBox.IsChecked == true;
+        var streamDload = EdlAllowStreamDloadBox.IsChecked == true;
         if (!TryReadEdlAuthTimeout(EdlAuthTimeoutBox.Text, out var authTimeoutMs))
         {
             AppendLog(LanguageService.Instance.GetString("Flash_EdlAuthTimeoutInvalid"));
@@ -973,14 +977,15 @@ public partial class FlashView : UserControl
 
         if (EdlAuthKindBox.SelectedIndex == EdlAuthKindNone)
         {
-            initialization = netType || qudRecovery || pendingCompletion ||
+            initialization = netType || qudRecovery || pendingCompletion || streamDload ||
                 authTimeoutMs != EdlAuthTimeoutDefaultMs
                 ? new EdlInitializationOptions
                 {
                     SendOnePlusNetType = netType,
                     QudHelloRecoveryEnabled = qudRecovery,
                     AllowSingleFirehosePendingCompletion = pendingCompletion,
-                    AuthenticationTimeoutMs = authTimeoutMs
+                    AuthenticationTimeoutMs = authTimeoutMs,
+                    AllowStreamDload = streamDload
                 }
                 : null;
             return true;
@@ -1257,7 +1262,7 @@ public partial class FlashView : UserControl
         MtkBaudBox.IsVisible = !isMtkUsb;
         MtkAttachAgentBox.IsVisible = !isMtkUsb;
         SwitchSlotButton.IsVisible = isFastboot;
-        ReadInfoButton.IsVisible = isFastboot;
+        ReadInfoButton.IsVisible = isFastboot || isMtkUsb;
         ShowAllPartitionsBox.IsVisible = isFastboot;
         EraseSelectedButton.IsVisible = isFastboot;
         FlashSelectedButton.IsVisible = protocol is not DeviceProtocolKind.Mtk;
@@ -1270,16 +1275,40 @@ public partial class FlashView : UserControl
         EdlRepairGptButton.IsEnabled = !_busy && isEdl;
         EdlRamDumpButton.IsEnabled = !_busy && isEdl;
         MtkUsbOnlyRow.IsVisible = isMtkUsb;
+        var isMtkPreloader = isMtkUsb && SelectedDevice?.State == "preloader";
+        MtkPreloaderPane.IsVisible = isMtkPreloader;
+        var preloaderEnabled = !_busy && isMtkPreloader;
+        MtkPreloaderOffsetBox.IsEnabled = preloaderEnabled;
+        MtkPreloaderLengthBox.IsEnabled = preloaderEnabled;
+        MtkPreloaderStepBox.IsEnabled = preloaderEnabled;
+        MtkPreloaderConfirmFlashMappingBox.IsEnabled = preloaderEnabled;
+        MtkPreloaderDumpButton.IsEnabled = preloaderEnabled;
+        MtkPreloaderPeekButton.IsEnabled = preloaderEnabled;
+        MtkPreloaderWriteDataBox.IsEnabled = preloaderEnabled;
+        MtkPreloaderWriteConfirmBox.IsEnabled = preloaderEnabled;
+        MtkPreloaderWriteButton.IsEnabled = preloaderEnabled;
+        MtkPreloaderReturnToBromButton.IsEnabled = preloaderEnabled;
+        MtkPreloaderDisableWatchdogButton.IsEnabled = preloaderEnabled;
+        MtkPreloaderPartitionNameBox.IsEnabled = preloaderEnabled;
+        MtkPreloaderJumpButton.IsEnabled = preloaderEnabled;
         var exploitGranted = !_busy && isMtkUsb && MtkExploitBypassBox.IsChecked == true &&
             MtkExploitVolatileBox.IsChecked == true;
         MtkExploitFamilyBox.IsEnabled = exploitGranted;
         MtkExploitPayloadBox.IsEnabled = MtkExploitFamilyBox.IsEnabled;
         MtkBypassButton.IsEnabled = MtkExploitFamilyBox.IsEnabled;
+        MtkBruteVar1Box.IsVisible = isMtkUsb &&
+            ReadExploitFamily(MtkExploitFamilyBox.SelectedIndex) == MtkExploitFamily.Kamakiri;
+        MtkBruteVar1Box.IsEnabled = exploitGranted;
         MtkRpmbModeBox.IsEnabled = !_busy && isMtkUsb;
         MtkRpmbOffsetBox.IsEnabled = MtkRpmbModeBox.IsEnabled;
         MtkRpmbLengthBox.IsEnabled = MtkRpmbModeBox.IsEnabled;
         MtkRpmbReadButton.IsEnabled = MtkRpmbModeBox.IsEnabled;
         var mtkProtocolReady = !_busy && protocol is DeviceProtocolKind.Mtk;
+        MtkCrashModeBox.IsEnabled = mtkProtocolReady;
+        MtkCrashButton.IsEnabled = mtkProtocolReady;
+        MtkSetSpeedButton.IsEnabled = mtkProtocolReady;
+        MtkRebootMetaButton.IsEnabled = mtkProtocolReady;
+        MtkRebootAndroidTestButton.IsEnabled = mtkProtocolReady;
         MtkSecCfgPartitionBox.IsEnabled = mtkProtocolReady;
         MtkSecCfgReadButton.IsEnabled = mtkProtocolReady;
         MtkSecCfgLockBox.IsEnabled = mtkProtocolReady;
@@ -1493,6 +1522,12 @@ public partial class FlashView : UserControl
 
     private async void OnReadInfoClick(object? sender, RoutedEventArgs e)
     {
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Mtk, Transport: DeviceTransportKind.Usb })
+        {
+            await RunMtkDeviceInfoAsync();
+            return;
+        }
+
         if (SelectedDevice is not { Protocol: DeviceProtocolKind.Fastboot } device || _busy || _confirming) return;
         SetBusy(true);
         try
@@ -1530,6 +1565,31 @@ public partial class FlashView : UserControl
         }
         catch (Exception ex) { AppendLog(ex.Message); }
         finally { SetBusy(false); }
+    }
+
+    private async Task RunMtkDeviceInfoAsync()
+    {
+        var language = LanguageService.Instance;
+        await RunWithReadyMtkOperationAsync(async (session, token) =>
+        {
+            if (SelectedMtkProtocol != MtkDaProtocol.XFlash)
+            {
+                AppendLog(language.GetString("Flash_MtkSpeedFamilyUnsupported"));
+                return;
+            }
+
+            var label = language.GetString("Flash_MtkDevCtrlGroup");
+            var ram = await session.GetXFlashRamInfoAsync(token).ConfigureAwait(true);
+            AppendLog($"{label} · {language.GetString("Flash_MtkRamInfo")}: {ram}");
+            var randomId = await session.GetXFlashRandomIdAsync(token).ConfigureAwait(true);
+            AppendLog($"{label} · {language.GetString("Flash_MtkRandomId")}: {Convert.ToHexString(randomId)}");
+            var life = await session.GetXFlashStorageLifeCycleCheckAsync(token).ConfigureAwait(true);
+            AppendLog($"{label} · {language.GetString("Flash_MtkStorageLife")}: 0x{life:X8}");
+            var expire = await session.GetXFlashExpireDateAsync(token).ConfigureAwait(true);
+            AppendLog($"{label} · {language.GetString("Flash_MtkExpireDate")}: {Convert.ToHexString(expire)}");
+            var category = await session.GetXFlashPartitionTableCategoryAsync(token).ConfigureAwait(true);
+            AppendLog($"{label} · {language.GetString("Flash_MtkPartitionCategory")}: {category}");
+        });
     }
 
     private async void OnFlashSelectedClick(object? sender, RoutedEventArgs e)
@@ -3632,9 +3692,13 @@ public partial class FlashView : UserControl
     /// outside this pane.
     /// </summary>
     /// <value>The selected storage family. <para>所选存储族。</para></value>
-    private MtkXFlashStorageKind SelectedMtkStorageKind => MtkStorageKindBox.SelectedIndex == 1
-        ? MtkXFlashStorageKind.Ufs
-        : MtkXFlashStorageKind.Emmc;
+    private MtkXFlashStorageKind SelectedMtkStorageKind => MtkStorageKindBox.SelectedIndex switch
+    {
+        1 => MtkXFlashStorageKind.Ufs,
+        2 => MtkXFlashStorageKind.Nor,
+        3 => MtkXFlashStorageKind.Nand,
+        _ => MtkXFlashStorageKind.Emmc
+    };
 
     /// <summary>
     /// <para>XML 代理的 DRAM 资源走它自己的主机文件通道，不接受 XFlash 的 EMI 参数，因此家族为 XML 时
@@ -4275,6 +4339,7 @@ public partial class FlashView : UserControl
             {
                 AllowExploitBypass = true,
                 AllowUnsafeVolatileWrite = true,
+                AllowUnknownVar1Brute = MtkBruteVar1Box.IsChecked == true,
                 Family = ReadExploitFamily(MtkExploitFamilyBox.SelectedIndex),
                 Payload = payload
             }, progress, cancellation.Token).ConfigureAwait(true);
@@ -4994,15 +5059,293 @@ public partial class FlashView : UserControl
     /// <para>是否容忍单次 pending 完成。</para></param>
     /// <param name="authTimeoutMs">The authentication deadline. <para>鉴权截止时间。</para></param>
     /// <returns>The options with the switches applied. <para>已套用开关的启动要求。</para></returns>
-    private static EdlInitializationOptions WithEdlCompatibility(EdlInitializationOptions options, bool netType,
+    private EdlInitializationOptions WithEdlCompatibility(EdlInitializationOptions options, bool netType,
         bool qudRecovery, bool pendingCompletion, int authTimeoutMs) =>
         options with
         {
             SendOnePlusNetType = netType,
             QudHelloRecoveryEnabled = qudRecovery,
             AllowSingleFirehosePendingCompletion = pendingCompletion,
-            AuthenticationTimeoutMs = authTimeoutMs
+            AuthenticationTimeoutMs = authTimeoutMs,
+            AllowStreamDload = EdlAllowStreamDloadBox.IsChecked == true
         };
+
+    /// <summary>
+    /// <para>在 preloader 命令阶段的新会话上运行给定操作：每次点击都经租约取一份全新、已初始化但未上传下载代理的
+    /// 会话，因此协议 fault 后下一次点击自动重建，不在故障会话上重试。</para>
+    /// Runs the given operation on a fresh preloader command-stage session: every click takes a newly initialized
+    /// lease with no download-agent uploaded, so a protocol fault is rebuilt by the next click rather than retried
+    /// on the faulted session.
+    /// </summary>
+    private async Task RunMtkPreloaderAsync(string? confirmKey, Func<MtkSession, CancellationToken, Task> operation)
+    {
+        if (_busy || _confirming ||
+            SelectedDevice is not { Protocol: DeviceProtocolKind.Mtk, Transport: DeviceTransportKind.Usb } usbDevice ||
+            usbDevice.State != "preloader")
+        {
+            return;
+        }
+
+        var language = LanguageService.Instance;
+        if (confirmKey is not null && TopLevel.GetTopLevel(this) is Window owner)
+        {
+            _confirming = true;
+            bool confirmed;
+            try
+            {
+                confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_MtkPreloaderGroup"),
+                    language.GetString(confirmKey));
+            }
+            finally { _confirming = false; }
+            if (!confirmed) return;
+        }
+
+        SetBusy(true);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        CancelFlashButton.IsEnabled = true;
+        try
+        {
+            await App.DeviceMonitor.RunMtkAsync(usbDevice, async session =>
+            {
+                await session.InitializeAsync(cancellation.Token).ConfigureAwait(true);
+                await operation(session, cancellation.Token).ConfigureAwait(true);
+                return true;
+            }, cancellation.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex)
+        {
+            AppendLog(ex.Message);
+            AppendLog(language.GetString("Flash_MtkPreloaderSessionFaulted"));
+        }
+        finally
+        {
+            _flashCancellation = null;
+            CancelFlashButton.IsEnabled = false;
+            SetBusy(false);
+            UpdateEdlButton();
+        }
+    }
+
+    internal static bool TryReadPreloaderAddress(string? text, out uint value)
+    {
+        var trimmed = text?.Trim();
+        if (trimmed is not null && trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed[2..];
+        }
+
+        return uint.TryParse(trimmed, System.Globalization.NumberStyles.HexNumber,
+            System.Globalization.CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryReadPreloaderCount(string? text, out int value)
+    {
+        if (TryReadPreloaderAddress(text, out var hex))
+        {
+            value = checked((int)hex);
+            return true;
+        }
+
+        return int.TryParse(text?.Trim(), System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out value);
+    }
+
+    private async void OnMtkPreloaderDumpClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(this) is not Window owner ||
+            !TryReadPreloaderAddress(MtkPreloaderOffsetBox.Text, out var offset) ||
+            !TryReadPreloaderCount(MtkPreloaderLengthBox.Text, out var length) || length <= 0 ||
+            !TryReadPreloaderCount(MtkPreloaderStepBox.Text, out var step) || step <= 0)
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_MtkMemoryLength") + " / " +
+                LanguageService.Instance.GetString("Flash_MtkPreloaderStep"));
+            return;
+        }
+
+        var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = LanguageService.Instance.GetString("Flash_MtkPreloaderDump"),
+            SuggestedFileName = "iflash.bin",
+            DefaultExtension = "bin"
+        });
+        if (file?.TryGetLocalPath() is not { Length: > 0 } destination) return;
+        var confirmFlashMapping = MtkPreloaderConfirmFlashMappingBox.IsChecked == true;
+        await RunMtkPreloaderAsync(null, async (session, token) =>
+        {
+            var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
+            var record = await MtkPreloaderService.DumpInternalFlashAsync(session, offset, length, step,
+                confirmFlashMapping, destination, progress, token).ConfigureAwait(true);
+            AppendLog($"{record.RegionName} 0x{record.StartOffset:X8} -> {record.DestinationPath} " +
+                $"({record.ByteLength} bytes, SHA-256 {record.Sha256Hex})");
+        });
+    }
+
+    private async void OnMtkPreloaderPeekClick(object? sender, RoutedEventArgs e)
+    {
+        if (!TryReadPreloaderAddress(MtkPreloaderOffsetBox.Text, out var address) ||
+            !TryReadPreloaderCount(MtkPreloaderLengthBox.Text, out var length) || length <= 0)
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_MtkMemoryAddress"));
+            return;
+        }
+
+        await RunMtkPreloaderAsync(null, async (session, token) =>
+        {
+            var data = await MtkPreloaderService.PeekWindowAsync(session, address, length, token)
+                .ConfigureAwait(true);
+            AppendLog($"0x{address:X8}: {Convert.ToHexString(data)}");
+        });
+    }
+
+    private async void OnMtkPreloaderWriteClick(object? sender, RoutedEventArgs e)
+    {
+        if (!TryReadPreloaderAddress(MtkPreloaderOffsetBox.Text, out var address) ||
+            MtkPreloaderWriteDataBox.Text?.Trim() is not { Length: > 0 } hex ||
+            !TryParseHexBytes(hex, out var data))
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_MtkPreloaderWriteData"));
+            return;
+        }
+
+        if (MtkPreloaderWriteConfirmBox.IsChecked != true)
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_MtkPreloaderWriteConfirm"));
+            return;
+        }
+
+        await RunMtkPreloaderAsync("Flash_MtkPreloaderWriteConfirmDialog", async (session, token) =>
+        {
+            var submitted = await MtkPreloaderService.WriteWindowAsync(session, address, data,
+                confirmed: true, token).ConfigureAwait(true);
+            AppendLog($"0x{address:X8} <- {submitted} bytes");
+        });
+    }
+
+    private async void OnMtkPreloaderReturnToBromClick(object? sender, RoutedEventArgs e)
+        => await RunMtkPreloaderAsync("Flash_MtkPreloaderReturnToBromConfirm", async (session, token) =>
+            await MtkPreloaderService.ReturnToBootRomAsync(session, timeoutSeconds: 0, confirmed: true, token)
+                .ConfigureAwait(true));
+
+    private async void OnMtkPreloaderDisableWatchdogClick(object? sender, RoutedEventArgs e)
+        => await RunMtkPreloaderAsync("Flash_MtkPreloaderDisableWatchdogConfirm", async (session, token) =>
+            await MtkPreloaderService.DisableWatchdogAsync(session, confirmed: true, token).ConfigureAwait(true));
+
+    private async void OnMtkPreloaderJumpClick(object? sender, RoutedEventArgs e)
+    {
+        if (MtkPreloaderPartitionNameBox.Text?.Trim() is not { Length: > 0 } partitionName)
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_MtkPreloaderPartitionName"));
+            return;
+        }
+
+        await RunMtkPreloaderAsync("Flash_MtkPreloaderJumpConfirm", async (session, token) =>
+            await MtkPreloaderService.JumpToPartitionAsync(session, partitionName, confirmed: true, token)
+                .ConfigureAwait(true));
+    }
+
+    internal static bool TryParseHexBytes(string text, out byte[] bytes)
+    {
+        var cleaned = new string(text.Replace(" ", string.Empty).Replace("-", string.Empty)
+            .Where(Uri.IsHexDigit).ToArray());
+        if (cleaned.Length == 0 || cleaned.Length % 2 != 0)
+        {
+            bytes = [];
+            return false;
+        }
+
+        bytes = Convert.FromHexString(cleaned);
+        return true;
+    }
+
+    private async void OnMtkCrashClick(object? sender, RoutedEventArgs e)
+    {
+        var language = LanguageService.Instance;
+        if (!TryReadMtkSelection(out _, out _, out _, out _, out _, out _) ||
+            TopLevel.GetTopLevel(this) is not Window owner ||
+            SelectedDevice is not { Protocol: DeviceProtocolKind.Mtk } usbDevice)
+        {
+            return;
+        }
+
+        _confirming = true;
+        bool confirmed;
+        try
+        {
+            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_MtkCrashButton"),
+                language.GetString("Flash_MtkCrashConfirm"));
+        }
+        finally { _confirming = false; }
+        if (!confirmed) return;
+
+        var mode = Enum.GetValues<MtkDaCrashMode>()[Math.Max(MtkCrashModeBox.SelectedIndex, 0)];
+        SetBusy(true);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        CancelFlashButton.IsEnabled = true;
+        try
+        {
+            await RunWithReadyMtkSessionAsync(async (session, token) =>
+            {
+                var result = await session.CrashDaAsync(mode, confirm: true, token).ConfigureAwait(true);
+                AppendLog($"{result.Mode}: {result.Detail}");
+                AppendLog(language.GetString("Flash_MtkCrashConfirm"));
+            }, cancellation.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            _flashCancellation = null;
+            CancelFlashButton.IsEnabled = false;
+            SetBusy(false);
+            UpdateEdlButton();
+        }
+    }
+
+    private async void OnMtkSetSpeedClick(object? sender, RoutedEventArgs e)
+    {
+        var language = LanguageService.Instance;
+        await RunWithReadyMtkOperationAsync(async (session, token) =>
+        {
+            var applied = SelectedMtkProtocol switch
+            {
+                MtkDaProtocol.Legacy => (await session.SetLegacyTransferSpeedAsync(
+                    SelectedMtkBaudrate, token).ConfigureAwait(true)).ToString(),
+                MtkDaProtocol.XFlash => (await session.SetXFlashUsbSpeedAsync(token).ConfigureAwait(true)).ToString(),
+                _ => null
+            };
+            AppendLog(applied is null
+                ? language.GetString("Flash_MtkSpeedFamilyUnsupported")
+                : string.Format(language.GetString("Flash_MtkSpeedApplied"), applied));
+        });
+    }
+
+    private async Task RunWithReadyMtkOperationAsync(Func<MtkSession, CancellationToken, Task> operation)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(this) is not Window owner) return;
+        var language = LanguageService.Instance;
+        SetBusy(true);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        CancelFlashButton.IsEnabled = true;
+        try
+        {
+            await RunWithReadyMtkSessionAsync(operation, cancellation.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            _flashCancellation = null;
+            CancelFlashButton.IsEnabled = false;
+            SetBusy(false);
+            UpdateEdlButton();
+        }
+    }
+
+    private int SelectedMtkBaudrate => MtkBaudBox.SelectedItem is int baud ? baud : 921600;
 
     private void OnMtkRebootClick(object? sender, RoutedEventArgs e)
         => RunMtkShutdownAsync(MtkXFlashShutdownMode.NormalBoot,
@@ -5013,6 +5356,90 @@ public partial class FlashView : UserControl
     private void OnMtkPowerOffClick(object? sender, RoutedEventArgs e)
         => RunMtkShutdownAsync(MtkXFlashShutdownMode.PowerOff,
             "Flash_MtkPowerOff", "Flash_MtkPowerOffConfirm", "Flash_MtkPowerOffDone");
+
+    private void OnMtkRebootMetaClick(object? sender, RoutedEventArgs e)
+        => RunMtkXmlRebootAsync(MtkXmlBootMode.Meta,
+            "Flash_MtkRebootMeta", "Flash_MtkRebootMetaConfirm", "Flash_MtkRebootMetaDone");
+
+    private void OnMtkRebootAndroidTestClick(object? sender, RoutedEventArgs e)
+        => RunMtkXmlRebootAsync(MtkXmlBootMode.AndroidTest,
+            "Flash_MtkRebootAndroidTest", "Flash_MtkRebootAndroidTestConfirm", "Flash_MtkRebootAndroidTestDone");
+
+    /// <summary>
+    /// <para>META 与 Android 测试模式重启只由 XML 下载代理家族定义：非 XML 家族在接触设备前本地拒绝；家族匹配时先
+    /// 启动到存储就绪的 XML 代理，再请求该启动目标，执行前需用户确认。</para>
+    /// META and Android-test reboots are defined only by the XML download-agent family: a non-XML family is refused
+    /// locally before any device contact; when the family matches, a storage-ready XML agent is booted first and the
+    /// boot destination is requested afterwards under confirmation.
+    /// </summary>
+    private async void RunMtkXmlRebootAsync(MtkXmlBootMode mode, string titleKey, string confirmKey, string doneKey)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(this) is not Window owner) return;
+        var language = LanguageService.Instance;
+        if (SelectedMtkProtocol != MtkDaProtocol.Xml)
+        {
+            AppendLog(language.GetString("Flash_MtkXmlRebootFamilyRequired"));
+            return;
+        }
+
+        if (!TryReadMtkSelection(out var useSerial, out var usbDevice, out var port, out var baudRate,
+                out var attach, out var autoMatch))
+        {
+            return;
+        }
+
+        _confirming = true;
+        bool confirmed;
+        try
+        {
+            confirmed = await DialogService.ConfirmAsync(owner, language.GetString(titleKey),
+                language.GetString(confirmKey));
+        }
+        finally { _confirming = false; }
+        if (!confirmed) return;
+
+        SetBusy(true);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        CancelFlashButton.IsEnabled = true;
+        try
+        {
+            async Task FinishAsync(MtkSession session, CancellationToken token)
+            {
+                await session.RebootXmlAsync(new MtkXmlRebootOptions { Mode = mode }, cancellationToken: token)
+                    .ConfigureAwait(true);
+            }
+
+            if (useSerial)
+            {
+                var connect = BuildMtkSerialConnector(port!, baudRate, SelectedMtkStorageKind, attach, autoMatch);
+                using var session = await connect(cancellation.Token);
+                await FinishAsync(session, cancellation.Token);
+            }
+            else
+            {
+                var matched = await BuildMtkAutoStartupAsync(SelectedMtkStorageKind, cancellation.Token);
+                await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
+                {
+                    var ready = await MtkBootstrap.MatchAsync(session, SelectedMtkProtocol, matched,
+                        cancellation.Token);
+                    await FinishAsync(ready, cancellation.Token);
+                    return true;
+                }, cancellation.Token);
+            }
+
+            AppendLog(language.GetString(doneKey));
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            SetBusy(false);
+            _flashCancellation = null;
+            CancelFlashButton.IsEnabled = false;
+            UpdateEdlButton();
+        }
+    }
 
     /// <summary>
     /// <para>先按面板选择启动到存储就绪的代理，再向代理请求关机或启动模式切换；执行前需用户确认。</para>

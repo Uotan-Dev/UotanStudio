@@ -15,6 +15,7 @@ using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Firmware.Architecture;
 using UotanStudio.Tests.Services;
+using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
 using Xunit;
@@ -768,7 +769,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                         ],
                         protocolBox.Items.Cast<object?>().Select(item => (item as ContentControl)?.Content?.ToString()));
                     Assert.Equal(0, protocolBox.SelectedIndex);
-                    Assert.Equal(["eMMC", "UFS"], storageBox.Items.Cast<object?>().Select(item => item?.ToString()));
+                    Assert.Equal(["eMMC", "UFS", "NOR", "NAND", "Auto"], storageBox.Items.Cast<object?>().Select(item => item?.ToString()));
                     Assert.Equal(0, storageBox.SelectedIndex);
                 }
                 finally
@@ -1534,5 +1535,207 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task MtkStreamingAndPreloaderControls_ExistWithDefaultsAndHiddenPanes()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var view = new FlashView();
+                Assert.False(view.FindControl<StackPanel>("MtkPreloaderPane")!.IsVisible);
+                var streamBox = view.FindControl<CheckBox>("EdlAllowStreamDloadBox")!;
+                Assert.NotEqual(true, streamBox.IsChecked);
+                Assert.NotEqual(true, view.FindControl<CheckBox>("MtkBruteVar1Box")!.IsChecked);
+
+                var storage = view.FindControl<ComboBox>("MtkStorageKindBox")!;
+                Assert.Equal(new[] { "eMMC", "UFS", "NOR", "NAND", "Auto" },
+                    storage.ItemsSource!.Cast<object>().ToArray());
+                Assert.Equal(0, storage.SelectedIndex);
+
+                var crash = view.FindControl<ComboBox>("MtkCrashModeBox")!;
+                Assert.Equal(Enum.GetNames<MtkDaCrashMode>(), crash.ItemsSource!.Cast<object>().ToArray());
+                Assert.Equal(0, crash.SelectedIndex);
+                Assert.Equal(nameof(MtkDaCrashMode.Dasend1), crash.SelectedItem);
+
+                Assert.NotNull(view.FindControl<Button>("MtkCrashButton"));
+                Assert.NotNull(view.FindControl<Button>("MtkSetSpeedButton"));
+                Assert.NotNull(view.FindControl<Button>("MtkRebootMetaButton"));
+                Assert.NotNull(view.FindControl<Button>("MtkRebootAndroidTestButton"));
+
+                Assert.Equal("0x0", view.FindControl<TextBox>("MtkPreloaderOffsetBox")!.Text);
+                Assert.Equal("0x1000", view.FindControl<TextBox>("MtkPreloaderLengthBox")!.Text);
+                Assert.Equal("0x100", view.FindControl<TextBox>("MtkPreloaderStepBox")!.Text);
+                Assert.NotNull(view.FindControl<Button>("MtkPreloaderDumpButton"));
+                Assert.NotNull(view.FindControl<Button>("MtkPreloaderPeekButton"));
+                Assert.NotNull(view.FindControl<Button>("MtkPreloaderWriteButton"));
+                Assert.NotNull(view.FindControl<Button>("MtkPreloaderReturnToBromButton"));
+                Assert.NotNull(view.FindControl<Button>("MtkPreloaderDisableWatchdogButton"));
+                Assert.NotNull(view.FindControl<Button>("MtkPreloaderJumpButton"));
+                return Task.CompletedTask;
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task MtkPreloaderPane_IsHiddenUnlessSelectedDeviceIsPreloaderSubmode()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var model = DeviceViewModel.EnsureInstance();
+                var view = new FlashView();
+                var window = new Window { Content = view, Width = 960, Height = 800 };
+                var pane = view.FindControl<StackPanel>("MtkPreloaderPane")!;
+                try
+                {
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.False(pane.IsVisible);
+
+                    model.SelectedDevice = new DeviceInfo(new DetectedDevice
+                    {
+                        Key = "mtk-da",
+                        Serial = "da",
+                        Protocol = DeviceProtocolKind.Mtk,
+                        Transport = DeviceTransportKind.Usb,
+                        State = "da"
+                    });
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.False(pane.IsVisible);
+
+                    model.SelectedDevice = new DeviceInfo(new DetectedDevice
+                    {
+                        Key = "mtk-pl",
+                        Serial = "pl",
+                        Protocol = DeviceProtocolKind.Mtk,
+                        Transport = DeviceTransportKind.Usb,
+                        State = "preloader"
+                    });
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.True(pane.IsVisible);
+                }
+                finally
+                {
+                    model.SelectedDevice = null;
+                    window.Close();
+                }
+
+                return Task.CompletedTask;
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task MtkBruteVar1Box_IsVisibleOnlyForKamakiriFamily()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var model = DeviceViewModel.EnsureInstance();
+                var view = new FlashView();
+                var window = new Window { Content = view, Width = 960, Height = 800 };
+                var box = view.FindControl<CheckBox>("MtkBruteVar1Box")!;
+                var family = view.FindControl<ComboBox>("MtkExploitFamilyBox")!;
+                try
+                {
+                    window.Show();
+                    model.SelectedDevice = new DeviceInfo(new DetectedDevice
+                    {
+                        Key = "mtk-brom",
+                        Serial = "brom",
+                        Protocol = DeviceProtocolKind.Mtk,
+                        Transport = DeviceTransportKind.Usb,
+                        State = "brom"
+                    });
+                    Dispatcher.UIThread.RunJobs();
+
+                    var kamakiriIndex = Array.IndexOf(Enum.GetNames<MtkExploitFamily>(),
+                        nameof(MtkExploitFamily.Kamakiri)) + 1;
+                    var kamakiri2Index = Array.IndexOf(Enum.GetNames<MtkExploitFamily>(),
+                        nameof(MtkExploitFamily.Kamakiri2)) + 1;
+
+                    family.SelectedIndex = kamakiriIndex;
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.True(box.IsVisible);
+
+                    family.SelectedIndex = kamakiri2Index;
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.False(box.IsVisible);
+
+                    family.SelectedIndex = 0;
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.False(box.IsVisible);
+                }
+                finally
+                {
+                    model.SelectedDevice = null;
+                    window.Close();
+                }
+
+                return Task.CompletedTask;
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public void TryParseHexBytes_KnownVectors_DecodesByteRuns()
+    {
+        Assert.True(FlashView.TryParseHexBytes("00 01 A2", out var spaced));
+        Assert.Equal([0x00, 0x01, 0xA2], spaced);
+        Assert.False(FlashView.TryParseHexBytes("0", out _));
+        Assert.False(FlashView.TryParseHexBytes("zz", out _));
+    }
+
+    [Fact]
+    public void TryReadPreloaderAddress_AcceptsBareAndPrefixedHex()
+    {
+        Assert.True(FlashView.TryReadPreloaderAddress("0x10", out var prefixed));
+        Assert.Equal(0x10u, prefixed);
+        Assert.True(FlashView.TryReadPreloaderAddress("10", out var bare));
+        Assert.Equal(0x10u, bare);
+        Assert.False(FlashView.TryReadPreloaderAddress("gg", out _));
+    }
+
+    [Fact]
+    public void ReadExploitFamily_KamakiriIndex_ReturnsKamakiri()
+    {
+        Assert.Null(FlashView.ReadExploitFamily(0));
+        Assert.Equal(MtkExploitFamily.Kamakiri, FlashView.ReadExploitFamily(1));
+    }
+
+    [Fact]
+    public async Task MtkStreamingFlashControls_AreHiddenInsideTheirPanesByDefault()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var view = new FlashView();
+                var streamBox = view.FindControl<CheckBox>("EdlAllowStreamDloadBox")!;
+                Assert.True(streamBox.IsVisible);
+                var mtkPane = view.FindControl<StackPanel>("MtkPane")!;
+                Assert.False(mtkPane.IsVisible);
+                var brute = view.FindControl<CheckBox>("MtkBruteVar1Box")!;
+                Assert.False(brute.IsVisible);
+                return Task.CompletedTask;
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
     }
 }

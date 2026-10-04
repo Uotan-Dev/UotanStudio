@@ -227,6 +227,9 @@ internal sealed class EdlConnectionCache(
             {
                 EdlProtocolState.Sahara when session.SaharaHandshake is { } handshake
                     => new EdlDetailsSnapshot { Sahara = handshake, SerialPortName = portName },
+                // The Streaming DLOAD backend has no Firehose configure or capability snapshot; a stream-mode
+                // endpoint is described by its serial identity only, so nothing here dereferences session.Firehose.
+                EdlProtocolState.Streaming => portName is null ? null : new EdlDetailsSnapshot { SerialPortName = portName },
                 EdlProtocolState.Firehose => await CollectFirehoseDetailsAsync(session, portName, cancellationToken)
                     .ConfigureAwait(false),
                 _ => portName is null ? null : new EdlDetailsSnapshot { SerialPortName = portName },
@@ -249,21 +252,31 @@ internal sealed class EdlConnectionCache(
         string? serialPortName, CancellationToken cancellationToken)
     {
         await session.InitializeAsync(null, cancellationToken).ConfigureAwait(false);
+        // A command-mode endpoint that switched to the Streaming DLOAD backend reports no Firehose instance; the
+        // capability snapshot stays null instead of dereferencing a programmer that was never configured.
+        if (session.Backend == EdlDownloadBackend.StreamDload || session.Firehose is not { } firehose)
+        {
+            return new EdlDetailsSnapshot
+            {
+                Capabilities = session.Capabilities,
+                SerialPortName = serialPortName,
+            };
+        }
+
         FirehoseResponse? storage = null;
         try
         {
-            storage = await session.Firehose!.GetStorageInfoAsync(0, cancellationToken).ConfigureAwait(false);
+            storage = await firehose.GetStorageInfoAsync(0, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or TimeoutException or InvalidOperationException)
         {
-            // 存储查询是可选的附加信息；configure 能力快照已足够展示。
             // The storage query is optional enrichment; the configure capability snapshot is enough.
         }
         return new EdlDetailsSnapshot
         {
             Capabilities = session.Capabilities,
             Geometry = storage?.StorageGeometry,
-            Storage = session.Firehose!.LastStorageDetails,
+            Storage = firehose.LastStorageDetails,
             SerialPortName = serialPortName,
         };
     }

@@ -31,6 +31,11 @@ internal sealed record EdlGptProgramRequest(long StartSector, long SectorCount, 
 /// </remarks>
 internal static class EdlGptPartitionService
 {
+    /// <summary><para>流式后端设备分区表的 DIAG 读取地址（参考 read_partition_table 从 0 起读表）。</para>
+    /// The DIAG read address of the streaming backend's on-device partition table; the reference reads it from
+    /// offset 0.</summary>
+    private const uint StreamingPartitionTableAddress = 0u;
+
     /// <summary>
     /// <para>把设备 GPT 中的一项转成 rawprogram 形状的条目，供既有按条目流程（擦除、回读、清单生成）复用。</para>
     /// Converts one device-GPT entry into a rawprogram-shaped entry so the existing entry-driven
@@ -65,6 +70,17 @@ internal static class EdlGptPartitionService
         {
             using var programmer = OpenProgrammer(programmerPath);
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            if (session.Backend == EdlDownloadBackend.StreamDload && session.Streaming is { } streaming)
+            {
+                var entries = await EdlStreamingFlashService.ReadPartitionTableAsync(streaming,
+                    StreamingPartitionTableAddress, ct).ConfigureAwait(false);
+                var entry = EdlStreamingFlashService.ResolvePartition(entries, partition)
+                    ?? throw new InvalidOperationException(
+                        $"The Streaming DLOAD backend reported no partition named '{partition}'. 流式后端未上报名为 '{partition}' 的分区。");
+                return await EdlStreamingFlashService.FlashAsync(streaming, entry, imagePath, progress, ct)
+                    .ConfigureAwait(false);
+            }
+
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
             var snapshot = await firehose.ReadGptAsync(cancellationToken: ct).ConfigureAwait(false);
@@ -132,6 +148,18 @@ internal static class EdlGptPartitionService
         {
             using var programmer = OpenProgrammer(programmerPath);
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            if (session.Backend == EdlDownloadBackend.StreamDload && session.Streaming is { } streaming)
+            {
+                var entries = await EdlStreamingFlashService.ReadPartitionTableAsync(streaming,
+                    StreamingPartitionTableAddress, ct).ConfigureAwait(false);
+                var streamEntry = EdlStreamingFlashService.ResolvePartition(entries, partition)
+                    ?? throw new InvalidOperationException(
+                        $"The Streaming DLOAD backend reported no partition named '{partition}'. 流式后端未上报名为 '{partition}' 的分区。");
+                await EdlStreamingFlashService.BackupAsync(streaming, streamEntry, outPath, progress, ct)
+                    .ConfigureAwait(false);
+                return true;
+            }
+
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
             var snapshot = await firehose.ReadGptAsync(cancellationToken: ct).ConfigureAwait(false);

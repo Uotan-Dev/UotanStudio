@@ -521,6 +521,21 @@
                                     Click="OnMtkEraseClick"
                                     Content="{DynamicResource Flash_MtkErase}"
                                     AutomationProperties.Name="{DynamicResource Flash_MtkErase}" />
+                            <!-- 传输速度协商与代理崩溃都作用于已在存储就绪阶段的代理：崩溃会打崩 boot 通道，会话随即 fault，需重连。 -->
+                            <!-- Transfer-speed negotiation and a DA crash both act on an agent already at storage readiness: a
+                                 crash interrupts the boot channel and faults the session, so the channel must be reopened. -->
+                            <Button Name="MtkSetSpeedButton" Classes="pane-action" Click="OnMtkSetSpeedClick"
+                                    Content="{DynamicResource Flash_MtkSpeedButton}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkSpeedButton}" />
+                            <TextBlock Text="{DynamicResource Flash_MtkCrashGroup}" FontSize="12"
+                                       FontWeight="SemiBold" Opacity="0.8" />
+                            <TextBlock Text="{DynamicResource Flash_MtkCrashMode}" FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="MtkCrashModeBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch" SelectedIndex="0"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkCrashMode}" />
+                            <Button Name="MtkCrashButton" Classes="pane-action" Click="OnMtkCrashClick"
+                                    Content="{DynamicResource Flash_MtkCrashButton}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkCrashButton}" />
                             <!-- 以下两组操作只在 USB 上的 MediaTek 租约成立时出现：串口路径没有 BootROM 阶段的控制面。 -->
                             <!-- These two groups appear only for a MediaTek lease on USB: the serial path has no
                                  BootROM-stage control surface. -->
@@ -538,6 +553,11 @@
                             <ComboBox Name="MtkExploitFamilyBox" Height="32" VerticalContentAlignment="Center"
                                       HorizontalAlignment="Stretch" SelectedIndex="0"
                                       AutomationProperties.Name="{DynamicResource Flash_MtkExploitFamily}" />
+                            <!-- var1 暴力枚举只在 Kamakiri 家族有意义，因此仅在该家族被选中时显示。 -->
+                            <!-- Brute-forcing var1 is meaningful only for the Kamakiri family, so it appears only when that family is chosen. -->
+                            <CheckBox Name="MtkBruteVar1Box" Content="{DynamicResource Flash_MtkBruteVar1}"
+                                      HorizontalAlignment="Left" IsVisible="False" Click="OnMtkExploitAuthorizationClick"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkBruteVar1}" />
                             <TextBlock Text="{DynamicResource Flash_MtkExploitPayload}" FontSize="12" Opacity="0.8" />
                             <ComboBox Name="MtkExploitPayloadBox" Height="32" VerticalContentAlignment="Center"
                                       HorizontalAlignment="Stretch"
@@ -584,8 +604,75 @@
                                         Content="{DynamicResource Flash_MtkPowerOff}"
                                         AutomationProperties.Name="{DynamicResource Flash_MtkPowerOff}" />
                             </Grid>
+                            <!-- META 与 Android 测试模式重启只由 XML 家族定义，其余家族由处理逻辑本地拒绝。 -->
+                            <!-- META and Android-test reboots are defined only by the XML family; other families are refused locally. -->
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <Button Name="MtkRebootMetaButton" Classes="pane-action"
+                                        Click="OnMtkRebootMetaClick"
+                                        Content="{DynamicResource Flash_MtkRebootMeta}"
+                                        AutomationProperties.Name="{DynamicResource Flash_MtkRebootMeta}" />
+                                <Button Grid.Column="1" Name="MtkRebootAndroidTestButton" Classes="pane-action"
+                                        Click="OnMtkRebootAndroidTestClick"
+                                        Content="{DynamicResource Flash_MtkRebootAndroidTest}"
+                                        AutomationProperties.Name="{DynamicResource Flash_MtkRebootAndroidTest}" />
+                            </Grid>
                             <TextBlock Name="MtkScatterHintText" Text="{DynamicResource Flash_MtkLoadScatterHint}"
                                        FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <!-- Preloader 命令阶段面板只在选中设备处于 MTK preloader 子模式时出现，整块由接线代码控制可见性。 -->
+                        <!-- The preloader command-stage pane appears only when the selected device is in the MTK preloader
+                             submode; the wiring code owns the whole block's visibility. -->
+                        <StackPanel Name="MtkPreloaderPane" Spacing="8" IsVisible="False">
+                            <TextBlock Text="{DynamicResource Flash_MtkPreloaderGroup}" FontWeight="SemiBold" />
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                <TextBox Name="MtkPreloaderOffsetBox" Height="32" VerticalContentAlignment="Center"
+                                         Text="0x0" PlaceholderText="{DynamicResource Flash_MtkPreloaderOffset}"
+                                         AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderOffset}" />
+                                <TextBox Grid.Column="1" Name="MtkPreloaderLengthBox" Height="32"
+                                         VerticalContentAlignment="Center" Text="0x1000"
+                                         PlaceholderText="{DynamicResource Flash_MtkPreloaderLength}"
+                                         AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderLength}" />
+                                <TextBox Grid.Column="2" Name="MtkPreloaderStepBox" Height="32"
+                                         VerticalContentAlignment="Center" Text="0x100"
+                                         PlaceholderText="{DynamicResource Flash_MtkPreloaderStep}"
+                                         AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderStep}" />
+                            </Grid>
+                            <CheckBox Name="MtkPreloaderConfirmFlashMappingBox"
+                                      Content="{DynamicResource Flash_MtkPreloaderConfirmFlashMapping}"
+                                      HorizontalAlignment="Left"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderConfirmFlashMapping}" />
+                            <Button Name="MtkPreloaderDumpButton" Classes="pane-action" Click="OnMtkPreloaderDumpClick"
+                                    Content="{DynamicResource Flash_MtkPreloaderDump}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderDump}" />
+                            <Button Name="MtkPreloaderPeekButton" Classes="pane-action" Click="OnMtkPreloaderPeekClick"
+                                    Content="{DynamicResource Flash_MtkPreloaderPeek}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderPeek}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <TextBox Name="MtkPreloaderWriteDataBox" Height="32" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Flash_MtkPreloaderWriteData}"
+                                         AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderWriteData}" />
+                            </Grid>
+                            <CheckBox Name="MtkPreloaderWriteConfirmBox"
+                                      Content="{DynamicResource Flash_MtkPreloaderWriteConfirm}"
+                                      HorizontalAlignment="Left"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderWriteConfirm}" />
+                            <Button Name="MtkPreloaderWriteButton" Classes="pane-action" Click="OnMtkPreloaderWriteClick"
+                                    Content="{DynamicResource Flash_MtkPreloaderWrite}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderWrite}" />
+                            <Button Name="MtkPreloaderReturnToBromButton" Classes="pane-action"
+                                    Click="OnMtkPreloaderReturnToBromClick"
+                                    Content="{DynamicResource Flash_MtkPreloaderReturnToBrom}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderReturnToBrom}" />
+                            <Button Name="MtkPreloaderDisableWatchdogButton" Classes="pane-action"
+                                    Click="OnMtkPreloaderDisableWatchdogClick"
+                                    Content="{DynamicResource Flash_MtkPreloaderDisableWatchdog}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderDisableWatchdog}" />
+                            <TextBox Name="MtkPreloaderPartitionNameBox" Height="32" VerticalContentAlignment="Center"
+                                     PlaceholderText="{DynamicResource Flash_MtkPreloaderPartitionName}"
+                                     AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderPartitionName}" />
+                            <Button Name="MtkPreloaderJumpButton" Classes="pane-action" Click="OnMtkPreloaderJumpClick"
+                                    Content="{DynamicResource Flash_MtkPreloaderJump}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderJump}" />
                         </StackPanel>
                         <TextBlock Name="EdlHeader" Text="{DynamicResource Flash_Edl}" FontWeight="SemiBold" IsVisible="False" />
                         <StackPanel Name="EdlPane" Spacing="8" IsVisible="False">
@@ -643,6 +730,12 @@
                                       Content="{DynamicResource Flash_EdlPendingCompletion}"
                                       HorizontalAlignment="Left"
                                       AutomationProperties.Name="{DynamicResource Flash_EdlPendingCompletion}" />
+                            <!-- 流式 DLOAD 只在命令模式、无 programmer 的目标上生效：勾选后初始化经 Sahara exec 切换到流式后端。 -->
+                            <!-- Streaming DLOAD only takes effect on a command-mode target with no programmer: when checked,
+                                 initialization switches to the streaming backend through the Sahara exec path. -->
+                            <CheckBox Name="EdlAllowStreamDloadBox" Content="{DynamicResource Flash_EdlAllowStreamDload}"
+                                      HorizontalAlignment="Left"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlAllowStreamDload}" />
                             <TextBox Name="EdlAuthTimeoutBox" Height="32" VerticalContentAlignment="Center" Text="60000"
                                      PlaceholderText="{DynamicResource Flash_EdlAuthTimeout}"
                                      AutomationProperties.Name="{DynamicResource Flash_EdlAuthTimeout}" />
