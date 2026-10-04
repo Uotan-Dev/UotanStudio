@@ -88,7 +88,7 @@ public sealed class LuaScriptEngineTests
     }
 
     [Fact]
-    public async Task RunAsync_StdLibIsAbsent_ScriptCannotReachIoOrOs()
+    public async Task RunAsync_SandboxedLibraries_KeepPlatformSurfacesUnreachable()
     {
         var engine = new LuaScriptEngine();
         var context = new TestExecutionContext(TestContext.Current.CancellationToken);
@@ -98,6 +98,43 @@ public sealed class LuaScriptEngineTests
             engine.RunAsync("return io.open('x')", "tests.sandbox", tools, context, TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<LuaRuntimeException>(() =>
             engine.RunAsync("return os.execute('echo')", "tests.sandbox", tools, context, TestContext.Current.CancellationToken));
+
+        var types = await engine.RunAsync(
+            "return type(dofile) .. type(loadfile) .. type(io) .. type(os) .. type(package) .. type(require) .. type(debug)",
+            "tests.sandbox", tools, context, TestContext.Current.CancellationToken);
+
+        Assert.Equal("nilnilnilnilnilnilnil", types);
+    }
+
+    [Fact]
+    public async Task RunAsync_StandardLibraries_SupportPureComputation()
+    {
+        var engine = new LuaScriptEngine();
+        var context = new TestExecutionContext(TestContext.Current.CancellationToken);
+        var tools = new Dictionary<string, ScriptTool>();
+
+        var result = await engine.RunAsync(
+            "local parts = { 'a', 'b' }\ntable.insert(parts, 'c')\nreturn string.upper(table.concat(parts, '-'))"
+            + " .. ':' .. tostring(math.floor(1.9)) .. ':' .. bit32.band(6, 3)",
+            "tests.stdlib", tools, context, TestContext.Current.CancellationToken);
+
+        Assert.Equal("A-B-C:1:2", result);
+    }
+
+    [Fact]
+    public async Task RunAsync_Print_RoutesFormattedOutputIntoNodeLog()
+    {
+        var engine = new LuaScriptEngine();
+        var logs = new List<string>();
+        var context = new ObservingExecutionContext(TestContext.Current.CancellationToken, [], logs);
+        var tools = new Dictionary<string, ScriptTool>();
+
+        await engine.RunAsync(
+            "print('status', 42, true, nil)\nprint(setmetatable({}, { __tostring = function() return 'MT' end }))",
+            "tests.print", tools, context, TestContext.Current.CancellationToken);
+
+        Assert.Contains("status\t42\ttrue\tnil", logs);
+        Assert.Contains("MT", logs);
     }
 
     [Fact]

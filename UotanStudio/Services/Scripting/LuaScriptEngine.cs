@@ -1,4 +1,8 @@
+using System.Text;
 using Lua;
+using Lua.IO;
+using Lua.Platforms;
+using Lua.Standard;
 using UotanStudio.Projects.Interactions;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Projects;
@@ -6,12 +10,18 @@ using UotanStudio.Services.Projects;
 namespace UotanStudio.Services.Scripting;
 
 /// <summary>
-/// <para>Executes one plugin Lua script inside a bare <see cref="LuaState"/>: no standard library is
-/// opened, so only the host-injected <c>tool</c>, <c>ctx</c> and <c>ui</c> tables are reachable from
-/// the script. The execution cancellation token flows into the interpreter, so a runaway script
-/// stops when the surrounding node execution is cancelled.</para>
-/// <para>在裸 <see cref="LuaState"/> 内执行一个插件 Lua 脚本：不打开任何标准库，脚本只能访问宿主注入的
-/// <c>tool</c>、<c>ctx</c> 与 <c>ui</c> 三个表。执行取消令牌贯穿解释器，外层节点执行取消时失控脚本会随之停止。</para>
+/// <para>Executes one plugin Lua script inside a sandboxed <see cref="LuaState"/>: the pure computation
+/// standard libraries (base, string, table, math, coroutine and bit32) are opened for the script, while
+/// the platform-facing <c>io</c>, <c>os</c>, <c>package</c> and <c>debug</c> libraries stay closed and the
+/// base <c>dofile</c>/<c>loadfile</c> entries are removed because they read through the host file system.
+/// Scripts therefore reach the standard library, the host-injected <c>tool</c>, <c>ctx</c> and <c>ui</c>
+/// tables, and <c>print</c> routed into the node log. The execution cancellation token flows into the
+/// interpreter, so a runaway script stops when the surrounding node execution is cancelled.</para>
+/// <para>在沙箱化的 <see cref="LuaState"/> 内执行一个插件 Lua 脚本：为脚本打开纯计算类标准库（base、string、
+/// table、math、coroutine 与 bit32），不打开面向平台的 <c>io</c>、<c>os</c>、<c>package</c> 与 <c>debug</c>，
+/// 并移除经宿主文件系统读取的 <c>dofile</c>/<c>loadfile</c>。脚本可访问标准库、宿主注入的 <c>tool</c>、
+/// <c>ctx</c> 与 <c>ui</c> 三个表，以及被路由到节点日志的 <c>print</c>。执行取消令牌贯穿解释器，
+/// 外层节点执行取消时失控脚本会随之停止。</para>
 /// </summary>
 public sealed class LuaScriptEngine
 {
@@ -70,7 +80,8 @@ public sealed class LuaScriptEngine
             throw new ArgumentException($"The script exceeds {MaximumScriptLength} characters.", nameof(script));
         }
 
-        var state = LuaState.Create();
+        var state = LuaState.Create(LuaPlatform.Default with { StandardIO = new UnifiedLogStandardIO(context.Log) });
+        OpenSandboxedStandardLibraries(state);
         InjectSurface(state, "tool", BuildToolTable(tools, context));
         InjectSurface(state, "ctx", BuildContextTable(context));
         InjectSurface(state, "ui", BuildUiTable(context));
@@ -80,6 +91,21 @@ public sealed class LuaScriptEngine
             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, context.CancellationToken).Token)
             .ConfigureAwait(false);
         return results.Length > 0 ? ReadDisplayString(results[0]) : string.Empty;
+    }
+
+    private static void OpenSandboxedStandardLibraries(LuaState state)
+    {
+        state.OpenBasicLibrary();
+        state.OpenBitwiseLibrary();
+        state.OpenCoroutineLibrary();
+        state.OpenMathLibrary();
+        state.OpenStringLibrary();
+        state.OpenTableLibrary();
+        // base 库会一并注册 dofile/loadfile，两者经平台文件系统读取宿主磁盘，必须移除以维持插件沙箱。
+        // The base library registers dofile/loadfile, which read the host file system through the
+        // platform abstraction; both are removed to keep installed plugins sandboxed.
+        state.Environment["dofile"] = LuaValue.Nil;
+        state.Environment["loadfile"] = LuaValue.Nil;
     }
 
     private static LuaTable BuildToolTable(
@@ -202,4 +228,98 @@ public sealed class LuaScriptEngine
 
     private static string ReadDisplayString(LuaValue value) =>
         value.Type == LuaValueType.Nil ? string.Empty : value.ToString() ?? string.Empty;
+
+    private sealed class UnifiedLogStandardIO(IUnifiedLog log) : ILuaStandardIO
+    {
+        public ILuaStream Input { get; } = new UnifiedLogStream(log, LogLevel.Info);
+        public ILuaStream Output { get; } = new UnifiedLogStream(log, LogLevel.Info);
+        public ILuaStream Error { get; } = new UnifiedLogStream(log, LogLevel.Error);
+    }
+
+    private sealed class UnifiedLogStream(IUnifiedLog log, LogLevel level) : ILuaStream
+    {
+        private readonly StringBuilder pending = new();
+        private bool isOpen = true;
+
+        public bool IsOpen => isOpen;
+
+        public LuaFileOpenMode Mode => LuaFileOpenMode.Write;
+
+        public ValueTask WriteAsync(string content, CancellationToken cancellationToken = default)
+        {
+            pending.Append(content);
+            CommitCompletedLines();
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask WriteAsync(ReadOnlyMemory<char> content, CancellationToken cancellationToken = default)
+        {
+            pending.Append(content.Span);
+            CommitCompletedLines();
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask FlushAsync(CancellationToken cancellationToken = default)
+        {
+            Commit(pending.ToString());
+            pending.Clear();
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask<string> ReadAllAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The script standard input is not supported.");
+
+        public ValueTask<string?> ReadLineAsync(bool keepEol, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The script standard input is not supported.");
+
+        public ValueTask<string?> ReadAsync(int count, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The script standard input is not supported.");
+
+        public ValueTask<double?> ReadNumberAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The script standard input is not supported.");
+
+        public void SetVBuf(LuaFileBufferingMode mode, int size) { }
+
+        public long Seek(SeekOrigin origin, long offset) =>
+            throw new NotSupportedException("The script standard streams cannot seek.");
+
+        public ValueTask CloseAsync(CancellationToken cancellationToken = default)
+        {
+            FlushAsync(cancellationToken);
+            isOpen = false;
+            return ValueTask.CompletedTask;
+        }
+
+        public void Dispose()
+        {
+            pending.Clear();
+            isOpen = false;
+        }
+
+        private void CommitCompletedLines()
+        {
+            var text = pending.ToString();
+            pending.Clear();
+            while (true)
+            {
+                var index = text.IndexOf('\n');
+                if (index < 0)
+                {
+                    break;
+                }
+                Commit(text[..index]);
+                text = text[(index + 1)..];
+            }
+            pending.Append(text);
+        }
+
+        private void Commit(string line)
+        {
+            if (line.Length == 0)
+            {
+                return;
+            }
+            log.Write(level, "LuaScript", line.TrimEnd('\r'));
+        }
+    }
 }
