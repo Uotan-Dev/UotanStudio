@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Core.Checksums;
 
 namespace UotanStudio.Comm.Protocols.Bootrom;
 
@@ -149,7 +150,7 @@ internal sealed class RkBootImage
         }
 
         var expected = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(buffer.Length - 4));
-        var actual = RockchipCrc32(buffer.AsSpan(0, buffer.Length - 4));
+        var actual = RockchipCrc32.Compute(buffer.AsSpan(0, buffer.Length - 4));
         if (expected != actual)
         {
             throw new RkdlException(RkdlError.InvalidParameter, $"Loader CRC mismatch: stored 0x{expected:X8}, computed 0x{actual:X8}.");
@@ -220,27 +221,5 @@ internal sealed class RkBootImage
             });
         }
         return entries;
-    }
-
-    /// <summary>
-    /// Computes the Rockchip CRC-32 (poly 0x04C10DB7, MSB-first, init 0, no final XOR —
-    /// gTable_Crc32 in rkdeveloptool crc.cpp).
-    /// <para>计算 Rockchip CRC-32（多项式 0x04C10DB7，高位优先，初值 0，无最终异或——
-    /// rkdeveloptool crc.cpp 的 gTable_Crc32）。</para>
-    /// </summary>
-    /// <param name="data">The data to checksum. <para>待校验数据。</para></param>
-    /// <returns>The Rockchip CRC-32 value. <para>Rockchip CRC-32 值。</para></returns>
-    public static uint RockchipCrc32(ReadOnlySpan<byte> data)
-    {
-        uint crc = 0;
-        foreach (var b in data)
-        {
-            crc ^= (uint)b << 24;
-            for (var i = 0; i < 8; i++)
-            {
-                crc = (crc & 0x80000000u) != 0 ? (crc << 1) ^ 0x04C10DB7u : crc << 1;
-            }
-        }
-        return crc;
     }
 }

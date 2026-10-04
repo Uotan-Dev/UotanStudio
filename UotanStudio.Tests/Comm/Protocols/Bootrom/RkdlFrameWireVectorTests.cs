@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Protocols.Bootrom;
+using UotanStudio.Firmware.Core.Checksums;
 using Xunit;
 
 namespace UotanStudio.Tests.Comm.Protocols.Bootrom;
@@ -242,11 +243,11 @@ public class RkdlFrameWireVectorTests
     [Fact]
     public void RockchipCrc32_UpstreamGoldenVectors_MatchReferenceTableImplementation()
     {
-        Assert.Equal(0x889A9615u, RkBootImage.RockchipCrc32("123456789"u8.ToArray()));
-        Assert.Equal(0xA862DB20u, RkBootImage.RockchipCrc32("a"u8.ToArray()));
-        Assert.Equal(0x3A06543Eu, RkBootImage.RockchipCrc32("abc"u8.ToArray()));
-        Assert.Equal(0x00000000u, RkBootImage.RockchipCrc32(ReadOnlySpan<byte>.Empty));
-        Assert.Equal(0x00000000u, RkBootImage.RockchipCrc32(new byte[1024]));
+        Assert.Equal(0x889A9615u, RockchipCrc32.Compute("123456789"u8.ToArray()));
+        Assert.Equal(0xA862DB20u, RockchipCrc32.Compute("a"u8.ToArray()));
+        Assert.Equal(0x3A06543Eu, RockchipCrc32.Compute("abc"u8.ToArray()));
+        Assert.Equal(0x00000000u, RockchipCrc32.Compute(ReadOnlySpan<byte>.Empty));
+        Assert.Equal(0x00000000u, RockchipCrc32.Compute(new byte[1024]));
     }
 
     [Fact]

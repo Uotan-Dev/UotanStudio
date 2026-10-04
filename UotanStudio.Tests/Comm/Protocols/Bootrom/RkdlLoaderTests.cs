@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Transports.Abstractions;
+using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -76,7 +77,7 @@ public class RkdlLoaderTests
         var image = BuildLoaderImage(rc4Enabled: false);
         var stored = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1020));
         image[200] ^= 0xFF;
-        var recomputed = RkBootImage.RockchipCrc32(image.AsSpan(0, 1020));
+        var recomputed = RockchipCrc32.Compute(image.AsSpan(0, 1020));
 
         var exception = Assert.Throws<RkdlException>(() => RkBootImage.Parse(image));
 
@@ -90,7 +91,7 @@ public class RkdlLoaderTests
     {
         var image = BuildLoaderImage(rc4Enabled: false);
         image[30] = EntrySize - 1;
-        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(1020), RkBootImage.RockchipCrc32(image.AsSpan(0, 1020)));
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(1020), RockchipCrc32.Compute(image.AsSpan(0, 1020)));
 
         var exception = Assert.Throws<RkdlException>(() => RkBootImage.Parse(image));
 
@@ -102,7 +103,7 @@ public class RkdlLoaderTests
     {
         var image = BuildLoaderImage(rc4Enabled: false);
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(26), 4000);
-        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(1020), RkBootImage.RockchipCrc32(image.AsSpan(0, 1020)));
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(1020), RockchipCrc32.Compute(image.AsSpan(0, 1020)));
 
         var exception = Assert.Throws<RkdlException>(() => RkBootImage.Parse(image));
 
@@ -456,7 +457,7 @@ public class RkdlLoaderTests
             image[200 + i] = (byte)(i + 1);
         }
 
-        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(1020), RkBootImage.RockchipCrc32(image.AsSpan(0, 1020)));
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(1020), RockchipCrc32.Compute(image.AsSpan(0, 1020)));
         return image;
     }
 }
