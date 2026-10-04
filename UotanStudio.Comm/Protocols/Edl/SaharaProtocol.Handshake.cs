@@ -34,8 +34,8 @@ public sealed partial class SaharaProtocol
     /// </summary>
     /// <param name="images">Images keyed by the Sahara <c>ImageId</c> the device will request. Callers retain ownership of each stream; every stream must be readable and seekable, and must not be mutated during the handshake.<para>以设备将请求的 Sahara <c>ImageId</c> 为键的镜像。调用方保留每个流的所有权；所有流必须可读、可定位，并且在握手期间不得被修改。</para></param>
     /// <param name="cancellationToken">Cancellation token checked between Sahara packet boundaries.<para>在 Sahara 数据包边界之间检查的取消令牌。</para></param>
-    /// <returns>The negotiated Sahara mode. When the device is already running Firehose, returns <see cref="SaharaMode.ImageTxComplete"/> without uploading any image.<para>协商的 Sahara 模式。设备已在运行 Firehose 时直接返回 <see cref="SaharaMode.ImageTxComplete"/> 且不上传任何镜像。</para></returns>
-    /// <exception cref="EdlException">No image is provided for a device that is still in Sahara mode, the HELLO version range does not intersect the host range, an unknown image id or oversized 64-bit range is requested, or a NAK status is reported.<para>设备仍处于 Sahara 模式但未提供镜像、HELLO 版本区间与主机不相交、请求了未知镜像 id 或超大的 64 位区间，或返回 NAK 状态。</para></exception>
+    /// <returns>The negotiated Sahara mode. When the device is already running Firehose, returns <see cref="SaharaMode.ImageTxComplete"/> without uploading any image. When no image is provided, <see cref="AllowStreamDload"/> is enabled and the HELLO reports <see cref="SaharaMode.Command"/>, the HELLO is answered in command mode and <see cref="SaharaMode.Command"/> is returned.<para>协商的 Sahara 模式。设备已在运行 Firehose 时直接返回 <see cref="SaharaMode.ImageTxComplete"/> 且不上传任何镜像。未提供镜像、<see cref="AllowStreamDload"/> 已启用且 HELLO 报告 <see cref="SaharaMode.Command"/> 时，以命令模式应答 HELLO 并返回 <see cref="SaharaMode.Command"/>。</para></returns>
+    /// <exception cref="EdlException">No image is provided for a device that is still in Sahara mode and a stream DLOAD switch was not selected, the HELLO version range does not intersect the host range, an unknown image id or oversized 64-bit range is requested, or a NAK status is reported.<para>设备仍处于 Sahara 模式但未提供镜像且未选择流式 DLOAD 切换、HELLO 版本区间与主机不相交、请求了未知镜像 id 或超大的 64 位区间，或返回 NAK 状态。</para></exception>
     /// <exception cref="ObjectDisposedException">The protocol instance has been disposed.<para>协议实例已被释放。</para></exception>
     public async Task<SaharaMode> HandshakeAsync(IReadOnlyDictionary<uint, Stream> images, CancellationToken cancellationToken = default)
     {
@@ -111,12 +111,32 @@ public sealed partial class SaharaProtocol
             return SaharaMode.ImageTxComplete;
         }
 
+        var helloPacket = BytesToStruct<SaharaHelloPacket>(firstData);
         if (images.Count == 0)
         {
+            if (AllowStreamDload && helloPacket.Mode == SaharaMode.Command)
+            {
+                ValidateHello(helloPacket);
+                NegotiatedProtocolVersion = Math.Min(helloPacket.Version, EdlConstants.SaharaHostMaxProtocolVersion);
+                await WriteStructAsync(new SaharaHelloResponsePacket
+                {
+                    Command = SaharaCommand.HelloResponse,
+                    Length = (uint)Marshal.SizeOf<SaharaHelloResponsePacket>(),
+                    Version = NegotiatedProtocolVersion.Value,
+                    MinVersion = EdlConstants.SaharaHostCompatibleVersion,
+                    Mode = SaharaMode.Command
+                }, cancellationToken).ConfigureAwait(false);
+                var commandReady = BytesToStruct<SaharaPacketHeader>(
+                    await ReadExactAsync(8, _timeoutMs, cancellationToken).ConfigureAwait(false));
+                ValidateCommand(commandReady.Command, SaharaCommand.CommandReady, commandReady.Length, 8);
+                Log("Device answered the command-mode HELLO; Sahara is in command mode for a stream DLOAD switch.");
+                HandshakeComplete?.Invoke(this, SaharaMode.Command);
+                return SaharaMode.Command;
+            }
+
             throw new SaharaException("Device is in Sahara mode but no programmer image was provided.");
         }
 
-        var helloPacket = BytesToStruct<SaharaHelloPacket>(firstData);
         if (QueryIdentityBeforeUpload)
         {
             helloPacket = await QueryIdentityOwnedAsync(helloPacket, cancellationToken).ConfigureAwait(false);

@@ -40,6 +40,21 @@ public sealed record MtkBypassOptions
     /// </value>
     public bool AllowVolatileMemoryWrite { get; init; }
 
+    /// <summary>Gets whether the Kamakiri driver may brute-force the Boot ROM control index (var1) when the chip
+    /// table records none for the queried hardware.
+    /// <para>获取当芯片表未为所查询硬件记录 Boot ROM 控制索引（var1）时，Kamakiri 驱动是否可以暴力枚举该索引。</para></summary>
+    /// <value>
+    /// <see langword="false"/> by default: a chip without a recorded var1 is refused with
+    /// <see cref="NotSupportedException"/> before any byte is written. Only the Kamakiri family honours this flag,
+    /// because only its reference driver enumerates the bounded candidate range 0..255
+    /// (<c>mtkclient/Library/Exploit/kamakiri.py</c>, lines 50-101); every other family still requires its recorded
+    /// registers.
+    /// <para>默认为 <see langword="false"/>：未记录 var1 的芯片在写出任何字节之前会以 <see cref="NotSupportedException"/>
+    /// 被拒绝。只有 Kamakiri 家族理会该标志，因为只有它的参考驱动会枚举有界候选范围 0..255
+    /// （<c>mtkclient/Library/Exploit/kamakiri.py</c> 第 50-101 行）；其余家族仍要求各自记录的寄存器。</para>
+    /// </value>
+    public bool AllowUnknownVar1Brute { get; init; }
+
     /// <summary>Gets the exploit family to run.
     /// <para>获取要运行的漏洞家族。</para></summary>
     /// <value>

@@ -145,7 +145,8 @@ public sealed partial class MtkSession
             try
             {
                 var report = await MtkExploitRunner.RunAsync(family, profile, new BypassByteChannel(this),
-                    controlChannel, prepared.Bytes, options.TimeoutMs, cancellationToken).ConfigureAwait(false);
+                    controlChannel, prepared.Bytes, options.TimeoutMs, cancellationToken,
+                    options.AllowUnknownVar1Brute).ConfigureAwait(false);
                 var refreshed = await RehandshakeAndRequeryAsync(options.TimeoutMs, cancellationToken)
                     .ConfigureAwait(false);
                 var result = new MtkBypassResult(family, profile.HardwareCode, profile.Name, report.LandingAddress,

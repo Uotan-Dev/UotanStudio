@@ -55,6 +55,21 @@ public sealed partial class SaharaProtocol(ICommTransport transport, int? timeou
     public bool AllowSingleFirehosePendingCompletion { get; set; }
 
     /// <summary>
+    /// Gets or sets whether an image-less handshake against a command-mode HELLO answers in command
+    /// mode and returns <see cref="SaharaMode.Command"/> instead of raising the programmer-image error.
+    /// <para>获取或设置在无镜像握手遇到命令模式 HELLO 时，是否以命令模式应答并返回
+    /// <see cref="SaharaMode.Command"/>，而不是抛出 programmer 镜像错误。</para>
+    /// </summary>
+    /// <value>False by default so an image-less handshake keeps throwing; when true and the device
+    /// HELLO reports <see cref="SaharaMode.Command"/>, the HELLO is acknowledged in command mode, the
+    /// following COMMAND_READY is consumed, and the negotiated command mode is returned for a
+    /// streaming DLOAD switch.
+    /// <para>默认关闭，无镜像握手仍抛出；为 true 且设备 HELLO 报告 <see cref="SaharaMode.Command"/>
+    /// 时，HELLO 以命令模式应答、消费随后的 COMMAND_READY，并返回协商的命令模式以供流式 DLOAD
+    /// 切换。</para></value>
+    internal bool AllowStreamDload { get; set; }
+
+    /// <summary>
     /// Gets whether the device is already running Firehose (skipped Sahara).
     /// <para>设备是否已在运行 Firehose（跳过了 Sahara）。</para>
     /// </summary>

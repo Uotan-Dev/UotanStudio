@@ -7,6 +7,7 @@ using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Edl.Auth;
 using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Comm.Protocols.Edl.Reenum;
+using UotanStudio.Comm.Protocols.Edl.Streaming;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
 
@@ -266,6 +267,29 @@ public sealed partial class EdlSession : IProtocolSession
     public FirehoseProtocol? Firehose { get; }
 
     /// <summary>
+    /// Gets the Streaming DLOAD protocol instance negotiated through a command-mode Sahara switch.
+    /// <para>获取经命令模式 Sahara 切换协商得到的流式 DLOAD 协议实例。</para>
+    /// </summary>
+    /// <value>The instance once an initialization with <see cref="EdlInitializationOptions.AllowStreamDload"/>
+    /// reached the streaming backend, or <see langword="null"/> for Firehose-only sessions and before the
+    /// first streaming switch.
+    /// <para>当带 <see cref="EdlInitializationOptions.AllowStreamDload"/> 的初始化抵达流式后端后可用；
+    /// 仅 Firehose 会话以及首次流式切换之前为 <see langword="null"/>。</para></value>
+    public StreamingProtocol? Streaming { get; private set; }
+
+    /// <summary>
+    /// Gets which flash backend this session exposes after the most recent successful initialization.
+    /// <para>获取最近一次成功初始化后本会话暴露的刷写后端。</para>
+    /// </summary>
+    /// <value><see cref="EdlDownloadBackend.None"/> before success, <see cref="EdlDownloadBackend.Firehose"/>
+    /// for a configured Firehose session, and <see cref="EdlDownloadBackend.StreamDload"/> once the
+    /// command-mode Sahara switch has handed the transport to <see cref="Streaming"/>.
+    /// <para>成功前为 <see cref="EdlDownloadBackend.None"/>，已配置的 Firehose 会话为
+    /// <see cref="EdlDownloadBackend.Firehose"/>，命令模式 Sahara 将传输交接给
+    /// <see cref="Streaming"/> 后为 <see cref="EdlDownloadBackend.StreamDload"/>。</para></value>
+    public EdlDownloadBackend Backend { get; private set; }
+
+    /// <summary>
     /// Gets the negotiated maximum packet length from Sahara.
     /// <para>从 Sahara 获取协商的最大包长度。</para>
     /// </summary>
@@ -456,6 +480,7 @@ public sealed partial class EdlSession : IProtocolSession
                 RecordAuthenticationEvidence(EdlAuthStage.VipEnabled, CommandOutcomeKind.Completed,
                     "The VIP packet profile was installed before probing.", started);
             }
+            var streamDloadSelected = false;
             if (_protocolState != EdlProtocolState.Firehose)
             {
                 LinkStage = programmerImage is null ? EdlLinkStage.SaharaConnecting : EdlLinkStage.ProgrammerUploading;
@@ -463,70 +488,89 @@ public sealed partial class EdlSession : IProtocolSession
                 {
                     QudHelloRecoveryEnabled = options?.QudHelloRecoveryEnabled ?? false,
                     AllowSingleFirehosePendingCompletion = options?.AllowSingleFirehosePendingCompletion ?? false,
-                    QueryIdentityBeforeUpload = options?.QueryIdentityBeforeUpload ?? false
+                    QueryIdentityBeforeUpload = options?.QueryIdentityBeforeUpload ?? false,
+                    AllowStreamDload = options?.AllowStreamDload ?? false
                 };
-                await Sahara.HandshakeAsync(programmerImage, cancellationToken: cancellationToken).ConfigureAwait(false);
-                SetProtocolState(EdlProtocolState.Firehose);
-                LinkStage = EdlLinkStage.FirehoseVerifying;
+                var mode = await Sahara.HandshakeAsync(programmerImage, cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+                if (mode == SaharaMode.Command && options?.AllowStreamDload == true && programmerImage is null)
+                {
+                    await EnterStreamDloadAsync(cancellationToken).ConfigureAwait(false);
+                    streamDloadSelected = true;
+                    Backend = EdlDownloadBackend.StreamDload;
+                    SetProtocolState(EdlProtocolState.Streaming);
+                    RecordInitializationEvidence("stream-dload-selected", CommandOutcomeKind.Completed,
+                        "The command-mode Sahara target switched to the streaming DLOAD backend.", null, null);
+                }
+                else
+                {
+                    SetProtocolState(EdlProtocolState.Firehose);
+                    LinkStage = EdlLinkStage.FirehoseVerifying;
+                }
             }
             else if (options?.QueryIdentityBeforeUpload == true)
             {
                 throw new SaharaException("A Firehose-only connection cannot provide the required Sahara identity.");
             }
-            if (options?.XiaomiAuthenticationProvider is { } provider)
+
+            if (!streamDloadSelected)
             {
-                lastAuthStage = EdlAuthStage.XiaomiRsaAuth;
-                await RunAuthStageAsync(EdlAuthStage.XiaomiRsaAuth,
-                    token => Firehose!.AuthenticateXiaomiOwnedAsync(provider, Sahara?.DeviceIdentity,
-                        options.AuthenticationTimeoutMs, token), cancellationToken).ConfigureAwait(false);
-            }
-            var project = options?.ProjectAuthentication;
-            if (project is not null && Sahara?.DeviceIdentity is { } identity && identity.SerialNumber != project.SerialNumber)
-            {
-                lastAuthStage = EdlAuthStage.ProjectAuth;
-                RecordAuthenticationEvidence(EdlAuthStage.ProjectAuth, CommandOutcomeKind.Rejected,
-                    "The selected project serial does not match the Sahara report.", Stopwatch.GetTimestamp());
-                throw new FirehoseException("The selected project authentication serial does not match Sahara.");
-            }
-            var netType = options?.SendOnePlusNetType == true;
-            var demacia = project?.Kind == EdlProjectAuthenticationKind.OnePlusDemacia;
-            await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: project is not null || netType).ConfigureAwait(false);
-            if (demacia)
-            {
-                lastAuthStage = EdlAuthStage.ProjectAuth;
-                await RunAuthStageAsync(EdlAuthStage.ProjectAuth,
-                    token => Firehose.AuthenticateProjectOwnedAsync(project!, options!.AuthenticationTimeoutMs, token),
-                    cancellationToken).ConfigureAwait(false);
-            }
-            if (netType)
-            {
-                lastAuthStage = EdlAuthStage.OnePlusNetType;
-                await RunAuthStageAsync(EdlAuthStage.OnePlusNetType,
-                    token => Firehose.SetOnePlusNetTypeOwnedAsync(options!.AuthenticationTimeoutMs, token),
-                    cancellationToken).ConfigureAwait(false);
-            }
-            if (project is not null && !demacia)
-            {
-                lastAuthStage = EdlAuthStage.ProjectAuth;
-                await RunAuthStageAsync(EdlAuthStage.ProjectAuth,
-                    token => Firehose.AuthenticateProjectOwnedAsync(project, options!.AuthenticationTimeoutMs, token),
-                    cancellationToken).ConfigureAwait(false);
-            }
-            if (project is not null || netType)
-            {
-                await Firehose.CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
-            }
-            IsConfigured = true;
-            LinkStage = EdlLinkStage.FirehoseReady;
-            if (authenticationRequested || _authenticationEvidence.Count > 0)
-            {
-                AuthenticationResult = new EdlAuthenticationResult
+                if (options?.XiaomiAuthenticationProvider is { } provider)
                 {
-                    Evidence = _authenticationEvidence.ToArray(),
-                    ReachedStage = EdlAuthStage.Completed,
-                    AuthenticationRequested = authenticationRequested,
-                    Disposition = EdlAuthSessionDisposition.CanContinue
-                };
+                    lastAuthStage = EdlAuthStage.XiaomiRsaAuth;
+                    await RunAuthStageAsync(EdlAuthStage.XiaomiRsaAuth,
+                        token => Firehose!.AuthenticateXiaomiOwnedAsync(provider, Sahara?.DeviceIdentity,
+                            options.AuthenticationTimeoutMs, token), cancellationToken).ConfigureAwait(false);
+                }
+                var project = options?.ProjectAuthentication;
+                if (project is not null && Sahara?.DeviceIdentity is { } identity && identity.SerialNumber != project.SerialNumber)
+                {
+                    lastAuthStage = EdlAuthStage.ProjectAuth;
+                    RecordAuthenticationEvidence(EdlAuthStage.ProjectAuth, CommandOutcomeKind.Rejected,
+                        "The selected project serial does not match the Sahara report.", Stopwatch.GetTimestamp());
+                    throw new FirehoseException("The selected project authentication serial does not match Sahara.");
+                }
+                var netType = options?.SendOnePlusNetType == true;
+                var demacia = project?.Kind == EdlProjectAuthenticationKind.OnePlusDemacia;
+                await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: project is not null || netType).ConfigureAwait(false);
+                if (demacia)
+                {
+                    lastAuthStage = EdlAuthStage.ProjectAuth;
+                    await RunAuthStageAsync(EdlAuthStage.ProjectAuth,
+                        token => Firehose.AuthenticateProjectOwnedAsync(project!, options!.AuthenticationTimeoutMs, token),
+                        cancellationToken).ConfigureAwait(false);
+                }
+                if (netType)
+                {
+                    lastAuthStage = EdlAuthStage.OnePlusNetType;
+                    await RunAuthStageAsync(EdlAuthStage.OnePlusNetType,
+                        token => Firehose.SetOnePlusNetTypeOwnedAsync(options!.AuthenticationTimeoutMs, token),
+                        cancellationToken).ConfigureAwait(false);
+                }
+                if (project is not null && !demacia)
+                {
+                    lastAuthStage = EdlAuthStage.ProjectAuth;
+                    await RunAuthStageAsync(EdlAuthStage.ProjectAuth,
+                        token => Firehose.AuthenticateProjectOwnedAsync(project, options!.AuthenticationTimeoutMs, token),
+                        cancellationToken).ConfigureAwait(false);
+                }
+                if (project is not null || netType)
+                {
+                    await Firehose.CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
+                }
+                IsConfigured = true;
+                LinkStage = EdlLinkStage.FirehoseReady;
+                Backend = EdlDownloadBackend.Firehose;
+                if (authenticationRequested || _authenticationEvidence.Count > 0)
+                {
+                    AuthenticationResult = new EdlAuthenticationResult
+                    {
+                        Evidence = _authenticationEvidence.ToArray(),
+                        ReachedStage = EdlAuthStage.Completed,
+                        AuthenticationRequested = authenticationRequested,
+                        Disposition = EdlAuthSessionDisposition.CanContinue
+                    };
+                }
             }
         }
         catch
@@ -541,12 +585,30 @@ public sealed partial class EdlSession : IProtocolSession
                     Disposition = EdlAuthSessionDisposition.RequiresReconnect
                 };
             }
+            Streaming?.Dispose();
+            Streaming = null;
+            Backend = EdlDownloadBackend.None;
             SetProtocolState(EdlProtocolState.Unknown);
             Firehose!.Invalidate();
             LinkStage = EdlLinkStage.Failed;
             PublishRelinkOffer();
             throw;
         }
+    }
+
+    /// <summary>Drives the command-mode Sahara exec switch and negotiates the streaming DLOAD hello.
+    /// <para>驱动命令模式 Sahara 的 exec 切换并协商流式 DLOAD 的 hello。</para></summary>
+    /// <remarks>The caller holds the Firehose operation lease so the transport is exclusive. A failed
+    /// switch leaves <see cref="Streaming"/> unassigned and lets the caller's cleanup dispose any
+    /// partially negotiated protocol.</remarks>
+    /// <param name="cancellationToken">Cancellation token threaded through the exec and hello exchanges.
+    /// <para>贯穿 exec 与 hello 交换的取消令牌。</para></param>
+    private async Task EnterStreamDloadAsync(CancellationToken cancellationToken)
+    {
+        await Sahara!.SwitchToStreamDloadAsync(cancellationToken).ConfigureAwait(false);
+        var streaming = new StreamingProtocol(Transport);
+        await streaming.HelloAsync(cancellationToken).ConfigureAwait(false);
+        Streaming = streaming;
     }
 
     /// <summary>Runs one vendor authentication stage and records its observed outcome as evidence.
@@ -834,6 +896,7 @@ public sealed partial class EdlSession : IProtocolSession
 
         _disposed = true;
         Sahara?.Dispose();
+        Streaming?.Dispose();
         Firehose?.Dispose();
         Transport.Dispose();
     }

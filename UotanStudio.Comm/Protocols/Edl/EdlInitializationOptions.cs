@@ -55,4 +55,16 @@ public sealed record EdlInitializationOptions
     /// <value>False by default; true rejects Firehose-only connections and failed identity queries.
     /// <para>默认为 false；为 true 时拒绝仅 Firehose 连接和失败的身份查询。</para></value>
     public bool QueryIdentityBeforeUpload { get; init; }
+
+    /// <summary>Gets whether a command-mode Sahara target with no programmer image may switch to
+    /// the streaming DLOAD backend instead of failing the handshake.
+    /// <para>获取在没有 programmer 镜像时，命令模式 Sahara 目标可否切换到流式 DLOAD 后端，而不是
+    /// 让握手失败。</para></summary>
+    /// <value>False by default, so an image-less handshake keeps raising the programmer-image error;
+    /// when true and the device HELLO reports <see cref="SaharaMode.Command"/>, initialization drives
+    /// the Sahara exec switch and exposes a streaming backend rather than configuring Firehose.
+    /// <para>默认为 false，无镜像握手仍抛出 programmer 镜像错误；为 true 且设备 HELLO 报告
+    /// <see cref="SaharaMode.Command"/> 时，初始化经 Sahara exec 切换并暴露流式后端，而非配置
+    /// Firehose。</para></value>
+    public bool AllowStreamDload { get; init; }
 }
