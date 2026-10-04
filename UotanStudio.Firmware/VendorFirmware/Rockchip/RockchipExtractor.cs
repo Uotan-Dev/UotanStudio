@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.VendorFirmware.Rockchip;
@@ -295,12 +296,7 @@ internal static class RockchipExtractor
         {
             var read = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
             if (read == 0) throw new EndOfStreamException();
-            foreach (var value in buffer.AsSpan(0, read))
-            {
-                crc ^= (uint)value << 24;
-                for (var bit = 0; bit < 8; bit++)
-                    crc = (crc & 0x80000000) != 0 ? (crc << 1) ^ 0x04C10DB7U : crc << 1;
-            }
+            crc = RockchipCrc32.Compute(buffer.AsSpan(0, read), crc);
             remaining -= read;
         }
         Span<byte> stored = stackalloc byte[4];

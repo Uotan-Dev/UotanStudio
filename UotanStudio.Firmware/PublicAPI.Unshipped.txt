@@ -333,3 +333,41 @@ UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection.Backup = 1 -> UotanStudio.F
 UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection.Both = 2 -> UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection
 UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection.Primary = 0 -> UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection
 static UotanStudio.Firmware.BlockImage.Gpt.GptDeviceImage.BuildExtents(UotanStudio.Firmware.BlockImage.Gpt.GptTable! table, UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection copies) -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent!>!
+UotanStudio.Firmware.Core.Checksums.RockchipCrc32
+static UotanStudio.Firmware.Core.Checksums.RockchipCrc32.Compute(System.ReadOnlySpan<byte> data, uint seed = 0) -> uint
+UotanStudio.Firmware.Core.IO.TempFileHelper
+static UotanStudio.Firmware.Core.IO.TempFileHelper.CleanupAll() -> void
+static UotanStudio.Firmware.Core.IO.TempFileHelper.CreateAdjacentPath(string! targetPath) -> string!
+static UotanStudio.Firmware.Core.IO.TempFileHelper.CreateScratchPath(string! prefix, string! extension = ".tmp") -> string!
+static UotanStudio.Firmware.Core.IO.TempFileHelper.CreateScratchPathIn(string! directory, string! prefix, string! extension = ".tmp") -> string!
+static UotanStudio.Firmware.Core.IO.TempFileHelper.CreateTempFile() -> string!
+static UotanStudio.Firmware.Core.IO.TempFileHelper.SafeDelete(string? path) -> void
+UotanStudio.Firmware.Core.Streams.CappedWriteStream
+UotanStudio.Firmware.Core.Streams.CappedWriteStream.CappedWriteStream(System.IO.Stream! output, long maxBytes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+UotanStudio.Firmware.Core.Streams.CappedWriteStream.Written.get -> long
+override UotanStudio.Firmware.Core.Streams.CappedWriteStream.CanRead.get -> bool
+override UotanStudio.Firmware.Core.Streams.CappedWriteStream.CanSeek.get -> bool
+override UotanStudio.Firmware.Core.Streams.CappedWriteStream.CanWrite.get -> bool
+override UotanStudio.Firmware.Core.Streams.CappedWriteStream.Flush() -> void
+override UotanStudio.Firmware.Core.Streams.CappedWriteStream.Length.get -> long
+override UotanStudio.Firmware.Core.Streams.CappedWriteStream.Position.get -> long
+override UotanStudio.Firmware.Core.Streams.CappedWriteStream.Position.set -> void
+override UotanStudio.Firmware.Core.Streams.CappedWriteStream.Read(byte[]! buffer, int offset, int count) -> int
+override UotanStudio.Firmware.Core.Streams.CappedWriteStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override UotanStudio.Firmware.Core.Streams.CappedWriteStream.SetLength(long value) -> void
+override UotanStudio.Firmware.Core.Streams.CappedWriteStream.Write(byte[]! buffer, int offset, int count) -> void
+override UotanStudio.Firmware.Core.Streams.CappedWriteStream.Write(System.ReadOnlySpan<byte> buffer) -> void
+UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream
+UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.StrictBrotliReadStream(System.IO.Stream! input) -> void
+override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.CanRead.get -> bool
+override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.CanSeek.get -> bool
+override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.CanWrite.get -> bool
+override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.Flush() -> void
+override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.Length.get -> long
+override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.Position.get -> long
+override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.Position.set -> void
+override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.Read(byte[]! buffer, int offset, int count) -> int
+override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.Read(System.Span<byte> buffer) -> int
+override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.SetLength(long value) -> void
+override UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream.Write(byte[]! buffer, int offset, int count) -> void

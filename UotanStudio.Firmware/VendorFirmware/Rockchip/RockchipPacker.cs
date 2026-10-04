@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Checksums;
 
 namespace UotanStudio.Firmware.VendorFirmware.Rockchip;
 
@@ -591,17 +592,7 @@ public static class RockchipPacker
     {
         public uint Value { get; private set; }
 
-        public void Append(ReadOnlySpan<byte> data)
-        {
-            foreach (var value in data)
-            {
-                Value ^= (uint)value << 24;
-                for (var bit = 0; bit < 8; bit++)
-                {
-                    Value = (Value & 0x80000000) != 0 ? (Value << 1) ^ 0x04C10DB7U : Value << 1;
-                }
-            }
-        }
+        public void Append(ReadOnlySpan<byte> data) => Value = RockchipCrc32.Compute(data, Value);
     }
 
     private sealed record RkafSourceEntry(string Name, string RelativePath, string FullPath);
