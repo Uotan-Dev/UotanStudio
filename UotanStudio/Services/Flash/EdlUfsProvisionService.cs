@@ -1,5 +1,4 @@
 using UotanStudio.Comm.Protocols.Edl;
-using UotanStudio.Services.Devices;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Services.Flash;

@@ -1,4 +1,3 @@
-using System.Text;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Mcp;

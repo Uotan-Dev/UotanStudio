@@ -1,5 +1,4 @@
 using System.Text;
-using UotanStudio.Comm;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;

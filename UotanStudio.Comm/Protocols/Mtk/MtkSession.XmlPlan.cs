@@ -1,5 +1,3 @@
-using UotanStudio.Comm.Protocols.Common;
-
 namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession

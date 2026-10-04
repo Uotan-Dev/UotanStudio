@@ -3,7 +3,6 @@ using UotanStudio.Services.Devices;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Mirroring;
-using UotanStudio.Services.Projects;
 using UotanStudio.Services.Scripting;
 using Xunit;
 

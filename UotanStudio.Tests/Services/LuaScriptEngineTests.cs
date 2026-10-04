@@ -1,5 +1,4 @@
 using Lua;
-using Lua.Runtime;
 using UotanStudio.Projects.Interactions;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;

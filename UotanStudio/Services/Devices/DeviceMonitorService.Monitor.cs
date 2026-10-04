@@ -1,4 +1,3 @@
-using UotanStudio.Comm;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;

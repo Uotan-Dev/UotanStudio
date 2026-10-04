@@ -2,7 +2,6 @@ using System.Buffers.Binary;
 using System.Net.Sockets;
 using System.Numerics;
 using System.Security.Cryptography;
-using System.Text.RegularExpressions;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Tls;

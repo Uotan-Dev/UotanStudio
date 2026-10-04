@@ -2,8 +2,6 @@
 // (c) B.Kerler 2018-2024, licensed under GNU GPLv3, redistributed here under the same license.
 // See MtkLegacyDaPatcher.cs.LICENSE. The upstream sources are mtkclient/Library/DA/legacy/extension/legacy.py
 // (LegacyExt.patch_da2) and mtkclient/Tools/patch_legacy.py.
-using System.Buffers.Binary;
-
 namespace UotanStudio.Comm.Protocols.Mtk;
 
 /// <summary>

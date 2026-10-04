@@ -1,11 +1,11 @@
-using UotanStudio.ViewModels.Shell;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Styling;
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Shell;
 #if DEBUG
 using Dock.Avalonia.Diagnostics;
 #endif

@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using UotanStudio.Comm.Devices;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Transports.Tcp;

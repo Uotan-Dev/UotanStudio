@@ -1,7 +1,5 @@
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Edl;
-using UotanStudio.Services;
-using UotanStudio.Services.Logging;
 
 namespace UotanStudio.Services.Devices;
 

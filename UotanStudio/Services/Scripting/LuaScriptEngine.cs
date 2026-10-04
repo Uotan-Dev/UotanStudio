@@ -1,8 +1,6 @@
 using Lua;
-using Lua.Runtime;
 using UotanStudio.Projects.Interactions;
 using UotanStudio.Services.Execution;
-using UotanStudio.Services.Interactions;
 using UotanStudio.Services.Projects;
 
 namespace UotanStudio.Services.Scripting;

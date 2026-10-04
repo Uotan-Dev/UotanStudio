@@ -1,7 +1,6 @@
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Firmware.BlockImage.Gpt;
-using UotanStudio.Services.Devices;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Services.Flash;
