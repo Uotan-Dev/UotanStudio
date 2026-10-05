@@ -16,53 +16,22 @@ internal static class CryptoHelper
             throw new ArgumentNullException(nameof(data));
         }
 
-        var hash = MD5.HashData(data);
-
-        var hex = new StringBuilder(32);
-        for (var i = 0; i < hash.Length; i++)
-        {
-            hex.Append(hash[i].ToString("x2"));
-        }
-
-        var hexStr = hex.ToString();
-        return Encoding.UTF8.GetBytes(hexStr[..16]);
+        var hex = Convert.ToHexStringLower(MD5.HashData(data));
+        return Encoding.UTF8.GetBytes(hex[..16]);
     }
 
     /// <summary>
     /// Decodes a hex string to a byte array.
     /// <para>将十六进制字符串解码为字节数组。</para>
     /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="hex"/> is <see langword="null"/>.
+    /// <para><paramref name="hex"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="FormatException"><paramref name="hex"/> has an odd length or contains a character outside
+    /// the hexadecimal alphabet.
+    /// <para><paramref name="hex"/> 长度为奇数，或包含十六进制字符集之外的字符。</para></exception>
     internal static byte[] HexDecode(string hex)
     {
-        if (hex is null)
-        {
-            throw new ArgumentNullException(nameof(hex));
-        }
-
-        if (hex.Length % 2 != 0)
-        {
-            throw new FormatException("Hex string must have an even number of characters.");
-        }
-
-        var result = new byte[hex.Length / 2];
-        for (var i = 0; i < result.Length; i++)
-        {
-            result[i] = (byte)((HexCharToInt(hex[i * 2]) << 4) | HexCharToInt(hex[(i * 2) + 1]));
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Converts a single hex character to its integer value.
-    /// <para>将单个十六进制字符转换为其整数值。</para>
-    /// </summary>
-    internal static int HexCharToInt(char c)
-    {
-        return c is >= '0' and <= '9'
-            ? c - '0'
-            : c is >= 'a' and <= 'f'
-                ? c - 'a' + 10
-                : c is >= 'A' and <= 'F' ? c - 'A' + 10 : throw new FormatException($"Invalid hex character: '{c}'");
+        ArgumentNullException.ThrowIfNull(hex);
+        return Convert.FromHexString(hex);
     }
 }

@@ -25,4 +25,20 @@ internal static class NulText
     /// </summary>
     internal static string GetStringTrimNul(this Encoding encoding, byte[] buffer, int index, int count)
         => encoding.GetString(buffer, index, count).TrimEnd('\0');
+
+    /// <summary>
+    /// Decodes the bytes before the first NUL of <paramref name="bytes"/>, or the whole span when it
+    /// holds no NUL. Used for C strings whose length is not stored separately.
+    /// <para>解码 <paramref name="bytes"/> 中首个 NUL 之前的内容；整段不含 NUL 时解码整段。用于长度未单独存储的 C 字符串。</para>
+    /// </summary>
+    /// <param name="bytes">Field bytes, usually a fixed-width slot whose tail is NUL padding.
+    /// <para>字段字节，通常是尾部以 NUL 填充的定宽槽位。</para></param>
+    /// <param name="encoding">Encoding of the stored characters; it is never inferred from the bytes.
+    /// <para>所存字符的编码；绝不从字节推断。</para></param>
+    /// <returns>The decoded text up to the first NUL. <para>首个 NUL 之前的解码文本。</para></returns>
+    internal static string ReadCString(ReadOnlySpan<byte> bytes, Encoding encoding)
+    {
+        var length = bytes.IndexOf((byte)0);
+        return encoding.GetString(length < 0 ? bytes : bytes[..length]);
+    }
 }

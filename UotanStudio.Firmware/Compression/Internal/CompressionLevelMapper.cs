@@ -23,7 +23,7 @@ internal static class CompressionLevelMapper
 
     /// <summary>
     /// Maps the unified integer level (0-9) to a Brotli quality value (0-11).
-    /// <para>映射到 BrotliSharpLib 的质量值（0-11）。</para>
+    /// <para>把统一整数等级（0-9）映射为 Brotli 质量值（0-11）。</para>
     /// </summary>
     public static int ToBrotliQuality(int? level)
     {

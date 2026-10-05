@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.BlockImage.Lp;
 
@@ -631,18 +632,7 @@ public readonly struct LpMetadataPartition
     }
 
     internal static string ReadName(byte[]? nameBytes)
-    {
-        if (nameBytes is null)
-        {
-            return string.Empty;
-        }
-        var len = 0;
-        while (len < nameBytes.Length && nameBytes[len] != 0)
-        {
-            len++;
-        }
-        return Encoding.UTF8.GetString(nameBytes, 0, len);
-    }
+        => nameBytes is null ? string.Empty : NulText.ReadCString(nameBytes, Encoding.UTF8);
 
     internal static void WriteName(Span<byte> dest, byte[]? name)
     {

@@ -593,25 +593,6 @@ internal static partial class DeliveryPackageBuilder
         entry.LastWriteTime = new DateTimeOffset(2009, 1, 1, 0, 0, 0, TimeSpan.Zero);
         return entry;
     }
-    private static async Task AddFileAsync(ZipArchive zip, string name, string source, CancellationToken token,
-        IProgress<DeliveryProgress>? progress = null)
-    {
-        await using var input = File.OpenRead(source);
-        await using var output = Entry(zip, name).Open();
-        await CopyPackageMemberAsync(input, output, name, token, progress);
-    }
-
-    private static async Task CopyPackageMemberAsync(Stream input, Stream output, string name,
-        CancellationToken token, IProgress<DeliveryProgress>? progress)
-    {
-        var length = input.Length;
-        void Report(long count) => progress?.Report(new(85 + count * 4.0 / Math.Max(1, length), "Packaging ZIP",
-            (count, length), "Delivery_ProgressPackage", Detail: name));
-        Report(0);
-        using var tracked = new DeliveryWriteProgressStream(output, Report, token);
-        await input.CopyToAsync(tracked, 65536, token);
-        Report(tracked.Length);
-    }
     private static async Task AddTextAsync(ZipArchive zip, string name, string text, CancellationToken token)
     {
         await using var output = Entry(zip, name).Open();

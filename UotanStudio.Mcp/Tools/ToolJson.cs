@@ -18,10 +18,7 @@ internal static class ToolJson
 {
     private static readonly JsonSerializerOptions SerializerOptions = CreateFrozenOptions();
 
-    private static readonly IJsonTypeInfoResolver Resolver = McpToolJsonContext.Default;
-
-    private static readonly JsonTypeInfo<ToolResult> ResultTypeInfo =
-        RequireTypeInfo<ToolResult>(ResolverResolve(typeof(ToolResult)));
+    private static readonly JsonTypeInfo<ToolResult> ResultTypeInfo = SerializerOptions.GetTypeInfo<ToolResult>();
 
     private static JsonSerializerOptions CreateFrozenOptions()
     {
@@ -36,9 +33,6 @@ internal static class ToolJson
         return options;
     }
 
-    private static JsonTypeInfo? ResolverResolve(Type type) =>
-        Resolver.GetTypeInfo(type, SerializerOptions);
-
     /// <summary>
     /// Serializes a result payload as the tool's JSON text output.
     /// <para>把结果负载序列化为工具的 JSON 文本输出。</para>
@@ -49,13 +43,23 @@ internal static class ToolJson
     /// Converts a concrete payload into the envelope's JSON data without reflection.
     /// <para>不经反射把具体负载转换为信封的 JSON 数据。</para>
     /// </summary>
-    public static JsonElement Data<T>(T value) =>
-        JsonSerializer.SerializeToElement(value, RequireTypeInfo<T>(ResolverResolve(typeof(T))));
+    /// <param name="value">Payload record registered in <see cref="McpToolJsonContext"/>.
+    /// <para>已注册进 <see cref="McpToolJsonContext"/> 的负载记录。</para></param>
+    /// <typeparam name="T">Concrete payload type; its metadata must exist in the source-generated context.
+    /// <para>具体负载类型；其元数据必须存在于源生成上下文中。</para></typeparam>
+    /// <returns>The payload as a detached JSON element. <para>作为独立 JSON 元素的负载。</para></returns>
+    /// <exception cref="InvalidOperationException"><typeparamref name="T"/> has no generated metadata.
+    /// <para><typeparamref name="T"/> 没有源生成元数据。</para></exception>
+    public static JsonElement Data<T>(T value)
+    {
+        if (!SerializerOptions.TryGetTypeInfo<T>(out var typeInfo) || typeInfo is null)
+        {
+            throw new InvalidOperationException(
+                $"Type {typeof(T).Name} is not registered in {nameof(McpToolJsonContext)}.");
+        }
 
-    private static JsonTypeInfo<T> RequireTypeInfo<T>(JsonTypeInfo? typeInfo) =>
-        (JsonTypeInfo<T>?)typeInfo
-        ?? throw new InvalidOperationException(
-            $"Type {typeof(T).Name} is not registered in {nameof(McpToolJsonContext)}.");
+        return JsonSerializer.SerializeToElement(value, typeInfo);
+    }
 }
 
 /// <summary>

@@ -1,5 +1,4 @@
-using ICSharpCode.SharpZipLib.Zip.Compression;
-using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
+using System.IO.Compression;
 using UotanStudio.Firmware.Compression.Internal;
 using UotanStudio.Firmware.Core.Streams;
 
@@ -153,19 +152,45 @@ internal static class ImageDeltaPatch
             using var expanded = BinaryDeltaPatch.CreateTemporaryStream();
             if (chunk.ExpandedLength > 0)
             {
-                var inflater = new Inflater(noHeader: true);
-                using var decoder = new InflaterInputStream(sourceRange, inflater) { IsStreamOwner = false };
+                using var decoder = new DeflateStream(sourceRange, CompressionMode.Decompress, leaveOpen: true);
                 BinaryDeltaPatch.CopyExactly(decoder, expanded, chunk.ExpandedLength);
-                if (decoder.ReadByte() != -1 || !inflater.IsFinished) throw new InvalidDataException("IMGDIFF2 source inflation length mismatch.");
+                if (decoder.ReadByte() != -1) throw new InvalidDataException("IMGDIFF2 source inflation length mismatch.");
             }
             expanded.Position = 0;
             if (BinaryDeltaPatch.ReadOutputLength(patchRange) != chunk.TargetLength) throw new InvalidDataException("IMGDIFF2 target expansion length mismatch.");
-            using (var encoder = new SharpCompress.Compressors.Deflate.DeflateStream(new NonDisposingStream(bounded),
-                   SharpCompress.Compressors.CompressionMode.Compress,
-                   (SharpCompress.Compressors.Deflate.CompressionLevel)(chunk.Level == -1 ? 6 : chunk.Level))
-            { Strategy = (SharpCompress.Compressors.Deflate.CompressionStrategy)chunk.Strategy })
+            using (var encoder = CreateDeflateEncoder(bounded, chunk.Level, chunk.Strategy))
                 BinaryDeltaPatch.Apply(expanded, patchRange, encoder, chunk.TargetLength);
         }
         if (bounded.BytesWritten != expectedLength) throw new InvalidDataException("IMGDIFF2 output does not match destination ranges.");
     }
+
+    /// <summary>
+    /// Creates the raw DEFLATE encoder that reproduces the compressed bytes recorded in an IMGDIFF2 DEFLATE chunk.
+    /// <para>创建可复现 IMGDIFF2 DEFLATE 数据块中记录的压缩字节的原始 DEFLATE 编码器。</para>
+    /// </summary>
+    /// <remarks>
+    /// A DEFLATE chunk stores its compressor parameters next to the patch, and the applier has to reproduce the very
+    /// same compressed bytes because the assembled image is checked against the recorded target hash. The in-box
+    /// <see cref="System.IO.Compression.DeflateStream"/> cannot honour that contract: on the recorded fixtures it emits
+    /// 160 bytes at the chunk's level 6 where the patch records 87, so this single site stays on
+    /// <see cref="SharpCompress.Compressors.Deflate.DeflateStream"/>, which the assembly already depends on for bzip2.
+    /// <para>DEFLATE 数据块把压缩参数与补丁一并存储，应用端必须复现完全相同的压缩字节，因为组装后的镜像要与记录的目标
+    /// 哈希校验。内置的 <see cref="System.IO.Compression.DeflateStream"/> 无法满足该契约：在记录的夹具上，数据块等级 6
+    /// 会输出 160 字节，而补丁记录的是 87 字节；因此此唯一位点保留
+    /// <see cref="SharpCompress.Compressors.Deflate.DeflateStream"/>，程序集本就为 bzip2 依赖它。</para>
+    /// </remarks>
+    /// <param name="output">Destination the compressed bytes are written to. <para>压缩字节写入的目标。</para></param>
+    /// <param name="level">Zlib level recorded in the chunk, or <c>-1</c> for the encoder default.
+    /// <para>数据块记录的 zlib 等级，<c>-1</c> 表示编码器默认值。</para></param>
+    /// <param name="strategy">Zlib strategy recorded in the chunk. <para>数据块记录的 zlib 策略。</para></param>
+    /// <returns>A raw DEFLATE encoder that leaves <paramref name="output"/> open when it is disposed.
+    /// <para>释放时保持 <paramref name="output"/> 打开的原始 DEFLATE 编码器。</para></returns>
+    private static Stream CreateDeflateEncoder(Stream output, int level, int strategy) =>
+        new SharpCompress.Compressors.Deflate.DeflateStream(
+            new NonDisposingStream(output),
+            SharpCompress.Compressors.CompressionMode.Compress,
+            (SharpCompress.Compressors.Deflate.CompressionLevel)(level == -1 ? 6 : level))
+        {
+            Strategy = (SharpCompress.Compressors.Deflate.CompressionStrategy)strategy
+        };
 }

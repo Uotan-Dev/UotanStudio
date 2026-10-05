@@ -144,42 +144,13 @@ public sealed record OzipKeyEntry
     /// <para>随密钥记录的可选题型说明。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="keyHex"/> is <see langword="null"/>.
     /// <para><paramref name="keyHex"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="keyHex"/> has an odd length or contains a
+    /// <exception cref="FormatException"><paramref name="keyHex"/> has an odd length or contains a
     /// character outside the hexadecimal alphabet.
     /// <para><paramref name="keyHex"/> 长度为奇数，或包含十六进制字符集之外的字符。</para></exception>
     public OzipKeyEntry(string keyHex, string? description = null)
     {
         KeyHex = keyHex ?? throw new ArgumentNullException(nameof(keyHex));
-        KeyBytes = HexDecode(keyHex);
+        KeyBytes = CryptoHelper.HexDecode(keyHex);
         Description = description;
-    }
-
-    private static byte[] HexDecode(string hex)
-    {
-        if (hex.Length % 2 != 0)
-        {
-            throw new ArgumentException("Hex string must have an even number of characters.", nameof(hex));
-        }
-
-        var bytes = new byte[hex.Length / 2];
-        for (var i = 0; i < bytes.Length; i++)
-        {
-            var high = HexCharToInt(hex[i * 2]);
-            var low = HexCharToInt(hex[(i * 2) + 1]);
-            bytes[i] = (byte)((high << 4) | low);
-        }
-
-        return bytes;
-    }
-
-    private static int HexCharToInt(char c)
-    {
-        return c switch
-        {
-            >= '0' and <= '9' => c - '0',
-            >= 'a' and <= 'f' => c - 'a' + 10,
-            >= 'A' and <= 'F' => c - 'A' + 10,
-            _ => throw new ArgumentException($"Invalid hexadecimal character: '{c}'.")
-        };
     }
 }

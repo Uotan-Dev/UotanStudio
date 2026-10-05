@@ -10,6 +10,7 @@ using Org.BouncyCastle.Security;
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 
@@ -225,7 +226,7 @@ public static partial class AvbSigner
             var rollbackIndex = BinaryPrimitives.ReadUInt64BigEndian(headerBytes.AsSpan(112));
             var flags = BinaryPrimitives.ReadUInt32BigEndian(headerBytes.AsSpan(120));
             var rollbackIndexLocation = BinaryPrimitives.ReadUInt32BigEndian(headerBytes.AsSpan(124));
-            var releaseString = ReadAscii(headerBytes.AsSpan(128, 48));
+            var releaseString = NulText.ReadCString(headerBytes.AsSpan(128, 48), Encoding.ASCII);
             if (string.IsNullOrEmpty(releaseString))
             {
                 releaseString = ReleaseString;
@@ -331,7 +332,7 @@ public static partial class AvbSigner
             var rollbackIndex = BinaryPrimitives.ReadUInt64BigEndian(headerBytes.AsSpan(112));
             var flags = BinaryPrimitives.ReadUInt32BigEndian(headerBytes.AsSpan(120));
             var rollbackIndexLocation = BinaryPrimitives.ReadUInt32BigEndian(headerBytes.AsSpan(124));
-            var releaseString = ReadAscii(headerBytes.AsSpan(128, 48));
+            var releaseString = NulText.ReadCString(headerBytes.AsSpan(128, 48), Encoding.ASCII);
             if (string.IsNullOrEmpty(releaseString))
             {
                 releaseString = ReleaseString;
@@ -939,17 +940,6 @@ public static partial class AvbSigner
         }
 
         return total == HeaderSize ? buffer : null;
-    }
-
-    private static string ReadAscii(ReadOnlySpan<byte> bytes)
-    {
-        var end = 0;
-        while (end < bytes.Length && bytes[end] != 0)
-        {
-            end++;
-        }
-
-        return end == 0 ? string.Empty : Encoding.ASCII.GetString(bytes[..end]);
     }
 
     private static bool PathsEqual(string first, string second)

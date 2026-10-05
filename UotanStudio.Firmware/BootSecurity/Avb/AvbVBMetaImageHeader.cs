@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb;
 
@@ -145,7 +146,7 @@ public readonly struct AvbVBMetaImageHeader
             RollbackIndex = BinaryPrimitives.ReadUInt64BigEndian(data[112..]),
             Flags = BinaryPrimitives.ReadUInt32BigEndian(data[120..]),
             RollbackIndexLocation = BinaryPrimitives.ReadUInt32BigEndian(data[124..]),
-            ReleaseString = ReadAscii(data, 128, 48)
+            ReleaseString = NulText.ReadCString(data.Slice(128, 48), Encoding.ASCII)
         };
         return header;
     }
@@ -227,16 +228,5 @@ public readonly struct AvbVBMetaImageHeader
         }
 
         bytes.CopyTo(destination);
-    }
-
-    private static string ReadAscii(ReadOnlySpan<byte> data, int offset, int length)
-    {
-        var slice = data.Slice(offset, length);
-        var end = 0;
-        while (end < slice.Length && slice[end] != 0)
-        {
-            end++;
-        }
-        return Encoding.ASCII.GetString(slice[..end]);
     }
 }

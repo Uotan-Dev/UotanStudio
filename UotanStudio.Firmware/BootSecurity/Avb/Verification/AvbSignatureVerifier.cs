@@ -621,7 +621,7 @@ public static partial class AvbSignatureVerifier
             case HashtreeDescriptorTag:
                 if (numBytesFollowing >= 164 && bodyStart + 164 <= data.Length)
                 {
-                    var hashAlgorithm = ReadAscii(data.AsSpan(bodyStart + 56, 32));
+                    var hashAlgorithm = NulText.ReadCString(data.AsSpan(bodyStart + 56, 32), Encoding.ASCII);
                     var nameLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 88, 4));
                     var saltLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 92, 4));
                     var rootDigestLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 96, 4));
@@ -659,7 +659,7 @@ public static partial class AvbSignatureVerifier
             case HashDescriptorTag:
                 if (numBytesFollowing >= 116 && bodyStart + 116 <= data.Length)
                 {
-                    var hashAlgorithm = ReadAscii(data.AsSpan(bodyStart + 8, 32));
+                    var hashAlgorithm = NulText.ReadCString(data.AsSpan(bodyStart + 8, 32), Encoding.ASCII);
                     var partitionNameLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 40, 4));
                     var saltLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 44, 4));
                     var digestLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 48, 4));
@@ -835,17 +835,6 @@ public static partial class AvbSignatureVerifier
         first.CopyTo(combined, 0);
         second.CopyTo(combined, first.Length);
         return combined;
-    }
-
-    private static string ReadAscii(ReadOnlySpan<byte> bytes)
-    {
-        var length = bytes.IndexOf((byte)0);
-        if (length < 0)
-        {
-            length = bytes.Length;
-        }
-
-        return length == 0 ? string.Empty : Encoding.ASCII.GetString(bytes[..length]);
     }
 
     private static AvbSignatureVerifyResult With(AvbSignatureVerifyResult source, bool? IsSigned = null, bool? SignatureIsValid = null,

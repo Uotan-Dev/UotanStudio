@@ -101,7 +101,7 @@ internal static class UfsProvisionParser
             };
     }
 
-    private static UfsProvisionCommon ParseCommon(XElement element)
+    private static UfsProvisionEntry ParseCommon(XElement element)
     {
         return new UfsProvisionCommon
         {
@@ -118,7 +118,7 @@ internal static class UfsProvisionParser
         };
     }
 
-    private static UfsProvisionBody ParseBody(XElement element)
+    private static UfsProvisionEntry ParseBody(XElement element)
     {
         return new UfsProvisionBody
         {
@@ -137,7 +137,7 @@ internal static class UfsProvisionParser
         };
     }
 
-    private static UfsProvisionEpilogue ParseEpilogue(XElement element)
+    private static UfsProvisionEntry ParseEpilogue(XElement element)
     {
         return new UfsProvisionEpilogue
         {
