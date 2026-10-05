@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Formats.Asn1;
 using System.IO.Compression;
+using System.IO.Hashing;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -95,7 +96,7 @@ internal static partial class DeliveryPackageBuilder
                     writer.Write(CareMap.ZipEntryName, new MemoryStream(careMap));
                 }
 
-                writer.Write("META-INF/com/android/metadata", new MemoryStream(Encoding.UTF8.GetBytes(text)));
+                writer.Write(MetadataEntryName, new MemoryStream(Encoding.UTF8.GetBytes(text)));
                 if (plan.Package.CertificatePath.Length > 0)
                 {
                     using var cert = LoadCertificate(plan.Package.CertificatePath);
@@ -106,7 +107,7 @@ internal static partial class DeliveryPackageBuilder
             var ranges = ReadStoredRanges(path);
             var payload = ranges["payload.bin"];
             var properties = ranges["payload_properties.txt"];
-            var meta = ranges["META-INF/com/android/metadata"];
+            var meta = ranges[MetadataEntryName];
             using var input = File.OpenRead(Path.Combine(images, "payload.bin"));
             var header = new byte[24]; input.ReadExactly(header);
             var metadataLength = checked(24UL + BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(12)) + BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(20)));
@@ -121,6 +122,7 @@ internal static partial class DeliveryPackageBuilder
                 patch.Position = meta.Offset + Encoding.UTF8.GetByteCount(metadata);
                 patch.Write(suffix);
             }
+            RepairStoredEntryChecksum(path, MetadataEntryName);
             var actual = ReadStoredRanges(path);
             if (ranges.Any(p => actual[p.Key] != p.Value)) throw new InvalidDataException("OTA ZIP entry offsets changed while finalizing metadata.");
             if (plan.Package.SigningKeyPath.Length > 0) await SignAsync(path, plan.Package, token, signingKeys);
@@ -229,6 +231,246 @@ internal static partial class DeliveryPackageBuilder
             input.Position = checked(input.Position + (long)size);
         }
         return result;
+    }
+
+    private const string MetadataEntryName = "META-INF/com/android/metadata";
+
+    /// <summary>
+    /// <para>就地改写 stored 条目内容后修复其 CRC-32：读回条目字节重算校验值，同时写回本地文件头（偏移 +14）与
+    /// 中央目录记录（偏移 +16）。ZIP64 归档下中央目录起点取自 ZIP64 结束记录，条目的真实大小与本地头偏移取自其
+    /// ZIP64 扩展字段；CRC-32 字段本身不被 ZIP64 加宽，因此只有这 8 个字节改变。</para>
+    /// Repairs the CRC-32 of a stored entry whose bytes were overwritten in place: the entry is read back, the
+    /// checksum recomputed, and the value written to both the local file header (offset +14) and its central
+    /// directory record (offset +16). For ZIP64 archives the central directory start comes from the ZIP64
+    /// end-of-central-directory record and the entry's true sizes and local header offset come from its ZIP64 extra
+    /// field; CRC-32 fields are never widened by ZIP64, so only those eight bytes change.
+    /// </summary>
+    /// <param name="path">Archive patched in place. <para>被就地修复的归档路径。</para></param>
+    /// <param name="entryName">Stored entry whose content was rewritten. <para>内容被就地改写的存储条目名。</para></param>
+    /// <exception cref="InvalidDataException">
+    /// The directory records are missing or malformed, the entry is absent, or the entry is not a seekable stored
+    /// entry within the repairable size limit.
+    /// <para>目录记录缺失或无效、条目不存在，或条目不是上限内可寻址的存储条目时抛出。</para>
+    /// </exception>
+    internal static void RepairStoredEntryChecksum(string path, string entryName)
+    {
+        using var archive = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None, 65536);
+        var directoryStart = LocateCentralDirectory(archive, out var entryCount);
+        var entry = LocateStoredEntry(archive, directoryStart, entryCount, entryName);
+
+        var data = new byte[checked((int)entry.UncompressedSize)];
+        archive.Position = entry.DataStart;
+        archive.ReadExactly(data);
+        var checksum = Crc32.HashToUInt32(data);
+
+        WriteUInt32At(archive, entry.CentralDirectoryStart + 16, checksum);
+        WriteUInt32At(archive, entry.LocalHeaderStart + 14, checksum);
+    }
+
+    /// <summary>
+    /// <para>从尾部有界窗口定位中央目录起点与条目数，经典字段为占位值时经 ZIP64 定位器与 ZIP64 结束记录取回真实值。</para>
+    /// Locates the central directory start and entry count from a bounded tail window, falling back to the ZIP64
+    /// locator and ZIP64 end-of-central-directory record when the classic fields hold their placeholders.
+    /// </summary>
+    private static long LocateCentralDirectory(Stream archive, out int entryCount)
+    {
+        const int EndOfCentralDirectoryLength = 22;
+        const int Zip64LocatorLength = 20;
+
+        var tailLength = checked((int)Math.Min(archive.Length, EndOfCentralDirectoryLength + (long)ushort.MaxValue));
+        var tail = new byte[tailLength];
+        archive.Position = archive.Length - tailLength;
+        archive.ReadExactly(tail);
+
+        var recordStart = -1;
+        for (var offset = tailLength - EndOfCentralDirectoryLength; offset >= 0; offset--)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(tail.AsSpan(offset)) == 0x06054b50)
+            {
+                recordStart = offset;
+                break;
+            }
+        }
+
+        if (recordStart < 0)
+        {
+            throw new InvalidDataException("ZIP end-of-central-directory record is missing.");
+        }
+
+        var recordedCount = BinaryPrimitives.ReadUInt16LittleEndian(tail.AsSpan(recordStart + 10));
+        var recordedStart = BinaryPrimitives.ReadUInt32LittleEndian(tail.AsSpan(recordStart + 16));
+        if (recordedCount != ushort.MaxValue && recordedStart != uint.MaxValue)
+        {
+            entryCount = recordedCount;
+            return recordedStart;
+        }
+
+        var locatorStart = recordStart - Zip64LocatorLength;
+        if (locatorStart < 0 || BinaryPrimitives.ReadUInt32LittleEndian(tail.AsSpan(locatorStart)) != 0x07064b50)
+        {
+            throw new InvalidDataException("ZIP64 end-of-central-directory locator is missing.");
+        }
+
+        var zip64Start = checked((long)BinaryPrimitives.ReadUInt64LittleEndian(tail.AsSpan(locatorStart + 8)));
+        var zip64 = new byte[56];
+        archive.Position = zip64Start;
+        archive.ReadExactly(zip64);
+        if (BinaryPrimitives.ReadUInt32LittleEndian(zip64) != 0x06064b50)
+        {
+            throw new InvalidDataException("ZIP64 end-of-central-directory record is missing.");
+        }
+
+        var totalEntries = BinaryPrimitives.ReadUInt64LittleEndian(zip64.AsSpan(32));
+        if (totalEntries > int.MaxValue)
+        {
+            throw new InvalidDataException("ZIP central directory declares too many entries.");
+        }
+
+        entryCount = (int)totalEntries;
+        return checked((long)BinaryPrimitives.ReadUInt64LittleEndian(zip64.AsSpan(48)));
+    }
+
+    /// <summary>
+    /// <para>遍历中央目录，按名称解析目标存储条目的本地头起点、记录起点、数据起点与原始长度；ZIP64 加宽的字段按
+    /// 扩展字段内的固定顺序还原，且只接受可寻址的 stored 条目。</para>
+    /// Walks the central directory to resolve the named stored entry's local header start, record start, data start
+    /// and uncompressed length, restoring ZIP64-widened fields from the entry extra block and accepting only
+    /// seekable stored entries.
+    /// </summary>
+    private static (long LocalHeaderStart, long CentralDirectoryStart, long DataStart, long UncompressedSize) LocateStoredEntry(
+        Stream archive, long directoryStart, int entryCount, string entryName)
+    {
+        const int RecordLength = 46;
+        const int LocalHeaderLength = 30;
+        const long MaximumRepairableEntryBytes = 1L << 20;
+
+        var position = directoryStart;
+        for (var index = 0; index < entryCount; index++)
+        {
+            var record = ReadAt(archive, position, RecordLength);
+            if (BinaryPrimitives.ReadUInt32LittleEndian(record) != 0x02014b50)
+            {
+                throw new InvalidDataException("ZIP central directory record signature is invalid.");
+            }
+
+            var flags = BinaryPrimitives.ReadUInt16LittleEndian(record.AsSpan(8));
+            var method = BinaryPrimitives.ReadUInt16LittleEndian(record.AsSpan(10));
+            var compressedSize = (long)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(20));
+            var uncompressedSize = (long)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(24));
+            var nameLength = BinaryPrimitives.ReadUInt16LittleEndian(record.AsSpan(28));
+            var extraLength = BinaryPrimitives.ReadUInt16LittleEndian(record.AsSpan(30));
+            var commentLength = BinaryPrimitives.ReadUInt16LittleEndian(record.AsSpan(32));
+            var localHeaderStart = (long)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(42));
+
+            if (uncompressedSize == uint.MaxValue || compressedSize == uint.MaxValue || localHeaderStart == uint.MaxValue)
+            {
+                var extra = ReadAt(archive, position + RecordLength + nameLength, extraLength);
+                (uncompressedSize, compressedSize, localHeaderStart) = ReadZip64Extra(extra, uncompressedSize, compressedSize, localHeaderStart);
+            }
+
+            var name = Encoding.UTF8.GetString(ReadAt(archive, position + RecordLength, nameLength));
+            if (string.Equals(name, entryName, StringComparison.Ordinal))
+            {
+                if (method != 0 || (flags & 8) != 0 || compressedSize != uncompressedSize
+                    || uncompressedSize > MaximumRepairableEntryBytes)
+                {
+                    throw new InvalidDataException("Checksum repair requires a seekable stored ZIP entry within the repairable size limit.");
+                }
+
+                var local = ReadAt(archive, localHeaderStart, LocalHeaderLength);
+                if (BinaryPrimitives.ReadUInt32LittleEndian(local) != 0x04034b50)
+                {
+                    throw new InvalidDataException("ZIP local file header signature is invalid.");
+                }
+
+                var dataStart = checked(localHeaderStart + LocalHeaderLength
+                    + BinaryPrimitives.ReadUInt16LittleEndian(local.AsSpan(26))
+                    + BinaryPrimitives.ReadUInt16LittleEndian(local.AsSpan(28)));
+                if (dataStart + uncompressedSize > archive.Length)
+                {
+                    throw new InvalidDataException("ZIP entry extends past the end of the archive.");
+                }
+
+                return (localHeaderStart, position, dataStart, uncompressedSize);
+            }
+
+            position = checked(position + RecordLength + nameLength + extraLength + commentLength);
+        }
+
+        throw new InvalidDataException($"ZIP entry '{entryName}' is missing from the central directory.");
+    }
+
+    /// <summary>
+    /// <para>从 ZIP64 条目扩展字段按固定顺序还原被加宽的值（原始长度、压缩长度、本地头偏移），只读取实际为占位值的槽位。</para>
+    /// Restores the widened values from a ZIP64 entry extra block in its fixed order (uncompressed size, compressed
+    /// size, local header offset), consuming a slot only when that field still holds its placeholder.
+    /// </summary>
+    private static (long UncompressedSize, long CompressedSize, long LocalHeaderStart) ReadZip64Extra(
+        ReadOnlySpan<byte> extra, long uncompressedSize, long compressedSize, long localHeaderStart)
+    {
+        for (var offset = 0; offset + 4 <= extra.Length;)
+        {
+            var type = BinaryPrimitives.ReadUInt16LittleEndian(extra.Slice(offset));
+            var length = BinaryPrimitives.ReadUInt16LittleEndian(extra.Slice(offset + 2));
+            if (length > extra.Length - offset - 4)
+            {
+                throw new InvalidDataException("Invalid ZIP extra field.");
+            }
+
+            if (type == 1)
+            {
+                var values = extra.Slice(offset + 4, length);
+                var cursor = 0;
+                if (uncompressedSize == uint.MaxValue)
+                {
+                    uncompressedSize = ReadZip64Slot(values, ref cursor);
+                }
+
+                if (compressedSize == uint.MaxValue)
+                {
+                    compressedSize = ReadZip64Slot(values, ref cursor);
+                }
+
+                if (localHeaderStart == uint.MaxValue)
+                {
+                    localHeaderStart = ReadZip64Slot(values, ref cursor);
+                }
+
+                return (uncompressedSize, compressedSize, localHeaderStart);
+            }
+
+            offset += 4 + length;
+        }
+
+        throw new InvalidDataException("ZIP64 entry is missing its extra field.");
+    }
+
+    private static long ReadZip64Slot(ReadOnlySpan<byte> values, ref int cursor)
+    {
+        if (cursor + 8 > values.Length)
+        {
+            throw new InvalidDataException("ZIP64 extra field is truncated.");
+        }
+
+        var value = checked((long)BinaryPrimitives.ReadUInt64LittleEndian(values.Slice(cursor)));
+        cursor += 8;
+        return value;
+    }
+
+    private static byte[] ReadAt(Stream stream, long position, int length)
+    {
+        var buffer = new byte[length];
+        stream.Position = position;
+        stream.ReadExactly(buffer);
+        return buffer;
+    }
+
+    private static void WriteUInt32At(Stream stream, long position, uint value)
+    {
+        var buffer = new byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer, value);
+        stream.Position = position;
+        stream.Write(buffer);
     }
 
     private static DeliveryFile[] Selected(DeliveryPlan plan) => plan.Files.Where(f => !f.Optional || f.Default).ToArray();

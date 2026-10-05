@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
     <PackageReference Include="SharpCompress" />
+    <PackageReference Include="System.IO.Hashing" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\update-binary-arm64" CopyToOutputDirectory="PreserveNewest" />
