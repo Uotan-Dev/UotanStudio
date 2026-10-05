@@ -57,8 +57,9 @@ internal static class AdbPairingKeystore
 
         using var authentication = AdbAuthentication.LoadOrCreate();
         var certificate = GenerateSelfSigned(authentication.RsaKey);
-        WriteAtomically(path, certificate.ExportCertificatePem());
-        return certificate;
+        return WriteAtomically(path, certificate.ExportCertificatePem())
+            ? certificate
+            : CreateWithPrivateKey(File.ReadAllText(path));
     }
 
     private static X509Certificate2 GenerateSelfSigned(RSA rsa)
@@ -127,14 +128,25 @@ internal static class AdbPairingKeystore
         }
     }
 
-    private static void WriteAtomically(string path, string contents)
+    private static bool WriteAtomically(string path, string contents)
     {
         var temporary = path + "-" + Guid.NewGuid().ToString("N");
         try
         {
             File.WriteAllText(temporary, contents, new System.Text.UTF8Encoding(false));
-            try { File.Move(temporary, path, overwrite: true); }
-            catch (IOException) when (File.Exists(path)) { }
+            try
+            {
+                File.Move(temporary, path, overwrite: false);
+                return true;
+            }
+            catch (IOException) when (File.Exists(path))
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException) when (File.Exists(path))
+            {
+                return false;
+            }
         }
         finally
         {

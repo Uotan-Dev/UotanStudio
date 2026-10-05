@@ -157,6 +157,55 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     }
 
     /// <summary>
+    /// Pairs one network device with a one-time password through an existing ADB server, so the
+    /// server stores the pairing credentials instead of this process.
+    /// <para>通过已运行的 ADB server 用一次性密码与单个网络设备配对，使配对凭据由 server 保存而不是本进程。</para>
+    /// </summary>
+    /// <param name="host">The device address the pairing service advertisement resolved to.
+    /// <para>配对服务广播解析出的设备地址。</para></param>
+    /// <param name="pairingPort">The pairing port carried by that advertisement.
+    /// <para>该广播携带的配对端口。</para></param>
+    /// <param name="password">The one-time pairing password shown with the QR code.
+    /// <para>二维码旁显示的一次性配对密码。</para></param>
+    /// <param name="serverHost">The adb server host. <para>adb server 主机。</para></param>
+    /// <param name="serverPort">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
+    /// <param name="cancellationToken">Cancels the connect and the <c>host:pair:</c> exchange.
+    /// <para>取消连接与 <c>host:pair:</c> 交互。</para></param>
+    /// <returns>The server's pairing result, which begins with <c>Successfully paired</c> once the
+    /// device accepted the password. <para>server 返回的配对结果；设备接受密码后以 <c>Successfully paired</c> 开头。</para></returns>
+    /// <exception cref="ArgumentException">The device host or the password is blank.
+    /// <para>设备主机或密码为空。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The pairing port is outside 1-65535.
+    /// <para>配对端口不在 1-65535 之内。</para></exception>
+    /// <exception cref="IOException">The server rejected the pairing request or reported no success.
+    /// <para>server 拒绝了配对请求或未报告成功。</para></exception>
+    /// <exception cref="TimeoutException">The exchange exceeded the 30 second network default.
+    /// <para>交互超过 30 秒网络默认期限。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled before completion.
+    /// <para>令牌在完成前被取消。</para></exception>
+    public static async Task<string> PairAsync(string host, int pairingPort, string password,
+        string serverHost = "127.0.0.1", int serverPort = 5037, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(host);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+        if (pairingPort is < 1 or > 65535)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pairingPort));
+        }
+
+        var response = await RunNetworkCommandAsync(
+                "host:pair:" + DebugBridgeNetworkAddress.FormatHost(host) + ":" +
+                pairingPort.ToString(CultureInfo.InvariantCulture) + " " + password,
+                serverHost, serverPort, null, cancellationToken).ConfigureAwait(false);
+        if (!response.StartsWith("Successfully paired", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IOException("ADB server: " + response);
+        }
+
+        return response;
+    }
+
+    /// <summary>
     /// Connects one network device through an existing ADB server and checks its response.
     /// <para>通过已运行的 ADB server 连接单个网络设备，并检查响应结果。</para>
     /// </summary>

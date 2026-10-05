@@ -231,14 +231,10 @@ public static class AdbQrPairingService
         string host, int pairingPort, IProgress<AdbQrPairingProgress>? progress,
         CancellationToken cancellationToken)
     {
-        var client = new AdvancedSharpAdbClient.AdbClient(
-            DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort);
-        var pairResult = await client.PairAsync(DebugBridgeNetworkAddress.FormatHost(host), pairingPort,
-            credentials.Password, cancellationToken).ConfigureAwait(false);
-        if (!pairResult.StartsWith("Successfully paired", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new IOException("ADB server pairing failed: " + pairResult.Trim());
-        }
+        var serverHost = DeviceCommunicationConfiguration.ServerHost;
+        var serverPort = DeviceCommunicationConfiguration.AdbServerPort;
+        await AdbServerServices.PairAsync(host, pairingPort, credentials.Password, serverHost, serverPort,
+            cancellationToken).ConfigureAwait(false);
 
         progress?.Report(new AdbQrPairingProgress(AdbQrPairingStage.Connecting,
             DebugBridgeNetworkAddress.FormatHost(host)));
@@ -250,14 +246,8 @@ public static class AdbQrPairingService
 
         var connectPort = await ResolveConnectPortAsync(AdbQrPairingRoute.AdbServer, true, host, cancellationToken)
             .ConfigureAwait(false);
-        var connectResult = await client.ConnectAsync(DebugBridgeNetworkAddress.FormatHost(host), connectPort,
-            cancellationToken).ConfigureAwait(false);
-        if (!connectResult.StartsWith("connected to", StringComparison.OrdinalIgnoreCase) &&
-            !connectResult.StartsWith("already connected to", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new IOException("ADB server connection failed: " + connectResult.Trim());
-        }
-
+        await AdbServerServices.ConnectAsync(DebugBridgeNetworkAddress.FormatEndpoint(host, connectPort),
+            serverHost, serverPort, cancellationToken).ConfigureAwait(false);
         return DebugBridgeNetworkAddress.FormatEndpoint(host, connectPort);
     }
 

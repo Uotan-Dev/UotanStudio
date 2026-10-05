@@ -179,6 +179,49 @@ public sealed class RemoteDeviceConnectionTests
     }
 
     [Theory]
+    [InlineData("Successfully paired to 192.0.2.1:37177 [guid=adb-abc]", true)]
+    [InlineData("Failed to pair to 192.0.2.1:37177", false)]
+    public async Task AdbPairAsync_OkayFollowedByResult_RequiresSuccessfulResult(string reply, bool succeeds)
+    {
+        using var listener = Listen();
+        var server = ServeAdbAsync(listener, "host:pair:192.0.2.1:37177 one-time-password", "OKAY", reply);
+        var pair = AdbServerServices.PairAsync("192.0.2.1", 37177, "one-time-password", "127.0.0.1", Port(listener),
+            TestContext.Current.CancellationToken);
+        if (succeeds)
+        {
+            Assert.Equal(reply, await pair);
+        }
+        else
+        {
+            await Assert.ThrowsAsync<IOException>(() => pair);
+        }
+        await server;
+    }
+
+    [Fact]
+    public async Task AdbPairAsync_FailStatus_PropagatesServerRejection()
+    {
+        using var listener = Listen();
+        var server = ServeAdbAsync(listener, "host:pair:192.0.2.1:37177 one-time-password", "FAIL",
+            "wrong password");
+        var error = await Assert.ThrowsAsync<IOException>(() => AdbServerServices.PairAsync(
+            "192.0.2.1", 37177, "one-time-password", "127.0.0.1", Port(listener),
+            TestContext.Current.CancellationToken));
+        Assert.Contains("wrong password", error.Message);
+        await server;
+    }
+
+    [Theory]
+    [InlineData(" ", 37177, "password")]
+    [InlineData("192.0.2.1", 0, "password")]
+    [InlineData("192.0.2.1", 37177, " ")]
+    public async Task AdbPairAsync_InvalidCredential_ThrowsWithoutContactingServer(string host, int port, string password)
+    {
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => AdbServerServices.PairAsync(host, port, password,
+            "127.0.0.1", 1, TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
     [InlineData("disconnected 192.0.2.1:5555", true)]
     [InlineData("error: no such device '192.0.2.1:5555'", false)]
     public async Task AdbDisconnectAsync_OkayFollowedByResult_RequiresSuccessfulResult(string reply, bool succeeds)
