@@ -2,7 +2,7 @@
 
 ## 项目边界
 
-UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信的 .NET 10/C# 14 桌面应用。修改代码前先确认所属边界，避免把 UI、宿主服务和固件算法混在同一层。
+UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信的 .NET 11/C# 15 桌面应用。修改代码前先确认所属边界，避免把 UI、宿主服务和固件算法混在同一层。
 
 - `UotanStudio.Desktop` 是桌面应用入口，负责平台启动和进程级配置。
 - `UotanStudio` 是 Avalonia 宿主，包含界面、ViewModel、项目会话、设置、密钥库适配和应用服务。
@@ -72,7 +72,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 
 ## C#、格式和可维护性
 
-项目目标为 .NET 10/C# 14。遵循根目录 `.editorconfig`：
+项目目标为 .NET 11/C# 15，`LangVersion` 固定为 `preview` 以启用 C# 15 内存安全语法（指针放宽、`unsafe(expr)`、`safe` 关键字）。遵循根目录 `.editorconfig`：
 
 - 4 个空格缩进，禁止 Tab；使用 file-scoped namespace。
 - 使用 `var`、模式匹配、集合表达式、对象初始化和空合并等现有规则要求的现代 C# 写法。
@@ -132,14 +132,14 @@ dotnet test --solution UotanStudio.slnx --no-restore
 
 ## 当前验证基线
 
-实测工作区验证状态（2026-10-01）：
+实测工作区验证状态（2026-10-05，net11 迁移后）：
 
 - `dotnet build UotanStudio.Tests/UotanStudio.Tests.csproj --no-restore --nologo`：0 错误，0 条 `xUnit1051` 警告（异步测试一律用 `TestContext.Current.CancellationToken`）。
 - `dotnet build UotanStudio.Firmware/UotanStudio.Firmware.csproj --no-restore --nologo --no-incremental -v:n`：0 错误、0 警告。警告清点必须带 `--no-incremental`：增量构建不重跑分析器，会显示"0 个警告"。
 - `TreatWarningsAsErrors=true` 在 `UotanStudio.Comm`、`UotanStudio.Media` 与 `UotanStudio.Firmware` 生效；`UotanStudio.Tests` 另有 `NoWarn CS0618`。在 Firmware 中新增无 XML 注释的公共类型会使构建以 `CS1591`/`RS0016` 失败。
 - whitespace/style `dotnet format --verify-no-changes`：通过。
-- 完整测试集：8089 总数 / 8055 通过 / 34 跳过 / 0 失败（2026-10-02 在仓库内 `UotanStudio.Tests/bin/Debug/net10.0` 测试宿主实测）。把测试宿主输出重定向到仓库外目录会让 `FirmwareContextDependencyScannerTests.TryFindRepositoryRoot_CurrentTestHostOutput_FindsCheckedOutSolution` 因找不到 `UotanStudio.slnx` 而失败，并额外产生环境跳过，因此该用例只在仓库内运行时结果有效。
-- 无 server 的 TCP ADB 与 scrcpy 投屏已在模拟器回环端口（同一实例的 5555 与 16384）实测：直接握手、shell、`localabstract` 多流、h264 首帧与关键帧、SET_CLIPBOARD 回包均通过；该 ROM 不回应 GET_CLIPBOARD，设备→客户端剪贴板主动推送仍未在硬件上观察到。真实 USB 设备、物理手机与 macOS/Linux 平台路径仍未验证。
-- 34 条跳过全部来自环境门控：`UOTAN_NATIVE_TOOLS`、`UOTAN_LARGE_DATA`、`UOTAN_SMALI_CLASSPATH`、`UOTAN_HOS_UPDATE_APP_SAMPLE` 等；缺少门控时按 `Skip = "…"` 明确跳过。
+- 完整测试集：9688 总数 / 9626 通过 / 62 跳过 / 0 失败（2026-10-05 在仓库内 `UotanStudio.Tests/bin/Release/net11.0` 测试宿主实测，`dotnet test --solution`）。把测试宿主输出重定向到仓库外目录会让 `FirmwareContextDependencyScannerTests.TryFindRepositoryRoot_CurrentTestHostOutput_FindsCheckedOutSolution` 因找不到 `UotanStudio.slnx` 而失败，并额外产生环境跳过，因此该用例只在仓库内运行时结果有效。
+- 无 server 的 TCP ADB 与 scrcpy 投屏已在模拟器回环端口（同一实例的 5555 与 16384）实测：直接握手、shell、`localabstract` 多流、h264 首帧与关键帧、SET_CLIPBOARD 回包均通过；该 ROM 不回应 GET_CLIPBOARD，设备→客户端剪贴板主动推送仍未在硬件上观察到。这些结论来自 net10 时期，net11 迁移未在设备或模拟器上复跑。真实 USB 设备、物理手机与 macOS/Linux 平台路径仍未验证。
+- 62 条跳过全部来自环境门控：`UOTAN_NATIVE_TOOLS`、`UOTAN_LARGE_DATA`、`UOTAN_SMALI_CLASSPATH`、`UOTAN_HOS_UPDATE_APP_SAMPLE` 等；缺少门控时按 `Skip = "…"` 明确跳过。
 - JAR/DEX、LP、流式构建、异常日志、Delivery 和镜像输入的定向测试均通过。
-- CI 门禁见 `.github/workflows/ci.yml`（构建 + whitespace/style 双 `dotnet format` + `dotnet test --solution`，不设置 `UOTAN_*`，因此门控套件自跳）；`.github/workflows/release.yml` 只负责 NativeAOT 发布。同一二进制多次运行时可能偶发 1 次无法复现的单测失败（总数与通过数之差为 1），具体用例未定位；把整套件当成"确定全绿"之前先按日志里的 `失败` 行确认。
+- CI 门禁见 `.github/workflows/ci.yml`（`setup-dotnet` 取 `11.0.x` 预览版 + 构建 + whitespace/style 双 `dotnet format` + `dotnet test --solution`，不设置 `UOTAN_*`，因此门控套件自跳）；`.github/workflows/release.yml` 只负责 NativeAOT 发布，同样取 `11.0.x` 预览版。`global.json` 显式 pin SDK 版本并 `rollForward: latestMinor`，因此本机与 CI 不再各自挑 SDK。只用 nuget.org 单源即可还原 net11 RC 并成功 `PublishAot` 发布 win-x64，无需添加预览版 NuGet 源。同一二进制多次运行时可能偶发 1 次无法复现的单测失败（总数与通过数之差为 1；2026-10-05 观察到 `ProjectOperationsBoundaryTests.CreateAndOpen_RestoresDataInOrder_ExcludesMissingImages` 整轮失败、单跑三次全绿）；把整套件当成"确定全绿"之前先按日志里的 `失败` 行确认。
