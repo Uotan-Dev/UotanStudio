@@ -34,7 +34,7 @@ public sealed class SerialTransport(
     private readonly StopBits _stopBits = stopBits;
     private readonly Handshake _handshake = handshake;
     private volatile bool _disposed;
-    private readonly object _lifecycleGate = new();
+    private readonly Lock _lifecycleGate = new();
     private readonly Func<SerialPort> _portFactory = static () => new SerialPort();
 
     internal SerialTransport(string portName, Func<SerialPort> portFactory) : this(portName)

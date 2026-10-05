@@ -9,7 +9,7 @@ namespace UotanStudio.Firmware.BlockImage.Sparse.IO;
 public sealed class SparseReadStream : Stream
 {
     private readonly SparseFile _sparseFile;
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private long _position;
     private bool _disposed;
     private readonly bool _requireExactRawData;

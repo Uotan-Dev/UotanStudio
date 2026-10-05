@@ -73,7 +73,7 @@ public sealed class MtkLegacyFlashPlan : IDisposable
 {
     private readonly List<PreparedLegacyOperation> _prepared = [];
     private readonly List<Stream> _sources = [];
-    private readonly object _lifecycleGate = new();
+    private readonly Lock _lifecycleGate = new();
     private MtkFlashPlanState _state;
     private bool _disposed;
 

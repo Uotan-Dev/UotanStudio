@@ -12,7 +12,7 @@ namespace UotanStudio.Media.Decoding.MediaFoundation;
 [SupportedOSPlatform("windows")]
 public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
 {
-    private static readonly object LifetimeLock = new();
+    private static readonly Lock LifetimeLock = new();
     private static int _leases;
     private readonly VideoDecoderOptions _options;
     private nint _transform;

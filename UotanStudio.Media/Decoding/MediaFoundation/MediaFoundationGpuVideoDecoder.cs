@@ -28,7 +28,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     /// <para>色彩空间覆盖与输出格式偏好；不得为 <see langword="null"/>。</para>
     /// </param>
     public MediaFoundationGpuVideoDecoder(VideoDecoderOptions options) => _options = options ?? throw new ArgumentNullException(nameof(options));
-    private static readonly object LifetimeLock = new();
+    private static readonly Lock LifetimeLock = new();
     private static int _leases;
     private nint _transform;
     private nint _eventGenerator;

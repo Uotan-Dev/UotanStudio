@@ -74,7 +74,7 @@ public sealed class MtkXmlFlashPlan : IDisposable
 {
     private readonly List<PreparedXmlOperation> _prepared = [];
     private readonly List<Stream> _sources = [];
-    private readonly object _lifecycleGate = new();
+    private readonly Lock _lifecycleGate = new();
     private MtkFlashPlanState _state;
     private bool _disposed;
 

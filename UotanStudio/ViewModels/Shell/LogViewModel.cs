@@ -103,7 +103,7 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     /// <para>待刷新日志的锁对象，保护跨线程入队的 <see cref="_pendingEntries"/>。</para>
     /// Lock guarding <see cref="_pendingEntries"/> which is enqueued from any thread.
     /// </summary>
-    private readonly object _pendingGate = new();
+    private readonly Lock _pendingGate = new();
 
     /// <summary>
     /// <para>待批量刷新的日志队列：入队线程只做加锁追加，UI 线程由定时器批量消费。</para>

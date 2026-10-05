@@ -53,6 +53,7 @@ public sealed record FormatDetectionResult(
 public static class FormatDetector
 {
     private static readonly List<IReadonlyFormatHandler> Handlers = [];
+    private static readonly Lock Gate = new();
 
     /// <summary>
     /// Registers a format handler.
@@ -68,7 +69,7 @@ public static class FormatDetector
     public static void Register(IReadonlyFormatHandler handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
-        lock (Handlers)
+        lock (Gate)
         {
             if (Handlers.All(h => h.FormatName != handler.FormatName))
             {
@@ -87,7 +88,7 @@ public static class FormatDetector
     /// </value>
     public static IReadOnlyList<IReadonlyFormatHandler> RegisteredHandlers
     {
-        get { lock (Handlers) { return [.. Handlers]; } }
+        get { lock (Gate) { return [.. Handlers]; } }
     }
 
     /// <summary>
@@ -120,7 +121,7 @@ public static class FormatDetector
         if (!string.IsNullOrEmpty(fileExt))
         {
             List<IReadonlyFormatHandler> snapshot;
-            lock (Handlers) { snapshot = [.. Handlers]; }
+            lock (Gate) { snapshot = [.. Handlers]; }
 
             foreach (var handler in snapshot)
             {
@@ -143,7 +144,7 @@ public static class FormatDetector
 
 
         List<IReadonlyFormatHandler> sniffSnapshot;
-        lock (Handlers) { sniffSnapshot = [.. Handlers]; }
+        lock (Gate) { sniffSnapshot = [.. Handlers]; }
 
         foreach (var handler in sniffSnapshot)
         {

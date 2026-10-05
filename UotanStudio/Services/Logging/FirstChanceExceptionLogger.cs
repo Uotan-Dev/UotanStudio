@@ -33,8 +33,8 @@ public static class FirstChanceExceptionLogger
     private const int MaxThrottledKeys = 256;
 
     private static volatile bool _installed;
-    private static readonly object InstallLock = new();
-    private static readonly object ThrottleLock = new();
+    private static readonly Lock InstallLock = new();
+    private static readonly Lock ThrottleLock = new();
     private static readonly Dictionary<string, (DateTime WindowStart, int Count)> Throttle = new(StringComparer.Ordinal);
 
     [ThreadStatic]

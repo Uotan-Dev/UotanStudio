@@ -148,7 +148,7 @@ public partial class NewProjectWindow : Window
 
     private sealed class StageProgress(Action<(long Processed, long Total)> report) : IProgress<(long Processed, long Total)>
     {
-        private readonly object _gate = new();
+        private readonly Lock _gate = new();
         private (long Processed, long Total) _latest;
         private bool _queued;
 

@@ -23,7 +23,6 @@ namespace UotanStudio.ViewModels.Workspace;
 public class WorkspaceViewModel : ViewModelBase, IDisposable
 {
     private readonly IFactory _factory;
-    private IRootDock? _layout;
     private DocumentDock? _documentDock;
     private bool _subscribedDocumentDock;
     private CompareViewModel? _compareDocument;
@@ -38,8 +37,8 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     public IRootDock? Layout
     {
-        get => _layout;
-        set => SetProperty(ref _layout, value);
+        get;
+        set => SetProperty(ref field, value);
     }
 
     /// <summary>

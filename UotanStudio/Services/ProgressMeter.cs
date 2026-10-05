@@ -24,7 +24,7 @@ public sealed class ProgressMeter
     public ProgressMeter() : this(TimeProvider.System) { }
     internal ProgressMeter(TimeProvider clock) => _clock = clock;
 
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly Queue<Sample> _samples = new();
     private bool _itemMode;
 

@@ -274,7 +274,7 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider, I
 
             var written = 0;
             var readGate = new object();
-            var progressGate = new object();
+            var progressGate = new Lock();
             var parallelOptions = new ParallelOptions
             {
                 MaxDegreeOfParallelism = FirmwareParallelism.Workers,

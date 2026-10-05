@@ -30,7 +30,7 @@ namespace UotanStudio.Views.Editors;
 /// </remarks>
 internal sealed class ScreenMirrorGpuPresenter : IDisposable
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly ConcurrentQueue<Action> _recycle = new();
     private PresentedImage? _latest;
     private int _liveFrames;

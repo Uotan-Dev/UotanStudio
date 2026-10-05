@@ -36,7 +36,7 @@ public partial class ScreenMirrorViewModel : Document
 {
     private Services.Mirroring.ManagedMirrorSession? _client;
     private int _starting;
-    private readonly object _frameLock = new();
+    private readonly Lock _frameLock = new();
     private Views.Editors.ScreenMirrorPixelBuffer? _pendingFrame;
     private Views.Editors.ScreenMirrorPixelBuffer? _spareFrame;
     private bool _renderScheduled;

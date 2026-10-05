@@ -18,7 +18,7 @@ namespace UotanStudio.Comm.Devices.Services;
 /// </summary>
 public sealed partial class DeviceController
 {
-    private readonly object _watchGate = new();
+    private readonly Lock _watchGate = new();
     private IDisposable? _removalWatch;
 
     /// <summary>

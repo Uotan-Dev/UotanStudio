@@ -134,7 +134,7 @@ public sealed partial class ErofsParser : IDisposable
     private readonly bool _ownsStream;
     private readonly long _baseOffset;
     private readonly long _imageSize;
-    private readonly object _streamLock = new();
+    private readonly Lock _streamLock = new();
     private readonly ErofsSuperblock _superblock;
     private readonly int _blockSize;
     private readonly bool _hasMetabox;

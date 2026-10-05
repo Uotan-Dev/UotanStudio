@@ -39,7 +39,7 @@ public enum CompositeApplicability
 
 public sealed partial class PatchRun
 {
-    private readonly object _compositeLock = new();
+    private readonly Lock _compositeLock = new();
     private readonly List<PatchCompositeExecution> _compositeExecutions = [];
     // A value local to the async call chain prevents parallel branches from sharing a mutable stack.
     private readonly AsyncLocal<int?> _currentComposite = new();

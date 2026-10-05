@@ -134,7 +134,7 @@ public sealed class CompositeNodeViewModel : FlowNodeViewModel
     {
         private readonly NodeExecutionEngine _engine;
         private readonly INodeExecutionContext _context;
-        private readonly object _gate = new();
+        private readonly Lock _gate = new();
         private readonly HashSet<FlowNodeViewModel> _waiting = [];
         private IDisposable? _scope;
         private bool _disposed;

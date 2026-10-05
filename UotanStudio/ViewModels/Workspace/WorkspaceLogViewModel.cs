@@ -61,7 +61,7 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
     private bool _disposed;
 
     /// <summary><para>待刷新日志队列锁。</para>Gate for the pending log backlog.</para></summary>
-    private readonly object _pendingGate = new();
+    private readonly Lock _pendingGate = new();
     private readonly Queue<LogEntry> _pendingEntries = new();
     private long _pendingCharacters;
     private readonly Dictionary<string, int> _sourceCounts = new(StringComparer.Ordinal);

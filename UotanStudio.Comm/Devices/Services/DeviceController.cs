@@ -22,7 +22,7 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
     private readonly ImmutableArray<IDeviceDiscoverySource> _sources;
     private readonly IDeviceTransportOpener _opener;
     private readonly ImmutableDictionary<DeviceSessionKind, IDeviceSessionFactory> _factories;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private DeviceSnapshot _snapshot = new(0, []);
     private long _requestedGeneration;
     private int _lifecycle;

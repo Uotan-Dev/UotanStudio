@@ -18,7 +18,7 @@ namespace UotanStudio.Comm.Devices.Services;
 public sealed class DeviceLease : IAsyncDisposable, IDisposable
 {
     private readonly Action _release;
-    private readonly object _lifecycleGate = new();
+    private readonly Lock _lifecycleGate = new();
     private readonly List<IAsyncDisposable> _streams = [];
     private Task? _teardown;
 

@@ -81,7 +81,7 @@ public sealed class F2fsParser : IDisposable
     private const long MaxDirectoryDataSize = 512L * 1024 * 1024;
 
     private readonly Stream _stream;
-    private readonly object _streamLock = new();
+    private readonly Lock _streamLock = new();
     private long _imageSize;
     private F2fsSuperblock _superblock = null!;
     private F2fsCheckpoint _checkpoint = null!;

@@ -8,7 +8,7 @@ namespace UotanStudio.Media.Audio;
 /// </summary>
 internal sealed class AudioPcmRingBuffer
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly byte[] _ring;
     private readonly byte[] _conversion;
     private readonly int _channels;

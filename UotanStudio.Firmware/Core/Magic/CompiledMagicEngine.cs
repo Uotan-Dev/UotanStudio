@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Collections.Frozen;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -26,9 +27,9 @@ public static class CompiledMagicEngine
     public static readonly List<string> DebugMatches = new();
 
     private static readonly List<CompiledRule> TopLevel = new();
-    private static readonly Dictionary<string, CompiledRule> Named = new(StringComparer.Ordinal);
+    private static FrozenDictionary<string, CompiledRule> Named = FrozenDictionary<string, CompiledRule>.Empty;
     private static bool _loaded;
-    private static readonly object Gate = new();
+    private static readonly Lock Gate = new();
 
     /// <summary>Loaded top-level rule count, valid after <see cref="EnsureLoaded"/> has run.
     /// <para>已加载的顶层规则数，在 <see cref="EnsureLoaded"/> 执行后有效。</para></summary>
@@ -64,21 +65,23 @@ public static class CompiledMagicEngine
                 TopLevel.Add(ReadRule(br));
             }
 
-            BuildNameIndex(TopLevel);
+            var named = new Dictionary<string, CompiledRule>(StringComparer.Ordinal);
+            BuildNameIndex(TopLevel, named);
+            Named = named.ToFrozenDictionary(StringComparer.Ordinal);
             _loaded = true;
         }
     }
 
-    private static void BuildNameIndex(List<CompiledRule> rules)
+    private static void BuildNameIndex(List<CompiledRule> rules, Dictionary<string, CompiledRule> named)
     {
         foreach (var r in rules)
         {
             if (r.Name is not null)
             {
-                Named[r.Name] = r;
+                named[r.Name] = r;
             }
 
-            BuildNameIndex(r.Children);
+            BuildNameIndex(r.Children, named);
         }
     }
 

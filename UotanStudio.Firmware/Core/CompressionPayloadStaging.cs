@@ -16,7 +16,7 @@ internal sealed class CompressionPayloadStaging : IDisposable
         Path.Combine(Path.GetTempPath(), $"uotan-stage-{Guid.NewGuid():N}.tmp"),
         FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1 << 16,
         FileOptions.DeleteOnClose | FileOptions.SequentialScan);
-    private readonly object _appendLock = new();
+    private readonly Lock _appendLock = new();
 
     /// <summary>
     /// Appends one payload and returns the offset it was written at; the caller records the payload

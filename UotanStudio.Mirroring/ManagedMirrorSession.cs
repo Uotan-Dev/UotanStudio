@@ -22,6 +22,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     DeviceLease? lease = null, Action<string>? logSink = null) : IDisposable
 {
     private readonly StringBuilder _output = new();
+    private readonly Lock _outputLock = new();
     private int _disposed;
     private bool _displayPowerOn = true;
 
@@ -96,7 +97,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
         catch (Exception error)
         {
             string detail;
-            lock (_output) detail = _output.ToString().Trim();
+            lock (_outputLock) detail = _output.ToString().Trim();
             if (detail.Length == 0) throw;
             var summary = string.Join("\n", detail.Split('\n')
                 .Where(line => line.Contains("ERROR:", StringComparison.Ordinal) &&
@@ -228,7 +229,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
                 { continue; }
                 if (count == 0) break;
                 var text = Encoding.UTF8.GetString(buffer, 0, count);
-                lock (_output)
+                lock (_outputLock)
                 {
                     _output.Append(text);
                     if (_output.Length > 4096) _output.Remove(0, _output.Length - 4096);

@@ -375,7 +375,7 @@ public sealed partial class F2fsBuilder
         AssignInodeNumbers(ordered);
         foreach (var (alias, canonical) in hardlinks) alias.Ino = canonical.Ino;
         var plannedBytes = 0L;
-        var progressGate = new object();
+        var progressGate = new Lock();
         var totalPlannedBytes = progress is null
             ? 0L
             : ordered.Where(node => !node.IsDirectory).Sum(node => (long)node.Size);

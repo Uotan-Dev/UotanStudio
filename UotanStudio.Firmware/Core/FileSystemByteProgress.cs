@@ -60,7 +60,7 @@ public readonly record struct FileSystemByteProgress(FileSystemWorkStage Stage, 
 /// <summary>Aggregates parallel writes and bounds notification frequency without estimating byte counts.</summary>
 internal sealed class ExtractionByteCounter
 {
-    private readonly object gate = new();
+    private readonly Lock gate = new();
     private readonly IProgress<(long Processed, long Total)>? progress;
     private readonly CancellationToken token;
     private readonly long total;

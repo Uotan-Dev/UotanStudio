@@ -103,7 +103,7 @@ public sealed partial class MtkFlashPlan : IDisposable
     private readonly List<PreparedOperation> _prepared = [];
     private bool _disposed;
     private int _sparseChunkCount;
-    private readonly object _lifecycleGate = new();
+    private readonly Lock _lifecycleGate = new();
     private MtkFlashPlanState _state;
 
     private MtkFlashPlan(MtkXFlashStorageInfo storage)

@@ -24,7 +24,7 @@ namespace UotanStudio.Media.Audio;
 [SupportedOSPlatform("windows")]
 public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
 {
-    private static readonly object LifetimeLock = new();
+    private static readonly Lock LifetimeLock = new();
     private static int _leases;
 
     private nint _transform;

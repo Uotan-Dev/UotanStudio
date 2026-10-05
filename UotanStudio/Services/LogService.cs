@@ -51,7 +51,7 @@ public sealed class LogService : IUnifiedLog
 {
     private static readonly Lazy<LogService> LazyInstance = new(() => new LogService());
     private readonly ConcurrentQueue<LogEntry> _entries = new();
-    private readonly object _subscribersLock = new();
+    private readonly Lock _subscribersLock = new();
     private readonly List<EventHandler<LogEntry>> _subscribers = [];
     private EventHandler<LogEntry>[] _subscriberSnapshot = [];
     private volatile LogLevel _minimumLevel = LogLevel.Trace;
