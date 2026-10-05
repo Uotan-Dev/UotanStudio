@@ -1,4 +1,5 @@
 using System.Text;
+using UotanStudio.Comm.Text;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -34,6 +35,6 @@ public sealed partial class MtkSession
             received += payload.Length;
         }
         await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-        return new UTF8Encoding(false, true).GetString(bytes).TrimEnd('\0');
+        return new UTF8Encoding(false, true).GetStringTrimNul(bytes);
     }
 }

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using UotanStudio.Comm.Text;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
@@ -359,7 +360,7 @@ internal static partial class UsbPnpNative
             return null;
         }
 
-        var text = Encoding.Unicode.GetString(data).TrimEnd('\0');
+        var text = Encoding.Unicode.GetStringTrimNul(data);
         return text.Length == 0 ? null : text;
     }
 

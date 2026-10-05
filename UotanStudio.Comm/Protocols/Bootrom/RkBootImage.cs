@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Comm.Text;
 using UotanStudio.Firmware.Core.Checksums;
 
 namespace UotanStudio.Comm.Protocols.Bootrom;
@@ -210,7 +211,7 @@ internal sealed class RkBootImage
             }
 
             var span = buffer.AsSpan((int)baseOffset, EntrySize);
-            var name = Encoding.Unicode.GetString(span.Slice(5, 40)).TrimEnd('\0');
+            var name = Encoding.Unicode.GetStringTrimNul(span.Slice(5, 40));
             entries.Add(new RkBootEntry
             {
                 Type = BinaryPrimitives.ReadUInt32LittleEndian(span[1..]),

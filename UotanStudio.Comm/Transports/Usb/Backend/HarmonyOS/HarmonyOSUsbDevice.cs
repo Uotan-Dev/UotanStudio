@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using UotanStudio.Comm.Diagnostics;
+using UotanStudio.Comm.Text;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using static UotanStudio.Comm.Transports.Usb.Backend.HarmonyOS.HarmonyOSUsbDDK;
 
@@ -398,7 +399,7 @@ internal class HarmonyOSUsbDevice : UsbDevice
         var stringLen = (int)(dataLen - 2);
         if (stringLen > 0)
         {
-            SerialNumber = System.Text.Encoding.Unicode.GetString(descriptor, 2, stringLen).TrimEnd('\0');
+            SerialNumber = System.Text.Encoding.Unicode.GetStringTrimNul(descriptor, 2, stringLen);
         }
 
         return 0;

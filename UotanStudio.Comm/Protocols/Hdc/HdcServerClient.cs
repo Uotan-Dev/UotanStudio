@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
 using UotanStudio.Comm.Routing;
+using UotanStudio.Comm.Text;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -211,7 +212,7 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     /// <exception cref="IOException">The server returned an explicit <c>[Fail]</c> response.<para>服务端返回明确的 <c>[Fail]</c> 响应。</para></exception>
     public IReadOnlyList<string> ListTargets(int timeoutMs = 10000)
     {
-        var output = Encoding.UTF8.GetString(ExecuteOnDevice(string.Empty, "list targets", timeoutMs)).TrimEnd('\0');
+        var output = Encoding.UTF8.GetStringTrimNul(ExecuteOnDevice(string.Empty, "list targets", timeoutMs));
         ThrowOnFailure(output);
         return output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(line => !line.StartsWith("[Empty]", StringComparison.Ordinal))
@@ -242,8 +243,8 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
             throw new ArgumentException("A network address fitting the HDC connect-key field is required.", nameof(address));
         }
         var command = disconnect ? "tconn " + target + " -remove" : "tconn " + target;
-        var text = Encoding.UTF8.GetString(await ExecuteAsync(string.Empty, command,
-            cancellationToken: cancellationToken).ConfigureAwait(false)).TrimEnd('\0').Trim();
+        var text = Encoding.UTF8.GetStringTrimNul(await ExecuteAsync(string.Empty, command,
+            cancellationToken: cancellationToken).ConfigureAwait(false)).Trim();
         ThrowOnFailure(text);
         if (disconnect)
         {

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
+using UotanStudio.Comm.Text;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using static UotanStudio.Comm.Transports.Usb.Backend.Windows.Win32API;
 
@@ -51,7 +52,7 @@ internal class LegacyUsbDevice : UsbDevice
         var buffer = new byte[256];
         if (DeviceIoControl(_fileHandle.DangerousGetHandle(), IoGetSerialCode, null, 0, buffer, (uint)buffer.Length, out var returned, IntPtr.Zero))
         {
-            SerialNumber = System.Text.Encoding.Unicode.GetString(buffer, 0, (int)returned).TrimEnd('\0');
+            SerialNumber = System.Text.Encoding.Unicode.GetStringTrimNul(buffer, 0, (int)returned);
             return 0;
         }
         return Marshal.GetLastWin32Error();

@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Comm.Text;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using FirmwareAvbVerifier = UotanStudio.Firmware.BootSecurity.Avb.Verification.AvbSignatureVerifier;
 
@@ -457,7 +458,7 @@ internal sealed class AvbVerificationService
         var partitionNameStart = 56;
         if (partitionNameStart + partitionNameLen + saltLen + digestLen > s.Length) return;
 
-        var partitionName = Encoding.UTF8.GetString(s.Slice(partitionNameStart, partitionNameLen)).TrimEnd('\0');
+        var partitionName = Encoding.UTF8.GetStringTrimNul(s.Slice(partitionNameStart, partitionNameLen));
         var saltStart = partitionNameStart + partitionNameLen;
         var salt = s.Slice(saltStart, saltLen).ToArray();
         var digestStart = saltStart + saltLen;

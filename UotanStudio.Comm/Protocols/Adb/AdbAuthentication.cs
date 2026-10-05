@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Comm.Text;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -120,7 +121,7 @@ public sealed class AdbAuthentication : IDisposable
         var temporary = path + ".pub-" + Guid.NewGuid().ToString("N");
         try
         {
-            WriteKeyFile(temporary, Encoding.UTF8.GetString(authentication.BuildPublicKeyPayload()).TrimEnd('\0') + "\n");
+            WriteKeyFile(temporary, Encoding.UTF8.GetStringTrimNul(authentication.BuildPublicKeyPayload()) + "\n");
             try { File.Move(temporary, path + ".pub", overwrite: false); }
             catch (IOException) when (File.Exists(path + ".pub")) { }
         }
