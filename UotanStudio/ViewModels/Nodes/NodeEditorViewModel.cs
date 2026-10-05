@@ -29,8 +29,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     /// <summary>Host-provided dependency check for the package currently being edited.</summary>
     public Func<IReadOnlyList<string>>? ValidatePackage { get; set; }
-    private ObservableCollection<NodeViewModels.FlowNodeViewModel> _nodes = [];
-    private ObservableCollection<NodeViewModels.NodeConnectionViewModel> _connections = [];
     private Point _nextNodeLocation = new(100, 100);
     private static readonly Point DefaultNodeLocation = new(100, 100);
 
@@ -95,23 +93,23 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public ObservableCollection<NodeViewModels.FlowNodeViewModel> Nodes
     {
-        get => _nodes;
+        get;
         set
         {
             ArgumentNullException.ThrowIfNull(value);
             EnsureEditable();
-            if (ReferenceEquals(_nodes, value))
+            if (ReferenceEquals(field, value))
             {
                 return;
             }
-            _nodes.CollectionChanged -= OnNodesChanged;
+            field.CollectionChanged -= OnNodesChanged;
             DetachAllPropertyTracking();
-            SetProperty(ref _nodes, value);
-            _nodes.CollectionChanged += OnNodesChanged;
+            SetProperty(ref field, value);
+            field.CollectionChanged += OnNodesChanged;
             OnNodesChanged(this, new(System.Collections.Specialized.NotifyCollectionChangedAction.Reset));
             SetSelection([]);
         }
-    }
+    } = [];
 
     /// <summary>
     /// <para>获取或设置节点间的连接线集合。</para>
@@ -119,19 +117,22 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public ObservableCollection<NodeViewModels.NodeConnectionViewModel> Connections
     {
-        get => _connections;
+        get;
         set
         {
             ArgumentNullException.ThrowIfNull(value);
             EnsureEditable();
-            if (ReferenceEquals(_connections, value)) return;
-            _connections.CollectionChanged -= OnConnectionsChanged;
-            SetProperty(ref _connections, value);
-            _connections.CollectionChanged += OnConnectionsChanged;
+            if (ReferenceEquals(field, value))
+            {
+                return;
+            }
+            field.CollectionChanged -= OnConnectionsChanged;
+            SetProperty(ref field, value);
+            field.CollectionChanged += OnConnectionsChanged;
             SelectConnection(null);
             RefreshParameterPresentation();
         }
-    }
+    } = [];
 
     private NodeConnectionViewModel? _selectedConnection;
 
@@ -378,10 +379,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         PluginWorkspace = new VisualPluginWorkspaceViewModel(showVisualPluginWorkspace);
         PatchReview.PropertyChanged += (_, args) => OnPropertyChanged(args.PropertyName);
         SelectedNodes = new ReadOnlyObservableCollection<NodeViewModels.FlowNodeViewModel>(_selectedNodes);
-        _draftDocument = new NodeProjectDocument(string.Empty, _nodes, _connections);
+        _draftDocument = new NodeProjectDocument(string.Empty, Nodes, Connections);
         _activeDocument = _draftDocument;
-        _connections.CollectionChanged += OnConnectionsChanged;
-        _nodes.CollectionChanged += OnNodesChanged;
+        Connections.CollectionChanged += OnConnectionsChanged;
+        Nodes.CollectionChanged += OnNodesChanged;
         BatchInputs = new ReadOnlyObservableCollection<NodeViewModels.BatchNodeInputViewModel>(_batchInputs);
         InitializeToolbox();
         PendingConnection = new PendingConnectionViewModel(this);
@@ -1522,8 +1523,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
-        _nodes.CollectionChanged -= OnNodesChanged;
-        _connections.CollectionChanged -= OnConnectionsChanged;
+        Nodes.CollectionChanged -= OnNodesChanged;
+        Connections.CollectionChanged -= OnConnectionsChanged;
         DetachAllPropertyTracking();
         LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
         NodeFactoryRegistrar.DescriptorsChanged -= OnDescriptorsChanged;

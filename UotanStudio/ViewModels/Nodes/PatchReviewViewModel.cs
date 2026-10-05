@@ -11,8 +11,6 @@ namespace UotanStudio.ViewModels.Nodes;
 /// </summary>
 public sealed class PatchReviewViewModel : ViewModelBase
 {
-    private PatchRunOutcome _outcome;
-
     /// <summary>Individual invocation results; publication remains a root-run decision.</summary>
     public IReadOnlyList<PatchCompositeExecutionViewModel> CompositeExecutions
     {
@@ -51,11 +49,11 @@ public sealed class PatchReviewViewModel : ViewModelBase
     public bool HasPatchChanges => PatchChanges.Count > 0;
 
     /// <summary>Includes a meaningful preflight result even when no file changes were staged.</summary>
-    public bool HasPatchReview => HasPatchChanges || CompositeExecutions.Count > 0 || _outcome is PatchRunOutcome.NotApplicable
+    public bool HasPatchReview => HasPatchChanges || CompositeExecutions.Count > 0 || Outcome is PatchRunOutcome.NotApplicable
         or PatchRunOutcome.NoChanges or PatchRunOutcome.AlreadyApplied or PatchRunOutcome.Conflict;
 
     /// <summary>Localized publication outcome, distinct from node execution success.</summary>
-    public string PatchOutcomeText => LanguageService.Instance.GetString("Node_PatchOutcome_" + _outcome);
+    public string PatchOutcomeText => LanguageService.Instance.GetString("Node_PatchOutcome_" + Outcome);
 
     /// <summary>Clears staged review rows while keeping the last publication outcome.</summary>
     public void Clear()
@@ -91,10 +89,10 @@ public sealed class PatchReviewViewModel : ViewModelBase
 
     private PatchRunOutcome Outcome
     {
-        get => _outcome;
+        get;
         set
         {
-            if (SetProperty(ref _outcome, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(PatchOutcomeText));
                 OnPropertyChanged(nameof(HasPatchReview));

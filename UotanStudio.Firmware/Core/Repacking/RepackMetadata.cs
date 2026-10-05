@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using UotanStudio.Firmware.Core.IO;
@@ -23,7 +23,6 @@ public sealed class RepackMetadata
     private const long MaximumBytes = 256 * 1024 * 1024;
     private const string DefaultPartitionName = "unknown";
 
-    private static string? _defaultMetadataRoot;
     private static readonly AsyncLocal<MetadataScope?> CurrentScope = new();
     private static readonly AsyncLocal<IReadOnlyDictionary<string, string>?> CurrentPackingOverrides = new();
 
@@ -40,8 +39,8 @@ public sealed class RepackMetadata
     /// </value>
     public static string? DefaultMetadataRoot
     {
-        get => CurrentScope.Value is { } scope ? scope.Root : _defaultMetadataRoot;
-        set => _defaultMetadataRoot = value;
+        get => CurrentScope.Value is { } scope ? scope.Root : field;
+        set => field = value;
     }
 
     /// <summary>

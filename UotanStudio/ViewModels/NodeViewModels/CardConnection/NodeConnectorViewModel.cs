@@ -10,9 +10,6 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 /// </summary>
 public partial class NodeConnectorViewModel : ConnectorViewModelBase
 {
-    private string _portId = string.Empty;
-    private object? _initialValue;
-
     internal bool IsEditingLocked { get; set; }
 
     /// <summary>Whether the current invocation obtains this input from an upstream connection.</summary>
@@ -90,10 +87,10 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// </summary>
     public object? InitialValue
     {
-        get => _initialValue;
+        get;
         set
         {
-            if (!IsEditingLocked && SetProperty(ref _initialValue, value))
+            if (!IsEditingLocked && SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(SelectedChoice));
                 OnPropertyChanged(nameof(InitialNumberValue));
@@ -163,7 +160,7 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// Flow/Any ports have no initial-value semantics and return <c>false</c>.
     /// </summary>
     public bool HasPersistableInitialValue
-        => !IsSensitive && _initialValue is not null
+        => !IsSensitive && InitialValue is not null
            && IsInput
            && PortType is NodePortType.Path or NodePortType.Text or NodePortType.Number or NodePortType.Boolean;
 
@@ -216,7 +213,7 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// </summary>
     public double InitialNumberValue
     {
-        get => _initialValue is double d ? d : NodeDataUtil.ToDouble(_initialValue, 0);
+        get => InitialValue is double d ? d : NodeDataUtil.ToDouble(InitialValue, 0);
         set
         {
             InitialValue = value;
@@ -230,7 +227,7 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// </summary>
     public bool InitialBooleanValue
     {
-        get => _initialValue is bool b ? b : NodeDataUtil.ToBool(_initialValue, false);
+        get => InitialValue is bool b ? b : NodeDataUtil.ToBool(InitialValue, false);
         set
         {
             InitialValue = value;
@@ -289,12 +286,12 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// <summary>Stable non-localized identifier used by portable workflows and visual plugins.</summary>
     public string PortId
     {
-        get => _portId;
-        set => SetProperty(ref _portId, value);
-    }
+        get;
+        set => SetProperty(ref field, value);
+    } = string.Empty;
 
     /// <summary>Configured stable id, or a deterministic compatibility id derived from the legacy title.</summary>
-    public string StableId => string.IsNullOrWhiteSpace(_portId) ? CreateStableId(Title) : _portId;
+    public string StableId => string.IsNullOrWhiteSpace(PortId) ? CreateStableId(Title) : PortId;
 
     /// <summary>Creates a deterministic ASCII id for legacy connectors that only have a title.</summary>
     public static string CreateStableId(string? title)

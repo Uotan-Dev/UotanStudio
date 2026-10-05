@@ -6,9 +6,6 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 /// </summary>
 public partial class NodeConnectionViewModel : ViewModelBase
 {
-    private NodeConnectorViewModel? _source;
-    private NodeConnectorViewModel? _target;
-
     /// <summary>Whether this connection is selected on the canvas.</summary>
     public bool IsSelected
     {
@@ -22,8 +19,8 @@ public partial class NodeConnectionViewModel : ViewModelBase
     /// </summary>
     public NodeConnectorViewModel? Source
     {
-        get => _source;
-        set => SetProperty(ref _source, value);
+        get;
+        set => SetProperty(ref field, value);
     }
 
     /// <summary>
@@ -32,8 +29,8 @@ public partial class NodeConnectionViewModel : ViewModelBase
     /// </summary>
     public NodeConnectorViewModel? Target
     {
-        get => _target;
-        set => SetProperty(ref _target, value);
+        get;
+        set => SetProperty(ref field, value);
     }
 
     /// <summary>
@@ -44,7 +41,7 @@ public partial class NodeConnectionViewModel : ViewModelBase
     /// <param name="target">目标连接器（输入端口）。</param>
     public NodeConnectionViewModel(NodeConnectorViewModel source, NodeConnectorViewModel target)
     {
-        _source = source;
-        _target = target;
+        Source = source;
+        Target = target;
     }
 }

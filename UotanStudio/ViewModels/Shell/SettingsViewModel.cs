@@ -136,18 +136,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
     private CancellationTokenSource? _saveCts;
     private bool _disposed;
-
-    private LanguageInfo _selectedLanguage = LanguageInfo.SystemLanguage;
-    private ThemeMode _selectedThemeMode;
-    private bool _autoSave;
-    private bool _flashAutoBackup;
-    private bool _debugMode;
-    private bool _erofsLegacyCompatibility;
-
-    private bool _mcpExposeEnabled;
-    private int _mcpExposePort = AppSettings.DefaultMcpExposePort;
-    private string _mcpExposeRootDirectory = string.Empty;
-    private bool _mcpExposeAllowFlash;
+    private bool _loading;
 
     /// <summary>
     /// <para>获取可用语言列表，从语言服务动态获取。</para>
@@ -180,8 +169,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool McpExposeEnabled
     {
-        get => _mcpExposeEnabled;
-        set => SetProperty(ref _mcpExposeEnabled, value);
+        get;
+        set => SetProperty(ref field, value);
     }
 
     /// <summary>
@@ -190,10 +179,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool ErofsLegacyCompatibility
     {
-        get => _erofsLegacyCompatibility;
+        get;
         set
         {
-            if (SetProperty(ref _erofsLegacyCompatibility, value))
+            if (SetProperty(ref field, value))
             {
                 global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = value;
                 DebouncedSaveSettings();
@@ -207,9 +196,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public int McpExposePort
     {
-        get => _mcpExposePort;
-        set => SetProperty(ref _mcpExposePort, Math.Clamp(value, 1, 65535));
-    }
+        get;
+        set => SetProperty(ref field, Math.Clamp(value, 1, 65535));
+    } = AppSettings.DefaultMcpExposePort;
 
     /// <summary>
     /// <para>获取或设置内嵌 MCP 服务器的文件沙箱根目录；空字符串表示不限制根目录。</para>
@@ -217,9 +206,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public string McpExposeRootDirectory
     {
-        get => _mcpExposeRootDirectory;
-        set => SetProperty(ref _mcpExposeRootDirectory, value?.Trim() ?? string.Empty);
-    }
+        get;
+        set => SetProperty(ref field, value?.Trim() ?? string.Empty);
+    } = string.Empty;
 
     /// <summary>
     /// <para>获取或设置内嵌 MCP 服务器是否暴露刷写、擦除、重启类工具（默认关闭）。</para>
@@ -227,8 +216,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool McpExposeAllowFlash
     {
-        get => _mcpExposeAllowFlash;
-        set => SetProperty(ref _mcpExposeAllowFlash, value);
+        get;
+        set => SetProperty(ref field, value);
     }
 
     /// <summary>
@@ -267,17 +256,19 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public LanguageInfo SelectedLanguage
     {
-        get => _selectedLanguage;
+        get;
         set
         {
-            if (SetProperty(ref _selectedLanguage, value))
+            if (!SetProperty(ref field, value) || _loading)
             {
-                ApplyLanguageInfo(value);
-                OnPropertyChanged(nameof(LanguagePreviewText));
-                DebouncedSaveSettings();
+                return;
             }
+
+            ApplyLanguageInfo(value);
+            OnPropertyChanged(nameof(LanguagePreviewText));
+            DebouncedSaveSettings();
         }
-    }
+    } = LanguageInfo.SystemLanguage;
 
     /// <summary>
     /// <para>获取或设置选中的主题模式。</para>
@@ -285,18 +276,19 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public ThemeMode SelectedThemeMode
     {
-        get => _selectedThemeMode;
+        get;
         set
         {
-            if (SetProperty(ref _selectedThemeMode, value))
+            if (!SetProperty(ref field, value) || _loading)
             {
-
-                OnPropertyChanged(nameof(IsLightTheme));
-                OnPropertyChanged(nameof(IsDarkTheme));
-                OnPropertyChanged(nameof(IsSystemTheme));
-                WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(value));
-                DebouncedSaveSettings();
+                return;
             }
+
+            OnPropertyChanged(nameof(IsLightTheme));
+            OnPropertyChanged(nameof(IsDarkTheme));
+            OnPropertyChanged(nameof(IsSystemTheme));
+            WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(value));
+            DebouncedSaveSettings();
         }
     }
 
@@ -306,11 +298,13 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool IsLightTheme
     {
-        get => _selectedThemeMode == ThemeMode.Light;
+        get => SelectedThemeMode == ThemeMode.Light;
         set
         {
-            if (value && _selectedThemeMode != ThemeMode.Light)
+            if (value && SelectedThemeMode != ThemeMode.Light)
+            {
                 SelectedThemeMode = ThemeMode.Light;
+            }
         }
     }
 
@@ -320,11 +314,13 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool IsDarkTheme
     {
-        get => _selectedThemeMode == ThemeMode.Dark;
+        get => SelectedThemeMode == ThemeMode.Dark;
         set
         {
-            if (value && _selectedThemeMode != ThemeMode.Dark)
+            if (value && SelectedThemeMode != ThemeMode.Dark)
+            {
                 SelectedThemeMode = ThemeMode.Dark;
+            }
         }
     }
 
@@ -334,11 +330,13 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool IsSystemTheme
     {
-        get => _selectedThemeMode == ThemeMode.System;
+        get => SelectedThemeMode == ThemeMode.System;
         set
         {
-            if (value && _selectedThemeMode != ThemeMode.System)
+            if (value && SelectedThemeMode != ThemeMode.System)
+            {
                 SelectedThemeMode = ThemeMode.System;
+            }
         }
     }
 
@@ -348,8 +346,14 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool AutoSave
     {
-        get => _autoSave;
-        set { if (SetProperty(ref _autoSave, value)) DebouncedSaveSettings(); }
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                DebouncedSaveSettings();
+            }
+        }
     }
 
     /// <summary>
@@ -358,8 +362,14 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool FlashAutoBackup
     {
-        get => _flashAutoBackup;
-        set { if (SetProperty(ref _flashAutoBackup, value)) DebouncedSaveSettings(); }
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                DebouncedSaveSettings();
+            }
+        }
     }
 
     /// <summary>
@@ -368,10 +378,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool DebugMode
     {
-        get => _debugMode;
+        get;
         set
         {
-            if (SetProperty(ref _debugMode, value))
+            if (SetProperty(ref field, value))
             {
                 LogService.Instance.ApplyDebugMode(value);
                 DebouncedSaveSettings();
@@ -410,44 +420,52 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// <param name="applyLanguage">Whether the loaded language still needs to be applied.</param>
     private void InitializeFromAppSettings(AppSettings settings, bool applyLanguage = true)
     {
-        global::UotanStudio.Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
-        global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = settings.ErofsLegacyCompatibility;
-        _erofsLegacyCompatibility = settings.ErofsLegacyCompatibility;
-
-        _selectedLanguage = string.IsNullOrEmpty(settings.CultureName)
-            ? LanguageInfo.SystemLanguage
-            : LanguageService.Instance.AvailableLanguages.FirstOrDefault(l => l.CultureName == settings.CultureName)
-              ?? new LanguageInfo(settings.CultureName, settings.CultureName, settings.CultureName);
-        _selectedThemeMode = settings.ThemeMode;
-        _autoSave = settings.AutoSave;
-        _flashAutoBackup = settings.AutoBackupBeforeFlash;
-        _debugMode = settings.DebugMode;
-
-        LogService.Instance.ApplyDebugMode(_debugMode);
-
-        if (applyLanguage)
+        _loading = true;
+        try
         {
-            ApplyLanguageInfo(_selectedLanguage);
-        }
+            global::UotanStudio.Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
+            global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = settings.ErofsLegacyCompatibility;
 
-        McpServers.Clear();
-        foreach (var server in settings.McpServers)
-        {
-            McpServers.Add(new McpServerConfig
+            ErofsLegacyCompatibility = settings.ErofsLegacyCompatibility;
+            SelectedLanguage = string.IsNullOrEmpty(settings.CultureName)
+                ? LanguageInfo.SystemLanguage
+                : LanguageService.Instance.AvailableLanguages.FirstOrDefault(l => l.CultureName == settings.CultureName)
+                  ?? new LanguageInfo(settings.CultureName, settings.CultureName, settings.CultureName);
+            SelectedThemeMode = settings.ThemeMode;
+            AutoSave = settings.AutoSave;
+            FlashAutoBackup = settings.AutoBackupBeforeFlash;
+            DebugMode = settings.DebugMode;
+
+            LogService.Instance.ApplyDebugMode(settings.DebugMode);
+
+            if (applyLanguage)
             {
-                Name = server.Name,
-                Transport = server.Transport,
-                Command = server.Command,
-                Arguments = server.Arguments,
-                Url = server.Url,
-                Enabled = server.Enabled
-            });
-        }
+                ApplyLanguageInfo(SelectedLanguage);
+            }
 
-        _mcpExposeEnabled = settings.McpExposeEnabled;
-        _mcpExposePort = settings.McpExposePort is > 0 and <= 65535 ? settings.McpExposePort : AppSettings.DefaultMcpExposePort;
-        _mcpExposeRootDirectory = settings.McpExposeRootDirectory?.Trim() ?? string.Empty;
-        _mcpExposeAllowFlash = settings.McpExposeAllowFlash;
+            McpServers.Clear();
+            foreach (var server in settings.McpServers)
+            {
+                McpServers.Add(new McpServerConfig
+                {
+                    Name = server.Name,
+                    Transport = server.Transport,
+                    Command = server.Command,
+                    Arguments = server.Arguments,
+                    Url = server.Url,
+                    Enabled = server.Enabled
+                });
+            }
+
+            McpExposeEnabled = settings.McpExposeEnabled;
+            McpExposePort = settings.McpExposePort is > 0 and <= 65535 ? settings.McpExposePort : AppSettings.DefaultMcpExposePort;
+            McpExposeRootDirectory = settings.McpExposeRootDirectory?.Trim() ?? string.Empty;
+            McpExposeAllowFlash = settings.McpExposeAllowFlash;
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     /// <summary>
@@ -476,6 +494,11 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void DebouncedSaveSettings()
     {
+        if (_loading)
+        {
+            return;
+        }
+
         var oldCts = _saveCts;
         _saveCts = new CancellationTokenSource();
         oldCts?.Cancel();
@@ -512,12 +535,12 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void SaveSettings()
     {
-        _appSettings.CultureName = _selectedLanguage.IsSystemLanguage ? string.Empty : _selectedLanguage.CultureName;
-        _appSettings.ThemeMode = _selectedThemeMode;
-        _appSettings.AutoSave = _autoSave;
-        _appSettings.AutoBackupBeforeFlash = _flashAutoBackup;
-        _appSettings.DebugMode = _debugMode;
-        _appSettings.ErofsLegacyCompatibility = _erofsLegacyCompatibility;
+        _appSettings.CultureName = SelectedLanguage.IsSystemLanguage ? string.Empty : SelectedLanguage.CultureName;
+        _appSettings.ThemeMode = SelectedThemeMode;
+        _appSettings.AutoSave = AutoSave;
+        _appSettings.AutoBackupBeforeFlash = FlashAutoBackup;
+        _appSettings.DebugMode = DebugMode;
+        _appSettings.ErofsLegacyCompatibility = ErofsLegacyCompatibility;
 
         var latest = SettingsPersistenceService.Instance.LoadSettings();
         _appSettings.RecentProjects = latest.RecentProjects;
@@ -527,17 +550,17 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.PairedNetworkTargets = latest.PairedNetworkTargets;
 
         _appSettings.McpServers = [.. McpServers];
-        _appSettings.McpExposeEnabled = _mcpExposeEnabled;
-        _appSettings.McpExposePort = _mcpExposePort;
-        _appSettings.McpExposeRootDirectory = _mcpExposeRootDirectory;
-        _appSettings.McpExposeAllowFlash = _mcpExposeAllowFlash;
+        _appSettings.McpExposeEnabled = McpExposeEnabled;
+        _appSettings.McpExposePort = McpExposePort;
+        _appSettings.McpExposeRootDirectory = McpExposeRootDirectory;
+        _appSettings.McpExposeAllowFlash = McpExposeAllowFlash;
 
         var saved = SettingsPersistenceService.Instance.TrySaveSettings(_appSettings, out var error);
         WeakReferenceMessenger.Default.Send(new SettingsSaveCompletedMessage(saved, error));
 
         if (saved)
         {
-            McpExposureService.Instance.Apply(_mcpExposeEnabled, _mcpExposePort, _mcpExposeRootDirectory, _mcpExposeAllowFlash);
+            McpExposureService.Instance.Apply(McpExposeEnabled, McpExposePort, McpExposeRootDirectory, McpExposeAllowFlash);
             McpClientConnectionService.Instance.Apply(McpServers);
         }
     }
@@ -626,7 +649,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         Ai.Reset();
         _appSettings = SettingsPersistenceService.Instance.ResetToDefaults();
         InitializeFromAppSettings(_appSettings);
-        McpExposureService.Instance.Apply(_mcpExposeEnabled, _mcpExposePort, _mcpExposeRootDirectory, _mcpExposeAllowFlash);
+        McpExposureService.Instance.Apply(McpExposeEnabled, McpExposePort, McpExposeRootDirectory, McpExposeAllowFlash);
 
         Languages.Clear();
         foreach (var lang in LanguageService.Instance.AvailableLanguages)
@@ -635,7 +658,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         }
 
         OnPropertyChanged(string.Empty);
-        WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(_selectedThemeMode));
+        WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(SelectedThemeMode));
     }
 
     /// <summary>

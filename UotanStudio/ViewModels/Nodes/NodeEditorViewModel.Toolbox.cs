@@ -171,7 +171,6 @@ public partial class NodeEditorViewModel
 /// <summary>A toolbox category or object family. Search results retain concrete items without nesting.</summary>
 public sealed class NodeToolboxCategory(string name, NodeCategory category, ObservableCollection<NodeToolboxItem> items) : ViewModelBase
 {
-    private bool _isExpanded;
     public string Name { get; } = name;
     public NodeCategory Category { get; } = category;
     public ObservableCollection<NodeToolboxItem> Items { get; } = items;
@@ -182,10 +181,10 @@ public sealed class NodeToolboxCategory(string name, NodeCategory category, Obse
 
     public bool IsExpanded
     {
-        get => _isExpanded;
+        get;
         set
         {
-            if (SetProperty(ref _isExpanded, value))
+            if (SetProperty(ref field, value))
             {
                 ExpansionChanged?.Invoke(this);
             }
@@ -196,7 +195,6 @@ public sealed class NodeToolboxCategory(string name, NodeCategory category, Obse
 /// <summary>One concrete operation, with searchable contract identity and a persistent favorite action.</summary>
 public sealed class NodeToolboxItem : ViewModelBase
 {
-    private bool _isFavorite;
     private readonly IReadOnlyList<string> _keywords = [];
 
     public string Name { get; }
@@ -214,10 +212,10 @@ public sealed class NodeToolboxItem : ViewModelBase
 
     public bool IsFavorite
     {
-        get => _isFavorite;
+        get;
         set
         {
-            if (SetProperty(ref _isFavorite, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(FavoriteGlyph));
                 OnPropertyChanged(nameof(FavoriteHint));
@@ -237,7 +235,7 @@ public sealed class NodeToolboxItem : ViewModelBase
         FamilyName = family == familyKey ? FamilyId : family;
         RequiresConfirmation = descriptor.RequiresConfirmation;
         Capabilities = descriptor.Capabilities;
-        _isFavorite = isFavorite;
+        IsFavorite = isFavorite;
         _keywords = [.. descriptor.SearchKeywords, .. NodeSearchIndex.GetLabels(descriptor.NameResourceKey)];
         ToggleFavoriteCommand = new RelayCommand(() => toggleFavorite?.Invoke(this));
         if (descriptor.TypeKey == "Device.Partition.Flash")

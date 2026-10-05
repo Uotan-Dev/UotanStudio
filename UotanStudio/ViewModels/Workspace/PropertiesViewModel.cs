@@ -23,15 +23,13 @@ internal partial class PropertiesViewModel : Tool
     /// <summary>Stable setting value with a localized label. 稳定设置值与本地化标签。</summary>
     public sealed class PropertyChoice : ObservableObject
     {
-        private string _label;
-
         public string Value { get; }
 
         public string Label
         {
-            get => _label;
-            private set => SetProperty(ref _label, value);
-        }
+            get;
+            private set => SetProperty(ref field, value);
+        } = string.Empty;
 
         /// <summary>Resource key used to refresh this label after a language switch.</summary>
         internal string? LabelResourceKey { get; }
@@ -44,7 +42,7 @@ internal partial class PropertiesViewModel : Tool
             LabelResourceKey = labelResourceKey;
             FallbackLabel = fallbackLabel ?? label;
 
-            _label = !string.IsNullOrEmpty(labelResourceKey)
+            Label = !string.IsNullOrEmpty(labelResourceKey)
                 && string.Equals(label, labelResourceKey, StringComparison.Ordinal)
                 ? FallbackLabel
                 : label;

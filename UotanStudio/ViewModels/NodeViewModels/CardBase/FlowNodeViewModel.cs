@@ -15,9 +15,6 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 /// </summary>
 public partial class FlowNodeViewModel : ViewModelBase, INodePosition
 {
-    private string _title = string.Empty;
-    private NodeCategory _category;
-
     /// <summary>Prevents authoring changes while this node belongs to an executing editor.</summary>
     internal bool IsEditingLocked { get; set; }
 
@@ -58,15 +55,15 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public string Title
     {
-        get => _title;
+        get;
         set
         {
             if (!IsEditingLocked)
             {
-                SetProperty(ref _title, value);
+                SetProperty(ref field, value);
             }
         }
-    }
+    } = string.Empty;
 
     /// <summary>Gets the localized title used by the node editor.</summary>
     public string LocalizedTitle => LanguageService.Instance.GetString(GetTitleResourceKey());
@@ -123,8 +120,8 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public NodeCategory Category
     {
-        get => _category;
-        set => SetProperty(ref _category, value);
+        get;
+        set => SetProperty(ref field, value);
     }
 
     /// <summary>
@@ -337,8 +334,8 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </param>
     public FlowNodeViewModel(string title, NodeCategory category)
     {
-        _title = title;
-        _category = category;
+        Title = title;
+        Category = category;
         Input.CollectionChanged += (_, e) => SetConnectorDirection(e, isInput: true);
         Output.CollectionChanged += (_, e) => SetConnectorDirection(e, isInput: false);
     }

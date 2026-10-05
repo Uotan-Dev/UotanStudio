@@ -5,8 +5,6 @@ namespace UotanStudio.ViewModels.Nodes;
 public partial class NodeEditorViewModel
 {
     public Services.Workspace.IWorkflowDocuments? Documents { get; set; }
-    private bool _showAdvancedParameters;
-    private bool _compactNodes;
     private IReadOnlyList<NodeConnectorViewModel> _selectedParameterInputs = [];
 
     public IReadOnlyList<NodePortChoice> ValueTypeChoices { get; } =
@@ -15,10 +13,10 @@ public partial class NodeEditorViewModel
     /// <summary>Hides unconnected advanced and irrelevant inputs on canvas nodes.</summary>
     public bool CompactNodes
     {
-        get => _compactNodes;
+        get;
         set
         {
-            if (SetProperty(ref _compactNodes, value))
+            if (SetProperty(ref field, value))
             {
                 RefreshParameterPresentation();
             }
@@ -28,10 +26,10 @@ public partial class NodeEditorViewModel
     /// <summary>Includes advanced parameters in the selected node's inspector.</summary>
     public bool ShowAdvancedParameters
     {
-        get => _showAdvancedParameters;
+        get;
         set
         {
-            if (SetProperty(ref _showAdvancedParameters, value))
+            if (SetProperty(ref field, value))
             {
                 RefreshParameterPresentation();
             }

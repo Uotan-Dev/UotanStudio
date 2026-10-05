@@ -14,8 +14,11 @@ public sealed class ProjectDataWorkspace : IProjectWorkspace
     /// <para>按节点项目名索引的打开文档集合，包含未知节点类型键。</para>
     /// </summary>
     /// <value>Read/write dictionary; empty by default. A solution with no registered node project leaves it
-    /// empty. <para>可读写字典；默认为空。未登记节点项目的解决方案保持为空。</para></value>
-    public Dictionary<string, NodeProjectSnapshot> Workflows { get; } = new(StringComparer.OrdinalIgnoreCase);
+    /// empty. Keys enumerate in insertion order even after a removal, which the active-document fallback and
+    /// <see cref="OpenWorkflowNames"/> rely on.
+    /// <para>可读写字典；默认为空。未登记节点项目的解决方案保持为空。即使发生删除，键仍按插入顺序枚举，
+    /// 活动文档回退与 <see cref="OpenWorkflowNames"/> 依赖该顺序。</para></value>
+    public OrderedDictionary<string, NodeProjectSnapshot> Workflows { get; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>
     /// Current image entries, relative to the solution data directory.
     /// <para>当前镜像条目，相对于解决方案数据目录。</para>

@@ -24,8 +24,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     private ObservableCollection<CompareRowViewModel>? _ownRows;
     private bool _isDirty;
     private bool _hasEditableRows;
-    private bool _isTextEditorVisible;
-    private string _editorText = string.Empty;
     private bool _loadingEditorText;
     private CompareColumnSide _side;
 
@@ -414,10 +412,10 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// </summary>
     public bool IsTextEditorVisible
     {
-        get => _isTextEditorVisible;
+        get;
         private set
         {
-            if (SetProperty(ref _isTextEditorVisible, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(IsBrowsingTextEditor));
                 OnPropertyChanged(nameof(ShowLeftCells));
@@ -434,7 +432,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// in a comparison it must yield to the compare editor, otherwise both editors stack inside one column (which shows up as
     /// ghosting).
     /// </summary>
-    public bool IsBrowsingTextEditor => _isTextEditorVisible && IsBrowsing;
+    public bool IsBrowsingTextEditor => IsTextEditorVisible && IsBrowsing;
 
     /// <summary>
     /// <para>文本编辑器中的内容（浏览文本文件时使用；每一行以 <c>\n</c> 连接，保存时由服务还原原换行风格）。</para>
@@ -443,17 +441,17 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// </summary>
     public string EditorText
     {
-        get => _editorText;
+        get;
         set
         {
-            if (!SetProperty(ref _editorText, value) || _loadingEditorText)
+            if (!SetProperty(ref field, value) || _loadingEditorText)
             {
                 return;
             }
 
             MarkDirty();
         }
-    }
+    } = string.Empty;
 
     /// <summary>浏览状态下把文本行载入编辑器（不触发「已修改」）。</summary>
     private void LoadEditorText(IReadOnlyList<string> lines)
@@ -482,7 +480,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     private List<string> EditorLines()
     {
         var lines = new List<string>();
-        foreach (var line in _editorText.Split('\n'))
+        foreach (var line in EditorText.Split('\n'))
         {
             lines.Add(line.TrimEnd('\r'));
         }

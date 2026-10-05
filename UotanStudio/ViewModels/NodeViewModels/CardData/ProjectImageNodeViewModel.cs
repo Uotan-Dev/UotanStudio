@@ -12,7 +12,6 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 /// </summary>
 public class ProjectImageNodeViewModel : FlowNodeViewModel
 {
-    private string _selectedImage = string.Empty;
     private IReadOnlyList<string>? _cachedAvailableImages;
 
     /// <summary>
@@ -58,15 +57,15 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
     /// </summary>
     public override string SelectedImage
     {
-        get => _selectedImage;
+        get;
         set
         {
             if (!IsEditingLocked)
             {
-                SetProperty(ref _selectedImage, value);
+                SetProperty(ref field, value);
             }
         }
-    }
+    } = string.Empty;
 
     /// <summary>
     /// <para>获取工程镜像面板中的可用镜像相对路径列表（每项取自 <see cref="ImageEntryViewModel.RelativePath"/>）。</para>

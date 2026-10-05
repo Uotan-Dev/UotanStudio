@@ -2,8 +2,6 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 
 public partial class NodeConnectorViewModel
 {
-    private string _sourceDescription = string.Empty;
-
     /// <summary>Whether this parameter is hidden until advanced options are requested.</summary>
     public bool IsAdvanced { get; set; }
 
@@ -16,10 +14,10 @@ public partial class NodeConnectorViewModel
     /// <summary>Connected upstream source shown instead of an unused default editor.</summary>
     public string SourceDescription
     {
-        get => _sourceDescription;
+        get;
         internal set
         {
-            if (SetProperty(ref _sourceDescription, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(HasConnectedSource));
                 OnPropertyChanged(nameof(UsesTextEditor));
@@ -29,7 +27,7 @@ public partial class NodeConnectorViewModel
                 OnPropertyChanged(nameof(CanBrowsePath));
             }
         }
-    }
+    } = string.Empty;
 
     public bool HasConnectedSource => SourceDescription.Length > 0;
     public bool CanEditChoice => HasChoices && !HasConnectedSource;
