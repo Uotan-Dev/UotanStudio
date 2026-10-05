@@ -16,7 +16,7 @@ namespace UotanStudio.Firmware.Core.IO;
 /// 与刮擦路径工厂持有，目标位置由每个调用方决定。它只建模移动本身以及专属于该移动的暂存文件清理；
 /// 针对暂存写入阶段的清理仍留在调用点。</para>
 /// </remarks>
-internal static class AtomicPublish
+public static class AtomicPublish
 {
     /// <summary>
     /// Moves <paramref name="stagedPath"/> onto <paramref name="targetPath"/>, replacing any existing target,
@@ -42,7 +42,7 @@ internal static class AtomicPublish
     /// the staged file has been removed and the exception is re-thrown unchanged.
     /// <para>移动被文件系统拒绝，或 <paramref name="targetPath"/> 不是可写入的文件位置；暂存文件已被删除并原样重抛。</para>
     /// </exception>
-    internal static void Publish(string stagedPath, string targetPath)
+    public static void Publish(string stagedPath, string targetPath)
     {
         try
         {

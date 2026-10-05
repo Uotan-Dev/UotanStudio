@@ -5,6 +5,7 @@ using ModelContextProtocol.Server;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
@@ -425,17 +426,17 @@ internal static class ContainerResourceFactory
     private static (string Filesystem, int Total, IReadOnlyList<FilesystemEntryRecord> Entries) WalkFilesystem(
         string resolved, string displayPath, CancellationToken cancellationToken)
     {
-        var formatName = FormatDetector.Detect(resolved)?.FormatName ?? string.Empty;
-        return formatName switch
+        var handler = FormatDetector.Detect(resolved);
+        return handler switch
         {
-            "EXT4" => WalkExt4(resolved, cancellationToken),
-            "EROFS" => WalkErofs(resolved, cancellationToken),
-            "F2FS" => WalkF2fs(resolved),
+            Ext4FormatHandler => WalkExt4(resolved, cancellationToken),
+            ErofsFormatHandler => WalkErofs(resolved, cancellationToken),
+            F2fsFormatHandler => WalkF2fs(resolved),
             _ => throw InvalidParams(
                 $"'{displayPath}' is not an EXT4, EROFS or F2FS image"
-                + (formatName.Length == 0
+                + (handler is null
                     ? "; no registered format handler claims it."
-                    : $"; the detected format is {formatName}."))
+                    : $"; the detected format is {handler.FormatName}."))
         };
     }
 

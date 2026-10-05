@@ -131,7 +131,7 @@ public sealed class VisualPluginAsset
             Id = id,
             Name = Path.GetFileName(path),
             Length = length,
-            Sha256 = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant(),
+            Sha256 = Convert.ToHexStringLower(hash.GetHashAndReset()),
             SourcePath = Path.GetFullPath(path)
         };
     }

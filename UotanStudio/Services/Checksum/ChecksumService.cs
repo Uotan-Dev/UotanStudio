@@ -80,5 +80,5 @@ internal static class ChecksumService
 
     /// <summary>未参与时返回空串，否则输出全库统一的小写十六进制。 Empty when absent; otherwise the repo-wide lowercase hex.</summary>
     private static string HashToHex(IncrementalHash? hash)
-        => hash is null ? "" : Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+        => hash is null ? "" : Convert.ToHexStringLower(hash.GetHashAndReset());
 }

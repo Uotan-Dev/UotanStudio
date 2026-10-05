@@ -919,7 +919,7 @@ public sealed class FirmwareService
         {
             await using var fs = File.OpenRead(filePath);
             var hash = await System.Security.Cryptography.SHA256.HashDataAsync(fs, cancellationToken);
-            var hex = Convert.ToHexString(hash).ToLowerInvariant();
+            var hex = Convert.ToHexStringLower(hash);
             var ok = string.IsNullOrEmpty(expectedHash) || string.Equals(hex, expectedHash, StringComparison.OrdinalIgnoreCase);
             return new FirmwareOpResult
             {

@@ -290,21 +290,40 @@ internal static class MiscToolHandlers
         try
         {
             using var client = new HttpClient();
-            await using (var source = await client.GetStreamAsync(uri, cancellationToken).ConfigureAwait(false))
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromMinutes(5));
+            await using (var source = await client.GetStreamAsync(uri, timeout.Token).ConfigureAwait(false))
             await using (var target = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
                 131072, FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
-                await source.CopyToAsync(target, 131072, cancellationToken).ConfigureAwait(false);
-                await target.FlushAsync(cancellationToken).ConfigureAwait(false);
+                await source.CopyToAsync(target, 131072, timeout.Token).ConfigureAwait(false);
+                await target.FlushAsync(timeout.Token).ConfigureAwait(false);
             }
 
             string? actual = null;
             if (!string.IsNullOrWhiteSpace(sha256))
             {
+                byte[] expected;
+                try
+                {
+                    expected = Convert.FromHexString(sha256);
+                }
+                catch (FormatException)
+                {
+                    return new ToolResult(false, "The supplied sha256 is not valid hexadecimal.");
+                }
+
+                if (expected.Length != 32)
+                {
+                    return new ToolResult(false, "sha256 must be 64 hexadecimal characters.");
+                }
+
                 await using var stream = new FileStream(temporary, FileMode.Open, FileAccess.Read, FileShare.Read,
                     131072, FileOptions.Asynchronous | FileOptions.SequentialScan);
-                actual = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false)).ToLowerInvariant();
-                if (!string.Equals(actual, sha256, StringComparison.OrdinalIgnoreCase))
+                var actualHash = await System.Security.Cryptography.SHA256.HashDataAsync(stream, timeout.Token)
+                    .ConfigureAwait(false);
+                actual = Convert.ToHexStringLower(actualHash);
+                if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(actualHash, expected))
                 {
                     return new ToolResult(false,
                         $"SHA-256 mismatch: expected {sha256}, downloaded {actual}. The output was not modified.");
@@ -318,6 +337,11 @@ internal static class MiscToolHandlers
                     + (actual is null ? string.Empty : $" (sha256 {actual})"),
                 ToolJson.Data(new DownloadFilePayload(url, resolved, new FileInfo(resolved).Length,
                     actual, actual is not null)));
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new ToolResult(false,
+                "The download timed out after 5 minutes. The output was not modified.");
         }
         finally
         {
