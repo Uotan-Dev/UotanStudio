@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.IO.Compression;
 using K4os.Compression.LZ4;
 using UotanStudio.Firmware.Compression.Codecs.Lzo;
 
@@ -164,15 +165,23 @@ internal static class F2fsCompression
 
     private static byte[] CompressZstd(ReadOnlySpan<byte> data, int level)
     {
-        using var compressor = new ZstdSharp.Compressor(level > 0 ? level : 3);
-        var result = compressor.Wrap(data);
-        return result.ToArray();
+        var frame = new byte[ZstandardEncoder.GetMaxCompressedLength(data.Length)];
+        if (!ZstandardEncoder.TryCompress(data, frame, out var written, level > 0 ? level : 3, 0))
+        {
+            throw new FileSystemCorruptedException("ZSTD compression failed.  ZSTD 压缩失败。");
+        }
+
+        return frame.AsSpan(0, written).ToArray();
     }
 
     private static byte[] DecompressZstd(ReadOnlySpan<byte> compressed, int expectedSize)
     {
-        using var decompressor = new ZstdSharp.Decompressor();
-        var result = decompressor.Unwrap(compressed, expectedSize);
-        return result.ToArray();
+        var result = new byte[expectedSize];
+        if (!ZstandardDecoder.TryDecompress(compressed, result, out var decoded))
+        {
+            throw new FileSystemCorruptedException("ZSTD decompression failed.  ZSTD 解压失败。");
+        }
+
+        return decoded == expectedSize ? result : result.AsSpan(0, decoded).ToArray();
     }
 }

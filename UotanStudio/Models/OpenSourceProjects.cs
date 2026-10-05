@@ -213,17 +213,6 @@ public static class OpenSourceProjects
         },
         new OpenSourceProject
         {
-            Name = "ZstdSharp.Port",
-            Description = "Zstandard 压缩库（zstd 数据解压）",
-            RepositoryUrl = "https://github.com/oleg-st/ZstdSharp",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/oleg-st/ZstdSharp/blob/master/LICENSE",
-            AuthorName = "Oleg Stepanov",
-            AuthorGitHubUrl = "https://github.com/oleg-st",
-            AuthorAvatarUrl = "https://github.com/oleg-st.png"
-        },
-        new OpenSourceProject
-        {
             Name = "LZMA-SDK",
             Description = "LZMA 压缩算法 SDK（LZMA/LZMA2 解压）",
             RepositoryUrl = "https://www.7-zip.org/sdk.html",

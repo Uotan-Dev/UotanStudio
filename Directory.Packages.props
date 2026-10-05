@@ -56,7 +56,6 @@
     <!-- PKCS#7 CMS (SignedCms) for APK v1 JAR signature blocks -->
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.12" />
     <PackageVersion Include="xunit.v3" Version="4.0.1" />
-    <PackageVersion Include="ZstdSharp.Port" Version="0.8.8" />
     <!-- AVB signature verification (RSASSA-PSS / PKCS#1 v1.5), pure managed & AOT-friendly -->
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <!-- LZOP container parsing / zlib inflate helpers -->

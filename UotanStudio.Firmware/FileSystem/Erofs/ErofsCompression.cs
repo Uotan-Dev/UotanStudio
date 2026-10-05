@@ -1,12 +1,11 @@
 using System.Buffers.Binary;
+using System.IO.Compression;
 using ICSharpCode.SharpZipLib.Zip.Compression;
 using K4os.Compression.LZ4;
 using SevenZip;
 using SevenZip.Compression.LZMA;
 using UotanStudio.Firmware.Compression.Codecs.Lz4;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
-using ZstdSharp;
-using ZstdSharp.Unsafe;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs;
 
@@ -588,8 +587,8 @@ internal static class ErofsCompression
     }
 
     /// <summary>
-    /// ZSTD compression (fully-managed ZstdSharp port) producing a standard zstd frame; when windowLog &gt; 0 the frame window log is set accordingly.
-    /// <para>ZSTD 压缩（ZstdSharp 全托管移植），输出标准 zstd 帧；windowLog &gt; 0 时写入帧的窗口对数。</para>
+    /// ZSTD compression (in-box Zstandard codec) producing a standard zstd frame; when windowLog &gt; 0 the frame window log is set accordingly.
+    /// <para>ZSTD 压缩（内置 Zstandard 编解码器），输出标准 zstd 帧；windowLog &gt; 0 时写入帧的窗口对数。</para>
     /// </summary>
     private static int CompressZstd(
         byte[] source,
@@ -606,26 +605,20 @@ internal static class ErofsCompression
             return 0;
         }
 
-        using var compressor = new Compressor(Math.Clamp(compressionLevel, -5, 22));
-        if (windowLog > 0)
-        {
-            compressor.SetParameter(ZSTD_cParameter.ZSTD_c_windowLog, windowLog);
-        }
-
-        try
-        {
-            return compressor.Wrap(source.AsSpan(sourceIndex, sourceLength), target.AsSpan(targetIndex, targetLength));
-        }
-        catch (ZstdException ex)
+        var quality = Math.Clamp(compressionLevel, -5, 22);
+        if (!ZstandardEncoder.TryCompress(source.AsSpan(sourceIndex, sourceLength),
+                target.AsSpan(targetIndex, targetLength), out var compressed, quality, windowLog))
         {
             throw new InvalidOperationException(
-                "ZSTD compressed output exceeds the destination buffer, or the compression parameters are invalid.", ex);
+                "ZSTD compressed output exceeds the destination buffer, or the compression parameters are invalid.");
         }
+
+        return compressed;
     }
 
     /// <summary>
-    /// ZSTD decompression (fully-managed ZstdSharp port); when windowLog &gt; 0 the maximum window log is constrained accordingly.
-    /// <para>ZSTD 解压（ZstdSharp 全托管移植）；windowLog &gt; 0 时约束最大窗口对数。</para>
+    /// ZSTD decompression (in-box Zstandard codec); when windowLog &gt; 0 the maximum window log is constrained accordingly.
+    /// <para>ZSTD 解压（内置 Zstandard 编解码器）；windowLog &gt; 0 时约束最大窗口对数。</para>
     /// </summary>
     private static int DecompressZstd(
         byte[] source,
@@ -641,21 +634,35 @@ internal static class ErofsCompression
             return 0;
         }
 
-        using var decompressor = new Decompressor();
+        var options = new ZstandardDecompressionOptions();
         if (windowLog > 0)
         {
-            decompressor.SetParameter(ZSTD_dParameter.ZSTD_d_windowLogMax, windowLog);
+            options.MaxWindowLog2 = windowLog;
         }
 
+        byte[] plaintext;
         try
         {
-            return decompressor.Unwrap(source.AsSpan(sourceIndex, sourceLength), target.AsSpan(targetIndex, targetLength));
+            using var frameStream = new MemoryStream(source, sourceIndex, sourceLength, writable: false);
+            using var decoder = new ZstandardStream(frameStream, options, leaveOpen: true);
+            using var buffer = new MemoryStream();
+            decoder.CopyTo(buffer);
+            plaintext = buffer.ToArray();
         }
-        catch (ZstdException ex)
+        catch (Exception ex) when (ex is not FileSystemCorruptedException)
         {
             throw new FileSystemCorruptedException(
                 "ZSTD decompression failed: the compressed data is corrupt or the destination buffer is too small.", ex);
         }
+
+        if (plaintext.Length > targetLength)
+        {
+            throw new FileSystemCorruptedException(
+                "ZSTD decompression failed: the compressed data is corrupt or the destination buffer is too small.");
+        }
+
+        Array.Copy(plaintext, 0, target, targetIndex, plaintext.Length);
+        return plaintext.Length;
     }
 
     /// <summary>

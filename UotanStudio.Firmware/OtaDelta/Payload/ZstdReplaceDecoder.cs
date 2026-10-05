@@ -1,6 +1,5 @@
 using System.Buffers;
-using ZstdSharp;
-using ZstdSharp.Unsafe;
+using System.IO.Compression;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload;
 
@@ -54,12 +53,12 @@ internal static class ZstdReplaceDecoder
         var outputBuffer = ArrayPool<byte>.Shared.Rent(BufferSize);
         try
         {
-            using var decompressor = new Decompressor();
-            decompressor.SetParameter(ZSTD_dParameter.ZSTD_d_windowLogMax, MaximumWindowLog);
-            if (dictionary is { } dict)
-            {
-                decompressor.LoadDictionary(dict.Span);
-            }
+            using ZstandardDictionary? contentDictionary = dictionary is { Length: > 0 } dict
+                ? ZstandardDictionary.Create(dict.Span)
+                : null;
+            using var decoder = contentDictionary is null
+                ? new ZstandardDecoder(MaximumWindowLog)
+                : new ZstandardDecoder(contentDictionary, MaximumWindowLog);
 
             var inputOffset = 0;
             var inputLength = 0;
@@ -77,7 +76,7 @@ internal static class ZstdReplaceDecoder
                     }
                 }
 
-                var status = decompressor.UnwrapStream(
+                var status = decoder.Decompress(
                     inputBuffer.AsSpan(inputOffset, inputLength - inputOffset),
                     outputBuffer,
                     out var consumed,
@@ -89,29 +88,32 @@ internal static class ZstdReplaceDecoder
                     output.Write(outputBuffer, 0, written);
                 }
 
-                switch (status)
+                if (status == OperationStatus.Done)
                 {
-                    case OperationStatus.Done:
-                        if (inputOffset != inputLength || input.ReadByte() != -1)
-                        {
-                            throw new PartitionExtractionException(
-                                "Zstd REPLACE accepts exactly one frame without trailing data.", string.Empty);
-                        }
-                        return;
-                    case OperationStatus.NeedMoreData:
-                    case OperationStatus.DestinationTooSmall:
-                        break;
-                    case OperationStatus.InvalidData:
+                    if (inputOffset != inputLength || input.ReadByte() != -1)
+                    {
                         throw new PartitionExtractionException(
-                            dictionary is null
-                                ? "Invalid Zstd REPLACE frame. External dictionaries are not supported."
-                                : "Invalid Zstd REPLACE frame for the supplied external dictionary.", string.Empty);
-                    default:
-                        throw new PartitionExtractionException($"Unexpected Zstd decoder status: {status}.", string.Empty);
+                            "Zstd REPLACE accepts exactly one frame without trailing data.", string.Empty);
+                    }
+
+                    return;
+                }
+
+                if (status == OperationStatus.InvalidData)
+                {
+                    throw new PartitionExtractionException(
+                        dictionary is null
+                            ? "Invalid Zstd REPLACE frame. External dictionaries are not supported."
+                            : "Invalid Zstd REPLACE frame for the supplied external dictionary.", string.Empty);
+                }
+
+                if (consumed == 0 && written == 0)
+                {
+                    throw new PartitionExtractionException("Zstd REPLACE decoder made no progress on the frame.", string.Empty);
                 }
             }
         }
-        catch (ZstdException ex)
+        catch (Exception ex) when (ex is InvalidDataException or IOException)
         {
             throw new PartitionExtractionException(
                 "Zstd REPLACE frame exceeds the 64 MiB window limit or is invalid.", string.Empty, ex);

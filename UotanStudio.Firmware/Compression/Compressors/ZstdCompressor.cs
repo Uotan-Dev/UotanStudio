@@ -1,12 +1,12 @@
 using System.Buffers;
+using System.IO.Compression;
 using UotanStudio.Firmware.Compression.Internal;
-using ZstdSharp;
 
 namespace UotanStudio.Firmware.Compression.Compressors;
 
 /// <summary>
-/// Zstd compression and decompression over byte arrays or streams, backed by ZstdSharp.
-/// <para>基于 ZstdSharp 的 Zstd 字节数组与流式压缩解压。</para>
+/// Zstd compression and decompression over byte arrays or streams, backed by the in-box Zstandard codec.
+/// <para>基于内置 Zstandard 编解码器的 Zstd 字节数组与流式压缩解压。</para>
 /// </summary>
 public static class ZstdCompressor
 {
@@ -39,8 +39,13 @@ public static class ZstdCompressor
                 return parallel;
             }
 
-            using var compressor = new Compressor(options?.Level ?? 3);
-            return compressor.Wrap(data).ToArray();
+            var frame = new byte[ZstandardEncoder.GetMaxCompressedLength(data.Length)];
+            if (!ZstandardEncoder.TryCompress(data, frame, out var written, options?.Level ?? 3, 0))
+            {
+                throw new CompressionException("ZSTD 压缩失败");
+            }
+
+            return frame.AsSpan(0, written).ToArray();
         }
         catch (Exception ex)
         {
@@ -54,8 +59,13 @@ public static class ZstdCompressor
     /// </summary>
     private static byte[] CompressChunk(byte[] data, int start, int count, CompressionOptions? options)
     {
-        using var compressor = new Compressor(options?.Level ?? 3);
-        return compressor.Wrap(data.AsSpan(start, count)).ToArray();
+        var frame = new byte[ZstandardEncoder.GetMaxCompressedLength(count)];
+        if (!ZstandardEncoder.TryCompress(data.AsSpan(start, count), frame, out var written, options?.Level ?? 3, 0))
+        {
+            throw new CompressionException("ZSTD 压缩失败");
+        }
+
+        return frame.AsSpan(0, written).ToArray();
     }
 
     /// <summary>
@@ -76,8 +86,11 @@ public static class ZstdCompressor
 
         try
         {
-            using var decompressor = new Decompressor();
-            return decompressor.Unwrap(data).ToArray();
+            using var decompressor = new ZstandardStream(new MemoryStream(data, writable: false),
+                CompressionMode.Decompress, leaveOpen: true);
+            using var plaintext = new MemoryStream();
+            decompressor.CopyTo(plaintext);
+            return plaintext.ToArray();
         }
         catch (Exception ex)
         {
@@ -86,11 +99,11 @@ public static class ZstdCompressor
     }
 
     /// <summary>
-    /// Streaming zstd compression: pipes through ZstdSharp's CompressionStream without full buffering, suitable for large inputs.
+    /// Streaming zstd compression: pipes through the in-box <see cref="ZstandardStream"/> without full buffering, suitable for large inputs.
     /// When <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is above 1 and the input is seekable with at least two
     /// 1 MiB chunks, chunks are compressed concurrently into independent frames and concatenated in chunk order, matching
     /// the byte-array overload; otherwise a single frame is produced.
-    /// <para>流式 Zstd 压缩：基于 ZstdSharp 的 CompressionStream 直接管道， 无需整块缓冲，适合大输入。当
+    /// <para>流式 Zstd 压缩：基于内置 <see cref="ZstandardStream"/> 直接管道，无需整块缓冲，适合大输入。当
     /// <see cref="CompressionOptions.MaxDegreeOfParallelism"/> 大于 1 且输入可寻址并至少包含两个 1 MiB 块时，各块并发
     /// 压缩为独立帧并按块序串接，与字节数组重载语义一致；否则生成单帧。</para>
     /// </summary>
@@ -121,7 +134,8 @@ public static class ZstdCompressor
             {
                 return;
             }
-            using var compressor = new CompressionStream(new NonDisposingStream(output), options?.Level ?? 3);
+            using var compressor = new ZstandardStream(output,
+                new ZstandardCompressionOptions { Quality = options?.Level ?? 3 }, leaveOpen: true);
             input.CopyTo(compressor);
         }
         catch (Exception ex)
@@ -188,8 +202,8 @@ public static class ZstdCompressor
     }
 
     /// <summary>
-    /// Streaming zstd decompression: pipes through ZstdSharp's DecompressionStream without full buffering, suitable for large inputs.
-    /// <para>流式 Zstd 解压：基于 ZstdSharp 的 DecompressionStream 直接管道， 无需整块缓冲，适合大输入。</para>
+    /// Streaming zstd decompression: pipes through the in-box <see cref="ZstandardStream"/> without full buffering, suitable for large inputs.
+    /// <para>流式 Zstd 解压：基于内置 <see cref="ZstandardStream"/> 直接管道，无需整块缓冲，适合大输入。</para>
     /// </summary>
     /// <param name="input">Readable compressed stream, consumed to its end and left open; the decoded size is
     /// unbounded, so callers handling untrusted input must cap <paramref name="output"/> themselves.
@@ -213,7 +227,7 @@ public static class ZstdCompressor
 
         try
         {
-            using var decompressor = new DecompressionStream(new NonDisposingStream(input));
+            using var decompressor = new ZstandardStream(input, CompressionMode.Decompress, leaveOpen: true);
             decompressor.CopyTo(output);
         }
         catch (Exception ex)

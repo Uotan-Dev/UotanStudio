@@ -1,5 +1,4 @@
-using ZstdSharp;
-using ZstdSharp.Unsafe;
+using System.IO.Compression;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
 
@@ -52,18 +51,29 @@ public sealed partial class PayloadBuilder
         try
         {
             byte[] frame;
-            using var compressor = new Compressor(level);
-            compressor.SetParameter(ZSTD_cParameter.ZSTD_c_checksumFlag, 1);
-            if (!dictionary.IsEmpty)
+            using ZstandardDictionary? contentDictionary = dictionary.IsEmpty
+                ? null
+                : ZstandardDictionary.Create(dictionary.Span);
+            using (var staging = new MemoryStream())
             {
-                compressor.LoadDictionary(dictionary.Span);
-            }
+                using (var compressor = new ZstandardStream(staging,
+                           new ZstandardCompressionOptions
+                           {
+                               Quality = level,
+                               AppendChecksum = true,
+                               Dictionary = contentDictionary
+                           }, leaveOpen: true))
+                {
+                    buffer.Position = 0;
+                    buffer.CopyTo(compressor);
+                }
 
-            frame = compressor.Wrap(buffer.ToArray()).ToArray();
+                frame = staging.ToArray();
+            }
 
             outputStream.Write(frame);
         }
-        catch (ZstdException ex)
+        catch (Exception ex) when (ex is not PayloadGenerationException)
         {
             throw new PayloadGenerationException($"Zstd REPLACE compression failed: {ex.Message}", ex);
         }
