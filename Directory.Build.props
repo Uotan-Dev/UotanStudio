@@ -1,7 +1,9 @@
 <Project>
 
   <PropertyGroup>
-    <TargetFramework Condition="'$(TargetFramework)' == ''">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net11.0</TargetFramework>
+    <Features>runtime-async=on</Features>
+    <CETCompat>false</CETCompat>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
