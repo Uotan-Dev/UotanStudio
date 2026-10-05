@@ -1,5 +1,6 @@
 using Avalonia.Media;
 using Material.Icons;
+using UotanStudio.Firmware.OtaDelta.Dat;
 
 namespace UotanStudio.ViewModels.Workspace;
 
@@ -62,7 +63,7 @@ public static class ExplorerIconCatalog
                 : new(MaterialIconKind.FolderOutline, ExplorerIconPalette.Folder);
         }
 
-        if (System.IO.Path.GetFileName(path).EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase))
+        if (DatFileSet.IsTransferList(path))
         {
             return new(MaterialIconKind.FileArrowUpDownOutline, ExplorerIconPalette.Image);
         }

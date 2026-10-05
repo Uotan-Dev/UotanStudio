@@ -5,7 +5,9 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Flash;
@@ -250,9 +252,17 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             try
             {
                 lp = await Task.Run(() =>
-                    new UotanStudio.Firmware.BlockImage.Lp.LpFormatHandler().CanHandle(path)
+                {
+                    // 格式识别以注册表为权威：Detect 返回的处理器就是注册表单例，
+                    // 因此按处理器类型判定 LP super，而不是在编辑器另起一次 CanHandle 探测。
+                    // The registry is the authority for format identity: Detect returns the registered
+                    // singleton, so LP super images are decided by handler type instead of a second
+                    // CanHandle probe owned by this editor.
+                    FirmwareFormatRegistry.RegisterAll();
+                    return FormatDetector.Detect(path) is LpFormatHandler
                         ? MetadataReader.ReadFromImageFile(path)
-                        : null, default).ConfigureAwait(true);
+                        : null;
+                }, default).ConfigureAwait(true);
             }
             catch
             {

@@ -336,13 +336,13 @@ internal partial class ImageViewModel : Tool
             var list = new List<(string Relative, long Size, string Format)>();
             foreach (var file in Directory.EnumerateFiles(imagesDir))
             {
-                var format = ImageInputService.DetectFormat(file);
-                if (format == "unknown")
+                var kind = ImageInputService.ProbeFormat(file);
+                if (kind == ImageFormatKind.Unknown)
                 {
                     continue;
                 }
 
-                if (!outputMode && !(ImageInputService.ContainsFileSystem(file) || ImageInputService.IsBootFamilyFormat(format)))
+                if (!outputMode && !(ImageInputService.ContainsFileSystem(file) || ImageInputService.IsBootFamilyFormat(kind)))
                 {
                     continue;
                 }
@@ -360,7 +360,9 @@ internal partial class ImageViewModel : Tool
                     continue;
                 }
 
-                list.Add((relative, size, format));
+                // 条目格式随解决方案快照持久化，仍写入既有标签字符串。
+                // Entry formats are persisted in the solution snapshot, so the established label string is stored.
+                list.Add((relative, size, ImageInputService.GetFormatLabel(kind)));
             }
             return list;
         }).ConfigureAwait(true);

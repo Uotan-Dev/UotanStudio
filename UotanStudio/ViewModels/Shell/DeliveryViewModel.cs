@@ -48,10 +48,15 @@ internal sealed partial class DeliveryImage : ObservableObject
         OnPropertyChanged(nameof(Description));
         OnPropertyChanged(nameof(DisplaySize));
     }
+    /// <summary>
+    /// <para>探测源镜像格式并取既有标签：条目仍按标签持久化与显示，格式判定来自
+    /// <see cref="ImageInputService.ProbeFormat"/>。</para>
+    /// Probes the source format and returns its established label: entries are still persisted and shown
+    /// by label, while the decision itself comes from <see cref="ImageInputService.ProbeFormat"/>.</summary>
     private static string DetectSourceFormat(string path)
     {
-        try { return ImageInputService.DetectFormat(path); }
-        catch { return "unknown"; }
+        try { return ImageInputService.GetFormatLabel(ImageInputService.ProbeFormat(path)); }
+        catch { return ImageInputService.GetFormatLabel(ImageFormatKind.Unknown); }
     }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Name))] private string _fileName = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Name))] private string _partitionName = "";

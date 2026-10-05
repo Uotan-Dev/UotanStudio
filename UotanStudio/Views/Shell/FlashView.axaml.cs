@@ -531,7 +531,11 @@ public partial class FlashView : UserControl
                     return;
                 }
                 if (path.EndsWith(".img", StringComparison.OrdinalIgnoreCase) &&
-                    await Task.Run(() => new UotanStudio.Firmware.BlockImage.Lp.LpFormatHandler().CanHandle(path)))
+                    await Task.Run(() =>
+                    {
+                        UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
+                        return UotanStudio.Firmware.Core.FormatDetector.Detect(path) is UotanStudio.Firmware.BlockImage.Lp.LpFormatHandler;
+                    }))
                 {
                     var partitions = await FlashSuperService.ListAsync(path, CancellationToken.None);
                     _superPath = path;

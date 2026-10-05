@@ -39,12 +39,12 @@ internal partial class ImageViewModel
         var (full, project) = ValidateConversionSource(sourcePath);
         var outputDir = Directory.CreateDirectory(project.OutputDir).FullName;
         var baseName = Path.GetFileNameWithoutExtension(full);
-        var format = ImageInputService.DetectFormat(full);
+        var format = ImageInputService.ProbeFormat(full);
 
         string[] outputPaths;
         if (direction == ConvertSparse)
         {
-            var toSparse = !string.Equals(format, "sparse", StringComparison.OrdinalIgnoreCase);
+            var toSparse = format != ImageFormatKind.Sparse;
             outputPaths = [Path.Combine(outputDir, baseName + (toSparse ? ".sparse" : ".raw"))];
         }
         else if (direction == ConvertImgToDat)
@@ -83,7 +83,7 @@ internal partial class ImageViewModel
         var (full, project) = ValidateConversionSource(sourcePath);
         var outputDir = Directory.CreateDirectory(project.OutputDir).FullName;
         var baseName = Path.GetFileNameWithoutExtension(full);
-        var format = ImageInputService.DetectFormat(full);
+        var format = ImageInputService.ProbeFormat(full);
 
         IsOperating = true;
 
@@ -133,12 +133,12 @@ internal partial class ImageViewModel
     }
 
     /// <summary>Builds the localized operation label shown in the confirmation dialog and progress text.</summary>
-    private static string GetOperationLabel(string direction, string format, string baseName)
+    private static string GetOperationLabel(string direction, ImageFormatKind format, string baseName)
     {
         var language = LanguageService.Instance;
         if (direction == ConvertSparse)
         {
-            var toSparse = !string.Equals(format, "sparse", StringComparison.OrdinalIgnoreCase);
+            var toSparse = format != ImageFormatKind.Sparse;
             return language.GetString(toSparse ? "Image_ConvertRawToSparse" : "Image_ConvertSparseToRaw");
         }
         return string.Format(language.GetString(direction == ConvertImgToBr ? "Image_ConvertImgToBr" : "Image_ConvertImgToDat"), baseName);
@@ -152,9 +152,9 @@ internal partial class ImageViewModel
             ReportByteStatistics(baseOffset + local, globalTotal);
         });
 
-    private async Task<IReadOnlyList<string>> ConvertSparseImageAsync(string source, string outputDir, string baseName, string format, int generation)
+    private async Task<IReadOnlyList<string>> ConvertSparseImageAsync(string source, string outputDir, string baseName, ImageFormatKind format, int generation)
     {
-        var toSparse = !string.Equals(format, "sparse", StringComparison.OrdinalIgnoreCase);
+        var toSparse = format != ImageFormatKind.Sparse;
         var output = Path.Combine(outputDir, baseName + (toSparse ? ".sparse" : ".raw"));
         if (toSparse)
         {
@@ -179,7 +179,7 @@ internal partial class ImageViewModel
         return [output];
     }
 
-    private async Task<IReadOnlyList<string>> ConvertToDatOrBrAsync(string source, string outputDir, string baseName, string format, bool br, int generation)
+    private async Task<IReadOnlyList<string>> ConvertToDatOrBrAsync(string source, string outputDir, string baseName, ImageFormatKind format, bool br, int generation)
     {
         var datPath = Path.Combine(outputDir, baseName + ".new.dat");
         var transferPath = Path.Combine(outputDir, baseName + ".transfer.list");
@@ -188,7 +188,7 @@ internal partial class ImageViewModel
         string? stagingRaw = null;
         var rawPhases = 1;
         long rawSize;
-        if (string.Equals(format, "sparse", StringComparison.OrdinalIgnoreCase))
+        if (format == ImageFormatKind.Sparse)
         {
             stagingRaw = Path.Combine(outputDir, ".convert-" + Guid.NewGuid().ToString("N") + ".raw");
             rawPhases = 2;

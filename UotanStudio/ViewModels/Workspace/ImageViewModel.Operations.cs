@@ -232,7 +232,11 @@ internal partial class ImageViewModel
         using var metadataScope = UotanStudio.Firmware.Core.Repacking.RepackMetadata.UseContext(
             ProjectContextService.Instance.CaptureMetadataContext(targetDirectory));
         UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
-        var handler = ImageInputService.IsBootFamilyFormat(entry.Format)
+        // 条目的格式标签来自解决方案快照，先还原为格式标识再分派。
+        // Entry labels come from the solution snapshot, so they are parsed back into a format identity
+        // before dispatch.
+        var format = ImageInputService.ParseFormatLabel(entry.Format);
+        var handler = ImageInputService.IsBootFamilyFormat(format)
             ? new UotanStudio.Firmware.BootSecurity.BootImage.BootImageFormatHandler()
             : FormatDetector.Detect(paths.Source) ?? throw new IOException("Unsupported firmware format.");
         if (Directory.Exists(targetDirectory)
@@ -242,7 +246,7 @@ internal partial class ImageViewModel
         }
 
         IReadOnlyList<string>? erofsDevices = null;
-        if (entry.Format is "ext4" or "erofs" or "f2fs" or "raw"
+        if (format is ImageFormatKind.Ext4 or ImageFormatKind.Erofs or ImageFormatKind.F2fs or ImageFormatKind.Raw
             && ImageInputService.ProbeFilesystemHeader(paths.Source) == RawImageLayout.Erofs)
         {
             erofsDevices = await SelectErofsDevicesAsync(paths.Source, cancellationToken);
@@ -255,11 +259,11 @@ internal partial class ImageViewModel
 
         var byteProgress = CreateFileSystemProgress(entry.DisplayName);
 
-        var result = await ExtractionDirectory.ReplaceAsync(targetDirectory, async () => entry.Format switch
+        var result = await ExtractionDirectory.ReplaceAsync(targetDirectory, async () => format switch
         {
-            "boot" or "init_boot" or "recovery" or "vendor_boot" => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, targetDirectory), cancellationToken),
-            "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, targetDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken), cancellationToken),
-            "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(paths.Source, targetDirectory, paths.Name,
+            ImageFormatKind.Boot or ImageFormatKind.InitBoot or ImageFormatKind.Recovery or ImageFormatKind.VendorBoot => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, targetDirectory), cancellationToken),
+            ImageFormatKind.Sparse => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, targetDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken), cancellationToken),
+            ImageFormatKind.Ext4 or ImageFormatKind.Erofs or ImageFormatKind.F2fs or ImageFormatKind.Raw => await ExtractRawAsync(paths.Source, targetDirectory, paths.Name,
                 byteProgress: byteProgress, erofsExtraDevicePaths: erofsDevices, cancellationToken: cancellationToken),
             // boot 家族其余变体（MTK/Samsung/DHTB/ChromeOS/Tegra/zImage/RSCE）由 BootImageFormatHandler 分派解包。
             // Remaining boot-family variants (MTK/Samsung/DHTB/ChromeOS/Tegra/zImage/RSCE) dispatch through BootImageFormatHandler.
@@ -477,8 +481,14 @@ internal partial class ImageViewModel
         var context = ProjectContextService.Instance;
         foreach (var file in candidates)
         {
-            var format = ImageInputService.DetectFormat(file);
-            if (format is "unknown" or "raw" or "folder") continue;
+            // 探测只返回文件内的格式标识；目录条目的 "folder" 标签由打包模式单独写入。
+            // Probing only reports file formats; the "folder" label is written by pack mode separately.
+            var format = ImageInputService.ProbeFormat(file);
+            if (format is ImageFormatKind.Unknown or ImageFormatKind.Raw)
+            {
+                continue;
+            }
+
             var relative = context.RelativePath(file);
             if (relative is null) continue;
             nested.Add(new ImageEntryViewModel
@@ -486,7 +496,7 @@ internal partial class ImageViewModel
                 DisplayName = Path.GetFileName(file),
                 RelativePath = relative,
                 SizeBytes = 0,
-                Format = format
+                Format = ImageInputService.GetFormatLabel(format)
             });
         }
         return nested;

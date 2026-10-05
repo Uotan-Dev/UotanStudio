@@ -1,9 +1,11 @@
 using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.Archive;
 using UotanStudio.Firmware.Archive.Browsing;
 using UotanStudio.Firmware.Archive.Models;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
@@ -13,7 +15,8 @@ namespace UotanStudio.Services.FileManagement;
 
 internal sealed partial class ImageBrowserSession
 {
-    // EXT4 magic ends at byte 1082; EROFS/F2FS magic ends at byte 1028.
+    // 逻辑头部预读长度：EXT4 魔数结束于 1082，EROFS/F2FS 魔数结束于 1028。
+    // Logical header peek length: the EXT4 magic ends at byte 1082 and the EROFS/F2FS magic at 1028.
     private const int FilesystemHeaderLength = 1082;
 
     /// <summary>
@@ -66,38 +69,40 @@ internal sealed partial class ImageBrowserSession
     }
 
     /// <summary>
-    /// <para>按魔数识别镜像的文件系统格式（ext4 0xEF53@1080、erofs 0xE0F5E1E2@1024、f2fs 0xF2F52010@1024）。
-    /// 物理偏移未命中时，sparse 包装镜像（如 product.img）按逻辑偏移重新探测内部文件系统。</para>
-    /// Detects the filesystem format of the image by magic (ext4 0xEF53@1080, erofs 0xE0F5E1E2@1024, f2fs 0xF2F52010@1024).
-    /// When the physical offset misses, sparse-wrapped images (e.g. product.img) are re-probed at the logical offset.
+    /// <para>识别镜像的文件系统格式：物理布局一律交给 <see cref="FormatDetector"/> 的注册表处理器，
+    /// 按处理器类型映射到会话内部 kind，宿主不再重复魔数字节比较。注册表只探测物理头部，
+    /// sparse 包装镜像（如 product.img）的内层文件系统位于逻辑偏移上，此时 Detect 只会返回
+    /// <see cref="SparseFormatHandler"/>，因此保留一次逻辑头部重探。</para>
+    /// Detects the filesystem format of the image: the physical layout is decided by the registered
+    /// <see cref="FormatDetector"/> handlers and mapped to a session kind by handler type, so the host keeps
+    /// no duplicated magic-byte comparisons. The registry only probes the physical header, and the inner
+    /// filesystem of a sparse-wrapped image (e.g. product.img) lives at the logical offset where detection
+    /// can only return <see cref="SparseFormatHandler"/>, so one logical re-probe is kept.
     /// </summary>
     /// <param name="path">
     /// <para>镜像文件路径。</para>
     /// The image file path.
     /// </param>
     /// <returns>
-    /// <para>识别出的文件系统格式；无法读取或未命中魔数时为 <see cref="FilesystemKind.Unknown"/>。</para>
+    /// <para>识别出的文件系统格式；无法读取或未命中时为 <see cref="FilesystemKind.Unknown"/>。</para>
     /// The detected filesystem kind; <see cref="FilesystemKind.Unknown"/> when unreadable or unmatched.
     /// </returns>
     private static FilesystemKind DetectFilesystem(string path)
     {
         try
         {
-            // 先按物理偏移探测（raw 镜像直接命中）。
-            // Probe the physical header first (raw images match directly).
-            var kind = DetectKindFromHeader(FormatDetector.ReadHeader(path, FilesystemHeaderLength),
-                new FileInfo(path).Length);
+            var kind = MapKind(FormatDetector.Detect(path));
             if (kind != FilesystemKind.Unknown)
             {
                 return kind;
             }
 
-            // 物理头部未命中：sparse 包装的镜像按逻辑偏移重新探测内部文件系统。
-            // Physical header missed: re-probe the logical header for sparse-wrapped images.
+            // 物理头部没有文件系统处理器认领：sparse 包装的镜像按逻辑头部重新探测内层文件系统。
+            // No filesystem handler claimed the physical header: re-probe the logical header of a
+            // sparse-wrapped image.
             if (IsSparseImage(path))
             {
-                var logical = SparseReader.PeekLogicalRange(path, 0, FilesystemHeaderLength);
-                kind = DetectKindFromHeader(logical, imageLength: null);
+                kind = DetectKindFromLogicalHeader(SparseReader.PeekLogicalRange(path, 0, FilesystemHeaderLength));
                 if (kind != FilesystemKind.Unknown)
                 {
                     return kind;
@@ -114,44 +119,62 @@ internal sealed partial class ImageBrowserSession
     }
 
     /// <summary>
-    /// <para>按头部字节中的文件系统魔数识别格式（ext4 0xEF53@1080、erofs 0xE0F5E1E2@1024、f2fs 0xF2F52010@1024）。
-    /// 长度不足或未命中时返回 <see cref="FilesystemKind.Unknown"/>。</para>
-    /// Detects the filesystem kind from header bytes by magic (ext4 0xEF53@1080, erofs 0xE0F5E1E2@1024,
-    /// f2fs 0xF2F52010@1024). Returns <see cref="FilesystemKind.Unknown"/> when too short or unmatched.
+    /// <para>把注册表处理器映射为会话内部 kind；非文件系统或未支持的容器返回
+    /// <see cref="FilesystemKind.Unknown"/>。</para>
+    /// Maps a registry handler to the session kind; filesystems the session cannot browse report
+    /// <see cref="FilesystemKind.Unknown"/>.
     /// </summary>
-    private static FilesystemKind DetectKindFromHeader(byte[] header, long? imageLength)
+    private static FilesystemKind MapKind(IReadonlyFormatHandler? handler) => handler switch
     {
-        if (header.Length >= 1082
-            && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
+        Ext4FormatHandler => FilesystemKind.Ext4,
+        ErofsFormatHandler => FilesystemKind.Erofs,
+        F2fsFormatHandler => FilesystemKind.F2fs,
+        CpioFormatHandler => FilesystemKind.Cpio,
+        // FAT/exFAT 处理器对宿主内部不可见，按注册表 FormatName 判定。
+        // The FAT/exFAT handlers are assembly-internal; match them by registry FormatName.
+        _ when handler is not null && handler.FormatName == "FAT" => FilesystemKind.Fat,
+        _ when handler is not null && handler.FormatName == "EXFAT" => FilesystemKind.ExFat,
+        _ => FilesystemKind.Unknown,
+    };
+
+    /// <summary>
+    /// <para>按 sparse 逻辑头部识别内层文件系统。ext4/EROFS/F2FS 复用注册表处理器的逻辑流判定
+    /// （<see cref="IStreamUnpackableFormatHandler.CanHandleLogicalStream"/>），顺序与注册表一致。
+    /// FAT 系列与 CPIO 的注册表处理器没有逻辑流入口，只能读取整卷，因此保留宿主侧判定：
+    /// FAT/exFAT 复用库解析器的引导记录几何校验，sparse 逻辑头部只覆盖镜像前缀、无法给出真实
+    /// 长度，故传入 null 跳过数据区上限，由解析器在装载时校验。</para>
+    /// Identifies the inner filesystem from a sparse logical header. EXT4, EROFS and F2FS reuse the registry
+    /// handlers' logical-stream check in registry order. The FAT family and CPIO handlers expose no logical
+    /// stream entry point and only read a whole volume, so their checks stay here: the FAT geometry is
+    /// reused from the Firmware parsers, and a sparse logical header only covers a prefix, so its unknown
+    /// length is passed as null and the parser validates when the volume loads.
+    /// </summary>
+    private static FilesystemKind DetectKindFromLogicalHeader(byte[] logical)
+    {
+        using var stream = new MemoryStream(logical, writable: false);
+        if (MatchesLogicalHandler<Ext4FormatHandler>(stream))
         {
             return FilesystemKind.Ext4;
         }
 
-        if (header.Length >= 1028
-            && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xE0F5E1E2)
+        if (MatchesLogicalHandler<ErofsFormatHandler>(stream))
         {
             return FilesystemKind.Erofs;
         }
 
-        if (header.Length >= 1028
-            && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xF2F52010)
+        if (MatchesLogicalHandler<F2fsFormatHandler>(stream))
         {
             return FilesystemKind.F2fs;
         }
 
-        // FAT12/FAT16/FAT32/exFAT 卷：几何校验复用 Firmware 解析器，避免在宿主另写一套 BIOS 参数块规则。
-        // sparse 逻辑头部只覆盖镜像前缀，无法给出真实长度，因此传入 null 跳过数据区上限，由解析器在装载时校验。
-        // FAT family and exFAT volumes: geometry validation is reused from the Firmware parsers so the host
-        // does not keep a second set of BIOS parameter block rules. A sparse logical header only covers a
-        // prefix, so its unknown length is passed as null and the parser validates when the volume loads.
-        if (header.Length >= 512)
+        if (logical.Length >= 512)
         {
-            if (FatParser.IsFatBootRecord(header, imageLength))
+            if (FatParser.IsFatBootRecord(logical))
             {
                 return FilesystemKind.Fat;
             }
 
-            if (ExFatParser.IsExFatBootRecord(header, imageLength))
+            if (ExFatParser.IsExFatBootRecord(logical))
             {
                 return FilesystemKind.ExFat;
             }
@@ -159,9 +182,9 @@ internal sealed partial class ImageBrowserSession
 
         // CPIO newc 魔数 "070701" 或 "070702"，CPIO bin 魔数 0x71C7（大端）。
         // CPIO newc magic "070701" or "070702", CPIO bin magic 0x71C7 (big-endian).
-        if (header.Length >= 6)
+        if (logical.Length >= 6)
         {
-            var magic = System.Text.Encoding.ASCII.GetString(header, 0, 6);
+            var magic = System.Text.Encoding.ASCII.GetString(logical, 0, 6);
             if (magic is "070701" or "070702" or "070707")
             {
                 return FilesystemKind.Cpio;
@@ -169,6 +192,27 @@ internal sealed partial class ImageBrowserSession
         }
 
         return FilesystemKind.Unknown;
+    }
+
+    /// <summary>
+    /// <para>用注册表中该类型的处理器单例判定逻辑流，避免在宿主新建处理器实例；普通遍历注册表快照，
+    /// 保持裁剪与 Native AOT 下的静态可分发。</para>
+    /// Probes the logical stream with the registered singleton of this handler type so the host never
+    /// constructs its own handler; the registry snapshot is walked with a plain loop to stay statically
+    /// dispatchable under trimming and Native AOT.
+    /// </summary>
+    private static bool MatchesLogicalHandler<THandler>(Stream logical)
+        where THandler : IStreamUnpackableFormatHandler
+    {
+        foreach (var handler in FormatDetector.RegisteredHandlers)
+        {
+            if (handler is THandler probe)
+            {
+                return probe.CanHandleLogicalStream(logical);
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Detects an image and indexes its entries, returning ownership only after successful loading.</summary>

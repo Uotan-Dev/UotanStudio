@@ -1,9 +1,12 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BootSecurity.BootImage;
 using UotanStudio.Firmware.BootSecurity.BootImage.Formats;
+using UotanStudio.Firmware.OtaDelta.Dat;
 using FormatDetector = UotanStudio.Firmware.Core.FormatDetector;
 
 namespace UotanStudio.Services.Firmware;
@@ -22,13 +25,101 @@ internal enum RawImageLayout
 }
 
 /// <summary>
-/// <para>镜像输入侧职责：格式探测与源文件路径解析。只返回纯数据（格式字符串、布局枚举、绝对路径），
-/// 依赖经构造参数显式注入；不引用视图、ViewModel 或任何 UI 单例。解包目录规则仍由
-/// <see cref="ImageOperationPaths"/> 负责，本服务不生成输出路径。</para>
+/// <para>镜像探测得到的格式标识。持久化与界面文本使用 <see cref="ImageInputService.GetFormatLabel"/>
+/// 映射出的既有标签，枚举名本身不作为显示文案。</para>
+/// The format identity produced by image probing. Persistence and UI text use the established labels
+/// mapped by <see cref="ImageInputService.GetFormatLabel"/>; the enum names are never display text.
+/// </summary>
+internal enum ImageFormatKind
+{
+    /// <summary>Unrecognized content. 未能识别的内容。</summary>
+    Unknown,
+
+    /// <summary>Raw image without a recognized header. 无可识别头部的 raw 镜像。</summary>
+    Raw,
+
+    /// <summary>Directory entry packed into an image (not a probe result). 打包用的目录条目（非探测结果）。</summary>
+    Folder,
+
+    /// <summary>OTA block-data transfer list or <c>.dat</c>. OTA 块数据 transfer list 或 <c>.dat</c>。</summary>
+    Dat,
+
+    /// <summary>Brotli-compressed block data. Brotli 压缩的块数据。</summary>
+    Brotli,
+
+    /// <summary>Android logical partition (super) container. Android 逻辑分区（super）容器。</summary>
+    Super,
+
+    /// <summary>Android sparse image. Android 稀疏镜像。</summary>
+    Sparse,
+
+    /// <summary>OTA payload ("CrAU"). OTA payload（"CrAU"）。</summary>
+    Payload,
+
+    /// <summary>CPIO archive. CPIO 归档。</summary>
+    Cpio,
+
+    /// <summary>Oppo OFP/OPS/OZIP package. Oppo OFP/OPS/OZIP 包。</summary>
+    Oppo,
+
+    /// <summary>ext4 filesystem image. ext4 文件系统镜像。</summary>
+    Ext4,
+
+    /// <summary>EROFS filesystem image. EROFS 文件系统镜像。</summary>
+    Erofs,
+
+    /// <summary>F2FS filesystem image. F2FS 文件系统镜像。</summary>
+    F2fs,
+
+    /// <summary>FAT12/16/32 volume. FAT12/16/32 卷。</summary>
+    Fat,
+
+    /// <summary>exFAT volume. exFAT 卷。</summary>
+    ExFat,
+
+    /// <summary>AOSP boot image. AOSP boot 镜像。</summary>
+    Boot,
+
+    /// <summary>AOSP init_boot image. AOSP init_boot 镜像。</summary>
+    InitBoot,
+
+    /// <summary>AOSP recovery image. AOSP recovery 镜像。</summary>
+    Recovery,
+
+    /// <summary>Vendor boot image. vendor_boot 镜像。</summary>
+    VendorBoot,
+
+    /// <summary>MediaTek boot image. MediaTek boot 镜像。</summary>
+    MtkBoot,
+
+    /// <summary>Samsung PXA boot image. 三星 PXA boot 镜像。</summary>
+    SamsungBoot,
+
+    /// <summary>DHTB boot image. DHTB boot 镜像。</summary>
+    DhtbBoot,
+
+    /// <summary>ChromeOS kernel image. ChromeOS 内核镜像。</summary>
+    ChromeOsBoot,
+
+    /// <summary>NVIDIA Tegra blob. NVIDIA Tegra blob。</summary>
+    TegraBlob,
+
+    /// <summary>zImage kernel. zImage 内核。</summary>
+    ZImage,
+
+    /// <summary>Rockchip RSCE resource container. 瑞芯微 RSCE 资源容器。</summary>
+    RkResource,
+}
+
+/// <summary>
+/// <para>镜像输入侧职责：格式探测与源文件路径解析。只返回纯数据（<see cref="ImageFormatKind"/> 格式标识、
+/// 既有标签字符串、布局枚举、绝对路径），依赖经构造参数显式注入；不引用视图、ViewModel 或任何 UI 单例。
+/// 解包目录规则仍由 <see cref="ImageOperationPaths"/> 负责，本服务不生成输出路径。</para>
 /// Image input-side responsibilities: format probing and source-path resolution. Only plain data is
-/// returned (format strings, layout enums, absolute paths); dependencies are injected explicitly via
-/// constructor parameters; no view, ViewModel or UI singleton is referenced. Unpack-directory rules
-/// stay with <see cref="ImageOperationPaths"/>; this service never produces output paths.
+/// returned (an <see cref="ImageFormatKind"/> identity, its established label, layout enums and absolute
+/// paths); dependencies are injected explicitly via constructor parameters; no view, ViewModel or UI
+/// singleton is referenced. Unpack-directory rules stay with <see cref="ImageOperationPaths"/>; this
+/// service never produces output paths.
 /// </summary>
 internal sealed class ImageInputService
 {
@@ -83,45 +174,57 @@ internal sealed class ImageInputService
     }
 
     /// <summary>
+    /// <para>探测镜像格式并返回既有标签字符串：标签由 <see cref="GetFormatLabel"/> 从
+    /// <see cref="ProbeFormat"/> 的 <see cref="ImageFormatKind"/> 映射得到，用于持久化与仍按字符串
+    /// 比较的调用方；显示文案请用现格式名，不要把标签或枚举名直接当作界面文本。</para>
+    /// Probes the image format and returns the established label string: labels come from
+    /// <see cref="GetFormatLabel"/> over <see cref="ProbeFormat"/>'s <see cref="ImageFormatKind"/> and serve
+    /// persistence and callers that still compare strings; display text uses the current format names,
+    /// never a label or the enum name.
+    /// </summary>
+    internal static string DetectFormat(string filePath) => GetFormatLabel(ProbeFormat(filePath));
+
+    /// <summary>
     /// <para>探测镜像格式：扩展名优先（cpio/oppo/sparse），随后读取 1082 字节头部按魔数判定
     /// （Android sparse 0xED26FF3A、payload "CrAU"、boot 系列经 <see cref="BootImageDetector"/>
-    /// 签名探测并按家族与分区角色输出 <c>boot</c>/<c>init_boot</c>/<c>recovery</c>/<c>vendor_boot</c>/
-    /// <c>mtk_boot</c>/<c>samsung_boot</c>/<c>dhtb_boot</c>/<c>chromeos_boot</c>/<c>tegra_blob</c>/
-    /// <c>zimage</c> 标签、RSCE 资源容器 <c>rk_resource</c>、ext4 超级块
+    /// 签名探测并按家族与分区角色输出 <see cref="ImageFormatKind.Boot"/>/<see cref="ImageFormatKind.InitBoot"/>/
+    /// <see cref="ImageFormatKind.Recovery"/>/<see cref="ImageFormatKind.VendorBoot"/>/<see cref="ImageFormatKind.MtkBoot"/>/
+    /// <see cref="ImageFormatKind.SamsungBoot"/>/<see cref="ImageFormatKind.DhtbBoot"/>/<see cref="ImageFormatKind.ChromeOsBoot"/>/
+    /// <see cref="ImageFormatKind.TegraBlob"/>/<see cref="ImageFormatKind.ZImage"/> 标签、RSCE 资源容器
+    /// <see cref="ImageFormatKind.RkResource"/>、ext4 超级块
     /// 结构校验、erofs 0xE0F5E1E2@1024、f2fs 0xF2F52010@1024、FAT12/16/32/exFAT 卷引导）；
-    /// ELF 可执行文件一律返回 <c>unknown</c>，其段内数据可能偶然命中文件系统魔数；头部读取
-    /// 失败回退扩展名推断，仍无法识别返回 "unknown"。只读文件头部，不做任何写入或调度。</para>
+    /// ELF 可执行文件一律返回 <see cref="ImageFormatKind.Unknown"/>，其段内数据可能偶然命中文件系统魔数；
+    /// 头部读取失败回退扩展名推断，仍无法识别返回 <see cref="ImageFormatKind.Unknown"/>。
+    /// super 判定交给格式注册表（见 <see cref="IsLpSuper"/>）。只读文件头部，不做任何写入或调度。</para>
     /// Probes the image format: extensions first (cpio/oppo/sparse), then a 1082-byte header is read
     /// and matched by magic (Android sparse 0xED26FF3A, payload "CrAU", the boot family via
-    /// <see cref="BootImageDetector"/> signature probes labeled by family and partition role as
-    /// <c>boot</c>/<c>init_boot</c>/<c>recovery</c>/<c>vendor_boot</c>/<c>mtk_boot</c>/<c>samsung_boot</c>/
-    /// <c>dhtb_boot</c>/<c>chromeos_boot</c>/<c>tegra_blob</c>/<c>zimage</c>, the RSCE resource container
-    /// as <c>rk_resource</c>,
-    /// a structural ext4 superblock check, erofs 0xE0F5E1E2@1024, f2fs 0xF2F52010@1024,
-    /// FAT12/16/32/exFAT boot records); ELF executables always return <c>unknown</c> because their
-    /// segment data can coincidentally match a filesystem magic; header read failures fall back to
-    /// extension inference, and "unknown" is returned when nothing matches. Read-only header access;
-    /// no writes or dispatching.
+    /// <see cref="BootImageDetector"/> signature probes labeled by family and partition role, the RSCE
+    /// resource container, a structural ext4 superblock check, erofs 0xE0F5E1E2@1024, f2fs
+    /// 0xF2F52010@1024, FAT12/16/32/exFAT boot records); an ELF executable always reports
+    /// <see cref="ImageFormatKind.Unknown"/> because its segment data can coincidentally match a
+    /// filesystem magic; header read failures fall back to extension inference and nothing matching
+    /// yields <see cref="ImageFormatKind.Unknown"/>. The super decision is delegated to the format
+    /// registry (see <see cref="IsLpSuper"/>). Read-only header access; no writes or dispatching.
     /// </summary>
-    internal static string DetectFormat(string filePath)
+    internal static ImageFormatKind ProbeFormat(string filePath)
     {
         // OTA block data may begin with filesystem magic; the container suffix takes precedence.
-        if (filePath.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase)) return "dat";
-        if (filePath.EndsWith(".dat", StringComparison.OrdinalIgnoreCase)) return "dat";
-        if (filePath.EndsWith(".br", StringComparison.OrdinalIgnoreCase)) return "brotli";
-        if (new UotanStudio.Firmware.BlockImage.Lp.LpFormatHandler().CanHandle(filePath)) return "super";
+        if (DatFileSet.IsTransferList(filePath)) return ImageFormatKind.Dat;
+        if (filePath.EndsWith(".dat", StringComparison.OrdinalIgnoreCase)) return ImageFormatKind.Dat;
+        if (DatFileSet.IsBrotli(filePath)) return ImageFormatKind.Brotli;
+        if (IsLpSuper(filePath)) return ImageFormatKind.Super;
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         switch (extension)
         {
             case ".cpio":
-                return "cpio";
+                return ImageFormatKind.Cpio;
             case ".ofp":
             case ".ops":
             case ".ozip":
-                return "oppo";
+                return ImageFormatKind.Oppo;
             case ".simg":
             case ".sparse":
-                return "sparse";
+                return ImageFormatKind.Sparse;
         }
 
         try
@@ -136,19 +239,19 @@ internal sealed class ImageInputService
             // renamed .img ELF never reports "raw".
             if (IsElfExecutable(header))
             {
-                return "unknown";
+                return ImageFormatKind.Unknown;
             }
 
             // Android sparse 魔数 0xED26FF3A（小端）。
             // Android sparse magic 0xED26FF3A (little-endian).
             if (IsSparseHeader(header))
             {
-                return "sparse";
+                return ImageFormatKind.Sparse;
             }
 
             if (IsPayloadHeader(header))
             {
-                return "payload";
+                return ImageFormatKind.Payload;
             }
 
             // boot 系列：复用库侧 BootImageDetector 签名探测，按家族与分区角色输出区分标签；
@@ -165,7 +268,7 @@ internal sealed class ImageInputService
             // ext4 filesystem image: structural superblock validation (see IsExt4Superblock).
             if (IsExt4Superblock(header))
             {
-                return "ext4";
+                return ImageFormatKind.Ext4;
             }
 
             // erofs 文件系统镜像：魔数 0xE0F5E1E2 位于偏移 1024。
@@ -173,7 +276,7 @@ internal sealed class ImageInputService
             if (header.Length >= 1028
                 && BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == ErofsMagic)
             {
-                return "erofs";
+                return ImageFormatKind.Erofs;
             }
 
             // f2fs 文件系统镜像：魔数 0xF2F52010 位于偏移 1024。
@@ -181,7 +284,7 @@ internal sealed class ImageInputService
             if (header.Length >= 1028
                 && BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == F2fsMagic)
             {
-                return "f2fs";
+                return ImageFormatKind.F2fs;
             }
 
             // FAT12/FAT16/FAT32/exFAT 文件系统镜像：FAT 系列 OID 位于 54/82，exFAT 检查
@@ -204,35 +307,139 @@ internal sealed class ImageInputService
 
         if (extension is ".img" or ".raw")
         {
-            return "raw";
+            return ImageFormatKind.Raw;
         }
 
-        return extension == ".bin" && Path.GetFileName(filePath).Contains("payload", StringComparison.OrdinalIgnoreCase) ? "payload" : "unknown";
+        return extension == ".bin" && Path.GetFileName(filePath).Contains("payload", StringComparison.OrdinalIgnoreCase)
+            ? ImageFormatKind.Payload
+            : ImageFormatKind.Unknown;
     }
 
     /// <summary>
-    /// <para>判定格式标签是否属于 boot 系列（解包视图登记、解包分派与刷入选择共用）。</para>
-    /// Decides whether a format label belongs to the boot family (shared by unpack-view registration,
-    /// extraction dispatch and flash selection).
+    /// <para>把 <see cref="ImageFormatKind"/> 映射为既有格式标签字符串。标签同时用于解决方案快照的
+    /// 持久化，因此取值必须与历史写入保持一致；界面显示名不由本方法提供。</para>
+    /// Maps an <see cref="ImageFormatKind"/> to the established label string. Labels are also persisted in
+    /// the solution snapshot, so the values must stay identical to what earlier builds wrote; display
+    /// names are not produced here.
     /// </summary>
-    /// <param name="format"><para><see cref="DetectFormat"/> 返回的格式标签。</para>Format label from <see cref="DetectFormat"/>.</param>
-    /// <returns><para>属于 boot 系列时为 <see langword="true"/>。</para><see langword="true"/> for boot-family labels.</returns>
-    internal static bool IsBootFamilyFormat(string format) => format is "boot" or "init_boot" or "recovery"
-        or "vendor_boot" or "mtk_boot" or "samsung_boot" or "dhtb_boot" or "chromeos_boot" or "tegra_blob"
-        or "zimage" or "rk_resource";
+    internal static string GetFormatLabel(ImageFormatKind kind) => kind switch
+    {
+        ImageFormatKind.Dat => "dat",
+        ImageFormatKind.Brotli => "brotli",
+        ImageFormatKind.Super => "super",
+        ImageFormatKind.Sparse => "sparse",
+        ImageFormatKind.Payload => "payload",
+        ImageFormatKind.Cpio => "cpio",
+        ImageFormatKind.Oppo => "oppo",
+        ImageFormatKind.Ext4 => "ext4",
+        ImageFormatKind.Erofs => "erofs",
+        ImageFormatKind.F2fs => "f2fs",
+        ImageFormatKind.Fat => "fat",
+        ImageFormatKind.ExFat => "exfat",
+        ImageFormatKind.Boot => "boot",
+        ImageFormatKind.InitBoot => "init_boot",
+        ImageFormatKind.Recovery => "recovery",
+        ImageFormatKind.VendorBoot => "vendor_boot",
+        ImageFormatKind.MtkBoot => "mtk_boot",
+        ImageFormatKind.SamsungBoot => "samsung_boot",
+        ImageFormatKind.DhtbBoot => "dhtb_boot",
+        ImageFormatKind.ChromeOsBoot => "chromeos_boot",
+        ImageFormatKind.TegraBlob => "tegra_blob",
+        ImageFormatKind.ZImage => "zimage",
+        ImageFormatKind.RkResource => "rk_resource",
+        ImageFormatKind.Raw => "raw",
+        ImageFormatKind.Folder => "folder",
+        _ => "unknown",
+    };
 
     /// <summary>
-    /// <para>用 <see cref="BootImageDetector"/> 的签名探测判定 boot 系列标签：AOSP 镜像按文件名的
-    /// 分区角色细分 <c>init_boot</c>/<c>recovery</c>/<c>boot</c>，vendor_boot、MTK、Samsung PXA、DHTB、
-    /// ChromeOS、Tegra blob 与 zImage 各自成标签；RSCE 资源容器记 <c>rk_resource</c>；payload 与
-    /// 未识别家族返回 null 交由后续文件系统判定。</para>
-    /// Decides the boot-family label through <see cref="BootImageDetector"/> signature probes: AOSP
-    /// images split into <c>init_boot</c>/<c>recovery</c>/<c>boot</c> by the partition role taken from
-    /// the file name, while vendor boot, MTK, Samsung PXA, DHTB, ChromeOS, Tegra blob and zImage each
-    /// get their own label; RSCE resource containers report <c>rk_resource</c>; payload and unmatched
-    /// families return null so the filesystem probes continue.
+    /// <para>读入已持久化的格式标签并还原为 <see cref="ImageFormatKind"/>（大小写不敏感）。
+    /// 空值或历史遗留的未知标签一律按 <see cref="ImageFormatKind.Unknown"/> 处理，
+    /// 由调用方回退到内容探测。</para>
+    /// Reads a persisted format label back into an <see cref="ImageFormatKind"/> (case-insensitively).
+    /// Blank or legacy unknown labels become <see cref="ImageFormatKind.Unknown"/> so callers fall back to
+    /// content probing.
     /// </summary>
-    private static string? DetectBootFamilyLabel(byte[] header, string filePath)
+    internal static ImageFormatKind ParseFormatLabel(string? label) => label?.ToLowerInvariant() switch
+    {
+        "dat" => ImageFormatKind.Dat,
+        "brotli" => ImageFormatKind.Brotli,
+        "super" => ImageFormatKind.Super,
+        "sparse" => ImageFormatKind.Sparse,
+        "payload" => ImageFormatKind.Payload,
+        "cpio" => ImageFormatKind.Cpio,
+        "oppo" => ImageFormatKind.Oppo,
+        "ext4" => ImageFormatKind.Ext4,
+        "erofs" => ImageFormatKind.Erofs,
+        "f2fs" => ImageFormatKind.F2fs,
+        "fat" => ImageFormatKind.Fat,
+        "exfat" => ImageFormatKind.ExFat,
+        "boot" => ImageFormatKind.Boot,
+        "init_boot" => ImageFormatKind.InitBoot,
+        "recovery" => ImageFormatKind.Recovery,
+        "vendor_boot" => ImageFormatKind.VendorBoot,
+        "mtk_boot" => ImageFormatKind.MtkBoot,
+        "samsung_boot" => ImageFormatKind.SamsungBoot,
+        "dhtb_boot" => ImageFormatKind.DhtbBoot,
+        "chromeos_boot" => ImageFormatKind.ChromeOsBoot,
+        "tegra_blob" => ImageFormatKind.TegraBlob,
+        "zimage" => ImageFormatKind.ZImage,
+        "rk_resource" => ImageFormatKind.RkResource,
+        "raw" => ImageFormatKind.Raw,
+        "folder" => ImageFormatKind.Folder,
+        _ => ImageFormatKind.Unknown,
+    };
+
+    /// <summary>
+    /// <para>由格式注册表判定 LP super 容器：RegisterAll 幂等注册全部处理器，Detect 返回的处理器
+    /// 即注册表单例，因此按类型判定而不是在宿主新建处理器实例。</para>
+    /// Decides an LP super container through the format registry: RegisterAll publishes every handler
+    /// idempotently and Detect returns the registered singleton, so the decision is a handler-type check
+    /// instead of a handler instance the host constructs on its own.
+    /// </summary>
+    private static bool IsLpSuper(string filePath)
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        return FormatDetector.Detect(filePath) is LpFormatHandler;
+    }
+
+    /// <summary>
+    /// <para>判定格式标识是否属于 boot 系列（解包视图登记、解包分派与刷入选择共用）。</para>
+    /// Decides whether a format identity belongs to the boot family (shared by unpack-view registration,
+    /// extraction dispatch and flash selection).
+    /// </summary>
+    /// <param name="format"><para><see cref="ProbeFormat"/> 得到的格式标识。</para>The format identity from <see cref="ProbeFormat"/>.</param>
+    /// <returns><para>属于 boot 系列时为 <see langword="true"/>。</para><see langword="true"/> for boot-family formats.</returns>
+    internal static bool IsBootFamilyFormat(ImageFormatKind format) => format is ImageFormatKind.Boot or ImageFormatKind.InitBoot
+        or ImageFormatKind.Recovery or ImageFormatKind.VendorBoot or ImageFormatKind.MtkBoot or ImageFormatKind.SamsungBoot
+        or ImageFormatKind.DhtbBoot or ImageFormatKind.ChromeOsBoot or ImageFormatKind.TegraBlob or ImageFormatKind.ZImage
+        or ImageFormatKind.RkResource;
+
+    /// <summary>
+    /// <para>判定既有格式标签字符串是否属于 boot 系列：先经 <see cref="ParseFormatLabel"/> 还原为
+    /// <see cref="ImageFormatKind"/>，未识别的标签按 <see cref="ImageFormatKind.Unknown"/> 处理。</para>
+    /// Decides whether an established label string names a boot-family format: it is parsed back into an
+    /// <see cref="ImageFormatKind"/> first, and unrecognized labels become
+    /// <see cref="ImageFormatKind.Unknown"/>.
+    /// </summary>
+    /// <param name="format"><para>标签字符串（<see cref="DetectFormat"/> 或持久化值）。</para>The label string (<see cref="DetectFormat"/> or a persisted value).</param>
+    /// <returns><para>属于 boot 系列时为 <see langword="true"/>。</para><see langword="true"/> for boot-family labels.</returns>
+    internal static bool IsBootFamilyFormat(string format) => IsBootFamilyFormat(ParseFormatLabel(format));
+
+    /// <summary>
+    /// <para>用 <see cref="BootImageDetector"/> 的签名探测判定 boot 系列标识：AOSP 镜像按文件名的
+    /// 分区角色细分 <see cref="ImageFormatKind.InitBoot"/>/<see cref="ImageFormatKind.Recovery"/>/
+    /// <see cref="ImageFormatKind.Boot"/>，vendor_boot、MTK、Samsung PXA、DHTB、ChromeOS、Tegra blob 与
+    /// zImage 各自成标识；RSCE 资源容器记 <see cref="ImageFormatKind.RkResource"/>；payload 与
+    /// 未识别家族返回 null 交由后续文件系统判定。</para>
+    /// Decides the boot-family identity through <see cref="BootImageDetector"/> signature probes: AOSP
+    /// images split into <see cref="ImageFormatKind.InitBoot"/>/<see cref="ImageFormatKind.Recovery"/>/
+    /// <see cref="ImageFormatKind.Boot"/> by the partition role taken from the file name, while vendor
+    /// boot, MTK, Samsung PXA, DHTB, ChromeOS, Tegra blob and zImage each get their own identity; RSCE
+    /// resource containers report <see cref="ImageFormatKind.RkResource"/>; payload and unmatched families
+    /// return null so the filesystem probes continue.
+    /// </summary>
+    private static ImageFormatKind? DetectBootFamilyLabel(byte[] header, string filePath)
     {
         if (header.Length < 8)
         {
@@ -241,24 +448,24 @@ internal sealed class ImageInputService
 
         if (RockchipResourceImage.DetectResource(header) == RockchipResourceImage.BootResourceType.RockchipResource)
         {
-            return "rk_resource";
+            return ImageFormatKind.RkResource;
         }
 
         return BootImageDetector.Detect(header).Format switch
         {
             BootImageDetector.ImageFormat.AospBoot => Path.GetFileNameWithoutExtension(filePath) switch
             {
-                var stem when stem.Contains("init_boot", StringComparison.OrdinalIgnoreCase) => "init_boot",
-                var stem when stem.Contains("recovery", StringComparison.OrdinalIgnoreCase) => "recovery",
-                _ => "boot"
+                var stem when stem.Contains("init_boot", StringComparison.OrdinalIgnoreCase) => ImageFormatKind.InitBoot,
+                var stem when stem.Contains("recovery", StringComparison.OrdinalIgnoreCase) => ImageFormatKind.Recovery,
+                _ => ImageFormatKind.Boot
             },
-            BootImageDetector.ImageFormat.VendorBoot => "vendor_boot",
-            BootImageDetector.ImageFormat.MtkBoot => "mtk_boot",
-            BootImageDetector.ImageFormat.SamsungPxa => "samsung_boot",
-            BootImageDetector.ImageFormat.DhtbBoot => "dhtb_boot",
-            BootImageDetector.ImageFormat.ChromeOs => "chromeos_boot",
-            BootImageDetector.ImageFormat.TegraBlob => "tegra_blob",
-            BootImageDetector.ImageFormat.ZImage => "zimage",
+            BootImageDetector.ImageFormat.VendorBoot => ImageFormatKind.VendorBoot,
+            BootImageDetector.ImageFormat.MtkBoot => ImageFormatKind.MtkBoot,
+            BootImageDetector.ImageFormat.SamsungPxa => ImageFormatKind.SamsungBoot,
+            BootImageDetector.ImageFormat.DhtbBoot => ImageFormatKind.DhtbBoot,
+            BootImageDetector.ImageFormat.ChromeOs => ImageFormatKind.ChromeOsBoot,
+            BootImageDetector.ImageFormat.TegraBlob => ImageFormatKind.TegraBlob,
+            BootImageDetector.ImageFormat.ZImage => ImageFormatKind.ZImage,
             _ => null
         };
     }
@@ -342,7 +549,7 @@ internal sealed class ImageInputService
             // The LP super check must precede the sparse branch: a sparse-wrapped super carries the
             // sparse magic rather than a filesystem boot record in its header, so probing the sparse
             // logical stream first would misclassify the super as carrying no filesystem.
-            if (new UotanStudio.Firmware.BlockImage.Lp.LpFormatHandler().CanHandle(filePath))
+            if (IsLpSuper(filePath))
             {
                 return true;
             }
@@ -373,12 +580,13 @@ internal sealed class ImageInputService
     /// <summary>
     /// <para>匹配 FAT12/FAT16/FAT32/exFAT 卷引导：要求偏移 510 的 0x55AA 引导记录签名，
     /// 再比对偏移 54/82 的 FAT 文件系统类型名或偏移 3 的 "EXFAT   " 文件系统名。
-    /// 命中返回 <c>"fat"</c>/<c>"exfat"</c>，否则返回 null。</para>
+    /// 命中返回 <see cref="ImageFormatKind.Fat"/>/<see cref="ImageFormatKind.ExFat"/>，否则返回 null。</para>
     /// Matches a FAT12/FAT16/FAT32/exFAT volume boot record: it requires the 0x55AA boot-record
     /// signature at offset 510, then compares the FAT filesystem type name at offset 54/82 or the
-    /// "EXFAT   " filesystem name at offset 3. Returns <c>"fat"</c>/<c>"exfat"</c> on a match, else null.
+    /// "EXFAT   " filesystem name at offset 3. Returns <see cref="ImageFormatKind.Fat"/>/
+    /// <see cref="ImageFormatKind.ExFat"/> on a match, else null.
     /// </summary>
-    private static string? MatchFatFamilyFormat(ReadOnlySpan<byte> header)
+    private static ImageFormatKind? MatchFatFamilyFormat(ReadOnlySpan<byte> header)
     {
         if (header.Length < 512 || header[510] != 0x55 || header[511] != 0xAA)
         {
@@ -388,15 +596,15 @@ internal sealed class ImageInputService
         var oem12 = Encoding.ASCII.GetString(header.Slice(54, 8)).Trim();
         if (oem12 is "FAT12" or "FAT16")
         {
-            return "fat";
+            return ImageFormatKind.Fat;
         }
 
         if (header.Length >= 90 && Encoding.ASCII.GetString(header.Slice(82, 8)).Trim() == "FAT32")
         {
-            return "fat";
+            return ImageFormatKind.Fat;
         }
 
-        return header.Length >= 11 && Encoding.ASCII.GetString(header.Slice(3, 8)) == "EXFAT   " ? "exfat" : null;
+        return header.Length >= 11 && Encoding.ASCII.GetString(header.Slice(3, 8)) == "EXFAT   " ? ImageFormatKind.ExFat : null;
     }
 
     /// <summary>
