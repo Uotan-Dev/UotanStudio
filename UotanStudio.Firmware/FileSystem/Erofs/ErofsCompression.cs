@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
-using ICSharpCode.SharpZipLib.Zip.Compression;
 using K4os.Compression.LZ4;
 using SevenZip;
 using SevenZip.Compression.LZMA;
@@ -405,7 +404,7 @@ internal static class ErofsCompression
         try
         {
             rebuilt[0] = 0;
-            Buffer.BlockCopy(source, sourceIndex + 1, rebuilt, 1, sourceLength - 1);
+            source.AsSpan(sourceIndex + 1, sourceLength - 1).CopyTo(rebuilt.AsSpan(1));
             using var input = new MemoryStream(rebuilt, 0, sourceLength, writable: false);
             using var output = new BoundedWriteStream(target, targetIndex, targetLength);
 
@@ -469,31 +468,34 @@ internal static class ErofsCompression
             return 0;
         }
 
-        var deflater = new Deflater(Math.Clamp(compressionLevel, 0, 9), noZlibHeaderOrFooter: true);
-        if (windowBits is > 0 and < 15) deflater.SetStrategy(DeflateStrategy.HuffmanOnly);
-        deflater.SetInput(source, sourceIndex, sourceLength);
-        deflater.Finish();
-
-        var written = 0;
-        while (!deflater.IsFinished)
+        using var output = new BoundedWriteStream(target, targetIndex, targetLength);
+        using (var deflate = new DeflateStream(output, DeflateEncoderOptions(compressionLevel, windowBits), leaveOpen: true))
         {
-            var remaining = targetLength - written;
-            if (remaining <= 0)
-            {
-                throw new InvalidOperationException("DEFLATE compressed output exceeds the destination buffer.");
-            }
-
-            var n = deflater.Deflate(target, targetIndex + written, remaining);
-            if (n <= 0)
-            {
-                throw new InvalidOperationException("DEFLATE compressor made no progress.");
-            }
-
-            written += n;
+            deflate.Write(source, sourceIndex, sourceLength);
         }
 
-        return written;
+        return checked((int)output.Position);
     }
+
+    /// <summary>
+    /// Builds the raw DEFLATE encoder options: the clamped level plus the Huffman-only strategy the kernel
+    /// requests by passing a reduced window size for ZLIB4C semi-compressed pclusters.
+    /// <para>构建原始 DEFLATE 编码器选项：截断后的等级，以及内核为 ZLIB4C 半压缩 pcluster 传入缩小窗口时
+    /// 请求的 Huffman-only 策略。</para>
+    /// </summary>
+    /// <param name="compressionLevel">Requested level, clamped to the 0-9 range the encoder accepts.
+    /// <para>请求的等级，截断到编码器接受的 0-9 区间。</para></param>
+    /// <param name="windowBits">Validated window size; a value in 1-14 selects Huffman-only encoding.
+    /// <para>已校验的窗口大小；取值 1-14 时选择 Huffman-only 编码。</para></param>
+    /// <returns>Options producing a raw DEFLATE stream. <para>产生原始 DEFLATE 流的选项。</para></returns>
+    private static ZLibCompressionOptions DeflateEncoderOptions(int compressionLevel, int windowBits)
+        => new()
+        {
+            CompressionLevel = Math.Clamp(compressionLevel, 0, 9),
+            CompressionStrategy = windowBits is > 0 and < 15
+                ? ZLibCompressionStrategy.HuffmanOnly
+                : ZLibCompressionStrategy.Default,
+        };
 
     /// <summary>
     /// DEFLATE decompression accepting a raw DEFLATE stream (no zlib header, RFC 1951).
@@ -516,66 +518,31 @@ internal static class ErofsCompression
 
         try
         {
-            return InflateDeflateRaw(source, sourceIndex, sourceLength, target, targetIndex, targetLength);
-        }
-        catch (ICSharpCode.SharpZipLib.SharpZipBaseException exception)
-        {
-            throw new FileSystemCorruptedException("EROFS DEFLATE compressed cluster data is invalid.", exception);
-        }
-    }
-
-    private static int InflateDeflateRaw(
-        byte[] source,
-        int sourceIndex,
-        int sourceLength,
-        byte[] target,
-        int targetIndex,
-        int targetLength)
-    {
-        var inflater = new Inflater(noHeader: true);
-        inflater.SetInput(source, sourceIndex, sourceLength);
-
-        var written = 0;
-        while (!inflater.IsFinished)
-        {
-            if (written >= targetLength)
+            using var input = new MemoryStream(source, sourceIndex, sourceLength, writable: false);
+            using var inflater = new DeflateStream(input, CompressionMode.Decompress, leaveOpen: true);
+            var written = 0;
+            while (written < targetLength)
             {
-
-                inflater.Inflate(target, targetIndex, 0);
-                if (inflater.IsFinished)
+                var read = inflater.Read(target, targetIndex + written, targetLength - written);
+                if (read == 0)
                 {
-                    break;
+                    return written;
                 }
 
-                if (inflater.IsNeedingInput)
-                {
-                    throw new FileSystemCorruptedException("DEFLATE compressed data is truncated.");
-                }
+                written += read;
+            }
 
+            if (inflater.ReadByte() != -1)
+            {
                 throw new FileSystemCorruptedException("DEFLATE decompressed output exceeds the destination buffer.");
             }
 
-            var n = inflater.Inflate(target, targetIndex + written, targetLength - written);
-            if (n > 0)
-            {
-                written += n;
-                continue;
-            }
-
-            if (inflater.IsFinished)
-            {
-                break;
-            }
-
-            if (inflater.IsNeedingInput)
-            {
-                throw new FileSystemCorruptedException("DEFLATE compressed data is truncated.");
-            }
-
-            throw new FileSystemCorruptedException("DEFLATE decompressor made no progress (corrupt stream).");
+            return written;
         }
-
-        return written;
+        catch (InvalidDataException exception)
+        {
+            throw new FileSystemCorruptedException("EROFS DEFLATE compressed cluster data is invalid.", exception);
+        }
     }
 
     private static void ValidateDeflateWindowBits(int windowBits)
