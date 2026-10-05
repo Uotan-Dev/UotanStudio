@@ -399,7 +399,6 @@
     <x:String x:Key="Flash_EdlActiveSlotDetected">Active slot: {0}</x:String>
     <x:String x:Key="Flash_EdlLun">Physical region (LUN)</x:String>
     <x:String x:Key="Flash_EdlSerialBaud">Serial baud rate</x:String>
-    <x:String x:Key="Flash_Canceled">The operation was canceled.</x:String>
     <x:String x:Key="Flash_MtkLoggingOnlyHint">The selected MTK port is logging-only and cannot run flashing commands.</x:String>
     <x:String x:Key="Flash_MtkLoaderNoEntries">The loader profile exposes no usable DA1/DA2 region pair.</x:String>
     <x:String x:Key="Flash_MtkRpmbModeFrames">Read frames by index</x:String>

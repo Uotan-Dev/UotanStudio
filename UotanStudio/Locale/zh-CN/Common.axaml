@@ -399,7 +399,6 @@
     <x:String x:Key="Flash_EdlActiveSlotDetected">活动槽位：{0}</x:String>
     <x:String x:Key="Flash_EdlLun">物理区域（LUN）</x:String>
     <x:String x:Key="Flash_EdlSerialBaud">串口波特率</x:String>
-    <x:String x:Key="Flash_Canceled">操作已取消。</x:String>
     <x:String x:Key="Flash_MtkLoggingOnlyHint">所选 MTK 端口仅支持日志输出，无法执行刷写命令。</x:String>
     <x:String x:Key="Flash_MtkLoaderNoEntries">该 loader 配置没有可用的 DA1/DA2 区域对。</x:String>
     <x:String x:Key="Flash_MtkRpmbModeFrames">按序号读取帧</x:String>
