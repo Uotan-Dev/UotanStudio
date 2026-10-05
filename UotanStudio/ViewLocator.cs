@@ -51,23 +51,12 @@ public class ViewLocator : IDataTemplate
             return cached;
         }
 
-        var factory = ViewModelViewRegistry.Resolve(param.GetType());
+        var viewModelType = param.GetType();
+        var factory = ViewModelViewRegistry.Resolve(viewModelType);
         if (factory is not null)
         {
             var view = factory();
-            if (param is UotanStudio.ViewModels.Editors.ElfInfoViewModel
-                or UotanStudio.ViewModels.Editors.QualcommImageViewModel
-                or UotanStudio.ViewModels.Editors.PartitionEditorViewModel
-                or UotanStudio.ViewModels.Editors.LogEditorViewModel
-                or UotanStudio.ViewModels.Editors.DexEditorViewModel
-                or UotanStudio.ViewModels.Editors.FirmwareInfoViewModel
-                or UotanStudio.ViewModels.Editors.DtbEditorViewModel
-                or UotanStudio.ViewModels.Editors.ManifestEditorViewModel
-                or UotanStudio.ViewModels.Editors.ArscEditorViewModel
-                or UotanStudio.ViewModels.Editors.FileManagerEditorViewModel
-                or UotanStudio.ViewModels.Editors.FileViewModel
-                or UotanStudio.ViewModels.Editors.HexEditorViewModel
-                or UotanStudio.ViewModels.Editors.ApkEditorViewModel)
+            if (ViewModelViewRegistry.IsDocumentStyle(viewModelType))
             {
                 if (view is UserControl editor && editor.Background is null)
                 {

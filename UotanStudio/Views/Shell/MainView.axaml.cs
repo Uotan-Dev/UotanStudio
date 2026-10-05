@@ -4,7 +4,6 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.ViewModels.Shell;
-using UotanStudio.Views.Nodes;
 
 namespace UotanStudio.Views.Shell;
 
@@ -41,10 +40,10 @@ public partial class MainView : UserControl
 
     private static Control CreatePage(int index) => index switch
     {
-        FlashTabIndex => new FlashView(),
-        DeliveryTabIndex => new DeliveryView(),
-        NodeEditorTabIndex => new NodeEditorView(),
-        SettingsTabIndex => new SettingsView(),
+        FlashTabIndex => ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.Flash),
+        DeliveryTabIndex => ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.Delivery),
+        NodeEditorTabIndex => ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.NodeEditor),
+        SettingsTabIndex => ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.Settings),
         _ => throw new ArgumentOutOfRangeException(nameof(index))
     };
 
