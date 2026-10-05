@@ -243,6 +243,27 @@ public class CpioRoundTripTests
         }
     }
 
+    [Fact]
+    public void TarArchiveReader_ReadEntries_CorruptedHeaderChecksum_ThrowsInvalidData()
+    {
+        var fileA = BuildBytes(512, 7);
+        byte[] packed;
+        using (var ms = new MemoryStream())
+        {
+            var archive = new CpioArchive();
+            archive.SaveAll(ms, [new ArchiveEntry { Name = "a.bin", Data = fileA, Metadata = new ArchiveEntryMetadata() }],
+                ArchiveFormat.Ustar, new WriteOptions());
+            packed = ms.ToArray();
+        }
+
+        packed[150] = packed[150] == (byte)'0' ? (byte)'1' : (byte)'0';
+
+        var reader = new TarArchiveReader();
+        using var src = new MemoryStream(packed, writable: false);
+        var invalid = Assert.Throws<InvalidDataException>(() => reader.ReadAll(src));
+        Assert.Contains("hecksum", invalid.Message, StringComparison.Ordinal);
+    }
+
     private static ArchiveEntry BuildStreamedEntry(string name, string filePath)
     {
         return new ArchiveEntry
