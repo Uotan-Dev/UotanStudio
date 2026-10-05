@@ -51,7 +51,7 @@ public sealed class HashingReadStream : Stream
     /// </summary>
     /// <returns>The 64-character lowercase hexadecimal digest; the accumulated state is cleared, so later reads start a new digest.
     /// <para>64 位小写十六进制摘要；调用后累积状态被清空，之后的读取将从新的摘要重新开始。</para></returns>
-    public string GetHashHex() => Convert.ToHexString(_hash.GetHashAndReset()).ToLowerInvariant();
+    public string GetHashHex() => Convert.ToHexStringLower(_hash.GetHashAndReset());
 
     /// <summary>
     /// Returns the raw SHA-256 digest bytes of the data read so far.

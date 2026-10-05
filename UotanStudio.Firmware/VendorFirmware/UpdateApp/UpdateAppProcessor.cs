@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.VendorFirmware.UpdateApp;
 
@@ -171,7 +172,7 @@ internal static class UpdateAppProcessor
 
             var fileSize = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(24));
             var nameBytes = header.AsSpan(60, 16).ToArray();
-            var filename = Encoding.ASCII.GetString(nameBytes).TrimEnd('\0');
+            var filename = Encoding.ASCII.GetStringTrimNul(nameBytes);
             filename = CleanFileName(filename).ToLowerInvariant();
             FileExtraction.ValidateRange(headerStart + headerSize, fileSize, fs.Length, "UPDATE.APP entry data");
 

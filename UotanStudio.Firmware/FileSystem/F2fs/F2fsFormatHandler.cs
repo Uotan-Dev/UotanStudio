@@ -1,5 +1,6 @@
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Firmware.FileSystem.F2fs.Models;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
 
@@ -126,7 +127,7 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider,
                     ["MetaIno"] = MetadataDisplay.Number(sb.MetaIno),
                     ["CpPayload"] = MetadataDisplay.Number(sb.CpPayload),
                     ["Feature"] = MetadataDisplay.Flags(sb.Feature, (1, "encryption"), (2, "blkzoned"), (4, "atomic_write"), (8, "extra_attr"), (16, "project_quota"), (32, "inode_checksum"), (64, "flexible_inline_xattr"), (128, "quota_ino"), (256, "inode_crtime"), (512, "lost_found"), (1024, "verity"), (2048, "sb_checksum"), (4096, "casefold"), (8192, "compression"), (16384, "readonly"), (32768, "device_alias")),
-                    ["Version"] = System.Text.Encoding.UTF8.GetString(sb.Version).TrimEnd('\0'),
+                    ["Version"] = System.Text.Encoding.UTF8.GetStringTrimNul(sb.Version),
                     ["CheckpointVer"] = MetadataDisplay.Number(parser.Checkpoint.CheckpointVer),
                     ["UserBlockCount"] = MetadataDisplay.Number(parser.Checkpoint.UserBlockCount),
                     ["ValidBlockCount"] = MetadataDisplay.Number(parser.Checkpoint.ValidBlockCount),

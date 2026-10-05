@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.VendorFirmware.Dz;
 
@@ -249,7 +250,7 @@ internal static class KdzBuilder
                 throw new InvalidDataException("Preserved KDZ record offsets are invalid.");
             }
             layout.ReadExactly(record);
-            if (NameEncoding.GetString(record.AsSpan(0, 256)).TrimEnd('\0') != sources[index].Name)
+            if (NameEncoding.GetStringTrimNul(record.AsSpan(0, 256)) != sources[index].Name)
             {
                 throw new InvalidDataException("Preserved KDZ member name does not match its metadata.");
             }

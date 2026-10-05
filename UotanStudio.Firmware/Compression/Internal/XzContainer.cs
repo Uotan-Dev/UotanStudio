@@ -1,3 +1,5 @@
+using UotanStudio.Firmware.Core;
+
 namespace UotanStudio.Firmware.Compression.Internal;
 
 internal static class XzContainer
@@ -226,16 +228,7 @@ internal static class XzContainer
     /// Returns a 4-byte little-endian value.
     /// <para>返回小端序 4 字节值。</para>
     /// </summary>
-    private static byte[] WriteUInt32LE(uint value)
-    {
-        var buf = new byte[4];
-        for (var i = 0; i < 4; i++)
-        {
-            buf[i] = (byte)((value >> (8 * i)) & 0xFF);
-        }
-
-        return buf;
-    }
+    private static byte[] WriteUInt32LE(uint value) => ByteWriter.ToUInt32LE(value);
 
     /// <summary>
     /// Writes an XZ variable-length integer (1-9 bytes, 7 bits per group, high bit = continuation).

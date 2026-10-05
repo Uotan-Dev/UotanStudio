@@ -1,4 +1,5 @@
 using System.Text;
+using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Firmware.VendorFirmware.Nb0.Models;
 
@@ -215,12 +216,7 @@ public sealed class Nb0EntryHeader
     }
 
     private static void WriteUInt32LE(byte[] buffer, int offset, uint value)
-    {
-        buffer[offset] = (byte)value;
-        buffer[offset + 1] = (byte)(value >> 8);
-        buffer[offset + 2] = (byte)(value >> 16);
-        buffer[offset + 3] = (byte)(value >> 24);
-    }
+        => ByteWriter.WriteUInt32LE(buffer, offset, value);
 
     private static uint ReadUInt32LE(byte[] buffer, int offset)
     {

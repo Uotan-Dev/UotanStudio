@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Metadata;
 
@@ -131,7 +132,7 @@ public static partial class FileSystemPreservation
                 entry => new FsConfigEntry(entry.Uid, entry.Gid, (ushort)(entry.Mode & 0xFFF)), StringComparer.Ordinal),
             FileContexts = parsedEntries.Where(entry => entry.Xattrs?.ContainsKey("security.selinux") == true)
                 .ToDictionary(entry => FileSystemEditPlan.Normalize(entry.Path),
-                    entry => Encoding.UTF8.GetString(entry.Xattrs!["security.selinux"]).TrimEnd('\0'), StringComparer.Ordinal),
+                    entry => Encoding.UTF8.GetStringTrimNul(entry.Xattrs!["security.selinux"]), StringComparer.Ordinal),
             ImagePaths = CapturedPaths.Value is { } paths ? new(paths, StringComparer.Ordinal) : [],
             ParsedEntries = parsedEntries,
             Projection = Scan(extraction, metadataDirectory, metadata.SourceFileName, cancellationToken,

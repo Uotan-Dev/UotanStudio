@@ -575,7 +575,7 @@ public static class ElfTool
 
     private static ulong ReadUInt64LE(byte[] data, int offset) => offset + 8 > data.Length ? 0 : BinaryReaderHelpers.ReadUInt64LE(data, offset);
 
-    private static void WriteUInt32LE(byte[] data, int offset, uint value) => BitConverter.TryWriteBytes(data.AsSpan(offset, 4), value);
+    private static void WriteUInt32LE(byte[] data, int offset, uint value) => ByteWriter.WriteUInt32LE(data, offset, value);
 
     private static void WriteUInt64LE(byte[] data, int offset, ulong value) => BitConverter.TryWriteBytes(data.AsSpan(offset, 8), value);
 

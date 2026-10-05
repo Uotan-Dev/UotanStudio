@@ -15,6 +15,15 @@ namespace UotanStudio.Firmware.OtaDelta.Payload;
 /// <para>Android OTA <c>payload.bin</c> 读取与提取的入口，支持原始载荷流与 ZIP 包裹的升级包。输入不可信：
 /// 大小、extent 与输出路径在使用前均经边界检查。</para>
 /// </summary>
+/// <remarks>
+/// Two ZIP libraries are used deliberately. <c>System.IO.Compression.ZipArchive</c> streams the payload entry for
+/// normal extraction but does not expose an entry's raw local-header byte offset. <c>SharpZipZipFile</c> is retained
+/// only to map a <c>STORED</c> payload back to its absolute data range so it can be read in place without
+/// decompression; the BCL reader cannot answer that query.
+/// <para>本类型刻意使用两套 ZIP 库。<c>System.IO.Compression.ZipArchive</c> 负责常规流式提取，但不暴露条目的原始本地头
+/// 字节偏移。<c>SharpZipZipFile</c> 仅用于把 <c>STORED</c> 载荷映射回其绝对数据区间以便就地读取而无需解压；BCL 读取器无法
+/// 回答这一查询。</para>
+/// </remarks>
 public static partial class PayloadParser
 {
 

@@ -1,5 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions;
 
 namespace UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
@@ -96,7 +97,7 @@ internal sealed class OzipHeader
             }
 
 
-            var sizeString = Encoding.ASCII.GetString(sizeBuffer).TrimEnd('\0').Trim();
+            var sizeString = Encoding.ASCII.GetStringTrimNul(sizeBuffer).Trim();
             return !long.TryParse(sizeString, out var encryptedDataSize)
                 ? throw new InvalidOppFormatException(
                     $"Invalid OZip encrypted data size field: '{sizeString}'. Expected a decimal number.")

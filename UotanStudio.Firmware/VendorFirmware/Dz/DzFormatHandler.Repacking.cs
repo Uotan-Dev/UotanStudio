@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.VendorFirmware.Dz;
 
@@ -59,7 +60,7 @@ internal sealed partial class DzFormatHandler
             records[index] = source.Position;
             var record = new byte[KdzHeader.Size];
             source.ReadExactly(record);
-            var name = KdzBuilder.NameEncoding.GetString(record.AsSpan(0, 256)).TrimEnd('\0');
+            var name = KdzBuilder.NameEncoding.GetStringTrimNul(record.AsSpan(0, 256));
             if (name != names[index])
             {
                 throw new InvalidDataException("KDZ member names cannot be preserved as valid UTF-8.");

@@ -1253,19 +1253,25 @@ public sealed partial class Ext4Builder
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "getfattr",
-                    Arguments = $"-n security.selinux --only-values -- \"{path}\"",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 };
+                psi.ArgumentList.Add("-n");
+                psi.ArgumentList.Add("security.selinux");
+                psi.ArgumentList.Add("--only-values");
+                psi.ArgumentList.Add("--");
+                psi.ArgumentList.Add(path);
                 using var process = System.Diagnostics.Process.Start(psi);
                 if (process != null)
                 {
+                    // Drain stderr so the child cannot block on a full error pipe while we copy
+                    // stdout; the label is optional, so only a clean 0-exit stdout value is kept.
+                    _ = process.StandardError.ReadToEndAsync();
                     using var ms = new MemoryStream();
                     process.StandardOutput.BaseStream.CopyTo(ms);
-                    process.WaitForExit(2000);
-                    if (process.ExitCode == 0 && ms.Length > 0)
+                    if (process.WaitForExit(2000) && process.ExitCode == 0 && ms.Length > 0)
                     {
                         node.Xattrs ??= new Dictionary<string, byte[]>(StringComparer.Ordinal);
                         node.Xattrs["security.selinux"] = ms.ToArray();
@@ -1274,7 +1280,8 @@ public sealed partial class Ext4Builder
             }
             catch
             {
-
+                // A missing or failing getfattr is expected on hosts without SELinux xattrs;
+                // the inode is still built, just without the security.selinux label.
             }
         }
         else

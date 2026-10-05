@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
 
 namespace UotanStudio.Firmware.FileSystem.Metadata;
@@ -137,7 +138,7 @@ internal sealed class SelinuxFileLabelInference
     private static string? SafeLabel(PreservedInodeEntry entry)
     {
         if (entry.Xattrs?.TryGetValue("security.selinux", out var raw) != true || raw is null) return null;
-        var label = Encoding.UTF8.GetString(raw).TrimEnd('\0');
+        var label = Encoding.UTF8.GetStringTrimNul(raw);
         if (!IsObjectContext(label)) return null;
         var type = label.Split(':')[2];
         return type.EndsWith("_exec", StringComparison.Ordinal) || type.EndsWith("_exec_t", StringComparison.Ordinal)

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
@@ -223,7 +224,7 @@ internal static class FileSystemMetadataGenerator
             string? label = null;
             if (xattrs is not null && xattrs.TryGetValue("security.selinux", out var selinuxValue))
             {
-                var decoded = Encoding.UTF8.GetString(selinuxValue).TrimEnd('\0');
+                var decoded = Encoding.UTF8.GetStringTrimNul(selinuxValue);
                 if (!string.IsNullOrWhiteSpace(decoded))
                     label = decoded;
             }
@@ -254,7 +255,7 @@ internal static class FileSystemMetadataGenerator
                 var selinux = entry.Xattrs.FirstOrDefault(x => x.Name == "security.selinux");
                 if (selinux?.Name is not null)
                 {
-                    var decoded = Encoding.UTF8.GetString(selinux.Value).TrimEnd('\0');
+                    var decoded = Encoding.UTF8.GetStringTrimNul(selinux.Value);
                     if (!string.IsNullOrWhiteSpace(decoded))
                         label = decoded;
                 }

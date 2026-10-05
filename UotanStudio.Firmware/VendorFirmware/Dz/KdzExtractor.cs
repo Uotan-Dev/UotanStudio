@@ -1,6 +1,7 @@
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.VendorFirmware.Dz;
 
@@ -185,5 +186,5 @@ internal static class KdzExtractor
     /// <returns>The UTF-8 decoded name with trailing NUL characters trimmed.
     /// <para>按 UTF-8 解码并去除结尾 NUL 的名称。</para></returns>
     public static string GetName(byte[] nameBytes)
-        => Encoding.UTF8.GetString(nameBytes).TrimEnd('\0');
+        => Encoding.UTF8.GetStringTrimNul(nameBytes);
 }

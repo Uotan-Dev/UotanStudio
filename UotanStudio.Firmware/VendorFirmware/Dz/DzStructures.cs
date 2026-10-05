@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.VendorFirmware.Dz;
 
@@ -261,7 +262,7 @@ internal sealed class DzFileHeader
     /// <para>对 <see cref="Device"/> 作 UTF-8 解码并去除结尾 NUL 字符；字段全为 NUL 时返回空
     /// 字符串。非合法 UTF-8 字节会转为替换字符而不会抛出错误。</para>
     /// </returns>
-    public string GetDevice() => Encoding.UTF8.GetString(Device).TrimEnd('\0');
+    public string GetDevice() => Encoding.UTF8.GetStringTrimNul(Device);
 
     /// <summary>
     /// Gets the version string.
@@ -273,7 +274,7 @@ internal sealed class DzFileHeader
     /// <para>对 <see cref="Version"/> 作 UTF-8 解码并去除结尾 NUL 字符；字段全为 NUL 时返回空
     /// 字符串。</para>
     /// </returns>
-    public string GetVersion() => Encoding.UTF8.GetString(Version).TrimEnd('\0');
+    public string GetVersion() => Encoding.UTF8.GetStringTrimNul(Version);
 
     /// <summary>
     /// Gets the Android version string.
@@ -285,7 +286,7 @@ internal sealed class DzFileHeader
     /// <para>对 <see cref="AndroidVer"/> 作 UTF-8 解码并去除结尾 NUL 字符；字段全为 NUL 时返回空
     /// 字符串。</para>
     /// </returns>
-    public string GetAndroidVersion() => Encoding.UTF8.GetString(AndroidVer).TrimEnd('\0');
+    public string GetAndroidVersion() => Encoding.UTF8.GetStringTrimNul(AndroidVer);
 }
 
 /// <summary>
@@ -444,7 +445,7 @@ public sealed class DzChunkHeader
     /// <para>对 <see cref="ChunkName"/> 作 UTF-8 解码并去除结尾 NUL 字符；字段全为 NUL 时返回空
     /// 字符串。非合法 UTF-8 字节会转为替换字符而不会抛出错误。</para>
     /// </returns>
-    public string GetChunkName() => Encoding.UTF8.GetString(ChunkName).TrimEnd('\0');
+    public string GetChunkName() => Encoding.UTF8.GetStringTrimNul(ChunkName);
 
     /// <summary>
     /// Gets the slice name string.
@@ -457,7 +458,7 @@ public sealed class DzChunkHeader
     /// <para>对 <see cref="SliceName"/> 作 UTF-8 解码并去除结尾 NUL 字符；字段全为 NUL 时返回空
     /// 字符串。分区筛选会把该值与所请求的布局名比较。</para>
     /// </returns>
-    public string GetSliceName() => Encoding.UTF8.GetString(SliceName).TrimEnd('\0');
+    public string GetSliceName() => Encoding.UTF8.GetStringTrimNul(SliceName);
 }
 
 /// <summary>
@@ -546,5 +547,5 @@ public struct KdzHeader
     /// <para>对全部 256 个 <see cref="Name"/> 字节作 UTF-8 解码并去除结尾 NUL 字符；字段全为 NUL
     /// 时返回空字符串。非合法 UTF-8 字节会转为替换字符而不会抛出错误。</para>
     /// </returns>
-    public readonly string GetName() => Encoding.UTF8.GetString(Name).TrimEnd('\0');
+    public readonly string GetName() => Encoding.UTF8.GetStringTrimNul(Name);
 }

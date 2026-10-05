@@ -745,5 +745,5 @@ internal class BootImagePacker
         }
     }
 
-    private static uint AlignToPage(uint value, uint pageSize) => checked((value + pageSize - 1) / pageSize * pageSize);
+    private static uint AlignToPage(uint value, uint pageSize) => Alignment.UpChecked(value, pageSize);
 }

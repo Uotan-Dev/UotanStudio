@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Checksums;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;
@@ -53,17 +53,17 @@ public sealed partial class Ext4Builder
 
 
     private static void WriteU16(Span<byte> span, int offset, ushort value) =>
-        BinaryPrimitives.WriteUInt16LittleEndian(span[offset..], value);
+        ByteWriter.WriteUInt16LE(span[offset..], value);
 
 
     private static void WriteU32(Span<byte> span, int offset, uint value) =>
-        BinaryPrimitives.WriteUInt32LittleEndian(span[offset..], value);
+        ByteWriter.WriteUInt32LE(span[offset..], value);
 
 
     private static void WriteU16(byte[] bytes, int offset, ushort value) =>
-        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(offset, 2), value);
+        ByteWriter.WriteUInt16LE(bytes, offset, value);
 
 
     private static void WriteU32(byte[] bytes, int offset, uint value) =>
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(offset, 4), value);
+        ByteWriter.WriteUInt32LE(bytes, offset, value);
 }

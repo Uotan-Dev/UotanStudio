@@ -192,5 +192,5 @@ internal static class StructHelper
     /// Computes the SHA-256 hex string of the data.
     /// <para>计算数据的 SHA-256 十六进制字符串。</para>
     /// </summary>
-    public static string ComputeSha256Hex(ReadOnlySpan<byte> data) => Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
+    public static string ComputeSha256Hex(ReadOnlySpan<byte> data) => Convert.ToHexStringLower(SHA256.HashData(data));
 }

@@ -333,7 +333,7 @@ public class MtkBootParser : IDisposable
         return Encoding.ASCII.GetString(bytes);
     }
 
-    private static uint AlignToPage(uint offset, uint pageSize) => (offset + pageSize - 1) & ~(pageSize - 1);
+    private static uint AlignToPage(uint offset, uint pageSize) => Alignment.Up(offset, pageSize);
 
     /// <summary>
     /// Releases all resources used by the parser.

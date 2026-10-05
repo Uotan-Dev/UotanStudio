@@ -9,8 +9,25 @@ namespace UotanStudio.Firmware.BlockImage.Lp;
 /// Format handler for Android logical partition (super) images: detection, metadata reading, extraction and packing.
 /// <para>Android 逻辑分区（super）镜像的格式处理器：检测、读取元数据、解包与打包。</para>
 /// </summary>
-public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider
+public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider, IFormatProbeHints
 {
+    /// <summary>
+    /// Confirms an LP super image from a pre-read header by checking the little-endian geometry magic
+    /// <c>0x616c4467</c> at the reserved-bytes offset 4096, mirroring the handler's own detection offset
+    /// without any file access; a header shorter than 4096 plus four bytes never matches.
+    /// <para>通过在保留字节偏移 4096 处检查小端几何魔数 <c>0x616c4467</c>，从预先读取的头部确认 LP super 镜像，
+    /// 复刻本处理器自身检测所用的偏移且不访问文件；短于 4096 加四字节的头部永不匹配。</para>
+    /// </summary>
+    /// <param name="header">Leading bytes the caller already read. <para>调用方预先读入的起始字节。</para></param>
+    /// <param name="path">Read-from path; unused here, never opened. <para>读取来源路径；此处不使用，绝不打开。</para></param>
+    /// <returns><see langword="true"/> when the geometry magic sits at offset 4096. <para>几何魔数位于偏移 4096 时返回 <see langword="true"/>。</para></returns>
+    bool IFormatProbeHints.MatchesMagic(ReadOnlySpan<byte> header, string path)
+    {
+        const int geometryOffset = MetadataFormat.LP_PARTITION_RESERVED_BYTES;
+        return header.Length >= geometryOffset + sizeof(uint)
+            && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(geometryOffset, sizeof(uint))) == MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
+    }
+
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
     {
         metadata.CanPackDirectory = true;

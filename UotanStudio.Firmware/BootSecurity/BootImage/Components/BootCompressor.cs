@@ -5,7 +5,6 @@ using SharpCompress.Compressors.Xz;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.Compression;
 using UotanStudio.Firmware.Compression.Compressors;
-using ZstdSharp;
 
 namespace UotanStudio.Firmware.BootSecurity.BootImage.Components;
 
@@ -131,11 +130,7 @@ public static class BootCompressor
 
                     break;
                 case CompressionType.Zstd:
-                    using (var zstd = new Decompressor())
-                    {
-                        var raw = zstd.Unwrap(data.AsSpan()).ToArray();
-                        return raw;
-                    }
+                    return ZstdCompressor.Decompress(data);
                 case CompressionType.Brotli:
                     using (var br = new BrotliStream(input, CompressionMode.Decompress))
                     {

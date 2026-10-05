@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.VendorFirmware.OnePlusOps;
 
@@ -191,7 +192,7 @@ public class OpsEntry
                 Id = BinaryPrimitives.ReadUInt32LittleEndian(data[..4]),
                 Offset = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(4, 4)),
                 Size = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(8, 4)),
-                Name = Encoding.ASCII.GetString(data.Slice(12, OpsConstants.ENTRY_NAME_SIZE)).TrimEnd('\0')
+                Name = Encoding.ASCII.GetStringTrimNul(data.Slice(12, OpsConstants.ENTRY_NAME_SIZE))
             };
     }
 }

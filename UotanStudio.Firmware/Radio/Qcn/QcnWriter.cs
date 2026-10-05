@@ -136,7 +136,8 @@ public static class QcnWriter
                     throw new QcnPatchMismatchException($"Item {i} (stream '{item.SourceStreamPath}', record {item.RecordIndex}, id {item.Id}) does not match record {i} of the file (stream '{records[i].SourceStreamPath}', record {records[i].RecordIndex}, id {records[i].Id}).");
                 }
 
-                layout.Add(new PatchedRecordLayout(records[i].Ordinal, records[i].Data, (long)records[i].RecordIndex * QcnNvItem.RecordLength + 8, blockOffsets, streamLayout.BlockSize));            }
+                layout.Add(new PatchedRecordLayout(records[i].Ordinal, records[i].Data, (long)records[i].RecordIndex * QcnNvItem.RecordLength + 8, blockOffsets, streamLayout.BlockSize));
+            }
         }
 
         return layout;

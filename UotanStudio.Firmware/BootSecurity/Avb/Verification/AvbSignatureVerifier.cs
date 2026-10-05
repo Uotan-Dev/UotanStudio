@@ -8,6 +8,7 @@ using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 using Org.BouncyCastle.Math;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Verification;
 
@@ -626,7 +627,7 @@ public static partial class AvbSignatureVerifier
                     var rootDigestLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 96, 4));
                     if (bodyStart + 164 + (long)nameLen + (long)saltLen + (long)rootDigestLen <= data.Length)
                     {
-                        var partitionName = Encoding.UTF8.GetString(data, bodyStart + 164, (int)nameLen).TrimEnd('\0');
+                        var partitionName = Encoding.UTF8.GetStringTrimNul(data, bodyStart + 164, (int)nameLen);
                         var salt = data.AsSpan(bodyStart + 164 + (int)nameLen, (int)saltLen).ToArray();
                         var rootDigest = data.AsSpan(bodyStart + 164 + (int)nameLen + (int)saltLen, (int)rootDigestLen).ToArray();
                         return new AvbDescriptorInfo
@@ -665,7 +666,7 @@ public static partial class AvbSignatureVerifier
 
                     if (bodyStart + 116 + (long)partitionNameLen + (long)saltLen + (long)digestLen <= data.Length)
                     {
-                        var partitionName = Encoding.UTF8.GetString(data, bodyStart + 116, (int)partitionNameLen).TrimEnd('\0');
+                        var partitionName = Encoding.UTF8.GetStringTrimNul(data, bodyStart + 116, (int)partitionNameLen);
                         var salt = data.AsSpan(bodyStart + 116 + (int)partitionNameLen, (int)saltLen).ToArray();
                         var digest = data.AsSpan(bodyStart + 116 + (int)partitionNameLen + (int)saltLen, (int)digestLen).ToArray();
                         return new AvbDescriptorInfo
@@ -692,7 +693,7 @@ public static partial class AvbSignatureVerifier
                     var cmdlineLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 4, 4));
                     if (cmdlineLen <= int.MaxValue && bodyStart + 8 + (long)cmdlineLen <= data.Length)
                     {
-                        var cmdline = Encoding.UTF8.GetString(data, bodyStart + 8, (int)cmdlineLen).TrimEnd('\0');
+                        var cmdline = Encoding.UTF8.GetStringTrimNul(data, bodyStart + 8, (int)cmdlineLen);
                         return new AvbDescriptorInfo
                         {
                             Tag = tag,
@@ -714,7 +715,7 @@ public static partial class AvbSignatureVerifier
                     var keyLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 8, 4));
                     if (bodyStart + 76 + (long)nameLen + (long)keyLen <= data.Length)
                     {
-                        var partitionName = Encoding.UTF8.GetString(data, bodyStart + 76, (int)nameLen).TrimEnd('\0');
+                        var partitionName = Encoding.UTF8.GetStringTrimNul(data, bodyStart + 76, (int)nameLen);
                         var publicKey = data.AsSpan(bodyStart + 76 + (int)nameLen, (int)keyLen).ToArray();
                         return new AvbDescriptorInfo
                         {

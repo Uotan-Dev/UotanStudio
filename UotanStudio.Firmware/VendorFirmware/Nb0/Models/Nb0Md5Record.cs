@@ -45,7 +45,7 @@ public sealed class Nb0Md5Record
     /// <para><see cref="Md5Checksum"/> 的小写十六进制形式，每字节两个字符，完整摘要渲染为 32 个字符。</para>
     /// </summary>
     /// <value>Lowercase hex text of the digest. <para>摘要的小写十六进制文本。</para></value>
-    public string Md5Hex => Convert.ToHexString(Md5Checksum).ToLowerInvariant();
+    public string Md5Hex => Convert.ToHexStringLower(Md5Checksum);
 
     /// <summary>
     /// Reads and constructs an Nb0Md5Record instance from a binary reader.

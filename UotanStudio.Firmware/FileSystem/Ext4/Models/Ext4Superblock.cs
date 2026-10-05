@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4.Models;
 
@@ -117,7 +118,7 @@ internal sealed class Ext4Superblock
             Encoding = span.Length >= 0x280 ? BinaryPrimitives.ReadUInt16LittleEndian(span[0x27C..]) : (ushort)0,
             EncodingFlags = span.Length >= 0x280 ? BinaryPrimitives.ReadUInt16LittleEndian(span[0x27E..]) : (ushort)0,
             Uuid = span[104..120].ToArray(),
-            VolumeName = System.Text.Encoding.UTF8.GetString(span[120..136]).TrimEnd('\0'),
+            VolumeName = System.Text.Encoding.UTF8.GetStringTrimNul(span[120..136]),
             DefHashVersion = span[252],
             JournalInum = BinaryPrimitives.ReadUInt32LittleEndian(span[224..228]),
             LastOrphan = BinaryPrimitives.ReadUInt32LittleEndian(span[232..236]),

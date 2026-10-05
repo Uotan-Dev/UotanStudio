@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.FileSystem.Ext4.Models;
 
@@ -533,9 +534,9 @@ internal static class Ext4Htree
         WriteU32(block, endCap + 8, crc);
     }
 
-    private static void WriteU16(byte[] bytes, int offset, ushort value) => BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(offset, 2), value);
+    private static void WriteU16(byte[] bytes, int offset, ushort value) => ByteWriter.WriteUInt16LE(bytes, offset, value);
 
-    private static void WriteU32(byte[] bytes, int offset, uint value) => BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(offset, 4), value);
+    private static void WriteU32(byte[] bytes, int offset, uint value) => ByteWriter.WriteUInt32LE(bytes, offset, value);
 
     /// <summary>
     /// Writes dx_tail and computes checksum matching e2fsprogs 1.47.4 ext2fs_dx_csum. dx_tail is at countOffset + limit * DxEntrySize.

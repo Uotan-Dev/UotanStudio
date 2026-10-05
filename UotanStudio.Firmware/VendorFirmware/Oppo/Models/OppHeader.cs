@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions;
 
 namespace UotanStudio.Firmware.VendorFirmware.Oppo.Models;
@@ -188,5 +189,5 @@ internal static class OfpHelper
     /// Decodes an ASCII string from a read-only byte span and trims trailing null characters.
     /// <para>从只读字节跨度解码 ASCII 字符串并去除尾部空字符。</para>
     /// </summary>
-    internal static string DecodeAscii(ReadOnlySpan<byte> data) => Encoding.ASCII.GetString(data.ToArray()).TrimEnd('\0');
+    internal static string DecodeAscii(ReadOnlySpan<byte> data) => Encoding.ASCII.GetStringTrimNul(data);
 }

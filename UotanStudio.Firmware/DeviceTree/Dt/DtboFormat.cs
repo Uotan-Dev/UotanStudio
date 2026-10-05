@@ -1,3 +1,5 @@
+using UotanStudio.Firmware.Core;
+
 namespace UotanStudio.Firmware.DeviceTree.Dt;
 
 /// <summary>
@@ -121,13 +123,7 @@ public sealed class DtboHeader
     private static uint ReadU32BE(ReadOnlySpan<byte> data) =>
         ((uint)data[0] << 24) | ((uint)data[1] << 16) | ((uint)data[2] << 8) | data[3];
 
-    private static void WriteU32BE(byte[] data, int offset, uint value)
-    {
-        data[offset] = (byte)(value >> 24);
-        data[offset + 1] = (byte)(value >> 16);
-        data[offset + 2] = (byte)(value >> 8);
-        data[offset + 3] = (byte)value;
-    }
+    private static void WriteU32BE(byte[] data, int offset, uint value) => ByteWriter.WriteUInt32BE(data, offset, value);
 }
 
 /// <summary>
@@ -237,13 +233,7 @@ public sealed class DtboEntry
     private static uint ReadU32BE(ReadOnlySpan<byte> data) =>
         ((uint)data[0] << 24) | ((uint)data[1] << 16) | ((uint)data[2] << 8) | data[3];
 
-    private static void WriteU32BE(byte[] data, int offset, uint value)
-    {
-        data[offset] = (byte)(value >> 24);
-        data[offset + 1] = (byte)(value >> 16);
-        data[offset + 2] = (byte)(value >> 8);
-        data[offset + 3] = (byte)value;
-    }
+    private static void WriteU32BE(byte[] data, int offset, uint value) => ByteWriter.WriteUInt32BE(data, offset, value);
 }
 
 public static partial class DtboFormat

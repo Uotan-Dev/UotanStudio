@@ -5,6 +5,7 @@ using System.Text;
 using UotanStudio.Firmware.Compression;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.VendorFirmware.Dz;
 
@@ -74,8 +75,8 @@ public static class DzBuilder
         {
             throw new InvalidDataException("Invalid DZ chunk header template.");
         }
-        var name = Names.GetString(header.AsSpan(36, 64)).TrimEnd('\0');
-        var slice = Names.GetString(header.AsSpan(4, 32)).TrimEnd('\0');
+        var name = Names.GetStringTrimNul(header.AsSpan(36, 64));
+        var slice = Names.GetStringTrimNul(header.AsSpan(4, 32));
         if (string.IsNullOrWhiteSpace(slice) || slice.Contains('\0'))
         {
             throw new InvalidDataException("Invalid DZ slice name.");

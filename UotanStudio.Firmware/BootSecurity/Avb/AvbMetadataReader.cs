@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb;
 
@@ -171,7 +172,7 @@ internal static class AvbMetadataReader
                 var saltLength = U32(body, lengths + 4);
                 var digestLength = U32(body, lengths + 8);
                 fields[prefix + ".ImageSize"] = MetadataDisplay.Number(U64(body, tree ? 4 : 0));
-                fields[prefix + ".HashAlgorithm"] = Encoding.ASCII.GetString(body.Slice(tree ? 56 : 8, 32)).TrimEnd('\0');
+                fields[prefix + ".HashAlgorithm"] = Encoding.ASCII.GetStringTrimNul(body.Slice(tree ? 56 : 8, 32));
                 fields[prefix + ".PartitionName"] = Encoding.UTF8.GetString(Slice(body, fixedSize, nameLength));
                 fields[prefix + ".Salt"] = Convert.ToHexString(Slice(body, fixedSize + nameLength, saltLength));
                 fields[prefix + (tree ? ".RootDigest" : ".Digest")] = Convert.ToHexString(Slice(body, fixedSize + nameLength + saltLength, digestLength));
