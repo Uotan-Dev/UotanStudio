@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Collections.Frozen;
 using System.Text;
 
 namespace UotanStudio.Firmware.FileSystem.F2fs.Models;
@@ -6,7 +7,7 @@ namespace UotanStudio.Firmware.FileSystem.F2fs.Models;
 /// <summary>Reads and writes the Linux F2FS aligned xattr header and entry layout.</summary>
 internal static class F2fsXattrs
 {
-    private static readonly Dictionary<byte, string> Prefixes = new()
+    private static readonly FrozenDictionary<byte, string> Prefixes = new Dictionary<byte, string>
     {
         [1] = "user.",
         [2] = "system.posix_acl_access",
@@ -14,7 +15,7 @@ internal static class F2fsXattrs
         [4] = "trusted.",
         [6] = "security.",
         [9] = "encryption."
-    };
+    }.ToFrozenDictionary();
 
     internal static Dictionary<string, byte[]> Decode(ReadOnlySpan<byte> data)
     {

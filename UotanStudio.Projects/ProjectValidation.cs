@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace UotanStudio.Services.Projects;
 
 /// <summary>
@@ -6,6 +8,23 @@ namespace UotanStudio.Services.Projects;
 /// </summary>
 public static class ProjectValidation
 {
+    /// <summary>Reserved data directory names; the frozen set compares case-insensitively so neither validation
+    /// path allocates a name array per call.
+    /// <para>保留数据目录名；冻结集合并按大小写不敏感比较，使两处校验路径都不再逐次分配名称数组。</para></summary>
+    private static readonly FrozenSet<string> ReservedDirectories =
+        new[] { "images", "output", "delivery", "nodes", ".uotan", ".deleted", ".git" }
+            .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Decides whether a single directory name is one of the reserved data folders
+    /// (<c>images</c>, <c>output</c>, <c>delivery</c>, <c>nodes</c>, <c>.uotan</c>, <c>.deleted</c>, <c>.git</c>).
+    /// <para>判定单个目录名是否为保留数据目录（<c>images</c>、<c>output</c>、<c>delivery</c>、<c>nodes</c>、
+    /// <c>.uotan</c>、<c>.deleted</c>、<c>.git</c>）。</para></summary>
+    /// <param name="name">Single path segment to test. <para>待判定的单个路径段。</para></param>
+    /// <returns><see langword="true"/> for a reserved name, compared case-insensitively.
+    /// <para>是保留名称时为 <see langword="true"/>，按大小写不敏感比较。</para></returns>
+    internal static bool IsReservedDirectoryName(ReadOnlySpan<char> name) =>
+        ReservedDirectories.GetAlternateLookup<ReadOnlySpan<char>>().Contains(name);
+
     /// <summary>
     /// Decides whether a directory may own project state: it must resolve outside the solution root and
     /// no path segment below the root may be a reserved data folder (<c>images</c>, <c>output</c>,
@@ -26,9 +45,13 @@ public static class ProjectValidation
     {
         var relative = Path.GetRelativePath(Path.GetFullPath(solutionRoot), Path.GetFullPath(directory));
         if (relative == ".") return false;
-        var reserved = new[] { "images", "output", "delivery", "nodes", ".uotan", ".deleted", ".git" };
-        return !relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar])
-            .Any(part => reserved.Contains(part, StringComparer.OrdinalIgnoreCase));
+        var segments = relative.AsSpan();
+        foreach (var segment in segments.SplitAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]))
+        {
+            if (IsReservedDirectoryName(segments[segment])) return false;
+        }
+
+        return true;
     }
 
     /// <summary>

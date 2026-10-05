@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text;
 
 namespace UotanStudio.Firmware.FileSystem.Metadata;
@@ -10,7 +11,7 @@ namespace UotanStudio.Firmware.FileSystem.Metadata;
 /// </summary>
 internal static class SelinuxPolicyRegexTranslator
 {
-    private static readonly Dictionary<string, string> PosixClasses = new(StringComparer.Ordinal)
+    private static readonly FrozenDictionary<string, string> PosixClasses = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["alpha"] = "A-Za-z",
         ["digit"] = "0-9",
@@ -26,9 +27,9 @@ internal static class SelinuxPolicyRegexTranslator
         ["print"] = " -~",
         ["cntrl"] = "\\x00-\\x1F\\x7F",
         ["ascii"] = "\\x00-\\x7F",
-    };
+    }.ToFrozenDictionary(StringComparer.Ordinal);
 
-    private static readonly Dictionary<char, string> Shorthands = new()
+    private static readonly FrozenDictionary<char, string> Shorthands = new Dictionary<char, string>
     {
         ['d'] = "0-9",
         ['D'] = "^0-9",
@@ -36,7 +37,7 @@ internal static class SelinuxPolicyRegexTranslator
         ['W'] = "^0-9A-Za-z_",
         ['s'] = " \\t-\\r",
         ['S'] = "^ \\t-\\r",
-    };
+    }.ToFrozenDictionary();
 
     /// <summary>
     /// Rewrites one file-context regex into .NET syntax, expanding POSIX classes and Perl shorthands into

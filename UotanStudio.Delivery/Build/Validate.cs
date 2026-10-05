@@ -1,8 +1,18 @@
+using System.Collections.Frozen;
+
 namespace UotanStudio.Services.Delivery;
 
 /// <summary>Validation shared by preview, script generation, and file publication.</summary>
 internal static class DeliveryValidation
 {
+    /// <summary>Windows reserved device names, frozen with an OrdinalIgnoreCase comparer so repeated validation
+    /// allocates neither an array nor a substring.
+    /// <para>Windows 保留设备名；以 OrdinalIgnoreCase 冻结成集合，使逐次校验不再分配数组或子串。</para></summary>
+    private static readonly FrozenSet<string> ReservedDeviceNames =
+        new[] { "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" }
+            .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// <para>判断名称是否为可发布的脚本文件名（updater-script、update-binary 或 .sh/.bat/.txt）。</para>
     /// Determines whether a name is a publishable script filename (updater-script, update-binary, or .sh/.bat/.txt).
@@ -15,12 +25,19 @@ internal static class DeliveryValidation
     /// <para>判断数值是否为合法文件/项名称：ASCII 字母数字、下划线、连字符或点，不含 Windows 保留设备名。</para>
     /// Determines whether a value is a valid file/entry name: ASCII alphanumerics, underscore, hyphen, or dot, excluding Windows reserved device names.
     /// </summary>
-    internal static bool IsName(string value, int maximum = 100) => value is not null && value.Length is > 0 && value.Length <= maximum
-        && value is not "." and not ".." && !value.StartsWith('.') && !value.EndsWith('.')
-        && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.')
-        && !new[] { "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" }
-            .Contains(value.Split('.')[0], StringComparer.OrdinalIgnoreCase);
+    internal static bool IsName(string value, int maximum = 100)
+    {
+        if (value is null || value.Length is 0 || value.Length > maximum || value is "." or ".."
+            || value.StartsWith('.') || value.EndsWith('.')
+            || !value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.'))
+        {
+            return false;
+        }
+
+        var dot = value.IndexOf('.');
+        var stem = value.AsSpan(0, dot < 0 ? value.Length : dot);
+        return !ReservedDeviceNames.GetAlternateLookup<ReadOnlySpan<char>>().Contains(stem);
+    }
 
     /// <summary>
     /// <para>判断数值是否为合法分区名：最长 36 个 ASCII 字母数字或下划线，payload 模式额外允许连字符。</para>

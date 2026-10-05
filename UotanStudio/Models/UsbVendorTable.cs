@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace UotanStudio.Models;
 
 /// <summary>
@@ -16,7 +18,7 @@ namespace UotanStudio.Models;
 /// </remarks>
 public static class UsbVendorTable
 {
-    private static readonly Dictionary<ushort, string> _vendors = new()
+    private static readonly FrozenDictionary<ushort, string> _vendors = new Dictionary<ushort, string>
     {
         [0x04E8] = "Samsung",
         [0x18D1] = "Google",
@@ -50,7 +52,7 @@ public static class UsbVendorTable
         [0x0403] = "FTDI",
         [0x067B] = "Prolific",
         [0x0483] = "STMicroelectronics",
-    };
+    }.ToFrozenDictionary();
 
     /// <summary>
     /// Tries to look up the vendor name for the given USB Vendor ID.

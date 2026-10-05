@@ -1,4 +1,6 @@
+using System.Collections.Frozen;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -361,18 +363,19 @@ public enum QcnStructuredKind
 /// </summary>
 public partial class QcnNvItemViewModel : ObservableObject
 {
-    private static readonly Dictionary<ushort, QcnStructuredKind> StructuredKinds = new()
-    {
-        [550] = QcnStructuredKind.Imei,
-        [551] = QcnStructuredKind.Imei,
-        [85] = QcnStructuredKind.Spc,
-        [1943] = QcnStructuredKind.Meid,
-        [5598] = QcnStructuredKind.Meid,
-        [0] = QcnStructuredKind.Esn,
-        [5597] = QcnStructuredKind.Esn,
-        [447] = QcnStructuredKind.Mac,
-        [4678] = QcnStructuredKind.Mac
-    };
+    private static readonly FrozenDictionary<ushort, QcnStructuredKind> StructuredKinds =
+        new Dictionary<ushort, QcnStructuredKind>
+        {
+            [550] = QcnStructuredKind.Imei,
+            [551] = QcnStructuredKind.Imei,
+            [85] = QcnStructuredKind.Spc,
+            [1943] = QcnStructuredKind.Meid,
+            [5598] = QcnStructuredKind.Meid,
+            [0] = QcnStructuredKind.Esn,
+            [5597] = QcnStructuredKind.Esn,
+            [447] = QcnStructuredKind.Mac,
+            [4678] = QcnStructuredKind.Mac
+        }.ToFrozenDictionary();
 
     private readonly QcnNvItem _item;
     private readonly Action _onChanged;
@@ -600,13 +603,13 @@ public partial class QcnNvItemViewModel : ObservableObject
         }
 
         var previewLength = Math.Min(8, Math.Max(_item.EffectiveLength, 1));
-        var builder = new StringBuilder(2 * previewLength);
+        Span<char> preview = stackalloc char[2 * previewLength];
         for (var i = 0; i < previewLength; i++)
         {
-            builder.Append(data[i].ToString("X2"));
+            data[i].TryFormat(preview[(2 * i)..], out _, "X2", CultureInfo.InvariantCulture);
         }
 
-        return builder.ToString();
+        return new string(preview);
     }
 
     private string DecodeStructured(ReadOnlySpan<byte> data) => Kind switch

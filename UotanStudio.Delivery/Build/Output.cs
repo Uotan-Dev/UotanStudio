@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -125,12 +126,14 @@ internal interface IDeliveryTools
 /// Prepares every file privately, then publishes: overwrites caller-approved destinations and keeps the rest.</summary>
 internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigningKeyProvider? signingKeys = null)
 {
-    private static readonly HashSet<string> FirmwareUpdateImages = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "abl", "aop_config", "aop", "bluetooth", "cpucp", "devcfg", "dsp", "dtbo", "featenabler", "hyp",
-        "imagefv", "keymaster", "modem", "multiimgqti", "qupfw", "recovery", "shrm", "tz", "uefi",
-        "uefisecapp", "vbmeta_system", "vbmeta", "vendor_boot", "xbl_config", "xbl_ramdump", "xbl"
-    };
+    /// <summary>Firmware partition names written under <c>firmware-update/</c>; the frozen set reduces each image's
+    /// placement decision to a single hash lookup.
+    /// <para>写入 <c>firmware-update/</c> 的固件分区名；冻结集合让每个镜像的归属判定只做一次哈希查找。</para></summary>
+    private static readonly FrozenSet<string> FirmwareUpdateImages =
+        new[] { "abl", "aop_config", "aop", "bluetooth", "cpucp", "devcfg", "dsp", "dtbo", "featenabler", "hyp",
+            "imagefv", "keymaster", "modem", "multiimgqti", "qupfw", "recovery", "shrm", "tz", "uefi",
+            "uefisecapp", "vbmeta_system", "vbmeta", "vendor_boot", "xbl_config", "xbl_ramdump", "xbl" }
+            .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary><para>进度元数据里记录生成型容器等价状态的固定键名。</para>
     /// Fixed progress-metadata key recording the equivalence state of the generated containers.</summary>

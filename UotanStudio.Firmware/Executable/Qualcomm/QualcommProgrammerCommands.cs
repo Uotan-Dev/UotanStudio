@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Collections.Frozen;
 using System.Text;
 using UotanStudio.Firmware.Executable.Elf;
 
@@ -6,12 +7,12 @@ namespace UotanStudio.Firmware.Executable.Qualcomm;
 
 internal static class QualcommProgrammerCommands
 {
-    private static readonly HashSet<string> Known = new(StringComparer.Ordinal)
+    private static readonly FrozenSet<string> Known = new[]
     {
         "program", "read", "nop", "patch", "configure", "erase", "power",
         "getstorageinfo", "getsha256digest", "setbootablestoragedrive",
         "firmwarewrite", "peek", "poke", "fixgpt", "benchmark", "ufs", "emmc"
-    };
+    }.ToFrozenSet(StringComparer.Ordinal);
 
     internal static IReadOnlyList<QualcommCommandEvidence> Find(Stream stream, ElfInfo elf, CancellationToken token)
     {

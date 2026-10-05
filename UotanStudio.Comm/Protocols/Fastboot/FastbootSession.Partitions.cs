@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Globalization;
 using UotanStudio.Comm.Protocols.Fastboot.Images;
 
@@ -163,9 +164,9 @@ public sealed partial class FastbootSession
             : long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dec) ? dec : -1;
     }
 
-    private static readonly HashSet<string> VbmetaPartitionSet = new(
+    private static readonly FrozenSet<string> VbmetaPartitionSet = new HashSet<string>(
         ["vbmeta", "vbmeta_system", "vbmeta_vendor", "vbmeta_custom"],
-        StringComparer.OrdinalIgnoreCase);
+        StringComparer.OrdinalIgnoreCase).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Queries a single device variable and returns a detailed result including error information.

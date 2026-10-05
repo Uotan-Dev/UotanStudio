@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Avalonia.Threading;
@@ -270,10 +271,11 @@ internal partial class ImageViewModel : Tool
     /// Reserved directory names excluded in pack mode (case-insensitive): <c>delivery/</c> is a delivery
     /// output directory and, like the other reserved names, is not a packable extraction result.
     /// </summary>
-    private static readonly HashSet<string> ReservedDirNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "images", "output", "delivery", ".deleted", ".uotan"
-    };
+    private static readonly FrozenSet<string> ReservedDirNames =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "images", "output", "delivery", ".deleted", ".uotan"
+        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// <para>返回一级子目录是否属于保留目录：打包视图中不应把这些目录登记为可打包的解包产物。</para>

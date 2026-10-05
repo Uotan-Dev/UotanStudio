@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Avalonia.Media;
 using Material.Icons;
 using UotanStudio.Firmware.OtaDelta.Dat;
@@ -21,10 +22,11 @@ public static class ExplorerIconCatalog
     /// Extensions of image files (partition and raw images). OTA artifacts (<c>.dat</c>) and compressed
     /// streams (<c>.br</c>) are excluded: they share the disk icon but are not conversion inputs.
     /// </summary>
-    private static readonly HashSet<string> ImageFileExtensions = new(StringComparer.Ordinal)
-    {
-        ".img", ".raw", ".bin", ".simg", ".sparse", ".super", ".image", ".iso"
-    };
+    private static readonly FrozenSet<string> ImageFileExtensions =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            ".img", ".raw", ".bin", ".simg", ".sparse", ".super", ".image", ".iso"
+        }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
     /// <para>判断路径是否为镜像类文件（扩展名表与图标映射共享，避免两处各写一份）。</para>

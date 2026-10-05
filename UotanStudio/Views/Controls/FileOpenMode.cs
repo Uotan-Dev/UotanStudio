@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Collections.Frozen;
 using System.Text;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BlockImage.Sparse;
@@ -698,8 +699,9 @@ public static class FileOpenMode
     /// <para>格式处理器注册表未覆盖但仍属强二进制的残留扩展名（保持 Hex 打开）。</para>
     /// Residual extensions not covered by the format-handler registry yet still strongly binary (kept on Hex).
     /// </summary>
-    private static readonly HashSet<string> _residualBinaryExtensions =
-        new(StringComparer.OrdinalIgnoreCase) { ".dat", ".tgz", ".zip", ".el", ".elf", ".so" };
+    private static readonly FrozenSet<string> _residualBinaryExtensions =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".dat", ".tgz", ".zip", ".el", ".elf", ".so" }
+            .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// <para>固件扩展名静态缓存：首次访问时幂等注册全部格式处理器并聚合其扩展名。</para>

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Avalonia.Controls;
 using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Devices;
@@ -49,7 +50,7 @@ internal static class ViewModelViewRegistry
     /// <para>VM 类型 → 视图登记条目 的映射表。</para>
     /// Map of VM type → view registration entry.
     /// </summary>
-    private static readonly Dictionary<Type, Entry> _registry = new()
+    private static readonly FrozenDictionary<Type, Entry> _registry = new Dictionary<Type, Entry>
     {
         [typeof(CompareViewModel)] = new(() => new CompareView()),
         [typeof(FileViewModel)] = new(() => new FileView(), IsDocumentStyle: true),
@@ -78,7 +79,7 @@ internal static class ViewModelViewRegistry
         [typeof(WorkspaceLogViewModel)] = new(() => new WorkspaceLogView()),
         [typeof(AdbLogViewModel)] = new(() => new AdbLogView()),
         [typeof(TerminalViewModel)] = new(() => new TerminalView()),
-    };
+    }.ToFrozenDictionary();
 
     /// <summary>
     /// <para>顶层页签枚举，标识主窗口底栏按需创建的四个页面。</para>
@@ -100,13 +101,14 @@ internal static class ViewModelViewRegistry
     /// <para>顶层页签 → 页面工厂 的映射表。</para>
     /// Map of top-level tab → page factory.
     /// </summary>
-    private static readonly Dictionary<TopLevelPage, Func<Control>> _topLevelPages = new()
-    {
-        [TopLevelPage.Flash] = () => new FlashView(),
-        [TopLevelPage.Delivery] = () => new DeliveryView(),
-        [TopLevelPage.NodeEditor] = () => new NodeEditorView(),
-        [TopLevelPage.Settings] = () => new SettingsView(),
-    };
+    private static readonly FrozenDictionary<TopLevelPage, Func<Control>> _topLevelPages =
+        new Dictionary<TopLevelPage, Func<Control>>
+        {
+            [TopLevelPage.Flash] = () => new FlashView(),
+            [TopLevelPage.Delivery] = () => new DeliveryView(),
+            [TopLevelPage.NodeEditor] = () => new NodeEditorView(),
+            [TopLevelPage.Settings] = () => new SettingsView(),
+        }.ToFrozenDictionary();
 
     /// <summary>
     /// <para>按 ViewModel 类型查找对应视图工厂；未注册时返回 <c>null</c>。</para>

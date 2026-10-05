@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace UotanStudio.Firmware.Radio.Qcn;
 
 /// <summary>
@@ -42,7 +44,7 @@ public sealed class QcnKnownItem
 /// </summary>
 public static class QcnKnownItems
 {
-    private static readonly Dictionary<ushort, QcnKnownItem> Items = new()
+    private static readonly FrozenDictionary<ushort, QcnKnownItem> Items = new Dictionary<ushort, QcnKnownItem>
     {
         [0] = new("ESN", "Security"),
         [1] = new("IMSI_M", "CDMA"),
@@ -59,7 +61,7 @@ public static class QcnKnownItems
         [5597] = new("ESN ME", "Security"),
         [5598] = new("MEID ME", "Security"),
         [4678] = new("WLAN MAC Address", "Security")
-    };
+    }.ToFrozenDictionary();
 
     /// <summary>
     /// Looks up the dictionary entry of a numbered NV item.

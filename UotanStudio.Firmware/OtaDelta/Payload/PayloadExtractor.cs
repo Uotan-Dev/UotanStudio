@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Collections.Frozen;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
@@ -63,7 +64,7 @@ internal class PayloadExtractor
         return dictionary;
     }
 
-    private static readonly HashSet<InstallOperation.Types.Type> ParallelizableTypes =
+    private static readonly FrozenSet<InstallOperation.Types.Type> ParallelizableTypes =
     [
         InstallOperation.Types.Type.Replace,
         InstallOperation.Types.Type.ReplaceBz,
@@ -73,7 +74,7 @@ internal class PayloadExtractor
         InstallOperation.Types.Type.Discard
     ];
 
-    private static readonly HashSet<InstallOperation.Types.Type> SequentialTypes =
+    private static readonly FrozenSet<InstallOperation.Types.Type> SequentialTypes =
     [
         InstallOperation.Types.Type.Move,
         InstallOperation.Types.Type.SourceCopy,

@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace UotanStudio.Comm.Protocols.Mtk;
 
 /// <summary>
@@ -58,12 +60,12 @@ public sealed record MtkPreloaderWatchdogRule(
 /// </remarks>
 public static class MtkPreloaderWatchdogTable
 {
-    private static readonly IReadOnlySet<ushort> FixedAddressCodes = new HashSet<ushort>
+    private static readonly FrozenSet<ushort> FixedAddressCodes = new HashSet<ushort>
     {
         0x2625, 0x2523, 0x7682, 0x7686, 0x5932
-    };
+    }.ToFrozenSet();
 
-    private static readonly IReadOnlyDictionary<ushort, uint> WatchdogBases = new Dictionary<ushort, uint>
+    private static readonly FrozenDictionary<ushort, uint> WatchdogBases = new Dictionary<ushort, uint>
     {
         [0x0571] = 0x10007000,
         [0x0598] = 0x10211000,
@@ -131,9 +133,9 @@ public static class MtkPreloaderWatchdogTable
         [0x8512] = 0x10007000,
         [0x8590] = 0x10007000,
         [0x8695] = 0x10007000
-    };
+    }.ToFrozenDictionary();
 
-    private static readonly IReadOnlyDictionary<ushort, uint> MiscLockRegisters = new Dictionary<ushort, uint>
+    private static readonly FrozenDictionary<ushort, uint> MiscLockRegisters = new Dictionary<ushort, uint>
     {
         [0x6571] = 0x1000141C,
         [0x6572] = 0x1000141C,
@@ -164,7 +166,7 @@ public static class MtkPreloaderWatchdogTable
         [0x8163] = 0x10002050,
         [0x8172] = 0x01202050,
         [0x8176] = 0x01202050
-    };
+    }.ToFrozenDictionary();
 
     /// <summary>Resolves the ordered watchdog-disable steps the reference defines for one chip.
     /// <para>为单芯片解析参考实现所定义的有序看门狗禁用步骤。</para></summary>

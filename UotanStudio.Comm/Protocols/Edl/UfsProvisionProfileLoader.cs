@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Globalization;
 using System.Xml.Linq;
 
@@ -46,44 +47,47 @@ public static class UfsProvisionProfileLoader
     private const string SlotField = "slot";
     private const string CommitField = "commit";
 
-    private static readonly Dictionary<string, string> CommonFields = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["bNumberLU"] = nameof(UfsCommon.BNumberLU),
-        ["bBootEnable"] = nameof(UfsCommon.BBootEnable),
-        ["bDescrAccessEn"] = nameof(UfsCommon.BDescrAccessEn),
-        ["bInitPowerMode"] = nameof(UfsCommon.BInitPowerMode),
-        ["bHighPriorityLUN"] = nameof(UfsCommon.BHighPriorityLUN),
-        ["bSecureRemovalType"] = nameof(UfsCommon.BSecureRemovalType),
-        ["bInitActiveICCLevel"] = nameof(UfsCommon.BInitActiveICCLevel),
-        ["wPeriodicRTCUpdate"] = nameof(UfsCommon.WPeriodicRTCUpdate),
-        ["bConfigDescrLock"] = nameof(UfsCommon.BConfigDescrLock),
-        [SlotField] = SlotField
-    };
+    private static readonly FrozenDictionary<string, string> CommonFields =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["bNumberLU"] = nameof(UfsCommon.BNumberLU),
+            ["bBootEnable"] = nameof(UfsCommon.BBootEnable),
+            ["bDescrAccessEn"] = nameof(UfsCommon.BDescrAccessEn),
+            ["bInitPowerMode"] = nameof(UfsCommon.BInitPowerMode),
+            ["bHighPriorityLUN"] = nameof(UfsCommon.BHighPriorityLUN),
+            ["bSecureRemovalType"] = nameof(UfsCommon.BSecureRemovalType),
+            ["bInitActiveICCLevel"] = nameof(UfsCommon.BInitActiveICCLevel),
+            ["wPeriodicRTCUpdate"] = nameof(UfsCommon.WPeriodicRTCUpdate),
+            ["bConfigDescrLock"] = nameof(UfsCommon.BConfigDescrLock),
+            [SlotField] = SlotField
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    private static readonly Dictionary<string, string> BodyFields = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["LUNum"] = nameof(UfsBody.LUNum),
-        ["bLUEnable"] = nameof(UfsBody.BLUEnable),
-        ["bBootLunID"] = nameof(UfsBody.BBootLUNID),
-        ["size_in_kb"] = nameof(UfsBody.SizeInKb),
-        ["bDataReliability"] = nameof(UfsBody.BDataReliability),
-        ["bLUWriteProtect"] = nameof(UfsBody.BLUWriteProtect),
-        ["bMemoryType"] = nameof(UfsBody.BMemoryType),
-        ["bLogicalBlockSize"] = nameof(UfsBody.BLogicalBlockSize),
-        ["bProvisioningType"] = nameof(UfsBody.BProvisioningType),
-        ["wContextCapabilities"] = nameof(UfsBody.WContextCapacities),
-        ["WContextCapacities"] = nameof(UfsBody.WContextCapacities),
-        ["desc"] = nameof(UfsBody.Desc),
-        [SlotField] = SlotField
-    };
+    private static readonly FrozenDictionary<string, string> BodyFields =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["LUNum"] = nameof(UfsBody.LUNum),
+            ["bLUEnable"] = nameof(UfsBody.BLUEnable),
+            ["bBootLunID"] = nameof(UfsBody.BBootLUNID),
+            ["size_in_kb"] = nameof(UfsBody.SizeInKb),
+            ["bDataReliability"] = nameof(UfsBody.BDataReliability),
+            ["bLUWriteProtect"] = nameof(UfsBody.BLUWriteProtect),
+            ["bMemoryType"] = nameof(UfsBody.BMemoryType),
+            ["bLogicalBlockSize"] = nameof(UfsBody.BLogicalBlockSize),
+            ["bProvisioningType"] = nameof(UfsBody.BProvisioningType),
+            ["wContextCapabilities"] = nameof(UfsBody.WContextCapacities),
+            ["WContextCapacities"] = nameof(UfsBody.WContextCapacities),
+            ["desc"] = nameof(UfsBody.Desc),
+            [SlotField] = SlotField
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    private static readonly Dictionary<string, string> EpilogueFields = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["LUNtoGrow"] = nameof(UfsEpilogue.LUNumToGrow),
-        ["LUNumToGrow"] = nameof(UfsEpilogue.LUNumToGrow),
-        [CommitField] = CommitField,
-        [SlotField] = SlotField
-    };
+    private static readonly FrozenDictionary<string, string> EpilogueFields =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["LUNtoGrow"] = nameof(UfsEpilogue.LUNumToGrow),
+            ["LUNumToGrow"] = nameof(UfsEpilogue.LUNumToGrow),
+            [CommitField] = CommitField,
+            [SlotField] = SlotField
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Reads and validates a provisioning profile from a file path.
