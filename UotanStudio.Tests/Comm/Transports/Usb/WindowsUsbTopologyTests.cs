@@ -138,6 +138,7 @@ public sealed class WindowsUsbTopologyTests
             .Select(UsbTopologyNodes.Create)
             .ToArray();
 
+        Assert.SkipWhen(nodes.Length == 0, "No Windows PnP USB device nodes are exposed on this host.");
         Assert.NotEmpty(nodes);
         Assert.Contains(nodes, node => !string.IsNullOrWhiteSpace(node.ClassName));
         Assert.Contains(nodes, node => !string.IsNullOrWhiteSpace(node.Description));

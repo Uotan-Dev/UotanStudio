@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -19,7 +20,16 @@ public sealed class FavoriteNodeIconTests(NodeEditorUiFixture fixture)
             dispatchTask = fixture.Session.Dispatch(() =>
             {
                 using var editor = new NodeEditorViewModel();
-                var item = editor.VisibleToolboxCategories.SelectMany(category => category.Items).First();
+                // A fresh CI profile has no Recent/Favorites shortcut and every real category is
+                // collapsed, so surface the item through an expanded category the view can render.
+                var sourceCategory = editor.ToolboxCategories.First(category => category.Items.Count > 0);
+                var item = sourceCategory.Items.First();
+                var testCategory = new NodeToolboxCategory("Test", sourceCategory.Category,
+                    new ObservableCollection<NodeToolboxItem> { item })
+                {
+                    IsExpanded = true
+                };
+                editor.VisibleToolboxCategories.Insert(0, testCategory);
                 var view = new NodeEditorView { DataContext = editor };
                 var window = new Window { Content = view, Width = 1200, Height = 700 };
                 window.Show();

@@ -67,9 +67,10 @@ public sealed class DexSmaliDebugTests
     [Fact]
     public void Assemble_CoLocatedDebugEvents_PreservesDeclaredOrder()
     {
-        var source = Source.Replace(".line 103\n    .local v0, \"counter\":I",
+        var normalizedSource = Source.ReplaceLineEndings("\n");
+        var source = normalizedSource.Replace(".line 103\n    .local v0, \"counter\":I",
             ".local v0, \"counter\":I\n    .line 103", StringComparison.Ordinal);
-        Assert.NotEqual(Source, source);
+        Assert.NotEqual(normalizedSource, source);
         var bytes = SmaliAssembler.Assemble(source).ToArray();
         var text = Disassembler.DisassembleAll(DexFile.Load(bytes));
         Assert.True(text.IndexOf(".local v0", StringComparison.Ordinal) < text.IndexOf(".line 103", StringComparison.Ordinal));
@@ -117,7 +118,9 @@ public sealed class DexSmaliDebugTests
         Assert.Contains(".line 2147483647", text);
         Assert.Contains(".line -2147483648", text);
         Assert.Equal(bytes, SmaliAssembler.Assemble(text).ToArray());
-        Assert.Equal(bytes, SmaliAssembler.Assemble(SignedLineSource.Replace(".line -1\n", ".line 0xffffffffL\n", StringComparison.Ordinal)).ToArray());
+        Assert.Equal(bytes, SmaliAssembler.Assemble(SignedLineSource
+            .ReplaceLineEndings("\n")
+            .Replace(".line -1\n", ".line 0xffffffffL\n", StringComparison.Ordinal)).ToArray());
     }
 
     [Theory]

@@ -399,7 +399,7 @@ public sealed class ProjectContext
     }
 
     private static bool IsReservedDirectory(string path)
-        => new[] { "images", "output", "delivery", "nodes", ".uotan", ".deleted", ".git" }.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
+        => ProjectValidation.IsReservedDirectoryName(Path.GetFileName(path).AsSpan());
 
     /// <summary>
     /// Closes the current solution, clearing all state.

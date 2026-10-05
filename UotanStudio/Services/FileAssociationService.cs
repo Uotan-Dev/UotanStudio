@@ -12,7 +12,7 @@ namespace UotanStudio.Services;
 /// <c>.uotanfw</c>、<c>.uotannode</c>）的 Windows 文件关联，将默认打开命令指向当前可执行文件并为每种格式
 /// 设置 <c>DefaultIcon</c>。通过 P/Invoke 调用 advapi32（AOT 安全，无包依赖）。非 Windows 平台无操作。</para>
 /// </summary>
-public static class FileAssociationService
+public static partial class FileAssociationService
 {
     private const string ClassesRoot = @"Software\Classes";
     private const int RegSz = 1;
@@ -31,23 +31,23 @@ public static class FileAssociationService
         (".uotannode", "UotanStudio.uotannode", "uotannode.ico", "UotanStudio Node Project")
     ];
 
-    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern int RegCreateKeyExW(nint hKey, string lpSubKey, int reserved, string? lpClass, int dwOptions, int samDesired, nint lpSecurityAttributes, out nint phkResult, out int lpdwDisposition);
+    [LibraryImport("advapi32.dll", EntryPoint = "RegCreateKeyExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    private static partial int RegCreateKeyExW(nint hKey, string lpSubKey, int reserved, string? lpClass, int dwOptions, int samDesired, nint lpSecurityAttributes, out nint phkResult, out int lpdwDisposition);
 
-    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern int RegSetValueExW(nint hKey, string? lpValueName, int reserved, int dwType, byte[] lpData, int cbData);
+    [LibraryImport("advapi32.dll", EntryPoint = "RegSetValueExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    private static partial int RegSetValueExW(nint hKey, string? lpValueName, int reserved, int dwType, byte[] lpData, int cbData);
 
-    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern int RegOpenKeyExW(nint hKey, string lpSubKey, int ulOptions, int samDesired, out nint phkResult);
+    [LibraryImport("advapi32.dll", EntryPoint = "RegOpenKeyExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    private static partial int RegOpenKeyExW(nint hKey, string lpSubKey, int ulOptions, int samDesired, out nint phkResult);
 
-    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern int RegQueryValueExW(nint hKey, string? lpValueName, int lpReserved, out int lpType, byte[]? lpData, ref int lpcbData);
+    [LibraryImport("advapi32.dll", EntryPoint = "RegQueryValueExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    private static partial int RegQueryValueExW(nint hKey, string? lpValueName, int lpReserved, out int lpType, byte[]? lpData, ref int lpcbData);
 
-    [DllImport("advapi32.dll", SetLastError = true)]
-    private static extern int RegDeleteTreeW(nint hKey, string lpSubKey);
+    [LibraryImport("advapi32.dll", EntryPoint = "RegDeleteTreeW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    private static partial int RegDeleteTreeW(nint hKey, string lpSubKey);
 
-    [DllImport("advapi32.dll", SetLastError = true)]
-    private static extern int RegCloseKey(nint hKey);
+    [LibraryImport("advapi32.dll", EntryPoint = "RegCloseKey", SetLastError = true)]
+    private static partial int RegCloseKey(nint hKey);
 
     /// <summary>
     /// Registers the file associations idempotently; returns whether the registration succeeded.

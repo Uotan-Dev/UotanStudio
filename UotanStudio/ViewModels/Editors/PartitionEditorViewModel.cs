@@ -573,6 +573,16 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
         }
     }
 
+    private static string FormatPartitionType(byte type) => string.Create(
+        4,
+        type,
+        static (span, value) =>
+        {
+            span[0] = '0';
+            span[1] = 'x';
+            value.TryFormat(span[2..], out _, "X2", CultureInfo.InvariantCulture);
+        });
+
     private void BuildGptItems(GptTableInfo info)
     {
         Partitions.Clear();
@@ -605,7 +615,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                     Name = $"p{i + 1}",
                     StartSector = partition.StartLba,
                     SizeSectors = partition.SizeSectors,
-                    Type = "0x" + partition.Type.ToString("X2", CultureInfo.InvariantCulture)
+                    Type = FormatPartitionType(partition.Type)
                 },
                 i,
                 group: null,
@@ -625,7 +635,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                     Name = partition.Name,
                     StartSector = partition.StartLba,
                     SizeSectors = partition.SizeSectors,
-                    Type = "0x" + partition.Type.ToString("X2", CultureInfo.InvariantCulture)
+                    Type = FormatPartitionType(partition.Type)
                 },
                 i,
                 group: null,
@@ -683,7 +693,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 Name = item.Name,
                 StartSector = item.StartSector,
                 SizeSectors = item.SizeSectors,
-                Type = "0x" + type.ToString("X2", CultureInfo.InvariantCulture)
+                Type = FormatPartitionType(type)
             });
             bootable.Add(original?.Bootable ?? false);
         }
@@ -711,7 +721,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 Name = item.Name,
                 StartSector = item.StartSector,
                 SizeSectors = item.SizeSectors,
-                Type = "0x" + type.ToString("X2", CultureInfo.InvariantCulture)
+                Type = FormatPartitionType(type)
             });
             bootable.Add(original?.Bootable ?? false);
         }
