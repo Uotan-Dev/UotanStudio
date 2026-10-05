@@ -212,7 +212,7 @@ internal static class AdbPairingConnection
     private static (byte Type, byte[] Payload) ReadFrame(Stream stream)
     {
         var header = new byte[6];
-        ReadExactly(stream, header);
+        stream.ReadExactly(header);
         if (header[0] != HeaderVersion)
         {
             throw new IOException("The device sent an unsupported pairing header version.");
@@ -223,22 +223,8 @@ internal static class AdbPairingConnection
             throw new IOException("The pairing frame payload has an invalid length.");
         }
         var payload = new byte[length];
-        ReadExactly(stream, payload);
+        stream.ReadExactly(payload);
         return (header[1], payload);
-    }
-
-    private static void ReadExactly(Stream stream, byte[] buffer)
-    {
-        var offset = 0;
-        while (offset < buffer.Length)
-        {
-            var read = stream.Read(buffer, offset, buffer.Length - offset);
-            if (read <= 0)
-            {
-                throw new IOException("The pairing connection closed before the exchange completed.");
-            }
-            offset += read;
-        }
     }
 
     private static string ExtractGuid(byte[] peerInfo)

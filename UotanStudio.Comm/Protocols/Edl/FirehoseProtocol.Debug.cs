@@ -95,7 +95,7 @@ public sealed partial class FirehoseProtocol
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(data.Length);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(data.Length, 8);
         _ = checked(address + data.Length);
-        var content = Convert.ToHexString(data.Span).ToLowerInvariant();
+        var content = Convert.ToHexStringLower(data.Span);
         var xml = FirehoseXmlBuilder.BuildPoke(address, data.Length, $"0x{content}");
         var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken).ConfigureAwait(false);
         if (response.IsAck)

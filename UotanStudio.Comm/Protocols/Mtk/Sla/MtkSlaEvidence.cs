@@ -70,7 +70,7 @@ public sealed record MtkSlaEvidence
     /// <para>64 字符的小写十六进制摘要；绝不是挑战原文。</para>
     /// </returns>
     public static string ComputeChallengeSha256Hex(ReadOnlySpan<byte> challenge) =>
-        Convert.ToHexString(SHA256.HashData(challenge)).ToLowerInvariant();
+        Convert.ToHexStringLower(SHA256.HashData(challenge));
 
     /// <summary>
     /// Projects this observation onto the common evidence model for session and result consumption.

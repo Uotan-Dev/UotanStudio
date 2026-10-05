@@ -226,9 +226,9 @@ public sealed class EdlNothingProjectAuthProvider : IEdlProjectAuthenticationPro
         cancellationToken.ThrowIfCancellationRequested();
         ValidateRequest(kind, projectId, serialNumber);
         var token1 = FixedToken1 ?? GenerateToken1();
-        var token2 = Convert.ToHexString(SHA256.HashData(Encoding.ASCII.GetBytes(
+        var token2 = Convert.ToHexStringLower(SHA256.HashData(Encoding.ASCII.GetBytes(
             token1 + Profile.ProjectId + serialNumber.ToString("x", CultureInfo.InvariantCulture)
-            + Profile.HashVerify))).ToLowerInvariant();
+            + Profile.HashVerify)));
         return Task.FromResult<IReadOnlyDictionary<string, byte[]>>(
             new Dictionary<string, byte[]>
             {
@@ -258,7 +258,6 @@ public sealed class EdlNothingProjectAuthProvider : IEdlProjectAuthenticationPro
 
     private static string GenerateToken1()
     {
-        return Convert.ToHexString(RandomNumberGenerator.GetBytes(ReferenceToken1Length / 2))
-            .ToLowerInvariant();
+        return Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(ReferenceToken1Length / 2));
     }
 }
