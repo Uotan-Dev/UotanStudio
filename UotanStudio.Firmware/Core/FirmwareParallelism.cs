@@ -82,13 +82,10 @@ public static partial class FirmwareParallelism
         if (length == 0) return 0;
 
         var buffer = new byte[length];
-        unsafe
+        fixed (byte* pointer = buffer)
         {
-            fixed (byte* pointer = buffer)
-            {
-                if (!GetLogicalProcessorInformationEx(LogicalProcessorRelationship.ProcessorCore, (nint)pointer, ref length))
-                    return 0;
-            }
+            if (!GetLogicalProcessorInformationEx(LogicalProcessorRelationship.ProcessorCore, (nint)pointer, ref length))
+                return 0;
         }
 
         var count = 0;
