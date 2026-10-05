@@ -216,6 +216,22 @@ public static class BootCompressor
     }
 
     /// <summary>
+    /// Compresses a boot component with the resolved container format. Empty gzip-family input returns a zero-length
+    /// result because boot images store empty components as size-0 sections, whereas a valid empty gzip member carries
+    /// the gzip magic and would be detected as a compressed payload. Legacy LZ4 keeps its native behavior, where empty
+    /// input still produces the magic-only frame.
+    /// <para>按解析出的容器格式压缩 boot 组件。gzip 家族的空输入返回零长结果，因为 boot 镜像把空组件存成 0 长度区段，
+    /// 而合法的 gzip 空成员带有 gzip 魔数、会被识别成压缩载荷。传统 LZ4 保持原生行为，空输入仍产出仅含魔数的帧。</para>
+    /// </summary>
+    /// <param name="data">Plaintext buffer. <para>明文缓冲区。</para></param>
+    /// <param name="format">Resolved container format. <para>已解析的容器格式。</para></param>
+    /// <returns>The encoded bytes. <para>编码后的字节。</para></returns>
+    private static byte[] CompressBootFamilyPayload(byte[] data, CompressionFormat format)
+        => data.Length == 0 && format == CompressionFormat.Gzip
+            ? []
+            : CompressionService.Compress(data, format);
+
+    /// <summary>
     /// Compresses data with the boot-family encoding selected by the type label.
     /// <para>按类型标签选定的 boot 家族编码压缩数据。</para>
     /// </summary>
@@ -247,7 +263,7 @@ public static class BootCompressor
 
         try
         {
-            return CompressionService.Compress(data, format);
+            return CompressBootFamilyPayload(data, format);
         }
         catch
         {
@@ -283,7 +299,7 @@ public static class BootCompressor
 
         try
         {
-            compressed = CompressionService.Compress(data.ToArray(), format);
+            compressed = CompressBootFamilyPayload(data.ToArray(), format);
             return true;
         }
         catch
@@ -324,6 +340,6 @@ public static class BootCompressor
             throw new NotSupportedException($"压缩类型 {type} 没有 boot 家族合法编码 / Compression type {type} has no boot-family encoding.");
         }
 
-        return CompressionService.Compress(data, format);
+        return CompressBootFamilyPayload(data, format);
     }
 }
