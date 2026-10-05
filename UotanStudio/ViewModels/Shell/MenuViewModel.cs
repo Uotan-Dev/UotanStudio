@@ -1384,38 +1384,16 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
     /// <summary><para>打开在线文档。</para>Open online documentation.</summary>
     [RelayCommand]
-    private async Task Documentation()
+    private void Documentation()
     {
-        await OpenUrlAsync("https://github.com/UotanStudio/UotanStudio/wiki");
+        Services.ExternalLinkService.TryOpen("https://github.com/UotanStudio/UotanStudio/wiki");
     }
 
     /// <summary><para>打开问题反馈页面。</para>Open the issue reporting page.</summary>
     [RelayCommand]
-    private async Task ReportIssue()
+    private void ReportIssue()
     {
-        await OpenUrlAsync("https://github.com/UotanStudio/UotanStudio/issues");
-    }
-
-    /// <summary>
-    /// <para>使用宿主系统浏览器打开指定 URL，失败时写入统一日志。</para>
-    /// Opens the specified URL using the host system browser, logging on failure.
-    /// </summary>
-    private static Task OpenUrlAsync(string url)
-    {
-        try
-        {
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true
-            };
-            System.Diagnostics.Process.Start(psi);
-        }
-        catch (System.Exception ex)
-        {
-            Services.LogService.Instance.Write(LogLevel.Error, "Menu", $"Failed to open URL '{url}': {ex.Message}");
-        }
-        return Task.CompletedTask;
+        Services.ExternalLinkService.TryOpen("https://github.com/UotanStudio/UotanStudio/issues");
     }
 
     /// <summary>

@@ -313,25 +313,5 @@ internal static class ComparisonRowBuilder
     /// <para>将字节数格式化为可读大小文本（如 "1.5 MB"）；0 字节显示 "0 B"。</para>
     /// Formats a byte count into a human-readable size string (e.g. "1.5 MB"); 0 bytes shows "0 B".
     /// </summary>
-    private static string FormatSize(long bytes)
-    {
-        if (bytes <= 0)
-        {
-            return "0 B";
-        }
-
-        var abs = Math.Abs(bytes);
-        var units = new[] { "B", "KB", "MB", "GB", "TB" };
-        var unit = 0;
-        var value = (double)abs;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-
-        return unit == 0
-            ? $"{bytes} {units[0]}"
-            : $"{value:0.##} {units[unit]}";
-    }
+    private static string FormatSize(long bytes) => SizeFormatter.Format(bytes);
 }

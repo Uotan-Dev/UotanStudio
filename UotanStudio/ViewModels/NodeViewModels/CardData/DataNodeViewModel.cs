@@ -3,6 +3,7 @@ using System.Text;
 using Avalonia;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
+using UotanStudio.Services.Hashing;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
@@ -168,7 +169,7 @@ public class DataNodeViewModel : FlowNodeViewModel
         switch (format)
         {
             case "hex":
-                WriteOutput("Output", Convert.ToHexString(data).ToLowerInvariant());
+                WriteOutput("Output", Convert.ToHexStringLower(data));
                 context.Log.Write(LogLevel.Info, Title, $"Converted {data.Length} bytes to hex.  已转换为十六进制。");
                 break;
             case "base64":
@@ -219,16 +220,5 @@ public class DataNodeViewModel : FlowNodeViewModel
         context.Log.Write(LogLevel.Info, Title, $"Compare result: {match}  比较结果。");
     }
 
-    private static string? ComputeHash(byte[] data, string algorithm)
-    {
-        return algorithm switch
-        {
-            "md5" => Convert.ToHexString(MD5.HashData(data)).ToLowerInvariant(),
-            "sha1" => Convert.ToHexString(SHA1.HashData(data)).ToLowerInvariant(),
-            "sha256" => Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant(),
-            "sha384" => Convert.ToHexString(SHA384.HashData(data)).ToLowerInvariant(),
-            "sha512" => Convert.ToHexString(SHA512.HashData(data)).ToLowerInvariant(),
-            _ => null
-        };
-    }
+    private static string? ComputeHash(byte[] data, string algorithm) => HashFormatter.ComputeHex(data, algorithm);
 }
