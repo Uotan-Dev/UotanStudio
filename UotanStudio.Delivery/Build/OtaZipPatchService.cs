@@ -409,7 +409,7 @@ public static class OtaZipPatchService
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(staged, output, overwrite: true);
+            AtomicPublish.Publish(staged, output);
             return new(
                 output,
                 [.. replacements.Keys.Order(StringComparer.Ordinal)],

@@ -13,10 +13,10 @@ internal static partial class DeliveryPackageBuilder
 
     private sealed record DatSet(DeliveryFile Transfer, DeliveryFile Data, DeliveryFile? Patch)
     {
-        public string DataName => Data.FileName.EndsWith(".br", StringComparison.OrdinalIgnoreCase)
+        public string DataName => DatFileSet.IsBrotli(Data.FileName)
             ? Data.FileName[..^3] + ".br" : Data.FileName;
         public string PatchName => Patch is null ? DatStem(Data.FileName) + ".patch.dat"
-            : Patch.FileName.EndsWith(".br", StringComparison.OrdinalIgnoreCase) ? Patch.FileName[..^3] : Patch.FileName;
+            : DatFileSet.IsBrotli(Patch.FileName) ? Patch.FileName[..^3] : Patch.FileName;
     }
 
     private static DatSet[] DatSets(DeliveryPlan plan) => Selected(plan).Where(f => IsDatArtifact(f.FileName))

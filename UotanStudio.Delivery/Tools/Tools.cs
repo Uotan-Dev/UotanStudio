@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Infrastructure.Downloads;
 
 namespace UotanStudio.Services.Delivery;
@@ -200,7 +201,7 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
                     }
                     if (!await MatchesAsync(temporary, package.Sha256, token).ConfigureAwait(false)) throw new InvalidDataException("Tool checksum mismatch.");
                     token.ThrowIfCancellationRequested();
-                    File.Move(temporary, cached, true);
+                    AtomicPublish.Publish(temporary, cached);
                     return cached;
                 }
                 catch (Exception ex) when (!token.IsCancellationRequested && ex is HttpRequestException or IOException or InvalidDataException or OperationCanceledException)

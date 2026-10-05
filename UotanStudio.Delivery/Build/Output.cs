@@ -347,7 +347,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                         var hash = hashAlgorithm.GetHashAndReset();
                         hashAlgorithm.Dispose();
                         if (input.Length != fileLength) throw new IOException("Output changed while verifying.");
-                        hashLines[i] = Convert.ToHexString(hash).ToLowerInvariant() + "  " + line;
+                        hashLines[i] = Convert.ToHexStringLower(hash) + "  " + line;
                     }).ConfigureAwait(false);
                 var hashes = new StringBuilder();
                 foreach (var line in hashLines) hashes.AppendLine(line);
@@ -525,7 +525,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                     token.ThrowIfCancellationRequested();
                     hashing.AppendData(buffer, 0, read);
                 }
-                var hash = Convert.ToHexString(hashing.GetHashAndReset()).ToLowerInvariant();
+                var hash = Convert.ToHexStringLower(hashing.GetHashAndReset());
                 var state = string.Equals(hash, sourceHash, StringComparison.OrdinalIgnoreCase)
                     ? FirmwareEquivalenceState.Equivalent
                     : FirmwareEquivalenceState.NotEquivalent;
@@ -559,7 +559,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         await using var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
         var length = source.Length;
-        var hash = Convert.ToHexString(await SHA256.HashDataAsync(source, token).ConfigureAwait(false)).ToLowerInvariant();
+        var hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(source, token).ConfigureAwait(false));
         return (hash, length);
     }
 

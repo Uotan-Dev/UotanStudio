@@ -328,7 +328,7 @@ internal static partial class DeliveryPackageBuilder
         }
 
         Report(written);
-        hashes.Append(Convert.ToHexString(hashAlgorithm.GetHashAndReset()).ToLowerInvariant()).Append("  ").Append(member).Append('\n');
+        hashes.Append(Convert.ToHexStringLower(hashAlgorithm.GetHashAndReset())).Append("  ").Append(member).Append('\n');
     }
 
     private static async Task<string> ExpandPatchAsync(string source, string stage, CancellationToken token)
