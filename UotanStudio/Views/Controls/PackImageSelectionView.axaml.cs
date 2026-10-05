@@ -4,6 +4,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;
@@ -170,7 +171,7 @@ public partial class PackImageSelectionView : UserControl
             .Where(path => Path.GetExtension(path).ToLowerInvariant() is
                 ".img" or ".bin" or ".raw" or ".simg" or ".sparse" or ".ext4" or ".erofs" or ".f2fs"
                 or ".dat" or ".br" or ".zst" or ".dtb" or ".dtbo"
-                || path.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase))
+                || DatFileSet.IsTransferList(path))
             .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
             .Select(PackImageFileInfo.Read).ToArray();
     }

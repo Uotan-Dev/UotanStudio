@@ -54,7 +54,6 @@ public partial class DeliveryCompositionView : UserControl
     private bool? _stacked;
     private bool _outputToDirectory = true;
     private bool _packImages;
-    private bool _compositionConfirmed;
     private bool _editorExternal;
     /// <summary><para>当前正在编排容器镜像（Super 或 Payload）。</para>
     /// True while composing a Super or Payload container.</summary>
@@ -77,7 +76,7 @@ public partial class DeliveryCompositionView : UserControl
             CompositionStatsText.Text = Model.ProgressStats;
             CompositionStatsText.IsVisible = Model.ProgressStats.Length > 0;
         };
-        Model.Changed += (_, _) => { _compositionConfirmed = Model.Confirmed; UpdateInteractionState(); UpdateEmptyState(); Changed?.Invoke(this, EventArgs.Empty); };
+        Model.Changed += (_, _) => { UpdateInteractionState(); UpdateEmptyState(); Changed?.Invoke(this, EventArgs.Empty); };
         StartCompositionOutputButton.Click += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
         ScriptPane.OutputRequested += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
         AutoZeroPartitionsBox.IsCheckedChanged += (_, _) => { Model.AutoZero = AutoZeroPartitionsBox.IsChecked == true; UpdateMode(); Changed?.Invoke(this, EventArgs.Empty); };
@@ -110,8 +109,6 @@ public partial class DeliveryCompositionView : UserControl
     internal bool SetOutputOptions(bool outputToDirectory, bool packSuper, bool packPayload)
     {
         var packImages = packSuper || packPayload;
-        if (_outputToDirectory != outputToDirectory || _packImages != packImages || IsPayload != packPayload)
-            _compositionConfirmed = false;
         _outputToDirectory = outputToDirectory;
         _packImages = packImages;
         IsPayload = packPayload;
@@ -124,27 +121,27 @@ public partial class DeliveryCompositionView : UserControl
 
     /// <summary><para>宿主视图据此把左侧打包设置面板随确认态整体禁用或恢复。</para>
     /// Host views use this to disable or restore the whole sidebar pack-settings panel on confirmation.</summary>
-    internal bool IsCompositionConfirmed => _packImages && _outputToDirectory && _compositionConfirmed && !IsSuperEmptyOnly;
+    internal bool IsCompositionConfirmed => _packImages && _outputToDirectory && Model.Confirmed && !IsSuperEmptyOnly;
 
     private void UpdateInteractionState()
     {
-        var editingComposition = _packImages && (!_compositionConfirmed || IsSuperEmptyOnly);
+        var editingComposition = _packImages && (!Model.Confirmed || IsSuperEmptyOnly);
         if (!editingComposition) CancelImageDrag();
         ImageCompositionContent.IsEnabled = editingComposition && !Model.IsRunning;
         var confirmBeforeOutput = _packImages && _outputToDirectory && !IsSuperEmptyOnly;
         CompositionFooter.IsVisible = !(_packImages && !_outputToDirectory);
-        ConfirmCompositionButton.IsEnabled = confirmBeforeOutput && !_compositionConfirmed && !Model.IsRunning;
+        ConfirmCompositionButton.IsEnabled = confirmBeforeOutput && !Model.Confirmed && !Model.IsRunning;
 
-        CancelCompositionButton.IsEnabled = confirmBeforeOutput && _compositionConfirmed && !Model.IsRunning;
+        CancelCompositionButton.IsEnabled = confirmBeforeOutput && Model.Confirmed && !Model.IsRunning;
         CompositionOutputFooter.IsVisible = _packImages && !_outputToDirectory;
 
-        ScriptPane.SetInteractionState(_outputToDirectory && (!_packImages || _compositionConfirmed) && !IsSuperEmptyOnly,
+        ScriptPane.SetInteractionState(_outputToDirectory && (!_packImages || Model.Confirmed) && !IsSuperEmptyOnly,
             (_outputToDirectory || _packImages) && !IsSuperEmptyOnly, IsSuperEmptyOnly);
     }
 
     private void OnConfirmCompositionClick(object? sender, RoutedEventArgs e)
     {
-        if (!_packImages || !_outputToDirectory || _compositionConfirmed) return;
+        if (!_packImages || !_outputToDirectory || Model.Confirmed) return;
         try { Model.Confirm(ReadPlan()); }
         catch (Exception ex) { Model.Status = global::UotanStudio.Services.UserError.Describe(ex); OperationFailed?.Invoke(this, ex); }
         UpdateInteractionState();
@@ -152,7 +149,7 @@ public partial class DeliveryCompositionView : UserControl
 
     private void OnCancelCompositionClick(object? sender, RoutedEventArgs e)
     {
-        if (!_packImages || !_outputToDirectory || !_compositionConfirmed) return;
+        if (!_packImages || !_outputToDirectory || !Model.Confirmed) return;
         Model.ReturnToContainer();
         UpdateInteractionState();
     }
@@ -187,7 +184,6 @@ public partial class DeliveryCompositionView : UserControl
         AutoZeroPartitionsBox.IsChecked = true;
         ZeroPartitionNameBox.Text = string.Empty;
         ScriptPane.Reset();
-        _compositionConfirmed = false;
         CompositionOutputProgress.Value = 0;
         UpdateInteractionState();
         UpdateEmptyState();
