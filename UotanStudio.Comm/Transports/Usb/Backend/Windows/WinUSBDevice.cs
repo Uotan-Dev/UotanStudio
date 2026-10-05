@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using UotanStudio.Comm.Diagnostics;
@@ -366,59 +368,68 @@ internal partial class WinUSBDevice : UsbDevice
             return result;
         }
 
-        var pos = 0;
-        UsbInterfaceInfo? currentInterface = null;
-        List<UsbEndpointInfo>? currentEndpoints = null;
-        while (pos + 2 <= length)
+        var rented = ArrayPool<byte>.Shared.Rent(length);
+        try
         {
-            int bLength = Marshal.ReadByte(buffer, pos);
-            int bDescriptorType = Marshal.ReadByte(buffer, pos + 1);
-            if (bLength < 2 || pos + bLength > length)
+            Marshal.Copy(buffer, rented, 0, length);
+            var descriptor = rented.AsSpan(0, length);
+            var pos = 0;
+            UsbInterfaceInfo? currentInterface = null;
+            List<UsbEndpointInfo>? currentEndpoints = null;
+            while (pos + 2 <= length)
             {
-                break;
+                int bLength = descriptor[pos];
+                int bDescriptorType = descriptor[pos + 1];
+                if (bLength < 2 || pos + bLength > length)
+                {
+                    break;
+                }
+
+                switch (bDescriptorType)
+                {
+                    case 4 when bLength >= 8:
+                        if (currentInterface != null)
+                        {
+                            result.Add(currentInterface);
+                        }
+
+                        currentEndpoints = [];
+                        currentInterface = new UsbInterfaceInfo
+                        {
+                            InterfaceNumber = descriptor[pos + 2],
+                            Class = descriptor[pos + 5],
+                            SubClass = descriptor[pos + 6],
+                            Protocol = descriptor[pos + 7],
+                            Endpoints = currentEndpoints
+                        };
+                        break;
+
+                    case 5 when bLength >= 7:
+                        currentEndpoints?.Add(new UsbEndpointInfo
+                        {
+                            EndpointAddress = descriptor[pos + 2],
+                            Attributes = descriptor[pos + 3],
+                            MaxPacketSize = BinaryPrimitives.ReadUInt16LittleEndian(descriptor[(pos + 4)..]),
+                            Interval = descriptor[pos + 6]
+                        });
+                        break;
+                    default:
+                        break;
+                }
+
+                pos += bLength;
             }
 
-            switch (bDescriptorType)
+            if (currentInterface != null)
             {
-                case 4:
-                    if (currentInterface != null)
-                    {
-                        result.Add(currentInterface);
-                    }
-
-                    currentEndpoints = [];
-                    currentInterface = new UsbInterfaceInfo
-                    {
-                        InterfaceNumber = Marshal.ReadByte(buffer, pos + 2),
-                        Class = Marshal.ReadByte(buffer, pos + 5),
-                        SubClass = Marshal.ReadByte(buffer, pos + 6),
-                        Protocol = Marshal.ReadByte(buffer, pos + 7),
-                        Endpoints = currentEndpoints
-                    };
-                    break;
-
-                case 5:
-                    currentEndpoints?.Add(new UsbEndpointInfo
-                    {
-                        EndpointAddress = Marshal.ReadByte(buffer, pos + 2),
-                        Attributes = Marshal.ReadByte(buffer, pos + 3),
-                        MaxPacketSize = (ushort)(Marshal.ReadByte(buffer, pos + 4) | (Marshal.ReadByte(buffer, pos + 5) << 8)),
-                        Interval = Marshal.ReadByte(buffer, pos + 6)
-                    });
-                    break;
-                default:
-                    break;
+                result.Add(currentInterface);
             }
-
-            pos += bLength;
         }
-
-        if (currentInterface != null)
+        finally
         {
-            result.Add(currentInterface);
+            ArrayPool<byte>.Shared.Return(rented);
         }
 
         return result;
     }
-
 }

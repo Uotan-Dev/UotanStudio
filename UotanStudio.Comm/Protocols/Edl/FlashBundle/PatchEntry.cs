@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 
 /// <summary>
@@ -92,18 +90,18 @@ internal sealed class PatchEntry
             hex = "0" + hex;
         }
 
-        var bytes = new byte[hex.Length / 2];
-        for (var i = 0; i < bytes.Length; i++)
+        for (var i = 0; i < hex.Length; i++)
         {
-            if (!byte.TryParse(hex.AsSpan(i * 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
+            if (char.IsAsciiHexDigit(hex[i]))
             {
-                throw new EdlException(EdlErrorCode.InvalidParameter, $"Invalid hex string in patch value: '{hex.Substring(i * 2, 2)}'. 补丁值中的十六进制字符串无效。");
+                continue;
             }
 
-            bytes[i] = b;
+            throw new EdlException(EdlErrorCode.InvalidParameter,
+                $"Invalid hex string in patch value: '{hex.Substring(i - (i % 2), 2)}'. 补丁值中的十六进制字符串无效。");
         }
 
-        return bytes;
+        return Convert.FromHexString(hex);
     }
 
     /// <summary>

@@ -25,8 +25,8 @@ public sealed record ScrcpyVideoMetadata(uint CodecFourCc, int Width, int Height
     {
         get
         {
-            var bytes = BitConverter.GetBytes(CodecFourCc);
-            Array.Reverse(bytes);
+            Span<byte> bytes = stackalloc byte[4];
+            BinaryPrimitives.WriteUInt32BigEndian(bytes, CodecFourCc);
             return Encoding.ASCII.GetString(bytes).Trim('\0', ' ');
         }
     }
@@ -114,8 +114,8 @@ public sealed record ScrcpyAudioMetadata(uint CodecFourCc)
     {
         get
         {
-            var bytes = BitConverter.GetBytes(CodecFourCc);
-            Array.Reverse(bytes);
+            Span<byte> bytes = stackalloc byte[4];
+            BinaryPrimitives.WriteUInt32BigEndian(bytes, CodecFourCc);
             return Encoding.ASCII.GetString(bytes).Trim('\0', ' ').ToUpperInvariant();
         }
     }

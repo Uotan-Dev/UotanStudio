@@ -226,7 +226,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
 
         var donePacket = new byte[V1HeaderSize];
         Encoding.ASCII.GetBytes(SyncIds.Done).CopyTo(donePacket, 0);
-        BitConverter.GetBytes(mtime).CopyTo(donePacket, 4);
+        BinaryPrimitives.WriteUInt32LittleEndian(donePacket.AsSpan(4), mtime);
         stream.Write(donePacket);
 
         ExpectResponse(stream, "push");

@@ -310,7 +310,7 @@ internal sealed class WindowsUsbTopologyProvider : IUsbTopologyProvider
             {
                 var start = index + marker.Length;
                 var end = start;
-                while (end < text.Length && end - start < 8 && IsHexDigit(text[end]))
+                while (end < text.Length && end - start < 8 && char.IsAsciiHexDigit(text[end]))
                 {
                     end++;
                 }
@@ -326,9 +326,6 @@ internal sealed class WindowsUsbTopologyProvider : IUsbTopologyProvider
             search = index + marker.Length;
         }
     }
-
-    private static bool IsHexDigit(char value)
-        => value is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F';
 
     /// <summary>
     /// <para>扫描 <c>Control\DeviceClasses</c> 建立「设备实例标识 → 已注册设备接口类 GUID」映射。注册接口

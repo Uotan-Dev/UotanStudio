@@ -1,4 +1,4 @@
-using System.Text;
+using System.Runtime.InteropServices;
 
 namespace UotanStudio.Firmware.VendorFirmware.Pac;
 
@@ -253,9 +253,7 @@ internal sealed class SprdHead
 
     private static string ConvertU16ToString(ushort[] data)
     {
-        var bytes = new byte[data.Length * 2];
-        Buffer.BlockCopy(data, 0, bytes, 0, bytes.Length);
-        return Encoding.Unicode.GetString(bytes).TrimEnd('\0');
+        return new string(MemoryMarshal.Cast<ushort, char>(data)).TrimEnd('\0');
     }
 }
 
@@ -451,9 +449,7 @@ internal sealed class SprdFile
 
     private static string ConvertU16ToString(ushort[] data)
     {
-        var bytes = new byte[data.Length * 2];
-        Buffer.BlockCopy(data, 0, bytes, 0, bytes.Length);
-        return Encoding.Unicode.GetString(bytes).TrimEnd('\0');
+        return new string(MemoryMarshal.Cast<ushort, char>(data)).TrimEnd('\0');
     }
 }
 

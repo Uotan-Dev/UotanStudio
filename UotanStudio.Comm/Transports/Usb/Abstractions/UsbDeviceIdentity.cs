@@ -130,9 +130,6 @@ internal static class UsbDeviceIdentity
 
         var serial = info.SerialNumber ?? string.Empty;
         var devicePath = info.DevicePath ?? string.Empty;
-        var interfaceClass = info.InterfaceClass?.ToString("X2") ?? string.Empty;
-        var interfaceSubClass = info.InterfaceSubClass?.ToString("X2") ?? string.Empty;
-        var interfaceProtocol = info.InterfaceProtocol?.ToString("X2") ?? string.Empty;
 
         return string.Join("|", new[]
         {
@@ -140,9 +137,9 @@ internal static class UsbDeviceIdentity
             info.SourceApiKind.ToString(),
             info.VendorId.ToString("X4"),
             info.ProductId.ToString("X4"),
-            interfaceClass,
-            interfaceSubClass,
-            interfaceProtocol,
+            FormatHexByte(info.InterfaceClass),
+            FormatHexByte(info.InterfaceSubClass),
+            FormatHexByte(info.InterfaceProtocol),
             serial,
             devicePath
         });
@@ -168,18 +165,31 @@ internal static class UsbDeviceIdentity
 
         var serial = string.IsNullOrEmpty(info.SerialNumber) || info.SerialNumber == "UNKNOWN"
             ? info.ApiName + ":" + NormalizeInterfacePath(info.DevicePath) : info.SerialNumber;
-        var interfaceClass = info.InterfaceClass?.ToString("X2") ?? string.Empty;
-        var interfaceSubClass = info.InterfaceSubClass?.ToString("X2") ?? string.Empty;
 
         return string.Join("|", new[]
         {
             info.VendorId.ToString("X4"),
             info.ProductId.ToString("X4"),
-            interfaceClass,
-            interfaceSubClass,
+            FormatHexByte(info.InterfaceClass),
+            FormatHexByte(info.InterfaceSubClass),
             serial
         });
     }
+
+    /// <summary>
+    /// Renders one optional interface byte as two uppercase hexadecimal characters, so every
+    /// identity segment keeps the exact width <see cref="TryParseKeyFilter"/> expects.
+    /// <para>把一个可选的接口字节渲染为两个大写十六进制字符，使每个标识分段都保持
+    /// <see cref="TryParseKeyFilter"/> 所要求的精确宽度。</para>
+    /// </summary>
+    /// <param name="value">The byte the backend reported, or <see langword="null"/> when absent.
+    /// <para>后端上报的字节；缺失时为 <see langword="null"/>。</para></param>
+    /// <returns>The two-character uppercase hex text, or an empty string when absent.
+    /// <para>两个字符的大写十六进制文本；缺失时为空字符串。</para></returns>
+    private static string FormatHexByte(byte? value) =>
+        value is { } number
+            ? string.Create(2, number, static (span, byteValue) => byteValue.TryFormat(span, out _, "X2"))
+            : string.Empty;
 
     /// <summary>
     /// Collapses the per-driver <c>#{interface-class-guid}</c> suffix on Windows device

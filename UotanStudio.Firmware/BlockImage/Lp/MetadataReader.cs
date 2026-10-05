@@ -42,7 +42,7 @@ public static class MetadataReader
     public static Stream OpenImage(string path)
     {
         var header = UotanStudio.Firmware.Core.FormatDetector.ReadHeader(path, 4);
-        return header.AsSpan().SequenceEqual(new byte[] { 0x3a, 0xff, 0x26, 0xed })
+        return header.AsSpan().SequenceEqual((ReadOnlySpan<byte>)[0x3a, 0xff, 0x26, 0xed])
             ? new SparseReadStream(SparseReader.FromImageFile(path))
             : new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous);
     }

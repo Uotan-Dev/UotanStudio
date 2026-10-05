@@ -39,7 +39,7 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     private readonly long _rightLength;
     private readonly int _count;
     private readonly byte[] _rowDiffBitmap;
-    private readonly object _syncRoot = new();
+    private readonly Lock _syncRoot = new();
     private readonly CacheSlot[] _cache = new CacheSlot[CacheCapacity];
 
     /// <summary>
@@ -336,18 +336,18 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
             return string.Empty;
         }
 
-        var sb = new StringBuilder(count * 3);
-        for (var i = 0; i < count; i++)
+        return string.Create((count * 3) - 1, (Buffer: buffer, Count: count), static (span, state) =>
         {
-            if (i > 0)
+            for (var i = 0; i < state.Count; i++)
             {
-                sb.Append(' ');
+                if (i > 0)
+                {
+                    span[(3 * i) - 1] = ' ';
+                }
+
+                state.Buffer[i].TryFormat(span[(3 * i)..], out _, "X2", CultureInfo.InvariantCulture);
             }
-
-            sb.Append(buffer[i].ToString("X2", CultureInfo.InvariantCulture));
-        }
-
-        return sb.ToString();
+        });
     }
 
     /// <summary>

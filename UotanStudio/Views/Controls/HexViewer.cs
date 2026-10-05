@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -409,7 +408,7 @@ public class HexViewer : Grid
                     var isEdited = _editedOffsets.Contains(start + b);
                     DrawCenteredText(
                         context,
-                        _data[start + b].ToString("X2", CultureInfo.InvariantCulture),
+                        HexByteText[_data[start + b]],
                         x,
                         layout.HexCellWidth,
                         y,
@@ -434,6 +433,19 @@ public class HexViewer : Grid
             DrawCaret(context, caretBrush, layout);
         }
 
+        private static readonly string[] HexByteText = CreateHexByteText();
+
+        private static string[] CreateHexByteText()
+        {
+            var text = new string[256];
+            for (var i = 0; i < text.Length; i++)
+            {
+                text[i] = i.ToString("X2", CultureInfo.InvariantCulture);
+            }
+
+            return text;
+        }
+
         private static void DrawHeader(
             DrawingContext context,
             IBrush headerBrush,
@@ -448,7 +460,7 @@ public class HexViewer : Grid
             {
                 DrawCenteredText(
                     context,
-                    i.ToString("X2", CultureInfo.InvariantCulture),
+                    HexByteText[i],
                     layout.XFromByteIndex(i, hexZone: true),
                     layout.HexCellWidth,
                     0,
@@ -910,7 +922,7 @@ public class HexViewer : Grid
                 return ".";
             }
 
-            var decoded = _textEncoding.GetString(new[] { value });
+            var decoded = _textEncoding.GetString([value]);
             return decoded.Length == 1 && decoded[0] is >= ' ' and <= '~' ? decoded : ".";
         }
 
@@ -929,13 +941,22 @@ public class HexViewer : Grid
 
             var start = Math.Min(_selectionAnchor, _caretOffset);
             var end = Math.Max(_selectionAnchor, _caretOffset);
-            var builder = new StringBuilder((int)(end - start + 1) * 3);
-            for (var i = start; i <= end; i++)
+            var data = _data;
+            var count = (int)(end - start + 1);
+            var text = string.Create((count * 3) - 1, (Bytes: data, Start: start, Count: count), static (span, state) =>
             {
-                builder.Append(_data[i].ToString("X2", CultureInfo.InvariantCulture)).Append(' ');
-            }
+                for (var i = 0; i < state.Count; i++)
+                {
+                    if (i > 0)
+                    {
+                        span[(3 * i) - 1] = ' ';
+                    }
 
-            await clipboard.SetTextAsync(builder.ToString().TrimEnd());
+                    state.Bytes[state.Start + i].TryFormat(span[(3 * i)..], out _, "X2", CultureInfo.InvariantCulture);
+                }
+            });
+
+            await clipboard.SetTextAsync(text);
             await clipboard.FlushAsync();
         }
 
@@ -983,20 +1004,20 @@ public class HexViewer : Grid
 
         private static List<byte> ParseHexBytes(string text)
         {
-            var cleaned = new StringBuilder(text.Length);
+            Span<char> digits = text.Length <= 256 ? stackalloc char[text.Length] : new char[text.Length];
+            var count = 0;
             foreach (var ch in text)
             {
                 if (Uri.IsHexDigit(ch))
                 {
-                    cleaned.Append(ch);
+                    digits[count++] = ch;
                 }
             }
 
-            var result = new List<byte>();
-            var s = cleaned.ToString();
-            for (var i = 0; i + 1 < s.Length; i += 2)
+            var result = new List<byte>(count / 2);
+            for (var i = 0; i + 1 < count; i += 2)
             {
-                if (byte.TryParse(s.AsSpan(i, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
+                if (byte.TryParse(digits.Slice(i, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
                 {
                     result.Add(value);
                 }

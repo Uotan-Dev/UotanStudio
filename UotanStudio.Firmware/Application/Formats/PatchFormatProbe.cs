@@ -155,7 +155,7 @@ public static class PatchFormatProbe
         if (bytes.StartsWith("OPPOENCRYPT!"u8)) { return PatchFormatKind.Ozip; }
         if (bytes.StartsWith("NTPI"u8)) { return PatchFormatKind.Ntpi; }
         if (bytes.Length >= 3 && bytes[0] == 0x1f && bytes[1] == 0x8b && bytes[2] == 8) { return PatchFormatKind.Gzip; }
-        if (bytes.StartsWith(new byte[] { 0xfd, 0x37, 0x7a, 0x58, 0x5a, 0 })) { return PatchFormatKind.Xz; }
+        if (bytes.StartsWith((ReadOnlySpan<byte>)[0xfd, 0x37, 0x7a, 0x58, 0x5a, 0])) { return PatchFormatKind.Xz; }
         if (bytes.Length >= 4)
         {
             var magic = BinaryPrimitives.ReadUInt32LittleEndian(bytes);
@@ -200,9 +200,9 @@ public static class PatchFormatProbe
 
     private static (Encoding Encoding, int Skip) EncodingFor(ReadOnlySpan<byte> bytes)
     {
-        if (bytes.StartsWith(new byte[] { 0xef, 0xbb, 0xbf })) { return (new UTF8Encoding(false, true), 3); }
-        if (bytes.StartsWith(new byte[] { 0xff, 0xfe })) { return (new UnicodeEncoding(false, false, true), 2); }
-        if (bytes.StartsWith(new byte[] { 0xfe, 0xff })) { return (new UnicodeEncoding(true, false, true), 2); }
+        if (bytes.StartsWith((ReadOnlySpan<byte>)[0xef, 0xbb, 0xbf])) { return (new UTF8Encoding(false, true), 3); }
+        if (bytes.StartsWith((ReadOnlySpan<byte>)[0xff, 0xfe])) { return (new UnicodeEncoding(false, false, true), 2); }
+        if (bytes.StartsWith((ReadOnlySpan<byte>)[0xfe, 0xff])) { return (new UnicodeEncoding(true, false, true), 2); }
         return (new UTF8Encoding(false, true), 0);
     }
 

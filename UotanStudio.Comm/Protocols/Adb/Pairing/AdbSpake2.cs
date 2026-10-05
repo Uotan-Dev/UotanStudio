@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Numerics;
 using System.Security.Cryptography;
 
@@ -191,7 +192,9 @@ internal sealed class AdbSpake2
 
     private static void Update(IncrementalHash hash, byte[] data)
     {
-        hash.AppendData(BitConverter.GetBytes((long)data.Length));
+        Span<byte> length = stackalloc byte[sizeof(long)];
+        BinaryPrimitives.WriteInt64LittleEndian(length, data.Length);
+        hash.AppendData(length);
         hash.AppendData(data);
     }
 
@@ -212,15 +215,7 @@ internal sealed class AdbSpake2
         return new BigInteger(positive);
     }
 
-    private static BigInteger LeHex(string hex)
-    {
-        var bytes = new byte[hex.Length / 2];
-        for (var i = 0; i < bytes.Length; i++)
-        {
-            bytes[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
-        }
-        return LeToBigInteger(bytes);
-    }
+    private static BigInteger LeHex(string hex) => LeToBigInteger(Convert.FromHexString(hex));
 
     private static BigInteger Mod(BigInteger value)
     {

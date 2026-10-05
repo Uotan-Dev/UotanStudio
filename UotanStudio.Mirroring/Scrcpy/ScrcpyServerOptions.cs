@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 
@@ -189,7 +190,7 @@ public sealed class ScrcpyServerOptions
     {
         Span<byte> bytes = stackalloc byte[4];
         System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
-        return BitConverter.ToUInt32(bytes) & 0x7fffffff;
+        return BinaryPrimitives.ReadUInt32LittleEndian(bytes) & 0x7fffffff;
     }
 
     /// <summary>

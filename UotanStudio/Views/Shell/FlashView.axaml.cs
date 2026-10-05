@@ -5251,15 +5251,23 @@ public partial class FlashView : UserControl
 
     internal static bool TryParseHexBytes(string text, out byte[] bytes)
     {
-        var cleaned = new string(text.Replace(" ", string.Empty).Replace("-", string.Empty)
-            .Where(Uri.IsHexDigit).ToArray());
-        if (cleaned.Length == 0 || cleaned.Length % 2 != 0)
+        Span<char> digits = text.Length <= 256 ? stackalloc char[text.Length] : new char[text.Length];
+        var count = 0;
+        foreach (var ch in text)
+        {
+            if (Uri.IsHexDigit(ch))
+            {
+                digits[count++] = ch;
+            }
+        }
+
+        if (count == 0 || count % 2 != 0)
         {
             bytes = [];
             return false;
         }
 
-        bytes = Convert.FromHexString(cleaned);
+        bytes = Convert.FromHexString(digits[..count]);
         return true;
     }
 
