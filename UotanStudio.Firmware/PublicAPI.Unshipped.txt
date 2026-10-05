@@ -472,3 +472,9 @@ const UotanStudio.Firmware.Radio.Qcn.QcnReader.MaxStreamSize = 16777216 -> long
 static UotanStudio.Firmware.Radio.Qcn.QcnReader.ParseAsync(string! path, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.Radio.Qcn.QcnDocument!>!
 UotanStudio.Firmware.Radio.Qcn.QcnWriter
 static UotanStudio.Firmware.Radio.Qcn.QcnWriter.PatchAsync(string! path, System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.Radio.Qcn.QcnNvItem!>! items, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+UotanStudio.Firmware.Core.IFormatProbeHints
+UotanStudio.Firmware.Core.IFormatProbeHints.MatchesMagic(System.ReadOnlySpan<byte> header, string! path) -> bool
+static UotanStudio.Firmware.Core.FormatDetector.MatchesProbeHints(string! path, System.ReadOnlySpan<byte> header) -> bool
+static UotanStudio.Firmware.Core.FormatDetector.TryGetProbeMatch(string! path, System.ReadOnlySpan<byte> header, out UotanStudio.Firmware.Core.IReadonlyFormatHandler? handler) -> bool
+UotanStudio.Firmware.Core.IO.AtomicPublish
+static UotanStudio.Firmware.Core.IO.AtomicPublish.Publish(string! stagedPath, string! targetPath) -> void

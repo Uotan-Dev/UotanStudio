@@ -11,7 +11,7 @@ namespace UotanStudio.Firmware.BlockImage.Gpt;
 /// 而不切除分区数据。打包经 <c>GptTableWriter.ApplyToImageFile</c> 重新发布镜像，按已校验的表重写主备头部
 /// 与两份条目数组，同时保持数据字节不变。</para>
 /// </summary>
-public sealed class GptFormatHandler : IFormatHandler
+public sealed class GptFormatHandler : IFormatHandler, IFormatProbeHints
 {
     private static readonly int[] CandidateBlockSizes = [512, 4096, 16384, 65536];
 
@@ -26,6 +26,29 @@ public sealed class GptFormatHandler : IFormatHandler
     /// <value><c>img</c> and <c>dat</c>; both still need an <c>EFI PART</c> header to be recognized.
     /// <para><c>img</c> 与 <c>dat</c>；两者仍需 <c>EFI PART</c> 头部才能被识别。</para></value>
     public IReadOnlyList<string> FileExtensions => ["img", "dat"];
+
+    /// <summary>
+    /// Confirms a GPT image from a pre-read header by checking for the <c>EFI PART</c> signature at each
+    /// candidate block alignment, mirroring <see cref="CanHandle"/>'s physical offsets without any file
+    /// access; a header too short to reach an alignment never matches there.
+    /// <para>通过在候选块对齐处检查 <c>EFI PART</c> 签名，从预先读取的头部确认 GPT 镜像，复刻 <see cref="CanHandle"/>
+    /// 的物理偏移且不访问文件；短到无法触及某个对齐的头部在该处永不匹配。</para>
+    /// </summary>
+    /// <param name="header">Leading bytes the caller already read. <para>调用方预先读入的起始字节。</para></param>
+    /// <param name="path">Read-from path; unused here, never opened. <para>读取来源路径；此处不使用，绝不打开。</para></param>
+    /// <returns><see langword="true"/> when the signature is present at a candidate alignment. <para>某个候选对齐处存在签名时返回 <see langword="true"/>。</para></returns>
+    bool IFormatProbeHints.MatchesMagic(ReadOnlySpan<byte> header, string path)
+    {
+        foreach (var blockSize in CandidateBlockSizes)
+        {
+            if (header.Length >= blockSize + "EFI PART"u8.Length
+                && header.Slice(blockSize, "EFI PART"u8.Length).SequenceEqual("EFI PART"u8))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /// <summary>
     /// Determines whether the file carries a GPT header at a candidate block alignment.

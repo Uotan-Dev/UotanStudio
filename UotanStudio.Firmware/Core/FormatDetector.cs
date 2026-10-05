@@ -327,4 +327,76 @@ public static class FormatDetector
     /// <paramref name="magic"/> and starts with it.
     /// <para>仅当 <paramref name="header"/> 长度不小于 <paramref name="magic"/> 且以其开头时为 <see langword="true"/>。</para></returns>
     public static bool HasMagic(byte[] header, ReadOnlySpan<byte> magic) => header.AsSpan(0, Math.Min(header.Length, magic.Length)).SequenceEqual(magic);
+
+    /// <summary>
+    /// Confirms, through each registered handler's optional <see cref="IFormatProbeHints"/> capability, whether
+    /// a pre-read header carries a known structural magic beyond the extension candidates. Registry population is
+    /// the caller's responsibility (for example <c>FirmwareFormatRegistry.RegisterAll()</c>); this only iterates the
+    /// <see cref="RegisteredHandlers"/> snapshot with a plain loop, so it stays statically dispatchable for AOT.
+    /// <para>通过各已注册处理器可选的 <see cref="IFormatProbeHints"/> 能力，确认预先读取的头部是否在扩展名候选之外
+    /// 携带已知的结构魔数。注册表填充是调用方的职责（例如 <c>FirmwareFormatRegistry.RegisterAll()</c>）；本方法只以普通
+    /// 循环遍历 <see cref="RegisteredHandlers"/> 快照，因此对 AOT 保持静态可分发。</para>
+    /// </summary>
+    /// <param name="path">
+    /// Path the header was read from, forwarded to each handler for cheap name-based disambiguation; never opened.
+    /// <para>读取该头部所用的路径，转发给各处理器用于廉价的名字消歧；绝不打开。</para>
+    /// </param>
+    /// <param name="header">
+    /// Header bytes to confirm against, typically from <see cref="ReadHeader(string, int)"/>; may be shorter than
+    /// any magic offset, and an empty span simply matches nothing.
+    /// <para>用于确认的头部字节，通常来自 <see cref="ReadHeader(string, int)"/>；可能短于任意魔数偏移，空 span 则一律不匹配。</para>
+    /// </param>
+    /// <returns><see langword="true"/> when any handler confirms the header; <see langword="false"/> otherwise,
+    /// including when a handler throws, whose exception is swallowed.
+    /// <para>任一处理器确认头部时为 <see langword="true"/>；否则为 <see langword="false"/>，处理器抛出异常时同样被吞掉并返回该值。</para></returns>
+    public static bool MatchesProbeHints(string path, ReadOnlySpan<byte> header)
+        => TryGetProbeMatch(path, header, out _);
+
+    /// <summary>
+    /// Same confirmation as <see cref="MatchesProbeHints"/> but also reports which handler matched, so the caller
+    /// can distinguish formats that share an extension by reading the returned handler's
+    /// <see cref="IReadonlyFormatHandler.FormatName"/>. Handlers are consulted in registration order and the first
+    /// confirmation wins; the loop is a plain iteration over the <see cref="RegisteredHandlers"/> snapshot, keeping
+    /// it statically dispatchable for AOT, and registry population stays the caller's responsibility.
+    /// <para>与 <see cref="MatchesProbeHints"/> 相同的确认，但额外报告命中的处理器，使调用方能读取返回处理器的
+    /// <see cref="IReadonlyFormatHandler.FormatName"/> 以区分共用同一扩展名的格式。处理器按注册顺序咨询，首个确认即胜出；
+    /// 该循环是对 <see cref="RegisteredHandlers"/> 快照的普通遍历，因此对 AOT 保持静态可分发，注册表填充仍由调用方负责。</para>
+    /// </summary>
+    /// <param name="path">
+    /// Path the header was read from, forwarded to each handler; never opened. <para>读取该头部所用的路径，转发给各处理器；绝不打开。</para>
+    /// </param>
+    /// <param name="header">
+    /// Header bytes to confirm against; may be shorter than any magic offset. <para>用于确认的头部字节；可能短于任意魔数偏移。</para>
+    /// </param>
+    /// <param name="handler">
+    /// The confirming handler when the result is <see langword="true"/>, otherwise <see langword="null"/>.
+    /// <para>结果为 <see langword="true"/> 时为确认的处理器，否则为 <see langword="null"/>。</para>
+    /// </param>
+    /// <returns><see langword="true"/> when a handler confirms the header; <see langword="false"/> otherwise,
+    /// swallowing any handler exception.
+    /// <para>有处理器确认头部时为 <see langword="true"/>；否则为 <see langword="false"/>，并吞掉处理器的任何异常。</para></returns>
+    public static bool TryGetProbeMatch(string path, ReadOnlySpan<byte> header, out IReadonlyFormatHandler? handler)
+    {
+        foreach (var candidate in RegisteredHandlers)
+        {
+            if (candidate is IFormatProbeHints probe)
+            {
+                try
+                {
+                    if (probe.MatchesMagic(header, path))
+                    {
+                        handler = candidate;
+                        return true;
+                    }
+                }
+                catch
+                {
+
+                }
+            }
+        }
+
+        handler = null;
+        return false;
+    }
 }
