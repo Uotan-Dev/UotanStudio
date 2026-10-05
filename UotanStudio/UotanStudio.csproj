@@ -59,7 +59,6 @@
     <PackageReference Include="DiffPlex" />
     <PackageReference Include="SharpCompress" />
     <PackageReference Include="System.IO.Hashing" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
 </Project>

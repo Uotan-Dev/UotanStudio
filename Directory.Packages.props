@@ -38,7 +38,6 @@
     <!-- Device communication packages -->
     <PackageVersion Include="LibUsbDotNet" Version="3.0.224" />
     <PackageVersion Include="Makaretu.Dns.Multicast" Version="0.27.0" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     <PackageVersion Include="System.IO.Ports" Version="10.0.12" />
     <!-- Managed ADB client used only for host:pair / host:connect while an adb server listens. -->
     <PackageVersion Include="AdvancedSharpAdbClient" Version="3.6.16" />
