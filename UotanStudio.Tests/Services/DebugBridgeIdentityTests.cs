@@ -76,3 +76,6 @@ public sealed class DebugBridgeIdentityTests : IDisposable
         Assert.Equal("user-choice", _defaults["Adb"]);
     }
 }
+
+[CollectionDefinition("DebugBridgeIdentitySettings", DisableParallelization = true)]
+public sealed class DebugBridgeIdentitySettingsCollection;

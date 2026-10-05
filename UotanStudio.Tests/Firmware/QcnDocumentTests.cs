@@ -243,7 +243,7 @@ public class QcnDocumentTests
     {
         var samplePath = Environment.GetEnvironmentVariable("UOTAN_QCN_SAMPLE");
 
-        var document = await QcnReader.ParseAsync(samplePath, TestContext.Current.CancellationToken);
+        var document = await QcnReader.ParseAsync(samplePath!, TestContext.Current.CancellationToken);
         Assert.True(document.Items.Count > 0);
         Assert.True(document.NvItemArrayStreamPaths.Count > 0);
         Assert.True(document.Items.All(item => item.Data.Length == 128));

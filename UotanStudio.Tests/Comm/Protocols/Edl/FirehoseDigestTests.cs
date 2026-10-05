@@ -104,7 +104,7 @@ public class FirehoseDigestTests
                 return [Encoding.UTF8.GetBytes(
                     "<data><response value='ACK' Digest='00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'/></data>")];
             }
-            return respond(bytes);
+            return respond?.Invoke(bytes) ?? [];
         };
         using var protocol = Protocol(transport);
 
@@ -130,7 +130,7 @@ public class FirehoseDigestTests
                 return [Encoding.UTF8.GetBytes(
                     "<data><log value='Digest 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'/><response value='ACK' rawmode='false'/></data>")];
             }
-            return respond(bytes);
+            return respond?.Invoke(bytes) ?? [];
         };
         using var protocol = Protocol(transport);
 
@@ -160,7 +160,7 @@ public class FirehoseDigestTests
                 return [Encoding.UTF8.GetBytes(
                     $"<data><log value='Digest {Convert.ToHexString(digest).ToLowerInvariant()}'/><response value='ACK' rawmode='false'/></data>")];
             }
-            return respond(bytes);
+            return respond?.Invoke(bytes) ?? [];
         };
         using var protocol = Protocol(transport);
 
@@ -254,7 +254,7 @@ public class FirehoseDigestTests
                 return [Encoding.UTF8.GetBytes(
                     $"<data><log value='Digest {Convert.ToHexString(digest).ToLowerInvariant()}'/><response value='ACK' rawmode='false'/></data>")];
             }
-            return respond(bytes);
+            return respond?.Invoke(bytes) ?? [];
         };
         return transport;
     }

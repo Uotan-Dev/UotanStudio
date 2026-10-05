@@ -3,7 +3,6 @@ using System.Text;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Tests.Comm.TestDoubles;
-using UotanStudio.Tests.Firmware;
 using Xunit;
 
 namespace UotanStudio.Tests.Comm.Protocols.Edl;

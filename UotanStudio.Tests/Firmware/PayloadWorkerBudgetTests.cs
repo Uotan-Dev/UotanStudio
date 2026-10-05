@@ -88,3 +88,6 @@ public sealed class PayloadWorkerBudgetTests
         }
     }
 }
+
+[CollectionDefinition("Firmware concurrency", DisableParallelization = true)]
+public sealed class FirmwareConcurrencyCollection;

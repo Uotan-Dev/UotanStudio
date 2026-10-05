@@ -31,6 +31,25 @@ public class MuMuLoopbackMirrorBenchmarkTests
     public static bool LoopbackEnabled =>
         Environment.GetEnvironmentVariable("UOTAN_MUMU_LOOPBACK") == "1";
 
+    /// <summary>
+    /// Drives a scrcpy mirror session against a MuMu emulator on the loopback ADB port and reports
+    /// receive/decode/convert throughput. Gated behind <c>UOTAN_MUMU_LOOPBACK=1</c>.
+    /// <para>对回环 ADB 端口上的 MuMu 模拟器驱动 scrcpy 投屏会话，报告接收/解码/转换吞吐。受
+    /// <c>UOTAN_MUMU_LOOPBACK=1</c> 门控。</para>
+    /// </summary>
+    /// <remarks>
+    /// The Media Foundation GPU decoder binds to its owning thread, so it is created and initialized
+    /// on the dedicated decode thread rather than the test thread. The Windows GPU path delivers
+    /// BGRA, so one full-frame copy emulates the upload. The codec configuration is prepended to the
+    /// first keyframe to match the production decode loop, and <c>Poll</c> is pumped before the first
+    /// <c>Decode</c> and after each frame: async MFT events only surface through Poll, otherwise the
+    /// input-event wait inside <c>Decode</c> starves and blocks the receive loop. Metrics are written
+    /// to a file because the test host does not always echo captured output on pass.
+    /// <para>Media Foundation GPU 解码器绑定其所属线程，因此在专用解码线程而非测试线程上创建并初始化。
+    /// Windows GPU 路径交付 BGRA，故以一次整帧复制模拟上传。编码配置被拼接到首个关键帧前以匹配生产解码
+    /// 循环；并在首个 <c>Decode</c> 之前及每帧之后泵 <c>Poll</c>：异步 MFT 事件只能经 <c>Poll</c> 提取，
+    /// 否则 <c>Decode</c> 内的输入事件等待会饿死并阻塞接收循环。指标会落盘，因为测试宿主通过时未必回显捕获输出。</para>
+    /// </remarks>
     [Fact(Skip = "Requires UOTAN_MUMU_LOOPBACK=1 and a MuMu emulator listening on 127.0.0.1:5555.", SkipUnless = nameof(LoopbackEnabled))]
     public async Task MirrorLoop_MuMuLoopback5555_ReportsThroughput()
     {
@@ -73,8 +92,6 @@ public class MuMuLoopbackMirrorBenchmarkTests
         {
             try
             {
-                // The MF GPU decoder binds to its owning thread; create and initialize it here.
-                // MF GPU 解码器绑定所属线程，因此在此线程上创建并初始化。
                 var owned = VideoDecoderFactory.Create(codec, new VideoDecoderOptions());
                 owned.Initialize(codec, metadata.Width, metadata.Height, frame =>
                 {
@@ -82,8 +99,6 @@ public class MuMuLoopbackMirrorBenchmarkTests
                     var convertStart = Stopwatch.GetTimestamp();
                     if (frame is PointerDecodedVideoFrame or GpuDecodedVideoFrame)
                     {
-                        // The Windows GPU path delivers BGRA; one full-frame copy emulates the upload.
-                        // Windows GPU 路径交付 BGRA；一次整帧复制用于模拟上传。
                         var bgra = new byte[frame.Length];
                         frame.Span.CopyTo(bgra);
                     }
@@ -99,10 +114,6 @@ public class MuMuLoopbackMirrorBenchmarkTests
                 backendName = VideoDecoderFactory.GetBackendName(owned);
                 decoderReady.Set();
                 byte[]? configuration = null;
-                // Mimic the production loop's initial Poll: pump the startup NeedInput event before
-                // the first Decode instead of waiting for a read timeout that may never happen.
-                // 模拟生产循环的首次 Poll：在首个 Decode 前泵出启动 NeedInput 事件，
-                // 而不是等待可能永远不会发生的读超时。
                 owned.Poll();
                 while (!barrier.IsSet)
                 {
@@ -121,8 +132,6 @@ public class MuMuLoopbackMirrorBenchmarkTests
                     }
                     else
                     {
-                        // Match the production decode loop: prepend the codec config to the first keyframe.
-                        // 与生产解码循环一致：把编码配置拼接到首个关键帧前。
                         var length = configuration.Length + packet.Data.Length;
                         var combined = new byte[length];
                         configuration.CopyTo(combined, 0);
@@ -130,9 +139,6 @@ public class MuMuLoopbackMirrorBenchmarkTests
                         owned.Decode(combined, packet.PresentationTimestampMicroseconds * 10);
                         configuration = null;
                     }
-                    // Async MFTs queue events that only surface through Poll; without it the
-                    // input-event wait inside Decode starves and blocks the receive loop.
-                    // 异步 MFT 的事件只能经 Poll 提取；缺少它会让 Decode 内的输入事件等待饿死并阻塞接收循环。
                     owned.Poll();
                     decodeStopwatch.Stop();
                     Interlocked.Add(ref decodeTicks, Stopwatch.GetTimestamp() - start);
@@ -151,7 +157,6 @@ public class MuMuLoopbackMirrorBenchmarkTests
         if (decodeFault is not null) throw decodeFault;
         Assert.NotNull(decoder);
 
-        // Measure for 10 seconds, print a 1-second rate per second like the UI panel.
         while (sw.ElapsedMilliseconds < 10_000 && !ct.IsCancellationRequested)
         {
             await Task.Delay(1000, ct);
@@ -175,8 +180,6 @@ public class MuMuLoopbackMirrorBenchmarkTests
               convert : {Volatile.Read(ref uploaded) / seconds:F1} fps, convert CPU {new TimeSpan(convertTicks).TotalMilliseconds / seconds:F1} ms/s
             """;
         TestContext.Current.TestOutputHelper?.WriteLine(output);
-        // Test-host output is not always echoed on pass; persist the metrics for the benchmark report.
-        // 测试宿主通过时未必回显输出；把指标落盘以便生成基准报告。
         File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "mumu-mirror-benchmark.txt"), output);
         if (decodeFault is not null) TestContext.Current.TestOutputHelper?.WriteLine($"decode fault: {decodeFault}");
 

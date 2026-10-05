@@ -1,5 +1,6 @@
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -23,18 +24,6 @@ public class RepackMetadataContextTests : IDisposable
     public void Dispose() => RepackMetadata.DefaultMetadataRoot = _originalRoot;
 
     private const string ValidMetadataJson = """{"schema":"UotanStudio.Firmware.Repack","version":1,"formatName":"EXT4","sourceFileName":"system.img","sourceLength":1,"sourceProperties":{},"packingOptions":{},"configuration":{}}""";
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "uotan-tests-" + Guid.NewGuid().ToString("N"));
-
-        public TempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            try { Directory.Delete(Path, recursive: true); } catch (IOException) { }
-        }
-    }
 
     private static void WriteMetadata(string directory)
     {
