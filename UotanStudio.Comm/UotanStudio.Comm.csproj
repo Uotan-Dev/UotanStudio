@@ -36,9 +36,8 @@
   </Target>
 
   <ItemGroup>
-    <!-- host:pair / host:connect while an adb server listens; the serverless pairing
-         protocol is implemented in Protocols/Adb/Pairing on BouncyCastle. -->
-    <PackageReference Include="AdvancedSharpAdbClient" />
+    <!-- The serverless pairing protocol and the adb smart-socket client are implemented in
+         Protocols/Adb; no third-party adb client is referenced. -->
     <PackageReference Include="BouncyCastle.Cryptography" />
     <PackageReference Include="LibUsbDotNet" />
     <PackageReference Include="K4os.Compression.LZ4" />

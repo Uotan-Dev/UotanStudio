@@ -158,17 +158,6 @@ public static class OpenSourceProjects
         },
         new OpenSourceProject
         {
-            Name = "SharpZipLib",
-            Description = "压缩库（LZOP 容器解析 / zlib 解压辅助）",
-            RepositoryUrl = "https://github.com/icsharpcode/SharpZipLib",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/icsharpcode/SharpZipLib/blob/master/LICENSE.txt",
-            AuthorName = "ICSharpCode",
-            AuthorGitHubUrl = "https://github.com/icsharpcode",
-            AuthorAvatarUrl = "https://github.com/icsharpcode.png"
-        },
-        new OpenSourceProject
-        {
             Name = "BouncyCastle.Cryptography",
             Description = "加密算法库（AVB RSASSA-PSS / PKCS#1 v1.5 签名校验）",
             RepositoryUrl = "https://github.com/bcgit/bc-csharp",
@@ -177,28 +166,6 @@ public static class OpenSourceProjects
             AuthorName = "The Legion of the Bouncy Castle",
             AuthorGitHubUrl = "https://github.com/bcgit",
             AuthorAvatarUrl = "https://github.com/bcgit.png"
-        },
-        new OpenSourceProject
-        {
-            Name = "BsDiff",
-            Description = "二进制差分算法（OTA 差分生成/应用）",
-            RepositoryUrl = "https://github.com/LogosBible/bsdiff.net",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/LogosBible/bsdiff.net/blob/master/LICENSE",
-            AuthorName = "Logos Bible Software",
-            AuthorGitHubUrl = "https://github.com/LogosBible",
-            AuthorAvatarUrl = "https://github.com/LogosBible.png"
-        },
-        new OpenSourceProject
-        {
-            Name = "BrotliSharpLib",
-            Description = "Brotli 压缩库（.new.dat.br 解压）",
-            RepositoryUrl = "https://github.com/master131/BrotliSharpLib",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/master131/BrotliSharpLib/blob/master/LICENSE",
-            AuthorName = "master131",
-            AuthorGitHubUrl = "https://github.com/master131",
-            AuthorAvatarUrl = "https://github.com/master131.png"
         },
         new OpenSourceProject
         {

@@ -1,10 +1,9 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
-using ICSharpCode.SharpZipLib.BZip2;
-using ICSharpCode.SharpZipLib.GZip;
 using SevenZip;
 using SevenZip.Compression.LZMA;
+using SharpCompress.Compressors.BZip2;
 using UotanStudio.Firmware.Archive.Formats.Cpio;
 using UotanStudio.Firmware.Archive.Internal;
 using UotanStudio.Firmware.Archive.Models;
@@ -16,6 +15,7 @@ using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Metadata;
+using SharpCompressCompressionMode = SharpCompress.Compressors.CompressionMode;
 
 namespace UotanStudio.Firmware.Archive;
 
@@ -121,17 +121,7 @@ public sealed partial class CpioFormatHandler
             var scratch = CreateScratch();
             try
             {
-                if (compression == CompressionFormat.Gzip)
-                {
-                    using var gzip = new GZipInputStream(source) { IsStreamOwner = false };
-                    using var bounded = new CountingWriteStream(scratch, MaximumArchiveBytes, leaveOpen: true,
-                        cancellationToken: cancellationToken);
-                    gzip.CopyTo(bounded);
-                }
-                else
-                {
-                    CompressionService.Decompress(source, scratch, compression, MaximumArchiveBytes, cancellationToken);
-                }
+                CompressionService.Decompress(source, scratch, compression, MaximumArchiveBytes, cancellationToken);
                 scratch.Position = 0;
                 return scratch;
             }
@@ -269,6 +259,35 @@ public sealed partial class CpioFormatHandler
             metadata.Configuration["cpio"]!["dictionarySize"] = dictionary;
             metadata.Configuration["cpio"]!["unknownSize"] = BinaryPrimitives.ReadInt64LittleEndian(header[5..]) == -1;
         }
+    }
+
+    /// <summary>
+    /// Re-encodes the archive body as a single bzip2 stream after validating the block level recorded in the
+    /// repack metadata. The managed encoder always writes the 900 kB block layout, so a source recorded with
+    /// a smaller block size is re-encoded at level 9: the result stays a valid bzip2 stream and only the
+    /// compression ratio is recomputed.
+    /// <para>校验重打包元数据记录的块等级后，把归档主体重新编码为单条 bzip2 流。托管编码器固定写出
+    /// 900 kB 块布局，因此记录为更小块等级的源会以等级 9 重新编码：结果仍是合法的 bzip2 流，仅压缩率
+    /// 被重新计算。</para>
+    /// </summary>
+    /// <param name="source">Uncompressed CPIO body positioned at its first byte.
+    /// <para>定位在起始处的未压缩 CPIO 主体。</para></param>
+    /// <param name="destination">Writable destination for the encoded stream, left open.
+    /// <para>编码流的写入目标，保持打开。</para></param>
+    /// <param name="blockLevel">Block level recorded from the source, accepted in the range 1-9.
+    /// <para>从源记录的块等级，取值 1-9。</para></param>
+    /// <exception cref="ArchiveCorruptedException"><paramref name="blockLevel"/> is outside 1-9.
+    /// <para><paramref name="blockLevel"/> 超出 1-9。</para></exception>
+    private static void WriteBzip2(Stream source, Stream destination, int blockLevel)
+    {
+        if (blockLevel is < 1 or > 9)
+        {
+            throw new ArchiveCorruptedException("Invalid stored bzip2 block level.");
+        }
+
+        using var encoder = BZip2Stream.Create(destination, SharpCompressCompressionMode.Compress,
+            decompressConcatenated: false, leaveOpen: true);
+        source.CopyTo(encoder);
     }
 
     private static ArchiveFormat ResolveArchiveFormat(RepackMetadata? metadata)
@@ -487,13 +506,7 @@ public sealed partial class CpioFormatHandler
                 else if (compression == CompressionFormat.Bzip2 && metadata?.Configuration["cpio"] is JsonObject bzip2
                     && bzip2["blockLevel"] is not null)
                 {
-                    var blockLevel = bzip2["blockLevel"]!.GetValue<int>();
-                    if (blockLevel is < 1 or > 9)
-                    {
-                        throw new ArchiveCorruptedException("Invalid stored bzip2 block level.");
-                    }
-                    using var encoder = new BZip2OutputStream(bounded, blockLevel) { IsStreamOwner = false };
-                    raw.CopyTo(encoder);
+                    WriteBzip2(raw, bounded, bzip2["blockLevel"]!.GetValue<int>());
                 }
                 else if (compression == CompressionFormat.Lzma && metadata?.Configuration["cpio"] is JsonObject lzma
                     && lzma["lzmaProperty"] is not null)

@@ -2,6 +2,8 @@
   <PropertyGroup>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- Required by the source-generated LibraryImport marshalling stubs in FileAssociationService. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Preserve the Desktop RID through this reference to Comm's native assets. -->
     <IsRidAgnostic>false</IsRidAgnostic>
   </PropertyGroup>
@@ -57,7 +59,6 @@
     <!-- QR code rendering for the wireless-debugging pairing popup. -->
     <PackageReference Include="QRCoder" />
     <PackageReference Include="DiffPlex" />
-    <PackageReference Include="SharpCompress" />
     <PackageReference Include="System.IO.Hashing" />
   </ItemGroup>
 

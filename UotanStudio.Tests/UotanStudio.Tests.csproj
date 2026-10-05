@@ -33,6 +33,8 @@
     <!-- MCP 工具清单测试经由 UotanStudio.Mcp 暴露的 McpServerTool 元数据，需 Core 程序集参与重载解析。 -->
     <PackageReference Include="ModelContextProtocol.Core" />
     <PackageReference Include="LuaCSharp" />
+    <!-- Independent bsdiff oracle for the incremental-patch tests; production uses its own BinaryDeltaPatch. -->
+    <PackageReference Include="BsDiff" />
   </ItemGroup>
 
   <ItemGroup>

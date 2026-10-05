@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
@@ -420,13 +421,16 @@ public static partial class DtboFormat
             _ => null
         };
         var crc = compression == CompressionGzip ? new System.IO.Hashing.Crc32() : null;
-        var adler = compression == CompressionZlib ? new ICSharpCode.SharpZipLib.Checksum.Adler32() : null;
+        var adler = 1u;
         long length = 0;
         var hash = CopyAndHash(decoder ?? range, output, limit, cancellationToken,
             compression == CompressionNone ? entry.DtSize : null, (buffer, count) =>
             {
                 crc?.Append(buffer.AsSpan(0, count));
-                adler?.Update(new ArraySegment<byte>(buffer, 0, count));
+                if (compression == CompressionZlib)
+                {
+                    adler = AppendAdler32(adler, buffer.AsSpan(0, count));
+                }
                 length += count;
             });
         if (compression != CompressionNone)
@@ -440,10 +444,33 @@ public static partial class DtboFormat
             if (compression == CompressionGzip
                 ? BinaryPrimitives.ReadUInt32LittleEndian(trailer) != crc!.GetCurrentHashAsUInt32()
                     || BinaryPrimitives.ReadUInt32LittleEndian(trailer[4..]) != unchecked((uint)length)
-                : BinaryPrimitives.ReadUInt32BigEndian(trailer) != (uint)adler!.Value)
+                : BinaryPrimitives.ReadUInt32BigEndian(trailer) != adler)
                 throw new InvalidDataException("DTBO compression trailer checksum or size mismatch.");
         }
         return hash;
+    }
+
+    /// <summary>
+    /// Folds one decoded block into a running Adler-32 value, delegating each block to <see cref="Adler32.Compute(ReadOnlySpan{byte})"/>
+    /// so the streaming check uses the same reduction as the one-shot helper.
+    /// <para>把一块解码数据并入累进的 Adler-32 值，逐块委托给 <see cref="Adler32.Compute(ReadOnlySpan{byte})"/>，使流式校验与
+    /// 一次性辅助方法使用同一套归约。</para>
+    /// </summary>
+    /// <param name="running">
+    /// Checksum covering every earlier block, <c>1</c> before the first block.
+    /// <para>覆盖此前所有数据块的校验和，首个数据块之前为 <c>1</c>。</para></param>
+    /// <param name="block">Next decoded block. <para>下一个解码数据块。</para></param>
+    /// <returns>
+    /// The checksum covering the bytes behind <paramref name="running"/> followed by <paramref name="block"/>.
+    /// <para>覆盖 <paramref name="running"/> 已有字节与其后 <paramref name="block"/> 的校验和。</para></returns>
+    private static uint AppendAdler32(uint running, ReadOnlySpan<byte> block)
+    {
+        const long modulus = 65521;
+        var added = Adler32.Compute(block);
+        var carry = (long)(running & 0xFFFF) - 1;
+        var low = ((added & 0xFFFF) + carry) % modulus;
+        var high = ((added >> 16) + (running >> 16) + (long)block.Length * carry) % modulus;
+        return (uint)((high << 16) | low);
     }
 
     private static byte[] CopyAndHash(Stream input, Stream output, long limit, CancellationToken cancellationToken,

@@ -1,4 +1,5 @@
-using ICSharpCode.SharpZipLib.BZip2;
+using SharpCompress.Compressors;
+using SharpCompress.Compressors.BZip2;
 using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.OtaDelta.Diff;
@@ -136,7 +137,7 @@ internal static class BinaryDeltaPatch
         using var diff = CreateTemporaryStream();
         using var extra = CreateTemporaryStream();
         var commonLength = Math.Min(source.Length, target.Length);
-        using (var encoder = new BZip2OutputStream(control) { IsStreamOwner = false })
+        using (var encoder = BZip2Stream.Create(control, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
         {
             Span<byte> tuple = stackalloc byte[24];
             WriteNumber(tuple[..8], commonLength);
@@ -148,7 +149,7 @@ internal static class BinaryDeltaPatch
         target.Position = 0;
         var oldBuffer = new byte[64 * 1024];
         var newBuffer = new byte[oldBuffer.Length];
-        using (var encoder = new BZip2OutputStream(diff) { IsStreamOwner = false })
+        using (var encoder = BZip2Stream.Create(diff, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
         {
             long remaining = commonLength;
             while (remaining > 0)
@@ -162,7 +163,7 @@ internal static class BinaryDeltaPatch
                 remaining -= count;
             }
         }
-        using (var encoder = new BZip2OutputStream(extra) { IsStreamOwner = false })
+        using (var encoder = BZip2Stream.Create(extra, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
             CopyExactly(target, encoder, target.Length - commonLength, ct);
         Span<byte> header = stackalloc byte[32];
         "BSDIFF40"u8.CopyTo(header);
@@ -216,7 +217,7 @@ internal static class BinaryDeltaPatch
 
     private static Stream Decoder(Stream stream, byte codec) => codec switch
     {
-        1 => new BZip2InputStream(stream),
+        1 => BZip2Stream.Create(stream, CompressionMode.Decompress, decompressConcatenated: false, leaveOpen: true),
         2 => new StrictBrotliReadStream(stream),
         _ => throw new InvalidDataException($"Unsupported BSDF2 stream codec: {codec}")
     };

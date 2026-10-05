@@ -1,11 +1,11 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
+using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
-using SharpZipCompressionMethod = ICSharpCode.SharpZipLib.Zip.CompressionMethod;
-using SharpZipZipFile = ICSharpCode.SharpZipLib.Zip.ZipFile;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload;
 
@@ -16,19 +16,24 @@ namespace UotanStudio.Firmware.OtaDelta.Payload;
 /// 大小、extent 与输出路径在使用前均经边界检查。</para>
 /// </summary>
 /// <remarks>
-/// Two ZIP libraries are used deliberately. <c>System.IO.Compression.ZipArchive</c> streams the payload entry for
-/// normal extraction but does not expose an entry's raw local-header byte offset. <c>SharpZipZipFile</c> is retained
-/// only to map a <c>STORED</c> payload back to its absolute data range so it can be read in place without
-/// decompression; the BCL reader cannot answer that query.
-/// <para>本类型刻意使用两套 ZIP 库。<c>System.IO.Compression.ZipArchive</c> 负责常规流式提取，但不暴露条目的原始本地头
-/// 字节偏移。<c>SharpZipZipFile</c> 仅用于把 <c>STORED</c> 载荷映射回其绝对数据区间以便就地读取而无需解压；BCL 读取器无法
-/// 回答这一查询。</para>
+/// <c>System.IO.Compression.ZipArchive</c> streams the payload entry for normal extraction but does not expose an
+/// entry's raw local-header byte offset. A STORED payload is therefore located by walking the archive's local file
+/// headers, which maps the entry back to its absolute data range so it can be read in place without decompression.
+/// <para><c>System.IO.Compression.ZipArchive</c> 负责常规流式提取，但不暴露条目的原始本地头字节偏移。因此
+/// STORED 载荷通过遍历归档的本地文件头定位，从而把条目映射回其绝对数据区间以便就地读取而无需解压。</para>
 /// </remarks>
 public static partial class PayloadParser
 {
 
     private static readonly byte[] ZipMagicBytes = [0x50, 0x4B];
     private static readonly byte[] PayloadMagicBytes = [0x43, 0x72, 0x41, 0x55];
+    private static readonly byte[] PayloadFilenameBytes = Encoding.ASCII.GetBytes(PayloadConstants.PayloadFilename);
+
+    private const uint LocalFileHeaderSignature = 0x04034B50;
+    private const uint CentralDirectorySignature = 0x02014B50;
+    private const uint Zip64ExtraFieldType = 0x0001;
+    private const int LocalFileHeaderSize = 30;
+    private const int DataDescriptorFlag = 1 << 3;
 
     /// <summary>
     /// Determines the payload type of a local file by reading its magic bytes.
@@ -945,39 +950,155 @@ public static partial class PayloadParser
     /// STORED 条目；为 true 时 <paramref name="dataStart"/> 是条目数据在 <paramref name="filePath"/>
     /// 内的绝对字节偏移，<paramref name="length"/> 为载荷字节数。</para>
     /// </summary>
+    /// <param name="filePath">Path of the ZIP archive; opened read-only and closed before returning.
+    /// <para>ZIP 归档路径；以只读方式打开并在返回前关闭。</para></param>
+    /// <param name="dataStart">Absolute offset of the entry data, or zero when the entry is not STORED.
+    /// <para>条目数据的绝对偏移；条目不是 STORED 时为零。</para></param>
+    /// <param name="length">Stored payload byte count, or zero when the entry is not STORED.
+    /// <para>STORED 载荷字节数；条目不是 STORED 时为零。</para></param>
+    /// <returns>
+    /// <see langword="true"/> only for a STORED payload.bin whose local header carries its own sizes; a compressed,
+    /// data-descriptor, ZIP64-indeterminate or absent entry reports <see langword="false"/> so the caller
+    /// materializes the payload instead.
+    /// <para>仅当 payload.bin 为 STORED 且其本地头自带大小时返回 <see langword="true"/>；被压缩、带数据描述符、
+    /// ZIP64 信息不可判定或缺失的条目返回 <see langword="false"/>，由调用方改为物化载荷。</para></returns>
     private static bool TryGetStoredPayloadLocation(string filePath, out long dataStart, out long length)
     {
         dataStart = 0;
         length = 0;
-        using var zip = new SharpZipZipFile(filePath);
-        var entry = zip.GetEntry(PayloadConstants.PayloadFilename);
-        if (entry is null || entry.CompressionMethod != SharpZipCompressionMethod.Stored || entry.Size < 0 || entry.Offset < 0)
+        using var input = File.OpenRead(filePath);
+        var header = new byte[LocalFileHeaderSize];
+        while (input.Position + header.Length <= input.Length)
         {
+            input.ReadExactly(header);
+            var signature = BinaryPrimitives.ReadUInt32LittleEndian(header);
+            if (signature == CentralDirectorySignature)
+            {
+                return false;
+            }
+
+            if (signature != LocalFileHeaderSignature)
+            {
+                return false;
+            }
+
+            var flags = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(6));
+            var method = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(8));
+            var compressedSize = (long)BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(18));
+            var uncompressedSize = (long)BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(22));
+            var nameLength = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(26));
+            var extraLength = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(28));
+            if (input.Length - input.Position < nameLength + (long)extraLength)
+            {
+                return false;
+            }
+
+            var name = new byte[nameLength];
+            input.ReadExactly(name);
+            var extra = new byte[extraLength];
+            input.ReadExactly(extra);
+            if ((compressedSize == uint.MaxValue || uncompressedSize == uint.MaxValue)
+                && !TryReadZip64Sizes(extra, ref uncompressedSize, ref compressedSize))
+            {
+                return false;
+            }
+
+            if (method == 0 && (flags & DataDescriptorFlag) == 0 && compressedSize == uncompressedSize
+                && name.AsSpan().SequenceEqual(PayloadFilenameBytes))
+            {
+                dataStart = input.Position;
+                length = compressedSize;
+                return true;
+            }
+
+            var nextEntry = input.Position + compressedSize;
+            if (nextEntry < input.Position || nextEntry > input.Length)
+            {
+                return false;
+            }
+
+            input.Position = nextEntry;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Resolves the ZIP64 extended-information extra field for a local file header whose 32-bit sizes are
+    /// saturated, so a payload larger than 4 GiB still maps to its true data range.
+    /// <para>为 32 位大小已饱和的本地文件头解析 ZIP64 扩展信息额外字段，使超过 4 GiB 的载荷仍能映射到真实
+    /// 数据区间。</para>
+    /// </summary>
+    /// <param name="extra">Raw extra-field bytes of the local file header. <para>本地文件头的额外字段原始字节。</para></param>
+    /// <param name="uncompressedSize">Value read from the header, replaced when it was saturated.
+    /// <para>从头部读出的大小，饱和时被替换。</para></param>
+    /// <param name="compressedSize">Value read from the header, replaced when it was saturated.
+    /// <para>从头部读出的大小，饱和时被替换。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when every saturated size was resolved; <see langword="false"/> for a malformed
+    /// extra field or a missing ZIP64 record, which makes the caller fall back to materialization.
+    /// <para>所有饱和大小均解析成功时为 <see langword="true"/>；额外字段损坏或缺少 ZIP64 记录时为
+    /// <see langword="false"/>，调用方随即回退到物化路径。</para></returns>
+    private static bool TryReadZip64Sizes(ReadOnlySpan<byte> extra, ref long uncompressedSize, ref long compressedSize)
+    {
+        for (var offset = 0; offset + 4 <= extra.Length;)
+        {
+            var type = BinaryPrimitives.ReadUInt16LittleEndian(extra[offset..]);
+            var fieldLength = BinaryPrimitives.ReadUInt16LittleEndian(extra[(offset + 2)..]);
+            if (fieldLength > extra.Length - offset - 4)
+            {
+                return false;
+            }
+
+            if (type == Zip64ExtraFieldType)
+            {
+                var values = extra.Slice(offset + 4, fieldLength);
+                var cursor = 0;
+                if (uncompressedSize == uint.MaxValue)
+                {
+                    if (cursor + sizeof(ulong) > values.Length
+                        || !TryReadZip64Size(values[cursor..], out uncompressedSize))
+                    {
+                        return false;
+                    }
+
+                    cursor += sizeof(ulong);
+                }
+
+                if (compressedSize == uint.MaxValue
+                    && (cursor + sizeof(ulong) > values.Length
+                        || !TryReadZip64Size(values[cursor..], out compressedSize)))
+                {
+                    return false;
+                }
+
+                return true;
+            }
+
+            offset += 4 + fieldLength;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Reads one ZIP64 64-bit size, rejecting values that cannot be represented as a signed byte offset.
+    /// <para>读取一个 ZIP64 的 64 位大小，并拒绝无法表示为有符号字节偏移的取值。</para>
+    /// </summary>
+    /// <param name="source">Extra-field bytes starting at the 64-bit value. <para>从该 64 位值开始的额外字段字节。</para></param>
+    /// <param name="size">Resolved size. <para>解析出的大小。</para></param>
+    /// <returns><see langword="true"/> when the value fits; otherwise <see langword="false"/>.
+    /// <para>取值可表示时为 <see langword="true"/>，否则为 <see langword="false"/>。</para></returns>
+    private static bool TryReadZip64Size(ReadOnlySpan<byte> source, out long size)
+    {
+        var value = BinaryPrimitives.ReadUInt64LittleEndian(source);
+        if (value > long.MaxValue)
+        {
+            size = 0;
             return false;
         }
 
-        length = entry.Size;
-        using var fs = File.OpenRead(filePath);
-        if (entry.Offset + 30 > fs.Length)
-        {
-            return false;
-        }
-
-        Span<byte> localHeader = stackalloc byte[30];
-        fs.Seek(entry.Offset, SeekOrigin.Begin);
-        if (fs.Read(localHeader) < localHeader.Length)
-        {
-            return false;
-        }
-
-        if ((localHeader[8] | (localHeader[9] << 8)) != 0)
-        {
-            return false;
-        }
-
-        var nameLength = localHeader[26] | (localHeader[27] << 8);
-        var extraLength = localHeader[28] | (localHeader[29] << 8);
-        dataStart = checked(entry.Offset + 30 + nameLength + extraLength);
+        size = (long)value;
         return true;
     }
 

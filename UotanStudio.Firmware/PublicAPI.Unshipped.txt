@@ -302,10 +302,6 @@ static UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.operator !=(UotanStudi
 static UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.operator ==(UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry? left, UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry? right) -> bool
 static UotanStudio.Firmware.FileSystem.Fat.ExFatParser.IsExFatBootRecord(System.ReadOnlySpan<byte> header, long? imageLength = null) -> bool
 static UotanStudio.Firmware.FileSystem.Fat.FatParser.IsFatBootRecord(System.ReadOnlySpan<byte> header, long? imageLength = null) -> bool
-static UotanStudio.Firmware.Compression.Compressors.BrotliCompressor.CompressWithDictionary(byte[]! data, byte[]! dictionary, UotanStudio.Firmware.Compression.CompressionOptions? options) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.BrotliCompressor.CompressWithDictionary(System.IO.Stream! input, System.IO.Stream! output, byte[]! dictionary, UotanStudio.Firmware.Compression.CompressionOptions? options) -> void
-static UotanStudio.Firmware.Compression.Compressors.BrotliCompressor.DecompressWithDictionary(byte[]! data, byte[]! dictionary) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.BrotliCompressor.DecompressWithDictionary(System.IO.Stream! source, System.IO.Stream! destination, byte[]! dictionary, long maxOutputBytes) -> void
 UotanStudio.Firmware.OtaDelta.Payload.Models.PayloadProperties.MaxZstdDictRawSize.get -> long
 UotanStudio.Firmware.OtaDelta.Payload.Models.PayloadProperties.MaxZstdDictTrust.get -> string!
 UotanStudio.Firmware.BlockImage.Gpt.GptFormatHandler.PackAsync(string! inputPath, string! outputPath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.Core.FirmwareOpResult!>!

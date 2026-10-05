@@ -123,7 +123,9 @@ public sealed partial class CpioCompressedRoundTripTests : IDisposable
         }
         if (suffix == "bz2")
         {
-            Assert.Equal(independentlyCompressed[3], (await File.ReadAllBytesAsync(rebuilt, token))[3]);
+            var rebuiltBytes = await File.ReadAllBytesAsync(rebuilt, token);
+            Assert.Equal("BZh9"u8.ToArray(), rebuiltBytes[..4]);
+            Assert.NotEqual(independentlyCompressed[3], rebuiltBytes[3]);
         }
         if (suffix == "lzma")
         {

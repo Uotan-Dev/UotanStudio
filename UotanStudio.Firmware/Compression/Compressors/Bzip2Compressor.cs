@@ -1,4 +1,3 @@
-using ICSharpCode.SharpZipLib.BZip2;
 using SharpCompress.Compressors;
 using SharpCompress.Compressors.BZip2;
 using UotanStudio.Firmware.Compression.Internal;
@@ -37,7 +36,6 @@ internal static class Bzip2Compressor
 
         try
         {
-
             var parallel = ParallelCompression.TryCompressChunks(data, options?.MaxDegreeOfParallelism,
                 (start, count) => CompressChunk(data, start, count));
             if (parallel != null)
@@ -46,7 +44,7 @@ internal static class Bzip2Compressor
             }
 
             using var output = new MemoryStream();
-            using (var bzip2 = new BZip2OutputStream(output, 9) { IsStreamOwner = false })
+            using (var bzip2 = BZip2Stream.Create(output, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
             {
                 bzip2.Write(data, 0, data.Length);
             }
@@ -65,7 +63,7 @@ internal static class Bzip2Compressor
     private static byte[] CompressChunk(byte[] data, int start, int count)
     {
         using var output = new MemoryStream();
-        using (var bzip2 = new BZip2OutputStream(output, 9) { IsStreamOwner = false })
+        using (var bzip2 = BZip2Stream.Create(output, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
         {
             bzip2.Write(data, start, count);
         }
@@ -136,7 +134,7 @@ internal static class Bzip2Compressor
         try
         {
             using var buffered = new BufferedStream(new NonDisposingStream(output), 64 * 1024);
-            using var bzip2 = new BZip2OutputStream(buffered, 9) { IsStreamOwner = false };
+            using var bzip2 = BZip2Stream.Create(buffered, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true);
             input.CopyTo(bzip2);
         }
         catch (Exception ex)
@@ -173,7 +171,6 @@ internal static class Bzip2Compressor
 
         try
         {
-
             using var buffered = new BufferedStream(new NonDisposingStream(input), 64 * 1024);
             using var bzip2 = BZip2Stream.Create(buffered, CompressionMode.Decompress, decompressConcatenated: true, leaveOpen: true);
             bzip2.CopyTo(output);
