@@ -1,6 +1,7 @@
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;
 
@@ -38,13 +39,8 @@ internal static class WorkspaceSessionCapture
     /// <para>判定停靠项是否为文档型面板（与 <see cref="Documents"/> 的快照口径一致）。</para>
     /// Whether the dockable is a document panel (same scope as <see cref="Documents"/>).
     /// </summary>
-    internal static bool IsDocument(IDockable item) => item switch
-    {
-        FileViewModel or FirmwareInfoViewModel or FileManagerEditorViewModel or DtbEditorViewModel
-            or DexEditorViewModel or ElfInfoViewModel or QualcommImageViewModel or ManifestEditorViewModel or ArscEditorViewModel or HexEditorViewModel
-            or ApkEditorViewModel or PartitionEditorViewModel or CompareViewModel => true,
-        _ => false
-    };
+    internal static bool IsDocument(IDockable item) =>
+        DocumentOpenRegistry.ByInstance(item)?.IsDocument == true;
 
     internal static IEnumerable<IDockable> Enumerate(IDockable? root)
     {
@@ -68,24 +64,15 @@ internal static class WorkspaceSessionCapture
         var result = new List<OpenDocumentDto>();
         foreach (var item in Enumerate(root))
         {
-            var (kind, path) = item switch
+            var descriptor = DocumentOpenRegistry.ByInstance(item);
+            if (descriptor is not { IsDocument: true } || descriptor.GetPath is not { } getPath)
             {
-                FileViewModel file => ("Text", file.FilePath),
-                FirmwareInfoViewModel file => ("Firmware", file.FilePath),
-                FileManagerEditorViewModel file => ("FileManager", file.FilePath),
-                DtbEditorViewModel file => ("Dtb", file.FilePath),
-                DexEditorViewModel file => ("Dex", file.FilePath),
-                ElfInfoViewModel file => ("Elf", file.FilePath),
-                QualcommImageViewModel file => ("Qualcomm", file.FilePath),
-                ManifestEditorViewModel file => ("Manifest", file.FilePath),
-                ArscEditorViewModel file => ("Arsc", file.FilePath),
-                HexEditorViewModel file => ("Hex", file.FilePath),
-                ApkEditorViewModel file => ("Apk", file.FilePath),
-                PartitionEditorViewModel file => ("Partition", file.FilePath),
-                CompareViewModel => ("Compare", (string?)null),
-                _ => (string.Empty, (string?)null)
-            };
-            if (kind.Length == 0 || kind != "Compare" && string.IsNullOrWhiteSpace(path)) continue;
+                continue;
+            }
+
+            var kind = descriptor.Kind;
+            var path = getPath(item);
+            if (kind != "Compare" && string.IsNullOrWhiteSpace(path)) continue;
             result.Add(new()
             {
                 Kind = kind,

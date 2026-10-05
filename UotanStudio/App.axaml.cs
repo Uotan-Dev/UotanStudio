@@ -241,7 +241,7 @@ public partial class App : Application
     /// view model, which opens the requested document.
     /// </summary>
     private async void OnOpenDocument(object recipient, OpenDocumentRequestMessage message)
-        => await RunMainRequestAsync("Open document failed", main => main.WorkspaceVM.OpenDocumentAsync(message.Path, message.Mode));
+        => await RunMainRequestAsync("Open document failed", main => main.WorkspaceVM.OpenDocumentAsync(message.ToRequest()));
 
     /// <summary>
     /// <para>响应打开节点项目请求消息：把解决方案登记的节点项目载入节点编辑器画布并切到该选项卡。</para>

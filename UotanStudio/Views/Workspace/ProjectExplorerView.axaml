@@ -19,85 +19,15 @@
                         <!-- 菜单图标使用菜单自身前景色（单色，与 VS 的命令图标一致）；家族配色只用于左侧树节点。 -->
                         <!-- Menu icons use the menu's own foreground (monochrome, matching VS command icons);
                              the family colours are used by the tree nodes only. -->
-                        <!-- 文件节点右键菜单：打开方式 -->
-                        <MenuItem Header="{DynamicResource Explorer_OpenAsMenu}"
+                        <!-- 文件节点右键菜单：打开方式。子项由 OpenAsMenuItem 按 DocumentOpenRegistry 在构造时构建。 -->
+                        <!-- File node open-with menu: children are built by OpenAsMenuItem from DocumentOpenRegistry. -->
+                        <controls:OpenAsMenuItem Classes="open-as"
+                                  Header="{DynamicResource Explorer_OpenAsMenu}"
                                   IsVisible="{Binding !IsDirectory}">
                             <MenuItem.Icon>
                                 <icons:MaterialIcon Kind="OpenInNew" />
                             </MenuItem.Icon>
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsAuto}" Tag="{x:Static controls:EditorOpenMode.Auto}" Click="OnOpenWith" />
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsElf}" Tag="{x:Static controls:EditorOpenMode.Elf}" Click="OnOpenWith" />
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsQualcomm}" Tag="{x:Static controls:EditorOpenMode.Qualcomm}" Click="OnOpenWith">
-                                <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="Chip" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsQcn}" Tag="{x:Static controls:EditorOpenMode.Qcn}" Click="OnOpenWith">
-                                <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="RadioTower" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsPartition}" Tag="{x:Static controls:EditorOpenMode.Partition}" Click="OnOpenWith" />
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsText}"
-                                      Tag="{x:Static controls:EditorOpenMode.Text}" Click="OnOpenWith">
-                                <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="FileDocumentOutline" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsLog}" Tag="{x:Static controls:EditorOpenMode.Log}" Click="OnOpenWith">
-                                <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="TextBoxMultipleOutline" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsHex}"
-                                      Tag="{x:Static controls:EditorOpenMode.Hex}" Click="OnOpenWith">
-                                <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="CodeBraces" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsDtb}"
-                                      Tag="{x:Static controls:EditorOpenMode.Dtb}" Click="OnOpenWith">
-                                <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="FileTreeOutline" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsDex}"
-                                      Tag="{x:Static controls:EditorOpenMode.Dex}" Click="OnOpenWith">
-                                <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="FileCodeOutline" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsAxml}"
-                                      Tag="{x:Static controls:EditorOpenMode.Axml}" Click="OnOpenWith">
-                                <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="FileXmlBox" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsArsc}"
-                                      Tag="{x:Static controls:EditorOpenMode.Arsc}" Click="OnOpenWith">
-                                <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="DatabaseOutline" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsApk}"
-                                      Tag="{x:Static controls:EditorOpenMode.Apk}" Click="OnOpenWith">
-                                <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="Android" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsFirmware}"
-                                      Tag="{x:Static controls:EditorOpenMode.Firmware}" Click="OnOpenWith">
-                                <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="PackageOutline" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="{DynamicResource Explorer_OpenAsFileSystem}"
-                                      Tag="{x:Static controls:EditorOpenMode.FileSystem}" Click="OnOpenWith">
-                                <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="FolderSearchOutline" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                        </MenuItem>
+                        </controls:OpenAsMenuItem>
                         <!-- 镜像类文件：格式转换（确认后输出到子项目 output/，进度显示在镜像管理面板） -->
                         <MenuItem Header="{DynamicResource Explorer_ConvertFormat}"
                                   IsVisible="{Binding IsImageFile}">

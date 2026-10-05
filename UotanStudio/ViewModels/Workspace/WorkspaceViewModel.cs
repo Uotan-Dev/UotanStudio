@@ -162,6 +162,14 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// <para>按统一文档打开请求打开文档，转调路径+模式重载。</para>
+    /// Opens a document from the unified request, delegating to the path+mode overload.
+    /// </summary>
+    /// <param name="request"><para>统一打开请求。</para>The unified open request.</param>
+    internal Task OpenDocumentAsync(Services.Workspace.Documents.DocumentOpenRequest request)
+        => OpenDocumentAsync(request.Path ?? string.Empty, request.Mode);
+
+    /// <summary>
     /// <para>异步打开指定路径的文档：若该路径已在文档区打开则聚焦并返回；否则创建
     /// <see cref="FileViewModel"/>，按扩展名解析语法语言，加入文档区并激活。</para>
     /// Asynchronously opens the document at the given path: focuses it if the path is already open in
@@ -202,87 +210,35 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             {
                 detection = await Task.Run(() => FormatDetector.DetectDetailed(path)).ConfigureAwait(true);
             }
-            mode = FileOpenMode.ResolveMode(path, header, detection);
+            mode = Services.Workspace.Documents.DocumentOpenRegistry.ResolveMode(path, header, detection);
         }
 
-        if (mode == EditorOpenMode.Elf)
+        var descriptor = Services.Workspace.Documents.DocumentOpenRegistry.ByMode(mode);
+        if (descriptor?.Open is { } open)
         {
-            await OpenElfAsync(path);
+            await open(this, new Services.Workspace.Documents.DocumentOpenRequest
+            {
+                Path = path,
+                Mode = mode,
+                Detection = detection
+            });
             return;
         }
 
-        if (mode == EditorOpenMode.Qualcomm)
-        {
-            await OpenQualcommAsync(path);
-            return;
-        }
+        await OpenTextAsync(path, mode);
+    }
 
-        if (mode == EditorOpenMode.Qcn)
-        {
-            await OpenQcnAsync(path);
-            return;
-        }
-
-        if (mode == EditorOpenMode.Log)
-        {
-            await OpenLogAsync(path);
-            return;
-        }
-
-        if (mode == EditorOpenMode.Dtb)
-        {
-            await OpenDtbAsync(path);
-            return;
-        }
-
-        if (mode == EditorOpenMode.Dex)
-        {
-            await OpenDexAsync(path);
-            return;
-        }
-
-        if (mode == EditorOpenMode.Axml)
-        {
-            await OpenManifestAsync(path);
-            return;
-        }
-
-        if (mode == EditorOpenMode.Arsc)
-        {
-            await OpenArscAsync(path);
-            return;
-        }
-
-        if (mode == EditorOpenMode.Hex)
-        {
-            await OpenHexAsync(path);
-            return;
-        }
-
-        if (mode == EditorOpenMode.Apk)
-        {
-            await OpenApkAsync(path);
-            return;
-        }
-
-        if (mode == EditorOpenMode.Firmware)
-        {
-            await OpenFirmwareAsync(path, detection);
-            return;
-        }
-
-        if (mode == EditorOpenMode.FileSystem)
-        {
-            await OpenFileSystemAsync(path);
-            return;
-        }
-
-        if (mode == EditorOpenMode.Partition)
-        {
-            await OpenPartitionAsync(path);
-            return;
-        }
-
+    /// <summary>
+    /// <para>以文本兜底路径打开或聚焦文档：路径已打开则按需切换模式并载入，否则新建
+    /// <see cref="FileViewModel"/> 加入文档区并激活。供自动解析未命中编辑器描述符时调用。</para>
+    /// Opens or focuses a document through the text fallback path: switches mode and reloads when the
+    /// path is already open, otherwise creates a <see cref="FileViewModel"/>, adds it to the document
+    /// area and activates it. Invoked when automatic resolution matches no editor descriptor.
+    /// </summary>
+    /// <param name="path"><para>文档文件路径。</para>The document file path.</param>
+    /// <param name="mode"><para>解析后的打开方式。</para>The resolved open mode.</param>
+    internal async Task OpenTextAsync(string path, EditorOpenMode mode)
+    {
         var documentDock = _documentDock ??= FindDocumentsPane();
         if (documentDock is null)
         {
@@ -697,48 +653,23 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        var descriptor = Services.Workspace.Documents.DocumentOpenRegistry.ByKind(dto.Kind);
+        if (descriptor?.Open is not { } open)
+        {
+            return;
+        }
+
+        var mode = Enum.IsDefined((EditorOpenMode)dto.OpenMode)
+            ? (EditorOpenMode)dto.OpenMode
+            : EditorOpenMode.Auto;
+
         try
         {
-            switch (dto.Kind)
+            await open(this, new Services.Workspace.Documents.DocumentOpenRequest
             {
-                case "Text":
-                    await OpenDocumentAsync(fullPath, Enum.IsDefined((EditorOpenMode)dto.OpenMode)
-                        ? (EditorOpenMode)dto.OpenMode : EditorOpenMode.Auto);
-                    break;
-                case "Firmware":
-                    await OpenFirmwareAsync(fullPath);
-                    break;
-                case "FileManager":
-                    await OpenFileSystemAsync(fullPath);
-                    break;
-                case "Dtb":
-                    await OpenDtbAsync(fullPath);
-                    break;
-                case "Dex":
-                    await OpenDexAsync(fullPath);
-                    break;
-                case "Elf":
-                    await OpenElfAsync(fullPath);
-                    break;
-                case "Qualcomm":
-                    await OpenQualcommAsync(fullPath);
-                    break;
-                case "Manifest":
-                    await OpenManifestAsync(fullPath);
-                    break;
-                case "Arsc":
-                    await OpenArscAsync(fullPath);
-                    break;
-                case "Hex":
-                    await OpenHexAsync(fullPath);
-                    break;
-                case "Apk":
-                    await OpenApkAsync(fullPath);
-                    break;
-                case "Partition":
-                    await OpenPartitionAsync(fullPath);
-                    break;
-            }
+                Path = fullPath,
+                Mode = mode
+            });
         }
         catch (Exception ex)
         {
@@ -755,7 +686,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             await RestoreOpenDocumentAsync(active, rootDir);
     }
 
-    private async Task OpenPartitionAsync(string path)
+    internal async Task OpenPartitionAsync(string path)
     {
         var dock = FindDocumentsPanePublic();
         if (dock is null) return;

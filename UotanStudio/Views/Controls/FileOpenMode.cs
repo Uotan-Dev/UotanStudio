@@ -1,13 +1,9 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Application.Formats;
-using UotanStudio.Firmware.Archive.Browsing;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.Core.Magic;
-using UotanStudio.Firmware.Executable.Elf;
-using UotanStudio.Services.Logging;
 
 namespace UotanStudio.Views.Controls;
 
@@ -128,96 +124,8 @@ public static class FileOpenMode
     /// <para>文件名或完整路径。</para>
     /// A file name or full path.
     /// </param>
-    public static EditorOpenMode ResolveMode(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return EditorOpenMode.Auto;
-        }
-
-        var ext = Path.GetExtension(path);
-
-        if (ext.Equals(".log", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".logcat", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".adblog", StringComparison.OrdinalIgnoreCase)) return EditorOpenMode.Log;
-
-        if (IsDtbExtension(ext))
-        {
-            return EditorOpenMode.Dtb;
-        }
-
-        if (IsDexExtension(ext))
-        {
-            return EditorOpenMode.Dex;
-        }
-
-        if (IsJarExtension(ext))
-        {
-            return EditorOpenMode.Dex;
-        }
-
-        if (IsArscExtension(ext))
-        {
-            return EditorOpenMode.Arsc;
-        }
-
-        if (IsApkExtension(ext))
-        {
-            return EditorOpenMode.Apk;
-        }
-
-        if (IsQcnExtension(ext))
-        {
-            return EditorOpenMode.Qcn;
-        }
-
-        if (IsDtsExtension(ext))
-        {
-            return EditorOpenMode.Text;
-        }
-
-        if (IsFilesystemImageExtension(ext) && IsFilesystemImage(path))
-        {
-            return EditorOpenMode.FileSystem;
-        }
-
-        if (ArchiveBrowser.SupportsPath(path))
-        {
-            return EditorOpenMode.FileSystem;
-        }
-
-        if (IsLpCandidatePath(path) && IsLpSuperImage(path))
-        {
-            return EditorOpenMode.Partition;
-        }
-
-        if (IsPartitionTableCandidatePath(path) && (IsGptImage(path) || IsMbrImage(path)))
-        {
-            return EditorOpenMode.Partition;
-        }
-
-        if (IsFirmwareExtension(ext))
-        {
-            return EditorOpenMode.Firmware;
-        }
-
-        if (IsKnownBinaryExtension(ext))
-        {
-            return EditorOpenMode.Hex;
-        }
-
-        if (IsTextExtension(ext))
-        {
-            return EditorOpenMode.Text;
-        }
-
-        if (IsRockchipParameter(path))
-        {
-            return EditorOpenMode.Partition;
-        }
-
-        return EditorOpenMode.Auto;
-    }
+    public static EditorOpenMode ResolveMode(string path) =>
+        UotanStudio.Services.Workspace.Documents.DocumentOpenRegistry.ResolveMode(path);
 
     /// <summary>
     /// <para>解析应使用的打开方式；对未知/无扩展名文件，以已加载的头部字节做 magic 兜底，
@@ -233,121 +141,8 @@ public static class FileOpenMode
     /// <para>可选的已加载文件头部字节；为 <c>null</c> 时不计 magic 兜底。</para>
     /// Optional loaded file header bytes; magic fallback is skipped when <c>null</c>.
     /// </param>
-    public static EditorOpenMode ResolveMode(string path, byte[]? header, FormatDetectionResult? detection = null)
-    {
-
-        if (header is not null && header.AsSpan().StartsWith("\u007fELF"u8))
-        {
-            if (!ElfReader.TryReadHeader(header, out _))
-            {
-                return EditorOpenMode.Hex;
-            }
-            return EditorOpenMode.Elf;
-        }
-
-        if (header is not null && UotanStudio.Firmware.AndroidMeta.AXml.AXmlParser.IsAxml(header))
-        {
-            return EditorOpenMode.Axml;
-        }
-
-        if (header is not null && IsDtbMagic(header))
-        {
-            return EditorOpenMode.Dtb;
-        }
-
-        if (header is not null && IsDexMagic(header))
-        {
-            return EditorOpenMode.Dex;
-        }
-
-        if (header is not null && IsFirmwareMagic(header))
-        {
-            return EditorOpenMode.Firmware;
-        }
-
-        if (header is not null && IsZipMagic(header) && !IsApkExtension(Path.GetExtension(path)) && !IsJarExtension(Path.GetExtension(path)))
-        {
-            return EditorOpenMode.FileSystem;
-        }
-
-        if (header is not null && IsFilesystemMagic(header))
-        {
-            return EditorOpenMode.FileSystem;
-        }
-
-        if (header is not null && IsLpMetadataMagic(header))
-        {
-            return EditorOpenMode.Partition;
-        }
-
-        if (header is not null && (IsGptMagic(header) || IsMbrMagic(header)))
-        {
-            return EditorOpenMode.Partition;
-        }
-
-        if (header is not null && IsRockchipParameterText(header))
-        {
-            return EditorOpenMode.Partition;
-        }
-
-        if (detection is { Confidence: not DetectionConfidence.ExtensionOnly })
-        {
-            var formatName = detection.Handler.FormatName;
-            if (formatName.Contains("Resource Table", StringComparison.OrdinalIgnoreCase))
-            {
-                return EditorOpenMode.Arsc;
-            }
-
-            if (formatName.Contains("Compressed", StringComparison.OrdinalIgnoreCase)
-                || formatName.Contains("Archive", StringComparison.OrdinalIgnoreCase))
-            {
-                return EditorOpenMode.FileSystem;
-            }
-
-            return EditorOpenMode.Firmware;
-        }
-
-        var mode = ResolveMode(path);
-        if (mode is EditorOpenMode.Text or EditorOpenMode.Log && header is not null && IsBinaryContent(header))
-        {
-            return EditorOpenMode.Hex;
-        }
-
-        if (mode is EditorOpenMode.Auto or EditorOpenMode.Text && header is not null
-            && (string.IsNullOrEmpty(Path.GetExtension(path)) || Path.GetExtension(path).Equals(".txt", StringComparison.OrdinalIgnoreCase))
-            && LogFileService.LooksLikeLog(header)) return EditorOpenMode.Log;
-
-        if (mode != EditorOpenMode.Auto)
-        {
-            return mode;
-        }
-
-        if (header is not null && UotanStudio.Firmware.AndroidMeta.Arsc.ArscParser.IsArsc(header))
-        {
-            return EditorOpenMode.Arsc;
-        }
-
-        if (header is not null && header.Length > 0 && string.IsNullOrEmpty(Path.GetExtension(path)))
-        {
-            FirmwareFormatRegistry.RegisterAll();
-            if ((detection ?? FormatDetector.DetectDetailed(path)) is not null)
-            {
-                return EditorOpenMode.Firmware;
-            }
-        }
-
-        if (header is not null && FileMagic.Describe(header) is not null)
-        {
-            return EditorOpenMode.Hex;
-        }
-
-        if (header is not null && IsBinaryContent(header))
-        {
-            return EditorOpenMode.Hex;
-        }
-
-        return EditorOpenMode.Auto;
-    }
+    public static EditorOpenMode ResolveMode(string path, byte[]? header, FormatDetectionResult? detection = null) =>
+        UotanStudio.Services.Workspace.Documents.DocumentOpenRegistry.ResolveMode(path, header, detection);
 
     /// <summary>
     /// <para>通过有界内容样本判断文件是否明显为二进制。带 UTF 文本 BOM 的样本保持文本；
@@ -794,25 +589,6 @@ public static class FileOpenMode
     }
 
     /// <summary>
-    /// <para>文件名/扩展名是否可能为 LP super 镜像（避免对普通文件做内容读取）：
-    /// 文件名以 <c>super</c> 开头，或扩展名为 <c>.img</c>/<c>.super</c>。</para>
-    /// Whether the file name/extension could be an LP super image (avoids content reads for ordinary
-    /// files): the file name starts with <c>super</c>, or the extension is <c>.img</c>/<c>.super</c>.
-    /// </summary>
-    private static bool IsLpCandidatePath(string path)
-    {
-        var fileName = Path.GetFileName(path);
-        if (fileName.StartsWith("super", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var ext = Path.GetExtension(path);
-        return ext.Equals(".img", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".super", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
     /// <para>分区表内容探测所需的头部读取长度（覆盖 EDL 合并 GPT 镜像里不在 LBA 1 的头部，
     /// 以及 MBR 签名 @510）。</para>
     /// Header length read for partition-table content detection (covers the GPT headers that EDL combined
@@ -867,26 +643,6 @@ public static class FileOpenMode
 
             return false;
         }
-    }
-
-    /// <summary>
-    /// <para>文件名/扩展名是否可能为 GPT/MBR 分区表镜像（避免对普通文件做内容读取）：
-    /// 扩展名为 <c>.img</c>/<c>.gpt</c>/<c>.mbr</c>/<c>.bin</c> 或无扩展名。</para>
-    /// Whether the file name/extension could be a GPT/MBR partition-table image (avoids content reads
-    /// for ordinary files): the extension is <c>.img</c>/<c>.gpt</c>/<c>.mbr</c>/<c>.bin</c> or absent.
-    /// </summary>
-    private static bool IsPartitionTableCandidatePath(string path)
-    {
-        var ext = Path.GetExtension(path);
-        if (ext.Length == 0)
-        {
-            return true;
-        }
-
-        return ext.Equals(".img", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".gpt", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".mbr", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".bin", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Services.Workspace.Documents;
@@ -35,8 +36,11 @@ internal sealed record DocumentOpenDescriptor
     /// <summary><para>自动路由关联的格式处理器名称集合。</para>The format-handler names associated with automatic routing.</summary>
     public IReadOnlyList<string>? RequiredFormatNames { get; init; }
 
-    /// <summary><para>文档工厂：按统一请求创建并加载 ViewModel，在派发收敛阶段填充。</para>The document factory: creates and loads the ViewModel from the unified request, populated during dispatch consolidation.</summary>
-    public Func<DocumentOpenRequest, Task<object?>>? Factory { get; init; }
+    /// <summary><para>打开入口：在工作区实例上按统一请求创建并载入文档，取代此前打开派发与恢复 switch 两份手工表。</para>
+    /// The open entry point: creates and loads the document from the unified request against a
+    /// workspace instance, replacing the two hand-maintained tables previously used by open
+    /// dispatch and session restore.</summary>
+    public Func<WorkspaceViewModel, DocumentOpenRequest, Task>? Open { get; init; }
 
     /// <summary><para>已打开文档的去重键（文件路径）。</para>The dedup key (file path) for an opened document.</summary>
     public Func<object, string?>? GetPath { get; init; }

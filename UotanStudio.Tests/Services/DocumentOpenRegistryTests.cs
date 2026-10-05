@@ -1,3 +1,4 @@
+using UotanStudio.Messages;
 using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;
@@ -134,5 +135,37 @@ public class DocumentOpenRegistryTests
             Assert.NotNull(descriptor);
             Assert.False(descriptor!.IsDocument);
         }
+    }
+
+    [Fact]
+    public void OpenDocumentRequestMessage_PositionalCtor_RoundTripsPathAndMode()
+    {
+        var explicitMode = new OpenDocumentRequestMessage("x", EditorOpenMode.Dtb);
+        Assert.Equal("x", explicitMode.Path);
+        Assert.Equal(EditorOpenMode.Dtb, explicitMode.Mode);
+
+        var defaulted = new OpenDocumentRequestMessage("y");
+        Assert.Equal("y", defaulted.Path);
+        Assert.Equal(EditorOpenMode.Auto, defaulted.Mode);
+    }
+
+    [Theory]
+    [InlineData("boot.txt", EditorOpenMode.Text)]
+    [InlineData("boot.dts", EditorOpenMode.Text)]
+    [InlineData("boot.img", EditorOpenMode.Firmware)]
+    [InlineData("boot.dtb", EditorOpenMode.Dtb)]
+    [InlineData("classes.dex", EditorOpenMode.Dex)]
+    [InlineData("lib.jar", EditorOpenMode.Dex)]
+    [InlineData("resources.arsc", EditorOpenMode.Arsc)]
+    [InlineData("app.apk", EditorOpenMode.Apk)]
+    [InlineData("backup.qcn", EditorOpenMode.Qcn)]
+    [InlineData("BACKUP.QCN", EditorOpenMode.Qcn)]
+    [InlineData("console.log", EditorOpenMode.Log)]
+    [InlineData("blob.dat", EditorOpenMode.Firmware)]
+    [InlineData("archive.xyz", EditorOpenMode.Auto)]
+    public void ResolveMode_PathOnlyRoutes_MatchesDelegatedFileOpenMode(string path, EditorOpenMode expected)
+    {
+        Assert.Equal(expected, DocumentOpenRegistry.ResolveMode(path));
+        Assert.Equal(DocumentOpenRegistry.ResolveMode(path), FileOpenMode.ResolveMode(path));
     }
 }

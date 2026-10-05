@@ -1,3 +1,4 @@
+using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Messages;
@@ -7,4 +8,12 @@ namespace UotanStudio.Messages;
 /// Open document request message, sent when a panel such as the project explorer requests opening a
 /// file in the document area.
 /// </summary>
-public record OpenDocumentRequestMessage(string Path, EditorOpenMode Mode = EditorOpenMode.Auto);
+public record OpenDocumentRequestMessage(string Path, EditorOpenMode Mode = EditorOpenMode.Auto)
+{
+    /// <summary>
+    /// <para>转换为注册表派发使用的统一文档打开请求。</para>
+    /// Converts to the unified document-open request consumed by registry dispatch.
+    /// </summary>
+    /// <returns><para>等价的打开请求。</para>The equivalent open request.</returns>
+    internal DocumentOpenRequest ToRequest() => new() { Path = Path, Mode = Mode };
+}

@@ -121,19 +121,6 @@ public partial class ProjectExplorerView : UserControl
         }
     }
 
-    private void OnOpenWith(object? sender, RoutedEventArgs e)
-    {
-        if (sender is MenuItem { Tag: EditorOpenMode mode } item)
-        {
-            var target = item.DataContext as ExplorerNode ?? ProjectTree.SelectedItem as ExplorerNode;
-            if (target is { IsDirectory: false, IsPlaceholder: false })
-            {
-                WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(target.Path, mode));
-            }
-            e.Handled = true;
-        }
-    }
-
     /// <summary>
     /// <para>稀疏转换：原始镜像与稀疏镜像之间的双向转换（需求上两项合一，方向由源文件类型决定）。</para>
     /// Sparse conversion: converts between raw and sparse images in either direction; the source file type
