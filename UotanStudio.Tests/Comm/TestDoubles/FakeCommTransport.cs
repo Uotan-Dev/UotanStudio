@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Transports.Abstractions;
@@ -261,6 +262,22 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
 
     public uint PeerMaxPayload { get; init; } = AdbConstants.MaxPayload;
 
+    /// <summary>
+    /// Gets or sets the bytes a sync RECV request answers with: the simulator splits them into DATA
+    /// packets of <see cref="SyncPullChunkSize"/> bytes and closes the transfer with DONE. Left null,
+    /// a RECV request stays unanswered, which is what the hanging-write tests rely on.
+    /// <para>获取或设置 sync RECV 请求回应的字节：模拟器按 <see cref="SyncPullChunkSize"/> 切分为
+    /// DATA 包，并以 DONE 结束传输。保持为 null 时 RECV 请求不会得到回应，挂死写入的测试正依赖该行为。</para>
+    /// </summary>
+    public byte[]? SyncPullData { get; init; }
+
+    /// <summary>
+    /// Gets or sets the largest DATA payload the simulator emits in one packet, so a pull can be made
+    /// to span several chunks. Values below 1 are raised to 1.
+    /// <para>获取或设置模拟器单个 DATA 包的最大负载字节数，用于让拉取跨多个分块。小于 1 的取值按 1 处理。</para>
+    /// </summary>
+    public int SyncPullChunkSize { get; init; } = 64 * 1024;
+
     public bool AutoAcknowledgeWrites { get; init; } = true;
 
     public Action<byte[]>? OnWrte { get; init; }
@@ -338,6 +355,15 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
                         yield return AdbMessaging.Serialize(new AdbMessage(AdbCommand.Wrte, 1, arg0, syncOkay));
                     }
 
+                    if (SyncPullData is { Length: > 0 } pull &&
+                        payload.Length >= 8 && Encoding.ASCII.GetString(payload, 0, 4) == SyncIds.Recv)
+                    {
+                        foreach (var packet in BuildSyncPullPackets(pull))
+                        {
+                            yield return AdbMessaging.Serialize(new AdbMessage(AdbCommand.Wrte, 1, arg0, packet));
+                        }
+                    }
+
                     break;
                 }
 
@@ -349,5 +375,25 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
             default:
                 break;
         }
+    }
+
+    private IEnumerable<byte[]> BuildSyncPullPackets(byte[] data)
+    {
+        var chunkSize = Math.Max(1, SyncPullChunkSize);
+        var packets = new List<byte[]>();
+        for (var start = 0; start < data.Length; start += chunkSize)
+        {
+            var length = Math.Min(chunkSize, data.Length - start);
+            var packet = new byte[8 + length];
+            Encoding.ASCII.GetBytes(SyncIds.Data).CopyTo(packet, 0);
+            BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(4), (uint)length);
+            data.AsSpan(start, length).CopyTo(packet.AsSpan(8));
+            packets.Add(packet);
+        }
+
+        var done = new byte[8];
+        Encoding.ASCII.GetBytes(SyncIds.Done).CopyTo(done, 0);
+        packets.Add(done);
+        return packets;
     }
 }

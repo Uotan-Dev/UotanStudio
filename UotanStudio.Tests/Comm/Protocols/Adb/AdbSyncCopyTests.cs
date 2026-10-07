@@ -194,7 +194,7 @@ public sealed class AdbSyncCopyTests
     {
         var data = new byte[200];
         new Random(7).NextBytes(data);
-        using var transport = new FakeAdbDeviceTransport();
+        using var transport = new FakeAdbDeviceTransport { SyncPullData = data, SyncPullChunkSize = 37 };
         using var adb = new AdbSession(transport, AdbAuthentication.CreateNew());
         await adb.ConnectAsync(TestContext.Current.CancellationToken);
         await using var sync = adb.CreateSyncClient();
