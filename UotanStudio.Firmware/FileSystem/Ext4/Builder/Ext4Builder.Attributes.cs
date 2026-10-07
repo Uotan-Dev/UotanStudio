@@ -71,7 +71,7 @@ public sealed partial class Ext4Builder
             var length = 4L;
             foreach (var (name, value) in attributes)
             {
-                if (!TryMapXattrName(name, out _, out var suffix) || Encoding.UTF8.GetByteCount(suffix) > 255)
+                if (!TryMapXattrName(name, out _, out var suffix) || Encoding.UTF8.GetByteCount(suffix) > FileSystemNameLimits.MaximumNameBytes)
                 {
                     throw new FileSystemUnsupportedFeatureException($"Unsupported EXT4 xattr name: {name}");
                 }

@@ -308,6 +308,7 @@ public sealed partial class Ext4Builder
         {
             if (TryMapXattrName(kv.Key, out var nameIndex, out var shortName))
             {
+                FileSystemNameLimits.Validate(shortName, "EXT4");
                 entries.Add((shortName, nameIndex, kv.Value));
             }
             else throw new FileSystemUnsupportedFeatureException($"Unsupported EXT4 xattr namespace: {kv.Key}");

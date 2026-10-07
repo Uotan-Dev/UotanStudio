@@ -353,8 +353,8 @@ internal static class Ext4Htree
     }
 
     /// <summary>
-    /// Packs hash-ordered directory entries into leaf blocks, returning the leaf byte arrays and the first/last-entry hash of every leaf.
-    /// <para>按哈希顺序将目录项打包进叶块，返回叶块字节数组及各叶块首/末条目的哈希。</para>
+    /// Packs hash-ordered directory entries into leaf blocks, returning the leaf byte arrays and the first/last-entry hash of every leaf. The names packed here are child names only — the "." and ".." records are written by the dx_root block — so every one of them goes through the dirent name rule.
+    /// <para>按哈希顺序将目录项打包进叶块，返回叶块字节数组及各叶块首/末条目的哈希。这里打包的名称只是子项名称——“.” 与 “..” 记录由 dx_root 块写入——因此全部要经过目录项名称规则校验。</para>
     /// </summary>
     private static (List<byte[]> Blocks, List<uint> FirstHashes, List<uint> LastHashes) PackLeafBlocks(
         List<(uint Hash, string Name, uint Inode, byte FileType)> sorted,
@@ -401,7 +401,7 @@ internal static class Ext4Htree
         for (var i = 0; i < sorted.Count; i++)
         {
             var (hash, name, inode, fileType) = sorted[i];
-            FileSystemNameLimits.Validate(name, "EXT4");
+            FileSystemNameLimits.ValidateEntryName(name, "EXT4");
             var nameBytes = Encoding.UTF8.GetBytes(name);
             var nameLen = nameBytes.Length;
             var naturalLength = (8 + nameLen + 3) & ~3;

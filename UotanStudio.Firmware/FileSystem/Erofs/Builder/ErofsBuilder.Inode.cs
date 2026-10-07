@@ -16,8 +16,8 @@ public sealed partial class ErofsBuilder
            + node.Children.Sum(child => (long)ErofsDirectoryEntry.DirentSize + Encoding.UTF8.GetByteCount(child.Name));
 
     /// <summary>
-    /// Builds the directory entries: "." and ".." first (mkfs keeps dot entries by default and fsck enforces their presence), then children ordered by their UTF-8 bytes (matches the mergesort in mkfs and fsck's strictly-increasing check).
-    /// <para>构造目录条目：`. ` 与 `..` 在前（mkfs 默认不省略点条目，fsck 强制检查二者存在）， 随后子条目按 UTF-8 字节序排序（与 mkfs mergesort / fsck 递增校验一致）。</para>
+    /// Builds the directory entries: "." and ".." first (mkfs keeps dot entries by default and fsck enforces their presence), then children ordered by their UTF-8 bytes (matches the mergesort in mkfs and fsck's strictly-increasing check). The dirent name rule guards only those children, so the synthesised dot records stay legal.
+    /// <para>构造目录条目：`. ` 与 `..` 在前（mkfs 默认不省略点条目，fsck 强制检查二者存在）， 随后子条目按 UTF-8 字节序排序（与 mkfs mergesort / fsck 递增校验一致）。目录项名称规则只校验这些子条目，因此合成的点条目保持合法。</para>
     /// </summary>
     private static List<DirEntry> BuildDirEntries(BuildNode node)
     {
@@ -31,7 +31,7 @@ public sealed partial class ErofsBuilder
         entries.AddRange(node.Children
             .Select(child =>
             {
-                FileSystemNameLimits.Validate(child.Name, "EROFS");
+                FileSystemNameLimits.ValidateEntryName(child.Name, "EROFS");
                 return new DirEntry(child, Encoding.UTF8.GetBytes(child.Name));
             })
             .OrderBy(e => e.NameBytes, ByteArrayComparer.Instance));

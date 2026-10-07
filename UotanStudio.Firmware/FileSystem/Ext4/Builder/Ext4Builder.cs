@@ -1425,6 +1425,13 @@ public sealed partial class Ext4Builder
         }
     }
 
+    /// <summary>
+    /// Builds the linear dirent blocks of one directory. The "." and ".." records are synthesised here,
+    /// so the dirent charset rule is applied to the child names as they are collected and only the
+    /// length rule is applied to the records while they are packed.
+    /// <para>构建单个目录的线性目录项块。“.” 与 “..” 记录在这里合成，因此目录项字符集规则在收集子项名称时
+    /// 就已应用，打包记录时只应用长度规则。</para>
+    /// </summary>
     private static List<byte[]> BuildDirectoryBlocks(Node dir, int blockSize, byte[] uuid, bool enableMetadataCsum)
     {
         var entries = new List<(string Name, byte Type, uint Inode)>
@@ -1434,6 +1441,7 @@ public sealed partial class Ext4Builder
         };
         foreach (var child in dir.Children)
         {
+            FileSystemNameLimits.ValidateEntryName(child.Name, "EXT4");
             entries.Add((child.Name, FileTypeOf(child), child.Inode));
         }
 
