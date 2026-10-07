@@ -13,7 +13,7 @@ internal sealed class ExtentReadStream : Stream
     {
         _source = source;
         long position = 0;
-        _ranges = extents.Select(extent =>
+        _ranges = [.. extents.Select(extent =>
         {
             var size = checked((long)extent.NumBlocks * blockSize);
             var offset = extent.StartBlock == ulong.MaxValue ? -1 : checked((long)extent.StartBlock * blockSize);
@@ -22,7 +22,7 @@ internal sealed class ExtentReadStream : Stream
             var range = (offset, size, position);
             position = checked(position + size);
             return range;
-        }).ToArray();
+        })];
         _length = position;
     }
 

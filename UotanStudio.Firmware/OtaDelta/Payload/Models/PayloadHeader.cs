@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text;
 using UotanStudio.Firmware.Core;
 
@@ -18,7 +19,13 @@ internal class PayloadHeader
     /// <para>本库接受的清单 minor 版本集合。minor 1 在上游已废弃、永不接受；10 是上游允许
     /// REPLACE_ZSTD 操作的最低版本。</para>
     /// </summary>
-    internal static readonly HashSet<uint> SupportedMinorVersions = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    internal static readonly FrozenSet<uint> SupportedMinorVersions = BuildSupportedMinorVersions();
+
+    private static FrozenSet<uint> BuildSupportedMinorVersions()
+    {
+        uint[] versions = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        return versions.ToFrozenSet();
+    }
 
     internal string Magic { get; }
 
@@ -55,19 +62,19 @@ internal class PayloadHeader
             throw new InvalidPayloadMagicException(magic);
         }
 
-        var version = BinaryReaderHelpers.ReadUInt64BE(stream);
+        var version = stream.ReadUInt64BE();
         if (version != BrilloMajorPayloadVersion)
         {
             throw new UnsupportedPayloadVersionException(version);
         }
 
-        var manifestLength = BinaryReaderHelpers.ReadUInt64BE(stream);
+        var manifestLength = stream.ReadUInt64BE();
         if (manifestLength == 0 || manifestLength > MaximumManifestLength)
         {
             throw new InvalidManifestException($"Manifest length must be between 1 and {MaximumManifestLength} bytes.");
         }
 
-        var metadataSignatureLength = BinaryReaderHelpers.ReadUInt32BE(stream);
+        var metadataSignatureLength = stream.ReadUInt32BE();
         return metadataSignatureLength > MaximumMetadataSignatureLength
             ? throw new InvalidManifestException($"Metadata signature length must be between 0 and {MaximumMetadataSignatureLength} bytes.")
             : new PayloadHeader(magic, version, manifestLength, metadataSignatureLength);
@@ -90,19 +97,19 @@ internal class PayloadHeader
             throw new InvalidPayloadMagicException(magic);
         }
 
-        var version = await BinaryReaderHelpers.ReadUInt64BEAsync(stream, cancellationToken).ConfigureAwait(false);
+        var version = await stream.ReadUInt64BEAsync(cancellationToken).ConfigureAwait(false);
         if (version != BrilloMajorPayloadVersion)
         {
             throw new UnsupportedPayloadVersionException(version);
         }
 
-        var manifestLength = await BinaryReaderHelpers.ReadUInt64BEAsync(stream, cancellationToken).ConfigureAwait(false);
+        var manifestLength = await stream.ReadUInt64BEAsync(cancellationToken).ConfigureAwait(false);
         if (manifestLength == 0 || manifestLength > MaximumManifestLength)
         {
             throw new InvalidManifestException($"Manifest length must be between 1 and {MaximumManifestLength} bytes.");
         }
 
-        var metadataSignatureLength = await BinaryReaderHelpers.ReadUInt32BEAsync(stream, cancellationToken).ConfigureAwait(false);
+        var metadataSignatureLength = await stream.ReadUInt32BEAsync(cancellationToken).ConfigureAwait(false);
         return metadataSignatureLength > MaximumMetadataSignatureLength
             ? throw new InvalidManifestException($"Metadata signature length must be between 0 and {MaximumMetadataSignatureLength} bytes.")
             : new PayloadHeader(magic, version, manifestLength, metadataSignatureLength);
@@ -127,19 +134,19 @@ internal class PayloadHeader
             throw new InvalidPayloadMagicException(magic);
         }
 
-        var version = BinaryReaderHelpers.ReadUInt64BE(headerBytes, 4);
+        var version = headerBytes.ReadUInt64BE(4);
         if (version != BrilloMajorPayloadVersion)
         {
             throw new UnsupportedPayloadVersionException(version);
         }
 
-        var manifestLength = BinaryReaderHelpers.ReadUInt64BE(headerBytes, 12);
+        var manifestLength = headerBytes.ReadUInt64BE(12);
         if (manifestLength == 0 || manifestLength > MaximumManifestLength)
         {
             throw new InvalidManifestException($"Manifest length must be between 1 and {MaximumManifestLength} bytes.");
         }
 
-        var metadataSignatureLength = BinaryReaderHelpers.ReadUInt32BE(headerBytes, 20);
+        var metadataSignatureLength = headerBytes.ReadUInt32BE(20);
         return metadataSignatureLength > MaximumMetadataSignatureLength
             ? throw new InvalidManifestException($"Metadata signature length must be between 0 and {MaximumMetadataSignatureLength} bytes.")
             : new PayloadHeader(magic, version, manifestLength, metadataSignatureLength);

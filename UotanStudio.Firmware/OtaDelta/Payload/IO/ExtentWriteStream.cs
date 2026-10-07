@@ -33,9 +33,9 @@ internal sealed class ExtentWriteStream : Stream
         _byteProgress = byteProgress;
         try
         {
-            _extents = extents.Select(extent =>
+            _extents = [.. extents.Select(extent =>
                 (checked((long)extent.StartBlock * blockSize),
-                 checked((long)extent.NumBlocks * blockSize))).ToArray();
+                 checked((long)extent.NumBlocks * blockSize)))];
             _length = _extents.Aggregate(0L, (total, extent) => checked(total + extent.Length));
             for (var i = 0; i < _extents.Length; i++)
             {
@@ -89,6 +89,12 @@ internal sealed class ExtentWriteStream : Stream
     /// Writes bytes to the stream.
     /// <para>向流写入字节。</para>
     /// </summary>
+    /// <param name="buffer">Source array whose bytes are routed into the mapped extents.
+    /// <para>其字节被路由进映射区间的源数组。</para></param>
+    /// <param name="offset">Index in <paramref name="buffer"/> of the first byte written.
+    /// <para><paramref name="buffer"/> 中首个写入字节的索引。</para></param>
+    /// <param name="count">Number of bytes written; the total accepted never passes the summed extent
+    /// length. <para>写入的字节数；累计接受量不会超出各区间长度之和。</para></param>
     public override void Write(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);
@@ -106,6 +112,11 @@ internal sealed class ExtentWriteStream : Stream
     /// Writes bytes to the stream.
     /// <para>向流写入字节。</para>
     /// </summary>
+    /// <param name="buffer">Source span copied into the current extent and continued into the next one
+    /// when the span crosses the extent end; an empty span writes nothing.
+    /// <para>复制到当前区间的源区间，跨越区间末尾时继续写入下一个区间；空区间不写入任何字节。</para></param>
+    /// <exception cref="PartitionExtractionException">The span would pass the summed extent length.
+    /// <para>该区间跨度会超出各区间长度之和。</para></exception>
     public override void Write(ReadOnlySpan<byte> buffer)
     {
         if (buffer.Length > _length - _position)
@@ -151,6 +162,10 @@ internal sealed class ExtentWriteStream : Stream
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="buffer">Array never touched, since the stream only writes into the destination extents.
+    /// <para>从不接触的数组，因为该流只向目标区段写入。</para></param>
+    /// <param name="offset">Index ignored together with the call. <para>随调用一并被忽略的索引。</para></param>
+    /// <param name="count">Byte count ignored together with the call. <para>随调用一并被忽略的字节数。</para></param>
     public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
     /// <summary>
@@ -163,5 +178,7 @@ internal sealed class ExtentWriteStream : Stream
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="value">Requested length ignored; the writable size always comes from the extent list.
+    /// <para>被忽略的请求长度；可写大小始终由区段列表决定。</para></param>
     public override void SetLength(long value) => throw new NotSupportedException();
 }

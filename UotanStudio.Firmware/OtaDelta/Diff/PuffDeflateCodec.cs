@@ -143,7 +143,7 @@ internal static class PuffDeflateCodec
             }
         }
         if (lengths.Count != literalCount + distanceCount) throw new InvalidDataException("DEFLATE code lengths exceed declared counts.");
-        return (new Huffman(lengths.Take(literalCount).ToArray()), new Huffman(lengths.Skip(literalCount).ToArray()));
+        return (new Huffman([.. lengths.Take(literalCount)]), new Huffman([.. lengths.Skip(literalCount)]));
     }
 
     private static (Huffman, Huffman) WriteDynamic(Bits bits, ReadOnlySpan<byte> metadata)
@@ -166,7 +166,7 @@ internal static class PuffDeflateCodec
             else { bits.Write(code == 16 ? 2 : code == 17 ? 3 : 7, value - (code == 16 ? 16 : code == 17 ? 20 : 28)); ExpandLength(lengths, value); }
         }
         if (lengths.Count != literalCount + distanceCount || reader.Remaining != 0) throw new InvalidDataException("Invalid Puff Huffman metadata length.");
-        return (new Huffman(lengths.Take(literalCount).ToArray()), new Huffman(lengths.Skip(literalCount).ToArray()));
+        return (new Huffman([.. lengths.Take(literalCount)]), new Huffman([.. lengths.Skip(literalCount)]));
     }
 
     private static void ExpandLength(List<byte> lengths, byte packed)
@@ -183,7 +183,7 @@ internal static class PuffDeflateCodec
     {
         var literals = new byte[288];
         for (var i = 0; i < literals.Length; i++) literals[i] = (byte)(i < 144 ? 8 : i < 256 ? 9 : i < 280 ? 7 : 8);
-        return (new Huffman(literals), new Huffman(Enumerable.Repeat((byte)5, 32).ToArray()));
+        return (new Huffman(literals), new Huffman([.. Enumerable.Repeat((byte)5, 32)]));
     }
 
     private sealed class Huffman

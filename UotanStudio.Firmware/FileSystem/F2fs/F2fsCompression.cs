@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.IO.Compression;
 using K4os.Compression.LZ4;
 using UotanStudio.Firmware.Compression.Codecs.Lzo;
 
@@ -34,6 +33,14 @@ internal static class F2fsCompression
     /// Compresses a data cluster.
     /// <para>压缩一个数据簇。</para>
     /// </summary>
+    /// <param name="data">Cluster payload bytes, at most 1 MiB; an empty span yields no cluster and is not an error.
+    /// <para>簇载荷字节，最多 1 MiB；空区间不产出簇，也不算错误。</para></param>
+    /// <param name="algorithm">Codec used for the payload; a value outside <see cref="CompressionAlgorithm"/> is rejected.
+    /// <para>用于载荷的编解码器；超出 <see cref="CompressionAlgorithm"/> 定义的值会被拒绝。</para></param>
+    /// <param name="level">Codec level. LZ4 reads 0, 1, 3, 5 and 9 as fast through maximum effort and maps any other value to the fast path; Zstd uses the value when positive and falls back to level 3 otherwise; LZO-1x ignores it. Defaults to 0.
+    /// <para>编解码等级。LZ4 将 0、1、3、5、9 视为从快速到最高压缩强度，其他取值走快速路径；Zstd 在取值为正时使用该等级，否则用等级 3；LZO-1x 忽略该参数。默认为 0。</para></param>
+    /// <returns>Cluster header followed by the compressed payload, or <see langword="null"/> when the input is empty, the codec reports a failure, or the output is not smaller than the input, all of which leave the cluster stored uncompressed. A <see cref="NotSupportedException"/> from the codec is rethrown.
+    /// <para>压缩簇头部紧跟压缩后的载荷；输入为空、编解码器报错或输出不比输入小时返回 <see langword="null"/>，这三种情况都按未压缩存储该簇。编解码器抛出的 <see cref="NotSupportedException"/> 会继续向外抛出。</para></returns>
     public static byte[]? CompressCluster(ReadOnlySpan<byte> data, CompressionAlgorithm algorithm, int level = 0)
     {
         if (data.Length > 1024 * 1024)
@@ -92,6 +99,16 @@ internal static class F2fsCompression
     /// Decompresses a data cluster.
     /// <para>解压缩一个数据簇。</para>
     /// </summary>
+    /// <param name="compressedData">Codec payload following the 24-byte cluster header; it is passed to the decoder unchanged.
+    /// <para>24 字节簇头部之后的编解码载荷，原样交给解码器。</para></param>
+    /// <param name="algorithm">Codec that produced the payload; a value outside <see cref="CompressionAlgorithm"/> is rejected.
+    /// <para>生成该载荷所使用的编解码器；超出 <see cref="CompressionAlgorithm"/> 定义的值会被拒绝。</para></param>
+    /// <param name="expectedSize">Uncompressed cluster size the caller expects, which must be between 0 and 1 MiB and serves as the decode capacity unless <paramref name="maxOutputSize"/> is smaller.
+    /// <para>调用方预期的解压后大小，取值必须在 0 到 1 MiB 之间；当 <paramref name="maxOutputSize"/> 更小时以后者作为解码容量。</para></param>
+    /// <param name="maxOutputSize">Hard ceiling on produced bytes; a bound of 0 returns an empty array without calling the codec.
+    /// <para>产出字节的硬上限；上限为 0 时直接返回空数组，不会调用编解码器。</para></param>
+    /// <returns>Decoded bytes limited to the smaller of the two sizes, which the LZ4 path shortens further to the number the decoder actually wrote.
+    /// <para>解压得到的字节，长度以两个容量中较小者为准；LZ4 路径还会进一步缩短为解码器实际写出的字节数。</para></returns>
     public static byte[] DecompressCluster(
         ReadOnlySpan<byte> compressedData,
         CompressionAlgorithm algorithm,
@@ -124,6 +141,10 @@ internal static class F2fsCompression
     /// Parses metadata from a compressed cluster header.
     /// <para>从压缩簇头部解析元数据。</para>
     /// </summary>
+    /// <param name="data">Cluster header bytes, at least <see cref="ClusterHeaderSize"/> long, read from the start of a stored cluster.
+    /// <para>簇头部字节，长度至少为 <see cref="ClusterHeaderSize"/>，取自存储簇的起始处。</para></param>
+    /// <returns>Cluster metadata holding the stored compressed size and checksum with the uncompressed size set to the full cluster size.
+    /// <para>压缩簇元数据，含存储的压缩后大小与校验和，解压后大小按整簇大小填充。</para></returns>
     public static F2fsCompressedCluster ParseHeader(ReadOnlySpan<byte> data)
         => F2fsCompressedCluster.FromBytes(data);
 
@@ -165,23 +186,15 @@ internal static class F2fsCompression
 
     private static byte[] CompressZstd(ReadOnlySpan<byte> data, int level)
     {
-        var frame = new byte[ZstandardEncoder.GetMaxCompressedLength(data.Length)];
-        if (!ZstandardEncoder.TryCompress(data, frame, out var written, level > 0 ? level : 3, 0))
-        {
-            throw new FileSystemCorruptedException("ZSTD compression failed.  ZSTD 压缩失败。");
-        }
-
-        return frame.AsSpan(0, written).ToArray();
+        using var compressor = new ZstdSharp.Compressor(level > 0 ? level : 3);
+        var result = compressor.Wrap(data);
+        return result.ToArray();
     }
 
     private static byte[] DecompressZstd(ReadOnlySpan<byte> compressed, int expectedSize)
     {
-        var result = new byte[expectedSize];
-        if (!ZstandardDecoder.TryDecompress(compressed, result, out var decoded))
-        {
-            throw new FileSystemCorruptedException("ZSTD decompression failed.  ZSTD 解压失败。");
-        }
-
-        return decoded == expectedSize ? result : result.AsSpan(0, decoded).ToArray();
+        using var decompressor = new ZstdSharp.Decompressor();
+        var result = decompressor.Unwrap(compressed, expectedSize);
+        return result.ToArray();
     }
 }

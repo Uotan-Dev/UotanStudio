@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace UotanStudio.Firmware.Compression;
 
 /// <summary>
@@ -34,15 +36,15 @@ public static class CompressionFormats
             null, canCompress: false, canDecompress: true, isStreaming: false),
     ];
 
-    private static readonly Dictionary<CompressionFormat, CompressionFormatInfo> ByFormat =
-        AllFormats.ToDictionary(f => f.Format);
+    private static readonly FrozenDictionary<CompressionFormat, CompressionFormatInfo> ByFormat =
+        AllFormats.ToFrozenDictionary(f => f.Format);
 
-    private static readonly Dictionary<string, CompressionFormat> ByName =
+    private static readonly FrozenDictionary<string, CompressionFormat> ByName =
         BuildNameIndex();
 
 
 
-    private static Dictionary<string, CompressionFormat> BuildNameIndex()
+    private static FrozenDictionary<string, CompressionFormat> BuildNameIndex()
     {
         var index = new Dictionary<string, CompressionFormat>(StringComparer.OrdinalIgnoreCase);
         foreach (var info in AllFormats)
@@ -53,7 +55,7 @@ public static class CompressionFormats
                 index[alias] = info.Format;
             }
         }
-        return index;
+        return index.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>

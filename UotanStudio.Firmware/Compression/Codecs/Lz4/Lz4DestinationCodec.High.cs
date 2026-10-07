@@ -1053,7 +1053,7 @@ internal static unsafe partial class Lz4DestinationCodec
                 limitedOutput_directive.notLimited, outputEnd);
     }
 
-    private static readonly cParams_t[] clTable = {
+    private static readonly cParams_t[] clTable = [
         new cParams_t(lz4hc_strat_e.lz4hc, 2, 16),
         new cParams_t(lz4hc_strat_e.lz4hc, 2, 16),
         new cParams_t(lz4hc_strat_e.lz4hc, 2, 16),
@@ -1067,7 +1067,7 @@ internal static unsafe partial class Lz4DestinationCodec
         new cParams_t(lz4hc_strat_e.lz4opt, 96, 64),
         new cParams_t(lz4hc_strat_e.lz4opt, 512, 128),
         new cParams_t(lz4hc_strat_e.lz4opt, 16384, LZ4_OPT_NUM),
-    };
+    ];
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int LZ4HC_compress_generic_internal(

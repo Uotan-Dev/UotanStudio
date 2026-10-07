@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Security.Cryptography;
 using Google.Protobuf;
 using UotanStudio.Firmware.Compression.Compressors;
@@ -48,6 +49,10 @@ public sealed partial class PayloadBuilder
         var workers = partition.CompressionType == CompressionType.None ? 1 : compressionWorkers;
         if (declaredLength is { } size)
             workers = (int)Math.Min(workers, Math.Max(1, size / chunkSize + (size % chunkSize == 0 ? 0 : 1)));
+        workers = Core.FirmwareParallelism.BudgetedWorkers(
+            bytesPerWorker: checked(chunkSize * 3L + 65536),
+            budgetBytes: Core.FirmwareParallelism.WorkerMemoryBudgetBytes,
+            requestedWorkers: workers);
         var slots = Enumerable.Range(0, workers).Select(_ => new CompressionSlot(chunkSize)).ToArray();
         var parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = workers, CancellationToken = cancellationToken };
         ulong position = 0;
@@ -81,13 +86,13 @@ public sealed partial class PayloadBuilder
             if (count == 0) break;
 
             if (count == 1)
-                slots[0].Compress(partition.CompressionType, partition.ZstdDictionary ?? Memory<byte>.Empty, cancellationToken);
+                slots[0].Compress(partition.CompressionType, partition.ZstdDictionary, cancellationToken);
             else
             {
                 try
                 {
                     Parallel.For(0, count, parallelOptions,
-                        i => slots[i].Compress(partition.CompressionType, partition.ZstdDictionary ?? Memory<byte>.Empty, cancellationToken));
+                        i => slots[i].Compress(partition.CompressionType, partition.ZstdDictionary, cancellationToken));
                 }
                 catch (AggregateException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -124,23 +129,37 @@ public sealed partial class PayloadBuilder
         internal ulong StartBlock;
         internal byte[] Hash = [];
 
-        internal void Compress(CompressionType compression, ReadOnlyMemory<byte> dictionary, CancellationToken cancellationToken)
+        /// <summary>
+        /// Compresses the filled input range into <see cref="Output"/>, hashing the produced bytes on the
+        /// way out so the operation digest needs no second pass over the buffer.
+        /// <para>把已填充的输入区间压缩进 <see cref="Output"/>，并在写出链上同步计算输出摘要，
+        /// 免去对缓冲的第二遍哈希。</para>
+        /// </summary>
+        /// <param name="compression">Codec selected by the partition. <para>分区选用的编解码器。</para></param>
+        /// <param name="dictionary">
+        /// External raw dictionary bytes for Zstd frames, or <see langword="null"/>; the same array is passed to
+        /// every chunk of one partition build.
+        /// <para>Zstd 帧使用的外部原始字典字节，可为 <see langword="null"/>；同一次分区构建的每个块都收到同一个数组。</para>
+        /// </param>
+        /// <param name="cancellationToken">Token checked by every forwarded write. <para>每次转发写入都会检查的取消令牌。</para></param>
+        internal void Compress(CompressionType compression, byte[]? dictionary, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var source = new MemoryStream(Input, 0, InputLength, writable: false);
             using var destination = new MemoryStream(Output, writable: true);
             destination.SetLength(0);
-            using (var bounded = new CountingWriteStream(destination, InputLength * 2L + 65536,
+            using var hashing = new HashingWriteStream(destination, leaveOpen: true);
+            using (var bounded = new CountingWriteStream(hashing, InputLength * 2L + 65536,
                        leaveOpen: true, cancellationToken: cancellationToken))
             {
                 if (compression == CompressionType.Xz)
                 {
-                    var original = InputLength == Input.Length ? Input : Input.AsSpan(0, InputLength).ToArray();
-                    bounded.Write(XzCompressor.Compress(original, dictionarySize: 1u << 20, maxDegreeOfParallelism: 1));
+                    XzCompressor.Compress(source, bounded, dictionarySize: 1u << 20, maxDegreeOfParallelism: 1);
                 }
                 else if (compression == CompressionType.Zstd)
                 {
-                    CompressZstdChunk(source, bounded, dictionary, level: 3);
+                    CompressZstdChunk(source, bounded, dictionary is null ? Memory<byte>.Empty : dictionary.AsMemory(),
+                        level: 3);
                 }
                 else
                 {
@@ -148,7 +167,7 @@ public sealed partial class PayloadBuilder
                 }
             }
             OutputLength = checked((int)destination.Length);
-            Hash = SHA256.HashData(Output.AsSpan(0, OutputLength));
+            Hash = hashing.GetHashAndReset();
         }
     }
 }

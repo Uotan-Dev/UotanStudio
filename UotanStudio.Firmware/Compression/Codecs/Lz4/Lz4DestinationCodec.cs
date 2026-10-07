@@ -5,12 +5,14 @@ using System.Runtime.InteropServices;
 
 namespace UotanStudio.Firmware.Compression.Codecs.Lz4;
 
-internal static unsafe partial class Lz4DestinationCodec
+internal static partial class Lz4DestinationCodec
 {
     private const int MaximumBlockBytes = 256 * 1024 * 1024;
     private const int ALGORITHM_ARCH = 8;
 
-    internal static int Encode(ReadOnlySpan<byte> source, Span<byte> target, int algorithm, int level, out int consumed)
+    // The state handle is a void* returned by NativeMemory, so the whole encode
+    // path must stay in an unsafe context before C# 15's relaxed pointer rules.
+    internal static unsafe int Encode(ReadOnlySpan<byte> source, Span<byte> target, int algorithm, int level, out int consumed)
     {
         if (source.Length > MaximumBlockBytes || target.Length > MaximumBlockBytes || target.IsEmpty)
             throw new InvalidDataException("LZ4 block exceeds the bounded destination-size codec limits.");
@@ -25,28 +27,36 @@ internal static unsafe partial class Lz4DestinationCodec
             return 1;
         }
 
-        var stateSize = algorithm == 1 ? sizeof(LZ4_stream_t) : sizeof(LZ4_streamHC_t);
+        // sizeof on a custom struct requires an unsafe context before C# 15.
+        int stateSize;
+        unsafe
+        {
+            stateSize = algorithm == 1 ? sizeof(LZ4_stream_t) : sizeof(LZ4_streamHC_t);
+        }
         var state = NativeMemory.AllocZeroed((nuint)stateSize);
         try
         {
             int sourceLength = source.Length;
             int result;
-            fixed (byte* input = source)
-            fixed (byte* output = target)
+            unsafe
             {
-                if (algorithm == 1)
+                fixed (byte* input = source)
+                fixed (byte* output = target)
                 {
-                    result = LZ4_compress_generic((LZ4_stream_t*)state, input, output, source.Length,
-                        &sourceLength, target.Length, limitedOutput_directive.fillOutput,
-                        source.Length < LZ4_64Klimit ? tableType_t.byU16 : tableType_t.byU32,
-                        dict_directive.noDict, dictIssue_directive.noDictIssue, Math.Max(1, level));
-                }
-                else
-                {
-                    var context = LZ4_initStreamHC(state, stateSize);
-                    LZ4HC_init_internal(context, input);
-                    result = LZ4HC_compress_generic_internal(context, input, output, &sourceLength,
-                        target.Length, level, limitedOutput_directive.fillOutput, dictCtx_directive.noDictCtx);
+                    if (algorithm == 1)
+                    {
+                        result = LZ4_compress_generic((LZ4_stream_t*)state, input, output, source.Length,
+                            &sourceLength, target.Length, limitedOutput_directive.fillOutput,
+                            source.Length < LZ4_64Klimit ? tableType_t.byU16 : tableType_t.byU32,
+                            dict_directive.noDict, dictIssue_directive.noDictIssue, Math.Max(1, level));
+                    }
+                    else
+                    {
+                        var context = LZ4_initStreamHC(state, stateSize);
+                        LZ4HC_init_internal(context, input);
+                        result = LZ4HC_compress_generic_internal(context, input, output, &sourceLength,
+                            target.Length, level, limitedOutput_directive.fillOutput, dictCtx_directive.noDictCtx);
+                    }
                 }
             }
             if (result <= 0 || result > target.Length || sourceLength < 0 || sourceLength > source.Length)
@@ -64,7 +74,7 @@ internal static unsafe partial class Lz4DestinationCodec
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static uint LZ4_NbCommonBytes(ulong value) => (uint)BitOperations.TrailingZeroCount(value) >> 3;
 
-    private static class Mem
+    private static unsafe class Mem
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static ushort Peek2(void* pointer) => Unsafe.ReadUnaligned<ushort>(pointer);

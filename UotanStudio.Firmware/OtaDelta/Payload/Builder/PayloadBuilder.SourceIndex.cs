@@ -22,6 +22,7 @@ public sealed partial class PayloadBuilder
             Array.Fill(_heads, -1);
         }
 
+        [System.Runtime.CompilerServices.SkipLocalsInit]
         public void Add(ReadOnlySpan<byte> bytes, long block)
         {
             Span<byte> digest = stackalloc byte[32];
@@ -37,6 +38,7 @@ public sealed partial class PayloadBuilder
             _snapshot.Write(bytes);
         }
 
+        [System.Runtime.CompilerServices.SkipLocalsInit]
         public long Find(ReadOnlySpan<byte> bytes, long preferred, CancellationToken token)
         {
             if (preferred >= 0 && preferred < _snapshot.Length / _blockSize)
