@@ -32,7 +32,7 @@ public partial class FirmwareInfoViewModel
             return;
         }
 
-        var groups = new Dictionary<string, List<PropertyRow>>();
+        Dictionary<string, List<PropertyRow>> groups = [];
         foreach (var (key, rawValue) in _rawMetadata)
         {
             var groupKey = "General";

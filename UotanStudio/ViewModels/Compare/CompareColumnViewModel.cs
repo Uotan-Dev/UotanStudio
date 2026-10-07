@@ -369,7 +369,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         }
 
         var path = (Path ?? string.Empty).Trim();
-        var lines = new List<string>();
+        List<string> lines = [];
         foreach (var row in _ownRows)
         {
             if (row.IsEditable && row.HasLeftLine)
@@ -479,7 +479,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// <summary>取编辑器中的文本行（保存浏览文本文件用）。</summary>
     private List<string> EditorLines()
     {
-        var lines = new List<string>();
+        List<string> lines = [];
         foreach (var line in EditorText.Split('\n'))
         {
             lines.Add(line.TrimEnd('\r'));

@@ -418,25 +418,13 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
     /// </summary>
     private static bool ResolveBinary(EditorOpenMode mode, string path, byte[] data)
     {
-        switch (mode)
+        return mode switch
         {
-            case EditorOpenMode.Text:
-                return false;
-            case EditorOpenMode.Hex:
-                return true;
-            case EditorOpenMode.Dtb:
-                return false;
-            case EditorOpenMode.Dex:
-                return false;
-            default:
-                var ext = Path.GetExtension(path);
-                if (FileOpenMode.IsKnownBinaryExtension(ext))
-                {
-                    return true;
-                }
-
-                return FileOpenMode.IsBinaryContent(data);
-        }
+            EditorOpenMode.Hex => true,
+            EditorOpenMode.Text or EditorOpenMode.Dtb or EditorOpenMode.Dex => false,
+            _ => FileOpenMode.IsKnownBinaryExtension(Path.GetExtension(path))
+                || FileOpenMode.IsBinaryContent(data)
+        };
     }
 
     /// <summary>
@@ -517,7 +505,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
 
     private void NotifyAnalysisComplete(string path)
     {
-        WeakReferenceMessenger.Default.Send(new FileAnalysisCompletedMessage(Analysis.ToList(), DetectedFormat, path));
+        WeakReferenceMessenger.Default.Send(new FileAnalysisCompletedMessage([.. Analysis], DetectedFormat, path));
     }
 
     private void AddAnalysis(string name, string value)

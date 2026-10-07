@@ -73,8 +73,8 @@ public sealed class PatchReviewViewModel : ViewModelBase
     /// <summary>Applies one execution result to the review state.</summary>
     public void Publish(ExecutionResult result)
     {
-        PatchChanges = result.PatchChanges.Select(change => new PatchChangeViewModel(change)).ToArray();
-        CompositeExecutions = result.CompositeExecutions.Select(item => new PatchCompositeExecutionViewModel(item)).ToArray();
+        PatchChanges = [.. result.PatchChanges.Select(change => new PatchChangeViewModel(change))];
+        CompositeExecutions = [.. result.CompositeExecutions.Select(item => new PatchCompositeExecutionViewModel(item))];
         CompositeReportTruncated = result.CompositeReportTruncated;
         Outcome = result.PatchOutcome;
     }
@@ -82,8 +82,8 @@ public sealed class PatchReviewViewModel : ViewModelBase
     /// <summary>Rebuilds localized review rows after a language switch.</summary>
     public void RefreshLocalization()
     {
-        PatchChanges = PatchChanges.Select(item => new PatchChangeViewModel(item.Change)).ToArray();
-        CompositeExecutions = CompositeExecutions.Select(item => new PatchCompositeExecutionViewModel(item.Execution)).ToArray();
+        PatchChanges = [.. PatchChanges.Select(item => new PatchChangeViewModel(item.Change))];
+        CompositeExecutions = [.. CompositeExecutions.Select(item => new PatchCompositeExecutionViewModel(item.Execution))];
         OnPropertyChanged(nameof(PatchOutcomeText));
     }
 

@@ -17,7 +17,7 @@ internal static class FileManagerTreeBuilder
     /// </summary>
     public static List<FileManagerEntryViewModel> Build(IReadOnlyList<ImageBrowserEntry> entries)
     {
-        var root = new List<FileManagerEntryViewModel>();
+        List<FileManagerEntryViewModel> root = [];
         var byPath = new Dictionary<string, FileManagerEntryViewModel>(StringComparer.Ordinal);
 
         foreach (var entry in entries)

@@ -414,7 +414,7 @@ public sealed partial class ExplorerNode : ObservableObject
     {
         try
         {
-            var discovered = new List<ExplorerNode>();
+            List<ExplorerNode> discovered = [];
             foreach (var dir in Directory.EnumerateDirectories(Path))
             {
                 discovered.Add(new ExplorerNode(dir, isDirectory: true, isProjectFolder: ProjectFolderPaths.Contains(dir)));

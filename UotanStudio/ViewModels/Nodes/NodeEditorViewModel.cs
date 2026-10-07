@@ -552,7 +552,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             _suppressPropertyTracking = false;
         }
         _redoStack.Push(command);
-        SetSelection(_selectedNodes.Where(Nodes.Contains).ToArray());
+        SetSelection([.. _selectedNodes.Where(Nodes.Contains)]);
         RefreshSelectionProperties();
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
@@ -617,8 +617,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         _clipboard = WorkflowPersistenceService.CloneForEditing(new WorkflowSnapshot
         {
             Nodes = WorkflowPersistenceService.BuildNodeDtos(selected),
-            Connections = WorkflowPersistenceService.BuildConnectionDtos(selected, Connections)
-                .Where(edge => edge.SourceInstanceId is not null && edge.TargetInstanceId is not null).ToList()
+            Connections = [.. WorkflowPersistenceService.BuildConnectionDtos(selected, Connections).Where(edge => edge.SourceInstanceId is not null && edge.TargetInstanceId is not null)]
         });
         _pasteCount = 0;
         _log.Write(LogLevel.Info, "NodeEditor", $"Copied {selected.Count} node(s)");
@@ -1225,11 +1224,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         {
 
             IsExecuting = false;
-            FailedNodes = Nodes.Where(node => node.ExecutionStatus == NodeExecutionStatus.Failed || node.ExecutionError.Length > 0).ToArray();
-            if (_engine != null)
-            {
-                _engine.ProgressChanged -= OnExecutionProgress;
-            }
+            FailedNodes = [.. Nodes.Where(node => node.ExecutionStatus == NodeExecutionStatus.Failed || node.ExecutionError.Length > 0)];
+            _engine?.ProgressChanged -= OnExecutionProgress;
             _runCts?.Dispose();
             _runCts = null;
         }

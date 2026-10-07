@@ -423,7 +423,7 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
                     return System.Text.Encoding.UTF8.GetString(raw);
                 }
 
-                var parts = new List<string>();
+                List<string> parts = [];
                 var span = raw;
                 while (span.Length > 0)
                 {

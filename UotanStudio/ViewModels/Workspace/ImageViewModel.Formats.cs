@@ -19,7 +19,7 @@ internal partial class ImageViewModel
 
     private IReadOnlyList<ImageEntryViewModel> GetSelectedImages()
     {
-        return Images.Where(image => image.IsSelected).ToArray();
+        return [.. Images.Where(image => image.IsSelected)];
     }
 
     private string? GetSelectedSourcePath(ImageEntryViewModel image, string operation)

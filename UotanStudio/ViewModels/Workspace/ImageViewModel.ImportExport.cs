@@ -45,8 +45,8 @@ internal partial class ImageViewModel
         IsOperating = true;
         StatusText = LanguageService.Instance.GetString("NewProject_Copying");
         var generation = _progressGeneration;
-        var copiedPaths = new List<string>();
-        var imported = new List<ImageEntryViewModel>();
+        List<string> copiedPaths = [];
+        List<ImageEntryViewModel> imported = [];
         var committed = false;
         try
         {
@@ -131,7 +131,7 @@ internal partial class ImageViewModel
             if (history is not null)
             {
                 history.Count = imported.Count;
-                history.RelativePaths = imported.Select(e => e.RelativePath).ToList();
+                history.RelativePaths = [.. imported.Select(e => e.RelativePath)];
             }
             OperationHistoryService.Instance.Record(
                 $"Import {imported.Count} image(s)", history,

@@ -80,12 +80,12 @@ public partial class ElfInfoViewModel : Document
             source.Token.ThrowIfCancellationRequested();
             _info = info;
             UpdateFields();
-            Segments = info.Segments.Select(static segment => new ElfSegmentRow(segment.Index,
+            Segments = [.. info.Segments.Select(static segment => new ElfSegmentRow(segment.Index,
                 SegmentType(segment.Type), SegmentFlags(segment.Flags), Hex(segment.Offset), Hex(segment.VirtualAddress),
-                Hex(segment.PhysicalAddress), Hex(segment.FileSize), Hex(segment.MemorySize), Hex(segment.Alignment))).ToArray();
-            Sections = info.Sections.Select(static section => new ElfSectionRow(section.Index, section.Name,
+                Hex(segment.PhysicalAddress), Hex(segment.FileSize), Hex(segment.MemorySize), Hex(segment.Alignment)))];
+            Sections = [.. info.Sections.Select(static section => new ElfSectionRow(section.Index, section.Name,
                 SectionType(section.Type), Hex(section.Flags), Hex(section.Address), Hex(section.Offset), Hex(section.Size),
-                section.Link, section.Info, Hex(section.Alignment), Hex(section.EntrySize))).ToArray();
+                section.Link, section.Info, Hex(section.Alignment), Hex(section.EntrySize)))];
             IsRecognized = true;
         }
         catch (OperationCanceledException) when (source.IsCancellationRequested)

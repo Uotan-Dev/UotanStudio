@@ -30,6 +30,6 @@ internal static class NodeSearchIndex
                 values.Add(value);
             }
         }
-        return labels.ToDictionary(entry => entry.Key, entry => (IReadOnlyList<string>)entry.Value.ToArray(), StringComparer.Ordinal);
+        return labels.ToDictionary(entry => entry.Key, entry => (IReadOnlyList<string>)[.. entry.Value], StringComparer.Ordinal);
     }
 }

@@ -266,7 +266,7 @@ public partial class ApkEditorViewModel : Document
     {
         if (bytes < 1024) return $"{bytes:N0} B";
         var value = (double)bytes;
-        var units = new[] { "B", "KB", "MB", "GB", "TB" };
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
         var index = 0;
         while (value >= 1024 && index < units.Length - 1)
         {

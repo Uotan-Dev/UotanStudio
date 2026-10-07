@@ -19,7 +19,7 @@ internal static class ComparisonRowBuilder
     /// <param name="compared"><para>是否处于对比状态（决定该行的右键菜单是「另一边」还是「左边/右边」）。</para>Whether the rows belong to a comparison (which decides between the "other side" and "left/right" menu items).</param>
     internal static List<CompareRowViewModel> ForTree(IEnumerable<CompareTreeNodeViewModel> roots, bool compared)
     {
-        var rows = new List<CompareRowViewModel>();
+        List<CompareRowViewModel> rows = [];
         foreach (var root in roots)
         {
             AppendTreeRow(root, 0, rows, compared);
@@ -106,11 +106,11 @@ internal static class ComparisonRowBuilder
     internal static List<CompareRowViewModel> ForText(
         IReadOnlyList<string> lines,
         Action<CompareRowViewModel, bool>? edited = null) =>
-        lines.Select((line, index) => new CompareRowViewModel(
+        [.. lines.Select((line, index) => new CompareRowViewModel(
             FolderItemStatus.LeftOnly, 0, (index + 1).ToString(), line, string.Empty, true,
             string.Empty, string.Empty, string.Empty, false,
             editable: true, menu: CompareRowMenuKind.None, compared: false,
-            hasLeftLine: true, hasRightLine: false, edited: edited)).ToList();
+            hasLeftLine: true, hasRightLine: false, edited: edited))];
 
     /// <summary>
     /// <para>构建单侧文本对比的行：内容只落在有文件的一侧（行号 1 起），另一侧整列留空，
@@ -126,7 +126,7 @@ internal static class ComparisonRowBuilder
         IReadOnlyList<string> lines,
         bool leftSide,
         Action<CompareRowViewModel, bool>? edited = null) =>
-        lines.Select((line, index) => leftSide
+        [.. lines.Select((line, index) => leftSide
             ? new CompareRowViewModel(
                 FolderItemStatus.LeftOnly, 0, (index + 1).ToString(), line, string.Empty, true,
                 string.Empty, string.Empty, string.Empty, false,
@@ -136,7 +136,7 @@ internal static class ComparisonRowBuilder
                 FolderItemStatus.RightOnly, 0, string.Empty, string.Empty, string.Empty, false,
                 (index + 1).ToString(), line, string.Empty, true,
                 editable: true, menu: CompareRowMenuKind.ComparedText,
-                compared: true, hasLeftLine: false, hasRightLine: true, edited: edited)).ToList();
+                compared: true, hasLeftLine: false, hasRightLine: true, edited: edited))];
 
     /// <summary>
     /// <para>由两侧元数据构建元数据视图行：格式名行、摘要行、键值对行（键并集）、条目行与组件行；
@@ -155,7 +155,7 @@ internal static class ComparisonRowBuilder
     /// </summary>
     internal static List<CompareRowViewModel> ForMetadata(ComparisonMetadata? left, ComparisonMetadata? right, string unrecognized)
     {
-        var rows = new List<CompareRowViewModel>();
+        List<CompareRowViewModel> rows = [];
         var leftRecognized = left is { FormatName.Length: > 0 };
         var rightRecognized = right is { FormatName.Length: > 0 };
 
@@ -300,7 +300,7 @@ internal static class ComparisonRowBuilder
             return [];
         }
 
-        var result = new List<string>();
+        List<string> result = [];
         foreach (var raw in text.Split('\n'))
         {
             result.Add(raw.TrimEnd('\r'));

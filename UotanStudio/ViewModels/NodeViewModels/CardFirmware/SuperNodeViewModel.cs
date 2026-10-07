@@ -143,7 +143,7 @@ public class SuperNodeViewModel : FlowNodeViewModel
             throw new InvalidOperationException("Device Size must be a positive number (bytes).  Device Size 必须为正数（字节）。");
         }
 
-        var partitions = new List<SuperPartitionInput>();
+        List<SuperPartitionInput> partitions = [];
         foreach (var item in partitionsText.Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
             var pair = item.Trim();

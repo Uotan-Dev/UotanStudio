@@ -42,7 +42,7 @@ public class DecryptNodeViewModel : FlowNodeViewModel
             Title = "Algorithm",
             PortType = NodePortType.Text,
             InitialValue = "aes",
-            Choices = new[] { "aes", "aes-256", "xor" }.Select(value => new NodePortChoice(value)).ToArray()
+            Choices = [.. new[] { "aes", "aes-256", "xor" }.Select(value => new NodePortChoice(value))]
         });
         node.Output.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
         return node;

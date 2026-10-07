@@ -7,7 +7,7 @@ internal sealed partial class QualcommWorkspaceAnalyzer
 {
     private static IReadOnlyList<QualcommReportField> MetadataFields(QualcommAnalysisResult result)
     {
-        var rows = new List<QualcommReportField>();
+        List<QualcommReportField> rows = [];
         foreach (var region in result.Regions)
         {
             rows.Add(Field(region.Name, $"0x{region.Offset:X} + 0x{region.Length:X}"));

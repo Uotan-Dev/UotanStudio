@@ -65,7 +65,7 @@ internal static class NodeParameterSchema
         }
     }
 
-    private static void Advanced(FlowNodeViewModel node, params string[] titles)
+    private static void Advanced(FlowNodeViewModel node, params ReadOnlySpan<string> titles)
     {
         foreach (var title in titles)
         {

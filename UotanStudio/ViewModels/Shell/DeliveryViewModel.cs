@@ -193,7 +193,7 @@ internal sealed partial class DeliveryViewModel : ObservableObject
         if (plan.PackPayload) DeliveryPayloadBuilder.Validate(plan);
         if (plan.PackSuper)
         {
-            _ = DeliverySuperBuilder.ExpandPartitions(Container.Select(i => i.Snapshot()).ToArray(), plan.Super);
+            _ = DeliverySuperBuilder.ExpandPartitions([.. Container.Select(i => i.Snapshot())], plan.Super);
 
             if (!plan.Super.Empty) DeliverySuperCapacity.Validate([.. Container.Select(i => i.SizeBytes ?? 0)], plan.Super);
         }

@@ -246,8 +246,8 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
     private static List<CompareTreeNodeViewModel> EnumerateChildren(string path, CancellationToken token)
     {
         var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        var directories = new List<CompareTreeNodeViewModel>();
-        var files = new List<CompareTreeNodeViewModel>();
+        List<CompareTreeNodeViewModel> directories = [];
+        List<CompareTreeNodeViewModel> files = [];
 
         foreach (var directory in Directory.EnumerateDirectories(path))
         {

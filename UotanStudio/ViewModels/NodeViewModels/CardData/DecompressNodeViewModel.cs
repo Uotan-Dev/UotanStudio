@@ -41,7 +41,7 @@ public class DecompressNodeViewModel : FlowNodeViewModel
             Title = "Algorithm",
             PortType = NodePortType.Text,
             InitialValue = "gzip",
-            Choices = new[] { "gzip", "deflate" }.Select(value => new NodePortChoice(value)).ToArray()
+            Choices = [.. new[] { "gzip", "deflate" }.Select(value => new NodePortChoice(value))]
         });
         node.Output.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
         return node;

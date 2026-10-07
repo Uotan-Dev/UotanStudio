@@ -737,7 +737,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
         }
 
         var partitions = new List<LpMetadataPartition>(items.Count);
-        var extents = new List<LpMetadataExtent>();
+        List<LpMetadataExtent> extents = [];
         foreach (var item in items)
         {
             var nameBytes = Encoding.UTF8.GetBytes(item.Name);

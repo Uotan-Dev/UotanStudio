@@ -394,10 +394,7 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     public void WriteOutput(string title, object? value)
     {
         var connector = Output.FirstOrDefault(c => string.Equals(c.Title, title, StringComparison.Ordinal));
-        if (connector != null)
-        {
-            connector.Data = value;
-        }
+        connector?.Data = value;
     }
 
     /// <summary>

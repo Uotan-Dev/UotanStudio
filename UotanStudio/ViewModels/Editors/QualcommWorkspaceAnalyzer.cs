@@ -54,7 +54,7 @@ internal sealed partial class QualcommWorkspaceAnalyzer : IQualcommWorkspaceAnal
             overview.Add(Field("HashLength", mbn.HashLength.ToString(CultureInfo.InvariantCulture)));
         }
 
-        var segments = new List<QualcommReportField>();
+        List<QualcommReportField> segments = [];
         if (result.Elf is { } elf)
         {
             overview.Add(Field("Architecture", elf.Header.Machine switch
@@ -127,7 +127,7 @@ internal sealed partial class QualcommWorkspaceAnalyzer : IQualcommWorkspaceAnal
             verification.Add(new("Diagnostic", diagnostic, LocalizedName: true));
         }
 
-        var programmer = new List<QualcommReportField>();
+        List<QualcommReportField> programmer = [];
         foreach (var command in result.SupportedCommands.Take(256))
         {
             programmer.Add(Field("EvidenceSource", command.Source, true, command.Name));

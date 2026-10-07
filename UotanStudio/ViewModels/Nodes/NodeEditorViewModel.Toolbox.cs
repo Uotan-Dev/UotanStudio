@@ -240,13 +240,13 @@ public sealed class NodeToolboxItem : ViewModelBase
         ToggleFavoriteCommand = new RelayCommand(() => toggleFavorite?.Invoke(this));
         if (descriptor.TypeKey == "Device.Partition.Flash")
         {
-            Presets = new[] { "boot", "bootloader", "super" }.Select(partition => new NodeToolboxPreset(
+            Presets = [.. new[] { "boot", "bootloader", "super" }.Select(partition => new NodeToolboxPreset(
                 language.GetString("Node_Preset_Flash_" + partition), new RelayCommand(() =>
                 {
                     var node = descriptor.Factory();
                     node.Input.Single(input => input.PortId == "partition").InitialValue = partition;
                     addPreset?.Invoke(node);
-                }))).ToArray();
+                })))];
         }
     }
 

@@ -77,7 +77,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
             Title = "Algorithm",
             PortType = NodePortType.Text,
             InitialValue = "aes",
-            Choices = new[] { "aes", "aes-256", "xor" }.Select(value => new NodePortChoice(value)).ToArray()
+            Choices = [.. new[] { "aes", "aes-256", "xor" }.Select(value => new NodePortChoice(value))]
         });
         node.Output.Add(new NodeConnectorViewModel { Title = "Cipher", PortType = NodePortType.Data });
         return node;
@@ -100,7 +100,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
             Title = "Algorithm",
             PortType = NodePortType.Text,
             InitialValue = "gzip",
-            Choices = new[] { "gzip", "deflate" }.Select(value => new NodePortChoice(value)).ToArray()
+            Choices = [.. new[] { "gzip", "deflate" }.Select(value => new NodePortChoice(value))]
         });
         node.Output.Add(new NodeConnectorViewModel { Title = "Compressed", PortType = NodePortType.Data });
         return node;

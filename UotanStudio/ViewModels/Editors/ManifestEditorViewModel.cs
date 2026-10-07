@@ -429,23 +429,16 @@ public partial class ManifestAttributeRow : ObservableObject
             return;
         }
 
-        switch (_attribute.ValueType)
+        _attribute.ValueData = _attribute.ValueType switch
         {
-            case AXmlValueType.IntDec when long.TryParse(value, out var dec):
-                _attribute.ValueData = unchecked((uint)dec);
-                break;
-            case AXmlValueType.IntHex when value.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
-                                           && uint.TryParse(value.AsSpan(2), System.Globalization.NumberStyles.HexNumber,
-                                               System.Globalization.CultureInfo.InvariantCulture, out var hex):
-                _attribute.ValueData = hex;
-                break;
-            case AXmlValueType.IntBoolean when bool.TryParse(value, out var b):
-                _attribute.ValueData = b ? 1u : 0u;
-                break;
-            case AXmlValueType.String when _stringPool is not null:
-                _attribute.ValueData = (uint)_stringPool.Intern(value);
-                break;
-        }
+            AXmlValueType.IntDec when long.TryParse(value, out var dec) => unchecked((uint)dec),
+            AXmlValueType.IntHex when value.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                                      && uint.TryParse(value.AsSpan(2), System.Globalization.NumberStyles.HexNumber,
+                                          System.Globalization.CultureInfo.InvariantCulture, out var hex) => hex,
+            AXmlValueType.IntBoolean when bool.TryParse(value, out var b) => b ? 1u : 0u,
+            AXmlValueType.String when _stringPool is not null => (uint)_stringPool.Intern(value),
+            _ => _attribute.ValueData
+        };
 
         _onChanged?.Invoke();
     }

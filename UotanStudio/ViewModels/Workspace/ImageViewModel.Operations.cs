@@ -13,10 +13,15 @@ internal partial class ImageViewModel
 {
     private readonly ProgressMeter _meter = new();
 
-    /// <summary><para>解包统计行：已处理/总量 · 速度 · 剩余时间。</para>
-    /// Unpack stats line: processed/total · speed · eta.</summary>
+    /// <summary><para>进度统计行：已处理/总量 · 速度 · 剩余时间，解包与打包共用。</para>
+    /// Progress stats line shared by unpack and pack: processed/total · speed · eta.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasProgressStats))]
     private string _progressStats = string.Empty;
+
+    /// <summary><para>获取当前是否有可显示的进度统计行。</para>
+    /// Gets whether a progress stats line is currently available to display.</summary>
+    public bool HasProgressStats => ProgressStats.Length > 0;
 
     /// <summary>Extracts the clicked entry or checked entries. 提取右键条目或勾选条目。</summary>
     [RelayCommand]
@@ -65,7 +70,7 @@ internal partial class ImageViewModel
     private async Task RunImagesAsync(string operation, ImageEntryViewModel? clicked)
     {
         if (IsOperating) return;
-        var entries = clicked is null ? GetSelectedImages() : new[] { clicked };
+        var entries = clicked is null ? GetSelectedImages() : [clicked];
         if (entries.Count == 0)
         {
             StatusText = LanguageService.Instance.GetString("ImageView_NoSelection");
@@ -82,7 +87,7 @@ internal partial class ImageViewModel
         var succeeded = 0;
         var failed = 0;
         var skipped = 0;
-        var equivalenceBlocks = new List<string>();
+        List<string> equivalenceBlocks = [];
         ProgressPercent = 0;
         ReportItemStatistics(0, requests.Length);
         try
@@ -460,10 +465,10 @@ internal partial class ImageViewModel
     /// </summary>
     private static List<ImageEntryViewModel> CollectNestedImages(string directory)
     {
-        var nested = new List<ImageEntryViewModel>();
+        List<ImageEntryViewModel> nested = [];
         if (!Directory.Exists(directory)) return nested;
 
-        var candidates = new List<string>();
+        List<string> candidates = [];
         try
         {
             candidates.AddRange(Directory.EnumerateFiles(directory));

@@ -280,7 +280,7 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     private static IReadOnlyList<string> CollectProtocols(UsbTopologyNode node,
         IReadOnlyList<UsbTreeNodeViewModel> children)
     {
-        var protocols = new List<string>();
+        List<string> protocols = [];
         AddProtocol(protocols, node.Protocol);
         foreach (var child in children)
         {

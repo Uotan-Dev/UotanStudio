@@ -342,7 +342,7 @@ public sealed partial class CompareViewModel : Document
             return;
         }
 
-        var lines = new List<string>();
+        List<string> lines = [];
         for (var offset = 0; offset < count; offset++)
         {
             var index = startSlot + offset;

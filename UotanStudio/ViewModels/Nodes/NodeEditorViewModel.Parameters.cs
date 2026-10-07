@@ -8,7 +8,7 @@ public partial class NodeEditorViewModel
     private IReadOnlyList<NodeConnectorViewModel> _selectedParameterInputs = [];
 
     public IReadOnlyList<NodePortChoice> ValueTypeChoices { get; } =
-        FlowNodeViewModel.ValueTypeOptions.Select(value => new NodePortChoice(value, "Node_PortType_")).ToArray();
+        [.. FlowNodeViewModel.ValueTypeOptions.Select(value => new NodePortChoice(value, "Node_PortType_"))];
 
     /// <summary>Hides unconnected advanced and irrelevant inputs on canvas nodes.</summary>
     public bool CompactNodes

@@ -35,10 +35,6 @@ public sealed class CompareRowViewModel : ObservableObject
     private readonly Action<CompareRowViewModel, bool>? _edited;
     private string _leftText;
     private string _rightText;
-    private bool _hasLeftLine;
-    private bool _hasRightLine;
-    private bool _isLeftDiff;
-    private bool _isRightDiff;
 
     /// <summary>
     /// <para>创建对比行视图模型；可选参数用于目录树行、可编辑文本行与右键菜单。</para>
@@ -100,11 +96,11 @@ public sealed class CompareRowViewModel : ObservableObject
         LeftLine = leftLine;
         _leftText = leftText;
         LeftSub = leftSub;
-        _isLeftDiff = isLeftDiff;
+        IsLeftDiff = isLeftDiff;
         RightLine = rightLine;
         _rightText = rightText;
         RightSub = rightSub;
-        _isRightDiff = isRightDiff;
+        IsRightDiff = isRightDiff;
         TintSingleSide = tintSingleSide;
         TreeNode = treeNode;
         LeftIcon = leftIcon;
@@ -112,8 +108,8 @@ public sealed class CompareRowViewModel : ObservableObject
         IsEditable = editable;
         Menu = menu;
         IsComparedRow = compared;
-        _hasLeftLine = hasLeftLine ?? !string.IsNullOrEmpty(leftText);
-        _hasRightLine = hasRightLine ?? !string.IsNullOrEmpty(rightText);
+        HasLeftLine = hasLeftLine ?? !string.IsNullOrEmpty(leftText);
+        HasRightLine = hasRightLine ?? !string.IsNullOrEmpty(rightText);
         _edited = edited;
     }
 
@@ -144,7 +140,7 @@ public sealed class CompareRowViewModel : ObservableObject
     public string LeftText
     {
         get => _leftText;
-        set => SetSideText(leftSide: true, value, present: _hasLeftLine || !string.IsNullOrEmpty(value));
+        set => SetSideText(leftSide: true, value, present: HasLeftLine || !string.IsNullOrEmpty(value));
     }
 
     /// <summary>
@@ -159,8 +155,8 @@ public sealed class CompareRowViewModel : ObservableObject
     /// </summary>
     public bool IsLeftDiff
     {
-        get => _isLeftDiff;
-        private set => SetProperty(ref _isLeftDiff, value);
+        get => field;
+        private set => SetProperty(ref field, value);
     }
 
     /// <summary>
@@ -176,7 +172,7 @@ public sealed class CompareRowViewModel : ObservableObject
     public string RightText
     {
         get => _rightText;
-        set => SetSideText(leftSide: false, value, present: _hasRightLine || !string.IsNullOrEmpty(value));
+        set => SetSideText(leftSide: false, value, present: HasRightLine || !string.IsNullOrEmpty(value));
     }
 
     /// <summary>
@@ -191,8 +187,8 @@ public sealed class CompareRowViewModel : ObservableObject
     /// </summary>
     public bool IsRightDiff
     {
-        get => _isRightDiff;
-        private set => SetProperty(ref _isRightDiff, value);
+        get => field;
+        private set => SetProperty(ref field, value);
     }
 
     /// <summary>
@@ -291,10 +287,10 @@ public sealed class CompareRowViewModel : ObservableObject
     /// </summary>
     public bool HasLeftLine
     {
-        get => _hasLeftLine;
+        get => field;
         private set
         {
-            if (SetProperty(ref _hasLeftLine, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(IsLeftEmpty));
                 OnPropertyChanged(nameof(ShowLeftText));
@@ -308,10 +304,10 @@ public sealed class CompareRowViewModel : ObservableObject
     /// </summary>
     public bool HasRightLine
     {
-        get => _hasRightLine;
+        get => field;
         private set
         {
-            if (SetProperty(ref _hasRightLine, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(IsRightEmpty));
                 OnPropertyChanged(nameof(ShowRightText));
@@ -394,7 +390,7 @@ public sealed class CompareRowViewModel : ObservableObject
     internal void SetSideText(bool leftSide, string text, bool present)
     {
         var currentText = leftSide ? _leftText : _rightText;
-        var currentPresent = leftSide ? _hasLeftLine : _hasRightLine;
+        var currentPresent = leftSide ? HasLeftLine : HasRightLine;
         if (string.Equals(currentText, text, StringComparison.Ordinal) && currentPresent == present)
         {
             return;

@@ -58,7 +58,7 @@ public partial class NodeEditorViewModel
         {
             node.ExecutionError = string.Join(Environment.NewLine, issues.Where(issue => ReferenceEquals(issue.Node, node)).Select(issue => issue.Message));
         }
-        FailedNodes = issues.Where(issue => issue.Node is not null).Select(issue => issue.Node!).Distinct().ToArray();
+        FailedNodes = [.. issues.Where(issue => issue.Node is not null).Select(issue => issue.Node!).Distinct()];
         ExecutionStatus = issues.Count == 0 ? LanguageService.Instance.GetString("Node_Graph_Valid")
             : string.Join(Environment.NewLine, issues.Select(issue => issue.DisplayText));
         if (issues.Count > 0)

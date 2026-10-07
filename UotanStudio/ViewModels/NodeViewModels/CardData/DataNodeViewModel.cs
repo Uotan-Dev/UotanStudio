@@ -58,8 +58,7 @@ public class DataNodeViewModel : FlowNodeViewModel
             Title = "Format",
             PortType = NodePortType.Text,
             InitialValue = "utf8",
-            Choices = new[] { "hex", "base64", "utf8", "text", "string" }
-                .Select(value => new NodePortChoice(value)).ToArray()
+            Choices = [.. new[] { "hex", "base64", "utf8", "text", "string" }.Select(value => new NodePortChoice(value))]
         });
         node.Output.Add(new NodeConnectorViewModel { Title = "Output", PortType = NodePortType.Text });
         return node;
@@ -81,7 +80,7 @@ public class DataNodeViewModel : FlowNodeViewModel
         {
             Title = "Algorithm",
             PortType = NodePortType.Text,
-            Choices = new[] { "md5", "sha1", "sha256", "sha384", "sha512" }.Select(value => new NodePortChoice(value)).ToArray(),
+            Choices = [.. new[] { "md5", "sha1", "sha256", "sha384", "sha512" }.Select(value => new NodePortChoice(value))],
             InitialValue = "sha256"
         });
         node.Output.Add(new NodeConnectorViewModel { Title = "Hash", PortType = NodePortType.Text });

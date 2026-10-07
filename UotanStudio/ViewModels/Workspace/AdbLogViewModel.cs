@@ -131,7 +131,7 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
 
     private void ReapplyFilter()
     {
-        var filtered = new List<AdbLogcatEntry>();
+        List<AdbLogcatEntry> filtered = [];
         foreach (var line in _allLines.Entries)
         {
             if (MatchesFilter(line)) filtered.Add(line);

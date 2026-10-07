@@ -20,7 +20,7 @@ internal static class SizeFormatter
         }
 
         var abs = Math.Abs(bytes);
-        var units = new[] { "B", "KB", "MB", "GB", "TB" };
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
         var unit = 0;
         var value = (double)abs;
         while (value >= 1024 && unit < units.Length - 1)

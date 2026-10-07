@@ -84,7 +84,7 @@ public partial class NodeEditorViewModel
         var connections = Connections.Select(edge => new NodeConnectionViewModel(
             previous.Output.Contains(edge.Source!) ? replacement.Output.Single(port => port.StableId == edge.Source!.StableId) : edge.Source!,
             previous.Input.Contains(edge.Target!) ? replacement.Input.Single(port => port.StableId == edge.Target!.StableId) : edge.Target!)).ToArray();
-        ApplyCompositePlan(new CompositeGraphEditPlan(Nodes.Select(node => ReferenceEquals(node, previous) ? replacement : node).ToArray(),
+        ApplyCompositePlan(new CompositeGraphEditPlan([.. Nodes.Select(node => ReferenceEquals(node, previous) ? replacement : node)],
             connections, replacement));
     }
 

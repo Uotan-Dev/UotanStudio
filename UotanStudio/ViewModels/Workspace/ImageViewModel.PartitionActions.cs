@@ -182,7 +182,7 @@ internal partial class ImageViewModel
         }
 
         var settings = ProjectSettingViewModel.EnsureInstance();
-        var partitions = new List<SuperPartitionInput>();
+        List<SuperPartitionInput> partitions = [];
         foreach (var image in Images.Where(image => image.IsSelected))
         {
             if (image.Format is not ("raw" or "sparse"))
@@ -282,7 +282,7 @@ internal partial class ImageViewModel
             return;
         }
 
-        var entries = new List<(string Partition, string ImagePath)>();
+        List<(string Partition, string ImagePath)> entries = [];
         var selected = clicked is null ? GetSelectedImages() : [clicked];
         foreach (var image in selected)
         {

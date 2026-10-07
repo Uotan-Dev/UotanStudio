@@ -123,7 +123,7 @@ internal sealed class CompareTextSlotModel
     /// One side's real lines with fillers skipped, used when saving the file.
     internal List<string> RealLines(bool leftSide)
     {
-        var lines = new List<string>();
+        List<string> lines = [];
         foreach (var slot in _slots)
         {
             if (leftSide ? slot.HasLeft : slot.HasRight)
@@ -140,7 +140,7 @@ internal sealed class CompareTextSlotModel
     /// "equal".
     internal List<int> HighlightedSlots(bool leftSide)
     {
-        var result = new List<int>();
+        List<int> result = [];
         for (var index = 0; index < _slots.Count; index++)
         {
             var slot = _slots[index];
@@ -287,7 +287,7 @@ internal sealed class CompareTextSlotModel
 
     /// <summary>捕获全部槽状态（撤销点）。 Captures every slot's state (an undo point).</summary>
     internal List<SlotState> CaptureState()
-        => _slots.Select(slot => new SlotState(slot.Left, slot.Right, slot.HasLeft, slot.HasRight)).ToList();
+        => [.. _slots.Select(slot => new SlotState(slot.Left, slot.Right, slot.HasLeft, slot.HasRight))];
 
     /// <summary>用快照恢复槽状态（撤销/重做）。 Restores the slots from a snapshot (undo/redo).</summary>
     internal void RestoreState(IReadOnlyList<SlotState> state)

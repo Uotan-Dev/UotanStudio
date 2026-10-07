@@ -258,9 +258,9 @@ public partial class QualcommImageViewModel : Document
     }
 
     private static IReadOnlyList<QualcommRow> Translate(IReadOnlyList<QualcommReportField> source)
-        => source.Select(static row => new QualcommRow(
+        => [.. source.Select(static row => new QualcommRow(
             (row.Group is null ? "" : row.Group + " / ") + (row.LocalizedName ? Label(row.Name) : row.Name),
-            row.LocalizedValue ? Label(row.Value) : row.Value)).ToArray();
+            row.LocalizedValue ? Label(row.Value) : row.Value))];
 
     private void OnLanguageChanged(object? sender, EventArgs e)
     {

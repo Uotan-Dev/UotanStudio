@@ -25,7 +25,7 @@ public sealed class CompoundCommand : IEditorCommand
     /// </param>
     public CompoundCommand(IEnumerable<IEditorCommand> commands)
     {
-        _commands = commands.ToList();
+        _commands = [.. commands];
     }
 
     /// <summary>

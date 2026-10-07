@@ -125,7 +125,7 @@ public partial class LogEditorViewModel : Document, ILogViewModel
 
     private void ReapplyFilter()
     {
-        var matches = new List<ILogLine>();
+        List<ILogLine> matches = [];
         if (!HasSearchError)
             foreach (var entry in _allEntries)
             {

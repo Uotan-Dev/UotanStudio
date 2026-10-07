@@ -35,7 +35,7 @@ public sealed class NetworkNodeViewModel : FlowNodeViewModel
             PortId = "source",
             PortType = NodePortType.Text,
             InitialValue = "Direct",
-            Choices = new[] { "Direct", "GitHub Mirror" }.Select(item => new NodePortChoice(item)).ToArray()
+            Choices = [.. new[] { "Direct", "GitHub Mirror" }.Select(item => new NodePortChoice(item))]
         });
         node.Input.Add(new NodeConnectorViewModel
         {

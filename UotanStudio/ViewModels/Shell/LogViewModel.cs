@@ -288,7 +288,7 @@ public partial class LogViewModel : ViewModelBase, IDisposable
             return;
         }
         var removed = _allEntries.Take(overflow).ToArray();
-        Entries.Apply(removed.Length, Array.Empty<LogEntryViewModel>());
+        Entries.Apply(removed.Length, []);
         _allEntries.RemoveRange(0, overflow);
     }
 

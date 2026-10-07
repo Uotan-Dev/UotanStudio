@@ -335,7 +335,7 @@ internal partial class ImageViewModel : Tool
 
         var discovered = await Task.Run(() =>
         {
-            var list = new List<(string Relative, long Size, string Format)>();
+            List<(string Relative, long Size, string Format)> list = [];
             foreach (var file in Directory.EnumerateFiles(imagesDir))
             {
                 var kind = ImageInputService.ProbeFormat(file);
@@ -406,7 +406,7 @@ internal partial class ImageViewModel : Tool
 
         var discovered = await Task.Run(() =>
         {
-            var list = new List<(string Name, string Relative)>();
+            List<(string Name, string Relative)> list = [];
             foreach (var dir in Directory.EnumerateDirectories(subProjectRoot))
             {
                 var name = Path.GetFileName(dir);

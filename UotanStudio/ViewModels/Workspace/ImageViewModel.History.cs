@@ -71,8 +71,8 @@ internal partial class ImageViewModel
         {
             Kind = kind,
             Description = description,
-            OutputPaths = outputs.Select(path => path!).ToList(),
-            BackupPaths = backups.Select(path => path!).ToList()
+            OutputPaths = [.. outputs.Select(path => path!)],
+            BackupPaths = [.. backups.Select(path => path!)]
         };
     }
 

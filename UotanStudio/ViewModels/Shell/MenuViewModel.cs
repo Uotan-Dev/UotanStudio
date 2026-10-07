@@ -7,6 +7,8 @@ using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Firmware.Application.Containers;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.VendorFirmware.Workflow;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
@@ -138,7 +140,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void PersistRecentProjects()
     {
-        SettingsPersistenceService.Instance.UpdateRecentProjects(RecentProjects.Select(e => e.Path).ToList());
+        SettingsPersistenceService.Instance.UpdateRecentProjects([.. RecentProjects.Select(e => e.Path)]);
     }
 
     /// <summary>
@@ -233,6 +235,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 await UnpackSelectedPlainImagesAsync(form, images, window, cancellationToken);
             }
 
+            if (form.MergeMyPartitions)
+            {
+                await MergeMyPartitionsIntoSystemAsync(window, cancellationToken);
+            }
+
             await images.RefreshAfterProjectCreationAsync();
             if (!await _projectOps.SaveAsync(saveActiveDocument: false))
                 throw new IOException("Could not save the imported project.");
@@ -249,7 +256,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var outputDirectory = ProjectContextService.Instance.EnsureImagesDirectory();
         var fileName = Path.GetFileName(uri.LocalPath);
         if (string.IsNullOrWhiteSpace(fileName)) fileName = "remote-rom.bin";
-        fileName = string.Concat(fileName.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+        fileName = string.Concat(fileName.Select(ch => PathSearchValues.IsInvalidFileNameChar(ch) ? '_' : ch));
 
         var temp = Path.Combine(Path.GetTempPath(), $"uotan-remote-{Guid.NewGuid():N}-{fileName}");
         try
@@ -371,7 +378,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var extractedPaths = new List<string>();
+        List<string> extractedPaths = [];
         try
         {
             if (form.ContainerKind == ContainerKind.Zip && form.SelectedZipMembers.Length > 0)
@@ -416,6 +423,87 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         {
             await UnpackWithCreationProgressAsync(images, extractedEntries, true, window);
         }
+    }
+
+    /// <summary>
+    /// <para>创建流程的合并 my_ 分区步骤：发现子项目根下解包出的 system 与 my_* 目录树，逐个把
+    /// my_* 树并入 system 树并对分区自带的 file_contexts/fs_config 改基，全部成功后移除已合并的
+    /// my_* 树、images/ 内同名镜像与 .uotan/metadata 元数据。system 或 my_* 树缺失时记录日志并跳过；
+    /// 只并入与 system 树同槽位的 my_* 树，其它槽位的目录树保持原样。</para>
+    /// Merge step of the creation flow: discovers the unpacked system and my_* trees under the
+    /// sub-project root, merges each my_* tree into the system tree with its own file_contexts/fs_config
+    /// rebased, and after all merges succeed removes the merged trees, their images/ files and the
+    /// .uotan/metadata entries. A missing system or my_* tree is logged and skipped, and only my_* trees
+    /// of the system tree's own slot are merged — a tree of another slot is left in place.
+    /// </summary>
+    /// <param name="window"><para>显示进度的新建项目窗口。</para>The new-project window showing progress.</param>
+    /// <param name="cancellationToken"><para>取消合并；取消时不会删除任何文件。</para>Cancels the merge; no files are removed on cancellation.</param>
+    /// <exception cref="IOException"><para>子项目根目录缺失或某个分区合并失败。</para>The sub-project root is missing or a partition merge failed.</exception>
+    private async Task MergeMyPartitionsIntoSystemAsync(NewProjectWindow window, CancellationToken cancellationToken)
+    {
+        var project = ProjectContextService.Instance.ActiveSubProject;
+        var root = project?.RootPath;
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            throw new IOException("The active sub-project root is missing; my-partition merge aborted.");
+
+        var (systemTree, myTrees) = MyPartitionMergePlanner.DiscoverTrees(root);
+        if (systemTree is null || myTrees.Count == 0)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Images",
+                "My-partition merge skipped: no unpacked system or my_* tree was found in the sub-project.");
+            return;
+        }
+
+        var service = new MyPartitionMergeService();
+        var merged = new List<string>();
+        var imagesRoot = Path.Combine(root, "images");
+        var systemPartition = Path.GetFileName(Path.TrimEndingDirectorySeparator(systemTree));
+        try
+        {
+            var done = 0;
+            foreach (var tree in myTrees)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var partition = Path.GetFileName(Path.TrimEndingDirectorySeparator(tree));
+                window.ResetProgressStats();
+                window.ReportProgress(
+                    string.Format(LanguageService.Instance.GetString("NewProject_MergingMyPartitions"), partition),
+                    done * 100.0 / myTrees.Count);
+                var result = await service.MergeAsync(tree, systemTree, configDirectory: null,
+                    new MyPartitionMergeOptions
+                    {
+                        SkipMissingSidecars = true,
+                        MyMetadataDirectory = RepackMetadata.ResolveMetadataDirectory(imagesRoot, root, partition),
+                        SystemMetadataDirectory = RepackMetadata.ResolveMetadataDirectory(imagesRoot, root, systemPartition),
+                        SystemPartitionName = systemPartition,
+                    }, cancellationToken: cancellationToken);
+                merged.Add(partition);
+                done++;
+                LogService.Instance.Write(LogLevel.Info, "Images",
+                    $"Merged {partition} into system: {result.MovedEntries} entries, file_contexts {(result.FileContextsRebased ? "rebased" : "skipped")}, fs_config {(result.FsConfigRebased ? "rebased" : "skipped")}, preservation {(result.PreservationFolded ? $"folded ({result.FoldedInodeEntries} inodes)" : "manifest not found")}.");
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Images",
+                $"My-partition merge failed after {merged.Count} partition(s): {ex.Message}");
+            throw;
+        }
+
+        window.ResetProgressStats();
+        window.ReportProgress(LanguageService.Instance.GetString("NewProject_CleaningMergedPartitions"), 100);
+        foreach (var tree in myTrees)
+        {
+            var partition = Path.GetFileName(Path.TrimEndingDirectorySeparator(tree));
+            Directory.Delete(tree, recursive: true);
+            foreach (var image in MyPartitionMergePlanner.FindPartitionImageFiles(imagesRoot, partition))
+                File.Delete(image);
+            var metadata = RepackMetadata.ResolveMetadataDirectory(imagesRoot, root, partition);
+            if (Directory.Exists(metadata))
+                Directory.Delete(metadata, recursive: true);
+        }
+        LogService.Instance.Write(LogLevel.Info, "Images",
+            $"Removed {myTrees.Count} merged my-partition tree(s) with their images and metadata.");
     }
 
     /// <summary><para>在资源管理器选定目录中新建文件夹。</para>Creates a folder in the explorer directory.</summary>
@@ -717,6 +805,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 await UnpackSelectedPlainImagesAsync(form, images, window, cancellationToken);
             }
 
+            if (form.MergeMyPartitions)
+            {
+                await MergeMyPartitionsIntoSystemAsync(window, cancellationToken);
+            }
+
             await images.RefreshAfterProjectCreationAsync();
             if (!await _projectOps.SaveAsync(saveActiveDocument: false))
                 throw new IOException("Could not save the imported project.");
@@ -988,7 +1081,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        await ImageViewModel.EnsureInstance().ImportAsync(files.Select(f => f.Path.LocalPath).ToArray());
+        await ImageViewModel.EnsureInstance().ImportAsync([.. files.Select(f => f.Path.LocalPath)]);
     }
 
     /// <summary>
