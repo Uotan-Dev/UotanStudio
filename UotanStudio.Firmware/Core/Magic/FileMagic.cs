@@ -118,5 +118,5 @@ public static class FileMagic
     /// <para>至少给出四个字节且以 <c>0x7f 'E' 'L' 'F'</c> 开头时返回 <see langword="true"/>；长度不足返回 <see langword="false"/>。</para>
     /// </returns>
     public static bool IsElf(ReadOnlySpan<byte> data) =>
-        data.Length >= 4 && data[0] == 0x7f && data[1] == (byte)'E' && data[2] == (byte)'L' && data[3] == (byte)'F';
+        data.StartsWith("\u007fELF"u8);
 }

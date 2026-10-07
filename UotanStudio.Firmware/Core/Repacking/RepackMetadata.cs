@@ -226,6 +226,25 @@ public sealed class RepackMetadata
     }
 
     /// <summary>
+    /// Removes a trailing <c>_&lt;letter&gt;</c> A/B slot suffix from a partition name. Slot letters exist only in
+    /// the partition table, so <c>system_a</c> and <c>my_product_a</c> map to the same mount paths their
+    /// single-slot counterparts do.
+    /// <para>去除分区名结尾的 <c>_&lt;字母&gt;</c> A/B 槽位后缀。槽位字母只存在于分区表里，因此 <c>system_a</c> 与
+    /// <c>my_product_a</c> 的挂载路径和它们的单槽同名分区一致。</para>
+    /// </summary>
+    /// <param name="partitionName">
+    /// Partition name, with or without a slot suffix. <para>分区名，可带或不带槽位后缀。</para>
+    /// </param>
+    /// <returns>
+    /// The name without its slot suffix, or the unchanged input when it carries none.
+    /// <para>去除槽位后缀后的名称；不含槽位后缀时原样返回。</para>
+    /// </returns>
+    public static string StripSlotSuffix(string partitionName)
+        => partitionName.Length > 2 && partitionName[^2] == '_' && char.IsAsciiLetter(partitionName[^1])
+            ? partitionName[..^2]
+            : partitionName;
+
+    /// <summary>
     /// Resolves the consolidated metadata directory for a given extraction output path and project root.
     /// Returns <c>{projectRoot}/.uotan/metadata/{partitionName}</c>.
     /// <para>为给定解包输出路径和项目根目录解析统一元数据目录。返回 <c>{projectRoot}/.uotan/metadata/{partitionName}</c>。</para>

@@ -1,3 +1,4 @@
+using System.Buffers;
 using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.Core;
@@ -8,10 +9,12 @@ namespace UotanStudio.Firmware.Core;
 /// </summary>
 internal static class FileExtraction
 {
+    private static readonly SearchValues<char> ForbiddenEntryNameChars = SearchValues.Create(['\0', ':']);
+
     internal static string ResolvePath(string directory, string entryName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
-        if (string.IsNullOrWhiteSpace(entryName) || entryName.IndexOfAny(['\0', ':']) >= 0)
+        if (string.IsNullOrWhiteSpace(entryName) || entryName.AsSpan().ContainsAny(ForbiddenEntryNameChars))
             throw new InvalidDataException("The archive entry name is invalid.");
 
         var relative = entryName.Replace('\\', '/');

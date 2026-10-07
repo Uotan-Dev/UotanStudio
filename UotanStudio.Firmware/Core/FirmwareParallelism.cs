@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 
@@ -34,23 +35,84 @@ public static partial class FirmwareParallelism
         }
     }
 
+    /// <summary>Per-worker memory budget used by <see cref="BudgetedWorkers"/> to cap worker counts.
+    /// <para><see cref="BudgetedWorkers"/> 用来限制工作者数量的每工作者内存预算。</para></summary>
+    internal const long WorkerMemoryBudgetBytes = 128L * 1024 * 1024;
+
     internal static void ForEach<T>(IReadOnlyList<T> items, Action<T> action, int? workers = null)
+        => ForEach(items, (item, _) => action(item), workers);
+
+    /// <summary>Runs one action per item with its index, bounded by <see cref="Workers"/>.
+    /// <para>按不超过 <see cref="Workers"/> 的并发度，为每个条目连同其索引执行一次操作。</para></summary>
+    /// <remarks>
+    /// An exception thrown by the body surfaces as its first occurrence in the flattened aggregate, with its
+    /// original type and stack, matching the single-parameter overload.
+    /// <para>操作体抛出的异常以扁平化聚合中的首次出现为准，保留原始类型与堆栈，与单参数重载一致。</para>
+    /// </remarks>
+    /// <param name="items">Items visited exactly once; the index passed to the action is the item's position.
+    /// <para>只访问一次的条目集合；传给操作的索引即条目在集合中的位置。</para></param>
+    /// <param name="action">Action receiving the item and its index. <para>接收条目及其索引的操作。</para></param>
+    /// <param name="workers">Optional worker count override. <para>可选的工作者数量覆盖值。</para></param>
+    internal static void ForEach<T>(IReadOnlyList<T> items, Action<T, int> action, int? workers = null)
     {
         var degree = Math.Min(items.Count, workers ?? Workers);
         if (degree <= 1)
         {
-            foreach (var item in items) action(item);
+            for (var i = 0; i < items.Count; i++)
+            {
+                action(items[i], i);
+            }
             return;
         }
         try
         {
-            Parallel.For(0, items.Count, new ParallelOptions { MaxDegreeOfParallelism = degree }, i => action(items[i]));
+            Parallel.For(0, items.Count, new ParallelOptions { MaxDegreeOfParallelism = degree }, i => action(items[i], i));
         }
         catch (AggregateException ex)
         {
             ExceptionDispatchInfo.Capture(ex.Flatten().InnerExceptions[0]).Throw();
             throw;
         }
+    }
+
+    /// <summary>Projects every item into an array slot addressed by its own index, bounded by <see cref="Workers"/>.
+    /// <para>按不超过 <see cref="Workers"/> 的并发度把每个条目投影到其自身索引对应的数组槽位。</para></summary>
+    /// <param name="items">Items projected exactly once. <para>只投影一次的条目集合。</para></param>
+    /// <param name="selector">Projection receiving the item and its index; results land at that index.
+    /// <para>接收条目及其索引的投影函数；结果写入该索引对应的槽位。</para></param>
+    /// <param name="workers">Optional worker count override. <para>可选的工作者数量覆盖值。</para></param>
+    /// <returns>An array whose element at each index is that index's projection, in item order.
+    /// <para>数组，其每个索引位置的元素即该索引条目的投影，顺序与条目集合一致。</para></returns>
+    internal static TOut[] SelectArray<TIn, TOut>(IReadOnlyList<TIn> items, Func<TIn, int, TOut> selector, int? workers = null)
+    {
+        var results = new TOut[items.Count];
+        ForEach(items, (item, index) => results[index] = selector(item, index), workers);
+        return results;
+    }
+
+    /// <summary>
+    /// Caps a requested worker count so the per-worker buffers fit one aggregate memory budget, then
+    /// clamps it to <c>1</c>..<see cref="MaximumWorkers"/>.
+    /// <para>按每工作者缓冲总量不超过单一内存预算来限制请求的工作者数量，并把它钳制到
+    /// <c>1</c>..<see cref="MaximumWorkers"/>。</para>
+    /// </summary>
+    /// <param name="bytesPerWorker">Worst-case bytes held by one worker; must be at least <c>1</c>.
+    /// <para>单个工作者最坏情况下占用的字节数，至少为 <c>1</c>。</para></param>
+    /// <param name="budgetBytes">Total bytes all workers may hold together; must be at least <c>1</c>.
+    /// <para>所有工作者合计可占用的字节上限，至少为 <c>1</c>。</para></param>
+    /// <param name="requestedWorkers">Worker count the caller would like to use. <para>调用方期望使用的工作者数量。</para></param>
+    /// <returns>The worker count to run with, never below <c>1</c> and never above <see cref="MaximumWorkers"/>.
+    /// <para>实际使用的工作者数量，不小于 <c>1</c>，也不大于 <see cref="MaximumWorkers"/>。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="bytesPerWorker"/> or <paramref name="budgetBytes"/> is below <c>1</c>.
+    /// <para><paramref name="bytesPerWorker"/> 或 <paramref name="budgetBytes"/> 小于 <c>1</c>。</para>
+    /// </exception>
+    internal static int BudgetedWorkers(long bytesPerWorker, long budgetBytes, int requestedWorkers)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(bytesPerWorker, 1L);
+        ArgumentOutOfRangeException.ThrowIfLessThan(budgetBytes, 1L);
+        var affordable = (int)Math.Clamp(budgetBytes / bytesPerWorker, 1L, MaximumWorkers);
+        return Math.Clamp(Math.Min(Math.Max(requestedWorkers, 1), affordable), 1, MaximumWorkers);
     }
 
     internal static int NormalizeWorkerCount(int workerCount)
@@ -82,10 +144,14 @@ public static partial class FirmwareParallelism
         if (length == 0) return 0;
 
         var buffer = new byte[length];
-        fixed (byte* pointer = buffer)
+        // Pointers inside a fixed block require an unsafe context before C# 15.
+        unsafe
         {
-            if (!GetLogicalProcessorInformationEx(LogicalProcessorRelationship.ProcessorCore, (nint)pointer, ref length))
-                return 0;
+            fixed (byte* pointer = buffer)
+            {
+                if (!GetLogicalProcessorInformationEx(LogicalProcessorRelationship.ProcessorCore, (nint)pointer, ref length))
+                    return 0;
+            }
         }
 
         var count = 0;
@@ -93,8 +159,8 @@ public static partial class FirmwareParallelism
         while (offset < length)
         {
             if (length - offset < 8) return 0;
-            var relationship = (LogicalProcessorRelationship)BitConverter.ToInt32(buffer, offset);
-            var recordLength = BitConverter.ToInt32(buffer, offset + 4);
+            var relationship = (LogicalProcessorRelationship)BinaryPrimitives.ReadInt32LittleEndian(buffer.AsSpan(offset));
+            var recordLength = BinaryPrimitives.ReadInt32LittleEndian(buffer.AsSpan(offset + 4));
             if (recordLength < 8 || recordLength > length - offset) return 0;
             if (relationship == LogicalProcessorRelationship.ProcessorCore) count++;
             offset += recordLength;

@@ -11,20 +11,23 @@ namespace UotanStudio.Firmware.Core.Text;
 /// </summary>
 internal static class NulText
 {
-    /// <summary>
-    /// Decodes <paramref name="bytes"/> with <paramref name="encoding"/> and trims trailing NULs.
-    /// <para>用 <paramref name="encoding"/> 解码 <paramref name="bytes"/> 并去除尾部 NUL。</para>
-    /// </summary>
-    internal static string GetStringTrimNul(this Encoding encoding, ReadOnlySpan<byte> bytes)
-        => encoding.GetString(bytes).TrimEnd('\0');
+    extension(Encoding encoding)
+    {
+        /// <summary>
+        /// Decodes <paramref name="bytes"/> with the receiver encoding and trims trailing NULs.
+        /// <para>用接收者编码解码 <paramref name="bytes"/> 并去除尾部 NUL。</para>
+        /// </summary>
+        internal string GetStringTrimNul(ReadOnlySpan<byte> bytes)
+            => encoding.GetString(bytes).TrimEnd('\0');
 
-    /// <summary>
-    /// Decodes the <paramref name="count"/> bytes of <paramref name="buffer"/> starting at
-    /// <paramref name="index"/> and trims trailing NULs.
-    /// <para>解码 <paramref name="buffer"/> 中自 <paramref name="index"/> 起的 <paramref name="count"/> 字节并去除尾部 NUL。</para>
-    /// </summary>
-    internal static string GetStringTrimNul(this Encoding encoding, byte[] buffer, int index, int count)
-        => encoding.GetString(buffer, index, count).TrimEnd('\0');
+        /// <summary>
+        /// Decodes the <paramref name="count"/> bytes of <paramref name="buffer"/> starting at
+        /// <paramref name="index"/> and trims trailing NULs.
+        /// <para>解码 <paramref name="buffer"/> 中自 <paramref name="index"/> 起的 <paramref name="count"/> 字节并去除尾部 NUL。</para>
+        /// </summary>
+        internal string GetStringTrimNul(byte[] buffer, int index, int count)
+            => encoding.GetString(buffer, index, count).TrimEnd('\0');
+    }
 
     /// <summary>
     /// Decodes the bytes before the first NUL of <paramref name="bytes"/>, or the whole span when it
