@@ -79,7 +79,6 @@ internal partial class ImageViewModel
             _hideReportCts = null;
             _meter.Reset();
             ProgressStats = string.Empty;
-            EquivalenceReport = string.Empty;
             ProgressPercent = -1;
             return;
         }

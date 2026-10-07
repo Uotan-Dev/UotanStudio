@@ -17,10 +17,6 @@ internal static class FirmwareEquivalencePresenter
     /// <summary>Resource key of the report heading carrying the entry name. <para>带条目名的报告标题资源键。</para></summary>
     internal const string HeaderKey = "Image_EquivalenceReportHeader";
 
-    /// <summary>Resource key of the note pointing at the log when only the last entry's report stays visible.
-    /// <para>仅保留最后一项报告的可见文本时，指向日志的提示语资源键。</para></summary>
-    internal const string MoreInLogKey = "Image_EquivalenceMoreInLog";
-
     /// <summary>
     /// <para>返回等价报告标题（含条目名）。</para>
     /// Returns the equivalence report heading for one image entry.
@@ -63,30 +59,6 @@ internal static class FirmwareEquivalencePresenter
         FirmwareEquivalenceState.NotEquivalent => "Image_EquivalenceStateNotEquivalent",
         _ => "Image_EquivalenceStateNotEvaluated",
     };
-
-    /// <summary>
-    /// <para>按现有结果区的呈现习惯收敛批量构建的报告：只显示最后一项镜像的四维度报告，其余项数写进一条
-    /// 指向统一日志的本地化提示，避免底部状态区被无限拉长。</para>
-    /// Collapses the reports of a batch build the way the existing result surface reads: only the last image entry
-    /// stays visible with its four dimension lines, and the remaining entry count is stated in one localized note
-    /// pointing at the unified log, so the footer never grows without bound.
-    /// </summary>
-    /// <param name="perEntryBlocks"><para>按构建顺序排列的每条目报告文本块。</para>Per-entry report blocks in build order.</param>
-    /// <param name="getString"><para>本地化取值委托。</para>The localized string lookup.</param>
-    /// <returns><para>可见报告文本；无条目时为空字符串。</para>The visible report text, empty when there is no entry.</returns>
-    internal static string FormatVisibleReport(IReadOnlyList<string> perEntryBlocks, Func<string, string> getString)
-    {
-        ArgumentNullException.ThrowIfNull(perEntryBlocks);
-        ArgumentNullException.ThrowIfNull(getString);
-        if (perEntryBlocks.Count == 0)
-        {
-            return string.Empty;
-        }
-        var visible = perEntryBlocks[^1];
-        return perEntryBlocks.Count == 1
-            ? visible
-            : visible + Environment.NewLine + string.Format(getString(MoreInLogKey), perEntryBlocks.Count - 1);
-    }
 
     private static string FormatLine(Func<string, string> getString, string dimensionKey, FirmwareEquivalenceState state)
         => string.Format(getString(LineKey), getString(dimensionKey), getString(StateResourceKey(state)));

@@ -209,11 +209,6 @@
                                FontSize="11"
                                Margin="0,2,0,0"
                                TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding EquivalenceReport}"
-                               FontSize="11"
-                               TextWrapping="Wrap"
-                               Opacity="0.78"
-                               IsVisible="{Binding HasEquivalenceReport}" />
                     <ProgressBar Minimum="0"
                                  Maximum="100"
                                  FontSize="12"

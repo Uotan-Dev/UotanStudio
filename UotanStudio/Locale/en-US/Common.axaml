@@ -513,7 +513,6 @@
     <x:String x:Key="Image_EquivalenceStateEquivalent">Equivalent</x:String>
     <x:String x:Key="Image_EquivalenceStateNotEquivalent">Not equivalent</x:String>
     <x:String x:Key="Image_EquivalenceStateNotEvaluated">Not evaluated by the library</x:String>
-    <x:String x:Key="Image_EquivalenceMoreInLog">Equivalence of {0} earlier image(s) is recorded in the log.</x:String>
     <x:String x:Key="Dialog_UnsavedTitle">Unsaved Changes</x:String>
     <x:String x:Key="Dialog_UnsavedMessage">Save changes to '{0}' before closing?</x:String>
     <x:String x:Key="Dialog_DiscardChanges">Discard</x:String>

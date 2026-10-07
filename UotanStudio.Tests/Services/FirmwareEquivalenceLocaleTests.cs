@@ -26,7 +26,6 @@ public sealed class FirmwareEquivalenceLocaleTests(NodeEditorUiFixture fixture)
         "Image_EquivalenceStateNotEvaluated",
         FirmwareEquivalencePresenter.LineKey,
         FirmwareEquivalencePresenter.HeaderKey,
-        FirmwareEquivalencePresenter.MoreInLogKey,
     ];
 
     private static FilesystemEquivalenceReport MixedReport() => FilesystemEquivalenceReport.FromMetadata(
@@ -123,21 +122,6 @@ public sealed class FirmwareEquivalenceLocaleTests(NodeEditorUiFixture fixture)
                     Assert.All(chineseLines, line => Assert.DoesNotMatch("[A-Za-z]", line));
                     Assert.Equal("产出镜像的等价性：system.img",
                         FirmwareEquivalencePresenter.FormatHeader(language.GetString, "system.img"));
-
-                    language.ApplyLanguage("en-US");
-                    Assert.Equal(string.Join(Environment.NewLine,
-                            "third",
-                            "Equivalence of 2 earlier image(s) is recorded in the log."),
-                        FirmwareEquivalencePresenter.FormatVisibleReport(["first", "second", "third"], language.GetString));
-
-                    language.ApplyLanguage("zh-CN");
-                    var chineseVisible = FirmwareEquivalencePresenter.FormatVisibleReport(
-                        ["第三项", "第四项"], language.GetString);
-                    Assert.Equal(string.Join(Environment.NewLine,
-                            "第四项",
-                            "另有 1 项镜像的等价性已记录在日志中。"),
-                        chineseVisible);
-                    Assert.DoesNotMatch("[A-Za-z]", chineseVisible.Split(Environment.NewLine)[1]);
                 }
                 finally
                 {

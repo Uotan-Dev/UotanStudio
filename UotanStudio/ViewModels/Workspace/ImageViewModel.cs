@@ -200,23 +200,6 @@ internal partial class ImageViewModel : Tool
     private string _statusText = string.Empty;
 
     /// <summary>
-    /// <para>获取或设置最近一次镜像构建的等价性报告文本：字节、结构、内容、容量四个维度各自成行，
-    /// 未被评估的维度如实显示“未评估”，不会把库侧未执行的检查说成已通过。</para>
-    /// Gets or sets the equivalence report of the latest image builds. Byte, structure, content and capacity
-    /// each keep their own line, and a dimension the library never evaluated reads as "not evaluated" instead of
-    /// presenting an un-run verification as passed.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasEquivalenceReport))]
-    private string _equivalenceReport = string.Empty;
-
-    /// <summary>
-    /// <para>获取当前是否有可显示的等价性报告。</para>
-    /// Gets whether an equivalence report is currently available to display.
-    /// </summary>
-    public bool HasEquivalenceReport => EquivalenceReport.Length > 0;
-
-    /// <summary>
     /// <para>获取或设置当前批量刷入操作的完成百分比。</para>
     /// Gets or sets the completion percentage of the current batch-flash operation.
     /// </summary>

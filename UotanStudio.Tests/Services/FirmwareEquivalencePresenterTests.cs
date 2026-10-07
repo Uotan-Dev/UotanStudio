@@ -16,8 +16,6 @@ public sealed class FirmwareEquivalencePresenterTests
     {
         [FirmwareEquivalencePresenter.LineKey] = "{0}: {1}",
         [FirmwareEquivalencePresenter.HeaderKey] = "Equivalence of the built image: {0}",
-        [FirmwareEquivalencePresenter.MoreInLogKey] = "Equivalence of {0} earlier image(s) is recorded in the log.",
-        [FirmwareEquivalencePresenter.MoreInLogKey] = "Equivalence of {0} earlier image(s) is recorded in the log.",
         ["Image_EquivalenceDimensionByte"] = "Byte identity",
         ["Image_EquivalenceDimensionStructure"] = "Inode structure",
         ["Image_EquivalenceDimensionContent"] = "File content",
@@ -116,26 +114,4 @@ public sealed class FirmwareEquivalencePresenterTests
     [Fact]
     public void FormatLines_MissingReport_ThrowsInsteadOfRenderingAnEmptyClaim()
         => Assert.Throws<ArgumentNullException>(() => FirmwareEquivalencePresenter.FormatLines(null!, Lookup));
-
-    [Fact]
-    public void FormatVisibleReport_NoEntries_ReturnsEmptyText()
-        => Assert.Equal(string.Empty, FirmwareEquivalencePresenter.FormatVisibleReport([], Lookup));
-
-    [Fact]
-    public void FormatVisibleReport_SingleEntry_KeepsTheWholeReportVisible()
-        => Assert.Equal("system.img report",
-            FirmwareEquivalencePresenter.FormatVisibleReport(["system.img report"], Lookup));
-
-    [Fact]
-    public void FormatVisibleReport_ManyEntries_KeepsOnlyTheLastReportAndPointsAtTheLog()
-    {
-        var visible = FirmwareEquivalencePresenter.FormatVisibleReport(
-            ["first report", "second report", "third report"], Lookup);
-
-        Assert.Equal(
-            string.Join(Environment.NewLine,
-                "third report",
-                "Equivalence of 2 earlier image(s) is recorded in the log."),
-            visible);
-    }
 }

@@ -519,7 +519,6 @@
     <x:String x:Key="Image_EquivalenceStateEquivalent">等价</x:String>
     <x:String x:Key="Image_EquivalenceStateNotEquivalent">不等价</x:String>
     <x:String x:Key="Image_EquivalenceStateNotEvaluated">库未执行评估</x:String>
-    <x:String x:Key="Image_EquivalenceMoreInLog">另有 {0} 项镜像的等价性已记录在日志中。</x:String>
     <x:String x:Key="ImageView_PackMode">打包</x:String>
     <x:String x:Key="ImageView_OutputMode">输出</x:String>
     <x:String x:Key="ImageView_Processing">正在处理…</x:String>
