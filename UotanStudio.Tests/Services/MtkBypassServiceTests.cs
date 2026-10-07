@@ -12,7 +12,7 @@ namespace UotanStudio.Tests.Services;
 
 public sealed class MtkBypassServiceTests
 {
-    private const int IdentityWriteCount = 7;
+    private const int IdentityWriteCount = 11;
     private const ushort MultiFamilyChip = 0x0766;
     private const ushort SolePreloaderChip = 0x0571;
     private const ushort UndocumentedChip = 0x0001;
@@ -157,7 +157,12 @@ public sealed class MtkBypassServiceTests
         using var session = new MtkSession(new UsbDeviceTransport(device));
         await session.InitializeAsync(TestContext.Current.CancellationToken);
         MtkKamakiriRunnerTests.EnqueueKamakiriResponses(pipe, PatchedPayloadLength);
-        EnqueueIdentity(pipe, MultiFamilyChip, 0x00000000);
+        pipe.Enqueue([
+            0x5F, 0xF5, 0xAF, 0xFA,
+            0xFD, (byte)(MultiFamilyChip >> 8), (byte)(MultiFamilyChip & 0xFF), 0, 0,
+            0xFC, 0x8A, 0, 0xCA, 1, 0, 2, 0, 0,
+            0xD8, 0, 0, 0, 0, 0, 0
+        ]);
         var stages = new List<FlashProgress>();
         var progress = new ProgressCollector(stages);
 
@@ -318,10 +323,6 @@ public sealed class MtkBypassServiceTests
         Assert.Contains("exploit bypass subsystem stays closed", error.Message);
     }
 
-    [Fact(Skip = "Requires a physical MTK device in Boot ROM mode; set UOTAN_TEST_MTK_USB_ID to run read-only identity probing.")]
-    public async Task RunAsync_PhysicalBootRomEndpoint_ReportsChipTableIdentityWithoutUploading() =>
-        await Task.CompletedTask;
-
     private static MtkBypassRequest AuthorisedRequest(MtkExploitFamily? family,
         MtkExploitPayloadSource payload = MtkExploitPayloadSource.StageOnePatcher) => new()
         {
@@ -332,7 +333,9 @@ public sealed class MtkBypassServiceTests
         };
 
     private static void EnqueueIdentity(ScriptedCommTransport transport, ushort hardwareCode,
-        uint targetConfiguration) => transport.Enqueue([
+        uint targetConfiguration)
+    {
+        transport.Enqueue([
             0x5F, 0xF5, 0xAF, 0xFA,
             0xFD, (byte)(hardwareCode >> 8), (byte)hardwareCode, 0, 0,
             0xFC, 0x8A, 0, 0xCA, 1, 0, 2, 0, 0,
@@ -341,6 +344,8 @@ public sealed class MtkBypassServiceTests
             (byte)(targetConfiguration >> 8), (byte)targetConfiguration,
             0, 0,
         ]);
+        transport.Enqueue([0, 0, 0, 0]);
+    }
 
     private const uint BlacklistOffset = 0x40;
 

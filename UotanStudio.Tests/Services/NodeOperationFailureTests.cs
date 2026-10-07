@@ -1,7 +1,5 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Security;
 using UotanStudio.Firmware.Archive;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
@@ -149,7 +147,7 @@ public sealed class NodeOperationFailureTests
         try
         {
             using var rsa = RSA.Create(2048);
-            var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+            var privateKey = rsa;
             var templatePath = Path.Combine(directory, "template.img");
             var signedPath = Path.Combine(directory, "signed.img");
             var template = new byte[256];

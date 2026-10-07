@@ -77,7 +77,7 @@ public sealed class DeliveryOutputEquivalenceTests : IDisposable
         return stage;
     }
 
-    private static DeliveryPlan Plan(string output, params DeliveryFile[] files)
+    private static DeliveryPlan Plan(string output, params ReadOnlySpan<DeliveryFile> files)
         => new() { Files = [.. files], Txt = false, OutputDirectory = output };
 
     private string OutputPath(string name) => Path.Combine(_root, name, "output");

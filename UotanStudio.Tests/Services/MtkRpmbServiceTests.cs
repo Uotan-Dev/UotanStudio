@@ -345,10 +345,6 @@ public sealed class MtkRpmbServiceTests
         Assert.Contains("read-only RPMB captures", error.Message);
     }
 
-    [Fact(Skip = "Requires physical MTK storage with an RPMB area; set UOTAN_TEST_MTK_USB_ID to run a bounded read-only frame capture.")]
-    public async Task CaptureAsync_PhysicalRpmbArea_ReportsFramesWithoutWriting() =>
-        await Task.CompletedTask;
-
     private static byte[] Frame(byte fill) => Enumerable.Repeat(fill, FrameLength).ToArray();
 
     private sealed class ProgressCollector(List<FlashProgress> stages) : IProgress<FlashProgress>

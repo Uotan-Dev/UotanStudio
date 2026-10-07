@@ -37,8 +37,8 @@ public sealed class VisualPluginBundleTests
         await VisualPluginBundle.CopyAssetAsync(loaded.Graph.Nodes[0].CompositePackage!, "resource", first, token);
         await VisualPluginBundle.CopyAssetAsync(loaded.Graph.Nodes[1].CompositePackage!, "resource", second, token);
 
-        Assert.Equal("first bytes", System.Text.Encoding.UTF8.GetString(first.ToArray()));
-        Assert.Equal("different bytes", System.Text.Encoding.UTF8.GetString(second.ToArray()));
+        Assert.Equal("first bytes", System.Text.Encoding.UTF8.GetString(first.GetBuffer(), 0, (int)first.Length));
+        Assert.Equal("different bytes", System.Text.Encoding.UTF8.GetString(second.GetBuffer(), 0, (int)second.Length));
         using (var archive = ZipFile.OpenRead(path))
         {
             Assert.Equal(3, archive.Entries.Count);

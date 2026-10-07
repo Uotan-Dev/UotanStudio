@@ -145,7 +145,7 @@ public sealed class HeadlessControllerGatewayTests
                 new Source(Server.Source, endpoints.Where(endpoint => endpoint.Source == Server.Source).ToArray())
             ], opener), () => false);
 
-    private static DeviceSnapshot Snapshot(params DeviceEndpoint[] endpoints)
+    private static DeviceSnapshot Snapshot(params ReadOnlySpan<DeviceEndpoint> endpoints)
         => new(1, ImmutableArray.Create(endpoints));
 
     private static DeviceEndpoint OtherUsb()

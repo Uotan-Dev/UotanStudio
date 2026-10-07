@@ -170,7 +170,7 @@ public sealed class RemoteRomServiceTests
         Assert.Equal(existing, await File.ReadAllBytesAsync(Path.Combine(output, "system.img"), TestContext.Current.CancellationToken));
     }
 
-    private static byte[] BuildIncrementalPayload(TempDirectory temp, params (string Name, string Source, byte[] Target)[] partitions)
+    private static byte[] BuildIncrementalPayload(TempDirectory temp, params ReadOnlySpan<(string Name, string Source, byte[] Target)> partitions)
     {
         var payloadPath = Path.Combine(temp.Path, $"payload-{Guid.NewGuid():N}.bin");
         using (var builder = new PayloadBuilder().WithBlockSize(16))
@@ -188,7 +188,7 @@ public sealed class RemoteRomServiceTests
     private static byte[] CreateImage(byte seed)
         => Enumerable.Range(0, 16 * 12).Select(index => (byte)(seed + index)).ToArray();
 
-    private static byte[] ChangeBlocks(byte[] source, params int[] blocks)
+    private static byte[] ChangeBlocks(byte[] source, params ReadOnlySpan<int> blocks)
     {
         var target = source.ToArray();
         foreach (var block in blocks)

@@ -271,6 +271,111 @@ public sealed class MtkPreloaderServiceTests
         Assert.Equal(MtkSessionState.Bootloader, session.State);
     }
 
+    [Fact]
+    public async Task JumpToBootLoaderAsync_NotConfirmed_SendsZeroDeviceBytes()
+    {
+        using var transport = new ScriptedCommTransport();
+        using var session = await CreatePreloaderSessionAsync(transport);
+        var before = transport.Writes.Count;
+        var reads = transport.ReadCount;
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => MtkPreloaderService.JumpToBootLoaderAsync(
+            session, confirmed: false, TestContext.Current.CancellationToken));
+
+        Assert.Equal(before, transport.Writes.Count);
+        Assert.Equal(reads, transport.ReadCount);
+        Assert.Equal(MtkSessionState.Bootloader, session.State);
+    }
+
+    [Fact]
+    public async Task JumpToBootLoaderAsync_Confirmed_DrivesJumpThroughSession()
+    {
+        using var transport = new ScriptedCommTransport();
+        using var session = await CreatePreloaderSessionAsync(transport);
+        transport.Enqueue([0xD6]);
+        transport.Enqueue([0x00, 0x00]);
+        transport.Enqueue([0x00, 0x00]);
+
+        await MtkPreloaderService.JumpToBootLoaderAsync(session, confirmed: true,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(MtkSessionState.Bootloader, session.State);
+    }
+
+    [Fact]
+    public async Task DumpBromAsync_SubWindow_PublishesByteExactFileAndRemovesStaging()
+    {
+        using var transport = new ScriptedCommTransport();
+        using var session = await CreatePreloaderSessionAsync(transport);
+        var expected = new byte[0x40];
+        for (var word = 0; word < 0x10; word++)
+        {
+            var value = (uint)(0x0102_0304 + word * 0x0101_0101);
+            EnqueuePreloaderRead(transport, PreloaderRead32, (uint)(word * 4), 1, BigEndian(value));
+            BinaryPrimitives.WriteUInt32LittleEndian(expected.AsSpan(word * 4), value);
+        }
+
+        using var directory = new TempDirectory();
+        var destination = Path.Combine(directory.Path, "brom.bin");
+        var reports = new List<FlashProgress>();
+
+        var record = await MtkPreloaderService.DumpBromAsync(session, destination, new ListProgress(reports),
+            TestContext.Current.CancellationToken, new MtkDaMemoryRange(0x0000_0000, 0x40));
+
+        Assert.Equal(expected, File.ReadAllBytes(destination));
+        Assert.Equal(0x40, record.ByteLength);
+        Assert.Equal(0x40, record.RequestedBytes);
+        Assert.Equal(MtkDaMemoryAccess.DumpStepBytes, record.StepBytes);
+        Assert.Equal(0x0000_0000u, record.StartOffset);
+        Assert.Equal("BROM", record.RegionName);
+        Assert.Equal(destination, record.DestinationPath);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(expected)), record.Sha256Hex);
+        Assert.Equal(100, reports[^1].Percent);
+        Assert.Single(Directory.GetFiles(directory.Path));
+    }
+
+    [Fact]
+    public async Task DumpBromAsync_ShortReadFault_KeepsExistingFileAndRemovesStaging()
+    {
+        using var transport = new ScriptedCommTransport();
+        using var session = await CreatePreloaderSessionAsync(transport);
+        EnqueuePreloaderRead(transport, PreloaderRead32, 0x0000_0000, 1, [0x44, 0x33, 0x22, 0x11]);
+        transport.Enqueue([PreloaderRead32]);
+        transport.Enqueue(BigEndian(0x0000_0004));
+        transport.Enqueue(BigEndian(1));
+        transport.Enqueue([0x00, 0x00]);
+        transport.Enqueue([0x11, 0x22, 0x33]);
+        transport.Enqueue([0x00, 0x00]);
+        using var directory = new TempDirectory();
+        var destination = Path.Combine(directory.Path, "brom.bin");
+        var existing = "PRE-EXISTING IMAGE"u8.ToArray();
+        File.WriteAllBytes(destination, existing);
+
+        await Assert.ThrowsAsync<MtkProtocolException>(() => MtkPreloaderService.DumpBromAsync(session, destination,
+            null, TestContext.Current.CancellationToken, new MtkDaMemoryRange(0x0000_0000, 0x40)));
+
+        Assert.Equal(existing, File.ReadAllBytes(destination));
+        Assert.Single(Directory.GetFileSystemEntries(directory.Path));
+        Assert.Equal(MtkSessionState.Faulted, session.State);
+    }
+
+    [Fact]
+    public async Task DumpBromAsync_PreCancelledToken_WritesNothingAndKeepsDirectoryClean()
+    {
+        using var transport = new ScriptedCommTransport();
+        using var session = await CreatePreloaderSessionAsync(transport);
+        var before = transport.Writes.Count;
+        using var directory = new TempDirectory();
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => MtkPreloaderService.DumpBromAsync(
+            session, Path.Combine(directory.Path, "brom.bin"), null, cancellation.Token));
+
+        Assert.Equal(before, transport.Writes.Count);
+        Assert.Empty(Directory.GetFiles(directory.Path));
+    }
+
     private static async Task<MtkSession> CreatePreloaderSessionAsync(ScriptedCommTransport transport)
     {
         transport.Enqueue(
