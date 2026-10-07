@@ -1578,7 +1578,14 @@ public sealed partial class Ext4Builder
             | FeatureRoCompatDirNlink | FeatureRoCompatExtraIsize
             | (enableMetadataCsum ? FeatureRoCompatMetadataChecksum : 0u)
             | (readOnly ? FeatureRoCompatReadOnly : 0u) | (sharedBlocks ? FeatureRoCompatSharedBlocks : 0u));
-        Encoding.UTF8.GetBytes(volumeName, block[0x78..0x88]);
+        var volumeNameField = block[0x78..0x88];
+        var volumeNameBytes = Encoding.UTF8.GetByteCount(volumeName);
+        if (volumeNameBytes > volumeNameField.Length)
+        {
+            throw new InvalidOperationException(
+                $"EXT4 volume name is not representable: {volumeNameBytes} UTF-8 bytes exceed the {volumeNameField.Length}-byte s_volume_name field: '{volumeName}'.");
+        }
+        Encoding.UTF8.GetBytes(volumeName, volumeNameField);
         uuid.AsSpan().CopyTo(block[0x68..0x78]);
 
         WriteU16(block, 0xCE, checked((ushort)reservedGdtBlocks));

@@ -400,8 +400,14 @@ public sealed partial class F2fsBuilder
         if (node.InlineData)
         {
             var inlineOffset = inode.InlineDataOffset;
-            node.InlineBytes.AsSpan(0, Math.Min(node.InlineBytes.Length, blockSize - inlineOffset))
-                .CopyTo(block.AsSpan(inlineOffset));
+            var capacity = blockSize - inlineOffset;
+            if (node.InlineBytes.Length > capacity)
+            {
+                throw new InvalidOperationException(
+                    $"Inline data of '{node.Name}' does not fit the inode block (needs {node.InlineBytes.Length} of {capacity} bytes at offset {inlineOffset}).");
+            }
+
+            node.InlineBytes.AsSpan().CopyTo(block.AsSpan(inlineOffset));
         }
 
         if (node.XattrBytes.Length > 0)

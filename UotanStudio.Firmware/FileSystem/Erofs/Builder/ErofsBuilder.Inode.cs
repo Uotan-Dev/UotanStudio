@@ -250,6 +250,40 @@ public sealed partial class ErofsBuilder
         return header + node.InlineData.Length;
     }
 
+    /// <summary>
+    /// Rejects a symlink whose inline inode record cannot fit one metablock, measuring the record with
+    /// <see cref="GetInodeRecordSize"/> so the header choice, inline xattrs and payload bytes match the
+    /// write pass exactly. The kernel resolves an inline symlink target inside the mapped metablock that
+    /// holds the inode, so a record longer than one block is unreadable rather than a long link, and
+    /// <c>mkfs.erofs</c> refuses such input instead of truncating the target. <paramref name="node"/>
+    /// keeps its size equal to the UTF-8 byte count of the target, which is the single measurement used
+    /// for both the record bound and the inline payload.
+    /// <para>拒绝 inode 记录无法容纳单个 metablock 的符号链接，并使用 <see cref="GetInodeRecordSize"/>
+    /// 度量记录长度，使头部选择、inline xattr 与负载字节与写出阶段完全一致。内核在承载该 inode 的
+    /// 已映射 metablock 内解析 inline 符号链接目标，因此超过一个块的记录不是长链接而是不可读数据，
+    /// <c>mkfs.erofs</c> 同样是拒绝输入而不是截断目标。节点的 size 保持等于目标的 UTF-8 字节数，
+    /// 这一份度量同时用于记录上限与 inline 负载。</para>
+    /// </summary>
+    /// <param name="node">Symlink node about to carry its target as inline payload.
+    /// <para>即将把目标作为 inline 负载的符号链接节点。</para></param>
+    /// <param name="blockSize">Image block size in bytes from the validated options.
+    /// <para>来自经校验选项的镜像块大小（字节）。</para></param>
+    /// <exception cref="InvalidOperationException">The symlink inode record needs more than one block.
+    /// <para>符号链接的 inode 记录超过一个块。</para></exception>
+    private static void ValidateSymlinkRecordCapacity(BuildNode node, int blockSize)
+    {
+        var targetBytes = Encoding.UTF8.GetByteCount(node.SymlinkTarget);
+        node.Size = targetBytes;
+        var recordSize = GetInodeRecordSize(node, blockSize);
+        if (recordSize <= blockSize)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"EROFS symlink '{node.Name}' has a {targetBytes}-byte target that does not fit the {blockSize}-byte block (inode record {recordSize} bytes).");
+    }
+
     private static long GetInodeHeaderSize(BuildNode node)
     {
         if (node.SourceInode is { Extended: true } || node.RequiresExtendedTime) return ErofsInode.ExtendedSize;

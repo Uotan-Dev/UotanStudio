@@ -187,10 +187,12 @@ internal sealed record F2fsDirectoryEntry
     /// </summary>
     /// <param name="block">Destination buffer with at least <paramref name="blockSize"/> writable bytes; the whole buffer is cleared before the first entry is written and a shorter buffer is rejected.
     /// <para>目标缓冲区，可写字节至少为 <paramref name="blockSize"/>；写入首条 entry 前会清空整个缓冲区，长度不足时被拒绝。</para></param>
-    /// <param name="entries">Entries appended in order, each starting at the next free slot: the 11-byte record at <see cref="DentriesOffset"/> carries the hash code, inode, the length of the UTF-8 name bytes and the file type, the name is split across <see cref="SlotLength"/>-byte slots from <see cref="FilenamesOffset"/>, and one bitmap bit is set per slot. The slot reservation itself uses <c>SlotCount</c>, which follows the stored name length. An empty list leaves the block zeroed.
-    /// <para>按顺序追加的条目，每条从下一个空闲槽开始：<see cref="DentriesOffset"/> 处的 11 字节记录写入哈希码、inode、UTF-8 名称字节长度与文件类型；名称按 <see cref="SlotLength"/> 字节从 <see cref="FilenamesOffset"/> 起跨槽存放，每个槽都置一位。槽位占用按 <c>SlotCount</c> 计算，即由存储的名称长度决定。空列表只会留下全零块。</para></param>
+    /// <param name="entries">Entries appended in order, each starting at the next free slot: the 11-byte record at <see cref="DentriesOffset"/> carries the hash code, inode, the length of the UTF-8 name bytes and the file type, the name is split across <see cref="SlotLength"/>-byte slots from <see cref="FilenamesOffset"/>, and one bitmap bit is set per slot. The slot reservation is derived from the same UTF-8 byte count that is written into the record, so <c>NameLen</c> must match it, and every name is checked against the upstream <c>F2FS_NAME_LEN</c> bound before a byte is written. An empty list leaves the block zeroed.
+    /// <para>按顺序追加的条目，每条从下一个空闲槽开始：<see cref="DentriesOffset"/> 处的 11 字节记录写入哈希码、inode、UTF-8 名称字节长度与文件类型；名称按 <see cref="SlotLength"/> 字节从 <see cref="FilenamesOffset"/> 起跨槽存放，每个槽都置一位。槽位占用与写入记录的 UTF-8 字节数同源，因此 <c>NameLen</c> 必须与它相等，且每个名称在写入任何字节前都会按上游 <c>F2FS_NAME_LEN</c> 上限校验。空列表只会留下全零块。</para></param>
     /// <param name="blockSize">Bytes the caller treats as one dentry block, checked against the buffer length; slot capacity is always <see cref="SlotsPerBlock"/> regardless of it.
     /// <para>调用方认定的单个 dentry 块字节数，只用于校验缓冲区长度；槽位容量始终为 <see cref="SlotsPerBlock"/>。</para></param>
+    /// <exception cref="InvalidOperationException">A name exceeds the on-disk name limit, its <c>NameLen</c> disagrees with the UTF-8 encoding of <c>Name</c>, or the reserved slots run past the block.
+    /// <para>名称超出磁盘名称上限、<c>NameLen</c> 与 <c>Name</c> 的 UTF-8 编码不一致，或占用的槽数超出该块。</para></exception>
     public static void BuildBlock(Span<byte> block, IReadOnlyList<F2fsDirectoryEntry> entries, int blockSize)
     {
         if (block.Length < blockSize)
@@ -202,14 +204,21 @@ internal sealed record F2fsDirectoryEntry
         var used = 0;
         foreach (var entry in entries)
         {
-            var slots = entry.SlotCount;
+            FileSystemNameLimits.Validate(entry.Name, "F2FS");
+            var nameBytes = Encoding.UTF8.GetBytes(entry.Name);
+            if (entry.NameLen != nameBytes.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Directory entry '{entry.Name}' has an inconsistent name length ({entry.NameLen} stored, {nameBytes.Length} encoded).");
+            }
+
+            var slots = (nameBytes.Length + SlotLength - 1) / SlotLength;
             if (used + slots > SlotsPerBlock)
             {
                 throw new InvalidOperationException(
                     $"Directory does not fit into one dentry block (needs slot {used + slots} of {SlotsPerBlock}).");
             }
 
-            var nameBytes = Encoding.UTF8.GetBytes(entry.Name);
             var dentry = block.Slice(DentriesOffset + used * DirectoryEntrySize, DirectoryEntrySize);
             BinaryPrimitives.WriteUInt32LittleEndian(dentry, entry.HashCode);
             BinaryPrimitives.WriteUInt32LittleEndian(dentry.Slice(4), entry.Ino);

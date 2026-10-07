@@ -232,8 +232,10 @@ internal sealed class F2fsSuperblock
     /// Serializes the superblock into a buffer of at least 3072 bytes (unimplemented tail fields stay zero).
     /// <para>将超级块序列化到缓冲区（长度至少 3072 字节；未实现的尾部字段保持为零）。</para>
     /// </summary>
-    /// <param name="destination">Buffer offering at least <see cref="SuperblockSize"/> writable bytes; it is cleared entirely, the magic is written as the constant value, the UUID and version bytes are truncated to 16 and 256 bytes, the volume name is re-encoded as UTF-16 units and bytes of fields this model does not carry stay zero.
-    /// <para>至少提供 <see cref="SuperblockSize"/> 个可写字节的缓冲区；整个缓冲区先清零，魔数按常量写入，UUID 与版本字节分别截断到 16 与 256 字节，卷标重新编码为 UTF-16 单元，本模型未承载字段对应的字节保持为 0。</para></param>
+    /// <param name="destination">Buffer offering at least <see cref="SuperblockSize"/> writable bytes; it is cleared entirely, the magic is written as the constant value, the UUID and version bytes are truncated to 16 and 256 bytes, the volume name is re-encoded as one little-endian UTF-16 code unit per <see cref="string"/> character so non-ASCII labels survive unchanged, and bytes of fields this model does not carry stay zero.
+    /// <para>至少提供 <see cref="SuperblockSize"/> 个可写字节的缓冲区；整个缓冲区先清零，魔数按常量写入，UUID 与版本字节分别截断到 16 与 256 字节，卷标按每个 <see cref="string"/> 字符一个小端 UTF-16 码元重新编码，因此非 ASCII 卷标原样保留，本模型未承载字段对应的字节保持为 0。</para></param>
+    /// <exception cref="InvalidOperationException"><see cref="VolumeName"/> holds more than <see cref="VolumeNameChars"/> UTF-16 code units, which the fixed-size on-disk field cannot hold; nothing is truncated silently.
+    /// <para><see cref="VolumeName"/> 的 UTF-16 码元数量超过 <see cref="VolumeNameChars"/>，磁盘上的定长字段无法容纳；不会静默截断。</para></exception>
     public void WriteTo(Span<byte> destination)
     {
         if (destination.Length < SuperblockSize)
@@ -288,7 +290,7 @@ internal sealed class F2fsSuperblock
                 break;
             }
 
-            buffer[count++] = (char)(value & 0xFF);
+            buffer[count++] = (char)value;
         }
 
         return count == 0 ? string.Empty : new string(buffer, 0, count);
@@ -296,11 +298,16 @@ internal sealed class F2fsSuperblock
 
     private static void WriteVolumeName(Span<byte> destination, string value)
     {
-        destination.Clear();
-        var count = Math.Min(VolumeNameChars, value.Length);
-        for (var i = 0; i < count; i++)
+        if (value.Length > VolumeNameChars)
         {
-            BinaryPrimitives.WriteUInt16LittleEndian(destination.Slice(i * 2, 2), (ushort)(value[i] & 0xFF));
+            throw new InvalidOperationException(
+                $"F2FS volume name '{value}' exceeds the {VolumeNameChars}-character volume name field.");
+        }
+
+        destination.Clear();
+        for (var i = 0; i < value.Length; i++)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(destination.Slice(i * 2, 2), (ushort)value[i]);
         }
     }
 }

@@ -353,11 +353,15 @@ public sealed partial class ErofsBuilder
         /// </summary>
         /// <param name="node">File node to lay out; never a directory.
         /// <para>待布局的文件节点；绝不可能是目录。</para></param>
+        /// <exception cref="InvalidOperationException">A symlink target's inline inode record exceeds one
+        /// block and therefore cannot be read back.
+        /// <para>符号链接目标的 inline inode 记录超过一个块，无法被读回。</para></exception>
         private void PlanFileLayout(BuildNode node)
         {
             var isDataFile = !node.IsSymlink && !node.IsDevice;
             if (node.IsSymlink)
             {
+                ValidateSymlinkRecordCapacity(node, BlockSize);
                 node.InlineData = Encoding.UTF8.GetBytes(node.SymlinkTarget);
                 return;
             }
