@@ -1,8 +1,13 @@
+using System.Collections.Frozen;
+
 namespace UotanStudio.Services.Firmware;
 
 /// <summary>Captures paths before an asynchronous image operation. 在异步镜像操作前固定路径。</summary>
 internal sealed record ImageOperationPaths(string Source, bool IsDirectory, string Root, string OutputRoot)
 {
+    private static readonly FrozenSet<string> ReservedNames =
+        FrozenSet.ToFrozenSet(["images", "output", "delivery", ".uotan", ".deleted"], StringComparer.OrdinalIgnoreCase);
+
     internal string Name => IsDirectory ? Path.GetFileName(Path.TrimEndingDirectorySeparator(Source))
         : Path.GetFileNameWithoutExtension(Source);
 
@@ -26,7 +31,7 @@ internal sealed record ImageOperationPaths(string Source, bool IsDirectory, stri
             var path = Path.GetFullPath(IsDirectory ? Source : Path.Combine(parent, Name));
             if (!string.Equals(Path.GetDirectoryName(path), Path.TrimEndingDirectorySeparator(parent),
                     StringComparison.OrdinalIgnoreCase)
-                || new[] { "images", "output", "delivery", ".uotan", ".deleted" }.Contains(Name, StringComparer.OrdinalIgnoreCase))
+                || ReservedNames.Contains(Name))
                 throw new IOException("The unpacked directory must be a non-reserved child of the sub-project root.");
             return path;
         }

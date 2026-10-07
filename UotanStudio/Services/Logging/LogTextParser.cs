@@ -40,7 +40,7 @@ internal sealed partial class LogTextParser
     internal void Finish(List<ILogLine> entries)
     {
         if (_pending is not null)
-            entries.Add(_text is null ? _pending : new LogFileRecord(_text.ToString(), _pending.Level, _pending.Columns.ToArray()));
+            entries.Add(_text is null ? _pending : new LogFileRecord(_text.ToString(), _pending.Level, [.. _pending.Columns]));
         _pending = null;
         _text = null;
         _longFormat = false;

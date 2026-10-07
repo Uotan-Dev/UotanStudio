@@ -95,9 +95,9 @@ public sealed partial class WorkspacePanelService : ObservableObject
             OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
         var useDotnet = File.Exists(assembly) && dotnet is not null && File.Exists(dotnet);
         var executable = useDotnet ? dotnet! : app;
-        var arguments = useDotnet
-            ? new[] { assembly, "--managed-device-shell", device.Protocol.ToString(), device.Serial }
-            : new[] { "--managed-device-shell", device.Protocol.ToString(), device.Serial };
+        string[] arguments = useDotnet
+            ? [assembly, "--managed-device-shell", device.Protocol.ToString(), device.Serial]
+            : ["--managed-device-shell", device.Protocol.ToString(), device.Serial];
         return new TerminalProfile("Device shell", executable, arguments);
     }
 

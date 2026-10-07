@@ -15,7 +15,7 @@ internal static class ExplorerItemCreationService
         try
         {
             if (name is "." or ".." || Path.IsPathRooted(name)
-                || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+                || name.AsSpan().ContainsAny(PathSearchValues.InvalidFileName)
                 || name.Contains('/') || name.Contains('\\'))
                 throw new IOException(language.GetString("Explorer_InvalidItemName"));
             if (!Directory.Exists(directory)) throw new DirectoryNotFoundException(directory);

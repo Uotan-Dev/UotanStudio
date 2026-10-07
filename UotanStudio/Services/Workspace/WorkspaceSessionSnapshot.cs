@@ -61,7 +61,7 @@ internal static class WorkspaceSessionCapture
 
     internal static List<OpenDocumentDto> Documents(IDockable? root, string rootDirectory)
     {
-        var result = new List<OpenDocumentDto>();
+        List<OpenDocumentDto> result = [];
         foreach (var item in Enumerate(root))
         {
             var descriptor = DocumentOpenRegistry.ByInstance(item);
@@ -86,12 +86,12 @@ internal static class WorkspaceSessionCapture
         return result;
     }
 
-    internal static List<WorkspaceDockState> Docks(IDockable? root) => Enumerate(root)
+    internal static List<WorkspaceDockState> Docks(IDockable? root) => [.. Enumerate(root)
         .OfType<IDock>().Where(d => !string.IsNullOrEmpty(d.Id))
         .Select(d => new WorkspaceDockState
         {
             Id = d.Id!,
             Proportion = double.IsFinite(d.Proportion) ? d.Proportion : null,
             ActiveId = d.ActiveDockable?.Id
-        }).ToList();
+        })];
 }

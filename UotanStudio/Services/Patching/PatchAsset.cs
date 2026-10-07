@@ -49,7 +49,7 @@ public sealed class PatchAsset
         {
             Kind = VisualPluginKind.CompositeNode,
             Manifest = new VisualPluginManifest { Id = package.Manifest.Id, Name = package.Manifest.Name },
-            Assets = package.Assets.Select(asset => asset.Snapshot()).ToList(),
+            Assets = [.. package.Assets.Select(asset => asset.Snapshot())],
             BundlePath = package.BundlePath,
             BundleRoot = SnapshotResourceScope(package.BundleRoot ?? package)
         };
@@ -66,7 +66,7 @@ public sealed class PatchAsset
         {
             Kind = VisualPluginKind.CompositeNode,
             Manifest = new VisualPluginManifest { Id = package.Manifest.Id, Name = package.Manifest.Name },
-            Assets = package.Assets.Select(asset => asset.Snapshot()).ToList()
+            Assets = [.. package.Assets.Select(asset => asset.Snapshot())]
         };
         foreach (var node in package.Graph.Nodes.Where(node => node.CompositePackage is not null))
         {

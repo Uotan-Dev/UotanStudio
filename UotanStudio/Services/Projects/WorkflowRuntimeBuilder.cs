@@ -14,7 +14,7 @@ internal static class WorkflowRuntimeBuilder
         var nodes = new List<FlowNodeViewModel>(snapshot.Nodes.Count);
         var created = new Dictionary<string, FlowNodeViewModel>(
             canvasIdentityComparison ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        var errors = new List<string>();
+        List<string> errors = [];
 
         foreach (var dto in snapshot.Nodes)
         {

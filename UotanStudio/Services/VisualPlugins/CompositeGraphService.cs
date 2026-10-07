@@ -28,8 +28,7 @@ public static class CompositeGraphService
         package.Graph = new WorkflowSnapshot
         {
             Nodes = WorkflowPersistenceService.BuildNodeDtos(selectedNodes),
-            Connections = WorkflowPersistenceService.BuildConnectionDtos(selectedNodes, allConnections)
-                .Where(edge => edge.SourceInstanceId is not null && edge.TargetInstanceId is not null).ToList()
+            Connections = [.. WorkflowPersistenceService.BuildConnectionDtos(selectedNodes, allConnections).Where(edge => edge.SourceInstanceId is not null && edge.TargetInstanceId is not null)]
         };
         var errors = VisualPluginValidation.Validate(package);
         if (errors.Count != 0)
@@ -44,7 +43,7 @@ public static class CompositeGraphService
         var outputMap = MapPorts(selectedNodes, package.Outputs, composite.Output, false);
         var selectedInputs = selectedNodes.SelectMany(node => node.Input).ToHashSet();
         var selectedOutputs = selectedNodes.SelectMany(node => node.Output).ToHashSet();
-        var connections = new List<NodeConnectionViewModel>();
+        List<NodeConnectionViewModel> connections = [];
         foreach (var edge in allConnections)
         {
             if (edge.Source is null || edge.Target is null)
@@ -130,7 +129,7 @@ public static class CompositeGraphService
         IEnumerable<NodeConnectorViewModel> publicPorts, bool input)
     {
         var byId = nodes.ToDictionary(node => node.InstanceId);
-        var result = new Dictionary<NodeConnectorViewModel, NodeConnectorViewModel>();
+        Dictionary<NodeConnectorViewModel, NodeConnectorViewModel> result = [];
         foreach (var definition in definitions)
         {
             var target = publicPorts.Single(port => port.StableId == definition.Id);

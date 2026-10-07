@@ -173,7 +173,7 @@ public sealed class NodeExecutionEngine
 
             var completed = 0;
             var total = order.Count;
-            var failedNodes = new List<string>();
+            List<string> failedNodes = [];
             var failLock = new object();
             var aborted = false;
             var byId = nodes.ToDictionary(n => n.InstanceId);
@@ -187,9 +187,9 @@ public sealed class NodeExecutionEngine
             // 已被 Loop / Parallel 子图调度执行过的节点（主循环跳过），与 Branch 未选中分支涉及的节点（标记 Skipped）。
             // Nodes already executed by Loop / Parallel sub-graph scheduling (skipped by the main loop),
             // and nodes belonging to the untaken Branch sub-graph (marked Skipped).
-            var handledByFlow = new HashSet<string>();
+            HashSet<string> handledByFlow = [];
             var skippedByBranch = GetInactiveEntryNodes(options.EntryActivation, connections);
-            var skippedByFailure = new HashSet<string>();
+            HashSet<string> skippedByFailure = [];
 
             foreach (var node in order)
             {
@@ -350,7 +350,7 @@ public sealed class NodeExecutionEngine
     private static Dictionary<string, List<(string Connector, FlowNodeViewModel Target)>> BuildFlowEdges(
         IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnection>? connections)
     {
-        var map = new Dictionary<string, List<(string, FlowNodeViewModel)>>();
+        Dictionary<string, List<(string, FlowNodeViewModel)>> map = [];
         if (connections == null || connections.Count == 0) return map;
 
         var byId = nodes.ToDictionary(n => n.InstanceId);
@@ -468,8 +468,8 @@ public sealed class NodeExecutionEngine
     {
         if (node.TypeKey is not ("Flow.Condition.Branch" or "Flow.Applicability.Gate" or "Flow.Collection.Loop" or "Flow.Execution.Parallel"))
         {
-            var inactive = new HashSet<FlowNodeViewModel>();
-            var active = new HashSet<FlowNodeViewModel>();
+            HashSet<FlowNodeViewModel> inactive = [];
+            HashSet<FlowNodeViewModel> active = [];
             foreach (var output in node.Output.Where(port => port.PortType == NodePortType.Flow))
             {
                 var reachable = CollectFlowReachable(node, output.Title, flowOut);
@@ -562,7 +562,7 @@ public sealed class NodeExecutionEngine
                     var branchConnectors = node.Output.Where(c => c.PortType == NodePortType.Flow).ToList();
                     if (branchConnectors.Count == 0) break;
 
-                    var branches = new List<(string Connector, HashSet<FlowNodeViewModel> Nodes)>();
+                    List<(string Connector, HashSet<FlowNodeViewModel> Nodes)> branches = [];
                     foreach (var connector in branchConnectors)
                     {
                         var branch = CollectFlowReachable(node, connector.Title, flowOut);
@@ -574,7 +574,7 @@ public sealed class NodeExecutionEngine
                         .SelectMany(branch => branch.Nodes.Select(branchNode => (branchNode, branch.Connector)))
                         .GroupBy(item => item.branchNode.InstanceId)
                         .ToDictionary(group => group.Key, group => group.Count());
-                    var tasks = new List<Task<ScopeExecutionResult>>();
+                    List<Task<ScopeExecutionResult>> tasks = [];
                     var stop = 0;
                     foreach (var (connectorTitle, allBranchNodes) in branches)
                     {
@@ -620,10 +620,10 @@ public sealed class NodeExecutionEngine
         var members = order.ToHashSet();
         var scopedFlow = flowOut.ToDictionary(pair => pair.Key,
             pair => pair.Value.Where(edge => members.Contains(edge.Target)).ToList());
-        var handled = new HashSet<string>();
-        var skipped = new HashSet<string>();
+        HashSet<string> handled = [];
+        HashSet<string> skipped = [];
         var failures = new HashSet<string>(inheritedFailures);
-        var failed = new List<string>();
+        List<string> failed = [];
         var scopeLock = new object();
         foreach (var node in order)
         {
@@ -693,7 +693,7 @@ public sealed class NodeExecutionEngine
             .ToDictionary(group => group.Key, group => group.Select(edge => edge.TargetInstanceId).ToArray());
         HashSet<string> Reach(bool active)
         {
-            var result = new HashSet<string>();
+            HashSet<string> result = [];
             var pending = new Queue<string>(entries.Where(entry => entry.Value == active).Select(entry => entry.Key));
             while (pending.TryDequeue(out var current))
             {
@@ -761,7 +761,7 @@ public sealed class NodeExecutionEngine
         FlowNodeViewModel start, string outputConnector,
         Dictionary<string, List<(string Connector, FlowNodeViewModel Target)>> flowOut)
     {
-        var visited = new HashSet<FlowNodeViewModel>();
+        HashSet<FlowNodeViewModel> visited = [];
         if (!flowOut.TryGetValue(start.InstanceId, out var edges)) return visited;
 
         var queue = new Queue<FlowNodeViewModel>();
@@ -997,7 +997,7 @@ public sealed class ExecutionResult
     /// <para>失败节点实例 ID 列表。</para>
     /// List of failed node instance IDs.
     /// </summary>
-    public IReadOnlyList<string> FailedNodes { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> FailedNodes { get; init; } = [];
 
     /// <summary>
     /// <para>错误信息。</para>
@@ -1019,7 +1019,7 @@ public sealed class ExecutionResult
     {
         Status = ExecutionStatus.Failed,
         ErrorMessage = error,
-        FailedNodes = failed ?? Array.Empty<string>()
+        FailedNodes = failed ?? []
     };
 
     /// <summary>

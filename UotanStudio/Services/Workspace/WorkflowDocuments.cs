@@ -32,9 +32,9 @@ internal sealed class WorkspaceWorkflowDocuments(WorkspaceViewModel workspace) :
             var documents = dock?.VisibleDockables?.ToArray() ?? [];
             var matches = string.IsNullOrWhiteSpace(selector)
                 ? documents.Where(document => ReferenceEquals(document, dock?.ActiveDockable)).ToArray()
-                : documents.Where(document => document.Id == selector
+                : [.. documents.Where(document => document.Id == selector
                     || document is ISearchableDocument searchable
-                    && string.Equals(searchable.FilePath, selector, StringComparison.OrdinalIgnoreCase)).ToArray();
+                    && string.Equals(searchable.FilePath, selector, StringComparison.OrdinalIgnoreCase))];
             if (matches.Length != 1)
             {
                 throw Error("Node_Document_NotFound");

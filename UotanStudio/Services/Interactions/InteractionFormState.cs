@@ -176,7 +176,7 @@ public sealed class InteractionFormState
                 {
                     return "Directory";
                 }
-                if (field.Kind == InteractionElementKind.SavePathField && (text.IndexOfAny(Path.GetInvalidPathChars()) >= 0 || string.IsNullOrEmpty(Path.GetFileName(text))))
+                if (field.Kind == InteractionElementKind.SavePathField && (text.AsSpan().ContainsAny(PathSearchValues.InvalidPath) || string.IsNullOrEmpty(Path.GetFileName(text))))
                 {
                     return "Path";
                 }

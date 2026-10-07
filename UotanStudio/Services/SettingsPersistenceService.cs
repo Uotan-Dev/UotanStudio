@@ -248,6 +248,12 @@ public class AppSettings : IJsonOnDeserialized
     public float ScreenMirrorVolume { get; set; } = 1;
     /// <summary>Enable remote input. 是否允许远程输入。</summary>
     public bool ScreenMirrorControl { get; set; } = true;
+    /// <summary>
+    /// <para>获取或设置投屏 GPU 零拷贝呈现偏好：Auto 按能力探测，On 强制启用（不支持时回落 NV12 回读），Off 强制沿用回读路径。</para>
+    /// Gets or sets the screen mirror GPU zero-copy presentation preference: Auto probes capability, On forces the
+    /// export path (falling back to NV12 readback when unsupported), Off forces the readback path.
+    /// </summary>
+    public GpuExportPreference ScreenMirrorGpuExport { get; set; }
 
     /// <summary>
     /// <para>获取或设置 MCP 服务器连接列表（设置页维护，MCP 客户端按名称调用其工具）。</para>
@@ -290,6 +296,20 @@ public class AppSettings : IJsonOnDeserialized
     /// </summary>
     [JsonPropertyName("mcpExposeAllowFlash")]
     public bool McpExposeAllowFlash { get; set; }
+}
+
+/// <summary>
+/// User preference for the GPU zero-copy presentation path of screen mirroring.
+/// <para>投屏 GPU 零拷贝呈现路径的用户偏好。</para>
+/// </summary>
+public enum GpuExportPreference
+{
+    /// <summary>Enable when the compositor interop probe succeeds. <para>合成器互操作探测成功时启用。</para></summary>
+    Auto,
+    /// <summary>Request the export path; unsupported platforms keep the NV12 readback. <para>请求导出路径；不支持的平台保持 NV12 回读。</para></summary>
+    On,
+    /// <summary>Always decode to CPU-visible planes. <para>始终解码为 CPU 可读的像素平面。</para></summary>
+    Off,
 }
 
 /// <summary>

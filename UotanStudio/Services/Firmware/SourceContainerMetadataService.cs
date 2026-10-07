@@ -66,7 +66,7 @@ internal static class SourceContainerMetadataService
                 Kind = "super",
                 DeviceName = metadata.BlockDevices.Count > 0
                     ? Encoding.UTF8.GetString(metadata.BlockDevices[0].PartitionName.AsSpan().TrimEnd((byte)0)) : "",
-                Storage = header.AsSpan().SequenceEqual(new byte[] { 0x3a, 0xff, 0x26, 0xed }) ? "SPARSE" : "RAW",
+                Storage = header is [0x3a, 0xff, 0x26, 0xed] ? "SPARSE" : "RAW",
                 DeviceType = (metadata.Header.Flags & 1) != 0 ? "VAB"
                     : metadata.PartitionNames.Any(name => name.EndsWith("_b", StringComparison.Ordinal)) ? "AB" : "AOnly",
                 Size = metadata.BlockDevices.Count > 0 ? metadata.BlockDevices[0].Size : 0,
@@ -74,9 +74,9 @@ internal static class SourceContainerMetadataService
                 MetadataSlots = metadata.Geometry.MetadataSlotCount,
                 MetadataMaxSize = metadata.Geometry.MetadataMaxSize,
                 MinorVersion = metadata.Header.MinorVersion,
-                GroupNames = metadata.Groups.Select(group => group.NameString).ToArray(),
-                GroupSizes = metadata.Groups.Select(group => group.MaximumSize).ToArray(),
-                PartitionNames = metadata.PartitionNames.ToArray(),
+                GroupNames = [.. metadata.Groups.Select(group => group.NameString)],
+                GroupSizes = [.. metadata.Groups.Select(group => group.MaximumSize)],
+                PartitionNames = [.. metadata.PartitionNames],
                 OriginalStructures = [metadata.Geometry.ToBytes(), metadata.Header.ToBytes(),
                     .. metadata.Partitions.Select(part => part.ToBytes()),
                     .. metadata.Extents.Select(extent => extent.ToBytes()),
@@ -102,10 +102,10 @@ internal static class SourceContainerMetadataService
             BuildFingerprint = ota.GetValueOrDefault("post-build", ""),
             Incremental = ota.GetValueOrDefault("post-build-incremental", ""),
             SdkLevel = uint.TryParse(ota.GetValueOrDefault("post-sdk-level"), NumberStyles.None, CultureInfo.InvariantCulture, out var sdk) ? sdk : 0,
-            PartitionSizes = payload.Manifest.Partitions.Select(partition => partition.NewPartitionInfo?.Size ?? 0).ToArray(),
-            PartitionNames = payload.PartitionNames.ToArray(),
-            GroupNames = payload.DynamicPartitionMetadata.Groups.Select(group => group.Name).ToArray(),
-            GroupSizes = payload.DynamicPartitionMetadata.Groups.Select(group => group.Size).ToArray(),
+            PartitionSizes = [.. payload.Manifest.Partitions.Select(partition => partition.NewPartitionInfo?.Size ?? 0)],
+            PartitionNames = [.. payload.PartitionNames],
+            GroupNames = [.. payload.DynamicPartitionMetadata.Groups.Select(group => group.Name)],
+            GroupSizes = [.. payload.DynamicPartitionMetadata.Groups.Select(group => group.Size)],
             OriginalStructures = [payload.DynamicPartitionMetadata.ToByteArray()]
         };
     }

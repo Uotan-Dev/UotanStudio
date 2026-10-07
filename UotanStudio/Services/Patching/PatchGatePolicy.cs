@@ -54,7 +54,7 @@ internal static class PatchGatePolicy
 
         var incoming = flow.Values.SelectMany(edges => edges).Select(edge => edge.Target.InstanceId).ToHashSet();
         var roots = nodes.Where(node => !incoming.Contains(node.InstanceId)).Select(node => node.InstanceId).ToArray();
-        var guarded = new HashSet<string>();
+        HashSet<string> guarded = [];
         foreach (var gate in gates)
         {
             var apply = Reach(Edges(gate.InstanceId, flow).Where(edge => edge.Connector == "Apply")
@@ -69,8 +69,8 @@ internal static class PatchGatePolicy
         foreach (var node in nodes)
         {
             var mutates = node is CompositeNodeViewModel composite
-                ? PackageMutates(composite.Package, new HashSet<string>(), 0)
-                : TypeMutates(node.TypeKey, new HashSet<string>(), 0);
+                ? PackageMutates(composite.Package, [], 0)
+                : TypeMutates(node.TypeKey, [], 0);
             if (mutates && !guarded.Contains(node.InstanceId))
             {
                 return LanguageService.Instance.GetString("Node_Patch_UnguardedMutation", node.LocalizedTitle);
@@ -113,7 +113,7 @@ internal static class PatchGatePolicy
     private static HashSet<string> Reach(IEnumerable<string> starts,
         Dictionary<string, List<(string Connector, FlowNodeViewModel Target)>> flow, string? removeApplyFrom = null)
     {
-        var visited = new HashSet<string>();
+        HashSet<string> visited = [];
         var queue = new Queue<string>(starts);
         while (queue.TryDequeue(out var current))
         {

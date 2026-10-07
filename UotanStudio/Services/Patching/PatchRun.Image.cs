@@ -28,8 +28,8 @@ public sealed partial class PatchRun
             if (!paths.Add(edit.Path.TrimStart('/'))) { throw new InvalidDataException("Duplicate image edit target."); }
         }
         await _gate.WaitAsync(token).ConfigureAwait(false);
-        var temporaryFiles = new List<string>();
-        var replacements = new List<ImageConfigurationReplacement>();
+        List<string> temporaryFiles = [];
+        List<ImageConfigurationReplacement> replacements = [];
         var changed = false;
         string? rebuilt = null;
         try

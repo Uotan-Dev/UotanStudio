@@ -83,8 +83,7 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
         return true;
     }
 
-    public List<ImageEntryDto> CaptureImages() => ImageViewModel.EnsureInstance().Images
-        .Select(i => new ImageEntryDto { RelativePath = i.RelativePath, SizeBytes = i.SizeBytes, Format = i.Format }).ToList();
+    public List<ImageEntryDto> CaptureImages() => [.. ImageViewModel.EnsureInstance().Images.Select(i => new ImageEntryDto { RelativePath = i.RelativePath, SizeBytes = i.SizeBytes, Format = i.Format })];
 
     public ProjectSettingsDto CaptureSettings() => ProjectSettingViewModel.EnsureInstance().ToDto();
 

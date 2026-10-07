@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Collections.Frozen;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
@@ -36,6 +37,8 @@ public sealed class RemoteRomService(HttpClient client)
     private const int ParallelChunkBytes = 16 * 1024 * 1024;
     private const int ParallelWorkers = 8;
     private const int TransferBufferBytes = 1024 * 1024;
+    private static readonly FrozenSet<string> ImageExtensions =
+        FrozenSet.ToFrozenSet([".img", ".raw", ".ext4", ".erofs", ".f2fs", ".simg", ".sparse"], StringComparer.OrdinalIgnoreCase);
     private readonly HttpClient _client = ConfigureClient(client);
 
     private static HttpClient ConfigureClient(HttpClient value)
@@ -70,7 +73,7 @@ public sealed class RemoteRomService(HttpClient client)
         var length = response.Content.Headers.ContentRange?.Length ?? response.Content.Headers.ContentLength;
         var fileName = GetFileName(uri, response.Content.Headers.ContentDisposition);
 
-        if (bytes.Length >= 4 && Encoding.ASCII.GetString(bytes, 0, 4) == "CrAU")
+        if (bytes.Length >= 4 && bytes.AsSpan(0, 4).SequenceEqual("CrAU"u8))
         {
             var payloadBytes = bytes.Length < PayloadManifestProbeBytes
                 ? await ReadRangeAsync(uri, 0, PayloadManifestProbeBytes, cancellationToken).ConfigureAwait(false)
@@ -89,7 +92,7 @@ public sealed class RemoteRomService(HttpClient client)
         {
             var details = await ReadZipEntryDetailsAsync(uri, length, cancellationToken).ConfigureAwait(false);
             var entries = details.Values.Where(e => !e.IsDirectory && !e.Name.EndsWith("payload.bin", StringComparison.OrdinalIgnoreCase)
-                    && new[] { ".img", ".raw", ".ext4", ".erofs", ".f2fs", ".simg", ".sparse" }.Contains(Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase))
+                    && ImageExtensions.Contains(Path.GetExtension(e.Name)))
                 .Select(e => new ContainerEntry(e.Name, Path.GetExtension(e.Name).TrimStart('.'), checked((long)e.UncompressedSize), false)).ToList();
             var payload = details.Values.FirstOrDefault(e => e.Name.EndsWith("payload.bin", StringComparison.OrdinalIgnoreCase) && e.Method == 0);
             if (payload is not null)
@@ -325,7 +328,7 @@ public sealed class RemoteRomService(HttpClient client)
         string outputDirectory,
         CancellationToken cancellationToken)
     {
-        var published = new List<(string Target, string? Backup)>();
+        List<(string Target, string? Backup)> published = [];
         var outputPaths = new List<string>(partitionNames.Count);
         try
         {
@@ -454,10 +457,9 @@ public sealed class RemoteRomService(HttpClient client)
     private async Task<IReadOnlyList<ContainerEntry>> ReadZipEntriesAsync(Uri uri, long? length, CancellationToken cancellationToken)
     {
         var details = await ReadZipEntryDetailsAsync(uri, length, cancellationToken).ConfigureAwait(false);
-        return details.Values.Where(e => !e.IsDirectory && (e.Name.EndsWith("payload.bin", StringComparison.OrdinalIgnoreCase)
-                || new[] { ".img", ".raw", ".ext4", ".erofs", ".f2fs", ".simg", ".sparse" }.Contains(Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase)))
-            .Select(e => new ContainerEntry(e.Name, Path.GetExtension(e.Name).TrimStart('.'), checked((long)e.UncompressedSize), e.Name.EndsWith("payload.bin", StringComparison.OrdinalIgnoreCase)))
-            .ToArray();
+        return [.. details.Values.Where(e => !e.IsDirectory && (e.Name.EndsWith("payload.bin", StringComparison.OrdinalIgnoreCase)
+                || ImageExtensions.Contains(Path.GetExtension(e.Name))))
+            .Select(e => new ContainerEntry(e.Name, Path.GetExtension(e.Name).TrimStart('.'), checked((long)e.UncompressedSize), e.Name.EndsWith("payload.bin", StringComparison.OrdinalIgnoreCase)))];
     }
 
     private async Task<Dictionary<string, ZipEntryDetail>> ReadZipEntryDetailsAsync(Uri uri, long? length, CancellationToken cancellationToken)

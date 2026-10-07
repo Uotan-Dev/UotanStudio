@@ -24,7 +24,7 @@ public sealed partial class PatchRun
             var identity = Current(path, original);
             temporary = NewStagingPath();
             IReadOnlyList<long> result;
-            var previews = new List<PatchBinaryPreview>();
+            List<PatchBinaryPreview> previews = [];
             var remainingPreviews = Math.Min(64 - (_binaryPreviews.GetValueOrDefault(path)?.Count ?? 0), 4096 - _binaryPreviewCount);
             await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true))
             {

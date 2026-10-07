@@ -75,7 +75,7 @@ internal static class ProjectCreationSpaceEstimator
             OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         AddDemand(targetDirectory, estimate.TargetBytes);
         if (estimate.TemporaryBytes > 0) AddDemand(Path.GetTempPath(), estimate.TemporaryBytes);
-        var shortages = new List<CreationSpaceShortage>();
+        List<CreationSpaceShortage> shortages = [];
         foreach (var (_, (path, required)) in demands)
         {
             var free = availableBytes(path);

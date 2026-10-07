@@ -19,8 +19,8 @@ public static class InteractionSchemaResolver
         var owners = nodes.SelectMany(node => node.Output.Select(port => (port, node))).ToDictionary(pair => pair.port, pair => pair.node);
         foreach (var dialog in nodes.OfType<InteractionNodeViewModel>().Where(node => node.TypeKey == "UI.Dialog.Show"))
         {
-            var fields = new List<InteractionFieldSchema>();
-            var visited = new HashSet<FlowNodeViewModel>();
+            List<InteractionFieldSchema> fields = [];
+            HashSet<FlowNodeViewModel> visited = [];
             var input = dialog.Input.Single(port => port.Title == "Form");
             var complete = VisitInput(input);
             dialog.ApplyFieldSchema(fields, complete, connections);
@@ -84,7 +84,7 @@ public static class InteractionSchemaResolver
 
     internal static void RefreshFromSnapshot(IEnumerable<FlowNodeViewModel> nodes, IReadOnlyDictionary<string, FlowNodeViewModel> created, WorkflowSnapshot snapshot)
     {
-        var edges = new List<NodeConnectionViewModel>();
+        List<NodeConnectionViewModel> edges = [];
         foreach (var connection in snapshot.Connections)
         {
             var (_, source) = WorkflowReconstruction.ResolveEndpoint(nodes, created, connection.SourceInstanceId, connection.SourceConnectorTitle, true, connection.SourcePortId);

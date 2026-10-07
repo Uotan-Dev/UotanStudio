@@ -48,8 +48,8 @@ public sealed class VisualPluginManager
             _registry.UnregisterNode(typeKey);
         _registeredTypeKeys.Clear();
 
-        var loaded = new List<(string Path, VisualPluginPackage Package)>();
-        var invalid = new List<VisualPluginRegistration>();
+        List<(string Path, VisualPluginPackage Package)> loaded = [];
+        List<VisualPluginRegistration> invalid = [];
         foreach (var path in Directory.EnumerateFiles(_directory, "*", SearchOption.TopDirectoryOnly)
                      .Where(path => path.EndsWith(".uotanplugin.json", StringComparison.OrdinalIgnoreCase)
                          || path.EndsWith(".uotanplugin", StringComparison.OrdinalIgnoreCase)))
@@ -76,14 +76,14 @@ public sealed class VisualPluginManager
         var cycleTypes = FindDependencyCycles(compositeByType);
         var available = new HashSet<string>(_registry.BuiltInTypeKeys, StringComparer.OrdinalIgnoreCase);
         var errorsById = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        var pending = new List<VisualPluginPackage>();
+        List<VisualPluginPackage> pending = [];
         var enabledPackages = loaded.Select(entry => entry.Package)
             .Where(package => IsNodeKind(package.Kind) && !_disabledIds.Contains(package.Manifest.Id))
             .ToArray();
 
         foreach (var (_, package) in loaded)
         {
-            var errors = new List<string>();
+            List<string> errors = [];
             errorsById[package.Manifest.Id] = errors;
             if (duplicates.Contains(package.Manifest.Id)) errors.Add("Multiple installed files use the same plugin id.");
             if (!SupportsCurrentPlatform(package.Manifest.Platforms)) errors.Add("This package does not support the current platform.");
@@ -485,7 +485,7 @@ public sealed class VisualPluginManager
     {
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var states = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var stack = new List<string>();
+        List<string> stack = [];
 
         void Visit(string typeKey)
         {
@@ -519,8 +519,7 @@ public sealed class VisualPluginManager
         {
             return structural;
         }
-        var errors = GetRequirementErrors(package, Registrations.Where(registration => registration.IsEnabled)
-            .Select(registration => registration.Package).ToArray());
+        var errors = GetRequirementErrors(package, [.. Registrations.Where(registration => registration.IsEnabled).Select(registration => registration.Package)]);
         foreach (var dependency in package.Manifest.Dependencies)
         {
             if (!Registrations.Any(registration => registration.IsEnabled && registration.IsAvailable
@@ -535,7 +534,7 @@ public sealed class VisualPluginManager
 
     private static List<string> GetRequirementErrors(VisualPluginPackage package, IReadOnlyList<VisualPluginPackage> enabled)
     {
-        var errors = new List<string>();
+        List<string> errors = [];
         foreach (var dependency in package.Manifest.Dependencies)
         {
             var candidates = enabled.Where(candidate => string.Equals(candidate.Manifest.Id, dependency.Id,

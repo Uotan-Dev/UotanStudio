@@ -39,11 +39,11 @@ internal static class WorkflowGraphValidation
         IReadOnlyList<NodeConnectionViewModel> connections, bool forExecution = false,
         bool deferConditionalRequirements = false)
     {
-        var issues = new List<WorkflowGraphIssue>();
+        List<WorkflowGraphIssue> issues = [];
         var identities = new HashSet<string>(StringComparer.Ordinal);
-        var owners = new Dictionary<NodeConnectorViewModel, FlowNodeViewModel>();
-        var inputs = new HashSet<NodeConnectorViewModel>();
-        var outputs = new HashSet<NodeConnectorViewModel>();
+        Dictionary<NodeConnectorViewModel, FlowNodeViewModel> owners = [];
+        HashSet<NodeConnectorViewModel> inputs = [];
+        HashSet<NodeConnectorViewModel> outputs = [];
         foreach (var node in nodes)
         {
             if (string.IsNullOrWhiteSpace(node.InstanceId) || !identities.Add(node.InstanceId)
@@ -68,10 +68,10 @@ internal static class WorkflowGraphValidation
                 issues.Add(new(node, Text("Node_Graph_Unavailable")));
             }
         }
-        var accepted = new List<NodeConnectionViewModel>();
-        var connected = new HashSet<NodeConnectorViewModel>();
-        var pairs = new HashSet<(NodeConnectorViewModel, NodeConnectorViewModel)>();
-        var counts = new Dictionary<NodeConnectorViewModel, int>();
+        List<NodeConnectionViewModel> accepted = [];
+        HashSet<NodeConnectorViewModel> connected = [];
+        HashSet<(NodeConnectorViewModel, NodeConnectorViewModel)> pairs = [];
+        Dictionary<NodeConnectorViewModel, int> counts = [];
         foreach (var edge in connections)
         {
             string? error = null;
@@ -171,7 +171,7 @@ internal static class WorkflowGraphValidation
                 && edge.Target?.PortType == NodePortType.Flow)
             .GroupBy(edge => owners[edge.Source!])
             .ToDictionary(group => group.Key, group => group.Select(edge => owners[edge.Target!]).ToArray());
-        var deferred = new HashSet<FlowNodeViewModel>();
+        HashSet<FlowNodeViewModel> deferred = [];
         var pending = new Queue<FlowNodeViewModel>(nodes
             .Where(node => node.TypeKey is "Flow.Condition.Branch" or "Flow.Applicability.Gate")
             .SelectMany(node => flow.GetValueOrDefault(node) ?? []));
@@ -192,9 +192,9 @@ internal static class WorkflowGraphValidation
     internal static IReadOnlyList<WorkflowGraphIssue> ValidateRuntime(IReadOnlyList<FlowNodeViewModel> nodes,
         IReadOnlyList<NodeConnection> connections)
     {
-        var issues = new List<WorkflowGraphIssue>();
+        List<WorkflowGraphIssue> issues = [];
         var byId = nodes.GroupBy(node => node.InstanceId).ToDictionary(group => group.Key, group => group.First());
-        var edges = new List<NodeConnectionViewModel>();
+        List<NodeConnectionViewModel> edges = [];
         foreach (var edge in connections)
         {
             byId.TryGetValue(edge.SourceInstanceId, out var source);

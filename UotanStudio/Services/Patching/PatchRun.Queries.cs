@@ -118,7 +118,7 @@ public sealed partial class PatchRun
             {
                 await OriginalAsync(path, token).ConfigureAwait(false);
             }
-            return result.Order(StringComparer.Ordinal).ToArray();
+            return [.. result.Order(StringComparer.Ordinal)];
         }
         finally { _gate.Release(); }
     }

@@ -604,7 +604,7 @@ internal sealed class ImageInputService
             return ImageFormatKind.Fat;
         }
 
-        return header.Length >= 11 && Encoding.ASCII.GetString(header.Slice(3, 8)) == "EXFAT   " ? ImageFormatKind.ExFat : null;
+        return header.Length >= 11 && header.Slice(3, 8).SequenceEqual("EXFAT   "u8) ? ImageFormatKind.ExFat : null;
     }
 
     /// <summary>
@@ -630,7 +630,7 @@ internal sealed class ImageInputService
     /// Determines whether the header carries the OTA payload magic ("CrAU").
     /// </summary>
     private static bool IsPayloadHeader(ReadOnlySpan<byte> header) =>
-        header.Length >= 4 && Encoding.ASCII.GetString(header.Slice(0, 4)) == "CrAU";
+        header.Length >= 4 && header.Slice(0, 4).SequenceEqual("CrAU"u8);
 
     /// <summary>erofs superblock magic at offset 1024. erofs 超级块魔数，位于偏移 1024。</summary>
     private const uint ErofsMagic = 0xE0F5E1E2;

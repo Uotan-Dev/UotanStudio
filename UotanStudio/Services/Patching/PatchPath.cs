@@ -26,13 +26,14 @@ internal static class PatchPath
         var segments = relative.Replace('\\', '/').Split('/');
         if (Path.IsPathRooted(relative) || relative.Contains(':') || segments.Any(segment =>
             segment is "" or "." or ".." || segment.EndsWith('.') || segment.EndsWith(' ')
-            || segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0))
+            || segment.AsSpan().ContainsAny(PathSearchValues.InvalidFileName)))
         {
             throw new InvalidDataException("A patch target must be a normalized relative path.");
         }
         foreach (var segment in segments)
         {
-            var stem = segment.Split('.')[0].ToUpperInvariant();
+            var dot = segment.IndexOf('.');
+            var stem = (dot < 0 ? segment : segment[..dot]).ToUpperInvariant();
             if (stem is "CON" or "PRN" or "AUX" or "NUL"
                 || stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) || stem.StartsWith("LPT", StringComparison.Ordinal))
                 && stem[3] is >= '1' and <= '9')

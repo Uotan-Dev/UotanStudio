@@ -20,10 +20,10 @@ public static class CompositeBoundaryAnalyzer
     {
         ArgumentNullException.ThrowIfNull(nodes);
         ArgumentNullException.ThrowIfNull(connections);
-        var inputs = new List<VisualPluginPortDefinition>();
-        var outputs = new List<VisualPluginPortDefinition>();
-        var inputCandidates = new List<VisualPluginPortDefinition>();
-        var outputCandidates = new List<VisualPluginPortDefinition>();
+        List<VisualPluginPortDefinition> inputs = [];
+        List<VisualPluginPortDefinition> outputs = [];
+        List<VisualPluginPortDefinition> inputCandidates = [];
+        List<VisualPluginPortDefinition> outputCandidates = [];
         var inputOwners = nodes.SelectMany(node => node.Input.Select(port => (node, port)))
             .ToDictionary(pair => pair.port, pair => pair.node);
         var outputOwners = nodes.SelectMany(node => node.Output.Select(port => (node, port)))

@@ -13,11 +13,14 @@ namespace UotanStudio.Services;
 /// </summary>
 internal static class JsonArrayAotExtensions
 {
-    /// <summary>
-    /// <para>把节点追加到 <see cref="JsonArray"/>（经非泛型 <c>IList&lt;JsonNode?&gt;</c> 接口，AOT 安全）。</para>
-    /// <para>Appends a node to the <see cref="JsonArray"/> via the non-generic
-    /// <c>IList&lt;JsonNode?&gt;</c> interface (AOT-safe).</para>
-    /// </summary>
-    public static void Append(this JsonArray array, JsonNode? node) =>
-        ((System.Collections.Generic.IList<JsonNode?>)array).Add(node);
+    extension(JsonArray array)
+    {
+        /// <summary>
+        /// <para>把节点追加到 <see cref="JsonArray"/>（经非泛型 <c>IList&lt;JsonNode?&gt;</c> 接口，AOT 安全）。</para>
+        /// <para>Appends a node to the <see cref="JsonArray"/> via the non-generic
+        /// <c>IList&lt;JsonNode?&gt;</c> interface (AOT-safe).</para>
+        /// </summary>
+        public void Append(JsonNode? node) =>
+            ((System.Collections.Generic.IList<JsonNode?>)array).Add(node);
+    }
 }

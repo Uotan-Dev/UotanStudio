@@ -42,7 +42,7 @@ public static class PatchFileService
         pattern = pattern.Replace('\\', '/');
         var pending = new Stack<string>();
         pending.Push(root);
-        var result = new List<string>();
+        List<string> result = [];
         var visited = 0;
         var pathCharacters = 0L;
         while (pending.TryPop(out var directory))
@@ -113,17 +113,17 @@ public static class PatchFileService
     {
         var encoding = "utf8";
         var skip = 0;
-        if (bytes.StartsWith(new byte[] { 0xef, 0xbb, 0xbf }))
+        if (bytes is [0xef, 0xbb, 0xbf, ..])
         {
             encoding = "utf8-bom";
             skip = 3;
         }
-        else if (bytes.StartsWith(new byte[] { 0xff, 0xfe }))
+        else if (bytes is [0xff, 0xfe, ..])
         {
             encoding = "utf16-le";
             skip = 2;
         }
-        else if (bytes.StartsWith(new byte[] { 0xfe, 0xff }))
+        else if (bytes is [0xfe, 0xff, ..])
         {
             encoding = "utf16-be";
             skip = 2;

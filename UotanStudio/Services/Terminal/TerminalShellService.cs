@@ -6,7 +6,7 @@ internal static class TerminalShellService
 {
     internal static IReadOnlyList<TerminalProfile> GetProfiles()
     {
-        var profiles = new List<TerminalProfile>();
+        List<TerminalProfile> profiles = [];
         void Add(string name, string? executable, params string[] arguments)
         {
             if (string.IsNullOrWhiteSpace(executable)) return;

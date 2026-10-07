@@ -32,12 +32,8 @@ public sealed class DesktopDeviceManagerGateway : IDeviceManagerGateway
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
-        _monitor.RunAdb(RequireUniqueAdbTarget(serial), session =>
-        {
-            using var sync = session.CreateSyncClient();
-            sync.Push(localPath, remotePath);
-            return true;
-        }, cancellationToken);
+        _monitor.PushAdbFileAsync(RequireUniqueAdbTarget(serial), localPath, remotePath, cancellationToken)
+            .ConfigureAwait(false).GetAwaiter().GetResult();
     }
 
     public void PullAdbFile(string serial, string remotePath, string localPath,
@@ -45,12 +41,8 @@ public sealed class DesktopDeviceManagerGateway : IDeviceManagerGateway
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
         ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
-        _monitor.RunAdb(RequireUniqueAdbTarget(serial), session =>
-        {
-            using var sync = session.CreateSyncClient();
-            sync.Pull(remotePath, localPath);
-            return true;
-        }, cancellationToken);
+        _monitor.PullAdbFileAsync(RequireUniqueAdbTarget(serial), remotePath, localPath, cancellationToken)
+            .ConfigureAwait(false).GetAwaiter().GetResult();
     }
 
     public TResult RunFastboot<TResult>(string? target, Func<FastbootSession, TResult> operation,

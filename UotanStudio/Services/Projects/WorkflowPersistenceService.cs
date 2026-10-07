@@ -26,7 +26,7 @@ public static class WorkflowPersistenceService
             // These capabilities come only from already loaded objects, never from serialized input.
             copy.BundlePath = original.BundlePath;
             copy.BundleRoot = original.BundleRoot;
-            copy.Assets = original.Assets.Select(asset => asset.Snapshot()).ToList();
+            copy.Assets = [.. original.Assets.Select(asset => asset.Snapshot())];
             RestoreResourceSources(original.Graph, copy.Graph);
         }
     }

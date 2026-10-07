@@ -184,8 +184,8 @@ internal sealed partial class ImageBrowserSession
         // CPIO newc magic "070701" or "070702", CPIO bin magic 0x71C7 (big-endian).
         if (logical.Length >= 6)
         {
-            var magic = System.Text.Encoding.ASCII.GetString(logical, 0, 6);
-            if (magic is "070701" or "070702" or "070707")
+            var magic = logical.AsSpan(0, 6);
+            if (magic.SequenceEqual("070701"u8) || magic.SequenceEqual("070702"u8) || magic.SequenceEqual("070707"u8))
             {
                 return FilesystemKind.Cpio;
             }

@@ -415,7 +415,7 @@ public sealed class FirmwareService
         {
             LogService.Instance.Write(LogLevel.Info, "Firmware", $"Signing VBMeta {vbmetaPath} -> {outputPath}");
 
-            var key = AvbSigner.LoadRsaPrivateKey(privateKeyPath);
+            using var key = AvbSigner.LoadRsaPrivateKey(privateKeyPath);
             if (key == null)
             {
                 return FirmwareOpResult.Fail($"Failed to load RSA private key from '{privateKeyPath}'. 无法从 '{privateKeyPath}' 加载 RSA 私钥。");
@@ -487,7 +487,7 @@ public sealed class FirmwareService
                 UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSigner.Sign(
                     inputApk, outputApk, keyMaterial, options, cancellationToken);
 
-                var schemes = new List<string>();
+                List<string> schemes = [];
                 if (enableV1) { schemes.Add("v1"); }
                 if (enableV2) { schemes.Add("v2"); }
                 if (enableV3) { schemes.Add("v3"); }
@@ -609,7 +609,7 @@ public sealed class FirmwareService
         {
             LogService.Instance.Write(LogLevel.Info, "Firmware", $"Adding AVB hash footer to {imagePath} -> {outputPath}");
 
-            var key = AvbSigner.LoadRsaPrivateKey(privateKeyPath);
+            using var key = AvbSigner.LoadRsaPrivateKey(privateKeyPath);
             if (key == null)
             {
                 return FirmwareOpResult.Fail($"Failed to load RSA private key from '{privateKeyPath}'. 无法从 '{privateKeyPath}' 加载 RSA 私钥。");
@@ -654,7 +654,7 @@ public sealed class FirmwareService
     {
         ArgumentNullException.ThrowIfNull(options);
         cancellationToken.ThrowIfCancellationRequested();
-        var key = AvbSigner.LoadRsaPrivateKey(privateKeyPath);
+        using var key = AvbSigner.LoadRsaPrivateKey(privateKeyPath);
         if (key is null)
         {
             return new AvbSignResult { ErrorMessage = "Failed to load the RSA private key. 无法加载 RSA 私钥。" };
@@ -1334,7 +1334,7 @@ public sealed class FirmwareService
             {
                 Success = true,
                 Summary = $"Imported {set.Kind} artifact to {outputPath}. 已导入 {set.Kind} 工件。",
-                Entries = set.Parts.Select(path => Path.GetFileName(path)!).ToArray()
+                Entries = [.. set.Parts.Select(path => Path.GetFileName(path)!)]
             };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -1371,7 +1371,7 @@ public sealed class FirmwareService
             {
                 Success = true,
                 Summary = $"Reconstructed {set.Kind} image to {outputImagePath}. 已重建 {set.Kind} 镜像。",
-                Entries = set.Parts.Select(path => Path.GetFileName(path)!).ToArray()
+                Entries = [.. set.Parts.Select(path => Path.GetFileName(path)!)]
             };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -24,8 +24,7 @@ public static class VisualPluginPackageBuilder
         var graph = new WorkflowSnapshot
         {
             Nodes = WorkflowPersistenceService.BuildNodeDtos(nodes),
-            Connections = WorkflowPersistenceService.BuildConnectionDtos(nodes, connections)
-                .Where(edge => edge.SourceInstanceId is not null && edge.TargetInstanceId is not null).ToList()
+            Connections = [.. WorkflowPersistenceService.BuildConnectionDtos(nodes, connections).Where(edge => edge.SourceInstanceId is not null && edge.TargetInstanceId is not null)]
         };
         if (portable)
         {
@@ -128,12 +127,12 @@ public static class VisualPluginPackageBuilder
         updated.Manifest.Description = existing.Manifest.Description;
         updated.Manifest.NodeApiVersion = existing.Manifest.NodeApiVersion;
         updated.Manifest.Platforms = [.. existing.Manifest.Platforms];
-        updated.Manifest.Dependencies = existing.Manifest.Dependencies.Select(dependency => new VisualPluginDependency
+        updated.Manifest.Dependencies = [.. existing.Manifest.Dependencies.Select(dependency => new VisualPluginDependency
         {
             Id = dependency.Id,
             MinimumVersion = dependency.MinimumVersion,
             MaximumVersionExclusive = dependency.MaximumVersionExclusive
-        }).ToList();
+        })];
         updated.Manifest.Conflicts = [.. existing.Manifest.Conflicts];
         updated.Assets = [.. existing.Assets];
         updated.BundlePath = existing.BundlePath;
@@ -142,8 +141,8 @@ public static class VisualPluginPackageBuilder
         if (existing.Kind == VisualPluginKind.CompositeNode)
         {
 
-            updated.Inputs = existing.Inputs.Select(ClonePort).ToList();
-            updated.Outputs = existing.Outputs.Select(ClonePort).ToList();
+            updated.Inputs = [.. existing.Inputs.Select(ClonePort)];
+            updated.Outputs = [.. existing.Outputs.Select(ClonePort)];
         }
 
         var errors = VisualPluginValidation.Validate(updated);
@@ -178,11 +177,11 @@ public static class VisualPluginPackageBuilder
         DefaultValue = port.IsSensitive ? null : port.DefaultValue,
         Required = port.Required,
         IsSensitive = port.IsSensitive,
-        AdditionalBindings = port.AdditionalBindings.Select(binding => new VisualPluginPortBinding
+        AdditionalBindings = [.. port.AdditionalBindings.Select(binding => new VisualPluginPortBinding
         {
             NodeInstanceId = binding.NodeInstanceId,
             PortId = binding.PortId
-        }).ToList()
+        })]
     };
 
     private static void RemoveMachineSpecificPathDefaults(WorkflowSnapshot graph)

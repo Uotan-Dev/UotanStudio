@@ -16,6 +16,8 @@ internal static class TextSearchService
     internal const int MaximumTextLength = 8 * 1024 * 1024;
     internal const int MaximumMatches = 10000;
 
+    private static CompiledSearch? _cachedSearch;
+
     internal static IReadOnlyList<TextSearchMatch> Find(string text, TextSearchOptions options,
         int start = 0, int? length = null, CancellationToken cancellationToken = default)
     {
@@ -31,13 +33,9 @@ internal static class TextSearchService
 
             return FindLiteral(text, options, start, end, cancellationToken);
         }
-        var pattern = options.UseRegex ? options.Pattern : Regex.Escape(options.Pattern);
-        if (options.WholeWord) pattern = @"(?<![\p{L}\p{N}\p{M}_])(?:" + pattern + @")(?![\p{L}\p{N}\p{M}_])";
-        var flags = RegexOptions.CultureInvariant | RegexOptions.Multiline;
-        if (!options.MatchCase) flags |= RegexOptions.IgnoreCase;
-        var regex = new Regex(pattern, flags, TimeSpan.FromMilliseconds(250));
+        var regex = GetCompiledRegex(options);
         var clock = Stopwatch.StartNew();
-        var matches = new List<TextSearchMatch>();
+        List<TextSearchMatch> matches = [];
         long replacementLength = 0;
         for (var match = regex.Match(text, start); match.Success && match.Index <= end; match = match.NextMatch())
         {
@@ -55,6 +53,32 @@ internal static class TextSearchService
     }
 
     /// <summary>
+    /// Reuses the last compiled <see cref="Regex"/> while the pattern and its switches are unchanged;
+    /// document and project searches call <see cref="Find"/> once per document or per file with the same
+    /// options, and the pattern is user input, so it cannot be source-generated.
+    /// <para>模式与开关未变时复用上一次编译出的 <see cref="Regex"/>：文档与项目搜索会用同一份选项按文档或
+    /// 按文件多次调用 <see cref="Find"/>，而模式来自用户输入，无法源码生成。</para>
+    /// </summary>
+    private static Regex GetCompiledRegex(TextSearchOptions options)
+    {
+        var cached = _cachedSearch;
+        if (cached is not null && cached.UseRegex == options.UseRegex && cached.WholeWord == options.WholeWord
+            && cached.MatchCase == options.MatchCase && cached.Pattern == options.Pattern)
+        {
+            return cached.Regex;
+        }
+        var pattern = options.UseRegex ? options.Pattern : Regex.Escape(options.Pattern);
+        if (options.WholeWord) pattern = @"(?<![\p{L}\p{N}\p{M}_])(?:" + pattern + @")(?![\p{L}\p{N}\p{M}_])";
+        var flags = RegexOptions.CultureInvariant | RegexOptions.Multiline;
+        if (!options.MatchCase) flags |= RegexOptions.IgnoreCase;
+        var regex = new Regex(pattern, flags, TimeSpan.FromMilliseconds(250));
+        _cachedSearch = new CompiledSearch(options.Pattern, options.UseRegex, options.WholeWord, options.MatchCase, regex);
+        return regex;
+    }
+
+    private sealed record CompiledSearch(string Pattern, bool UseRegex, bool WholeWord, bool MatchCase, Regex Regex);
+
+    /// <summary>
     /// Literal (non-regex, non-whole-word) search fast path. Matches the Regex path's
     /// boundary, limit and timeout semantics via IndexOf instead of an interpreted Regex.
     /// <para>字面量（非正则、非整词）搜索快路径：用 IndexOf 保持与 Regex 路径一致的
@@ -64,7 +88,7 @@ internal static class TextSearchService
         int start, int end, CancellationToken cancellationToken)
     {
         var clock = Stopwatch.StartNew();
-        var matches = new List<TextSearchMatch>();
+        List<TextSearchMatch> matches = [];
         long replacementLength = 0;
         var comparison = options.MatchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
         var index = start;
@@ -85,7 +109,7 @@ internal static class TextSearchService
 
             if (matches.Count == MaximumMatches) throw new IOException("Search exceeds the 10000 match limit. Narrow the scope.");
             var replacement = options.Replacement;
-            if (options.PreserveCase) replacement = PreserveCase(text.Substring(found, options.Pattern.Length), replacement);
+            if (options.PreserveCase) replacement = PreserveCase(text.AsSpan(found, options.Pattern.Length), replacement);
             replacementLength += replacement.Length;
             if (replacementLength > MaximumTextLength) throw new IOException("Replacement exceeds the 8 MiB text limit.");
             matches.Add(new(found, options.Pattern.Length, text.Substring(found, options.Pattern.Length), replacement));
@@ -134,7 +158,7 @@ internal static class TextSearchService
         });
     }
 
-    private static string PreserveCase(string source, string replacement)
+    private static string PreserveCase(ReadOnlySpan<char> source, string replacement)
     {
         var hasLetters = false;
         var allUpper = true;

@@ -95,7 +95,7 @@ public sealed partial class PatchRun
         {
             lock (_compositeLock)
             {
-                return _compositeExecutions.ToArray();
+                return [.. _compositeExecutions];
             }
         }
     }

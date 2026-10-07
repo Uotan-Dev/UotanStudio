@@ -78,7 +78,7 @@ public sealed class ProjectOperationsService
 
     private Dictionary<string, JsonElement>? CaptureSolutionState()
     {
-        var state = new Dictionary<string, JsonElement>();
+        Dictionary<string, JsonElement> state = [];
         if (CaptureDeliveryState?.Invoke() is { ValueKind: JsonValueKind.Object } delivery)
             state[DeliveryPlanStore.StateKey] = delivery;
         // 交付页尚未加载时保留解决方案文件中原有的交付计划，避免被空捕获覆盖。

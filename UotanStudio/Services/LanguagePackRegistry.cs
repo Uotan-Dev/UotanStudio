@@ -172,7 +172,7 @@ public class LanguagePackRegistry
     public void DiscoverBuiltInPacks(string[]? knownCultures = null)
     {
         var cultures = knownCultures ?? ["en-US", "zh-CN"];
-        var defaultModules = new[] { "Common", "Menu", "Dock", "Node", "Settings", "Device", "Interaction" };
+        string[] defaultModules = ["Common", "Menu", "Dock", "Node", "Settings", "Device", "Interaction"];
 
         foreach (var culture in cultures)
         {

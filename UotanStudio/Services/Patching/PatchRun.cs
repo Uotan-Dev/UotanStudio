@@ -253,9 +253,9 @@ public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
     private async Task PublishAsync(CancellationToken token)
     {
         var changes = _files.Values.Where(file => file.Before.Sha256 != file.After.Sha256).ToArray();
-        var prepared = new List<Publication>();
-        var applied = new List<Publication>();
-        var directories = new List<string>();
+        List<Publication> prepared = [];
+        List<Publication> applied = [];
+        List<string> directories = [];
         var retainRecovery = false;
         try
         {
@@ -438,16 +438,16 @@ public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
 
     private void RefreshChanges()
     {
-        Changes = _files.Values.Select(file => new PatchChange(file.Path,
+        Changes = [.. _files.Values.Select(file => new PatchChange(file.Path,
             file.Before.Sha256 == file.After.Sha256 ? PatchChangeKind.Unchanged
             : !file.Before.Exists ? PatchChangeKind.Added
             : !file.After.Exists ? PatchChangeKind.Deleted : PatchChangeKind.Modified,
             file.Before.Length, file.After.Length, file.Before.Sha256, file.After.Sha256, file.BeforePreview, file.AfterPreview)
         {
-            StagingInvocations = _stagingInvocations[file.Path].Order().ToArray(),
+            StagingInvocations = [.. _stagingInvocations[file.Path].Order()],
             BinaryPreviews = _binaryPreviews.TryGetValue(file.Path, out var previews) ? previews.ToArray() : [],
             BinaryPreviewTruncated = _truncatedBinaryPreviews.Contains(file.Path)
-        }).ToArray();
+        })];
         if (!_finished && Outcome != PatchRunOutcome.Conflict) { Outcome = PatchRunOutcome.Staged; }
     }
 

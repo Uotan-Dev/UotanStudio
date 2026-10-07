@@ -52,10 +52,10 @@ public sealed class KeyLibraryService
     public IReadOnlyList<ManagedKey> List()
     {
         if (!Directory.Exists(Root)) return [];
-        return Directory.EnumerateDirectories(Root)
+        return [.. Directory.EnumerateDirectories(Root)
             .Where(p => Guid.TryParseExact(Path.GetFileName(p), "N", out _))
             .Select(p => ReadMetadata(Path.Combine(p, "key.json")))
-            .OrderByDescending(k => k.Created).ToArray();
+            .OrderByDescending(k => k.Created)];
     }
 
     public ManagedKey Generate(string name, ManagedKeyKind kind, int bits)
@@ -138,7 +138,7 @@ public sealed class KeyLibraryService
             var key = Import(name, ManagedKeyKind.Apk, generated.PrivateKeyPath, keyPassword ?? "");
 
             Directory.CreateDirectory(Path.GetFullPath(outputDirectory));
-            var exported = new List<string>();
+            List<string> exported = [];
             using var privateKey = LoadAnyPrivateKey(generated.PrivateKeyPath, keyPassword ?? "");
             var pkcs8 = privateKey.ExportPkcs8PrivateKey();
             try

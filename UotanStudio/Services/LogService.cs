@@ -79,7 +79,7 @@ public sealed class LogService : IUnifiedLog
     {
         get
         {
-            var snapshot = new List<LogEntry>();
+            List<LogEntry> snapshot = [];
             foreach (var e in _entries) snapshot.Add(e);
             return snapshot;
         }
@@ -163,14 +163,14 @@ public sealed class LogService : IUnifiedLog
         lock (_subscribersLock)
         {
             _subscribers.Add(handler);
-            Volatile.Write(ref _subscriberSnapshot, _subscribers.ToArray());
+            Volatile.Write(ref _subscriberSnapshot, [.. _subscribers]);
         }
         return () =>
         {
             lock (_subscribersLock)
             {
                 _subscribers.Remove(handler);
-                Volatile.Write(ref _subscriberSnapshot, _subscribers.ToArray());
+                Volatile.Write(ref _subscriberSnapshot, [.. _subscribers]);
             }
         };
     }
@@ -239,7 +239,7 @@ public sealed class LogService : IUnifiedLog
     /// <para>判断来源是否包含任一关键字（不区分大小写）。</para>
     /// Determines whether the source contains any of the given keywords (case-insensitive).
     /// </summary>
-    private static bool ContainsAny(string source, params string[] keywords)
+    private static bool ContainsAny(string source, params ReadOnlySpan<string> keywords)
     {
         foreach (var keyword in keywords)
         {

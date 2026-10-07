@@ -86,10 +86,10 @@ internal static class ImageOutputService
         }
     }
 
-    private static void PublishOutputs(string outputRoot, string staging, params string[] files)
+    private static void PublishOutputs(string outputRoot, string staging, params ReadOnlySpan<string> files)
     {
-        var published = new List<string>();
-        var backups = new List<(string Target, string Backup)>();
+        List<string> published = [];
+        List<(string Target, string Backup)> backups = [];
         foreach (var file in files)
             if (Directory.Exists(Path.Combine(outputRoot, Path.GetFileName(file))))
                 throw new IOException($"Output path is a directory: {Path.GetFileName(file)}");

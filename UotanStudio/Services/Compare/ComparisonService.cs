@@ -50,7 +50,7 @@ internal sealed class ComparisonService(
     public Task<IReadOnlyList<FolderCompareItem>> ReadDirectoryAsync(string path, CancellationToken cancellationToken) => Task.Run<IReadOnlyList<FolderCompareItem>>(() =>
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var entries = new List<FolderCompareItem>();
+        List<FolderCompareItem> entries = [];
         foreach (var entry in Directory.EnumerateFileSystemEntries(path, "*", SearchOption.AllDirectories))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -80,7 +80,7 @@ internal sealed class ComparisonService(
 
         using var reader = new StreamReader(stream, Encoding.UTF8,
             detectEncodingFromByteOrderMarks: true, bufferSize: 81920, leaveOpen: false);
-        var lines = new List<string>();
+        List<string> lines = [];
         while (reader.ReadLine() is { } line)
         {
             cancellationToken.ThrowIfCancellationRequested();

@@ -33,8 +33,8 @@ public static class LogFileService
     public static bool LooksLikeLog(ReadOnlySpan<byte> header)
     {
         header = header[..Math.Min(header.Length, 8192)];
-        var encoding = header.StartsWith(new byte[] { 0xFF, 0xFE }) ? Encoding.Unicode
-            : header.StartsWith(new byte[] { 0xFE, 0xFF }) ? Encoding.BigEndianUnicode : Encoding.UTF8;
+        var encoding = header is [0xFF, 0xFE, ..] ? Encoding.Unicode
+            : header is [0xFE, 0xFF, ..] ? Encoding.BigEndianUnicode : Encoding.UTF8;
         using var reader = new StringReader(encoding.GetString(header).TrimStart('\uFEFF'));
         for (var i = 0; i < 16 && reader.ReadLine() is { } line; i++)
             if (line == Header || LogTextParser.Recognizes(line)) return true;
@@ -49,7 +49,7 @@ public static class LogFileService
         foreach (var entry in entries)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var record = new LogFileRecord(entry.Text, entry.Level, entry.Columns.ToArray());
+            var record = new LogFileRecord(entry.Text, entry.Level, [.. entry.Columns]);
             await writer.WriteLineAsync(JsonSerializer.Serialize(record, JsonContext.LogFileRecord).AsMemory(), cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -64,7 +64,7 @@ public static class LogFileService
         if (stream.Length > MaximumFileBytes)
             throw new InvalidDataException(LanguageService.Instance.GetString("Log_FileTooLarge"));
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        var result = new List<ILogLine>();
+        List<ILogLine> result = [];
         var parser = new LogTextParser();
         var firstLine = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
         var exported = firstLine == Header;

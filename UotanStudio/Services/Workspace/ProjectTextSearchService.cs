@@ -11,7 +11,7 @@ internal static class ProjectTextSearchService
     internal static IReadOnlyList<ProjectTextSearchResult> Find(string root, TextSearchOptions options,
         IReadOnlySet<string> excludedPaths, CancellationToken cancellationToken)
     {
-        var result = new List<ProjectTextSearchResult>();
+        List<ProjectTextSearchResult> result = [];
         var directories = new Stack<string>();
         directories.Push(Path.GetFullPath(root));
         long bytes = 0;
@@ -71,9 +71,9 @@ internal static class ProjectTextSearchService
         var headerLength = file.Read(header);
         Encoding encoding = new UTF8Encoding(false, true);
         var preamble = 0;
-        if (headerLength >= 4 && header.SequenceEqual(new byte[] { 0xff, 0xfe, 0, 0 }))
+        if (headerLength >= 4 && header is [0xff, 0xfe, 0, 0])
         { encoding = new UTF32Encoding(false, true, true); preamble = 4; }
-        else if (headerLength >= 4 && header.SequenceEqual(new byte[] { 0, 0, 0xfe, 0xff }))
+        else if (headerLength >= 4 && header is [0, 0, 0xfe, 0xff])
         { encoding = new UTF32Encoding(true, true, true); preamble = 4; }
         else if (headerLength >= 2 && header[0] == 0xff && header[1] == 0xfe)
         { encoding = new UnicodeEncoding(false, true, true); preamble = 2; }
