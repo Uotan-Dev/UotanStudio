@@ -151,11 +151,10 @@ public class OperationProcessorBenchmarks
         _baseOffset = header.BaseOffset;
         _blockSize = manifest.BlockSize;
         var odm = manifest.Partitions.Single(p => p.PartitionName == "odm");
-        _ops = odm.Operations
+        _ops = [.. odm.Operations
             .Where(o => o.Type == InstallOperation.Types.Type.ReplaceXz)
             .OrderBy(o => o.DataOffset)
-            .TakeLast(400)
-            .ToList();
+            .TakeLast(400)];
         _outDir = Path.Combine(Path.GetTempPath(), "uotan_bench_ops_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_outDir);
         _outPath = Path.Combine(_outDir, "out.img");

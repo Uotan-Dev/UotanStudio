@@ -79,11 +79,11 @@ public class HotPathBenchmarks
             names.Add($"art{i}.img");
         }
 
-        _stagedFiles = names.Select(n => Path.Combine(stage, n)).ToArray();
+        _stagedFiles = [.. names.Select(n => Path.Combine(stage, n))];
 
         // Byte-equivalence: one representative produced image, scanned whole.
         _equivalenceImage = CompressiblePayload(16 * 1024 * 1024, new Random(7));
-        _equivalenceDigest = Convert.ToHexString(SHA256.HashData(_equivalenceImage)).ToLowerInvariant();
+        _equivalenceDigest = Convert.ToHexStringLower(SHA256.HashData(_equivalenceImage));
         _equivalenceLength = _equivalenceImage.Length;
     }
 
@@ -155,7 +155,7 @@ public class HotPathBenchmarks
                 throw new IOException("Output changed while verifying.");
             }
 
-            hashes.Append(Convert.ToHexString(hash).ToLowerInvariant()).Append("  ")
+            hashes.Append(Convert.ToHexStringLower(hash)).Append("  ")
                 .AppendLine(Path.GetFileName(stagedFiles[i]));
         }
 
