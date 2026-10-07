@@ -259,11 +259,13 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
     /// </summary>
     /// <remarks>
     /// A directory input becomes one entry per file, ordered by ordinal path, skipping repack-metadata files
-    /// and <c>.decrypted</c> sidecars; entry names are truncated to the 20-byte table field. A file input is
-    /// parsed as an OPS package and its entry payloads are copied byte for byte. Neither path encrypts or
-    /// decrypts payload bytes, and each payload is streamed in bounded copies rather than buffered whole.
+    /// and <c>.decrypted</c> sidecars; every entry name must fit the 20-byte ASCII table field, and a name it
+    /// cannot store fails the pack instead of being clipped. A file input is parsed as an OPS package and its
+    /// entry payloads are copied byte for byte. Neither path encrypts or decrypts payload bytes, and each
+    /// payload is streamed in bounded copies rather than buffered whole.
     /// <para>目录输入按序数路径顺序为每个文件生成一个条目，跳过重打包元数据文件与 <c>.decrypted</c> 侧文件；
-    /// 条目名截断到 20 字节的表字段。文件输入按 OPS 包解析并逐字节复制其条目负载。两条路径都不对负载加解密，
+    /// 每个条目名都必须能放入 20 字节的 ASCII 表字段，放不下的名称会让打包直接失败而不会被截断。
+    /// 文件输入按 OPS 包解析并逐字节复制其条目负载。两条路径都不对负载加解密，
     /// 每段负载以有界复制写出而非整体缓冲。</para>
     /// </remarks>
     /// <param name="inputPath">Extraction directory or existing OPS package; a blank path, or a path that is
@@ -276,9 +278,10 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
     /// <see cref="OperationCanceledException"/> on the returned task, never as a failure result.
     /// <para>在任何工作前检查；已触发的令牌以返回任务上的 <see cref="OperationCanceledException"/> 呈现，绝不转换为失败结果。</para></param>
     /// <returns>A success result whose summary names the produced path; a failure result carrying the exception
-    /// message when the input cannot be read, an entry exceeds the 32-bit size field, or the output cannot be
-    /// written.
-    /// <para>成功结果的摘要写有产出路径；输入不可读、条目超出 32 位长度字段或输出无法写入时返回携带异常消息的失败结果。</para></returns>
+    /// message when the input cannot be read, an entry exceeds the 32-bit size field, an entry name does not
+    /// fit the 20-byte ASCII name field, or the output cannot be written.
+    /// <para>成功结果的摘要写有产出路径；输入不可读、条目超出 32 位长度字段、条目名放不进 20 字节 ASCII
+    /// 名称字段，或输出无法写入时返回携带异常消息的失败结果。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
@@ -482,7 +485,7 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             entries.Add(new OpsEntry
             {
                 Id = (uint)i,
-                Name = name.Length > OpsConstants.ENTRY_NAME_SIZE ? name[..OpsConstants.ENTRY_NAME_SIZE] : name,
+                Name = name,
                 Size = (uint)length
             });
             dataFiles[i] = files[i];
@@ -492,15 +495,22 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
     }
 
     /// <summary>
-    /// Writes an OPS file. Payload bytes come from, in priority order: the per-entry
-    /// files in <paramref name="dataFiles"/>, the matching offsets of
+    /// Writes an OPS file. Every entry name is encoded into its fixed table field before the destination is
+    /// opened, so an unrepresentable name leaves the output file untouched. Payload bytes come from, in
+    /// priority order: the per-entry files in <paramref name="dataFiles"/>, the matching offsets of
     /// <paramref name="source"/>, or the in-memory <see cref="OpsEntry.Data"/>.
-    /// <para>写出 OPS 文件。条目数据按优先级取自：<paramref name="dataFiles"/> 中的
-    /// 逐条目文件、<paramref name="source"/> 的对应偏移，或内存中的
-    /// <see cref="OpsEntry.Data"/>。</para>
+    /// <para>写出 OPS 文件。所有条目名会在打开目标文件之前编码进各自的定宽表字段，因此无法表示的名称不会
+    /// 改动输出文件。条目数据按优先级取自：<paramref name="dataFiles"/> 中的逐条目文件、
+    /// <paramref name="source"/> 的对应偏移，或内存中的 <see cref="OpsEntry.Data"/>。</para>
     /// </summary>
     private static void WriteOps(string outputPath, List<OpsEntry> entries, Stream? source = null, string[]? dataFiles = null)
     {
+        var nameFields = new byte[entries.Count][];
+        for (var i = 0; i < entries.Count; i++)
+        {
+            nameFields[i] = EncodeNameField(entries[i].Name);
+        }
+
         using var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None);
         using var writer = new BinaryWriter(fs, Encoding.ASCII, leaveOpen: false);
 
@@ -524,10 +534,7 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             writer.Write(entry.Id);
             writer.Write(0u);
             writer.Write(entry.Data is { Length: > 0 } data ? (uint)data.Length : entry.Size);
-            var nameBytes = new byte[OpsConstants.ENTRY_NAME_SIZE];
-            var nameSrc = Encoding.ASCII.GetBytes(entry.Name ?? string.Empty);
-            Array.Copy(nameSrc, nameBytes, Math.Min(nameSrc.Length, nameBytes.Length));
-            writer.Write(nameBytes);
+            writer.Write(nameFields[i]);
         }
 
         for (var i = 0; i < entries.Count; i++)
@@ -564,6 +571,54 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         writer.Write((uint)writer.BaseStream.Length);
 
         writer.Flush();
+    }
+
+    /// <summary>
+    /// Encodes one entry name into the fixed table field stored at offset 12 of its 32-byte record.
+    /// <para>将条目名编码到 32 字节记录偏移 12 处的定宽表字段。</para>
+    /// </summary>
+    /// <param name="name">
+    /// Entry name; <see langword="null"/> and an empty name both produce an all-NUL field, which the reader
+    /// reports as an empty name.
+    /// <para>条目名；<see langword="null"/> 与空名称都写出全 NUL 字段，读取器将其报告为空名称。</para>
+    /// </param>
+    /// <returns>
+    /// <see cref="OpsConstants.ENTRY_NAME_SIZE"/> bytes holding the ASCII name with zero padding. The field
+    /// reserves no terminator byte, so a name of exactly that width is legal and round-trips: the reader
+    /// slices the field itself rather than scanning for NUL.
+    /// <para>长度为 <see cref="OpsConstants.ENTRY_NAME_SIZE"/> 字节、以零填充的 ASCII 名称。该字段不预留结束符，
+    /// 因此恰好占满宽度的名称合法且可往返读取：读取器按字段长度切片，而不是扫描 NUL。</para>
+    /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// The name holds a character the ASCII field cannot encode, or is longer than
+    /// <see cref="OpsConstants.ENTRY_NAME_SIZE"/> bytes; the offending value is reported instead of a
+    /// <c>'?'</c> substitution or a clipped prefix.
+    /// <para>名称含有 ASCII 字段无法编码的字符，或长度超过 <see cref="OpsConstants.ENTRY_NAME_SIZE"/> 字节；
+    /// 报告原值，而不是替换为 <c>'?'</c> 或写出被裁剪的前缀。</para>
+    /// </exception>
+    private static byte[] EncodeNameField(string? name)
+    {
+        var value = name ?? string.Empty;
+        if (value.Length > OpsConstants.ENTRY_NAME_SIZE)
+        {
+            throw new InvalidDataException(
+                $"OPS entry name is not representable: {value.Length} ASCII bytes exceed the {OpsConstants.ENTRY_NAME_SIZE}-byte Name field of the {OpsConstants.ENTRY_HEADER_SIZE}-byte entry record: '{value}'.");
+        }
+
+        var field = new byte[OpsConstants.ENTRY_NAME_SIZE];
+        for (var index = 0; index < value.Length; index++)
+        {
+            var character = value[index];
+            if (character > '\x7F')
+            {
+                throw new InvalidDataException(
+                    $"OPS entry name is not representable: U+{(uint)character:X4} has no single-byte ASCII encoding for the {OpsConstants.ENTRY_NAME_SIZE}-byte Name field: '{value}'.");
+            }
+
+            field[index] = (byte)character;
+        }
+
+        return field;
     }
 
     private static void Align(BinaryWriter writer, int alignment)

@@ -39,8 +39,9 @@ internal sealed class Nb0Packer
     /// <paramref name="entries"/> is <see langword="null"/>. <para><paramref name="entries"/> 为 <see langword="null"/>。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">
-    /// An entry's data length or source file length does not match its declared header size.
-    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致。</para>
+    /// An entry's data length or source file length does not match its declared header size, or an entry
+    /// name cannot be stored in the 48-byte ASCII Name field.
+    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致，或条目名无法存入 48 字节 ASCII Name 字段。</para>
     /// </exception>
     /// <exception cref="EndOfStreamException">
     /// A file-backed source ended before its declared size was read.
@@ -87,8 +88,9 @@ internal sealed class Nb0Packer
     /// <paramref name="entries"/> is <see langword="null"/>. <para><paramref name="entries"/> 为 <see langword="null"/>。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">
-    /// An entry's data length or source file length does not match its declared header size.
-    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致。</para>
+    /// An entry's data length or source file length does not match its declared header size, or an entry
+    /// name cannot be stored in the 48-byte ASCII Name field.
+    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致，或条目名无法存入 48 字节 ASCII Name 字段。</para>
     /// </exception>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para>
@@ -132,8 +134,9 @@ internal sealed class Nb0Packer
     /// <paramref name="stream"/> does not support writing. <para><paramref name="stream"/> 不支持写入。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">
-    /// An entry's data length or source file length does not match its declared header size.
-    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致。</para>
+    /// An entry's data length or source file length does not match its declared header size, or an entry
+    /// name cannot be stored in the 48-byte ASCII Name field.
+    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致，或条目名无法存入 48 字节 ASCII Name 字段。</para>
     /// </exception>
     /// <exception cref="IOException">
     /// A source file cannot be opened or the stream write fails.
@@ -175,8 +178,9 @@ internal sealed class Nb0Packer
     /// <paramref name="stream"/> does not support writing. <para><paramref name="stream"/> 不支持写入。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">
-    /// An entry's data length or source file length does not match its declared header size.
-    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致。</para>
+    /// An entry's data length or source file length does not match its declared header size, or an entry
+    /// name cannot be stored in the 48-byte ASCII Name field.
+    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致，或条目名无法存入 48 字节 ASCII Name 字段。</para>
     /// </exception>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para>
@@ -218,8 +222,9 @@ internal sealed class Nb0Packer
     /// <paramref name="sourceDirectory"/> does not exist. <para><paramref name="sourceDirectory"/> 不存在。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">
-    /// A source file length does not match the size recorded in its entry header.
-    /// <para>源文件长度与条目头中记录的大小不一致。</para>
+    /// A source file length does not match the size recorded in its entry header, or a relative entry name
+    /// cannot be stored in the 48-byte ASCII Name field.
+    /// <para>源文件长度与条目头中记录的大小不一致，或相对条目名无法存入 48 字节 ASCII Name 字段。</para>
     /// </exception>
     /// <exception cref="IOException">
     /// The output file or a source file cannot be opened or written.
@@ -256,6 +261,11 @@ internal sealed class Nb0Packer
 
     private static void WriteNb0Core(Stream stream, List<Nb0Entry> entryList, IProgress<Nb0PackProgress>? progress, CancellationToken cancellationToken)
     {
+        foreach (var entry in entryList)
+        {
+            Nb0EntryHeader.ValidateName(entry.Header.Name);
+        }
+
         using var writer = new BinaryWriter(stream, Encoding.ASCII, leaveOpen: true);
 
         writer.Write((uint)entryList.Count);
@@ -367,16 +377,24 @@ public sealed class Nb0PackerBuilder
     /// <para>添加一个内存数据条目。</para>
     /// </summary>
     /// <param name="name">
-    /// Entry name stored in the header; ASCII-encoded and truncated to 47 characters when written.
-    /// <para>存入头部的条目名；写入时按 ASCII 编码并截断到 47 个字符。</para>
+    /// Entry name stored in the header; it must be printable ASCII of at most 47 bytes, the width the
+    /// 48-byte name slot holds once its NUL terminator is counted.
+    /// <para>存入头部的条目名；必须是长度不超过 47 字节的可打印 ASCII，即 48 字节名称槽位计入 NUL 结束符后
+    /// 可容纳的宽度。</para>
     /// </param>
     /// <param name="data">
     /// Entry payload; the header size is taken from its length. <para>条目数据；头部大小取自其长度。</para>
     /// </param>
     /// <returns>This builder. <para>当前构建器。</para>
     /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// <paramref name="name"/> cannot be stored in the fixed name slot; the entry is refused instead of
+    /// being clipped or replaced by <c>'?'</c> characters.
+    /// <para><paramref name="name"/> 无法存入定宽名称槽位；该条目会被拒绝，而不是被截断或替换为 <c>'?'</c>。</para>
+    /// </exception>
     public Nb0PackerBuilder AddEntry(string name, byte[] data)
     {
+        Nb0EntryHeader.ValidateName(name);
         _entries.Add(new Nb0Entry(name, data));
         return this;
     }
@@ -390,17 +408,25 @@ public sealed class Nb0PackerBuilder
     /// <para>源文件；其当前长度记录为条目大小，内容在构建时读取。</para>
     /// </param>
     /// <param name="entryName">
-    /// Name stored in the header; <see langword="null"/> uses the file's display name.
-    /// <para>存入头部的名称；为 <see langword="null"/> 时使用文件显示名。</para>
+    /// Name stored in the header; <see langword="null"/> uses the file's display name. Either form must be
+    /// printable ASCII of at most 47 bytes.
+    /// <para>存入头部的名称；为 <see langword="null"/> 时使用文件显示名。两种形式都必须是长度不超过 47 字节的
+    /// 可打印 ASCII。</para>
     /// </param>
     /// <returns>This builder. <para>当前构建器。</para>
     /// </returns>
     /// <exception cref="FileNotFoundException">
     /// <paramref name="filePath"/> does not exist. <para><paramref name="filePath"/> 不存在。</para>
     /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The resulting name cannot be stored in the fixed name slot; the file is refused at collection time,
+    /// before any container byte is written.
+    /// <para>得到的名称无法存入定宽名称槽位；该文件会在收集阶段被拒绝，此时尚未写出任何容器字节。</para>
+    /// </exception>
     public Nb0PackerBuilder AddFile(string filePath, string? entryName = null)
     {
         var name = entryName ?? Path.GetFileName(filePath);
+        Nb0EntryHeader.ValidateName(name);
         _entries.Add(new Nb0Entry(name, filePath));
         return this;
     }
@@ -423,6 +449,10 @@ public sealed class Nb0PackerBuilder
     /// <exception cref="DirectoryNotFoundException">
     /// <paramref name="directoryPath"/> does not exist. <para><paramref name="directoryPath"/> 不存在。</para>
     /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// A relative entry name, with or without <paramref name="prefix"/>, cannot be stored in the fixed name
+    /// slot. <para>相对条目名（无论是否加上 <paramref name="prefix"/>）无法存入定宽名称槽位。</para>
+    /// </exception>
     public Nb0PackerBuilder AddDirectory(string directoryPath, string? prefix = null)
     {
         foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories).OrderBy(f => f, StringComparer.Ordinal))
@@ -430,6 +460,7 @@ public sealed class Nb0PackerBuilder
             if (UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile(filePath)) continue;
             var relative = Path.GetRelativePath(directoryPath, filePath).Replace('\\', '/');
             var name = string.IsNullOrEmpty(prefix) ? relative : $"{prefix}/{relative}";
+            Nb0EntryHeader.ValidateName(name);
             _entries.Add(new Nb0Entry(name, filePath));
         }
         return this;
@@ -452,8 +483,9 @@ public sealed class Nb0PackerBuilder
     /// <para><paramref name="outputFilePath"/> 为 <see langword="null"/> 或空。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">
-    /// A file-backed entry changed size between collection and packing.
-    /// <para>基于文件的条目在收集与打包之间发生了大小变化。</para>
+    /// A file-backed entry changed size between collection and packing, or an entry name cannot be stored in
+    /// the 48-byte ASCII Name field.
+    /// <para>基于文件的条目在收集与打包之间发生了大小变化，或条目名无法存入 48 字节 ASCII Name 字段。</para>
     /// </exception>
     /// <exception cref="IOException">
     /// The output file or a source file cannot be opened or written.

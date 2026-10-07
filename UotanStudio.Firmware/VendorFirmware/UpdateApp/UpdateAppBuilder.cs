@@ -42,6 +42,16 @@ public static class UpdateAppBuilder
     /// <param name="cancellationToken">Cancellation token checked during both passes.
     /// <para>在两次文件扫描和写入期间检查的取消令牌。</para></param>
     /// <returns>The number of entries written. <para>写入的条目数。</para></returns>
+    /// <exception cref="DirectoryNotFoundException">
+    /// <paramref name="inputDirectory"/> does not exist. <para><paramref name="inputDirectory"/> 不存在。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The configured block size is zero, an entry name is not printable ASCII of at most the 16 bytes the
+    /// file_type field stores, two entries share a name, an entry exceeds 4 GiB, or a checksum table would
+    /// exceed its stored limit.
+    /// <para>配置的分块大小为零、条目名不是 file_type 字段可存放的最多 16 字节可打印 ASCII、两个条目重名、
+    /// 单个条目超过 4 GiB，或校验和表超出其存储上限。</para>
+    /// </exception>
     public static int Build(
         string inputDirectory,
         string outputPath,
@@ -164,12 +174,30 @@ public static class UpdateAppBuilder
 
     private static string GetEntryName(string path)
     {
-        var name = Path.GetFileName(path);
-        if (name.EndsWith(".img", StringComparison.OrdinalIgnoreCase))
-            name = name[..^4];
-        if (string.IsNullOrWhiteSpace(name) || name.Length > FileTypeSize ||
-            name.Any(c => c < 0x20 || c > 0x7E) || name.Contains('/') || name.Contains('\\'))
-            throw new InvalidDataException($"UPDATE.APP entry name is not representable: '{Path.GetFileName(path)}'.");
+        var fileName = Path.GetFileName(path);
+        var name = fileName.EndsWith(".img", StringComparison.OrdinalIgnoreCase) ? fileName[..^4] : fileName;
+        if (string.IsNullOrWhiteSpace(name) || name.Contains('/') || name.Contains('\\'))
+        {
+            throw new InvalidDataException(
+                $"UPDATE.APP entry name is not representable: '{fileName}' gives no bare file-type name for the {FileTypeSize}-byte file_type field.");
+        }
+
+        foreach (var character in name)
+        {
+            if (character is < '\x20' or > '\x7E')
+            {
+                throw new InvalidDataException(
+                    $"UPDATE.APP entry name is not representable: U+{(uint)character:X4} is outside the printable ASCII range stored by the {FileTypeSize}-byte file_type field: '{name}'.");
+            }
+        }
+
+        var bytes = Encoding.ASCII.GetByteCount(name);
+        if (bytes > FileTypeSize)
+        {
+            throw new InvalidDataException(
+                $"UPDATE.APP entry name is not representable: {bytes} ASCII bytes exceed the {FileTypeSize}-byte file_type field: '{name}'.");
+        }
+
         return name;
     }
 

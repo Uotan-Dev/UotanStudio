@@ -22,6 +22,20 @@ internal static class KdzBuilder
     internal const long MaximumLayoutBytes = 64 * 1024 * 1024;
     internal static readonly Encoding NameEncoding = new UTF8Encoding(false, true);
 
+    /// <summary>
+    /// Width of the KDZ record name slot: <see cref="KdzHeader.Size"/> minus the two 64-bit payload fields.
+    /// <para>KDZ 记录名称槽位的宽度：<see cref="KdzHeader.Size"/> 减去两个 64 位负载字段。</para>
+    /// </summary>
+    private const int NameFieldBytes = 256;
+
+    /// <summary>
+    /// UTF-8 bytes a member name may use, one fewer than <see cref="NameFieldBytes"/> because the slot ends
+    /// with the NUL that terminates it for readers scanning for the end of the name.
+    /// <para>成员名可使用的 UTF-8 字节数，比 <see cref="NameFieldBytes"/> 少一字节，因为槽位末尾要保留 NUL，
+    /// 供按名称结尾扫描的读取器识别终止符。</para>
+    /// </summary>
+    private const int MaximumNameBytes = NameFieldBytes - 1;
+
     /// <summary>Writes and verifies a KDZ v2 container before atomically replacing the destination.
     /// <para>写入并验证 KDZ v2 容器后原子替换目标文件。</para></summary>
     /// <param name="entries">Members in directory order; names must be unique.
@@ -76,17 +90,47 @@ internal static class KdzBuilder
             ArgumentException.ThrowIfNullOrWhiteSpace(source.Name);
             ArgumentException.ThrowIfNullOrWhiteSpace(source.FilePath);
             var normalized = source.Name.Replace('\\', '/');
-            if (!names.Add(normalized) || NameEncoding.GetByteCount(source.Name) > 256
-                || source.Name[0] is '\0' or '\x03')
+            if (!names.Add(normalized))
             {
-                throw new InvalidDataException("KDZ member names must be unique and fit in 256 UTF-8 bytes.");
+                throw new InvalidDataException("KDZ member names must be unique.");
             }
+
+            if (source.Name[0] is '\0' or '\x03')
+            {
+                throw new InvalidDataException("KDZ member names must not start with the directory terminator byte.");
+            }
+
+            ValidateNameField(source.Name);
             FileExtraction.ResolvePath(Path.GetTempPath(), source.Name);
 
             if (string.Equals(Path.GetFullPath(source.FilePath), output, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidDataException("The KDZ output must not overwrite an input member.");
             }
+        }
+    }
+
+    /// <summary>
+    /// Checks that one member name survives the fixed record slot it is written into.
+    /// <para>校验单个成员名能够存入它被写入的定宽记录槽位。</para>
+    /// </summary>
+    /// <param name="name">
+    /// Directory name of the member, measured in its UTF-8 encoding because the slot stores UTF-8 bytes.
+    /// <para>成员的目录名；按 UTF-8 编码计量，因为槽位存放的就是 UTF-8 字节。</para>
+    /// </param>
+    /// <exception cref="InvalidDataException">
+    /// The name needs more than <see cref="MaximumNameBytes"/> UTF-8 bytes; it is reported with the offending
+    /// value instead of writing a slot that leaves no room for its terminator.
+    /// <para>名称需要的 UTF-8 字节数超过 <see cref="MaximumNameBytes"/>；连同原值一起报告，而不是写出没有结束符
+    /// 空间的槽位。</para>
+    /// </exception>
+    private static void ValidateNameField(string name)
+    {
+        var bytes = NameEncoding.GetByteCount(name);
+        if (bytes > MaximumNameBytes)
+        {
+            throw new InvalidDataException(
+                $"KDZ member name is not representable: {bytes} UTF-8 bytes exceed the {MaximumNameBytes}-byte usable portion of the {NameFieldBytes}-byte Name field: '{name}'.");
         }
     }
 
@@ -171,7 +215,7 @@ internal static class KdzBuilder
                         output.WriteByte(3);
                     }
                     var record = new byte[KdzHeader.Size];
-                    NameEncoding.GetBytes(sources[index].Name, record.AsSpan(0, 256));
+                    NameEncoding.GetBytes(sources[index].Name, record.AsSpan(0, NameFieldBytes));
                     output.Write(record);
                 }
             }
@@ -184,7 +228,7 @@ internal static class KdzBuilder
                 {
                     throw new InvalidDataException("A KDZ record is outside the preserved header.");
                 }
-                output.Position = recordOffsets[index] + 256;
+                output.Position = recordOffsets[index] + NameFieldBytes;
                 BinaryPrimitives.WriteUInt64LittleEndian(numbers, (ulong)lengths[index]);
                 BinaryPrimitives.WriteUInt64LittleEndian(numbers[8..], (ulong)offsets[index]);
                 output.Write(numbers);
@@ -250,7 +294,7 @@ internal static class KdzBuilder
                 throw new InvalidDataException("Preserved KDZ record offsets are invalid.");
             }
             layout.ReadExactly(record);
-            if (NameEncoding.GetStringTrimNul(record.AsSpan(0, 256)) != sources[index].Name)
+            if (NameEncoding.GetStringTrimNul(record.AsSpan(0, NameFieldBytes)) != sources[index].Name)
             {
                 throw new InvalidDataException("Preserved KDZ member name does not match its metadata.");
             }
