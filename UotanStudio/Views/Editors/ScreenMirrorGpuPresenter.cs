@@ -2,12 +2,16 @@ using System.Collections.Concurrent;
 using System.Runtime.Versioning;
 using Avalonia;
 using Avalonia.Media;
+using Avalonia.Platform;
+using Avalonia.Rendering.Composition;
 using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
+using Avalonia.Threading;
 using SkiaSharp;
 using UotanStudio.Media.Acceleration.Linux;
 using UotanStudio.Media.Decoding;
 using UotanStudio.Media.Decoding.MediaFoundation;
+using UotanStudio.Media.Decoding.VideoToolbox;
 
 namespace UotanStudio.Views.Editors;
 
@@ -20,12 +24,16 @@ namespace UotanStudio.Views.Editors;
 /// Zero-copy <see cref="VaDmaBufVideoFrame"/> surfaces are imported on the render thread and their
 /// native resources are recycled on the next draw; if a session closes before that flush, the
 /// residual GL textures are bounded by the ring depth and the VA surface itself is released by the
-/// decoder reset.
+/// decoder reset. Shared-texture and IOSurface frames bypass the Skia lease entirely: they are imported
+/// into a composition drawing surface hosted by the video control, so the recycle queue keeps draining
+/// through the registered draw operation even while the compositor owns the picture.
 /// </para>
 /// <para>
 /// 图像不可变。场景操作会保留它们直到合成器释放。至多三帧存活；背压只丢弃解码呈现帧。
 /// 零拷贝的 <see cref="VaDmaBufVideoFrame"/> 表面在渲染线程导入，其原生资源在下一次绘制时回收；
-/// 若会话在回收前关闭，残留 GL 纹理以环深度为界，VA 表面本身由解码器重置释放。
+/// 若会话在回收前关闭，残留 GL 纹理以环深度为界，VA 表面本身由解码器重置释放。共享纹理与 IOSurface 帧
+/// 完全绕开 Skia 租约：它们被导入由视频控件托管的合成绘图表面，因此即便画面由合成器持有，
+/// 回收队列仍会经已注册的绘制操作继续排空。
 /// </para>
 /// </remarks>
 internal sealed class ScreenMirrorGpuPresenter : IDisposable
@@ -37,13 +45,355 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     private volatile bool _closed, _failed;
     private volatile bool _available;
     private long _sequence, _lastDrawn, _draws, _skipped;
+    private ICompositionGpuInterop? _interop;
+    private CompositionDrawingSurface? _surface;
+    private CompositionSurfaceVisual? _visual;
+    private Visual? _hostControl;
+    private int _compositionGeneration;
+    private volatile bool _compositionFailed;
+    private int _compositionProbeCompleted;
+    private int _compositionWidth, _compositionHeight;
+    private long _compositedFrames;
+    private readonly Dictionary<nint, CompositionImport> _imports = new();
     internal bool IsAvailable => _available;
     internal long Draws => Interlocked.Read(ref _draws);
     internal long Skipped => Interlocked.Read(ref _skipped);
+    internal long CompositedFrames => Interlocked.Read(ref _compositedFrames);
     internal int LiveFrames { get { lock (_gate) return _liveFrames; } }
-    internal PixelSize PixelSize { get { lock (_gate) return _latest is { } frame ? new(frame.Width, frame.Height) : default; } }
+    internal PixelSize PixelSize
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_compositionWidth > 0) return new(_compositionWidth, _compositionHeight);
+                return _latest is { } frame ? new(frame.Width, frame.Height) : default;
+            }
+        }
+    }
     internal string? Failure { get; private set; }
     internal string Backend { get; private set; } = "Uninitialized";
+
+    /// <summary>
+    /// Snapshot of the compositor's external-image import capability taken when the video control attached;
+    /// <see langword="null"/> before the first attach or when the compositor exposes no interop.
+    /// <para>视频控件挂载时采样的合成器外部图像导入能力快照；首次挂载前或合成器无互操作时为
+    /// <see langword="null"/>。</para>
+    /// </summary>
+    internal CompositionInterop? Composition { get; private set; }
+
+    /// <summary>Raised on the UI thread after the composition presentation path failed; the session should disable GPU export.</summary>
+    /// <summary>合成呈现路径失败后在 UI 线程触发；会话应禁用 GPU 导出。</summary>
+    internal event EventHandler? CompositionFailed;
+
+    /// <summary>
+    /// Whether the composition interop probe has completed at least once (with or without capability);
+    /// decode loops wait for it before choosing export options.
+    /// <para>合成互操作探测是否已完成过一次（无论有无能力）；解码循环在选择导出选项前等待它。</para>
+    /// </summary>
+    internal bool CompositionProbeCompleted => Volatile.Read(ref _compositionProbeCompleted) != 0;
+
+    /// <summary>Human-readable presentation path for diagnostics: composition, Skia GPU or bitmap.</summary>
+    /// <summary>用于诊断的呈现路径可读名称：合成、Skia GPU 或位图。</summary>
+    internal string PresentationPath => UsesCompositionSurface ? "Composition (GPU zero-copy)"
+        : _available ? Backend : "Bitmap";
+
+    /// <summary>Whether composition-owned frames currently cover the video area.</summary>
+    /// <summary>当前是否由合成器持有的帧覆盖视频区域。</summary>
+    internal bool UsesCompositionSurface
+    {
+        get { lock (_gate) return _surface is not null && !_closed && !_compositionFailed; }
+    }
+
+    /// <summary>
+    /// Probes the compositor's GPU interop and hosts a composition drawing surface inside
+    /// <paramref name="host"/>; UI thread only. The result is exposed through <see cref="Composition"/>.
+    /// <para>探测合成器 GPU 互操作并在 <paramref name="host"/> 内托管合成绘图表面；仅限 UI 线程。
+    /// 结果经 <see cref="Composition"/> 暴露。</para>
+    /// </summary>
+    internal async Task AttachCompositionVisualAsync(Visual host)
+    {
+        Dispatcher.UIThread.VerifyAccess();
+        DetachCompositionVisual();
+        lock (_gate)
+        {
+            if (_closed || _failed) { Volatile.Write(ref _compositionProbeCompleted, 1); return; }
+        }
+        try
+        {
+            int generation = Volatile.Read(ref _compositionGeneration);
+            var elementVisual = ElementComposition.GetElementVisual(host);
+            if (elementVisual is null) return;
+            var interop = await elementVisual.Compositor.TryGetCompositionGpuInterop();
+            if (Volatile.Read(ref _compositionGeneration) != generation) return;
+            if (interop is null) return;
+            bool keyedMutex = interop.SupportedImageHandleTypes.Contains(KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle)
+                && interop.GetSynchronizationCapabilities(KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle)
+                    .HasFlag(CompositionGpuImportedImageSynchronizationCapabilities.KeyedMutex);
+            bool iosurface = interop.SupportedImageHandleTypes.Contains(KnownPlatformGraphicsExternalImageHandleTypes.IOSurfaceRef)
+                && interop.GetSynchronizationCapabilities(KnownPlatformGraphicsExternalImageHandleTypes.IOSurfaceRef)
+                    .HasFlag(CompositionGpuImportedImageSynchronizationCapabilities.Automatic);
+            if (!keyedMutex && !iosurface) return;
+            var surface = elementVisual.Compositor.CreateDrawingSurface();
+            var visual = elementVisual.Compositor.CreateSurfaceVisual();
+            visual.Surface = surface;
+            visual.Visible = false;
+            ElementComposition.SetElementChildVisual(host, visual);
+            lock (_gate)
+            {
+                if (_closed)
+                {
+                    ElementComposition.SetElementChildVisual(host, null);
+                    surface.Dispose();
+                    return;
+                }
+                _interop = interop;
+                _surface = surface;
+                _visual = visual;
+                _hostControl = host;
+                _compositionGeneration++;
+                Composition = new CompositionInterop(keyedMutex, iosurface, interop.DeviceLuid);
+            }
+        }
+        catch (Exception error)
+        {
+            Services.LogService.Instance.Write(Services.LogLevel.Warn, "ScreenMirror",
+                $"Composition interop probe failed; using NV12 readback: {error.Message}");
+        }
+        finally
+        {
+            Volatile.Write(ref _compositionProbeCompleted, 1);
+        }
+    }
+
+    /// <summary>
+    /// Removes the hosted composition surface and drops the capability snapshot; UI thread only.
+    /// <para>移除托管的合成绘图表面并丢弃能力快照；仅限 UI 线程。</para>
+    /// </summary>
+    internal void DetachCompositionVisual()
+    {
+        Dispatcher.UIThread.VerifyAccess();
+        CompositionDrawingSurface? surface;
+        CompositionSurfaceVisual? visual;
+        Visual? host;
+        lock (_gate)
+        {
+            _compositionGeneration++;
+            Composition = null;
+            surface = _surface;
+            _surface = null;
+            visual = _visual;
+            _visual = null;
+            host = _hostControl;
+            _hostControl = null;
+            _interop = null;
+        }
+        if (host is not null) ElementComposition.SetElementChildVisual(host, null);
+        if (visual is not null) visual.Visible = false;
+        surface?.Dispose();
+    }
+
+    /// <summary>
+    /// Re-letterboxes the composition surface after the host control or the video size changed; UI thread only.
+    /// <para>宿主控件或视频尺寸变化后重新按信箱模式布局合成表面；仅限 UI 线程。</para>
+    /// </summary>
+    internal void UpdateCompositionLayout()
+    {
+        Dispatcher.UIThread.VerifyAccess();
+        CompositionSurfaceVisual? visual;
+        Visual? host;
+        int width, height;
+        lock (_gate)
+        {
+            visual = _visual;
+            host = _hostControl;
+            width = _compositionWidth;
+            height = _compositionHeight;
+        }
+        if (visual is null || host is null) return;
+        var bounds = host.Bounds.Size;
+        if (width <= 0 || height <= 0 || bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            visual.Visible = false;
+            return;
+        }
+        double scale = Math.Min(bounds.Width / width, bounds.Height / height);
+        if (double.IsInfinity(scale) || scale <= 0) return;
+        visual.Size = new Vector(width * scale, height * scale);
+        visual.Offset = new Vector3D((bounds.Width - width * scale) / 2, (bounds.Height - height * scale) / 2, 0);
+        visual.Visible = UsesCompositionSurface;
+    }
+
+    /// <summary>
+    /// Presents a Windows shared-texture frame through the composition surface; the frame's slot is
+    /// always returned to the decoder ring, whether or not presentation succeeded.
+    /// <para>经合成表面呈现 Windows 共享纹理帧；无论呈现成败，帧的槽位都会归还解码器环。</para>
+    /// </summary>
+    /// <returns><see langword="true"/> when the frame was queued for presentation.</returns>
+    [SupportedOSPlatform("windows")]
+    internal bool PublishSharedTexture(D3D11SharedVideoFrame frame)
+    {
+        if (!UsesCompositionSurface)
+        {
+            frame.MarkPresented();
+            return false;
+        }
+        Dispatcher.UIThread.Post(() => PresentSharedTexture(frame), DispatcherPriority.Render);
+        return true;
+    }
+
+    /// <summary>
+    /// Presents a macOS IOSurface frame through the composition surface; the pixel buffer is always
+    /// released back to VideoToolbox's pool.
+    /// <para>经合成表面呈现 macOS IOSurface 帧；像素缓冲总会归还 VideoToolbox 的缓冲池。</para>
+    /// </summary>
+    /// <returns><see langword="true"/> when the frame was queued for presentation.</returns>
+    [SupportedOSPlatform("macos")]
+    internal bool PublishIosurface(IosurfaceVideoFrame frame)
+    {
+        if (!UsesCompositionSurface)
+        {
+            frame.MarkPresented();
+            return false;
+        }
+        Dispatcher.UIThread.Post(() => PresentIosurface(frame), DispatcherPriority.Render);
+        return true;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private async void PresentSharedTexture(D3D11SharedVideoFrame frame)
+    {
+        int generation = Volatile.Read(ref _compositionGeneration);
+        try
+        {
+            var interop = _interop;
+            var surface = _surface;
+            if (_closed || interop is null || surface is null || Volatile.Read(ref _compositionGeneration) != generation)
+                return;
+            var import = ObtainImport(interop, frame.SharedHandle, frame.Width, frame.Height,
+                KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle);
+            await surface.UpdateWithKeyedMutexAsync(import.Image, 1, 0).ConfigureAwait(true);
+            if (Volatile.Read(ref _compositionGeneration) != generation) return;
+            SetCompositionFrameSize(frame.Width, frame.Height);
+            if (Interlocked.Increment(ref _compositedFrames) == 1)
+                Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
+                    "Composition presentation active: D3D11 shared texture.");
+        }
+        catch (Exception error)
+        {
+            DisableComposition(error.Message);
+        }
+        finally
+        {
+            frame.MarkPresented();
+        }
+    }
+
+    [SupportedOSPlatform("macos")]
+    private async void PresentIosurface(IosurfaceVideoFrame frame)
+    {
+        int generation = Volatile.Read(ref _compositionGeneration);
+        try
+        {
+            var interop = _interop;
+            var surface = _surface;
+            if (_closed || interop is null || surface is null || Volatile.Read(ref _compositionGeneration) != generation)
+                return;
+            // A fresh IOSurface backs every frame, so the import cannot be cached: dispose it after the
+            // update so the pixel buffer can return to the decoder pool before MarkPresented recycles it.
+            // 每帧都是新的 IOSurface，因此导入无法缓存：更新完成后先释放导入，让像素缓冲在
+            // MarkPresented 回收前归还解码器池。
+            var image = interop.ImportImage(new PlatformHandle(frame.Iosurface, KnownPlatformGraphicsExternalImageHandleTypes.IOSurfaceRef),
+                new PlatformGraphicsExternalImageProperties
+                {
+                    Width = frame.Width,
+                    Height = frame.Height,
+                    Format = PlatformGraphicsExternalImageFormat.B8G8R8A8UNorm,
+                    TopLeftOrigin = true,
+                });
+            try
+            {
+                await surface.UpdateAsync(image).ConfigureAwait(true);
+                if (Volatile.Read(ref _compositionGeneration) != generation) return;
+                SetCompositionFrameSize(frame.Width, frame.Height);
+                Interlocked.Increment(ref _compositedFrames);
+            }
+            finally { await image.DisposeAsync().ConfigureAwait(true); }
+        }
+        catch (Exception error)
+        {
+            DisableComposition(error.Message);
+        }
+        finally
+        {
+            frame.MarkPresented();
+        }
+    }
+
+    private CompositionImport ObtainImport(ICompositionGpuInterop interop, nint handle, int width, int height, string handleType)
+    {
+        lock (_gate)
+        {
+            if (_imports.TryGetValue(handle, out var existing))
+            {
+                if (existing.Width == width && existing.Height == height) return existing;
+                _imports.Remove(handle);
+            }
+        }
+        var image = interop.ImportImage(new PlatformHandle(handle, handleType), new PlatformGraphicsExternalImageProperties
+        {
+            Width = width,
+            Height = height,
+            Format = PlatformGraphicsExternalImageFormat.B8G8R8A8UNorm,
+            TopLeftOrigin = true,
+        });
+        var import = new CompositionImport { Image = image, Width = width, Height = height };
+        lock (_gate)
+        {
+            _imports[handle] = import;
+            while (_imports.Count > 16)
+            {
+                var candidate = _imports.Values.FirstOrDefault(item => item != import && item.Update.IsCompleted);
+                if (candidate is null) break;
+                _imports.Remove(_imports.First(pair => pair.Value == candidate).Key);
+                _ = DisposeImportAsync(candidate);
+            }
+        }
+        return import;
+    }
+
+    private void SetCompositionFrameSize(int width, int height)
+    {
+        lock (_gate)
+        {
+            _compositionWidth = width;
+            _compositionHeight = height;
+        }
+        UpdateCompositionLayout();
+    }
+
+    private void DisableComposition(string reason)
+    {
+        bool raise;
+        lock (_gate)
+        {
+            raise = !_compositionFailed;
+            _compositionFailed = true;
+            if (_visual is not null) _visual.Visible = false;
+        }
+        if (!raise) return;
+        Services.LogService.Instance.Write(Services.LogLevel.Warn, "ScreenMirror",
+            $"Composition presentation failed; using NV12 readback: {reason}");
+        CompositionFailed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static async Task DisposeImportAsync(CompositionImport import)
+    {
+        try { await import.Update.ConfigureAwait(false); }
+        catch { }
+        try { await import.Image.DisposeAsync().ConfigureAwait(false); }
+        catch { }
+    }
 
     internal bool Publish(DecodedVideoFrame frame, VideoColorMatrix matrix, VideoColorRange range)
     {
@@ -54,7 +404,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             _liveFrames++;
         }
         PresentedImage next;
-        try { next = new VideoImage(frame, matrix, range, Interlocked.Increment(ref _sequence), ReleaseSlot); }
+        try { next = new VideoImage(this, frame, matrix, range, Interlocked.Increment(ref _sequence), ReleaseSlot); }
         catch (Exception error)
         {
             ReleaseSlot(); _available = false; _failed = true; Failure = error.Message;
@@ -115,7 +465,49 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         PresentedImage? old;
         lock (_gate) { _closed = true; _available = false; old = _latest; _latest = null; }
         old?.Release();
+        DisposeComposition();
     }
+
+    private void DisposeComposition()
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(DisposeComposition, DispatcherPriority.Render);
+            return;
+        }
+        DetachCompositionVisual();
+        CompositionImport[] imports;
+        lock (_gate)
+        {
+            imports = [.. _imports.Values];
+            _imports.Clear();
+        }
+        foreach (CompositionImport import in imports) _ = DisposeImportAsync(import);
+    }
+
+    private sealed class CompositionImport
+    {
+        public required ICompositionImportedGpuImage Image { get; init; }
+        public required int Width { get; init; }
+        public required int Height { get; init; }
+        public Task Update { get; set; } = Task.CompletedTask;
+    }
+
+    /// <summary>Snapshot of the compositor's external-image import capability.</summary>
+    /// <summary>合成器外部图像导入能力的快照。</summary>
+    /// <param name="WindowsKeyedMutex">
+    /// The compositor imports global D3D11 shared textures synchronized by keyed mutex.
+    /// <para>合成器可导入以键互锁同步的全局 D3D11 共享纹理。</para>
+    /// </param>
+    /// <param name="MacIosurface">
+    /// The compositor imports IOSurfaces with automatic synchronization.
+    /// <para>合成器可导入自动同步的 IOSurface。</para>
+    /// </param>
+    /// <param name="AdapterLuid">
+    /// The compositor's 8-byte DXGI adapter LUID, when exposed.
+    /// <para>合成器的 8 字节 DXGI 适配器 LUID（如暴露）。</para>
+    /// </param>
+    internal sealed record CompositionInterop(bool WindowsKeyedMutex, bool MacIosurface, byte[]? AdapterLuid);
 
     private sealed class DrawOperation(ScreenMirrorGpuPresenter owner, PresentedImage? frame, Rect bounds) : ICustomDrawOperation
     {
@@ -128,7 +520,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         {
 
             while (owner._recycle.TryDequeue(out Action? recycle)) recycle();
-            if (owner._closed || owner._failed) return;
+            if (owner._closed || owner._failed || owner.UsesCompositionSurface) return;
             try
             {
                 var feature = context.TryGetFeature<ISkiaSharpApiLeaseFeature>();
@@ -196,15 +588,19 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                     return half4(clamp(rgb / 255.0, 0.0, 1.0), 1.0);
                 }
                 """, out var error) ?? throw new NotSupportedException(error));
+        private readonly ScreenMirrorGpuPresenter? _owner;
         private readonly SKImage _first;
         private readonly SKImage? _uv;
         private readonly Action _release;
         private readonly VideoColorMatrix _matrix;
         private readonly VideoColorRange _range;
+        private GRContext? _textureContext;
+        private SKImage? _textureFirst, _textureUv;
 
-        internal VideoImage(DecodedVideoFrame frame, VideoColorMatrix matrix, VideoColorRange range, long sequence, Action release)
+        internal VideoImage(ScreenMirrorGpuPresenter? owner, DecodedVideoFrame frame, VideoColorMatrix matrix, VideoColorRange range, long sequence, Action release)
             : base(frame.Width, frame.Height, sequence)
         {
+            _owner = owner;
             _matrix = matrix == VideoColorMatrix.Auto ? frame.ColorMatrix : matrix;
             _range = range == VideoColorRange.Auto ? frame.ColorRange : range;
             _release = release;
@@ -227,22 +623,54 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
 
         protected override void Recycle()
         {
-            _uv?.Dispose();
-            _first.Dispose();
-            _release();
+            // GPU-backed textures must be deleted with their context current, so their disposal joins the
+            // render-thread recycle queue; the frame slot is released immediately regardless.
+            // GPU 纹理必须在上下文当前时删除，因此其释放进入渲染线程回收队列；帧槽位无论如何立即归还。
+            if (_textureContext is null || _owner is null)
+            {
+                _textureUv?.Dispose();
+                _textureFirst?.Dispose();
+                _uv?.Dispose();
+                _first.Dispose();
+                _release();
+                return;
+            }
+            _owner.QueueRecycle(() =>
+            {
+                _textureUv?.Dispose();
+                _textureFirst?.Dispose();
+                _uv?.Dispose();
+                _first.Dispose();
+                _release();
+            });
         }
 
         public override void Draw(SKCanvas canvas, Rect bounds, double opacity, GRContext? gpu)
         {
             float scale = (float)Math.Min(bounds.Width / Width, bounds.Height / Height);
             if (scale <= 0) return;
-
-            using var uploadedFirst = gpu is null ? null : _first.ToTextureImage(gpu, true, false)
-                ?? throw new InvalidOperationException("Video texture upload failed.");
-            using var uploadedUv = gpu is null || _uv is null ? null : _uv.ToTextureImage(gpu, true, false)
-                ?? throw new InvalidOperationException("Chroma texture upload failed.");
-            var first = uploadedFirst ?? _first;
-            var chroma = uploadedUv ?? _uv;
+            SKImage first;
+            SKImage? chroma;
+            if (gpu is null)
+            {
+                first = _first;
+                chroma = _uv;
+            }
+            else
+            {
+                if (!ReferenceEquals(_textureContext, gpu))
+                {
+                    _textureUv?.Dispose();
+                    _textureFirst?.Dispose();
+                    _textureFirst = _first.ToTextureImage(gpu, true, false)
+                        ?? throw new InvalidOperationException("Video texture upload failed.");
+                    _textureUv = _uv is null ? null : _uv.ToTextureImage(gpu, true, false)
+                        ?? throw new InvalidOperationException("Chroma texture upload failed.");
+                    _textureContext = gpu;
+                }
+                first = _textureFirst!;
+                chroma = _textureUv;
+            }
             canvas.Save();
             try
             {
@@ -262,7 +690,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                     ["yScale"] = full ? 1f : 298f / 256,
                     ["coefficients"] = full
                         ? hd ? new float[] { 403f / 256, -48f / 256, -120f / 256, 475f / 256 } : [359f / 256, -88f / 256, -183f / 256, 454f / 256]
-                        : hd ? new float[] { 459f / 256, -55f / 256, -136f / 256, 541f / 256 } : [409f / 256, -100f / 256, -208f / 256, 516f / 256],
+                        : hd ? [459f / 256, -55f / 256, -136f / 256, 541f / 256] : [409f / 256, -100f / 256, -208f / 256, 516f / 256],
                 };
                 using var children = new SKRuntimeEffectChildren(effect) { ["luma"] = y, ["chroma"] = uv };
                 using var shader = effect.ToShader(uniforms, children);
@@ -319,7 +747,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                     ["yScale"] = full ? 1f : 298f / 256,
                     ["coefficients"] = full
                         ? hd ? new float[] { 403f / 256, -48f / 256, -120f / 256, 475f / 256 } : [359f / 256, -88f / 256, -183f / 256, 454f / 256]
-                        : hd ? new float[] { 459f / 256, -55f / 256, -136f / 256, 541f / 256 } : [409f / 256, -100f / 256, -208f / 256, 516f / 256],
+                        : hd ? [459f / 256, -55f / 256, -136f / 256, 541f / 256] : [409f / 256, -100f / 256, -208f / 256, 516f / 256],
                 };
                 using var children = new SKRuntimeEffectChildren(effect) { ["luma"] = y, ["chroma"] = uv };
                 using var shader = effect.ToShader(uniforms, children);

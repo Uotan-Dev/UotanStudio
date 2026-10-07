@@ -171,7 +171,7 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
         var create = (delegate* unmanaged<nint, nint, uint, nint, int*, nint>)eglGetProcAddress("eglCreateImageKHR");
         var destroy = (delegate* unmanaged<nint, nint, uint>)eglGetProcAddress("eglDestroyImageKHR");
         if (create == null || destroy == null) throw new NotSupportedException("EGL image entrypoints are unavailable.");
-        int[] array = attributes.ToArray();
+        int[] array = [.. attributes];
         fixed (int* p = array)
         {
             nint image = create(eglDisplay, 0, 0x3270, 0, p);

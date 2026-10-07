@@ -90,7 +90,7 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
         nint specification = VtNative.Dictionary();
         try
         {
-            VtNative.SetBoolean(specification, "kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder", true);
+            VtNative.SetBoolean(specification, VtNative.Vt, "kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder", true);
             _self = GCHandle.Alloc(this);
             VtNative.Check(VtNative.VTCompressionSessionCreate(0, width, height, VtNative.Codec(codec), specification, 0, 0,
                 &OnPacket, GCHandle.ToIntPtr(_self), out _session), "create hardware encoder");

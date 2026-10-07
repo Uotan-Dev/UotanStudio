@@ -349,7 +349,7 @@ public sealed class ScrcpyClient : IDisposable
         if (_options.SendDeviceMeta)
         {
             var name = ReadExact(_videoStream, ScrcpyConstants.DeviceNameLength, timeoutMs);
-            DeviceName = Encoding.UTF8.GetString(name).TrimEnd('\0');
+            DeviceName = Encoding.UTF8.GetString(name.AsSpan().TrimEnd((byte)0));
         }
 
         if (_options.SendCodecMeta)

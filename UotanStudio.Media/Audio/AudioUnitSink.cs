@@ -37,7 +37,6 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
     private AudioPcmRingBuffer? _staging;
     private int _channels = 2, _sampleRate;
     private int _thread = Environment.CurrentManagedThreadId;
-    private float _volumeValue = 1f;
     private GCHandle _self;
     private bool _disposed;
 
@@ -70,14 +69,14 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
     /// <exception cref="ArgumentOutOfRangeException">The assigned value is not a finite number. <para>所赋的值不是有限数。</para></exception>
     public float Volume
     {
-        get => _volumeValue;
+        get => field;
         set
         {
             if (!float.IsFinite(value)) throw new ArgumentOutOfRangeException(nameof(value));
-            _volumeValue = Math.Clamp(value, 0f, 1f);
+            field = Math.Clamp(value, 0f, 1f);
 
         }
-    }
+    } = 1f;
 
     /// <summary>
     /// Opens the default output AudioUnit, closes any previous instance, and starts rendering; the unit is converted to the device float32 format internally.
@@ -182,7 +181,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
         if (pcm.IsEmpty) return;
 
         if (pcm.Length > AudioFormatLimits.MaximumPacketBytes) throw new ArgumentException("Excessive PCM packet.", nameof(pcm));
-        _staging!.Write(pcm, _volumeValue);
+        _staging!.Write(pcm, Volume);
     }
 
     [UnmanagedCallersOnly]

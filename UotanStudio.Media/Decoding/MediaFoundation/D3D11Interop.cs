@@ -54,6 +54,10 @@ internal static unsafe partial class D3D11Interop
     /// <summary>D3D_DRIVER_TYPE_HARDWARE（d3dcommon.h：UNKNOWN + 1）。</summary>
     public const uint DriverTypeHardware = 1;
 
+    /// <summary>D3D_DRIVER_TYPE_UNKNOWN; required when a device is created on an explicit adapter.</summary>
+    /// <summary>D3D_DRIVER_TYPE_UNKNOWN；在显式指定的适配器上创建设备时必须使用。</summary>
+    public const uint DriverTypeUnknown = 0;
+
     /// <summary>D3D11_SDK_VERSION.</summary>
     /// <summary>D3D11_SDK_VERSION。</summary>
     public const uint SdkVersion = 7;

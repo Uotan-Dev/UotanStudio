@@ -20,7 +20,7 @@ public sealed class ScreenMirrorGpuPresenterTests
         using var frame = Frame();
         var expected = new byte[5 * 3 * 4];
         Nv12ToBgraConverter.Convert(frame.Span, 5, 3, 8, expected, matrix: matrix, range: range);
-        var image = new ScreenMirrorGpuPresenter.VideoImage(frame, matrix, range, 1, () => { });
+        var image = new ScreenMirrorGpuPresenter.VideoImage(null, frame, matrix, range, 1, () => { });
         try
         {
             frame.Buffer.AsSpan().Fill(0);

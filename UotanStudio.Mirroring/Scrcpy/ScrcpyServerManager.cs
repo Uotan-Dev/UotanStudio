@@ -23,13 +23,29 @@ namespace UotanStudio.Services.Mirroring;
 /// </remarks>
 public static class ScrcpyServerManager
 {
+    /// <summary>How long the kill command is given to report before the caller moves on.
+    /// <para>结束命令在调用方继续之前被允许上报的时长。</para></summary>
+    private const int ReplyWaitMilliseconds = 3000;
+
     /// <summary>
     /// Pushes the scrcpy server jar to the device.
     /// <para>将 scrcpy 服务端 jar 推送到设备。</para>
     /// </summary>
     /// <param name="session">An established ADB session. <para>已建立的 ADB 会话。</para></param>
     /// <param name="localJarPath">Path of the bundled <c>scrcpy-server</c> jar. <para>随附 <c>scrcpy-server</c> jar 的本地路径。</para></param>
-    public static void PushServer(IAdbDeviceSession session, string localJarPath)
+    /// <param name="cancellationToken">Cancels the push between sync packets. <para>在 sync 数据包之间取消推送。</para></param>
+    /// <returns>A task that completes once the device has accepted the transfer.
+    /// <para>设备接受该传输后完成的任务。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.
+    /// <para><paramref name="session"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="localJarPath"/> is empty.
+    /// <para><paramref name="localJarPath"/> 为空。</para></exception>
+    /// <exception cref="FileNotFoundException"><paramref name="localJarPath"/> does not exist.
+    /// <para><paramref name="localJarPath"/> 不存在。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    public static async Task PushServerAsync(IAdbDeviceSession session, string localJarPath,
+        CancellationToken cancellationToken = default)
     {
         if (session is null)
         {
@@ -41,8 +57,9 @@ public static class ScrcpyServerManager
             throw new ArgumentException("Server jar path is required. 服务端 jar 路径不能为空。", nameof(localJarPath));
         }
 
-        using var sync = session.CreateSyncClient();
-        sync.Push(localJarPath, ScrcpyConstants.ServerDevicePath);
+        await using var sync = session.CreateSyncClient();
+        await sync.PushAsync(localJarPath, ScrcpyConstants.ServerDevicePath, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -72,16 +89,34 @@ public static class ScrcpyServerManager
     /// <para>强制退出设备上正在运行的 scrcpy 服务端进程。</para>
     /// </summary>
     /// <param name="session">An established ADB session. <para>已建立的 ADB 会话。</para></param>
-    public static void StopServer(IAdbDeviceSession session)
+    /// <param name="cancellationToken">Cancels the reply wait. <para>取消应答等待。</para></param>
+    /// <returns>A task that completes once the kill command has finished or its reply wait expired.
+    /// <para>结束命令执行完毕，或其应答等待到期后完成的任务。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.
+    /// <para><paramref name="session"/> 为 <see langword="null"/>。</para></exception>
+    public static async Task StopServerAsync(IAdbDeviceSession session, CancellationToken cancellationToken = default)
     {
         if (session is null)
         {
             throw new ArgumentNullException(nameof(session));
         }
 
-        using var stream = session.OpenStream("shell:pkill -f " + ScrcpyConstants.ServerMainClass);
-        while (stream.Read(3000) is not null)
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(ReplyWaitMilliseconds);
+        await using var stream = session.OpenStream("shell:pkill -f " + ScrcpyConstants.ServerMainClass);
+        while (true)
         {
+            try
+            {
+                if (await stream.ReadAsync(timeout.Token).ConfigureAwait(false) is null)
+                {
+                    break;
+                }
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
         }
     }
 
@@ -94,8 +129,7 @@ public static class ScrcpyServerManager
     public static string DrainLog(IAdbStream shellStream)
     {
         var sb = new StringBuilder();
-        byte[]? chunk;
-        while ((chunk = shellStream.Read(0)) is not null)
+        while (shellStream.TryRead(out var chunk))
         {
             sb.Append(Encoding.UTF8.GetString(chunk));
         }

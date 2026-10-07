@@ -362,7 +362,7 @@ internal partial class PropertiesViewModel : Tool
         if (doc.IsBinary)
         {
             RefreshForFileAnalysis(new FileAnalysisCompletedMessage(
-                doc.Analysis.ToList(),
+                [.. doc.Analysis],
                 doc.DetectedFormat,
                 doc.FilePath));
             return;

@@ -16,7 +16,7 @@ internal partial class PropertiesViewModel
     private long _mirrorSampleTime;
     private (long Received, long Decoded, long Uploaded, long Bytes) _mirrorCounters;
     private long _mirrorAudioFrames;
-    private static readonly string[] MirrorKeys = ["Status", "Codec", "Decoder", "Resolution", "SourceColor", "PixelFormat", "Conversion", "ReceiveFps", "DecodeFps", "UploadFps", "MaxFps", "BitRate", "ActualBitRate", "Encoder", "Audio", "AudioFormat", "AudioFps", "Device", "Version"];
+    private static readonly string[] MirrorKeys = ["Status", "Codec", "Decoder", "Resolution", "SourceColor", "PixelFormat", "Conversion", "Presentation", "ReceiveFps", "DecodeFps", "UploadFps", "MaxFps", "BitRate", "ActualBitRate", "Encoder", "Audio", "AudioFormat", "AudioFps", "Device", "Version"];
 
     internal void RefreshForScreenMirror(ScreenMirrorViewModel mirror)
     {
@@ -102,7 +102,8 @@ internal partial class PropertiesViewModel
             size is { } s ? $"{s.Width} × {s.Height}" : meta is { } m ? $"{m.Width} × {m.Height}" : waiting,
             svc.GetString("MirrorProperty_Unknown"),
             mirror.DecoderBackend == "Media Foundation (GPU)" ? "BGRA · 8-bit" : "NV12 · 8-bit · YUV 4:2:0",
-            mirror.DecoderBackend == "Media Foundation (GPU)" ? "D3D11 → BGRA" : svc.GetString("MirrorProperty_ConversionValue"), received, decoded, uploaded,
+            mirror.DecoderBackend == "Media Foundation (GPU)" ? "D3D11 → BGRA" : svc.GetString("MirrorProperty_ConversionValue"),
+            mirror.GpuPresenter.PresentationPath, received, decoded, uploaded,
             options is null ? waiting : options.MaxFps > 0 ? $"{options.MaxFps} fps" : svc.GetString("MirrorProperty_Unlimited"),
             options is null ? waiting : $"{options.VideoBitRate / 1_000_000.0:F2} Mbps", bitrate,
             svc.GetString("MirrorProperty_EncoderValue"), audioValue, string.IsNullOrEmpty(mirror.AudioBackend) ? audioFormat : $"{audioFormat} ? {mirror.AudioBackend}", audioFps,
@@ -140,6 +141,9 @@ internal partial class PropertiesViewModel
         if (OperatingSystem.IsMacOS()) backends.Add(C("3", "VideoToolbox · GPU"));
         backends.AddRange([C("4", "GStreamer · GPU"), C("5", "GStreamer · CPU")]);
         Add("Backend", ((int)settings.ScreenMirrorDecoderBackend).ToString(), backends, v => settings.ScreenMirrorDecoderBackend = (VideoDecoderBackend)int.Parse(v));
+        Add("GpuExport", ((int)settings.ScreenMirrorGpuExport).ToString(),
+            [LC("0", "Auto", "Automatic"), LC("1", "On", "On"), LC("2", "Off", "Off")],
+            v => settings.ScreenMirrorGpuExport = (GpuExportPreference)int.Parse(v));
         Add("Matrix", ((int)settings.ScreenMirrorColorMatrix).ToString(), [LC("0", "Auto", "Automatic"), C("1", "BT.601"), C("2", "BT.709")], v => settings.ScreenMirrorColorMatrix = (VideoColorMatrix)int.Parse(v));
         Add("Range", ((int)settings.ScreenMirrorColorRange).ToString(), [LC("0", "Auto", "Automatic"), LC("1", "Limited", "Limited (16–235)"), LC("2", "Full", "Full (0–255)")], v => settings.ScreenMirrorColorRange = (VideoColorRange)int.Parse(v));
         Add("MaxFps", settings.ScreenMirrorMaxFps.ToString(), [LC("0", "Unlimited", "Unlimited"), C("30", "30 fps"), C("60", "60 fps"), C("90", "90 fps"), C("120", "120 fps")], v => settings.ScreenMirrorMaxFps = int.Parse(v));

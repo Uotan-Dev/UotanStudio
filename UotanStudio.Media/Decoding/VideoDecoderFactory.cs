@@ -148,6 +148,19 @@ public static class VideoDecoderFactory
     }
 
     /// <summary>
+    /// Resolves the decoder actually in use after initialization: fallback wrappers return their active
+    /// inner decoder, everything else returns the argument unchanged.
+    /// <para>解析初始化后实际在用的解码器：回退包装器返回其激活的内部解码器，其余原样返回。</para>
+    /// </summary>
+    /// <param name="decoder">Initialized decoder to inspect. <para>要检查的已初始化解码器。</para></param>
+    /// <returns>
+    /// The active decoder, or <see langword="null"/> when a fallback wrapper has activated nothing.
+    /// <para>激活的解码器；回退包装器尚未激活任何实现时返回 <see langword="null"/>。</para>
+    /// </returns>
+    public static IVideoDecoder? GetActiveDecoder(IVideoDecoder decoder) =>
+        decoder is FallbackVideoDecoder selection ? selection.ActiveDecoder : decoder;
+
+    /// <summary>
     /// Gets the initialized backend name, including the actual choice after fallback.
     /// <para>获取已初始化后端的名称，包含回退后实际选中的实现。</para>
     /// </summary>

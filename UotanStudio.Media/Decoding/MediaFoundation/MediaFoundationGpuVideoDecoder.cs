@@ -4,10 +4,10 @@ using System.Runtime.Versioning;
 namespace UotanStudio.Media.Decoding.MediaFoundation;
 
 /// <summary>
-/// D3D11-aware decoding with pooled NV12 readback or GPU NV12-to-BGRA processing.
-/// Supports synchronous system transforms and asynchronous hardware transforms sharing one D3D11 device.
-/// <para>支持 D3D11 的解码，可选池化 NV12 回读或 GPU 上的 NV12 转 BGRA 处理。</para>
-/// <para>同时支持同步系统变换与共享同一 D3D11 设备的异步硬件变换。</para>
+/// D3D11-aware decoding with pooled NV12 readback, GPU NV12-to-BGRA processing, or zero-copy shared-texture
+/// export. Supports synchronous system transforms and asynchronous hardware transforms sharing one D3D11 device.
+/// <para>支持 D3D11 的解码：可选池化 NV12 回读、GPU 上的 NV12 转 BGRA 处理，或零拷贝共享纹理导出。
+/// 同时支持同步系统变换与共享同一 D3D11 设备的异步硬件变换。</para>
 /// </summary>
 /// <remarks>Direct instances never fall back to CPU. The platform factory owns initialization fallback.</remarks>
 [SupportedOSPlatform("windows")]
@@ -56,6 +56,11 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private bool _drainComplete;
     private uint _inputColorSpace;
     private byte[]? _readbackBuffer;
+    private ExportSlotRing<MediaFoundationExportSlot>? _exportRing;
+    private volatile bool _gpuExportEnabled;
+    private Action<D3D11SharedVideoFrame>? _gpuExportFrameCallback;
+    private long _exportDropped;
+    private const int ExportSlotCount = 4;
 
     /// <summary>
     /// Whether a D3D11 media transform is currently configured.
@@ -68,6 +73,43 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     /// 以及 <see cref="Dispose"/> 之后为 <see langword="false"/>。</para>
     /// </value>
     public bool IsInitialized => _transform != 0;
+
+    /// <summary>
+    /// Gets or sets whether decoded frames are handed to <see cref="GpuExportFrameCallback"/> as shared
+    /// textures instead of being read back as NV12. The flag is read on the owning thread and may be set
+    /// from any thread; turning it off mid-stream returns subsequent frames to the NV12 readback path.
+    /// <para>获取或设置解码帧是否以共享纹理交付给 <see cref="GpuExportFrameCallback"/>，而非回读 NV12。
+    /// 该标志由所属线程读取、可在任意线程设置；播放中关闭后，后续帧回到 NV12 回读路径。</para>
+    /// </summary>
+    /// <value>
+    /// Effective only when initialization requested export via
+    /// <see cref="VideoDecoderOptions.MediaFoundationPreferGpuExport"/>.
+    /// <para>仅在初始化经 <see cref="VideoDecoderOptions.MediaFoundationPreferGpuExport"/> 请求导出时生效。</para>
+    /// </value>
+    public bool GpuExportEnabled { get => _gpuExportEnabled; set => _gpuExportEnabled = value; }
+
+    /// <summary>
+    /// Receives GPU-exported shared-texture frames when <see cref="GpuExportEnabled"/> is set; the callback
+    /// runs on the owning thread and must not reenter the decoder. Presentation must call
+    /// <see cref="D3D11SharedVideoFrame.MarkPresented"/> exactly once per frame, in a finally clause.
+    /// <para>在 <see cref="GpuExportEnabled"/> 开启时接收 GPU 导出的共享纹理帧；回调在所属线程执行且不得重入
+    /// 解码器。呈现方必须对每帧在 finally 中恰好调用一次 <see cref="D3D11SharedVideoFrame.MarkPresented"/>。</para>
+    /// </summary>
+    public Action<D3D11SharedVideoFrame>? GpuExportFrameCallback { get => _gpuExportFrameCallback; set => _gpuExportFrameCallback = value; }
+
+    /// <summary>
+    /// Gets how many frames were dropped because every shared texture was still owned by the compositor.
+    /// <para>获取因全部共享纹理仍被合成器持有而丢弃的帧数。</para>
+    /// </summary>
+    public long ExportDroppedFrames => Interlocked.Read(ref _exportDropped);
+
+    /// <summary>
+    /// Gets how many frames were handed off to <see cref="GpuExportFrameCallback"/>.
+    /// <para>获取已移交给 <see cref="GpuExportFrameCallback"/> 的帧数。</para>
+    /// </summary>
+    public long ExportSubmittedFrames => _exportRing?.SubmittedFrames ?? 0;
+
+    private bool ExportActive => _gpuExportEnabled && _exportRing is not null && _gpuExportFrameCallback is not null;
 
     /// <summary>
     /// Creates a D3D11 device and Media Foundation device manager, activates the first asynchronous hardware or
@@ -339,11 +381,23 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private void CreateD3D11Device()
     {
-        Check(D3D11Interop.D3D11CreateDevice(
-            0, D3D11Interop.DriverTypeHardware, 0,
-            D3D11Interop.CreateDeviceVideoSupport | D3D11Interop.CreateDeviceBgraSupport,
-            0, 0, D3D11Interop.SdkVersion,
-            out _device, out _, out _context), "D3D11CreateDevice");
+        nint adapter = 0;
+        if (_options.MediaFoundationPreferGpuExport)
+        {
+            if (_options.MediaFoundationAdapterLuid is not { Length: 8 } luid)
+                throw new NotSupportedException("Shared-texture export requires the compositor adapter LUID.");
+            adapter = DxgiInterop.FindAdapterByLuid(luid);
+            if (adapter == 0) throw new NotSupportedException("The compositor's DXGI adapter was not found.");
+        }
+        try
+        {
+            Check(D3D11Interop.D3D11CreateDevice(
+                adapter, adapter != 0 ? D3D11Interop.DriverTypeUnknown : D3D11Interop.DriverTypeHardware, 0,
+                D3D11Interop.CreateDeviceVideoSupport | D3D11Interop.CreateDeviceBgraSupport,
+                0, 0, D3D11Interop.SdkVersion,
+                out _device, out _, out _context), "D3D11CreateDevice");
+        }
+        finally { MfCom.Release(adapter); }
         try
         {
             Check(MfCom.QueryInterface(_device, D3D11Interop.IidVideoDevice, out _videoDevice), "ID3D11VideoDevice");
@@ -482,7 +536,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private void BuildVideoProcessor()
     {
         ReleaseVideoProcessor();
-        if (_options.PreferNv12Output) return;
+        if (_options.PreferNv12Output && !_options.MediaFoundationPreferGpuExport) return;
         var content = new D3D11VideoProcessorContentDesc
         {
             InputFrameFormat = D3D11Interop.VideoFrameFormatProgressive,
@@ -502,6 +556,13 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         MfCom.D3DVideoProcessorSetStreamAutoProcessingMode(_videoContext, _processor, 0, 0);
         MfCom.D3DVideoProcessorSetStreamColorSpace(_videoContext, _processor, 0, D3D11VideoProcessorColorSpace.FromBits(_inputColorSpace));
         MfCom.D3DVideoProcessorSetOutputColorSpace(_videoContext, _processor, D3D11VideoProcessorColorSpace.FromBits(2u << 4));
+
+        if (_options.MediaFoundationPreferGpuExport)
+        {
+            _exportRing = new ExportSlotRing<MediaFoundationExportSlot>(ExportSlotCount,
+                CreateExportSlot, DestroyExportSlot, AcquireExportSlot);
+            return;
+        }
 
         var outputDesc = new D3D11Interop.Texture2DDesc
         {
@@ -526,6 +587,79 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         stagingDesc.BindFlags = 0;
         stagingDesc.CPUAccessFlags = D3D11Interop.CpuAccessRead;
         Check(MfCom.D3DCreateTexture2D(_device, stagingDesc, 0, out _stagingTexture), "CreateTexture2D(staging)");
+    }
+
+    private MediaFoundationExportSlot CreateExportSlot(int index)
+    {
+        _ = index;
+        var desc = new D3D11Interop.Texture2DDesc
+        {
+            Width = (uint)_width,
+            Height = (uint)_height,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = D3D11Interop.DxgiFormatB8G8R8A8,
+            SampleDescCount = 1,
+            Usage = D3D11Interop.UsageDefault,
+            BindFlags = D3D11Interop.BindRenderTarget | D3D11Interop.BindShaderResource,
+            MiscFlags = DxgiInterop.MiscSharedKeyedMutex,
+        };
+        Check(MfCom.D3DCreateTexture2D(_device, desc, 0, out nint texture), "CreateTexture2D(export slot)");
+        nint keyedMutex = 0, outputView = 0;
+        try
+        {
+            Check(MfCom.QueryInterface(texture, DxgiInterop.IidDxgiKeyedMutex, out keyedMutex), "IDXGIKeyedMutex(export slot)");
+            Check(MfCom.QueryInterface(texture, DxgiInterop.IidDxgiResource, out nint resource), "IDXGIResource(export slot)");
+            nint sharedHandle;
+            try
+            {
+                Check(DxgiInterop.GetSharedHandle(resource, out sharedHandle), "GetSharedHandle(export slot)");
+            }
+            finally { MfCom.Release(resource); }
+            var viewDesc = new D3D11Interop.VideoProcessorOutputViewDesc
+            {
+                ViewDimension = D3D11Interop.VpovDimensionTexture2D,
+            };
+            Check(MfCom.D3DCreateVideoProcessorOutputView(_videoDevice, texture, _processorEnumerator, viewDesc, out outputView),
+                "CreateVideoProcessorOutputView(export slot)");
+            return new MediaFoundationExportSlot
+            {
+                Texture = texture,
+                OutputView = outputView,
+                KeyedMutex = keyedMutex,
+                SharedHandle = sharedHandle,
+            };
+        }
+        catch
+        {
+            if (outputView != 0) MfCom.Release(outputView);
+            MfCom.Release(keyedMutex);
+            MfCom.Release(texture);
+            throw;
+        }
+    }
+
+    private void DestroyExportSlot(MediaFoundationExportSlot slot)
+    {
+        MfCom.Release(slot.OutputView);
+        MfCom.Release(slot.KeyedMutex);
+        MfCom.Release(slot.Texture);
+    }
+
+    private bool AcquireExportSlot(MediaFoundationExportSlot slot)
+    {
+        int hr = DxgiInterop.AcquireSync(slot.KeyedMutex, 0, 0);
+        if (hr == DxgiInterop.WaitTimeout) return false;
+        if (hr == DxgiInterop.WaitAbandoned)
+        {
+            // The previous owner died holding the mutex; ownership transferred to us, so normalize
+            // the key back to 0 and treat the slot as acquired.
+            // 上一个持有者在持有互锁时死亡；所有权已转移给本设备，把键归一化回 0 并视为已获取。
+            _ = DxgiInterop.ReleaseSync(slot.KeyedMutex, 0);
+            return true;
+        }
+        Check(hr, "AcquireSync(export slot)");
+        return true;
     }
 
     private void StartStreaming()
@@ -638,10 +772,14 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
                 try
                 {
                     Check(MfCom.DxgiSubresourceIndex(dxgiBuffer, out uint subresource), "GetSubresourceIndex");
-                    if (_options.PreferNv12Output) ReadBackNv12(sourceTexture, subresource, timestamp);
+                    if (_options.PreferNv12Output)
+                    {
+                        if (ExportActive) ExportSample(sourceTexture, subresource, timestamp);
+                        else ReadBackNv12(sourceTexture, subresource, timestamp);
+                    }
                     else
                     {
-                        BlitToOutput(sourceTexture, subresource);
+                        BlitToOutput(sourceTexture, subresource, _outputView);
                         ReadBack(timestamp);
                     }
                 }
@@ -700,7 +838,47 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         finally { MfCom.D3DUnmap(_context, _stagingTexture, 0); }
     }
 
-    private void BlitToOutput(nint sourceTexture, uint subresource)
+    /// <summary>
+    /// Writes the decoded NV12 frame into a shared keyed-mutex texture and hands it to the presenter
+    /// without any CPU access. When every slot is still owned by the compositor the frame is dropped:
+    /// live mirroring wants the newest frame, and blocking the decode thread would only add latency.
+    /// <para>把解码的 NV12 帧经视频处理器写入带键互锁的共享纹理并交给呈现方，全程不经过 CPU。
+    /// 全部槽位仍被合成器持有时直接丢帧：实时投屏要的是最新帧，阻塞解码线程只会增加延迟。</para>
+    /// </summary>
+    /// <exception cref="InvalidOperationException">A D3D11 or DXGI call failed.
+    /// <para>某个 D3D11 或 DXGI 调用失败。</para></exception>
+    private void ExportSample(nint sourceTexture, uint subresource, long timestampTicks)
+    {
+        var ring = _exportRing!;
+        var slot = ring.Rent();
+        if (slot is null)
+        {
+            Interlocked.Increment(ref _exportDropped);
+            return;
+        }
+        try
+        {
+            BlitToOutput(sourceTexture, subresource, slot.OutputView);
+        }
+        catch
+        {
+            // The blit failed while this thread owns the mutex; hand it back at key 0 so the slot
+            // stays rentable, then let the exception fail the session.
+            // blit 失败时互锁仍归本线程所有；以键 0 归还使槽位保持可租用，然后让异常终止会话。
+            _ = DxgiInterop.ReleaseSync(slot.KeyedMutex, 0);
+            throw;
+        }
+        DxgiInterop.ReleaseSync(slot.KeyedMutex, 1);
+        ring.CloseGate(slot);
+        var frame = new D3D11SharedVideoFrame(ring, slot, slot.SharedHandle, _width, _height, timestampTicks,
+            (_inputColorSpace & 4) != 0 ? VideoColorMatrix.Bt709 : VideoColorMatrix.Bt601,
+            (_inputColorSpace & 0x30) == 0x20 ? VideoColorRange.Full : VideoColorRange.Limited);
+        _inCallback = true;
+        try { _gpuExportFrameCallback!(frame); }
+        finally { _inCallback = false; }
+    }
+
+    private void BlitToOutput(nint sourceTexture, uint subresource, nint outputView)
     {
         var inputViewDesc = new D3D11Interop.VideoProcessorInputViewDesc
         {
@@ -719,7 +897,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
                 FutureFrames = 0,
                 InputFramePtr = inputView,
             };
-            Check(MfCom.D3DVideoProcessorBlt(_videoContext, _processor, _outputView, _outputFrameCounter, 1, stream), "VideoProcessorBlt");
+            Check(MfCom.D3DVideoProcessorBlt(_videoContext, _processor, outputView, _outputFrameCounter, 1, stream), "VideoProcessorBlt");
             _outputFrameCounter++;
         }
         finally { MfCom.Release(inputView); }
@@ -793,6 +971,14 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private void ReleaseVideoProcessor()
     {
         _stagingWidth = _stagingHeight = 0;
+        if (_exportRing is not null)
+        {
+            // Slots may still be queued for composition; the compositor holds its own reference to the
+            // shared kernel resource, so destroying the textures here cannot pull the surfaces away.
+            // 槽位可能仍在合成队列中；合成器对共享内核资源持有自身引用，此处销毁纹理不会使表面失效。
+            _exportRing.Dispose();
+            _exportRing = null;
+        }
         if (_stagingTexture != 0) { MfCom.Release(_stagingTexture); _stagingTexture = 0; }
         if (_outputView != 0) { MfCom.Release(_outputView); _outputView = 0; }
         if (_outputTexture != 0) { MfCom.Release(_outputTexture); _outputTexture = 0; }

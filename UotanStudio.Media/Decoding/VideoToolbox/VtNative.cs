@@ -28,6 +28,7 @@ internal static unsafe partial class VtNative
     internal const string Cv = "/System/Library/Frameworks/CoreVideo.framework/CoreVideo";
     internal const string Cf = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
     internal const uint Nv12 = 0x34323076;
+    internal const uint Bgra = 0x42475224;
     internal static uint Codec(VideoCodecId codec) => codec switch
     {
         VideoCodecId.H264 => 0x61766331,
@@ -44,18 +45,29 @@ internal static unsafe partial class VtNative
     internal static nint Symbol(string library, string name) => Marshal.ReadIntPtr(Export(library, name));
     internal static nint Dictionary() => CFDictionaryCreateMutable(0, 0,
         Export(Cf, "kCFTypeDictionaryKeyCallBacks"), Export(Cf, "kCFTypeDictionaryValueCallBacks"));
-    internal static void SetBoolean(nint dictionary, string key, bool value) =>
-        CFDictionarySetValue(dictionary, Symbol(Vt, key), Symbol(Cf, value ? "kCFBooleanTrue" : "kCFBooleanFalse"));
-    internal static nint PixelAttributes()
+    internal static void SetBoolean(nint dictionary, string library, string key, bool value) =>
+        CFDictionarySetValue(dictionary, Symbol(library, key), Symbol(Cf, value ? "kCFBooleanTrue" : "kCFBooleanFalse"));
+    internal static nint PixelAttributes() => PixelAttributes(Nv12, gpuCompatible: false);
+    internal static nint PixelAttributes(uint pixelFormat, bool gpuCompatible)
     {
         nint dictionary = Dictionary();
-        int format = unchecked((int)Nv12);
+        int format = unchecked((int)pixelFormat);
         nint number = CFNumberCreate(0, 3, &format);
-        try { CFDictionarySetValue(dictionary, Symbol(Cv, "kCVPixelBufferPixelFormatTypeKey"), number); }
+        try
+        {
+            CFDictionarySetValue(dictionary, Symbol(Cv, "kCVPixelBufferPixelFormatTypeKey"), number);
+            if (gpuCompatible)
+            {
+                SetBoolean(dictionary, Cv, "kCVPixelBufferOpenGLCompatibilityKey", true);
+                SetBoolean(dictionary, Cv, "kCVPixelBufferMetalCompatibilityKey", true);
+            }
+        }
         catch { CFRelease(dictionary); throw; }
         finally { CFRelease(number); }
         return dictionary;
     }
+    [LibraryImport(Cv)] internal static partial nint CVPixelBufferGetIOSurface(nint pixelBuffer);
+    [LibraryImport(Cf)] internal static partial void CFRetain(nint value);
     [LibraryImport(Cf)] internal static partial byte CFEqual(nint left, nint right);
     [LibraryImport(Cv)] internal static partial nint CVBufferCopyAttachment(nint buffer, nint key, nint mode);
     [LibraryImport(Cf)] internal static partial void CFRelease(nint value);

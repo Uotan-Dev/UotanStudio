@@ -52,20 +52,27 @@ public class DecodedVideoFrame : IDisposable
     /// <summary>False only for decoder-owned storage borrowed until the callback returns.</summary>
     internal bool ReturnBufferToPool { get; init; } = true;
 
-    /// <summary>Creates a frame that takes ownership of an existing pooled buffer.</summary>
-    /// <summary>创建一个接管现有池化缓冲区所有权的帧。</summary>
-    /// <param name="buffer">The pooled buffer holding the NV12 planes. 持有 NV12 平面的池化缓冲区。</param>
-    /// <param name="length">The number of valid bytes in <paramref name="buffer"/>. <paramref name="buffer"/> 中的有效字节数。</param>
-    /// <param name="width">Frame width in pixels. 帧宽度（像素）。</param>
-    /// <param name="height">Frame height in pixels. 帧高度（像素）。</param>
-    /// <param name="stride">
-    /// Row pitch in bytes of the NV12 buffer (may exceed width for alignment).
-    /// NV12 缓冲区的行距（字节），为对齐可能大于宽度。
+    /// <summary>
+    /// Creates a frame over an existing buffer, optionally skipping the NV12 plane-length
+    /// check so borrowed or derived layouts can validate their own size.
+    /// <para>基于既有缓冲区创建帧；可跳过 NV12 平面长度校验，让借用或派生布局自行确认大小。</para>
+    /// </summary>
+    /// <param name="buffer">
+    /// Buffer holding the plane data; borrowed native frames pass an empty array.
+    /// <para>承载平面数据的缓冲区；借用的原生帧传入空数组。</para>
     /// </param>
-    /// <param name="timestampTicks">Presentation timestamp in ticks. 显示时间戳（tick）。</param>
+    /// <param name="length">Valid byte count in <paramref name="buffer"/>; compared against the array only when it is non-empty. <para><paramref name="buffer"/> 中的有效字节数；仅当缓冲区非空时才与数组长度比较。</para></param>
+    /// <param name="width">Frame width in pixels. <para>帧宽度（像素）。</para></param>
+    /// <param name="height">Frame height in pixels. <para>帧高度（像素）。</para></param>
+    /// <param name="stride">
+    /// Row pitch in bytes (may exceed width for alignment).
+    /// <para>行距（字节），为对齐可能大于宽度。</para>
+    /// </param>
+    /// <param name="timestampTicks">Presentation timestamp in ticks. <para>显示时间戳（tick）。</para></param>
     /// <param name="skipNv12Validation">
-    /// Skips the NV12 plane-length validation for derived frame layouts (e.g. BGRA).
-    /// 对派生帧布局（如 BGRA）跳过 NV12 平面长度校验。
+    /// true = accept a length that does not cover complete NV12 planes, used by derived
+    /// layouts such as BGRA.
+    /// <para>为 true 时允许长度不覆盖完整 NV12 平面，供 BGRA 等派生布局使用。</para>
     /// </param>
     protected DecodedVideoFrame(byte[] buffer, int length, int width, int height, int stride, long timestampTicks, bool skipNv12Validation)
     {
@@ -253,7 +260,7 @@ public sealed unsafe class PointerDecodedVideoFrame : DecodedVideoFrame
     /// <param name="stride">Bytes per BGRA row. 每行 BGRA 字节数。</param>
     /// <param name="timestampTicks">Presentation timestamp in ticks. 显示时间戳（tick）。</param>
     public PointerDecodedVideoFrame(byte* pointer, int length, int width, int height, int stride, long timestampTicks)
-        : base(Array.Empty<byte>(), length, width, height, stride, timestampTicks, skipNv12Validation: true)
+        : base([], length, width, height, stride, timestampTicks, skipNv12Validation: true)
     {
         if (length < checked(width * height * 4))
         {

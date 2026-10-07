@@ -13,19 +13,34 @@ public partial class ScreenMirrorViewModel
     private AppSettings _activeSettings = new();
     internal AppSettings PendingSettings => _pendingSettings ??= SettingsPersistenceService.Instance.LoadSettings().Copy();
     /// <summary>
-    /// Decoder options for the active session. The GPU backend always reads back NV12 planes: the
-    /// presenter and the bitmap fallback both consume NV12, and the smaller planes measured about twice
-    /// the decode rate of letting the video processor convert to BGRA on the GPU.
-    /// <para>当前会话的解码器选项。GPU 后端始终回读 NV12 平面：呈现器与位图回退都能消费 NV12，
-    /// 而且按实测，回读较小平面比让视频处理器在 GPU 上转成 BGRA 的解码速率约快一倍。</para>
+    /// Decoder options for the active session. NV12 readback stays the default contract; when the
+    /// compositor exposes the keyed-mutex D3D11 (Windows) or IOSurface (macOS) import capability and the
+    /// user preference allows it, the session additionally requests GPU export so the presenter can consume
+    /// shared frames without a CPU download.
+    /// <para>当前会话的解码器选项。NV12 回读仍是默认契约；当合成器暴露键互锁 D3D11（Windows）或 IOSurface（macOS）
+    /// 导入能力且用户偏好允许时，会话额外请求 GPU 导出，由呈现器零拷贝消费共享帧。</para>
     /// </summary>
-    internal VideoDecoderOptions ActiveDecoderOptions => new()
+    internal VideoDecoderOptions ActiveDecoderOptions
     {
-        Backend = _activeSettings.ScreenMirrorDecoderBackend,
-        ColorMatrix = _activeSettings.ScreenMirrorColorMatrix,
-        ColorRange = _activeSettings.ScreenMirrorColorRange,
-        PreferNv12Output = true,
-    };
+        get
+        {
+            var composition = GpuPresenter.Composition;
+            bool windowsExport = OperatingSystem.IsWindows() && composition is { WindowsKeyedMutex: true }
+                && _activeSettings.ScreenMirrorGpuExport != GpuExportPreference.Off;
+            bool macExport = OperatingSystem.IsMacOS() && composition is { MacIosurface: true }
+                && _activeSettings.ScreenMirrorGpuExport != GpuExportPreference.Off;
+            return new VideoDecoderOptions
+            {
+                Backend = _activeSettings.ScreenMirrorDecoderBackend,
+                ColorMatrix = _activeSettings.ScreenMirrorColorMatrix,
+                ColorRange = _activeSettings.ScreenMirrorColorRange,
+                PreferNv12Output = true,
+                MediaFoundationPreferGpuExport = windowsExport,
+                MediaFoundationAdapterLuid = windowsExport ? composition!.AdapterLuid : null,
+                VideoToolboxPreferGpuExport = macExport,
+            };
+        }
+    }
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ApplyMirrorSettingsCommand))]
     private bool _isApplyingMirrorSettings;
@@ -85,5 +100,6 @@ public partial class ScreenMirrorViewModel
         target.ScreenMirrorAudioBackend = source.ScreenMirrorAudioBackend;
         target.ScreenMirrorVolume = source.ScreenMirrorVolume;
         target.ScreenMirrorControl = source.ScreenMirrorControl;
+        target.ScreenMirrorGpuExport = source.ScreenMirrorGpuExport;
     }
 }

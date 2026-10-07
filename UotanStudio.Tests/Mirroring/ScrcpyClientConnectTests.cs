@@ -95,7 +95,7 @@ public sealed class ScrcpyClientConnectTests
         using var stream = new MemoryStream();
         stream.WriteByte(0);
         var deviceName = new byte[ScrcpyConstants.DeviceNameLength];
-        Encoding.UTF8.GetBytes(name).CopyTo(deviceName);
+        Encoding.UTF8.GetBytes(name.AsSpan(), deviceName);
         stream.Write(deviceName);
         var metadata = new byte[12];
         BinaryPrimitives.WriteUInt32BigEndian(metadata, 0x68323634);

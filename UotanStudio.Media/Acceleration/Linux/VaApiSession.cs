@@ -117,7 +117,7 @@ public sealed unsafe class VaApiSession : IDisposable
     }
 
     internal static string[] RenderNodes() => Directory.Exists("/dev/dri")
-        ? Directory.GetFiles("/dev/dri", "renderD*").Order(StringComparer.Ordinal).ToArray() : [];
+        ? [.. Directory.GetFiles("/dev/dri", "renderD*").Order(StringComparer.Ordinal)] : [];
 
     internal static bool SupportsCodec(VaApiCapability capability, VideoCodecId codec) => capability.Entrypoint == 1 && codec switch
     {
@@ -289,7 +289,7 @@ public sealed unsafe class VaApiSession : IDisposable
             Check(VaNative.vaBeginPicture(_display, _context, target), "begin picture");
             try
             {
-                uint[] array = ids.ToArray();
+                uint[] array = [.. ids];
                 fixed (uint* p = array) Check(VaNative.vaRenderPicture(_display, _context, p, array.Length), "render picture");
             }
             finally { Check(VaNative.vaEndPicture(_display, _context), "end picture"); }

@@ -18,7 +18,6 @@ public sealed class GStreamerAudioSink(bool alsa = false) : IAudioSink
     private int _bits;
     private long _samples;
     private bool _disposed;
-    private float _volume = 1;
     /// <summary>
     /// Whether a playback pipeline has been built.
     /// <para>是否已构建播放流水线。</para>
@@ -45,9 +44,9 @@ public sealed class GStreamerAudioSink(bool alsa = false) : IAudioSink
     /// <exception cref="ArgumentOutOfRangeException">The assigned value is not a finite number. <para>所赋的值不是有限数。</para></exception>
     public float Volume
     {
-        get => _volume;
-        set { if (!float.IsFinite(value)) throw new ArgumentOutOfRangeException(nameof(value)); _volume = Math.Clamp(value, 0, 1); }
-    }
+        get => field;
+        set { if (!float.IsFinite(value)) throw new ArgumentOutOfRangeException(nameof(value)); field = Math.Clamp(value, 0, 1); }
+    } = 1;
     /// <summary>
     /// Builds a live appsrc playback pipeline for the given format, disposing any previous pipeline; 16-bit input maps to S16LE and 32-bit input to F32LE.
     /// <para>为指定格式构建实时 appsrc 播放流水线，并释放此前的流水线；16 位输入映射为 S16LE，32 位输入映射为 F32LE。</para>
@@ -118,7 +117,7 @@ public sealed class GStreamerAudioSink(bool alsa = false) : IAudioSink
             if (Environment.TickCount64 >= deadline) throw new TimeoutException("Audio output stopped consuming PCM.");
             Thread.Sleep(2);
         }
-        if (_volume == 1)
+        if (Volume == 1)
         {
             _pipeline.Push(pcm, checked(_samples * 10_000_000 / SampleRate));
             _samples += pcm.Length / align;
@@ -131,8 +130,8 @@ public sealed class GStreamerAudioSink(bool alsa = false) : IAudioSink
             Span<byte> samples = bytes.AsSpan(0, pcm.Length);
             for (int i = 0; i < samples.Length; i += _bits / 8)
             {
-                if (_bits == 16) BinaryPrimitives.WriteInt16LittleEndian(samples[i..], (short)(BinaryPrimitives.ReadInt16LittleEndian(samples[i..]) * _volume));
-                else BinaryPrimitives.WriteSingleLittleEndian(samples[i..], BinaryPrimitives.ReadSingleLittleEndian(samples[i..]) * _volume);
+                if (_bits == 16) BinaryPrimitives.WriteInt16LittleEndian(samples[i..], (short)(BinaryPrimitives.ReadInt16LittleEndian(samples[i..]) * Volume));
+                else BinaryPrimitives.WriteSingleLittleEndian(samples[i..], BinaryPrimitives.ReadSingleLittleEndian(samples[i..]) * Volume);
             }
             _pipeline.Push(bytes.AsSpan(0, pcm.Length), checked(_samples * 10_000_000 / SampleRate));
             _samples += pcm.Length / align;

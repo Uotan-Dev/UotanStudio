@@ -9,6 +9,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Media.Acceleration.Linux;
 using UotanStudio.Media.Decoding;
+using UotanStudio.Media.Decoding.MediaFoundation;
+using UotanStudio.Media.Decoding.VideoToolbox;
 using UotanStudio.Services.Mirroring;
 
 namespace UotanStudio.ViewModels.Editors;
@@ -409,9 +411,17 @@ public partial class ScreenMirrorViewModel : Document
                 "AV1" or "AV01" => VideoCodecId.Av1,
                 _ => throw new NotSupportedException($"Unsupported video codec '{metadata.CodecName}'."),
             };
+            // The composition capability probe completes when the mirror control attaches to the visual
+            // tree; give it a short grace period so GPU export can be requested from the first frame.
+            // 合成能力探测在投屏控件挂载到可视树后完成；留出短暂宽限期，让 GPU 导出能从首帧起生效。
+            long probeDeadline = Environment.TickCount64 + 3000;
+            while (!GpuPresenter.CompositionProbeCompleted && Environment.TickCount64 < probeDeadline) Thread.Sleep(25);
             using var decoder = VideoDecoderFactory.Create(codec, ActiveDecoderOptions);
             decoder.Initialize(codec, metadata.Width, metadata.Height, OnDecodedFrame);
-            if (decoder is VaApiVideoDecoder vaApi && OperatingSystem.IsLinux()) EnableVaApiZeroCopy(vaApi);
+            var active = VideoDecoderFactory.GetActiveDecoder(decoder);
+            if (active is VaApiVideoDecoder vaApi && OperatingSystem.IsLinux()) EnableVaApiZeroCopy(vaApi);
+            else if (active is MediaFoundationGpuVideoDecoder mediaFoundation && OperatingSystem.IsWindows()) EnableSharedTextureExport(mediaFoundation);
+            else if (active is VideoToolboxVideoDecoder videoToolbox && OperatingSystem.IsMacOS()) EnableIosurfaceExport(videoToolbox);
             _decoderBackend = VideoDecoderFactory.GetBackendName(decoder);
             if (VideoDecoderFactory.GetFallbackReason(decoder) is { } reason)
                 UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Warn,
@@ -503,6 +513,62 @@ public partial class ScreenMirrorViewModel : Document
 
             decoder.GpuExportEnabled = false;
             frame.Dispose();
+            return;
+        }
+        ScheduleRender();
+    }
+
+    /// <summary>Routes Windows shared-texture frames to the composition presenter; export is disabled when it cannot be presented.</summary>
+    /// <summary>把 Windows 共享纹理帧交给合成呈现器；无法呈现时禁用导出。</summary>
+    [SupportedOSPlatform("windows")]
+    private void EnableSharedTextureExport(MediaFoundationGpuVideoDecoder decoder)
+    {
+        GpuPresenter.CompositionFailed += (_, _) => decoder.GpuExportEnabled = false;
+        decoder.GpuExportFrameCallback = frame => PublishSharedTextureFrame(frame, decoder);
+        decoder.GpuExportEnabled = true;
+        UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Info, "ScreenMirror",
+            "GPU zero-copy export enabled: D3D11 shared texture.");
+    }
+
+    [SupportedOSPlatform("windows")]
+    private void PublishSharedTextureFrame(D3D11SharedVideoFrame frame, MediaFoundationGpuVideoDecoder decoder)
+    {
+        Interlocked.Increment(ref _decodedFrames);
+        if (_disposed)
+        {
+            frame.MarkPresented();
+            return;
+        }
+        if (!GpuPresenter.PublishSharedTexture(frame))
+        {
+            decoder.GpuExportEnabled = false;
+            return;
+        }
+        ScheduleRender();
+    }
+
+    /// <summary>Routes macOS IOSurface frames to the composition presenter; export is disabled when it cannot be presented.</summary>
+    /// <summary>把 macOS IOSurface 帧交给合成呈现器；无法呈现时禁用导出。</summary>
+    [SupportedOSPlatform("macos")]
+    private void EnableIosurfaceExport(VideoToolboxVideoDecoder decoder)
+    {
+        GpuPresenter.CompositionFailed += (_, _) => decoder.GpuExportEnabled = false;
+        decoder.IosurfaceFrameCallback = frame => PublishIosurfaceFrame(frame, decoder);
+        decoder.GpuExportEnabled = true;
+    }
+
+    [SupportedOSPlatform("macos")]
+    private void PublishIosurfaceFrame(IosurfaceVideoFrame frame, VideoToolboxVideoDecoder decoder)
+    {
+        Interlocked.Increment(ref _decodedFrames);
+        if (_disposed)
+        {
+            frame.MarkPresented();
+            return;
+        }
+        if (!GpuPresenter.PublishIosurface(frame))
+        {
+            decoder.GpuExportEnabled = false;
             return;
         }
         ScheduleRender();

@@ -7,19 +7,25 @@ using System.Runtime.Versioning;
 namespace UotanStudio.Media.Decoding.VideoToolbox;
 
 /// <summary>
-/// VideoToolbox H.264/H.265 Annex-B decoder with required hardware acceleration and NV12 readback.
-/// <para>VideoToolbox 的 H.264/H.265 Annex-B 解码器，强制使用硬件加速并回读 NV12。</para>
+/// VideoToolbox H.264/H.265 Annex-B decoder with required hardware acceleration and NV12 readback, or
+/// IOSurface-backed BGRA export for zero-copy presentation.
+/// <para>VideoToolbox 的 H.264/H.265 Annex-B 解码器：强制硬件加速，可回读 NV12，或导出 IOSurface 支撑的
+/// BGRA 帧以供零拷贝呈现。</para>
 /// <para>macOS 硬件解码后端，接收独立 VPS/SPS/PPS 配置包并在参数变化时重建会话。</para>
 /// </summary>
 /// <remarks>
 /// Calls belong to one thread; decoded frames are delivered synchronously from Decode.
 /// <see cref="VideoDecoderOptions.ColorMatrix"/> and <see cref="VideoDecoderOptions.ColorRange"/>
 /// are ignored by this backend: VideoToolbox always converts to fixed video-range NV12 and exposes
-/// no managed hook to force other colorimetry, so the reported metadata stays truthful.
-/// <para>所有调用属于单一线程；解码帧在 Decode 内同步交付。本后端忽略
+/// no managed hook to force other colorimetry, so the reported metadata stays truthful. When export is
+/// requested the session asks for IOSurface-compatible BGRA output and falls back to the NV12 session if
+/// the hardware path refuses it; disabling export mid-session freezes the picture until the next
+/// <see cref="Reset"/> recreates the session.
+/// <para>所有调用属于单线程；解码帧在 Decode 内同步交付。本后端忽略
 /// <see cref="VideoDecoderOptions.ColorMatrix"/> 与 <see cref="VideoDecoderOptions.ColorRange"/>：
 /// VideoToolbox 总是转换为固定的 video-range NV12，且没有托管侧可强制其他色彩空间的入口，
-/// 因此元数据保持如实报告。</para>
+/// 因此元数据保持如实报告。请求导出时会话申请 IOSurface 兼容的 BGRA 输出，硬件路径拒绝时回落 NV12 会话；
+/// 播放中禁用导出会使画面停帧，直到下一次 <see cref="Reset"/> 重建会话。</para>
 /// </remarks>
 [SupportedOSPlatform("macos")]
 public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
@@ -31,6 +37,10 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     private bool _dirty, _disposed;
     private Action<DecodedVideoFrame>? _callback;
     private readonly ConcurrentQueue<DecodedVideoFrame> _frames = new();
+    private readonly ConcurrentQueue<IosurfaceVideoFrame> _exportFrames = new();
+    private volatile bool _gpuExportEnabled;
+    private Action<IosurfaceVideoFrame>? _iosurfaceFrameCallback;
+    private long _exportDropped;
     private ExceptionDispatchInfo? _error;
     private int _thread;
     private long _sequence;
@@ -47,6 +57,40 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     /// 要等到完整参数集随首个图像到达后才真正创建。</para>
     /// </value>
     public bool IsInitialized => _callback is not null;
+
+    /// <summary>
+    /// Gets or sets whether decoded frames are handed to <see cref="IosurfaceFrameCallback"/> as
+    /// IOSurface-backed BGRA frames instead of being copied as NV12. The flag is read on the owning thread
+    /// and may be set from any thread; the session's pixel format is chosen when it is created, so
+    /// disabling mid-session freezes the picture until the next <see cref="Reset"/>.
+    /// <para>获取或设置解码帧是否以 IOSurface 支撑的 BGRA 帧交付给 <see cref="IosurfaceFrameCallback"/>，
+    /// 而非拷贝 NV12。标志由所属线程读取、可在任意线程设置；会话像素格式在创建时决定，
+    /// 播放中禁用会使画面停帧直到下一次 <see cref="Reset"/>。</para>
+    /// </summary>
+    /// <value>
+    /// Effective only when initialization requested export via
+    /// <see cref="VideoDecoderOptions.VideoToolboxPreferGpuExport"/>.
+    /// <para>仅在初始化经 <see cref="VideoDecoderOptions.VideoToolboxPreferGpuExport"/> 请求导出时生效。</para>
+    /// </value>
+    public bool GpuExportEnabled { get => _gpuExportEnabled; set => _gpuExportEnabled = value; }
+
+    /// <summary>
+    /// Receives IOSurface-backed BGRA frames when <see cref="GpuExportEnabled"/> is set; the callback runs
+    /// on the owning thread and must not reenter the decoder. Presentation must call
+    /// <see cref="IosurfaceVideoFrame.MarkPresented"/> exactly once per frame, in a finally clause.
+    /// <para>在 <see cref="GpuExportEnabled"/> 开启时接收 IOSurface 支撑的 BGRA 帧；回调在所属线程执行且不得
+    /// 重入解码器。呈现方必须对每帧在 finally 中恰好调用一次 <see cref="IosurfaceVideoFrame.MarkPresented"/>。</para>
+    /// </summary>
+    public Action<IosurfaceVideoFrame>? IosurfaceFrameCallback { get => _iosurfaceFrameCallback; set => _iosurfaceFrameCallback = value; }
+
+    /// <summary>
+    /// Gets how many decoded frames were dropped because the presenter was busy or the buffer carried no
+    /// IOSurface.
+    /// <para>获取因呈现方忙碌或缓冲不含 IOSurface 而丢弃的解码帧数。</para>
+    /// </summary>
+    public long ExportDroppedFrames => Interlocked.Read(ref _exportDropped);
+
+    private bool ExportActive => _gpuExportEnabled && _iosurfaceFrameCallback is not null;
 
     /// <summary>
     /// Registers the frame callback and verifies that VideoToolbox hardware decoding is available for the codec;
@@ -179,10 +223,7 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
                 VtNative.Check(VtNative.VTDecompressionSessionDecodeFrame(_session, sample, 0, 0, out _), "decode frame");
                 VtNative.Check(VtNative.VTDecompressionSessionWaitForAsynchronousFrames(_session), "wait for frames");
                 Interlocked.Exchange(ref _error, null)?.Throw();
-                while (_frames.TryDequeue(out DecodedVideoFrame? frame))
-                {
-                    using (frame) Deliver(frame);
-                }
+                DeliverQueued();
             }
             finally { VtNative.CFRelease(sample); }
         }
@@ -228,8 +269,7 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
         try
         {
             Interlocked.Exchange(ref _error, null)?.Throw();
-            while (_frames.TryDequeue(out var frame))
-                using (frame) Deliver(frame);
+            DeliverQueued();
         }
         finally { ClearFrames(); }
     }
@@ -278,23 +318,47 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
                 VtNative.Check(VtNative.CMVideoFormatDescriptionCreateFromHEVCParameterSets(0, 3, sets, sizes, 4, 0, out _format), "HEVC format");
             }
         }
-        nint specification = 0, attributes = 0;
+        if (ExportActive)
+        {
+            nint exportAttributes = VtNative.PixelAttributes(VtNative.Bgra, gpuCompatible: true);
+            try
+            {
+                if (TryCreateSession(exportAttributes)) return;
+            }
+            finally { VtNative.CFRelease(exportAttributes); }
+        }
+        nint attributes = VtNative.PixelAttributes();
+        try { TryCreateSession(attributes); }
+        finally { VtNative.CFRelease(attributes); }
+    }
+
+    /// <summary>
+    /// Creates the decompression session with the given pixel-buffer attributes. Returns
+    /// <see langword="false"/> when VideoToolbox rejects the configuration, leaving no session behind so
+    /// the caller can retry with different attributes.
+    /// <para>以给定像素缓冲属性创建解压会话。VideoToolbox 拒绝该配置时返回 <see langword="false"/>，
+    /// 不遗留任何会话，调用方可换属性重试。</para>
+    /// </summary>
+    private bool TryCreateSession(nint attributes)
+    {
+        nint specification = 0;
         try
         {
             specification = VtNative.Dictionary();
-            VtNative.SetBoolean(specification, "kVTVideoDecoderSpecification_RequireHardwareAcceleratedVideoDecoder", true);
-            attributes = VtNative.PixelAttributes();
+            VtNative.SetBoolean(specification, VtNative.Vt, "kVTVideoDecoderSpecification_RequireHardwareAcceleratedVideoDecoder", true);
             _self = GCHandle.Alloc(this);
             var callback = new VtCallback { Function = &OnFrame, RefCon = GCHandle.ToIntPtr(_self) };
-            VtNative.Check(VtNative.VTDecompressionSessionCreate(0, _format, specification, attributes, &callback, out _session), "create hardware decoder");
+            if (VtNative.VTDecompressionSessionCreate(0, _format, specification, attributes, &callback, out _session) != 0)
+            {
+                _session = 0;
+                if (_self.IsAllocated) _self.Free();
+                return false;
+            }
             _dirty = false;
+            return true;
         }
         catch { ReleaseSession(); throw; }
-        finally
-        {
-            if (attributes != 0) VtNative.CFRelease(attributes);
-            if (specification != 0) VtNative.CFRelease(specification);
-        }
+        finally { if (specification != 0) VtNative.CFRelease(specification); }
     }
 
     [UnmanagedCallersOnly]
@@ -305,10 +369,65 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
         {
             VtNative.Check(status, "output callback");
             if (image == 0) return;
+            if (VtNative.CVPixelBufferGetPixelFormatType(image) == VtNative.Bgra)
+            {
+                decoder.EnqueueExportFrame(image, time.Ticks);
+                return;
+            }
             if (decoder._frames.Count >= 32) throw new InvalidDataException("Too many pending VideoToolbox frames.");
             decoder._frames.Enqueue(CopyFrame(image, time.Ticks));
         }
         catch (Exception exception) { Interlocked.CompareExchange(ref decoder._error, ExceptionDispatchInfo.Capture(exception), null); }
+    }
+
+    /// <summary>
+    /// Retains an IOSurface-backed BGRA output buffer for presentation. The frame is dropped (without
+    /// taking a reference) when export is off or the presenter queue is full, so VideoToolbox's decoder
+    /// pool keeps cycling.
+    /// <para>为呈现保留一个 IOSurface 支撑的 BGRA 输出缓冲。导出关闭或呈现队列已满时直接丢帧（不取引用），
+    /// 让 VideoToolbox 的解码缓冲池继续轮转。</para>
+    /// </summary>
+    private void EnqueueExportFrame(nint image, long timestamp)
+    {
+        if (!ExportActive || _exportFrames.Count >= 8)
+        {
+            Interlocked.Increment(ref _exportDropped);
+            return;
+        }
+        VtNative.CFRetain(image);
+        try
+        {
+            nint iosurface = VtNative.CVPixelBufferGetIOSurface(image);
+            if (iosurface == 0) throw new NotSupportedException("VideoToolbox produced a BGRA buffer without an IOSurface.");
+            int width = checked((int)VtNative.CVPixelBufferGetWidth(image));
+            int height = checked((int)VtNative.CVPixelBufferGetHeight(image));
+            _exportFrames.Enqueue(new IosurfaceVideoFrame(image, iosurface, width, height, timestamp, () => VtNative.CFRelease(image)));
+        }
+        catch
+        {
+            VtNative.CFRelease(image);
+            Interlocked.Increment(ref _exportDropped);
+        }
+    }
+
+    private void DeliverQueued()
+    {
+        while (_exportFrames.TryDequeue(out IosurfaceVideoFrame? exported))
+        {
+            if (!ExportActive)
+            {
+                exported.MarkPresented();
+                continue;
+            }
+            _inCallback = true;
+            try { _iosurfaceFrameCallback!(exported); }
+            catch { exported.MarkPresented(); throw; }
+            finally { _inCallback = false; }
+        }
+        while (_frames.TryDequeue(out DecodedVideoFrame? frame))
+        {
+            using (frame) Deliver(frame);
+        }
     }
 
     private static DecodedVideoFrame CopyFrame(nint image, long timestamp)
@@ -370,7 +489,11 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
         ClearFrames();
         _error = null;
     }
-    private void ClearFrames() { while (_frames.TryDequeue(out var frame)) frame.Dispose(); }
+    private void ClearFrames()
+    {
+        while (_frames.TryDequeue(out var frame)) frame.Dispose();
+        while (_exportFrames.TryDequeue(out var exported)) exported.MarkPresented();
+    }
     private void CheckReady()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
