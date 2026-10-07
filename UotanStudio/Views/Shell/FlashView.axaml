@@ -536,6 +536,18 @@
                             <Button Name="MtkCrashButton" Classes="pane-action" Click="OnMtkCrashClick"
                                     Content="{DynamicResource Flash_MtkCrashButton}"
                                     AutomationProperties.Name="{DynamicResource Flash_MtkCrashButton}" />
+                            <!-- set_meta 只由 XFlash 家族定义：模式三选一（正常/UART/USB），写入前经对话框确认。 -->
+                            <!-- set_meta is defined only by the XFlash family: the mode is one of three
+                                 (normal/UART/USB) and a dialog confirms every write. -->
+                            <TextBlock Text="{DynamicResource Flash_MtkSetMetaGroup}" FontSize="12"
+                                       FontWeight="SemiBold" Opacity="0.8" />
+                            <TextBlock Text="{DynamicResource Flash_MtkSetMetaMode}" FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="MtkMetaBootModeBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch" SelectedIndex="0"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkSetMetaMode}" />
+                            <Button Name="MtkSetMetaButton" Classes="pane-action" Click="OnMtkSetMetaClick"
+                                    Content="{DynamicResource Flash_MtkSetMetaButton}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkSetMetaButton}" />
                             <!-- 以下两组操作只在 USB 上的 MediaTek 租约成立时出现：串口路径没有 BootROM 阶段的控制面。 -->
                             <!-- These two groups appear only for a MediaTek lease on USB: the serial path has no
                                  BootROM-stage control surface. -->
@@ -616,6 +628,18 @@
                                         Content="{DynamicResource Flash_MtkRebootAndroidTest}"
                                         AutomationProperties.Name="{DynamicResource Flash_MtkRebootAndroidTest}" />
                             </Grid>
+                            <!-- XML 系统属性按精确键名查询且结果不做授权解释；查询是只读的，只有 XML 家族提供该通路。 -->
+                            <!-- An XML system property is queried by exact key and its result is never interpreted
+                                 as authorization; the query is read-only and only the XML family offers the path. -->
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <TextBox Name="MtkXmlPropertyBox" Height="32" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Flash_MtkXmlProperty}"
+                                         AutomationProperties.Name="{DynamicResource Flash_MtkXmlProperty}" />
+                                <Button Grid.Column="1" Name="MtkXmlPropertyQueryButton" Height="32"
+                                        Click="OnMtkXmlPropertyQueryClick"
+                                        Content="{DynamicResource Flash_MtkXmlPropertyQuery}"
+                                        AutomationProperties.Name="{DynamicResource Flash_MtkXmlPropertyQuery}" />
+                            </Grid>
                             <TextBlock Name="MtkScatterHintText" Text="{DynamicResource Flash_MtkLoadScatterHint}"
                                        FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
                         </StackPanel>
@@ -673,6 +697,17 @@
                             <Button Name="MtkPreloaderJumpButton" Classes="pane-action" Click="OnMtkPreloaderJumpClick"
                                     Content="{DynamicResource Flash_MtkPreloaderJump}"
                                     AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderJump}" />
+                            <!-- BootROM 转储是只读采集；跳转到 Boot Loader 会转移执行权并断开链路，因此先经确认。 -->
+                            <!-- The Boot-ROM dump is a read-only capture; a jump to the boot loader transfers
+                                 execution and drops the link, so it is confirmed first. -->
+                            <Button Name="MtkPreloaderBromDumpButton" Classes="pane-action"
+                                    Click="OnMtkPreloaderBromDumpClick"
+                                    Content="{DynamicResource Flash_MtkPreloaderBromDump}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderBromDump}" />
+                            <Button Name="MtkPreloaderBootloaderJumpButton" Classes="pane-action"
+                                    Click="OnMtkPreloaderBootloaderJumpClick"
+                                    Content="{DynamicResource Flash_MtkPreloaderBootloaderJump}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderBootloaderJump}" />
                         </StackPanel>
                         <TextBlock Name="EdlHeader" Text="{DynamicResource Flash_Edl}" FontWeight="SemiBold" IsVisible="False" />
                         <StackPanel Name="EdlPane" Spacing="8" IsVisible="False">
@@ -742,6 +777,15 @@
                             <TextBox Name="EdlProjectIdBox" Height="32" VerticalContentAlignment="Center"
                                      PlaceholderText="{DynamicResource Flash_EdlProjectId}"
                                      AutomationProperties.Name="{DynamicResource Flash_EdlProjectId}" />
+                            <!-- VIP 表文件与鉴权家族相互独立：文件按索引 0 的签名表原样交付，链式表缺失由协议报错。 -->
+                            <!-- The VIP table file is independent of the auth family: the file is served verbatim as
+                                 the index-0 signed table and a missing chained table is reported by the protocol. -->
+                            <Button Name="ChooseEdlVipTableButton" Classes="pane-action"
+                                    Click="OnChooseEdlVipTableClick"
+                                    Content="{DynamicResource Flash_EdlChooseVipTable}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlChooseVipTable}" />
+                            <TextBlock Name="EdlVipTableText" TextTrimming="CharacterEllipsis"
+                                       FontSize="12" Opacity="0.8" />
                             <!-- 小米固定鉴权数据按上游 xiaomi 模块约定为 256 字节凭据块，挑战原样忽略。 -->
                             <!-- The Xiaomi fixed auth data is a 256-byte credential blob per the upstream xiaomi
                                  module convention; the challenge is ignored verbatim. -->
@@ -765,6 +809,14 @@
                                     Click="OnEdlEraseClick"
                                     Content="{DynamicResource Flash_EdlErase}"
                                     AutomationProperties.Name="{DynamicResource Flash_EdlErase}" />
+                            <!-- 出厂重置只擦除设备 GPT 上名为 userdata 与 metadata 的分区：缺失的分区被跳过并报告，
+                                 两者都不存在时直接失败。 -->
+                            <!-- A factory reset erases only the partitions named userdata and metadata on the device's
+                                 own GPT: absent partitions are skipped and reported, and an empty device fails. -->
+                            <Button Name="EdlFactoryResetButton" Classes="pane-action"
+                                    Click="OnEdlFactoryResetClick"
+                                    Content="{DynamicResource Flash_EdlFactoryReset}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlFactoryReset}" />
                             <!-- 修复分区表只写回设备自身读回的表，不引入包内 GPT；写后按元数据指纹复核。 -->
                             <!-- The repair writes back only the table read from the device itself, never a packaged
                                  GPT, and revalidates the metadata fingerprint afterwards. -->
@@ -837,6 +889,21 @@
                                     Click="OnEdlMemcpyClick"
                                     Content="{DynamicResource Flash_EdlMemcpy}"
                                     AutomationProperties.Name="{DynamicResource Flash_EdlMemcpy}" />
+                            <!-- 内存读取是只读调试命令：地址与字节数经同一组输入解析，读回的字节按十六进制窗口写进日志。 -->
+                            <!-- A memory peek is a read-only debug command: address and byte count share the same input
+                                 parsing, and the bytes read back land in the log as a hex window. -->
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <TextBox Name="EdlPeekAddressBox" Grid.Column="0" Height="32" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Flash_EdlPokeAddressHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_EdlPokeAddressHint}" />
+                                <TextBox Name="EdlPeekLengthBox" Grid.Column="1" Height="32" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Flash_EdlMemcpySizeHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_EdlMemcpySizeHint}" />
+                            </Grid>
+                            <Button Name="EdlPeekButton" Classes="pane-action"
+                                    Click="OnEdlPeekClick"
+                                    Content="{DynamicResource Flash_EdlPeek}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlPeek}" />
                             <!-- UFS provisioning 只吃外部描述符文件：预览不写设备，提交前必须确认，非 UFS 存储由服务层拒绝。 -->
                             <!-- UFS provisioning takes an external descriptor profile: the preview writes nothing, the
                                  submission needs confirmation, and non-UFS storage is refused by the service layer. -->

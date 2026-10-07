@@ -63,6 +63,6 @@ public static class FastbootPartitionReader
             partitions[name] = size;
         }
 
-        return partitions.Select(pair => (pair.Key, pair.Value)).ToArray();
+        return [.. partitions.Select(pair => (pair.Key, pair.Value))];
     }
 }

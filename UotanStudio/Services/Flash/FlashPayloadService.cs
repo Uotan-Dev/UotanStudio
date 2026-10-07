@@ -9,9 +9,9 @@ public static class FlashPayloadService
     public static async Task<IReadOnlyList<(string Name, ulong Size)>> ListAsync(string path, CancellationToken ct)
     {
         var info = await PayloadParser.GetPartitionInfoAsync(path, ct).ConfigureAwait(false);
-        return info.Where(partition => partition.Name.Length is > 0 and <= 128 &&
+        return [.. info.Where(partition => partition.Name.Length is > 0 and <= 128 &&
                                        partition.Name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
-            .Select(partition => (partition.Name, partition.SizeBytes)).ToArray();
+            .Select(partition => (partition.Name, partition.SizeBytes))];
     }
 
     /// <summary>Publishes selected images as a new directory only after extraction succeeds.</summary>

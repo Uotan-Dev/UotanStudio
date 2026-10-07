@@ -109,6 +109,17 @@ public partial class FlashView : UserControl
     private readonly Dictionary<FlashPartitionEntry, RawProgramEntry> _edlEntries = [];
     private string? _edlProgrammer;
     private byte[]? _edlXiaomiAuthData;
+    private byte[]? _edlVipTableData;
+
+    /// <summary>
+    /// <para>VIP 签名表准备时的 raw program 包大小：64 KiB 在 1 MiB 上限内与所有常见扇区大小（512/2048/4096）
+    /// 对齐，作为目标协商包尺寸的保守取值；签名表必须与准备时的字节边界一致，协商不得静默修改。</para>
+    /// The raw program packet size used when preparing the VIP signed tables: 64 KiB is sector-aligned for
+    /// every common sector size (512/2048/4096) within the 1 MiB ceiling and stays a conservative target
+    /// packet size; signed tables must match the exact byte boundaries they were prepared with, and
+    /// negotiation cannot silently change them.
+    /// </summary>
+    private const int EdlVipProgramPayloadSize = 64 * 1024;
 
 
     private const int EdlAuthKindNone = 0;
@@ -140,6 +151,16 @@ public partial class FlashView : UserControl
     private string? _mtkAuthFile;
     private bool? _wide;
     private bool? _packageButtonsStacked;
+    /// <summary>
+    /// <para>MTK 串口刷新请求序号；只有最新一次请求的结果才写回下拉框。</para>
+    /// MTK port refresh sequence; only the latest request's result is written back to the combo box.
+    /// </summary>
+    private int _mtkPortRequest;
+    /// <summary>
+    /// <para>EDL 串口刷新请求序号；只有最新一次请求的结果才写回下拉框。</para>
+    /// EDL port refresh sequence; only the latest request's result is written back to the combo box.
+    /// </summary>
+    private int _edlSerialPortRequest;
     private DeviceViewModel? _deviceViewModel;
     private DetectedDevice? SelectedDevice => _deviceViewModel?.SelectedDevice?.Device;
 
@@ -158,6 +179,8 @@ public partial class FlashView : UserControl
         MtkStorageKindBox.SelectedIndex = 0;
         MtkCrashModeBox.ItemsSource = Enum.GetNames<MtkDaCrashMode>();
         MtkCrashModeBox.SelectedIndex = 0;
+        MtkMetaBootModeBox.ItemsSource = Enum.GetNames<MtkXFlashMetaBootMode>();
+        MtkMetaBootModeBox.SelectedIndex = 0;
         MtkExploitFamilyBox.SelectionChanged += (_, _) => UpdateEdlButton();
         MtkBaudBox.ItemsSource = new[] { 115200, 921600, 460800, 230400 };
         MtkBaudBox.SelectedIndex = 0;
@@ -242,6 +265,7 @@ public partial class FlashView : UserControl
             if (_deviceViewModel is not null)
                 _deviceViewModel.PropertyChanged -= OnGlobalDeviceChanged;
             _deviceViewModel = null;
+            _model.FlushPendingLog();
         };
         SizeChanged += (_, _) => UpdateResponsiveLayout();
         UpdateResponsiveLayout();
@@ -409,7 +433,7 @@ public partial class FlashView : UserControl
         }
     }
 
-    private void OnClearLogClick(object? sender, RoutedEventArgs e) => _model.LogText = string.Empty;
+    private void OnClearLogClick(object? sender, RoutedEventArgs e) => _model.ClearLog();
 
     private async void OnChooseFileClick(object? sender, RoutedEventArgs e)
     {
@@ -496,15 +520,17 @@ public partial class FlashView : UserControl
                     .ListAsync(path, CancellationToken.None);
                 if (path != _loadedPath) return;
                 _remotePayloadUrl = path;
+                var remoteRows = new List<FlashPartitionEntry>(partitions.Count);
                 foreach (var (name, size) in partitions)
                 {
-                    _model.Partitions.Add(new FlashPartitionEntry
+                    remoteRows.Add(new FlashPartitionEntry
                     {
                         Name = name,
                         Size = $"{size / 1024d / 1024d:F1} MiB",
                         CanSelect = true
                     });
                 }
+                _model.Partitions.Apply(0, remoteRows);
                 ExtractSelectedButton.IsEnabled = partitions.Count > 0;
                 AppendLog($"{partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
                 return;
@@ -539,15 +565,17 @@ public partial class FlashView : UserControl
                 {
                     var partitions = await FlashSuperService.ListAsync(path, CancellationToken.None);
                     _superPath = path;
+                    var superRows = new List<FlashPartitionEntry>(partitions.Count);
                     foreach (var (partitionName, size) in partitions)
                     {
-                        _model.Partitions.Add(new FlashPartitionEntry
+                        superRows.Add(new FlashPartitionEntry
                         {
                             Name = partitionName,
                             Size = $"{size / 1024d / 1024d:F1} MiB",
                             CanSelect = true
                         });
                     }
+                    _model.Partitions.Apply(0, superRows);
                     ExtractSelectedButton.IsEnabled = partitions.Count > 0;
                     AppendLog($"{partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
                     return;
@@ -582,16 +610,18 @@ public partial class FlashView : UserControl
             {
                 var entries = await FlashOppoContainerService.ListAsync(path, CancellationToken.None);
                 _oppoPath = path;
+                var oppoRows = new List<FlashPartitionEntry>(entries.Count);
                 foreach (var (name, archiveEntry, outputName, size) in entries)
                 {
                     _oppoEntries.Add(name, (archiveEntry, outputName));
-                    _model.Partitions.Add(new FlashPartitionEntry
+                    oppoRows.Add(new FlashPartitionEntry
                     {
                         Name = name,
                         Size = $"{size / 1024d / 1024d:F1} MiB",
                         CanSelect = true
                     });
                 }
+                _model.Partitions.Apply(0, oppoRows);
                 ExtractSelectedButton.IsEnabled = entries.Count > 0;
                 AppendLog($"{entries.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
                 return;
@@ -601,16 +631,18 @@ public partial class FlashView : UserControl
             {
                 var entries = await FlashVendorContainerService.ListAsync(path, CancellationToken.None);
                 _vendorPath = path;
+                var vendorRows = new List<FlashPartitionEntry>(entries.Count);
                 foreach (var (name, archiveEntry, size) in entries)
                 {
                     _vendorEntries.Add(name, archiveEntry);
-                    _model.Partitions.Add(new FlashPartitionEntry
+                    vendorRows.Add(new FlashPartitionEntry
                     {
                         Name = name,
                         Size = $"{size / 1024d / 1024d:F1} MiB",
                         CanSelect = true
                     });
                 }
+                _model.Partitions.Apply(0, vendorRows);
                 ExtractSelectedButton.IsEnabled = entries.Count > 0;
                 AppendLog($"{entries.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
                 return;
@@ -621,6 +653,7 @@ public partial class FlashView : UserControl
                 var resolution = MtkScatterPackage.Resolve(path, MtkScatterPackage.Read(path));
                 _mtkResolution = resolution;
                 var knownNames = new HashSet<string>(StringComparer.Ordinal);
+                var scatterRows = new List<FlashPartitionEntry>(resolution.Rows.Count);
                 for (var index = 0; index < resolution.Rows.Count; index++)
                 {
                     var (partition, imagePath, length) = resolution.Rows[index];
@@ -632,7 +665,7 @@ public partial class FlashView : UserControl
                         FileName = Path.GetFileName(imagePath),
                         Size = $"{length / 1024d / 1024d:F1} MiB"
                     };
-                    _model.Partitions.Add(row);
+                    scatterRows.Add(row);
                     _mtkRows[row] = index;
                     _mtkPartitions[row] = partition;
                     knownNames.Add(partition.Name);
@@ -646,17 +679,19 @@ public partial class FlashView : UserControl
                         continue;
                     }
 
-                    _model.Partitions.Add(new FlashPartitionEntry
+                    var row = new FlashPartitionEntry
                     {
                         Name = partition.Name,
                         Command = "erase",
                         CanSelect = true,
                         Size = $"{partition.Size / 1024d / 1024d:F1} MiB"
-                    });
+                    };
+                    scatterRows.Add(row);
                     eraseOnlyRows++;
-                    _mtkPartitions[_model.Partitions[^1]] = partition;
+                    _mtkPartitions[row] = partition;
                 }
 
+                _model.Partitions.Apply(0, scatterRows);
                 MtkPane.IsVisible = true;
                 AppendLog($"{resolution.Rows.Count + eraseOnlyRows} {LanguageService.Instance.GetString("Flash_ImagesLoaded")} · {resolution.StorageLabel}");
                 return;
@@ -667,15 +702,17 @@ public partial class FlashView : UserControl
                 var partitions = await FlashPayloadService.ListAsync(path, CancellationToken.None);
                 if (path != _loadedPath) return;
                 _payloadPath = path;
+                var payloadRows = new List<FlashPartitionEntry>(partitions.Count);
                 foreach (var (name, size) in partitions)
                 {
-                    _model.Partitions.Add(new FlashPartitionEntry
+                    payloadRows.Add(new FlashPartitionEntry
                     {
                         Name = name,
                         Size = $"{size / 1024d / 1024d:F1} MiB",
                         CanSelect = true
                     });
                 }
+                _model.Partitions.Apply(0, payloadRows);
                 ExtractSelectedButton.IsEnabled = partitions.Count > 0;
                 BuildWiredPackageButton.IsEnabled = partitions.Count > 0;
                 AppendLog($"{partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
@@ -701,6 +738,7 @@ public partial class FlashView : UserControl
                         !string.IsNullOrEmpty(entry.Filename) && File.Exists(entry.SourceFile) &&
                         !entry.Filename.StartsWith("gpt_", StringComparison.OrdinalIgnoreCase))
                         .ToArray();
+                    var edlRows = new List<FlashPartitionEntry>();
                     foreach (var (name, image, length) in bin.Images)
                     {
                         var matches = edlPrograms.Where(entry =>
@@ -716,10 +754,11 @@ public partial class FlashView : UserControl
                                 FileName = Path.GetFileName(image),
                                 Size = $"{length / 1024d / 1024d:F1} MiB"
                             };
-                            _model.Partitions.Add(row);
+                            edlRows.Add(row);
                             if (entry is not null) _edlEntries.Add(row, entry);
                         }
                     }
+                    _model.Partitions.Apply(0, edlRows);
                     _edlBundleReady = bin.Programs.Count > 0 && bin.Programmers.Count > 0;
                     if (bin.Programmers.Count > 1)
                     {
@@ -740,13 +779,14 @@ public partial class FlashView : UserControl
                 : null;
             _requiredCodeName = manifest?.CodeName;
             _requiresFastbootd = manifest?.RequiresFastbootd ?? false;
-            var steps = manifest?.Steps ?? FlashPackageReader.Read(path)
+            var steps = manifest?.Steps ?? [.. FlashPackageReader.Read(path)
                 .Select(image => new FlashStep(image.Partition.Equals("super_empty", StringComparison.OrdinalIgnoreCase)
                     ? "wipe_super" : "flash",
-                    image.Partition, image.Path, image.Length)).ToArray();
+                    image.Partition, image.Path, image.Length))];
+            var manifestRows = new List<FlashPartitionEntry>(steps.Count);
             foreach (var step in steps)
             {
-                _model.Partitions.Add(new FlashPartitionEntry
+                manifestRows.Add(new FlashPartitionEntry
                 {
                     Step = step,
                     Name = step.Partition.Length > 0 ? step.Partition : step.Command,
@@ -757,6 +797,7 @@ public partial class FlashView : UserControl
                 });
             }
 
+            _model.Partitions.Apply(0, manifestRows);
             AppendLog($"{_model.Partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
         }
         catch (Exception ex)
@@ -814,9 +855,9 @@ public partial class FlashView : UserControl
                     ? await FlashSuperService.ExtractAsync(super, names, parent, CancellationToken.None)
                     : _vendorPath is { } vendor
                         ? await FlashVendorContainerService.ExtractAsync(vendor,
-                            names.Select(name => _vendorEntries[name]).ToArray(), parent, CancellationToken.None)
+                            [.. names.Select(name => _vendorEntries[name])], parent, CancellationToken.None)
                         : await FlashOppoContainerService.ExtractAsync(_oppoPath!,
-                            names.Select(name => _oppoEntries[name].Entry).ToArray(), parent, CancellationToken.None);
+                            [.. names.Select(name => _oppoEntries[name].Entry)], parent, CancellationToken.None);
             foreach (var entry in selected)
             {
                 var filename = _vendorPath is not null ? _vendorEntries[entry.Name]
@@ -852,7 +893,7 @@ public partial class FlashView : UserControl
         try
         {
             var output = await FlashPayloadService.BuildPackageAsync(payload,
-                _model.Partitions.Select(entry => entry.Name).ToArray(), parent, CancellationToken.None);
+                [.. _model.Partitions.Select(entry => entry.Name)], parent, CancellationToken.None);
             AppendLog(output);
         }
         catch (Exception ex) { AppendLog(ex.Message); }
@@ -982,9 +1023,10 @@ public partial class FlashView : UserControl
         if (EdlAuthKindBox.SelectedIndex == EdlAuthKindNone)
         {
             initialization = netType || qudRecovery || pendingCompletion || streamDload ||
-                authTimeoutMs != EdlAuthTimeoutDefaultMs
+                authTimeoutMs != EdlAuthTimeoutDefaultMs || _edlVipTableData is not null
                 ? new EdlInitializationOptions
                 {
+                    Vip = BuildEdlVipOptions(),
                     SendOnePlusNetType = netType,
                     QudHelloRecoveryEnabled = qudRecovery,
                     AllowSingleFirehosePendingCompletion = pendingCompletion,
@@ -1230,23 +1272,24 @@ public partial class FlashView : UserControl
     }
 
     /// <summary>
-    /// <para>按所选设备的协议切换操作面板可见性：Fastboot 专属项（读取信息、全选显示、切换槽位、擦除）
-    /// 只在 Fastboot 下显示；EDL 显示专用面板，完整包按钮同时要求包就绪与 EDL 协议；串口设备显示
-    /// MTK 面板并隐藏通用“刷写所选”；其余协议隐藏 EDL 与 MTK 两块。</para>
-    /// Switches the action-pane visibility by the selected device's protocol: Fastboot-only items
-    /// (read info, show-all, switch slot, erase) appear only for Fastboot; EDL shows the dedicated
-    /// pane and the bundle button additionally requires a ready bundle and the EDL protocol; serial
-    /// devices show the MTK pane and hide the generic flash-selected button; every other protocol
-    /// hides both panes.
+    /// <para>按所选设备的协议切换操作面板可见性：面板归属只跟随选中设备的协议——EDL 设备只显示 EDL
+    /// 面板，MTK 设备只显示 MTK 面板，Fastboot 专属项（读取信息、全选显示、切换槽位、擦除与整包选项）
+    /// 只在 Fastboot 下显示；未选中设备时保留准备态（EDL 完整包行与已加载 scatter 的 MTK 面板），
+    /// 旧会话的散件准备状态不会让其他协议的设备看到 MTK 面板。</para>
+    /// Switches the action-pane visibility by the selected device's protocol: pane ownership follows
+    /// only the selected device's protocol — an EDL device shows just the EDL pane, an MTK device just
+    /// the MTK pane, and Fastboot-only items (read info, show-all, switch slot, erase and the package
+    /// options) appear only for Fastboot; with no device selected the preparation state (the EDL bundle
+    /// row and an MTK pane backed by a loaded scatter) is kept, and stale preparation state never
+    /// exposes the MTK pane to devices of other protocols.
     /// </summary>
     private void UpdateModeVisibility()
     {
         var protocol = SelectedDevice?.Protocol;
         var isEdl = protocol is DeviceProtocolKind.Edl;
         var isFastboot = protocol is DeviceProtocolKind.Fastboot;
-        var isMtkSerial = SelectedDevice is { Transport: DeviceTransportKind.Serial };
-        var isMtkUsb = protocol is DeviceProtocolKind.Mtk
-            && SelectedDevice is { Transport: DeviceTransportKind.Usb };
+        var isMtk = protocol is DeviceProtocolKind.Mtk;
+        var isMtkUsb = isMtk && SelectedDevice is { Transport: DeviceTransportKind.Usb };
         EdlHeader.IsVisible = EdlPane.IsVisible = isEdl;
         var bundleRowVisible = _edlBundleReady && (isEdl || SelectedDevice is null);
         if (bundleRowVisible && !BundleActionRow.IsVisible)
@@ -1257,7 +1300,10 @@ public partial class FlashView : UserControl
         BundleActionRow.IsVisible = bundleRowVisible;
         FlashEdlBundleButton.IsVisible = isEdl;
         EdlSerialFlashButton.IsVisible = SelectedDevice is null;
-        MtkPane.IsVisible = isMtkSerial || _mtkResolution is not null || protocol is DeviceProtocolKind.Mtk;
+        // 选中设备后面板只看该设备的协议；旧 scatter 准备状态只在未选中设备时保留，避免跨协议串位。
+        // With a device selected the pane follows only that device's protocol; stale scatter
+        // preparation state is kept only while no device is selected, preventing cross-mode leakage.
+        MtkPane.IsVisible = isMtk || (SelectedDevice is null && _mtkResolution is not null);
         MtkScatterHintText.IsVisible = _mtkResolution is null;
         MtkPortLabel.IsVisible = !isMtkUsb;
         MtkPortBox.IsVisible = !isMtkUsb;
@@ -1270,14 +1316,25 @@ public partial class FlashView : UserControl
         ShowAllPartitionsBox.IsVisible = isFastboot;
         EraseSelectedButton.IsVisible = isFastboot;
         FlashSelectedButton.IsVisible = protocol is not DeviceProtocolKind.Mtk;
-        AddRootBox.IsVisible = !isEdl && !isMtkSerial;
-        ChooseRootPackageButton.IsVisible = !isEdl && !isMtkSerial;
-        DeleteCowBox.IsVisible = !isEdl && !isMtkSerial;
+        AddRootBox.IsVisible = isFastboot;
+        ChooseRootPackageButton.IsVisible = isFastboot;
+        DeleteCowBox.IsVisible = isFastboot;
+        DisableVbmetaBox.IsVisible = isFastboot;
+        EraseDataBox.IsVisible = isFastboot;
+        RebootAfterBox.IsVisible = isFastboot;
         EdlReadbackButton.IsEnabled = !_busy && isEdl && HasSelectedEdlEntries();
         EdlEraseButton.IsEnabled = !_busy && isEdl && HasSelectedEdlEntries();
         EdlReadStorageInfoButton.IsEnabled = !_busy && isEdl;
         EdlRepairGptButton.IsEnabled = !_busy && isEdl;
         EdlRamDumpButton.IsEnabled = !_busy && isEdl;
+        EdlPeekButton.IsEnabled = !_busy && isEdl;
+        EdlPeekAddressBox.IsEnabled = !_busy && isEdl;
+        EdlPeekLengthBox.IsEnabled = !_busy && isEdl;
+        // 出厂重置不消费清单选择，因此与修复分区表一样只按 EDL 设备与忙碌状态启用。
+        // A factory reset consumes no manifest selection, so like the GPT repair it is enabled by the
+        // EDL device and the busy state alone.
+        EdlFactoryResetButton.IsEnabled = !_busy && isEdl;
+        ChooseEdlVipTableButton.IsEnabled = !_busy && isEdl;
         MtkUsbOnlyRow.IsVisible = isMtkUsb;
         var isMtkPreloader = isMtkUsb && SelectedDevice?.State == "preloader";
         MtkPreloaderPane.IsVisible = isMtkPreloader;
@@ -1295,6 +1352,8 @@ public partial class FlashView : UserControl
         MtkPreloaderDisableWatchdogButton.IsEnabled = preloaderEnabled;
         MtkPreloaderPartitionNameBox.IsEnabled = preloaderEnabled;
         MtkPreloaderJumpButton.IsEnabled = preloaderEnabled;
+        MtkPreloaderBromDumpButton.IsEnabled = preloaderEnabled;
+        MtkPreloaderBootloaderJumpButton.IsEnabled = preloaderEnabled;
         var exploitGranted = !_busy && isMtkUsb && MtkExploitBypassBox.IsChecked == true &&
             MtkExploitVolatileBox.IsChecked == true;
         MtkExploitFamilyBox.IsEnabled = exploitGranted;
@@ -1335,6 +1394,10 @@ public partial class FlashView : UserControl
         MtkOemKeySejBaseBox.IsEnabled = mtkProtocolReady;
         MtkOemKeyProgramButton.IsEnabled = mtkProtocolReady;
         MtkOemKeyPreviewButton.IsEnabled = mtkProtocolReady;
+        MtkMetaBootModeBox.IsEnabled = mtkProtocolReady;
+        MtkSetMetaButton.IsEnabled = mtkProtocolReady;
+        MtkXmlPropertyBox.IsEnabled = mtkProtocolReady;
+        MtkXmlPropertyQueryButton.IsEnabled = mtkProtocolReady;
         EdlChooseProgrammerButton.IsEnabled = !_busy && isEdl;
         EdlResetButton.IsEnabled = !_busy && isEdl;
         EdlPowerOffButton.IsEnabled = !_busy && isEdl;
@@ -1364,6 +1427,10 @@ public partial class FlashView : UserControl
         _model.IsBusy = value;
         EdlPane.IsEnabled = !value;
         MtkPane.IsEnabled = !value;
+        if (!value)
+        {
+            _model.FlushPendingLog();
+        }
     }
 
     private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1374,29 +1441,73 @@ public partial class FlashView : UserControl
         }
     }
 
+    /// <summary>
+    /// <para>后台线程枚举 MTK 串口，回到 UI 线程填充下拉框；序号用于丢弃过期的枚举结果。</para>
+    /// Enumerates the MTK serial ports on a background thread and fills the combo box back on the UI thread;
+    /// the sequence number drops stale enumeration results.
+    /// </summary>
     private void RefreshMtkPorts()
     {
-        var previous = MtkPortBox.SelectedItem as string;
-        var ports = SerialTransport.GetAvailablePorts();
-        MtkPortBox.ItemsSource = ports;
-        MtkPortBox.SelectedItem = previous is { } name && ports.Contains(name)
-            ? previous
-            : ports.Count > 0 ? ports[0] : null;
+        var request = ++_mtkPortRequest;
+        _ = ApplySerialPortsAsync(MtkPortBox, ReadSerialPortsAsync(), () => _mtkPortRequest == request);
     }
 
+    /// <summary>
+    /// <para>后台线程枚举 EDL 串口，回到 UI 线程填充下拉框；序号用于丢弃过期的枚举结果。</para>
+    /// Enumerates the EDL serial ports on a background thread and fills the combo box back on the UI thread;
+    /// the sequence number drops stale enumeration results.
+    /// </summary>
     private void RefreshEdlSerialPorts()
     {
-        var previous = EdlSerialPortBox.SelectedItem as string;
-        var ports = SerialTransport.GetAvailablePorts();
-        EdlSerialPortBox.ItemsSource = ports;
-        EdlSerialPortBox.SelectedItem = previous is { } name && ports.Contains(name)
+        var request = ++_edlSerialPortRequest;
+        _ = ApplySerialPortsAsync(EdlSerialPortBox, ReadSerialPortsAsync(), () => _edlSerialPortRequest == request);
+    }
+
+    /// <summary>
+    /// <para>把后台枚举到的串口写回下拉框，尽量保留此前选中的端口。续接点在 UI 线程，因此写控件安全。</para>
+    /// Writes the background-enumerated ports back to the combo box, keeping the previously selected port when it
+    /// is still present. The continuation resumes on the UI thread, so touching the control is safe.
+    /// </summary>
+    /// <param name="box"><para>要填充的串口下拉框。</para>The serial port combo box to fill.</param>
+    /// <param name="ports"><para>进行中的枚举任务。</para>The running enumeration task.</param>
+    /// <param name="isCurrent"><para>结果是否仍属于最新一次请求。</para>Whether the result still belongs to the latest request.</param>
+    private static async Task ApplySerialPortsAsync(ComboBox box, Task<IReadOnlyList<string>> ports,
+        Func<bool> isCurrent)
+    {
+        var previous = box.SelectedItem as string;
+        var available = await ports;
+        if (!isCurrent())
+        {
+            return;
+        }
+
+        box.ItemsSource = available;
+        box.SelectedItem = previous is { } name && available.Contains(name)
             ? previous
-            : ports.Count > 0 ? ports[0] : null;
+            : available.Count > 0 ? available[0] : null;
+    }
+
+    /// <summary>
+    /// <para>在后台线程读取系统串口名。注册表枚举可达数十毫秒，失败时按无串口处理，不让异步管道抛出未观察异常。</para>
+    /// Reads the system port names on a background thread. The registry enumeration costs tens of milliseconds,
+    /// and a failure is reported as "no ports" so the async pipeline never raises an unobserved exception.
+    /// </summary>
+    /// <returns><para>可用串口名列表。</para>The available port names.</returns>
+    private static async Task<IReadOnlyList<string>> ReadSerialPortsAsync()
+    {
+        try
+        {
+            return await Task.Run(SerialTransport.GetAvailablePorts);
+        }
+        catch (Exception)
+        {
+            return [];
+        }
     }
 
     private void SetRowsQueued(IReadOnlyList<FlashPartitionEntry> rows)
     {
-        _overallRows = rows.ToArray();
+        _overallRows = [.. rows];
         var language = LanguageService.Instance;
         foreach (var row in rows)
         {
@@ -1470,7 +1581,7 @@ public partial class FlashView : UserControl
         _model.OverallText = string.Format(LanguageService.Instance.GetString("Flash_OverallProgress"), finished, rows.Count);
     }
 
-    private void AppendLog(string message) => _model.LogText += message + Environment.NewLine;
+    private void AppendLog(string message) => _model.AppendLog(message);
 
     /// <summary>
     /// <para>把 GPT 分区表格式化为若干行；超过 <paramref name="maxLines"/> 时只保留前若干行并追加一条
@@ -1556,15 +1667,17 @@ public partial class FlashView : UserControl
             ExtractSelectedButton.IsEnabled = false;
             BuildWiredPackageButton.IsEnabled = false;
             _model.PackagePath = string.Empty;
+            var deviceRows = new List<FlashPartitionEntry>(partitions.Count);
             foreach (var (name, size) in partitions)
             {
-                _model.Partitions.Add(new FlashPartitionEntry
+                deviceRows.Add(new FlashPartitionEntry
                 {
                     Name = name,
                     Size = $"{size / 1024d / 1024d:F1} MiB",
                     CanSelect = true
                 });
             }
+            _model.Partitions.Apply(0, deviceRows);
             AppendLog($"{partitions.Count} {LanguageService.Instance.GetString("Flash_PartitionsLoaded")}");
         }
         catch (Exception ex) { AppendLog(ex.Message); }
@@ -1583,6 +1696,45 @@ public partial class FlashView : UserControl
             }
 
             var label = language.GetString("Flash_MtkDevCtrlGroup");
+            if (session.DeviceInfo is { } identity)
+            {
+                if (identity.BlVersion is { } blVersion)
+                {
+                    AppendLog($"{label} · {language.GetString("Flash_MtkBlVersion")}: 0x{blVersion:X2}");
+                }
+
+                if (identity.BromVersion is { } bromVersion)
+                {
+                    AppendLog($"{label} · {language.GetString("Flash_MtkBromVersion")}: 0x{bromVersion:X2}");
+                }
+
+                if (identity.Meid is { Length: > 0 } meid)
+                {
+                    AppendLog($"{label} · {language.GetString("Flash_MtkMeid")}: {Convert.ToHexString(meid)}");
+                }
+
+                if (identity.Socid is { Length: > 0 } socid)
+                {
+                    AppendLog($"{label} · {language.GetString("Flash_MtkSocid")}: {Convert.ToHexString(socid)}");
+                }
+            }
+
+            // 每个 GET 查询各自尽力而为：单条被拒绝只把该条的错误写进日志，剩余条目继续尝试。
+            // Each GET query is best-effort on its own: one rejection logs that entry's error and the
+            // remaining entries are still attempted.
+            async Task QueryAsync(string key, Func<CancellationToken, Task<string>> format,
+                CancellationToken queryToken)
+            {
+                try
+                {
+                    AppendLog($"{label} · {language.GetString(key)}: {await format(queryToken).ConfigureAwait(true)}");
+                }
+                catch (Exception failure)
+                {
+                    AppendLog(failure.Message);
+                }
+            }
+
             var ram = await session.GetXFlashRamInfoAsync(token).ConfigureAwait(true);
             AppendLog($"{label} · {language.GetString("Flash_MtkRamInfo")}: {ram}");
             var randomId = await session.GetXFlashRandomIdAsync(token).ConfigureAwait(true);
@@ -1593,6 +1745,29 @@ public partial class FlashView : UserControl
             AppendLog($"{label} · {language.GetString("Flash_MtkExpireDate")}: {Convert.ToHexString(expire)}");
             var category = await session.GetXFlashPartitionTableCategoryAsync(token).ConfigureAwait(true);
             AppendLog($"{label} · {language.GetString("Flash_MtkPartitionCategory")}: {category}");
+            await QueryAsync("Flash_MtkDaVersion",
+                async queryToken => await session.GetXFlashDownloadAgentVersionAsync(queryToken).ConfigureAwait(true),
+                token).ConfigureAwait(true);
+            await QueryAsync("Flash_MtkExpireData",
+                async queryToken => Convert.ToHexString(
+                    await session.GetXFlashExpireDataAsync(queryToken).ConfigureAwait(true)),
+                token).ConfigureAwait(true);
+            await QueryAsync("Flash_MtkOtpLockStatus",
+                async queryToken => Convert.ToHexString(
+                    await session.GetXFlashOtpLockStatusAsync(queryToken).ConfigureAwait(true)),
+                token).ConfigureAwait(true);
+            await QueryAsync("Flash_MtkBatteryVoltage",
+                async queryToken => Convert.ToHexString(
+                    await session.GetXFlashBatteryVoltageAsync(queryToken).ConfigureAwait(true)),
+                token).ConfigureAwait(true);
+            await QueryAsync("Flash_MtkDramType",
+                async queryToken => Convert.ToHexString(
+                    await session.GetXFlashDramTypeAsync(queryToken).ConfigureAwait(true)),
+                token).ConfigureAwait(true);
+            await QueryAsync("Flash_MtkErrorDetail",
+                async queryToken => Convert.ToHexString(
+                    await session.GetXFlashErrorDetailAsync(queryToken).ConfigureAwait(true)),
+                token).ConfigureAwait(true);
         });
     }
 
@@ -1769,7 +1944,8 @@ public partial class FlashView : UserControl
                 SetRowFinished(row, success: true);
             }
 
-            AppendLog(LanguageService.Instance.GetString("Flash_FlashEdlBundle") + ": OK");
+            AppendLog(string.Format(LanguageService.Instance.GetString("Flash_OkResult"),
+                LanguageService.Instance.GetString("Flash_FlashEdlBundle")));
             foreach (var warning in warnings)
             {
                 AppendLog($"{LanguageService.Instance.GetString("Flash_WarningPrefix")}: {warning}");
@@ -1993,7 +2169,7 @@ public partial class FlashView : UserControl
         ChooseFileButton.IsEnabled = false;
         ChooseFolderButton.IsEnabled = false;
         PartitionGrid.IsEnabled = false;
-        var staged = new List<string>();
+        List<string> staged = [];
         string? extractionRoot = null;
         try
         {
@@ -2113,8 +2289,8 @@ public partial class FlashView : UserControl
                     return;
                 }
             }
-            var prepared = new Dictionary<FlashPartitionEntry, string>();
-            var preparedSuper = new Dictionary<FlashPartitionEntry, PreparedSuperEmpty>();
+            Dictionary<FlashPartitionEntry, string> prepared = [];
+            Dictionary<FlashPartitionEntry, PreparedSuperEmpty> preparedSuper = [];
             if (!erase)
             {
                 foreach (var entry in selected.Where(entry => entry.Step?.Command == "wipe_super"))
@@ -2135,9 +2311,9 @@ public partial class FlashView : UserControl
                             ? await FlashSuperService.ExtractAsync(super, names, extractionRoot, cancellation.Token)
                         : _vendorPath is { } vendor
                             ? await FlashVendorContainerService.ExtractAsync(vendor,
-                                names.Select(name => _vendorEntries[name]).ToArray(), extractionRoot, cancellation.Token)
+                                [.. names.Select(name => _vendorEntries[name])], extractionRoot, cancellation.Token)
                         : await FlashOppoContainerService.ExtractAsync(_oppoPath!,
-                            names.Select(name => _oppoEntries[name].Entry).ToArray(), extractionRoot, cancellation.Token);
+                            [.. names.Select(name => _oppoEntries[name].Entry)], extractionRoot, cancellation.Token);
                     foreach (var entry in missingImages)
                     {
                         var filename = _vendorPath is not null ? _vendorEntries[entry.Name]
@@ -2212,7 +2388,7 @@ public partial class FlashView : UserControl
                 if (command == "wipe_super")
                 {
                     await FlashSuperEmptyService.WipeAsync(device, preparedSuper[entry], cancellation.Token);
-                    AppendLog($"{command}: OK");
+                    AppendLog(string.Format(language.GetString("Flash_OkResult"), command));
                     SetRowFinished(entry, success: true);
                 }
                 else if (command is "flash" or "erase")
@@ -2235,7 +2411,7 @@ public partial class FlashView : UserControl
                 else
                 {
                     await FastbootStepService.ExecuteAsync(device, entry.Step!, cancellation.Token);
-                    AppendLog($"{command}: OK");
+                    AppendLog(string.Format(language.GetString("Flash_OkResult"), command));
                     SetRowFinished(entry, success: true);
                 }
             }
@@ -2255,7 +2431,8 @@ public partial class FlashView : UserControl
             if (succeeded && !cancellation.IsCancellationRequested && rebootAfter)
             {
                 await FastbootStepService.ExecuteAsync(device, new FlashStep("reboot", ""), cancellation.Token);
-                AppendLog($"{language.GetString("Flash_RebootAfter")}: OK");
+                AppendLog(string.Format(language.GetString("Flash_OkResult"),
+                    language.GetString("Flash_RebootAfter")));
             }
         }
         catch (Exception ex) { AppendLog(ex.Message); }
@@ -2902,12 +3079,107 @@ public partial class FlashView : UserControl
                     .ConfigureAwait(true);
                 if (!response.IsAck)
                 {
-                    throw new InvalidOperationException("The target rejected the memcpy poke.");
+                    throw new InvalidOperationException(language.GetString("Flash_EdlMemcpyRejected"));
                 }
 
                 return true;
             }, cancellation.Token);
             AppendLog($"0x{source:X} → 0x{destination:X} ({size} B)");
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            _flashCancellation = null;
+            CancelFlashButton.IsEnabled = false;
+            SetBusy(false);
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// <para>经 <c>peek</c> 读取目标内存窗口：只读调试命令，无需确认；读回的字节按带地址与 ASCII 列的
+    /// 十六进制窗口写进日志，超出 32 位显示范围的地址在本地被拒绝。</para>
+    /// Reads a target memory window through <c>peek</c>: a read-only debug command needing no
+    /// confirmation; the bytes land in the log as a hex window with address and ASCII columns, and an
+    /// address beyond the 32-bit display range is refused locally.
+    /// </summary>
+    private async void OnEdlPeekClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device) return;
+        var language = LanguageService.Instance;
+        if (!TryReadEdlHexString(EdlPeekAddressBox.Text, out var address) || address > uint.MaxValue ||
+            !long.TryParse(EdlPeekLengthBox.Text?.Trim(), System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var size) ||
+            size is < 1 or > 16 * 1024 * 1024)
+        {
+            AppendLog(language.GetString("Flash_EdlPeekInvalid"));
+            return;
+        }
+
+        if (!TryBuildEdlInitialization(out var initialization)) return;
+
+        SetBusy(true);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        CancelFlashButton.IsEnabled = true;
+        try
+        {
+            var (_, data) = await App.DeviceMonitor.RunEdlAsync(device, async edl =>
+            {
+                var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token)
+                    .ConfigureAwait(true);
+                return await firehose.PeekAsync(size, address, cancellation.Token).ConfigureAwait(true);
+            }, cancellation.Token).ConfigureAwait(true);
+            AppendLog(FormatMemoryWindow((uint)address, data));
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            _flashCancellation = null;
+            CancelFlashButton.IsEnabled = false;
+            SetBusy(false);
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// <para>确认后执行 EDL 出厂重置：按设备自身 GPT 跨 LUN 解析 <c>userdata</c> 与 <c>metadata</c> 并整区
+    /// 擦除；擦除不可恢复，缺失的分区由服务层跳过并报告，全部缺失时结果摘要写明未擦除任何内容。</para>
+    /// Runs the EDL factory reset after confirmation: <c>userdata</c> and <c>metadata</c> are resolved
+    /// across LUNs on the device's own GPT and erased whole; the erasure is irreversible, absent partitions
+    /// are skipped and reported by the service, and a device reporting neither yields a summary saying
+    /// nothing was erased.
+    /// </summary>
+    private async void OnEdlFactoryResetClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
+            TopLevel.GetTopLevel(this) is not Window owner) return;
+        if (!TryBuildEdlInitialization(out var initialization)) return;
+        var language = LanguageService.Instance;
+        _confirming = true;
+        bool confirmed;
+        try
+        {
+            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_EdlFactoryReset"),
+                $"{language.GetString("Flash_EdlFactoryResetConfirm")}{Environment.NewLine}{device.DisplayName}");
+        }
+        finally { _confirming = false; }
+        if (!confirmed) return;
+
+        SetBusy(true);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        CancelFlashButton.IsEnabled = true;
+        EdlFactoryResetButton.IsEnabled = false;
+        try
+        {
+            var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
+            var result = await EdlGptPartitionService.FactoryResetAsync(new DeviceInfo(device), progress,
+                cancellation.Token, _edlProgrammerOverride ?? _edlProgrammer, initialization)
+                .ConfigureAwait(true);
+            AppendLog(result.Summary);
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendLog(ex.Message); }
@@ -3166,7 +3438,7 @@ public partial class FlashView : UserControl
         CancelFlashButton.IsEnabled = true;
         try
         {
-            var manifest = new List<EdlReadbackManifestEntry>();
+            List<EdlReadbackManifestEntry> manifest = [];
             var sectorSize = 0L;
             var numDiskSectors = 0L;
             SetRowsQueued(selected);
@@ -3578,12 +3850,14 @@ public partial class FlashView : UserControl
     /// <summary>
     /// <para>读取 MTK 面板当前选择并按顺序校验；失败时把本地化原因写入日志并返回 false。
     /// 家族与存储类型的不可能组合排在最前，因为用户不必为一个所选代理永远无法服务的请求去找加载器、
-    /// 串口和波特率；XML 家族不使用 EMI 参数，通过校验时只写一条本地化提示，不做静默丢弃。</para>
+    /// 串口和波特率；XML 家族不使用 EMI 参数，通过校验时只写一条本地化提示，不做静默丢弃。
+    /// 附加模式只有 Legacy 家族被拒绝，XFlash 与 XML 代理都能按各自通路附加。</para>
     /// Reads the current MTK pane selection and validates it in order; on failure the localized
     /// reason is written to the log and <see langword="false"/> is returned. An impossible family and
     /// storage combination is reported first, because the user should not have to hunt for a loader, a
     /// port and a baud rate for a request the chosen agent can never serve. The XML family uses no EMI
     /// parameters, so a passing selection only writes one localized note instead of dropping them quietly.
+    /// Attach mode refuses only the Legacy family; XFlash and XML agents are attached over their own paths.
     /// </summary>
     /// <param name="useSerial">Whether the operation targets a serial port instead of a USB device.
     /// <para>操作目标是串口而非 USB 设备。</param>
@@ -3657,7 +3931,7 @@ public partial class FlashView : UserControl
             failure = "Flash_MtkUsbAutoMatchRequired";
         }
 
-        if (failure is null && attach && SelectedMtkProtocol != MtkDaProtocol.XFlash)
+        if (failure is null && attach && SelectedMtkProtocol == MtkDaProtocol.Legacy)
         {
             failure = "Flash_MtkAttachFamilyUnsupported";
         }
@@ -3955,7 +4229,15 @@ public partial class FlashView : UserControl
             var session = await MtkSession.OpenSerialAsync(port, baudRate, token);
             try
             {
-                await session.AttachRunningXFlashAgentAsync(kind, 120000, token);
+                if (SelectedMtkProtocol == MtkDaProtocol.Xml)
+                {
+                    await session.AttachRunningXmlAgentAsync(120000, token);
+                }
+                else
+                {
+                    await session.AttachRunningXFlashAgentAsync(kind, 120000, token);
+                }
+
                 return session;
             }
             catch
@@ -5067,12 +5349,69 @@ public partial class FlashView : UserControl
         bool qudRecovery, bool pendingCompletion, int authTimeoutMs) =>
         options with
         {
+            Vip = BuildEdlVipOptions(),
             SendOnePlusNetType = netType,
             QudHelloRecoveryEnabled = qudRecovery,
             AllowSingleFirehosePendingCompletion = pendingCompletion,
             AuthenticationTimeoutMs = authTimeoutMs,
             AllowStreamDload = EdlAllowStreamDloadBox.IsChecked == true
         };
+
+    /// <summary>
+    /// <para>把所选 VIP 表文件包装成 Firehose VIP 配置：签名表按文件字节原样交付，raw program 包大小取
+    /// <see cref="EdlVipProgramPayloadSize"/>；未选择文件时返回 null，保持普通 Firehose 启动路径。</para>
+    /// Wraps the chosen VIP table file into the Firehose VIP configuration: the signed table is served
+    /// verbatim from the file bytes and the raw program packet size is <see cref="EdlVipProgramPayloadSize"/>;
+    /// null is returned when no file was chosen, keeping the ordinary Firehose startup path.
+    /// </summary>
+    /// <returns><para>VIP 配置；未选择表文件时为 null。</para>The VIP options, or null without a file.</returns>
+    private FirehoseVipOptions? BuildEdlVipOptions()
+    {
+        return _edlVipTableData is not { } tableBytes
+            ? null
+            : new FirehoseVipOptions
+            {
+                TableProvider = new EdlVipTableFileProvider(tableBytes),
+                ProgramPayloadSize = EdlVipProgramPayloadSize
+            };
+    }
+
+    /// <summary>
+    /// <para>选择 VIP 表文件：文件字节在复制前先做 1 字节到 16 MiB 的边界校验，超界或缺文件时清空已选状态并
+    /// 写入本地化提示；选择成功后文件名写进状态行，完整路径放进工具提示。</para>
+    /// Picks the VIP table file: the bytes are bounds-checked from 1 byte through 16 MiB before being copied,
+    /// an out-of-bounds or missing file clears the selection and writes a localized diagnostic, and a
+    /// successful pick shows the file name in the status line with the full path in its tooltip.
+    /// </summary>
+    private async void OnChooseEdlVipTableClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(this) is not { } topLevel) return;
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Flash_EdlChooseVipTable"),
+            AllowMultiple = false,
+            FileTypeFilter = [FilePickerFileTypes.All]
+        });
+        if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
+        try
+        {
+            var data = await File.ReadAllBytesAsync(path);
+            if (data.Length is 0 or > EdlVipTableFileProvider.SignedTableMaximumBytes)
+            {
+                throw new InvalidDataException(LanguageService.Instance.GetString("Flash_EdlVipTableInvalid"));
+            }
+            _edlVipTableData = data;
+            EdlVipTableText.Text = Path.GetFileName(path);
+            ToolTip.SetTip(EdlVipTableText, path);
+            AppendLog(Path.GetFileName(path));
+        }
+        catch (Exception ex)
+        {
+            _edlVipTableData = null;
+            EdlVipTableText.Text = string.Empty;
+            AppendLog(ex.Message);
+        }
+    }
 
     /// <summary>
     /// <para>在 preloader 命令阶段的新会话上运行给定操作：每次点击都经租约取一份全新、已初始化但未上传下载代理的
@@ -5181,8 +5520,9 @@ public partial class FlashView : UserControl
             var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
             var record = await MtkPreloaderService.DumpInternalFlashAsync(session, offset, length, step,
                 confirmFlashMapping, destination, progress, token).ConfigureAwait(true);
-            AppendLog($"{record.RegionName} 0x{record.StartOffset:X8} -> {record.DestinationPath} " +
-                $"({record.ByteLength} bytes, SHA-256 {record.Sha256Hex})");
+            AppendLog(string.Format(LanguageService.Instance.GetString("Flash_MtkPreloaderDumpRecord"),
+                record.RegionName, $"0x{record.StartOffset:X8}", record.DestinationPath, record.ByteLength,
+                record.Sha256Hex));
         });
     }
 
@@ -5223,7 +5563,8 @@ public partial class FlashView : UserControl
         {
             var submitted = await MtkPreloaderService.WriteWindowAsync(session, address, data,
                 confirmed: true, token).ConfigureAwait(true);
-            AppendLog($"0x{address:X8} <- {submitted} bytes");
+            AppendLog(string.Format(LanguageService.Instance.GetString("Flash_MtkPreloaderWriteApplied"),
+                $"0x{address:X8}", submitted));
         });
     }
 
@@ -5248,6 +5589,46 @@ public partial class FlashView : UserControl
             await MtkPreloaderService.JumpToPartitionAsync(session, partitionName, confirmed: true, token)
                 .ConfigureAwait(true));
     }
+
+    /// <summary>
+    /// <para>把 preloader 命令阶段上报的 BootROM 窗口采集到用户选择的文件：只读操作无需确认，字节先落暂存
+    /// 文件并增量哈希，长度一致时才原子替换目标。</para>
+    /// Captures the Boot-ROM window the preloader command stage reports into a user-chosen file: the
+    /// read-only capture needs no confirmation, bytes are staged and hashed incrementally, and the
+    /// destination is replaced atomically only once the length matches.
+    /// </summary>
+    private async void OnMtkPreloaderBromDumpClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(this) is not Window owner) return;
+        var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = LanguageService.Instance.GetString("Flash_MtkPreloaderBromDump"),
+            SuggestedFileName = "bootrom.bin",
+            DefaultExtension = "bin"
+        });
+        if (file?.TryGetLocalPath() is not { Length: > 0 } destination) return;
+        await RunMtkPreloaderAsync(null, async (session, token) =>
+        {
+            var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
+            var record = await MtkPreloaderService.DumpBromAsync(session, destination, progress, token)
+                .ConfigureAwait(true);
+            AppendLog(string.Format(LanguageService.Instance.GetString("Flash_MtkPreloaderDumpRecord"),
+                record.RegionName, $"0x{record.StartOffset:X8}", record.DestinationPath, record.ByteLength,
+                record.Sha256Hex));
+        });
+    }
+
+    /// <summary>
+    /// <para>在确认后让 preloader 跳转到 Boot Loader：执行权被转移且链路预计会断开，会话随协议 fault 一起作废，
+    /// 因此之后必须重新打开会话。</para>
+    /// Jumps the preloader to its boot loader after confirmation: execution is transferred and the link is
+    /// expected to drop, so the session is retired together with the protocol fault and must be reopened
+    /// afterwards.
+    /// </summary>
+    private async void OnMtkPreloaderBootloaderJumpClick(object? sender, RoutedEventArgs e)
+        => await RunMtkPreloaderAsync("Flash_MtkPreloaderBootloaderJumpConfirm", async (session, token) =>
+            await MtkPreloaderService.JumpToBootLoaderAsync(session, confirmed: true, token)
+                .ConfigureAwait(true));
 
     internal static bool TryParseHexBytes(string text, out byte[] bytes)
     {
@@ -5303,6 +5684,62 @@ public partial class FlashView : UserControl
                 var result = await session.CrashDaAsync(mode, confirm: true, token).ConfigureAwait(true);
                 AppendLog($"{result.Mode}: {result.Detail}");
                 AppendLog(language.GetString("Flash_MtkCrashConfirm"));
+            }, cancellation.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            _flashCancellation = null;
+            CancelFlashButton.IsEnabled = false;
+            SetBusy(false);
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// <para>在已就绪的 XFlash 代理上写入 meta 启动标志三元组：set_meta 只由 XFlash 家族定义，非 XFlash 家族在
+    /// 接触设备前本地拒绝；写入不可逆，执行前需用户确认。</para>
+    /// Writes the META boot flag triple on a ready XFlash agent: set_meta is defined only by the XFlash
+    /// family, so a non-XFlash family is refused locally before any device contact; the write is
+    /// irreversible and needs the user's confirmation first.
+    /// </summary>
+    private async void OnMtkSetMetaClick(object? sender, RoutedEventArgs e)
+    {
+        var language = LanguageService.Instance;
+        if (SelectedMtkProtocol != MtkDaProtocol.XFlash)
+        {
+            AppendLog(language.GetString("Flash_MtkSetMetaFamilyUnsupported"));
+            return;
+        }
+
+        if (!TryReadMtkSelection(out _, out _, out _, out _, out _, out _) ||
+            TopLevel.GetTopLevel(this) is not Window owner)
+        {
+            return;
+        }
+
+        _confirming = true;
+        bool confirmed;
+        try
+        {
+            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_MtkSetMetaButton"),
+                language.GetString("Flash_MtkSetMetaConfirm"));
+        }
+        finally { _confirming = false; }
+        if (!confirmed) return;
+
+        var mode = Enum.GetValues<MtkXFlashMetaBootMode>()[Math.Max(MtkMetaBootModeBox.SelectedIndex, 0)];
+        SetBusy(true);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        CancelFlashButton.IsEnabled = true;
+        try
+        {
+            await RunWithReadyMtkSessionAsync(async (session, token) =>
+            {
+                await session.SetXFlashMetaBootModeAsync(mode, token).ConfigureAwait(true);
+                AppendLog(string.Format(language.GetString("Flash_MtkSetMetaApplied"), mode));
             }, cancellation.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
@@ -5451,6 +5888,39 @@ public partial class FlashView : UserControl
             CancelFlashButton.IsEnabled = false;
             UpdateEdlButton();
         }
+    }
+
+    /// <summary>
+    /// <para>在已就绪的 XML 代理上按精确键名读取一条系统属性：该通路只由 XML 家族提供，其他家族在接触设备前
+    /// 本地拒绝；查询是只读的，结果连同信封名与版本一起写进日志，不做任何授权解释。</para>
+    /// Reads one XML system property by exact key on a ready XML agent: the path is provided only by the
+    /// XML family, so any other family is refused locally before device contact; the query is read-only,
+    /// and the result together with its envelope name and version is logged without any authorization
+    /// interpretation.
+    /// </summary>
+    private async void OnMtkXmlPropertyQueryClick(object? sender, RoutedEventArgs e)
+    {
+        var name = MtkXmlPropertyBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_MtkXmlPropertyRequired"));
+            return;
+        }
+
+        var language = LanguageService.Instance;
+        if (SelectedMtkProtocol != MtkDaProtocol.Xml)
+        {
+            AppendLog(language.GetString("Flash_MtkXmlPropertyFamilyRequired"));
+            return;
+        }
+
+        await RunMtkSecurityOperationAsync("Flash_MtkXmlPropertyQuery", null, async (session, token) =>
+        {
+            var property = await session.QueryXmlSystemPropertyAsync(name, cancellationToken: token)
+                .ConfigureAwait(true);
+            AppendLog(string.Format(language.GetString("Flash_MtkXmlPropertyResult"),
+                property.Key, property.Value, property.EnvelopeName, property.Version ?? "-"));
+        });
     }
 
     /// <summary>

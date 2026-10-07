@@ -257,7 +257,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Fact]
-    public async Task MtkProtocolSelector_NonXFlashFamilies_RejectAttachingAnXFlashAgent()
+    public async Task MtkProtocolSelector_Attach_XmlAcceptedAndLegacyRefused()
     {
         Task dispatch;
         using (ExecutionContext.SuppressFlow())
@@ -286,11 +286,49 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
 
                 protocolBox.SelectedIndex = 2;
                 view.UpdateLayout();
-                Assert.False(view.TryReadMtkSelection(out _, out _, out _, out _, out _, out _));
+                Assert.True(view.TryReadMtkSelection(out _, out _, out _, out _, out _, out _));
 
                 protocolBox.SelectedIndex = 0;
                 view.UpdateLayout();
                 Assert.True(view.TryReadMtkSelection(out _, out _, out _, out _, out _, out _));
+                return Task.CompletedTask;
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task MtkMetaBootAndXmlPropertyControls_EnumModesAndRows_ArePresentInMtkPane()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var view = new FlashView();
+                var window = new Window { Content = view, Width = 960, Height = 800 };
+                try
+                {
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    var pane = view.FindControl<StackPanel>("MtkPane")!;
+                    var mode = view.FindControl<ComboBox>("MtkMetaBootModeBox")!;
+                    Assert.Equal(Enum.GetNames<MtkXFlashMetaBootMode>(), mode.ItemsSource!.Cast<object>().ToArray());
+                    Assert.Equal(0, mode.SelectedIndex);
+                    Assert.Equal(nameof(MtkXFlashMetaBootMode.Off), mode.SelectedItem);
+                    var apply = view.FindControl<Button>("MtkSetMetaButton")!;
+                    Assert.Contains(pane, apply.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                    var property = view.FindControl<TextBox>("MtkXmlPropertyBox")!;
+                    var query = view.FindControl<Button>("MtkXmlPropertyQueryButton")!;
+                    Assert.Contains(pane, property.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                    Assert.Contains(pane, query.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                }
+                finally
+                {
+                    window.Close();
+                }
+
                 return Task.CompletedTask;
             }, TestContext.Current.CancellationToken);
         }
@@ -387,6 +425,15 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     var memcpy = view.FindControl<Button>("EdlMemcpyButton")!;
                     Assert.Contains(pane, poke.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
                     Assert.Contains(pane, memcpy.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                    var peek = view.FindControl<Button>("EdlPeekButton")!;
+                    var vip = view.FindControl<Button>("ChooseEdlVipTableButton")!;
+                    var factoryReset = view.FindControl<Button>("EdlFactoryResetButton")!;
+                    Assert.Contains(pane, peek.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                    Assert.Contains(pane, vip.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                    Assert.Contains(pane, factoryReset.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                    Assert.NotNull(view.FindControl<TextBox>("EdlPeekAddressBox"));
+                    Assert.NotNull(view.FindControl<TextBox>("EdlPeekLengthBox"));
+                    Assert.NotNull(view.FindControl<TextBlock>("EdlVipTableText"));
                 }
                 finally
                 {
@@ -398,6 +445,24 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
         }
 
         await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task EdlVipTableFileProvider_OpenTableAsync_ServesSignedTableAndNullForChainedTables()
+    {
+        var provider = new EdlVipTableFileProvider([1, 2, 3, 4, 5]);
+        using var first = Assert.IsType<MemoryStream>(await provider.OpenTableAsync(0,
+            TestContext.Current.CancellationToken));
+        Assert.Equal([1, 2, 3, 4, 5], first.ToArray());
+        using var second = Assert.IsType<MemoryStream>(await provider.OpenTableAsync(0,
+            TestContext.Current.CancellationToken));
+        Assert.Equal([1, 2, 3, 4, 5], second.ToArray());
+        Assert.NotSame(first, second);
+        Assert.Null(await provider.OpenTableAsync(1, TestContext.Current.CancellationToken));
+        Assert.Null(await provider.OpenTableAsync(2, TestContext.Current.CancellationToken));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new EdlVipTableFileProvider([]));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new EdlVipTableFileProvider(new byte[EdlVipTableFileProvider.SignedTableMaximumBytes + 1]));
     }
 
     [Fact]
@@ -529,6 +594,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 view.FindControl<TextBox>("EdlWipeFirstBox")!.Text = text;
 
                 Assert.False(view.TryReadEdlBundleTuning(out _));
+                model.FlushPendingLog();
                 Assert.Contains(LanguageService.Instance.GetString("Flash_EdlWipeFirstInvalid"),
                     model.LogText, StringComparison.Ordinal);
                 return Task.CompletedTask;
@@ -551,6 +617,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 view.FindControl<ComboBox>("MtkPortBox")!.SelectedItem = null;
 
                 Assert.False(view.TryReadMtkSelection(out _, out _, out _, out _, out _, out _));
+                model.FlushPendingLog();
                 Assert.Contains(LanguageService.Instance.GetString("Flash_MtkPortRequired"),
                     model.LogText, StringComparison.Ordinal);
                 return Task.CompletedTask;
@@ -575,6 +642,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 portBox.SelectedItem = "COM99";
 
                 Assert.False(view.TryReadMtkSelection(out _, out _, out _, out _, out _, out _));
+                model.FlushPendingLog();
                 Assert.Contains(LanguageService.Instance.GetString("Flash_MtkDaRequired"),
                     model.LogText, StringComparison.Ordinal);
                 return Task.CompletedTask;
@@ -601,6 +669,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 view.FindControl<ComboBox>("MtkBaudBox")!.SelectedIndex = -1;
 
                 Assert.False(view.TryReadMtkSelection(out _, out _, out _, out _, out _, out _));
+                model.FlushPendingLog();
                 Assert.Contains(LanguageService.Instance.GetString("Flash_MtkBaudRequired"),
                     model.LogText, StringComparison.Ordinal);
                 return Task.CompletedTask;
@@ -1381,20 +1450,23 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 protocolBox.SelectedIndex = 1;
                 storageBox.SelectedIndex = 1;
                 Assert.False(view.TryReadMtkSelection(out _, out _, out _, out _, out _, out _));
+                model.FlushPendingLog();
                 Assert.Contains(refusal, model.LogText, StringComparison.Ordinal);
+                var legacyLines = LogLineCount(model.LogText);
 
                 protocolBox.SelectedIndex = 2;
-                var xmlStart = model.LogText.Length;
                 Assert.False(view.TryReadMtkSelection(out _, out _, out _, out _, out _, out _));
-                Assert.DoesNotContain(refusal, model.LogText[xmlStart..], StringComparison.Ordinal);
-                Assert.Contains(language.GetString("Flash_MtkDaRequired"), model.LogText[xmlStart..],
-                    StringComparison.Ordinal);
+                model.FlushPendingLog();
+                var xmlLines = NewLogLines(model.LogText, legacyLines);
+                Assert.DoesNotContain(refusal, xmlLines);
+                Assert.Contains(language.GetString("Flash_MtkDaRequired"), xmlLines);
 
                 storageBox.SelectedIndex = 0;
                 protocolBox.SelectedIndex = 1;
-                var emmcStart = model.LogText.Length;
+                var xmlLinesTotal = LogLineCount(model.LogText);
                 Assert.False(view.TryReadMtkSelection(out _, out _, out _, out _, out _, out _));
-                Assert.DoesNotContain(refusal, model.LogText[emmcStart..], StringComparison.Ordinal);
+                model.FlushPendingLog();
+                Assert.DoesNotContain(refusal, NewLogLines(model.LogText, xmlLinesTotal));
                 return Task.CompletedTask;
             }, TestContext.Current.CancellationToken);
         }
@@ -1636,6 +1708,69 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Fact]
+    public async Task MtkPreloaderPane_BootloaderJumpAndBromDump_GateWithExistingPreloaderControls()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var model = DeviceViewModel.EnsureInstance();
+                var view = new FlashView();
+                var window = new Window { Content = view, Width = 960, Height = 800 };
+                var pane = view.FindControl<StackPanel>("MtkPreloaderPane")!;
+                var jump = view.FindControl<Button>("MtkPreloaderBootloaderJumpButton")!;
+                var dump = view.FindControl<Button>("MtkPreloaderBromDumpButton")!;
+                var existingJump = view.FindControl<Button>("MtkPreloaderJumpButton")!;
+                var existingDump = view.FindControl<Button>("MtkPreloaderDumpButton")!;
+                try
+                {
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    model.SelectedDevice = new DeviceInfo(new DetectedDevice
+                    {
+                        Key = "mtk-da",
+                        Serial = "da",
+                        Protocol = DeviceProtocolKind.Mtk,
+                        Transport = DeviceTransportKind.Usb,
+                        State = "da"
+                    });
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.False(pane.IsVisible);
+                    Assert.False(jump.IsEnabled);
+                    Assert.False(dump.IsEnabled);
+
+                    model.SelectedDevice = new DeviceInfo(new DetectedDevice
+                    {
+                        Key = "mtk-pl",
+                        Serial = "pl",
+                        Protocol = DeviceProtocolKind.Mtk,
+                        Transport = DeviceTransportKind.Usb,
+                        State = "preloader"
+                    });
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.True(pane.IsVisible);
+                    Assert.True(jump.IsEnabled);
+                    Assert.True(dump.IsEnabled);
+                    Assert.Equal(existingJump.IsEnabled, jump.IsEnabled);
+                    Assert.Equal(existingDump.IsEnabled, dump.IsEnabled);
+                    Assert.Contains(pane, jump.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                    Assert.Contains(pane, dump.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                }
+                finally
+                {
+                    model.SelectedDevice = null;
+                    window.Close();
+                }
+
+                return Task.CompletedTask;
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task MtkBruteVar1Box_IsVisibleOnlyForKamakiriFamily()
     {
         Task dispatch;
@@ -1738,4 +1873,446 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
 
         await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
     }
+
+    [Theory]
+    [InlineData(DeviceTransportKind.Serial)]
+    [InlineData(DeviceTransportKind.Usb)]
+    public async Task UpdateModeVisibility_ModeIsolation_EdlDevice_ShowsOnlyTheEdlPane(
+        DeviceTransportKind transport)
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var devices = DeviceViewModel.EnsureInstance();
+                var view = new FlashView();
+                var window = new Window { Content = view, Width = 960, Height = 800 };
+                try
+                {
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    devices.SelectedDevice = DeviceOf(DeviceProtocolKind.Edl, transport, "edl");
+                    Dispatcher.UIThread.RunJobs();
+
+                    Assert.True(view.FindControl<TextBlock>("EdlHeader")!.IsVisible);
+                    Assert.True(view.FindControl<StackPanel>("EdlPane")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("MtkPane")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("MtkUsbOnlyRow")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("MtkPreloaderPane")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("SwitchSlotButton")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("ReadInfoButton")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("ShowAllPartitionsBox")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("EraseSelectedButton")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("AddRootBox")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("ChooseRootPackageButton")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("DeleteCowBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("DisableVbmetaBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("EraseDataBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("RebootAfterBox")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("EdlSerialFlashButton")!.IsVisible);
+                    Assert.True(view.FindControl<Button>("FlashSelectedButton")!.IsVisible);
+                    return Task.CompletedTask;
+                }
+                finally
+                {
+                    devices.SelectedDevice = null;
+                    window.Close();
+                }
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task UpdateModeVisibility_ModeIsolation_MtkSerialDevice_ShowsOnlyTheMtkSerialRows()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var devices = DeviceViewModel.EnsureInstance();
+                var view = new FlashView();
+                var window = new Window { Content = view, Width = 960, Height = 800 };
+                try
+                {
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    devices.SelectedDevice = DeviceOf(DeviceProtocolKind.Mtk, DeviceTransportKind.Serial, "brom");
+                    Dispatcher.UIThread.RunJobs();
+
+                    Assert.True(view.FindControl<StackPanel>("MtkPane")!.IsVisible);
+                    Assert.False(view.FindControl<TextBlock>("EdlHeader")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("EdlPane")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("MtkUsbOnlyRow")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("MtkPreloaderPane")!.IsVisible);
+                    Assert.True(view.FindControl<ComboBox>("MtkPortBox")!.IsVisible);
+                    Assert.True(view.FindControl<ComboBox>("MtkBaudBox")!.IsVisible);
+                    Assert.True(view.FindControl<CheckBox>("MtkAttachAgentBox")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("ReadInfoButton")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("FlashSelectedButton")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("SwitchSlotButton")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("EraseSelectedButton")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("AddRootBox")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("ChooseRootPackageButton")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("DeleteCowBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("DisableVbmetaBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("EraseDataBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("RebootAfterBox")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("EdlSerialFlashButton")!.IsVisible);
+                    return Task.CompletedTask;
+                }
+                finally
+                {
+                    devices.SelectedDevice = null;
+                    window.Close();
+                }
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task UpdateModeVisibility_ModeIsolation_MtkUsbDevice_ShowsOnlyTheMtkUsbRows()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var devices = DeviceViewModel.EnsureInstance();
+                var view = new FlashView();
+                var window = new Window { Content = view, Width = 960, Height = 800 };
+                try
+                {
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    devices.SelectedDevice = DeviceOf(DeviceProtocolKind.Mtk, DeviceTransportKind.Usb, "brom");
+                    Dispatcher.UIThread.RunJobs();
+
+                    Assert.True(view.FindControl<StackPanel>("MtkPane")!.IsVisible);
+                    Assert.True(view.FindControl<StackPanel>("MtkUsbOnlyRow")!.IsVisible);
+                    Assert.False(view.FindControl<TextBlock>("EdlHeader")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("EdlPane")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("MtkPreloaderPane")!.IsVisible);
+                    Assert.False(view.FindControl<ComboBox>("MtkPortBox")!.IsVisible);
+                    Assert.False(view.FindControl<ComboBox>("MtkBaudBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("MtkAttachAgentBox")!.IsVisible);
+                    Assert.True(view.FindControl<Button>("ReadInfoButton")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("FlashSelectedButton")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("SwitchSlotButton")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("ShowAllPartitionsBox")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("EraseSelectedButton")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("AddRootBox")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("ChooseRootPackageButton")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("DeleteCowBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("DisableVbmetaBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("EraseDataBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("RebootAfterBox")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("EdlSerialFlashButton")!.IsVisible);
+                    return Task.CompletedTask;
+                }
+                finally
+                {
+                    devices.SelectedDevice = null;
+                    window.Close();
+                }
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task UpdateModeVisibility_ModeIsolation_MtkUsbPreloaderDevice_AddsThePreloaderPane()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var devices = DeviceViewModel.EnsureInstance();
+                var view = new FlashView();
+                var window = new Window { Content = view, Width = 960, Height = 800 };
+                try
+                {
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    devices.SelectedDevice = DeviceOf(DeviceProtocolKind.Mtk, DeviceTransportKind.Usb, "preloader");
+                    Dispatcher.UIThread.RunJobs();
+
+                    Assert.True(view.FindControl<StackPanel>("MtkPane")!.IsVisible);
+                    Assert.True(view.FindControl<StackPanel>("MtkPreloaderPane")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("EdlPane")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("FlashSelectedButton")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("SwitchSlotButton")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("EdlSerialFlashButton")!.IsVisible);
+                    return Task.CompletedTask;
+                }
+                finally
+                {
+                    devices.SelectedDevice = null;
+                    window.Close();
+                }
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task UpdateModeVisibility_ModeIsolation_FastbootDevice_ShowsOnlyTheFastbootRows()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var devices = DeviceViewModel.EnsureInstance();
+                var view = new FlashView();
+                var window = new Window { Content = view, Width = 960, Height = 800 };
+                try
+                {
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    devices.SelectedDevice = DeviceOf(DeviceProtocolKind.Fastboot, DeviceTransportKind.Usb, "fastboot");
+                    Dispatcher.UIThread.RunJobs();
+
+                    Assert.True(view.FindControl<Button>("SwitchSlotButton")!.IsVisible);
+                    Assert.True(view.FindControl<Button>("ReadInfoButton")!.IsVisible);
+                    Assert.True(view.FindControl<CheckBox>("ShowAllPartitionsBox")!.IsVisible);
+                    Assert.True(view.FindControl<Button>("EraseSelectedButton")!.IsVisible);
+                    Assert.True(view.FindControl<CheckBox>("AddRootBox")!.IsVisible);
+                    Assert.True(view.FindControl<Button>("ChooseRootPackageButton")!.IsVisible);
+                    Assert.True(view.FindControl<CheckBox>("DeleteCowBox")!.IsVisible);
+                    Assert.True(view.FindControl<CheckBox>("DisableVbmetaBox")!.IsVisible);
+                    Assert.True(view.FindControl<CheckBox>("EraseDataBox")!.IsVisible);
+                    Assert.True(view.FindControl<CheckBox>("RebootAfterBox")!.IsVisible);
+                    Assert.True(view.FindControl<Button>("FlashSelectedButton")!.IsVisible);
+                    Assert.False(view.FindControl<TextBlock>("EdlHeader")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("EdlPane")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("MtkPane")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("MtkUsbOnlyRow")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("MtkPreloaderPane")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("EdlSerialFlashButton")!.IsVisible);
+                    return Task.CompletedTask;
+                }
+                finally
+                {
+                    devices.SelectedDevice = null;
+                    window.Close();
+                }
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task UpdateModeVisibility_ModeIsolation_NoSelectedDevice_KeepsOnlyPreparationRows()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var devices = DeviceViewModel.EnsureInstance();
+                devices.SelectedDevice = null;
+                var view = new FlashView();
+                var window = new Window { Content = view, Width = 960, Height = 800 };
+                try
+                {
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+
+                    Assert.True(view.FindControl<Button>("EdlSerialFlashButton")!.IsVisible);
+                    Assert.True(view.FindControl<Button>("FlashSelectedButton")!.IsVisible);
+                    Assert.False(view.FindControl<TextBlock>("EdlHeader")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("EdlPane")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("MtkPane")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("MtkUsbOnlyRow")!.IsVisible);
+                    Assert.False(view.FindControl<StackPanel>("MtkPreloaderPane")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("SwitchSlotButton")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("ReadInfoButton")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("ShowAllPartitionsBox")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("EraseSelectedButton")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("AddRootBox")!.IsVisible);
+                    Assert.False(view.FindControl<Button>("ChooseRootPackageButton")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("DeleteCowBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("DisableVbmetaBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("EraseDataBox")!.IsVisible);
+                    Assert.False(view.FindControl<CheckBox>("RebootAfterBox")!.IsVisible);
+                    return Task.CompletedTask;
+                }
+                finally
+                {
+                    devices.SelectedDevice = null;
+                    window.Close();
+                }
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task UpdateModeVisibility_ModeIsolation_SwitchingMtkToEdl_HidesEveryMtkRow()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var devices = DeviceViewModel.EnsureInstance();
+                var view = new FlashView();
+                var window = new Window { Content = view, Width = 960, Height = 800 };
+                var mtkPane = view.FindControl<StackPanel>("MtkPane")!;
+                var usbRow = view.FindControl<StackPanel>("MtkUsbOnlyRow")!;
+                var preloaderPane = view.FindControl<StackPanel>("MtkPreloaderPane")!;
+                var edlPane = view.FindControl<StackPanel>("EdlPane")!;
+                try
+                {
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    devices.SelectedDevice = DeviceOf(DeviceProtocolKind.Mtk, DeviceTransportKind.Usb, "brom");
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.True(mtkPane.IsVisible);
+                    Assert.True(usbRow.IsVisible);
+                    Assert.False(edlPane.IsVisible);
+
+                    devices.SelectedDevice = DeviceOf(DeviceProtocolKind.Edl, DeviceTransportKind.Serial, "edl");
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.True(edlPane.IsVisible);
+                    Assert.False(mtkPane.IsVisible);
+                    Assert.False(usbRow.IsVisible);
+                    Assert.False(preloaderPane.IsVisible);
+
+                    devices.SelectedDevice = null;
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.False(edlPane.IsVisible);
+                    Assert.False(mtkPane.IsVisible);
+                    Assert.False(usbRow.IsVisible);
+                    Assert.False(preloaderPane.IsVisible);
+                    return Task.CompletedTask;
+                }
+                finally
+                {
+                    devices.SelectedDevice = null;
+                    window.Close();
+                }
+            }, TestContext.Current.CancellationToken);
+        }
+
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task UpdateModeVisibility_ModeIsolation_StaleScatter_EdlDeviceHidesMtkPaneUntilDeselected()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "flash-view-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            await File.WriteAllBytesAsync(Path.Combine(root, "boot.img"), [1, 2, 3],
+                TestContext.Current.CancellationToken);
+            var scatter = Path.Combine(root, "scatter.xml");
+            await File.WriteAllTextAsync(scatter, """
+                - general: MTK_PLATFORM_CFG
+                  info:
+                  - config_version: V2.1.0
+                    platform: MT6785
+                    project: test
+                    storage: EMMC
+                    boot_channel: test
+                    block_size: 0x20000
+                - partition_index: SYS2
+                  partition_name: boot
+                  file_name: boot.img
+                  is_download: true
+                  type: NORMAL_ROM
+                  linear_start_addr: 20480
+                  physical_start_addr: 20480
+                  partition_size: 2048
+                  region: EMMC_USER
+                  storage: HW_STORAGE_EMMC
+                  boundary_check: true
+                  is_reserved: false
+                  operation_type: UPDATE
+                  is_upgradable: true
+                  empty_boot_needed: false
+                  reserve: 0x00
+                """, TestContext.Current.CancellationToken);
+            Task dispatch;
+            using (ExecutionContext.SuppressFlow())
+            {
+                dispatch = fixture.DispatchAsync(async () =>
+                {
+                    var devices = DeviceViewModel.EnsureInstance();
+                    var view = new FlashView();
+                    var model = Assert.IsType<FlashViewModel>(view.DataContext);
+                    var window = new Window { Content = view, Width = 960, Height = 800 };
+                    var mtkPane = view.FindControl<StackPanel>("MtkPane")!;
+                    var edlPane = view.FindControl<StackPanel>("EdlPane")!;
+                    try
+                    {
+                        window.Show();
+                        Dispatcher.UIThread.RunJobs();
+                        Assert.False(mtkPane.IsVisible);
+
+                        model.PackagePath = scatter;
+                        view.FindControl<TextBox>("PackagePathBox")!.RaiseEvent(
+                            new RoutedEventArgs(InputElement.LostFocusEvent));
+                        var until = DateTime.UtcNow.AddSeconds(5);
+                        while (model.Partitions.Count == 0 && DateTime.UtcNow < until)
+                            await Task.Delay(20, TestContext.Current.CancellationToken);
+                        Assert.True(mtkPane.IsVisible);
+
+                        devices.SelectedDevice = DeviceOf(DeviceProtocolKind.Edl, DeviceTransportKind.Serial, "edl");
+                        Dispatcher.UIThread.RunJobs();
+                        Assert.True(edlPane.IsVisible);
+                        Assert.False(mtkPane.IsVisible);
+                        Assert.False(view.FindControl<TextBlock>("MtkScatterHintText")!.IsVisible);
+
+                        devices.SelectedDevice = null;
+                        Dispatcher.UIThread.RunJobs();
+                        Assert.False(edlPane.IsVisible);
+                        Assert.True(mtkPane.IsVisible);
+                        Assert.False(view.FindControl<TextBlock>("MtkScatterHintText")!.IsVisible);
+                    }
+                    finally
+                    {
+                        devices.SelectedDevice = null;
+                        window.Close();
+                    }
+                }, TestContext.Current.CancellationToken);
+            }
+
+            await dispatch.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static DeviceInfo DeviceOf(DeviceProtocolKind protocol, DeviceTransportKind transport, string state)
+        => new(new DetectedDevice
+        {
+            Key = $"{protocol}:{transport}:{state}",
+            Serial = "test",
+            Protocol = protocol,
+            Transport = transport,
+            State = state
+        });
+
+    private static string[] PublishedLines(string text)
+        => text.Split([Environment.NewLine], StringSplitOptions.RemoveEmptyEntries);
+
+    private static int LogLineCount(string text) => PublishedLines(text).Length;
+
+    private static string[] NewLogLines(string text, int publishedBefore)
+        => PublishedLines(text)[publishedBefore..];
 }

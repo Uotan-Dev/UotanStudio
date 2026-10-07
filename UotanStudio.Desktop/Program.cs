@@ -15,6 +15,19 @@ sealed class Program
     /// Process entry point that dispatches startup mode (headless MCP, CLI, companion MCP, GUI).
     /// <para>进程入口，分发启动模式（无头 MCP、CLI、伴随 MCP、GUI）。</para>
     /// </summary>
+    /// <param name="args">
+    /// Launch arguments; an empty array starts the GUI. Recognized forms are
+    /// <c>--managed-device-shell &lt;protocol&gt; &lt;serial&gt;</c>, <c>--mcp-headless</c>,
+    /// <c>--mcp</c>, <c>--open-screen-mirror &lt;serial&gt;</c>, and existing file paths, which the GUI
+    /// opens on startup.
+    /// <para>启动参数；空数组直接启动图形界面。可识别的形式包括
+    /// <c>--managed-device-shell &lt;协议&gt; &lt;序列号&gt;</c>、<c>--mcp-headless</c>、<c>--mcp</c>、
+    /// <c>--open-screen-mirror &lt;序列号&gt;</c>，以及由图形界面在启动时打开的既有文件路径。</para>
+    /// </param>
+    /// <returns>
+    /// 0 when the selected mode finishes or is cancelled, and 1 when a managed device-shell request fails.
+    /// <para>所选模式正常结束或被取消时返回 0；托管设备 shell 请求失败时返回 1。</para>
+    /// </returns>
     [STAThread]
     public static int Main(string[] args)
     {
@@ -75,7 +88,13 @@ sealed class Program
                 () => new UotanStudio.Services.Delivery.DeliveryKeyProvider()));
         }
 
-        App.StartupFiles = args.Where(File.Exists).ToArray();
+        int mirrorFlag = Array.IndexOf(args, "--open-screen-mirror");
+        if (mirrorFlag >= 0 && mirrorFlag + 1 < args.Length)
+        {
+            App.StartupScreenMirrorSerial = args[mirrorFlag + 1];
+        }
+
+        App.StartupFiles = [.. args.Where(File.Exists)];
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         return 0;
     }

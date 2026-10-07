@@ -5,8 +5,7 @@ public sealed record FlashManifest(string? CodeName, IReadOnlyList<FlashStep> St
 {
     /// <summary>Image-writing steps for consumers that only need their source files.</summary>
     public IReadOnlyList<(string Partition, string Path, long Length)> Images =>
-        Steps.Where(step => step.Command == "flash")
-            .Select(step => (step.Partition, step.ImagePath, step.ImageLength)).ToArray();
+        [.. Steps.Where(step => step.Command == "flash").Select(step => (step.Partition, step.ImagePath, step.ImageLength))];
 }
 
 /// <summary>Parses the legacy fastboot TXT image list without executing its contents as commands.</summary>

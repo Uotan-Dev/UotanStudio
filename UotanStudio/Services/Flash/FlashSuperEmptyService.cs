@@ -90,9 +90,9 @@ public static class FlashSuperEmptyService
             else
             {
                 SparseImageConverter.ResparseImage(image, Path.Combine(directory, "chunk_{0}.sparse"), maxDownload);
-                chunks = Directory.GetFiles(directory, "chunk_*.sparse")
+                chunks = [.. Directory.GetFiles(directory, "chunk_*.sparse")
                     .OrderBy(path => int.Parse(Path.GetFileNameWithoutExtension(path)["chunk_".Length..],
-                        System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                        System.Globalization.CultureInfo.InvariantCulture))];
                 if (chunks.Count == 0) throw new InvalidDataException("Super image resparse produced no chunks.");
             }
 

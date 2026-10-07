@@ -13,14 +13,11 @@ public static class FlashSuService
         if (device.Protocol != DeviceProtocolKind.Adb || device.State != "device") return false;
         try
         {
-            return await Task.Run(() =>
+            return await App.DeviceMonitor.RunAdbAsync(device, async adb =>
             {
-                return App.DeviceMonitor.RunAdb(device, adb =>
-                {
-                    var result = adb.ExecuteCommand("su -c id");
-                    return result.ExitCode == 0 &&
-                        Encoding.UTF8.GetString(result.Stdout).Contains("uid=0(", StringComparison.Ordinal);
-                }, ct);
+                var result = await adb.ExecuteCommandAsync("su -c id", ct).ConfigureAwait(false);
+                return result.ExitCode == 0 &&
+                    Encoding.UTF8.GetString(result.Stdout).Contains("uid=0(", StringComparison.Ordinal);
             }, ct).ConfigureAwait(false);
         }
         catch (Exception) when (!ct.IsCancellationRequested)
@@ -38,15 +35,15 @@ public static class FlashSuService
             throw new InvalidOperationException("ADB root flashing requires an online device and a valid partition.");
         if (!File.Exists(path) || new FileInfo(path).Length == 0)
             throw new FileNotFoundException("Image is missing or empty.", path);
-        return await Task.Run(() => App.DeviceMonitor.RunAdb(device, adb =>
+        return await App.DeviceMonitor.RunAdbAsync(device, async adb =>
         {
-            var root = adb.ExecuteCommand("su -c id");
+            var root = await adb.ExecuteCommandAsync("su -c id", ct).ConfigureAwait(false);
             if (root.ExitCode != 0 || !Encoding.UTF8.GetString(root.Stdout).Contains("uid=0(", StringComparison.Ordinal))
                 throw new UnauthorizedAccessException("Noninteractive su access is required.");
             var target = "/dev/block/bootdevice/by-name/" + partition;
-            var check = adb.ExecuteCommand($"su -c 'test -b {target}'");
+            var check = await adb.ExecuteCommandAsync($"su -c 'test -b {target}'", ct).ConfigureAwait(false);
             if (check.ExitCode != 0) throw new InvalidOperationException($"Block device not found: {target}");
-            var capacity = adb.ExecuteCommand($"su -c 'blockdev --getsize64 {target}'");
+            var capacity = await adb.ExecuteCommandAsync($"su -c 'blockdev --getsize64 {target}'", ct).ConfigureAwait(false);
             if (capacity.ExitCode != 0 ||
                 !long.TryParse(Encoding.UTF8.GetString(capacity.Stdout).Trim(),
                     NumberStyles.None, CultureInfo.InvariantCulture, out var bytes) ||
@@ -56,19 +53,20 @@ public static class FlashSuService
             try
             {
                 ct.ThrowIfCancellationRequested();
-                using (var sync = adb.CreateSyncClient())
-                    sync.Push(path, remote);
+                await using (var sync = adb.CreateSyncClient())
+                    await sync.PushAsync(path, remote, cancellationToken: ct).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
-                var result = adb.ExecuteCommand($"su -c 'dd if={remote} of={target} bs=1048576 conv=fsync'");
+                var result = await adb.ExecuteCommandAsync($"su -c 'dd if={remote} of={target} bs=1048576 conv=fsync'", ct)
+                    .ConfigureAwait(false);
                 if (result.ExitCode != 0)
                     throw new IOException($"Root dd failed: {Encoding.UTF8.GetString(result.Stderr).Trim()}");
                 return $"ADB su dd {partition}: OK";
             }
             finally
             {
-                try { adb.ExecuteCommand($"rm -f {remote}"); }
+                try { await adb.ExecuteCommandAsync($"rm -f {remote}", CancellationToken.None).ConfigureAwait(false); }
                 catch (Exception) { }
             }
-        }, ct), ct).ConfigureAwait(false);
+        }, ct).ConfigureAwait(false);
     }
 }

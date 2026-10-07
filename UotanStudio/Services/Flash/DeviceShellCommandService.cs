@@ -11,7 +11,7 @@ namespace UotanStudio.Services.Flash;
 public static class DeviceShellCommandService
 {
     /// <summary>Runs the command over the exact routed ADB target and returns its UTF-8 output.</summary>
-    public static Task<string> ExecuteAsync(DetectedDevice device, string command, CancellationToken ct)
+    public static async Task<string> ExecuteAsync(DetectedDevice device, string command, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
@@ -20,16 +20,13 @@ public static class DeviceShellCommandService
             throw new ArgumentException("An ADB target is required.", nameof(device));
         }
 
-        return Task.Run(() =>
+        ct.ThrowIfCancellationRequested();
+        return await App.DeviceMonitor.RunAdbAsync(device, async session =>
         {
-            ct.ThrowIfCancellationRequested();
-            return App.DeviceMonitor.RunAdb(device, session =>
-            {
-                using var stream = session.OpenServiceStream("shell:" + command);
-                using var memory = new MemoryStream();
-                stream.CopyTo(memory);
-                return Encoding.UTF8.GetString(memory.ToArray());
-            }, ct);
-        }, ct);
+            await using var stream = session.OpenServiceStream("shell:" + command);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory, ct).ConfigureAwait(false);
+            return Encoding.UTF8.GetString(memory.ToArray());
+        }, ct).ConfigureAwait(false);
     }
 }

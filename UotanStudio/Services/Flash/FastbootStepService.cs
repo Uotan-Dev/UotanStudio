@@ -37,14 +37,14 @@ public static class FastbootStepService
     public static IReadOnlyList<string> ParseCowPartitions(IReadOnlyDictionary<string, string> variables)
     {
         const string prefix = "is-logical:";
-        return variables.Where(pair => pair.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+        return [.. variables.Where(pair => pair.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
                                        pair.Value.Equals("yes", StringComparison.OrdinalIgnoreCase))
             .Select(pair => pair.Key[prefix.Length..])
             .Where(name => name.Length is > 4 and <= 128 &&
                            name.EndsWith("-cow", StringComparison.OrdinalIgnoreCase) &&
                            name.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-'))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Order(StringComparer.OrdinalIgnoreCase).ToArray();
+            .Order(StringComparer.OrdinalIgnoreCase)];
     }
 
     /// <summary>Returns failure as an exception; no external process or shell is used.</summary>

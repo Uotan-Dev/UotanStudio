@@ -226,7 +226,7 @@ public sealed class FlashService : IFlashService
                 Report(progress, "sideload", 5, "Rebooting into sideload mode... 正在重启进入 sideload 模式...");
                 RebootToSideload(adb);
                 await WaitForSideloadReconnectAsync(adb, ct).ConfigureAwait(false);
-                await Task.Run(() => PushSideloadFile(adb, otaPackagePath, progress, ct), ct).ConfigureAwait(false);
+                await PushSideloadFileAsync(adb, otaPackagePath, progress, ct).ConfigureAwait(false);
                 Report(progress, "sideload", 100, "Sideload complete. OTA 侧载完成。");
                 return new FlashResult
                 {
@@ -341,7 +341,7 @@ public sealed class FlashService : IFlashService
             }
         }
 
-        return names.ToList();
+        return [.. names];
     }
 
     /// <summary>
@@ -586,10 +586,9 @@ public sealed class FlashService : IFlashService
             var backupDir = Path.Combine(stateDir ?? Path.GetTempPath(), "backup");
             Directory.CreateDirectory(backupDir);
 
-            var invalid = Path.GetInvalidFileNameChars();
-            var safePartition = partition.IndexOfAny(invalid) < 0
-                ? partition
-                : string.Concat(partition.Select(c => invalid.Contains(c) ? '_' : c));
+            var safePartition = partition.AsSpan().ContainsAny(PathSearchValues.InvalidFileName)
+                ? string.Concat(partition.Select(c => PathSearchValues.IsInvalidFileNameChar(c) ? '_' : c))
+                : partition;
             var outPath = Path.Combine(backupDir, $"{safePartition}_{DateTime.Now:yyyyMMdd_HHmmss}.img");
 
             var backupProgress = new Progress<BackupProgress>(bp =>
@@ -1127,11 +1126,11 @@ public sealed class FlashService : IFlashService
                 Report(progress, partition, 5, "Rebooting into sideload mode... 正在重启进入 sideload 模式...");
                 RebootToSideload(adb);
                 await WaitForSideloadReconnectAsync(adb, ct).ConfigureAwait(false);
-                await Task.Run(() => PushSideloadFile(adb, imagePath, progress, ct), ct).ConfigureAwait(false);
+                await PushSideloadFileAsync(adb, imagePath, progress, ct).ConfigureAwait(false);
             }
             else
             {
-                await Task.Run(() => InstallOnline(adb, imagePath, progress, ct), ct).ConfigureAwait(false);
+                await InstallOnlineAsync(adb, imagePath, progress, ct).ConfigureAwait(false);
             }
 
             Report(progress, partition, 100, "ADB flash complete. ADB 刷写完成。");
@@ -1172,7 +1171,8 @@ public sealed class FlashService : IFlashService
     /// <param name="imagePath"><para>OTA 镜像路径。</para>The OTA image path.</param>
     /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    public static void PushSideloadFile(IAdbDeviceSession session, string imagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
+    /// <returns><para>推送完成或取消后的任务。</para>A task that completes once the push finished or was canceled.</returns>
+    public static async Task PushSideloadFileAsync(IAdbDeviceSession session, string imagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(session);
         if (!File.Exists(imagePath))
@@ -1180,12 +1180,12 @@ public sealed class FlashService : IFlashService
             throw new FileNotFoundException($"OTA image not found: {imagePath} OTA 镜像不存在。", imagePath);
         }
 
-        using var sync = session.CreateSyncClient();
-        using var fs = File.OpenRead(imagePath);
+        await using var sync = session.CreateSyncClient();
+        await using var fs = File.OpenRead(imagePath);
         var totalBytes = fs.Length;
-        using var reporting = new ProgressReportingStream(fs, totalBytes, written =>
+        await using var reporting = new ProgressReportingStream(fs, totalBytes, written =>
             Report(progress, "sideload", totalBytes > 0 ? (int)Math.Min(100, written * 100L / totalBytes) : 0, "Streaming OTA to /sideload/package.zip... 正在推送 OTA..."));
-        sync.PushStream(reporting, SideloadRemotePath);
+        await sync.PushStreamAsync(reporting, SideloadRemotePath, cancellationToken: ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1199,7 +1199,8 @@ public sealed class FlashService : IFlashService
     /// <param name="imagePath"><para>待安装镜像路径。</para>The image path to install.</param>
     /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    public static void InstallOnline(IAdbDeviceSession session, string imagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
+    /// <returns><para>推送与安装命令完成或取消后的任务。</para>A task that completes once the push and the install command finished or were canceled.</returns>
+    public static async Task InstallOnlineAsync(IAdbDeviceSession session, string imagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(session);
         ct.ThrowIfCancellationRequested();
@@ -1211,9 +1212,9 @@ public sealed class FlashService : IFlashService
         var fileName = Path.GetFileName(imagePath);
         var remotePath = "/data/local/tmp/" + fileName;
         Report(progress, "adb", 30, $"Pushing {fileName} to /data/local/tmp... 正在推送镜像...");
-        using (var sync = session.CreateSyncClient())
+        await using (var sync = session.CreateSyncClient())
         {
-            sync.Push(imagePath, remotePath);
+            await sync.PushAsync(imagePath, remotePath, cancellationToken: ct).ConfigureAwait(false);
         }
 
         var isApk = string.Equals(Path.GetExtension(fileName), ".apk", StringComparison.OrdinalIgnoreCase);
@@ -1221,7 +1222,7 @@ public sealed class FlashService : IFlashService
             ? $"pm install -r \"{remotePath}\""
             : $"apply update \"{remotePath}\"";
         Report(progress, "adb", 70, $"Running '{command}'... 正在执行安装命令...");
-        var result = session.ExecuteCommand(command);
+        var result = await session.ExecuteCommandAsync(command, ct).ConfigureAwait(false);
         if (result.ExitCode != 0)
         {
             var stderr = Encoding.UTF8.GetString(result.Stderr).Trim();

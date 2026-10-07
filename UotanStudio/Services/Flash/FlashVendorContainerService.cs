@@ -14,7 +14,7 @@ public static class FlashVendorContainerService
         if (Path.GetExtension(path).Equals(".nb0", StringComparison.OrdinalIgnoreCase))
         {
             var metadata = await Nb0Parser.ParseAsync(path, ct).ConfigureAwait(false);
-            entries = metadata.Entries.Select(entry => (entry.Name, entry.Size)).ToArray();
+            entries = [.. metadata.Entries.Select(entry => (entry.Name, entry.Size))];
         }
         else
         {

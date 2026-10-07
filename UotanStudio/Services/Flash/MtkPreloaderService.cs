@@ -26,6 +26,10 @@ internal static class MtkPreloaderService
 {
     private const string InternalFlashRegionName = "IFLASH";
 
+    /// <summary>Region name used in progress reports and dump records for boot-ROM captures.
+    /// <para>boot-ROM 采集在进度报告与转储记录中使用的区域名。</para></summary>
+    private const string BromRegionName = "BROM";
+
     /// <summary>Dumps a bounded internal-flash window to a file through the preloader command stage and
     /// publishes it atomically. <para>通过 preloader 命令阶段转储有界的内部闪存窗口并原子发布到文件。</para></summary>
     /// <remarks>
@@ -364,6 +368,137 @@ internal static class MtkPreloaderService
         RequireConfirmation(confirmed, "preloader jump-to-partition");
         ArgumentException.ThrowIfNullOrWhiteSpace(partitionName);
         return session.JumpPreloaderToPartitionAsync(partitionName, confirm: true, ct);
+    }
+
+    /// <summary>Asks a preloader running as download agent to hand control over to its bootloader stage.
+    /// <para>请求作为下载代理运行的 preloader 把控制权交给其 bootloader 阶段。</para></summary>
+    /// <remarks>
+    /// Jumping to the bootloader changes device state and is expected to end the preloader command
+    /// session, so it is refused before the session is touched unless <paramref name="confirmed"/> is
+    /// true, and the caller treats the transport as one-shot afterwards.
+    /// 跳转到 bootloader 会改变设备状态并预计结束 preloader 命令会话，因此除非 <paramref name="confirmed"/>
+    /// 为 true，否则在触碰会话之前即被拒绝；调用方其后应把该传输视为一次性。
+    /// </remarks>
+    /// <param name="session">A session sitting in the preloader command stage.
+    /// <para>处于 preloader 命令阶段的会话。</para></param>
+    /// <param name="confirmed">The explicit caller opt-in that authorizes the jump.
+    /// <para>授权本次跳转的显式调用方选择。</para></param>
+    /// <param name="ct">Cancellation honoured before the first device byte.
+    /// <para>在首个设备字节之前会响应的取消令牌。</para></param>
+    /// <returns>A task that completes once the session accepted the jump request.
+    /// <para>在会话接受跳转请求后完成的任务。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="session"/> is null.
+    /// <para><paramref name="session"/> 为 null。</para></exception>
+    /// <exception cref="UnauthorizedAccessException"><paramref name="confirmed"/> is false; no byte was sent.
+    /// <para><paramref name="confirmed"/> 为 false；未发送任何字节。</para></exception>
+    /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
+    /// <para>会话不处于 preloader 命令阶段。</para></exception>
+    /// <exception cref="MtkProtocolException">The status handshake was refused; the session faults.
+    /// <para>状态握手被拒绝；会话进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">Cancellation was requested at any cooperative point.
+    /// <para>在任一协作点请求了取消。</para></exception>
+    internal static Task JumpToBootLoaderAsync(MtkSession session, bool confirmed, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        RequireConfirmation(confirmed, "preloader jump-to-boot-loader");
+        return session.JumpPreloaderToBootLoaderAsync(confirm: true, ct);
+    }
+
+    /// <summary>Captures the documented boot-ROM window through the preloader command stage and publishes it
+    /// atomically. <para>通过 preloader 命令阶段采集已记载的 boot-ROM 窗口并原子发布。</para></summary>
+    /// <remarks>
+    /// <para>The window is streamed into a staging file named <c>&lt;destination&gt;.uotan-&lt;guid&gt;</c>
+    /// while its bytes are hashed incrementally. The destination is replaced by an atomic move only after
+    /// the staged byte count equals the requested window length, so a protocol fault or cancellation at any
+    /// step leaves any pre-existing image untouched and removes the staging file.</para>
+    /// <para>窗口被流式写进名为 <c>&lt;目标&gt;.uotan-&lt;guid&gt;</c> 的暂存文件，同时增量哈希其字节。只有暂存
+    /// 字节数与请求的窗口长度相等时，目标才被一次原子移动替换；因此任一步骤上的协议错误或取消都会保留既有镜像
+    /// 并删除暂存文件。</para>
+    /// <para>The read-only capture needs no confirmation; a faulted session must be rebuilt before the next
+    /// command. <para>只读采集无需确认；fault 后的会话必须在下一条命令前重建。</para></para>
+    /// </remarks>
+    /// <param name="session">A session sitting in the preloader command stage.
+    /// <para>处于 preloader 命令阶段的会话。</para></param>
+    /// <param name="destinationPath">Destination file inside an existing directory; replaced only on success.
+    /// <para>位于已存在目录中的目标文件；仅在成功时被替换。</para></param>
+    /// <param name="progress">Optional per-step progress; full progress is not publication.
+    /// <para>可选的按步进度；进度跑满并不等于发布成功。</para></param>
+    /// <param name="ct">Cancellation honoured before the first device byte and between every chunk.
+    /// <para>在首个设备字节之前以及每块之间都会响应的取消令牌。</para></param>
+    /// <param name="range">Optional step-aligned sub-window; <see langword="null"/> captures the whole
+    /// documented boot-ROM window. <para>可选的按步长对齐子窗口；<see langword="null"/> 采集完整的已记载
+    /// boot-ROM 窗口。</para></param>
+    /// <returns>The published image description. 已发布镜像的描述信息。</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="session"/> is null.
+    /// <para><paramref name="session"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="destinationPath"/> is empty or whitespace, or the
+    /// range is not step-aligned. <para><paramref name="destinationPath"/> 为空或仅空白，或范围未按步长对齐。</para></exception>
+    /// <exception cref="DirectoryNotFoundException">The destination directory does not exist.
+    /// <para>目标目录不存在。</para></exception>
+    /// <exception cref="IOException">The staged length did not match the requested window length, or
+    /// publication failed. <para>暂存长度与请求窗口长度不符，或发布失败。</para></exception>
+    /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
+    /// <para>会话不处于 preloader 命令阶段。</para></exception>
+    /// <exception cref="MtkProtocolException">A register exchange was invalid; the session faults.
+    /// <para>某次寄存器交换无效；会话进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">Cancellation was requested at any cooperative point; the
+    /// destination is left untouched. <para>在任一协作点请求了取消；目标保持不变。</para></exception>
+    internal static async Task<MtkPreloaderDumpRecord> DumpBromAsync(MtkSession session, string destinationPath,
+        IProgress<FlashProgress>? progress, CancellationToken ct, MtkDaMemoryRange? range = null)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
+
+        var destination = Path.GetFullPath(destinationPath);
+        var directory = Path.GetDirectoryName(destination)
+            ?? throw new DirectoryNotFoundException($"The dump destination '{destination}' has no parent directory.");
+        if (!Directory.Exists(directory))
+        {
+            throw new DirectoryNotFoundException($"The dump destination directory '{directory}' does not exist.");
+        }
+
+        var window = range ?? MtkDaMemoryRange.BromDump;
+        ct.ThrowIfCancellationRequested();
+        var stagingPath = destination + ".uotan-" + Guid.NewGuid().ToString("N");
+        long captured;
+        string sha256Hex;
+        progress?.Report(new FlashProgress(BromRegionName, 0,
+            $"Dumping the 0x{window.LengthBytes:X} boot-ROM bytes from 0x{window.StartAddress:X8}..."));
+        var stepProgress = progress is null
+            ? null
+            : new StepProgress(window.LengthBytes, BromRegionName, progress);
+        try
+        {
+            await using (var staging = new FileStream(stagingPath, FileMode.CreateNew, FileAccess.Write,
+                FileShare.None, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                await using var hashingDestination = new HashingWriteStream(staging, leaveOpen: true);
+                captured = await session
+                    .DumpPreloaderBromAsync(hashingDestination, window, stepProgress, ct)
+                    .ConfigureAwait(false);
+
+                if (captured != window.LengthBytes || staging.Length != window.LengthBytes)
+                {
+                    throw new IOException(
+                        $"The staged boot-ROM dump holds {staging.Length} bytes after a reported {captured} " +
+                        $"but {window.LengthBytes} were requested, so the destination was left untouched.");
+                }
+
+                sha256Hex = Convert.ToHexString(hashingDestination.GetHashAndReset());
+            }
+
+            ct.ThrowIfCancellationRequested();
+            File.Move(stagingPath, destination, overwrite: true);
+        }
+        finally
+        {
+            DiscardStaging(stagingPath);
+        }
+
+        progress?.Report(new FlashProgress(BromRegionName, 100,
+            $"Published {captured} bytes of the boot ROM with SHA-256 {sha256Hex}."));
+        return new MtkPreloaderDumpRecord(BromRegionName, window.StartAddress, window.LengthBytes,
+            MtkDaMemoryAccess.DumpStepBytes, captured, sha256Hex, destination);
     }
 
     /// <summary>Refuses a destructive preloader action before the session is touched when the caller has not

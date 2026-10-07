@@ -69,7 +69,7 @@ internal static class FlashEdlBundleService
                 throw new FileNotFoundException("EDL bundle image is missing.", entry.SourceFile);
             }
         }
-        return manifests.Select((manifest, index) => new FlashBundleOptions
+        return [.. manifests.Select((manifest, index) => new FlashBundleOptions
         {
             RawProgramPath = manifest,
             PatchPath = File.Exists(Path.Combine(directory,
@@ -87,7 +87,7 @@ internal static class FlashEdlBundleService
             Labels = labels is { Count: > 0 } selected ? [.. selected] : null,
             // Provisioning is a package-wide operation, after all program/patch manifests.
             SkipUfsProvision = skipUfsProvision || index != manifests.Length - 1
-        }).ToArray();
+        })];
     }
 
     private static async Task InspectAllAsync(EdlSession session, FlashBundleOptions[] options, CancellationToken ct)

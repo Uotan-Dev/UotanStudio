@@ -17,7 +17,7 @@ public sealed class FlashRemotePayloadService(HttpClient client)
         if (analysis.Entries.Any(entry => !FlashManifestReader.IsPartitionName(entry.Name) || entry.SizeBytes < 0) ||
             analysis.Entries.Select(entry => entry.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != analysis.Entries.Count)
             throw new InvalidDataException("The remote Payload contains invalid or duplicate partition names.");
-        return analysis.Entries.Select(entry => (entry.Name, checked((ulong)entry.SizeBytes))).ToArray();
+        return [.. analysis.Entries.Select(entry => (entry.Name, checked((ulong)entry.SizeBytes)))];
     }
 
     /// <summary>Publishes a new directory only when all requested images have been extracted.</summary>

@@ -7,7 +7,7 @@ namespace UotanStudio.Services.Flash;
 public static class RecoveryCleanService
 {
     /// <summary>Maps a clean mode to the recovery command and executes it, returning the recovery output.</summary>
-    public static Task<string> CleanAsync(DetectedDevice device, string mode, CancellationToken ct)
+    public static async Task<string> CleanAsync(DetectedDevice device, string mode, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(device);
         if (device.Protocol != DeviceProtocolKind.Adb)
@@ -21,16 +21,13 @@ public static class RecoveryCleanService
             _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Supported modes: factoryreset, formatdata.")
         };
 
-        return Task.Run(() =>
+        return await App.DeviceMonitor.RunAdbAsync(device, async session =>
         {
             ct.ThrowIfCancellationRequested();
-            return App.DeviceMonitor.RunAdb(device, session =>
-            {
-                using var stream = session.OpenServiceStream("shell:twrp " + command);
-                using var memory = new MemoryStream();
-                stream.CopyTo(memory);
-                return Encoding.UTF8.GetString(memory.ToArray());
-            }, ct);
-        }, ct);
+            await using var stream = session.OpenServiceStream("shell:twrp " + command);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory, ct).ConfigureAwait(false);
+            return Encoding.UTF8.GetString(memory.ToArray());
+        }, ct).ConfigureAwait(false);
     }
 }
