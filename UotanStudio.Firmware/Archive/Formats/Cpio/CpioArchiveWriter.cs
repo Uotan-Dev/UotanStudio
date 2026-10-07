@@ -14,6 +14,12 @@ namespace UotanStudio.Firmware.Archive.Formats.Cpio;
 /// </summary>
 public sealed class CpioArchiveWriter
 {
+    private const long MaximumBinaryNameBytes = ushort.MaxValue - 1L;
+
+    private const long MaximumOldAsciiNameBytes = 0x3FFFFL - 1L;
+
+    private const long MaximumNewAsciiNameBytes = uint.MaxValue - 1L;
+
     /// <summary>
     /// Writes all provided entries to a CPIO stream in the selected format.
     /// <para>将提供的全部条目以所选格式写入 CPIO 流。</para>
@@ -43,8 +49,8 @@ public sealed class CpioArchiveWriter
     /// <para>负载长度为负或与声明不符，或 HP 特殊设备包含数据。</para>
     /// </exception>
     /// <exception cref="ArchiveUnsupportedFeatureException">
-    /// A payload length is unrepresentable in the chosen format.
-    /// <para>负载长度无法被所选格式表示。</para>
+    /// A payload length or an entry name is unrepresentable in the chosen format.
+    /// <para>负载长度或条目名称无法被所选格式表示。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">
     /// A CRC payload cannot be spooled to scratch storage.
@@ -200,6 +206,7 @@ public sealed class CpioArchiveWriter
     private static void WriteNewAsciiLike(Stream stream, ArchiveEntry entry, ArchiveFormat format, WriteOptions options)
     {
         var nameBytes = Encoding.UTF8.GetBytes(entry.Name);
+        ValidateNameField(entry, nameBytes, MaximumNewAsciiNameBytes, format);
         var payloadLength = ResolvePayloadLength(entry, options);
         ValidatePayloadLength(entry, payloadLength, uint.MaxValue, format);
 
@@ -271,6 +278,7 @@ public sealed class CpioArchiveWriter
     private static void WriteOldAsciiLike(Stream stream, ArchiveEntry entry, ArchiveFormat format, WriteOptions options)
     {
         var nameBytes = Encoding.UTF8.GetBytes(entry.Name);
+        ValidateNameField(entry, nameBytes, MaximumOldAsciiNameBytes, format);
         var payloadLength = ResolvePayloadLength(entry, options);
         ValidatePayloadLength(entry, payloadLength, 0x1FFFFFFFFL, format);
 
@@ -313,6 +321,7 @@ public sealed class CpioArchiveWriter
     private static void WriteBinaryLike(Stream stream, ArchiveEntry entry, ArchiveFormat format, WriteOptions options)
     {
         var nameBytes = Encoding.UTF8.GetBytes(entry.Name);
+        ValidateNameField(entry, nameBytes, MaximumBinaryNameBytes, format);
         var payloadLength = ResolvePayloadLength(entry, options);
         ValidatePayloadLength(entry, payloadLength, uint.MaxValue, format);
 
@@ -490,6 +499,49 @@ public sealed class CpioArchiveWriter
         {
             throw new ArchiveUnsupportedFeatureException($"Entry '{entry.Name}' payload length {payloadLength} cannot be represented by {format}.");
         }
+    }
+
+    /// <summary>
+    /// Rejects a name that the selected dialect cannot record in its <c>namesc</c> field: two big-endian
+    /// bytes (65535) in the binary dialects, six octal digits (0777777) in the old ASCII dialects and
+    /// eight hexadecimal digits (4294967295) in newc and crc. The field counts the NUL terminator that
+    /// follows the name, so the measured UTF-8 byte length must stay one byte below the field capacity;
+    /// failing here keeps a header from advertising a record size that differs from the bytes actually
+    /// written, which would desynchronise every following record.
+    /// <para>当名称无法被所选方言的 <c>namesc</c> 字段记录时直接失败：binary 方言为两个大端字节（65535），
+    /// old ASCII 方言为六位八进制（0777777），newc 与 crc 为八位十六进制（4294967295）。该字段会计入名称之后的 NUL 终止符，
+    /// 因此实测的 UTF-8 字节长度必须比字段容量小一字节；在此失败可避免头部宣告的记录长度与实际写出的字节不一致，
+    /// 否则后续全部记录都会错位。</para>
+    /// </summary>
+    /// <param name="entry">
+    /// The entry being written; its name is quoted verbatim in the failure message.
+    /// <para>正在写入的条目；失败消息会原样引用其名称。</para>
+    /// </param>
+    /// <param name="nameBytes">
+    /// The UTF-8 encoding of the name emitted after the header.
+    /// <para>头部之后写出的名称的 UTF-8 编码。</para>
+    /// </param>
+    /// <param name="maximumNameBytes">
+    /// The dialect's name limit in UTF-8 bytes, already reduced by the counted NUL terminator.
+    /// <para>该方言允许的名称 UTF-8 字节上限，已减去被计入的 NUL 终止符。</para>
+    /// </param>
+    /// <param name="format">
+    /// The CPIO dialect whose field width is enforced.
+    /// <para>正在施加上限的 CPIO 方言。</para>
+    /// </param>
+    /// <exception cref="ArchiveUnsupportedFeatureException">
+    /// <paramref name="nameBytes"/> needs more bytes than <paramref name="maximumNameBytes"/>.
+    /// <para><paramref name="nameBytes"/> 的字节数超过 <paramref name="maximumNameBytes"/>。</para>
+    /// </exception>
+    private static void ValidateNameField(ArchiveEntry entry, byte[] nameBytes, long maximumNameBytes, ArchiveFormat format)
+    {
+        if (nameBytes.LongLength <= maximumNameBytes)
+        {
+            return;
+        }
+
+        throw new ArchiveUnsupportedFeatureException(
+            $"CPIO {format} entry name is not representable: {nameBytes.LongLength} UTF-8 bytes exceed the {maximumNameBytes}-byte name limit of the namesc field: '{entry.Name}'.");
     }
 
     private static FileStream CreatePayloadSpool(Stream source, long length, string entryName, bool probeEof)
