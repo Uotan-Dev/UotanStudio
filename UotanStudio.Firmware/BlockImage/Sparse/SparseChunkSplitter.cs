@@ -461,7 +461,7 @@ public static class SparseChunkSplitter
 
     private static void MergeSparse(SparseChunkSet set, string temporary, CancellationToken cancellationToken)
     {
-        var opened = new List<SparseFile>();
+        List<SparseFile> opened = new(set.Parts.Count);
         try
         {
             var mergedHeader = default(SparseHeader);

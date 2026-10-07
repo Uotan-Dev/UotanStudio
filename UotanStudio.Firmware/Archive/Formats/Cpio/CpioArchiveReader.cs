@@ -450,6 +450,7 @@ internal sealed class CpioArchiveReader
         };
     }
 
+    [System.Runtime.CompilerServices.SkipLocalsInit]
     private static (byte[] Data, Func<Stream>? Factory) ReadPayload(Stream stream, long length,
         CpioFileType fileType, ArchiveFormat format, uint expected, string name)
     {

@@ -469,6 +469,7 @@ public static class SparseReader
         }
     }
 
+    [System.Runtime.CompilerServices.SkipLocalsInit]
     private static void AppendZeros(Crc32? crc, long totalBytes, CancellationToken cancellationToken)
     {
         if (crc is null)

@@ -5325,27 +5325,6 @@ UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult.Missin
 UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult.MissingPartitions.init -> void
 UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult.OutputDirectory.get -> string!
 UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult.OutputDirectory.init -> void
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.<Clone>$() -> UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult!
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.BuildPropImported.get -> bool
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.BuildPropImported.init -> void
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.Deconstruct(out string! MovedRoot, out int MovedEntries, out int FileContextPrefixed, out int FileContextDropped, out System.Collections.Generic.IReadOnlyList<string!>! MetacharacterWarnings, out int FsConfigPrefixed, out int FsConfigDropped, out bool BuildPropImported) -> void
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.Equals(UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult? other) -> bool
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.FileContextDropped.get -> int
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.FileContextDropped.init -> void
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.FileContextPrefixed.get -> int
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.FileContextPrefixed.init -> void
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.FsConfigDropped.get -> int
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.FsConfigDropped.init -> void
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.FsConfigPrefixed.get -> int
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.FsConfigPrefixed.init -> void
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.HonorMyPartitionMergeResult(string! MovedRoot, int MovedEntries, int FileContextPrefixed, int FileContextDropped, System.Collections.Generic.IReadOnlyList<string!>! MetacharacterWarnings, int FsConfigPrefixed, int FsConfigDropped, bool BuildPropImported) -> void
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.MetacharacterWarnings.get -> System.Collections.Generic.IReadOnlyList<string!>!
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.MetacharacterWarnings.init -> void
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.MovedEntries.get -> int
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.MovedEntries.init -> void
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.MovedRoot.get -> string!
-UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.MovedRoot.init -> void
 UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult
 UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult.<Clone>$() -> UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult!
 UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult.Deconstruct(out System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.VendorFirmware.Workflow.SamsungMergedPartitionImage!>! MergedPartitions, out System.Collections.Generic.IReadOnlyList<string!>! SkippedPartitions) -> void
@@ -5918,9 +5897,6 @@ override UotanStudio.Firmware.VendorFirmware.Workflow.HarmonyMetadataRegeneratio
 override UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult.Equals(object? obj) -> bool
 override UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult.GetHashCode() -> int
 override UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult.ToString() -> string!
-override UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.Equals(object? obj) -> bool
-override UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.GetHashCode() -> int
-override UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.ToString() -> string!
 override UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult.Equals(object? obj) -> bool
 override UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult.GetHashCode() -> int
 override UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult.ToString() -> string!
@@ -6082,17 +6058,17 @@ static UotanStudio.Firmware.BlockImage.Sparse.SparseWriteOptions.operator ==(Uot
 static UotanStudio.Firmware.BootSecurity.Avb.AvbFooter.TryLoad(System.ReadOnlySpan<byte> imageData) -> UotanStudio.Firmware.BootSecurity.Avb.AvbFooter?
 static UotanStudio.Firmware.BootSecurity.Avb.AvbFooter.TryReadFile(string! path) -> UotanStudio.Firmware.BootSecurity.Avb.AvbFooter?
 static UotanStudio.Firmware.BootSecurity.Avb.AvbVBMetaImageHeader.FromBytes(System.ReadOnlySpan<byte> data) -> UotanStudio.Firmware.BootSecurity.Avb.AvbVBMetaImageHeader
-static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbResigner.ResignImageAsync(string! imagePath, string! outputPath, Org.BouncyCastle.Crypto.Parameters.RsaKeyParameters! key, UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbResignOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Avb.AvbSignResult!>!
+static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbResigner.ResignImageAsync(string! imagePath, string! outputPath, System.Security.Cryptography.RSA! key, UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbResignOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Avb.AvbSignResult!>!
 static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbRsaPublicKeyCodec.Export(System.Security.Cryptography.RSA! key) -> byte[]!
 static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbRsaPublicKeyCodec.ExportAsync(System.Security.Cryptography.RSA! key, string! outputPath, bool overwrite = true, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbRsaPublicKeyCodec.Import(System.ReadOnlySpan<byte> blob) -> System.Security.Cryptography.RSA!
 static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbRsaPublicKeyCodec.TryImport(System.ReadOnlySpan<byte> blob) -> System.Security.Cryptography.RSA?
-static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbSigner.AddHashFooterAsync(string! imagePath, string! partitionName, Org.BouncyCastle.Crypto.Parameters.RsaKeyParameters! key, string! outputPath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Avb.AvbSignResult!>!
-static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbSigner.AddHashtreeFooterAsync(string! imagePath, string! partitionName, Org.BouncyCastle.Crypto.Parameters.RsaKeyParameters! key, string! outputPath, byte[]? salt = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Avb.AvbSignResult!>!
+static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbSigner.AddHashFooterAsync(string! imagePath, string! partitionName, System.Security.Cryptography.RSA! key, string! outputPath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Avb.AvbSignResult!>!
+static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbSigner.AddHashtreeFooterAsync(string! imagePath, string! partitionName, System.Security.Cryptography.RSA! key, string! outputPath, byte[]? salt = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Avb.AvbSignResult!>!
 static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbSigner.DisableVbmetaVerificationAsync(string! vbmetaPath, string! outputPath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Avb.AvbSignResult!>!
-static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbSigner.LoadRsaPrivateKey(string! path) -> Org.BouncyCastle.Crypto.Parameters.RsaKeyParameters?
-static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbSigner.SignVbmetaAsync(string! vbmetaPath, Org.BouncyCastle.Crypto.Parameters.RsaKeyParameters! key, string! outputPath, System.Collections.Generic.IEnumerable<UotanStudio.Firmware.BootSecurity.Avb.AvbHashDescriptor!>! descriptors, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Avb.AvbSignResult!>!
-static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbSigner.SignVbmetaAsync<TDescriptor>(string! vbmetaPath, Org.BouncyCastle.Crypto.Parameters.RsaKeyParameters! key, string! outputPath, System.Collections.Generic.IReadOnlyList<TDescriptor!>! descriptors, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Avb.AvbSignResult!>!
+static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbSigner.LoadRsaPrivateKey(string! path) -> System.Security.Cryptography.RSA?
+static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbSigner.SignVbmetaAsync(string! vbmetaPath, System.Security.Cryptography.RSA! key, string! outputPath, System.Collections.Generic.IEnumerable<UotanStudio.Firmware.BootSecurity.Avb.AvbHashDescriptor!>! descriptors, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Avb.AvbSignResult!>!
+static UotanStudio.Firmware.BootSecurity.Avb.Signing.AvbSigner.SignVbmetaAsync<TDescriptor>(string! vbmetaPath, System.Security.Cryptography.RSA! key, string! outputPath, System.Collections.Generic.IReadOnlyList<TDescriptor!>! descriptors, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Avb.AvbSignResult!>!
 static UotanStudio.Firmware.BootSecurity.Avb.Verification.AvbChainVerifier.VerifyAsync(UotanStudio.Firmware.BootSecurity.Avb.Verification.AvbChainVerifyOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Avb.Verification.AvbChainVerifyResult!>!
 static UotanStudio.Firmware.BootSecurity.Avb.Verification.AvbSignatureVerifier.ExtractDescriptors(byte[]! vbmetaData) -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.BootSecurity.Avb.Verification.AvbDescriptorInfo!>!
 static UotanStudio.Firmware.BootSecurity.Avb.Verification.AvbSignatureVerifier.GetAlgorithmName(uint algorithmType) -> string!
@@ -6469,11 +6445,7 @@ static UotanStudio.Firmware.Patching.TextPatchResult.operator !=(UotanStudio.Fir
 static UotanStudio.Firmware.Patching.TextPatchResult.operator ==(UotanStudio.Firmware.Patching.TextPatchResult? left, UotanStudio.Firmware.Patching.TextPatchResult? right) -> bool
 static UotanStudio.Firmware.Patching.XmlPatch.Apply(string! text, string! xpath, string! namespaces, UotanStudio.Firmware.Patching.XmlPatchOperation operation, string! value, string! attributeName, int expectedMatches, bool checkOldValue, string! expectedOldValue) -> UotanStudio.Firmware.Patching.TextPatchResult!
 static UotanStudio.Firmware.Patching.XmlPatch.Query(string! text, string! xpath, string! namespaces, int expectedMatches) -> System.Collections.Generic.IReadOnlyList<string!>!
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadAscii(System.IO.Stream! stream, int length) -> string!
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt16BE(System.IO.Stream! stream) -> ushort
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32BE(System.IO.Stream! stream) -> uint
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64BE(System.IO.Stream! stream) -> ulong
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUntil(System.IO.Stream! stream, System.ReadOnlySpan<byte> endMarker, int maxBytes = 1048576) -> byte[]!
+
 static UotanStudio.Firmware.Core.Checksums.Adler32.Compute(System.ReadOnlySpan<byte> data) -> uint
 static UotanStudio.Firmware.Core.Checksums.Adler32.Compute(byte[]! data, int offset, int length) -> uint
 static UotanStudio.Firmware.Core.FileSystemByteProgress.ForStage(System.IProgress<UotanStudio.Firmware.Core.FileSystemByteProgress>? progress, UotanStudio.Firmware.Core.FileSystemWorkStage stage) -> System.IProgress<(long Processed, long Total)>!
@@ -6570,6 +6542,10 @@ static UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiVersionKey.operator !
 static UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiVersionKey.operator ==(UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiVersionKey? left, UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiVersionKey? right) -> bool
 static UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiVersionRegistry.GetKeysForVersion(ulong major, ulong minor, ulong patch) -> System.Collections.Generic.Dictionary<int, UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiVersionKey!>?
 static UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiVersionRegistry.RegisterVersion(ulong major, ulong minor, ulong patch, System.Collections.Generic.Dictionary<int, UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiVersionKey!>! keys) -> void
+UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionTypeExtensions.extension(UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionType)
+UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionTypeExtensions.extension(UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionType).GetDefaultFileName() -> string!
+UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionTypeExtensions.extension(UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionType).GetFileExtension() -> string!
+UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionTypeExtensions.extension(UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionType).GetRegionName() -> string!
 static UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionTypeExtensions.GetDefaultFileName(this UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionType type) -> string!
 static UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionTypeExtensions.GetFileExtension(this UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionType type) -> string!
 static UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionTypeExtensions.GetRegionName(this UotanStudio.Firmware.VendorFirmware.NTPi.Models.RegionType type) -> string!
@@ -6625,8 +6601,6 @@ static UotanStudio.Firmware.VendorFirmware.Workflow.HarmonyMetadataRegenerationR
 static UotanStudio.Firmware.VendorFirmware.Workflow.HarmonyMetadataRegenerationResult.operator ==(UotanStudio.Firmware.VendorFirmware.Workflow.HarmonyMetadataRegenerationResult? left, UotanStudio.Firmware.VendorFirmware.Workflow.HarmonyMetadataRegenerationResult? right) -> bool
 static UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult.operator !=(UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult? left, UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult? right) -> bool
 static UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult.operator ==(UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult? left, UotanStudio.Firmware.VendorFirmware.Workflow.HarmonySuperExtractionResult? right) -> bool
-static UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.operator !=(UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult? left, UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult? right) -> bool
-static UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult.operator ==(UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult? left, UotanStudio.Firmware.VendorFirmware.Workflow.HonorMyPartitionMergeResult? right) -> bool
 static UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult.operator !=(UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult? left, UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult? right) -> bool
 static UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult.operator ==(UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult? left, UotanStudio.Firmware.VendorFirmware.Workflow.SamsungIncrementalMergeResult? right) -> bool
 static UotanStudio.Firmware.VendorFirmware.Workflow.SamsungMergedPartitionImage.operator !=(UotanStudio.Firmware.VendorFirmware.Workflow.SamsungMergedPartitionImage? left, UotanStudio.Firmware.VendorFirmware.Workflow.SamsungMergedPartitionImage? right) -> bool

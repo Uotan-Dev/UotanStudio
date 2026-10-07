@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
@@ -229,6 +230,8 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider, I
             new UnpackOptions { SelectedEntries = partitions, Overwrite = false }, cancellationToken);
     }
 
+    private static readonly SearchValues<char> PartitionNameSeparators = SearchValues.Create(['/', '\\']);
+
     private async Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
@@ -245,7 +248,7 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider, I
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var name = partition.NameString;
-                if (string.IsNullOrWhiteSpace(name) || name.IndexOfAny(['/', '\\']) >= 0)
+                if (string.IsNullOrWhiteSpace(name) || name.AsSpan().ContainsAny(PartitionNameSeparators))
                     throw new InvalidDataException("Invalid LP partition name.");
                 if (selected is not null && !selected.Contains(name)) continue;
                 var target = FileExtraction.ResolvePath(outputDirectory, name + ".img");

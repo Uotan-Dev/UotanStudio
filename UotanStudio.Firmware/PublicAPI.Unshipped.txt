@@ -25,16 +25,32 @@ UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState.NotEquival
 UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState.NotEvaluated = 0 -> UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState
 UotanStudio.Firmware.BootSecurity.Avb.AvbVBMetaImageHeader.ToBytes() -> byte[]!
 UotanStudio.Firmware.BootSecurity.Avb.AvbVBMetaImageHeader.WriteTo(System.Span<byte> destination) -> void
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt16LE(System.IO.Stream! stream) -> ushort
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt16LE(byte[]! buffer, int offset) -> ushort
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32LE(System.IO.Stream! stream) -> uint
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32LE(byte[]! buffer, int offset) -> uint
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64LE(System.IO.Stream! stream) -> ulong
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64LE(byte[]! buffer, int offset) -> ulong
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32BE(byte[]! buffer, int offset) -> uint
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64BE(byte[]! buffer, int offset) -> ulong
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32BEAsync(System.IO.Stream! stream, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<uint>!
-static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64BEAsync(System.IO.Stream! stream, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<ulong>!
+UotanStudio.Firmware.Core.BinaryReaderHelpers.extension(System.IO.Stream!)
+UotanStudio.Firmware.Core.BinaryReaderHelpers.extension(System.IO.Stream!).ReadAscii(int length) -> string!
+UotanStudio.Firmware.Core.BinaryReaderHelpers.extension(System.IO.Stream!).ReadUInt16BE() -> ushort
+UotanStudio.Firmware.Core.BinaryReaderHelpers.extension(System.IO.Stream!).ReadUInt16LE() -> ushort
+UotanStudio.Firmware.Core.BinaryReaderHelpers.extension(System.IO.Stream!).ReadUInt32BE() -> uint
+UotanStudio.Firmware.Core.BinaryReaderHelpers.extension(System.IO.Stream!).ReadUInt32BEAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<uint>!
+UotanStudio.Firmware.Core.BinaryReaderHelpers.extension(System.IO.Stream!).ReadUInt32LE() -> uint
+UotanStudio.Firmware.Core.BinaryReaderHelpers.extension(System.IO.Stream!).ReadUInt64BE() -> ulong
+UotanStudio.Firmware.Core.BinaryReaderHelpers.extension(System.IO.Stream!).ReadUInt64BEAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<ulong>!
+UotanStudio.Firmware.Core.BinaryReaderHelpers.extension(System.IO.Stream!).ReadUInt64LE() -> ulong
+UotanStudio.Firmware.Core.BinaryReaderHelpers.extension(System.IO.Stream!).ReadUntil(System.ReadOnlySpan<byte> endMarker, int maxBytes = 1048576) -> byte[]!
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadAscii(this System.IO.Stream! stream, int length) -> string!
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt16BE(this System.IO.Stream! stream) -> ushort
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt16LE(this System.IO.Stream! stream) -> ushort
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32BE(this System.IO.Stream! stream) -> uint
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32BEAsync(this System.IO.Stream! stream, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<uint>!
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32LE(this System.IO.Stream! stream) -> uint
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64BE(this System.IO.Stream! stream) -> ulong
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64BEAsync(this System.IO.Stream! stream, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<ulong>!
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64LE(this System.IO.Stream! stream) -> ulong
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUntil(this System.IO.Stream! stream, System.ReadOnlySpan<byte> endMarker, int maxBytes = 1048576) -> byte[]!
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt16LE(this byte[]! buffer, int offset) -> ushort
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32BE(this byte[]! buffer, int offset) -> uint
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32LE(this byte[]! buffer, int offset) -> uint
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64BE(this byte[]! buffer, int offset) -> ulong
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64LE(this byte[]! buffer, int offset) -> ulong
 UotanStudio.Firmware.Core.UnpackOptions.MetadataOnly.get -> bool
 UotanStudio.Firmware.Core.UnpackOptions.MetadataOnly.set -> void
 UotanStudio.Firmware.Core.Repacking.IRepackMetadataProvider.SupportsMetadataOnlyUnpack.get -> bool
@@ -238,6 +254,7 @@ UotanStudio.Firmware.Executable.ExecutableUnsupportedFeatureException.Executable
 UotanStudio.Firmware.Core.Repacking.RepackMetadata.FileSystemPreservation.get -> System.Text.Json.Nodes.JsonObject?
 UotanStudio.Firmware.Core.Repacking.RepackMetadata.FileSystemPreservation.set -> void
 const UotanStudio.Firmware.Core.Repacking.RepackMetadata.FileName = "metadata.json" -> string!
+static UotanStudio.Firmware.Core.Repacking.RepackMetadata.StripSlotSuffix(string! partitionName) -> string!
 const UotanStudio.Firmware.DeviceTree.Dt.DtboFormat.ManifestFileName = "metadata.json" -> string!
 UotanStudio.Firmware.FileSystem.Fat.FatParser
 UotanStudio.Firmware.FileSystem.Fat.FatParser.BytesPerSector.get -> int
@@ -474,3 +491,58 @@ static UotanStudio.Firmware.Core.FormatDetector.MatchesProbeHints(string! path, 
 static UotanStudio.Firmware.Core.FormatDetector.TryGetProbeMatch(string! path, System.ReadOnlySpan<byte> header, out UotanStudio.Firmware.Core.IReadonlyFormatHandler? handler) -> bool
 UotanStudio.Firmware.Core.IO.AtomicPublish
 static UotanStudio.Firmware.Core.IO.AtomicPublish.Publish(string! stagedPath, string! targetPath) -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.MyPartitionMergeOptions() -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.MovedEntries.get -> int
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FileContextDropped.get -> int
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FileContextPrefixed.get -> int
+override UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.ToString() -> string!
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.MovedEntries.init -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FileContextDropped.init -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FileContextPrefixed.init -> void
+static UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.operator !=(UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult? left, UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult? right) -> bool
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.MetacharacterWarnings.get -> System.Collections.Generic.IReadOnlyList<string!>!
+static UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.operator ==(UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult? left, UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult? right) -> bool
+override UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.GetHashCode() -> int
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.MetacharacterWarnings.init -> void
+override UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.Equals(object? obj) -> bool
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FsConfigPrefixed.get -> int
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.Equals(UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult? other) -> bool
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FsConfigPrefixed.init -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.<Clone>$() -> UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult!
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.BuildPropImported.get -> bool
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.Deconstruct(out string! MovedRoot, out int MovedEntries, out int FileContextPrefixed, out int FileContextDropped, out System.Collections.Generic.IReadOnlyList<string!>! MetacharacterWarnings, out int FsConfigPrefixed, out int FsConfigDropped, out bool BuildPropImported, out bool FileContextsRebased, out bool FsConfigRebased, out bool PreservationFolded, out int FoldedInodeEntries) -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.BuildPropImported.init -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FileContextsRebased.get -> bool
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FileContextsRebased.init -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.PreservationFolded.get -> bool
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FsConfigRebased.get -> bool
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.MovedRoot.get -> string!
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.PreservationFolded.init -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.MovedRoot.init -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FsConfigRebased.init -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FoldedInodeEntries.get -> int
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FoldedInodeEntries.init -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FsConfigDropped.get -> int
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.FsConfigDropped.init -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeService
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeService.MyPartitionMergeService() -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeService.MergeAsync(string! myPartitionDirectory, string! targetSystemDirectory, string? configDirectory, UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions? options = null, UotanStudio.Firmware.Core.IFirmwareProgress? progress = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult!>!
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeResult.MyPartitionMergeResult(string! MovedRoot, int MovedEntries, int FileContextPrefixed, int FileContextDropped, System.Collections.Generic.IReadOnlyList<string!>! MetacharacterWarnings, int FsConfigPrefixed, int FsConfigDropped, bool BuildPropImported, bool FileContextsRebased, bool FsConfigRebased, bool PreservationFolded, int FoldedInodeEntries) -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.PartitionName.get -> string?
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.PartitionName.set -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.FsConfigRoot.get -> string!
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.MountPrefix.get -> string!
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.FsConfigRoot.set -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.MountPrefix.set -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.Overwrite.get -> bool
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.SkipMissingSidecars.get -> bool
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.Overwrite.set -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.SkipMissingSidecars.set -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.MyMetadataDirectory.set -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.MyMetadataDirectory.get -> string?
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.SystemMetadataDirectory.get -> string?
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.SystemPartitionName.set -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.SystemMetadataDirectory.set -> void
+UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.SystemPartitionName.get -> string?

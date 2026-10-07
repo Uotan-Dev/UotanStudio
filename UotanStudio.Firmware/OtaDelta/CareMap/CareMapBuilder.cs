@@ -128,7 +128,7 @@ public static class CareMapBuilder
             throw new InvalidDataException($"Sparse image uses a {sparse.Header.BlockSize} byte block size; care maps count {CareMap.BlockSize} byte blocks.");
         }
 
-        var ranges = new List<CareMapRange>();
+        List<CareMapRange> ranges = new(sparse.Chunks.Count);
         foreach (var chunk in sparse.Chunks)
         {
             cancellationToken.ThrowIfCancellationRequested();

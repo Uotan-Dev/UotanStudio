@@ -182,8 +182,8 @@ public static class ContainerEntryExtractor
             })).ConfigureAwait(false);
         progress?.Report(100);
 
-        var outputNames = new List<string>();
-        var outputPaths = new List<string>();
+        List<string> outputNames = new(partitionNames.Count);
+        List<string> outputPaths = new(partitionNames.Count);
         foreach (var name in partitionNames)
         {
             var path = Path.Combine(outputDir, name + ".img");
