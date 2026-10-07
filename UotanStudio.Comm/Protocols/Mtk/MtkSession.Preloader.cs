@@ -44,6 +44,9 @@ public sealed partial class MtkSession
     private const byte PreloaderExtendedCommand = 0xC8;
     private const byte PreloaderJumpBootLoaderCommand = 0xD6;
     private const byte PreloaderJumpToPartitionCommand = 0x71;
+    private const byte PreloaderSendPartitionDataCommand = 0x70;
+    private const byte PreloaderReadA2Command = 0xA2;
+    private const int PreloaderPartitionChunkBytes = 0x200;
     private const byte PreloaderCacheControlOperand = 0xB1;
     private const int PreloaderPartitionNameBytes = 64;
     private const int PreloaderPeekChunkBytes = 512;
@@ -578,6 +581,262 @@ public sealed partial class MtkSession
         {
             _operation.Release();
         }
+    }
+
+    /// <summary>Reads one register word through the A2 command the reference uses for IoT identity.
+    /// <para>通过参考实现用于 IoT 身份的 A2 命令读取一个寄存器字。</para></summary>
+    /// <remarks>
+    /// The framing mirrors <c>read_a2</c> (<c>mtkclient/Library/mtk_preloader.py:378-386</c>): the
+    /// command byte, the big-endian address and the big-endian word count (always one, exactly like
+    /// the reference default) are each echoed, then one big-endian reply word arrives. The exchange
+    /// carries no status words, and the reference reads only one word regardless of the count it
+    /// echoes, so no count parameter is exposed here.
+    /// 帧结构对应 <c>read_a2</c>（<c>mtkclient/Library/mtk_preloader.py:378-386</c>）：命令字节、大端地址与
+    /// 大端字数（恒为 1，与参考默认一致）逐一回显，随后到达一个大端回复字。该交互不含任何状态字，且参考
+    /// 无论回显的字数是多少都只读取一个字，因此此处不暴露字数参数。
+    /// </remarks>
+    /// <param name="address">The register address; the reference IoT identity registers live at
+    /// <c>0x80000000</c>, <c>0x80000008</c> and <c>0x8000000C</c>.
+    /// <para>寄存器地址；参考的 IoT 身份寄存器位于 <c>0x80000000</c>、<c>0x80000008</c> 与 <c>0x8000000C</c>。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>The reply word exactly as the big-endian wire delivered it.
+    /// <para>与大端线路交付一致的回复字。</para></returns>
+    /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
+    /// <para>会话不处于 preloader 命令阶段。</para></exception>
+    /// <exception cref="MtkProtocolException">An echo did not match or the reply was truncated; the
+    /// session faults. <para>某次回显不匹配或回复被截断；会话进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
+    public async Task<ushort> ReadPreloaderA2Async(uint address, CancellationToken cancellationToken = default)
+    {
+        RequirePreloaderCommandStage();
+        RequireDaMemoryWindow(address, sizeof(ushort));
+        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            try
+            {
+                await EchoAsync([PreloaderReadA2Command], cancellationToken).ConfigureAwait(false);
+                await EchoUInt32Async(address, cancellationToken).ConfigureAwait(false);
+                await EchoUInt32Async(1, cancellationToken).ConfigureAwait(false);
+                var reply = await ReadAsync(sizeof(ushort), _timeoutMs, cancellationToken).ConfigureAwait(false);
+                RecordSecurityEvidence("preloader-command", CommandOutcomeKind.Completed,
+                    $"preloader READ_A2 0x{address:X8}.");
+                return BinaryPrimitives.ReadUInt16BigEndian(reply);
+            }
+            catch
+            {
+                FaultPreloaderCommands();
+                throw;
+            }
+        }
+        finally
+        {
+            _operation.Release();
+        }
+    }
+
+    /// <summary>Reads consecutive thirty-two-bit register words and keeps the raw big-endian wire
+    /// bytes. <para>读取连续的三十二位寄存器字，并保留原始大端线路字节。</para></summary>
+    /// <remarks>
+    /// The framing mirrors <c>read</c> with <c>length == 32</c> and <c>direct=True</c>
+    /// (<c>mtkclient/Library/mtk_preloader.py:388-410</c> with
+    /// <c>Library/Connection/devicehandler.py:104-115</c>): the exchange is identical to
+    /// <see cref="ReadPreloader32Async"/>, but the reply bytes are returned in wire order without
+    /// re-packing each doubleword, so callers that need byte identity keep it exactly.
+    /// 帧结构对应 <c>length == 32</c> 且 <c>direct=True</c> 的 <c>read</c>
+    /// （<c>mtkclient/Library/mtk_preloader.py:388-410</c>，配合
+    /// <c>Library/Connection/devicehandler.py:104-115</c>）：交互与 <see cref="ReadPreloader32Async"/>
+    /// 相同，但回复字节按线路顺序原样返回、不重排双字，需要字节恒等的调用方可以精确保留。
+    /// </remarks>
+    /// <param name="address">The first doubleword address; words walk upward by four bytes.
+    /// <para>起始双字地址；字按四字节向上递增。</para></param>
+    /// <param name="dwordCount">The positive doubleword count, limited so one exchange stays within
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/> bytes. 正数双字数，其上限保证单次交换不超过
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/> 字节。</param>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>The payload bytes exactly as the wire delivered them.
+    /// <para>与线路交付一致的载荷字节。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">The doubleword count is not positive or the
+    /// window leaves the 32-bit address space; no byte was sent.
+    /// <para>双字数非正，或窗口越出 32 位地址空间；未发送任何字节。</para></exception>
+    /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
+    /// <para>会话不处于 preloader 命令阶段。</para></exception>
+    /// <exception cref="MtkProtocolException">An echo, status word or the payload was invalid; the
+    /// session faults. <para>回显、状态字或载荷无效；会话进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
+    public async Task<byte[]> ReadPreloader32DirectAsync(uint address, int dwordCount,
+        CancellationToken cancellationToken = default)
+    {
+        RequirePreloaderCommandStage();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dwordCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(dwordCount,
+            MtkDaMemoryAccess.MaximumWordLoopReadBytes / MtkDaMemoryAccess.RegisterCellBytes);
+        RequireDaMemoryWindow(address, checked(dwordCount * MtkDaMemoryAccess.RegisterCellBytes));
+        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            try
+            {
+                var payload = await ReadPreloaderWordsOwnedAsync(PreloaderRead32Command, address, dwordCount,
+                    MtkDaMemoryAccess.RegisterCellBytes, cancellationToken).ConfigureAwait(false);
+                RecordSecurityEvidence("preloader-command", CommandOutcomeKind.Completed,
+                    $"preloader READ32_DIRECT 0x{address:X8} x{dwordCount}.");
+                return payload;
+            }
+            catch
+            {
+                FaultPreloaderCommands();
+                throw;
+            }
+        }
+        finally
+        {
+            _operation.Release();
+        }
+    }
+
+    /// <summary>Pushes one partition data blob to a preloader running as DA through command 0x70.
+    /// <para>通过命令 0x70 把一个分区数据块推送到作为 DA 运行的 preloader。</para></summary>
+    /// <remarks>
+    /// <para>The framing mirrors <c>send_partition_data</c>
+    /// (<c>mtkclient/Library/mtk_preloader.py:511-530</c>): the opcode is echoed, the UTF-8 partition
+    /// name is truncated or null-padded to exactly 64 bytes and written without an echo check, the
+    /// big-endian payload length is written, one status word must arrive at or below <c>0x00FF</c>
+    /// before any payload byte, the payload streams in 0x200-byte chunks, and the exchange closes
+    /// with the big-endian xflash checksum — the little-endian doubleword sum with any trailing bytes
+    /// added individually.</para>
+    /// <para>帧结构对应 <c>send_partition_data</c>（<c>mtkclient/Library/mtk_preloader.py:511-530</c>）：
+    /// 回显操作码后，把 UTF-8 分区名截断或用 NUL 补齐到恰好 64 字节并直接写出（不校验回显），写出大端载荷
+    /// 长度，在发送任何载荷字节之前必须收到不超过 <c>0x00FF</c> 的状态字，载荷按 0x200 字节分块流出，最后
+    /// 以大端 xflash 校验和收尾——即小端双字之和，剩余字节逐个相加。</para>
+    /// <para>The reference adds the trailing bytes with a loop bound of <c>4 - (len % 4)</c>, which
+    /// over- or under-adds for lengths that are not two-mod-four; this path adds each remaining byte
+    /// once, which agrees exactly with the reference for every four-aligned payload. The reference
+    /// writes the checksum and returns without a completion status, so this path does not read one
+    /// either; the documented caller follows with the 0x71 jump-to-partition exchange.</para>
+    /// <para>参考用 <c>4 - (len % 4)</c> 的循环上限追加剩余字节，对非模 4 余 2 的长度会多加或漏加；本路径
+    /// 对每个剩余字节只加一次，对所有按四对齐的载荷与参考完全一致。参考写出校验和后直接返回、不读完成状态，
+    /// 因此本路径同样不读；已记载的调用方随后执行 0x71 跳转分区交互。</para>
+    /// </remarks>
+    /// <param name="partitionName">The partition name; its UTF-8 encoding is truncated or padded to
+    /// exactly 64 bytes. <para>分区名称；其 UTF-8 编码被截断或补齐到恰好 64 字节。</para></param>
+    /// <param name="data">The payload to push, positive and bounded by the download-agent image
+    /// ceiling. <para>要推送的载荷；须为正且不超过下载代理镜像上限。</para></param>
+    /// <param name="confirmWrite">The explicit caller opt-in that authorizes the push.
+    /// <para>授权本次推送的显式调用方选择。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>A task that completes after the checksum was written.
+    /// <para>在校验和写出后完成的任务。</para></returns>
+    /// <exception cref="UnauthorizedAccessException"><paramref name="confirmWrite"/> is
+    /// <see langword="false"/>; no byte was sent and the session keeps its stage.
+    /// <para><paramref name="confirmWrite"/> 为 <see langword="false"/>；未发送任何字节，会话保持原阶段。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="partitionName"/> is empty.
+    /// <para><paramref name="partitionName"/> 为空。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The payload is empty or exceeds the download-agent
+    /// image ceiling. <para>载荷为空或超过下载代理镜像上限。</para></exception>
+    /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
+    /// <para>会话不处于 preloader 命令阶段。</para></exception>
+    /// <exception cref="MtkProtocolException">An echo or the status was refused, or a write was
+    /// incomplete; the session faults. <para>回显或状态被拒绝，或写入不完整；会话进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
+    public async Task SendPreloaderPartitionDataAsync(string partitionName, ReadOnlyMemory<byte> data,
+        bool confirmWrite, CancellationToken cancellationToken = default)
+    {
+        RequirePreloaderCommandStage();
+        ArgumentException.ThrowIfNullOrEmpty(partitionName);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(data.Length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(data.Length, MaximumAgentLength);
+        RequireDaMemoryWriteConfirmation(confirmWrite, "preloader");
+        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            try
+            {
+                await SendPreloaderPartitionDataOwnedAsync(partitionName, data, cancellationToken)
+                    .ConfigureAwait(false);
+                RecordSecurityEvidence("preloader-command", CommandOutcomeKind.Completed,
+                    $"preloader send-partition-data {partitionName}: {data.Length} byte(s).");
+            }
+            catch
+            {
+                FaultPreloaderCommands();
+                throw;
+            }
+        }
+        finally
+        {
+            _operation.Release();
+        }
+    }
+
+    /// <summary>Runs the documented send-partition-data exchange after the caller confirmed the push.
+    /// <para>在调用方确认推送后执行已记载的 send-partition-data 交互。</para></summary>
+    /// <param name="partitionName">The validated partition name. 已校验的分区名称。</param>
+    /// <param name="data">The validated payload. 已校验的载荷。</param>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    private async Task SendPreloaderPartitionDataOwnedAsync(string partitionName, ReadOnlyMemory<byte> data,
+        CancellationToken cancellationToken)
+    {
+        await EchoAsync([PreloaderSendPartitionDataCommand], cancellationToken).ConfigureAwait(false);
+        await WriteAsync(EncodePreloaderPartitionName(partitionName), _timeoutMs, cancellationToken)
+            .ConfigureAwait(false);
+        var lengthField = new byte[sizeof(uint)];
+        BinaryPrimitives.WriteUInt32BigEndian(lengthField, (uint)data.Length);
+        await WriteAsync(lengthField, _timeoutMs, cancellationToken).ConfigureAwait(false);
+        await ReadStatusAsync("preloader partition data request", cancellationToken).ConfigureAwait(false);
+        var payload = System.Buffers.ArrayPool<byte>.Shared.Rent(data.Length);
+        try
+        {
+            data.CopyTo(payload);
+            for (var offset = 0; offset < data.Length; offset += PreloaderPartitionChunkBytes)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await WriteAsync(payload, offset, Math.Min(PreloaderPartitionChunkBytes, data.Length - offset),
+                    _timeoutMs, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(payload);
+        }
+
+        var checksumField = new byte[sizeof(uint)];
+        BinaryPrimitives.WriteUInt32BigEndian(checksumField, ComputeXflashChecksum(payload.AsSpan(0, data.Length)));
+        await WriteAsync(checksumField, _timeoutMs, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Composes the xflash checksum: the little-endian doubleword sum with any trailing
+    /// bytes added individually. <para>组合 xflash 校验和：小端双字之和，剩余字节逐个相加。</para></summary>
+    /// <param name="data">The payload to checksum. 要校验和的载荷。</param>
+    /// <returns>The 32-bit checksum word. 32 位校验和字。</returns>
+    private static uint ComputeXflashChecksum(ReadOnlySpan<byte> data)
+    {
+        uint checksum = 0;
+        var offset = 0;
+        for (; offset + sizeof(uint) <= data.Length; offset += sizeof(uint))
+        {
+            checksum += BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset, sizeof(uint)));
+        }
+
+        for (; offset < data.Length; offset++)
+        {
+            checksum += data[offset];
+        }
+
+        return checksum;
     }
 
     /// <summary>Disables the target watchdog with the chip-specific write sequence the reference defines.

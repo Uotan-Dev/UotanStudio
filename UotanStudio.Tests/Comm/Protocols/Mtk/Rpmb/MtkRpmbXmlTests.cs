@@ -271,10 +271,6 @@ public sealed class MtkRpmbXmlTests
         Assert.True(result.IsComplete);
     }
 
-    [Fact(Skip = "Requires a physical MTK eMMC/UFS device. Set UOTAN_TEST_MTK_USB_ID to run read-only probing.")]
-    public async Task ReadXmlRpmbDeviceBlobAsync_PhysicalDevice_ReportsFramesWithoutWriting() =>
-        await Task.CompletedTask;
-
     private static byte[] ExpectedCommand(string command)
     {
         var bytes = Encoding.UTF8.GetBytes(Prolog + command);

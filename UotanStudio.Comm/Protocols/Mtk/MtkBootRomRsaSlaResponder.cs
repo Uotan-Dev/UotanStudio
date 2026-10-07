@@ -1,8 +1,5 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using Org.BouncyCastle.Crypto.Encodings;
-using Org.BouncyCastle.Crypto.Engines;
-using Org.BouncyCastle.Security;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -108,9 +105,7 @@ internal sealed class MtkBootRomRsaSlaResponder : IMtkBootRomSlaResponder
                 }
                 message = wireChallenge.ToArray();
                 SwapWordBytes(message);
-                var encoding = new Pkcs1Encoding(new RsaBlindedEngine());
-                encoding.Init(true, DotNetUtilities.GetRsaKeyPair(parameters).Private);
-                response = encoding.ProcessBlock(message, 0, message.Length);
+                response = RsaTypeOneSignature.Sign(key, message);
                 if (response.Length != _modulus.Length)
                 {
                     throw new CryptographicException("The RSA response width does not match the selected key.");

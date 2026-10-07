@@ -176,4 +176,75 @@ public sealed partial class MtkSessionTests
 
         Assert.Equal(MtkSessionState.Faulted, session.State);
     }
+
+    [Fact]
+    public async Task GetXFlashDownloadAgentVersionAsync_TextReply_DecodesAsDelivered()
+    {
+        using var transport = new ScriptedCommTransport();
+        using var session = await CreateStageOneSessionAsync(transport);
+        EnqueueControlReply(transport, "2.24"u8.ToArray());
+        var before = transport.Writes.Count;
+
+        var version = await session.GetXFlashDownloadAgentVersionAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("2.24", version);
+        Assert.Equal(Convert.FromHexString("05000400"), transport.Writes[before + 3]);
+        Assert.Equal(MtkSessionState.XFlashStageOneReady, session.State);
+    }
+
+    [Fact]
+    public async Task GetXFlashDramTypeAsync_OpaqueReply_ReturnedUnchangedWithDocumentedCode()
+    {
+        using var transport = new ScriptedCommTransport();
+        using var session = await CreateStageOneSessionAsync(transport);
+        var reply = Convert.FromHexString("06000000");
+        EnqueueControlReply(transport, reply);
+        var before = transport.Writes.Count;
+
+        var dramType = await session.GetXFlashDramTypeAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(reply, dramType);
+        Assert.Equal(Convert.FromHexString("12000400"), transport.Writes[before + 3]);
+    }
+
+    [Theory]
+    [InlineData("06000400", "1A2B3C")]
+    [InlineData("0E000400", "0001")]
+    [InlineData("0F000400", "0E0A")]
+    [InlineData("15000400", "C0DE00")]
+    public async Task GetXFlashOpaqueReadQueries_DocumentedCodes_ReturnExactReplyBytes(string codeHex,
+        string replyHex)
+    {
+        using var transport = new ScriptedCommTransport();
+        using var session = await CreateStageOneSessionAsync(transport);
+        var reply = Convert.FromHexString(replyHex);
+        EnqueueControlReply(transport, reply);
+        var before = transport.Writes.Count;
+
+        var returned = codeHex switch
+        {
+            "06000400" => await session.GetXFlashExpireDataAsync(TestContext.Current.CancellationToken),
+            "0E000400" => await session.GetXFlashOtpLockStatusAsync(TestContext.Current.CancellationToken),
+            "0F000400" => await session.GetXFlashBatteryVoltageAsync(TestContext.Current.CancellationToken),
+            _ => await session.GetXFlashErrorDetailAsync(TestContext.Current.CancellationToken)
+        };
+
+        Assert.Equal(reply, returned);
+        Assert.Equal(Convert.FromHexString(codeHex), transport.Writes[before + 3]);
+        Assert.Equal(MtkSessionState.XFlashStageOneReady, session.State);
+    }
+
+    [Fact]
+    public async Task GetXFlashErrorDetailAsync_RejectedStatus_FaultsXFlash()
+    {
+        using var transport = new ScriptedCommTransport();
+        using var session = await CreateStageOneSessionAsync(transport);
+        EnqueueXFlashFrame(transport, new byte[4]);
+        EnqueueXFlashFrame(transport, [0x53, 0, 2, 0xC0]);
+
+        await Assert.ThrowsAsync<MtkProtocolException>(() =>
+            session.GetXFlashErrorDetailAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(MtkSessionState.Faulted, session.State);
+    }
 }

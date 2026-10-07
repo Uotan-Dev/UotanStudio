@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Text;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Mtk.Security;
 
@@ -6,8 +7,11 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 /// <summary>
 /// Extended device-control queries of the XFlash download agent: RAM inventory, random identifier,
-/// storage life percentage, expiry date and partition-table category.
-/// <para>XFlash 下载代理的扩展器件控制查询：内存清单、随机标识、存储寿命百分比、过期日期与分区表类别。</para>
+/// storage life percentage, expiry date and partition-table category, plus the DA-version,
+/// expire-data, OTP-lock, battery-voltage, DRAM-type and error-detail selectors catalogued by the
+/// reference parameter table.
+/// <para>XFlash 下载代理的扩展器件控制查询：内存清单、随机标识、存储寿命百分比、过期日期与分区表类别，
+/// 以及参考参数表登记的 DA 版本、过期数据、OTP 锁定、电池电压、DRAM 类型与错误详情选择器。</para>
 /// </summary>
 /// <remarks>
 /// <para>These are the read-only selectors catalogued by the reference dispatcher (device-control
@@ -30,6 +34,12 @@ public sealed partial class MtkSession
     private const uint XFlashStorageLifeCycleCheck = 0x080007;
     private const uint XFlashGetExpireDate = 0x040011;
     private const uint XFlashGetPartitionTableCategory = 0x040009;
+    private const uint XFlashGetDownloadAgentVersion = 0x040005;
+    private const uint XFlashGetExpireData = 0x040006;
+    private const uint XFlashGetOtpLockStatus = 0x04000E;
+    private const uint XFlashGetBatteryVoltage = 0x04000F;
+    private const uint XFlashGetDramType = 0x040012;
+    private const uint XFlashGetErrorDetail = 0x040015;
     private const int MaximumXFlashOpaqueDeviceControlBytes = 0x100;
     private const int XFlashDeviceControlWordBytes = 4;
 
@@ -168,6 +178,152 @@ public sealed partial class MtkSession
             "xflash-partition-category", DecodeXFlashPartitionTableCategory,
             category => $"Partition table category {category}.", cancellationToken);
 
+    /// <summary>Queries the download-agent build version string through the documented DA-version
+    /// control code. <para>通过已记载的 DA 版本控制码查询下载代理的版本字符串。</para></summary>
+    /// <remarks>
+    /// The reference decodes the reply as UTF-8 text (Library/DA/xflash/xflash_lib.py:384-397); the
+    /// reply is bounded to 256 bytes before allocation and kept as delivered text without further
+    /// interpretation.
+    /// 参考把该回复按 UTF-8 文本解码（Library/DA/xflash/xflash_lib.py:384-397）；回复在分配前被限制在
+    /// 256 字节以内，并按交付文本原样保留，不做进一步解释。
+    /// </remarks>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>The version text exactly as the agent delivered it.
+    /// <para>代理交付的版本文本原样内容。</para></returns>
+    /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
+    /// <para>未附加 XFlash 一阶段代理。</para></exception>
+    /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound;
+    /// the XFlash family faults. <para>某状态被拒绝或回复超限；XFlash 家族进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
+    public Task<string> GetXFlashDownloadAgentVersionAsync(CancellationToken cancellationToken = default) =>
+        QueryXFlashDeviceControlAsync(XFlashGetDownloadAgentVersion, MaximumXFlashOpaqueDeviceControlBytes,
+            "xflash-da-version", DecodeXFlashText, version => $"Download-agent version \"{version}\".",
+            cancellationToken);
+
+    /// <summary>Queries the expire-data control code and keeps the reply opaque.
+    /// <para>查询过期数据控制码，并将回复保持为不透明字节。</para></summary>
+    /// <remarks>
+    /// The reference defines the control code (Library/DA/xflash/xflash_param.py:23) without any
+    /// call site or layout, so the exact bytes are returned and recorded as evidence; the reply is
+    /// bounded to 256 bytes before allocation.
+    /// 参考只定义了该控制码（Library/DA/xflash/xflash_param.py:23），没有任何调用点或布局说明，因此这里
+    /// 返回并记录精确字节作为证据；回复在分配前被限制在 256 字节以内。
+    /// </remarks>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
+    /// <para>未附加 XFlash 一阶段代理。</para></exception>
+    /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound;
+    /// the XFlash family faults. <para>某状态被拒绝或回复超限；XFlash 家族进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
+    public Task<byte[]> GetXFlashExpireDataAsync(CancellationToken cancellationToken = default) =>
+        QueryXFlashDeviceControlAsync(XFlashGetExpireData, MaximumXFlashOpaqueDeviceControlBytes,
+            "xflash-expire-data", reply => reply, reply => $"{reply.Length} opaque bytes", cancellationToken);
+
+    /// <summary>Queries the OTP lock status through the documented control code.
+    /// <para>通过已记载的控制码查询 OTP 锁定状态。</para></summary>
+    /// <remarks>
+    /// The reference defines the control code (Library/DA/xflash/xflash_param.py:29) without any
+    /// call site or layout, so the exact bytes are returned and recorded as evidence; the reply is
+    /// bounded to 256 bytes before allocation.
+    /// 参考只定义了该控制码（Library/DA/xflash/xflash_param.py:29），没有任何调用点或布局说明，因此这里
+    /// 返回并记录精确字节作为证据；回复在分配前被限制在 256 字节以内。
+    /// </remarks>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
+    /// <para>未附加 XFlash 一阶段代理。</para></exception>
+    /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound;
+    /// the XFlash family faults. <para>某状态被拒绝或回复超限；XFlash 家族进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
+    public Task<byte[]> GetXFlashOtpLockStatusAsync(CancellationToken cancellationToken = default) =>
+        QueryXFlashDeviceControlAsync(XFlashGetOtpLockStatus, MaximumXFlashOpaqueDeviceControlBytes,
+            "xflash-otp-lock-status", reply => reply, reply => $"{reply.Length} opaque bytes", cancellationToken);
+
+    /// <summary>Queries the battery voltage reading through the documented control code.
+    /// <para>通过已记载的控制码查询电池电压读数。</para></summary>
+    /// <remarks>
+    /// The reference defines the control code (Library/DA/xflash/xflash_param.py:30) without any
+    /// call site or layout, so the exact bytes are returned and recorded as evidence without any
+    /// unit interpretation; the reply is bounded to 256 bytes before allocation.
+    /// 参考只定义了该控制码（Library/DA/xflash/xflash_param.py:30），没有任何调用点或布局说明，因此这里
+    /// 返回并记录精确字节作为证据，不做单位解释；回复在分配前被限制在 256 字节以内。
+    /// </remarks>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
+    /// <para>未附加 XFlash 一阶段代理。</para></exception>
+    /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound;
+    /// the XFlash family faults. <para>某状态被拒绝或回复超限；XFlash 家族进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
+    public Task<byte[]> GetXFlashBatteryVoltageAsync(CancellationToken cancellationToken = default) =>
+        QueryXFlashDeviceControlAsync(XFlashGetBatteryVoltage, MaximumXFlashOpaqueDeviceControlBytes,
+            "xflash-battery-voltage", reply => reply, reply => $"{reply.Length} opaque bytes", cancellationToken);
+
+    /// <summary>Queries the DRAM type through the documented control code.
+    /// <para>通过已记载的控制码查询 DRAM 类型。</para></summary>
+    /// <remarks>
+    /// The reference getter is commented out and keeps the reply as raw bytes
+    /// (Library/DA/xflash/xflash_lib.py:340-348), so no type enumeration is guessed here; the exact
+    /// bytes are returned and the reply is bounded to 256 bytes before allocation.
+    /// 参考 getter 处于注释状态并把回复保留为原始字节（Library/DA/xflash/xflash_lib.py:340-348），因此这里
+    /// 不猜测任何类型枚举，原样返回精确字节；回复在分配前被限制在 256 字节以内。
+    /// </remarks>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
+    /// <para>未附加 XFlash 一阶段代理。</para></exception>
+    /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound;
+    /// the XFlash family faults. <para>某状态被拒绝或回复超限；XFlash 家族进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
+    public Task<byte[]> GetXFlashDramTypeAsync(CancellationToken cancellationToken = default) =>
+        QueryXFlashDeviceControlAsync(XFlashGetDramType, MaximumXFlashOpaqueDeviceControlBytes,
+            "xflash-dram-type", reply => reply, reply => $"{reply.Length} opaque bytes", cancellationToken);
+
+    /// <summary>Queries the download-agent error detail through the documented control code.
+    /// <para>通过已记载的控制码查询下载代理的错误详情。</para></summary>
+    /// <remarks>
+    /// The reference defines the control code (Library/DA/xflash/xflash_param.py:33) without any
+    /// call site or layout, so the exact bytes are returned and recorded as evidence; the reply is
+    /// bounded to 256 bytes before allocation.
+    /// 参考只定义了该控制码（Library/DA/xflash/xflash_param.py:33），没有任何调用点或布局说明，因此这里
+    /// 返回并记录精确字节作为证据；回复在分配前被限制在 256 字节以内。
+    /// </remarks>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
+    /// <para>未附加 XFlash 一阶段代理。</para></exception>
+    /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound;
+    /// the XFlash family faults. <para>某状态被拒绝或回复超限；XFlash 家族进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
+    public Task<byte[]> GetXFlashErrorDetailAsync(CancellationToken cancellationToken = default) =>
+        QueryXFlashDeviceControlAsync(XFlashGetErrorDetail, MaximumXFlashOpaqueDeviceControlBytes,
+            "xflash-error-detail", reply => reply, reply => $"{reply.Length} opaque bytes", cancellationToken);
+
     private async Task<T> QueryXFlashDeviceControlAsync<T>(uint controlCode, int maximumPayload,
         string evidencePhase, Func<byte[], T> decode, Func<T, string> describe,
         CancellationToken cancellationToken)
@@ -210,6 +366,12 @@ public sealed partial class MtkSession
 
         return BinaryPrimitives.ReadUInt32LittleEndian(reply);
     }
+
+    /// <summary>Decodes one device-control reply as the UTF-8 text the reference renders.
+    /// <para>按参考渲染方式把一个器件控制回复解码为 UTF-8 文本。</para></summary>
+    /// <param name="reply">The exact reply bytes. 精确的回复字节。</param>
+    /// <returns>The decoded text. 解码后的文本。</returns>
+    private static string DecodeXFlashText(byte[] reply) => Encoding.UTF8.GetString(reply);
 
     private static MtkPartitionTableCategory DecodeXFlashPartitionTableCategory(byte[] reply)
     {

@@ -237,5 +237,6 @@ public sealed class MtkCommandInterfacePolicyTests
             0xFC, 0x8A, 0, 0xCA, 1, 0, 2, 0, 0,
             0xD8, 0, 0, 0, 0x17, 0, 0
         ]);
+        transport.Enqueue([0, 0, 0, 0]);
     }
 }

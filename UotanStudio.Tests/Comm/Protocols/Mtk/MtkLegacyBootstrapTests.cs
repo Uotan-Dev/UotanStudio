@@ -34,8 +34,8 @@ public sealed partial class MtkSessionTests
         Assert.Contains(transport.Writes, bytes => bytes.SequenceEqual(Convert.FromHexString("05FE0008007007FFFF010000000002010200")));
         Assert.Contains(transport.Writes, bytes => bytes.SequenceEqual(Convert.FromHexString("400000000000001000000004")));
         Assert.Contains(transport.Writes, bytes => bytes.SequenceEqual(new byte[] { 0xEE, 0xEE, 0xEE, 0xEE }));
-        Assert.Equal(1, transport.Writes.Count(bytes => bytes.SequenceEqual(new byte[] { 0xFE })));
-        Assert.Equal(1, transport.Writes.Count(bytes => bytes.SequenceEqual(new byte[] { 0xFF })));
+        Assert.Equal(4, transport.Writes.Count(bytes => bytes.SequenceEqual(new byte[] { 0xFE })));
+        Assert.Equal(2, transport.Writes.Count(bytes => bytes.SequenceEqual(new byte[] { 0xFF })));
         using var exclusive = File.Open(options.LoaderPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         await session.ShutdownLegacyAsync(MtkLegacyShutdownMode.PowerOff, TestContext.Current.CancellationToken);
         Assert.Equal(MtkSessionState.LegacyShutdownAcknowledged, session.State);
@@ -357,6 +357,7 @@ public sealed partial class MtkSessionTests
             0x5F, 0xF5, 0xAF, 0xFA, 0xFD, (byte)(hardwareCode >> 8), (byte)hardwareCode, 0, 0,
             0xFC, 0x8A, 0, 0xCA, 1, 0, 2, 0, 0, 0xD8, 0, 0, 0, 0x17, 0, 0
         ]);
+        transport.Enqueue([0, 0, 0, 0]);
         transport.Enqueue([0xFE, 0x05]);
         transport.Enqueue(Convert.FromHexString("D7002000000000000800000002000008000000D5002000000000"));
         transport.Enqueue([failure == "sync" ? (byte)0xCF : (byte)0xC0]);

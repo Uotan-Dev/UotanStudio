@@ -145,15 +145,4 @@ public sealed partial class MtkSessionTests
         Assert.False(transport.IsConnected);
     }
 
-    [Fact(Skip = "Requires a physical Legacy-NAND device. Set UOTAN_TEST_MTK_USB_ID to run read-only probing.")]
-    public async Task LegacyNandRealDeviceProbe_ReadOnlyGeometryAndBadBlockInventory_SucceedsOnHardware() =>
-        await Task.CompletedTask;
-
-    [Fact(Skip = "Requires a physical Legacy-NOR device. Set UOTAN_TEST_MTK_USB_ID to run read-only probing.")]
-    public async Task LegacyNorRealDeviceProbe_ReadOnlyGeometryAndBusyPolling_SucceedsOnHardware() =>
-        await Task.CompletedTask;
-
-    [Fact(Skip = "Requires a physical MTK device with an authorized shutdown slot. Set UOTAN_TEST_MTK_USB_ID and UOTAN_TEST_ALLOW_REBOOT to run.")]
-    public async Task LegacyShutdownRealDeviceProbe_PowerOffAcknowledgement_ReturnsToBootRom() =>
-        await Task.CompletedTask;
 }

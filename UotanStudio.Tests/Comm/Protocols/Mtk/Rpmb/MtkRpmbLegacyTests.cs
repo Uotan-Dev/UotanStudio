@@ -172,9 +172,6 @@ public sealed class MtkRpmbLegacyTests
         Assert.Equal(MtkSessionState.Bootloader, session.State);
     }
 
-    [Fact(Skip = "Requires a physical Legacy eMMC device. Set UOTAN_TEST_MTK_USB_ID to run read-only probing.")]
-    public async Task ReadLegacyRpmbAsync_PhysicalDevice_DeliversRpmbPartitionBytes() => await Task.CompletedTask;
-
     private sealed class ProgressCollector(List<long> values) : IProgress<long>
     {
         public void Report(long value) => values.Add(value);

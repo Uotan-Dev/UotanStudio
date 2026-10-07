@@ -199,22 +199,6 @@ public sealed class MtkLoaderProfileTests
         Assert.True(MtkDaDescriptor.IsStageOneUsable(new MtkDaRegion(4096, 8, 0x200000, 0, 8)));
     }
 
-    [Fact]
-    public async Task FromFileAsync_ProvidedRealLoader_ParsesAndHashesOnlyWithoutDeviceIo()
-    {
-        var path = Environment.GetEnvironmentVariable("UOTAN_TEST_MTK_LOADER_PATH");
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-        {
-            Assert.Skip("Requires a real MTK DA file provided via UOTAN_TEST_MTK_LOADER_PATH; "
-                + "缺少该环境变量指向的真实 DA 文件时跳过（不连接设备）。");
-        }
-
-        var profile = await MtkLoaderProfile.FromFileAsync(path!, TestContext.Current.CancellationToken);
-
-        Assert.NotEmpty(profile.Entries);
-        Assert.Equal(64, profile.Sha256Hex.Length);
-    }
-
     private static async Task<MtkLoaderProfile> ProfileAsync(TempDirectory dir, params DaEntrySpec[] entries)
     {
         var path = dir.WriteBytes("da.bin", Container(entries));

@@ -131,6 +131,11 @@ public sealed partial class MtkSession
             RequireState(MtkSessionState.Bootloader);
             var device = DeviceInfo ?? throw new InvalidOperationException(
                 "Query the boot identity before requesting a bypass.");
+            if (options.EnforceCrash && device.SerialLinkAuthenticationRequired && device.Meid is null)
+            {
+                await SubmitEnforcedCrashSequenceAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             var profile = MtkBromChipTable.Find(device.HardwareCode) ?? throw new NotSupportedException(
                 $"The reference chip table records no Boot ROM sites for hardware code 0x{device.HardwareCode:X4}; no exploit family is attempted.");
             var family = options.Family ?? SelectSoleDocumentedFamily(profile);
@@ -181,6 +186,77 @@ public sealed partial class MtkSession
         {
             _operation.Release();
         }
+    }
+
+    /// <summary>Submits the documented download-agent crash exchanges when the Boot ROM serial-link
+    /// authentication blocks the ordinary path and no MEID was obtained.
+    /// <para>当 Boot ROM 串行链路认证阻断常规路径且未取得 MEID 时，提交已记载的下载代理 crash 交互。</para></summary>
+    /// <remarks>
+    /// <para>This mirrors the reference <c>crasher</c> decision (<c>mtkclient/Library/mtk_class.py:169</c>)
+    /// restricted to the explicit host-side opt-in: the reference crashes whenever it is not in Boot
+    /// ROM or has no MEID, while this path only submits the exchanges when the caller set
+    /// <see cref="MtkBypassOptions.EnforceCrash"/>, the queried target configuration demands serial-link
+    /// authentication and no MEID was answered. The three documented modes are submitted in reference
+    /// order; the sequence stops at the first mode after which the target stops answering, which is
+    /// the observable success signal of a crash.</para>
+    /// <para>此处对应参考 <c>crasher</c> 的判定（<c>mtkclient/Library/mtk_class.py:169</c>），但限定为显式的
+    /// 主机侧选择：参考在不在 Boot ROM 或没有 MEID 时一律 crash，而本路径只在调用方设置了
+    /// <see cref="MtkBypassOptions.EnforceCrash"/>、查询到的目标配置要求串行链路认证且没有应答 MEID 时才提交
+    /// 交互。三个已记载模式按参考顺序提交；目标在某个模式之后停止应答即停止序列——这是 crash 生效的可观测
+    /// 成功信号。</para>
+    /// <para>The exchanges reuse the exact implementations behind <c>CrashDaAsync</c>; the public method
+    /// cannot be called from here because the bypass core already holds the operation semaphore and a
+    /// crash by definition ends the session. Whatever the target answered, the session faults and the
+    /// caller must reconnect and repeat the bypass, exactly like the reference reconnects between
+    /// crash attempts.</para>
+    /// <para>这些交互复用 <c>CrashDaAsync</c> 背后的同一实现；公开方法无法从此处调用，因为绕过核心已持有
+    /// 操作信号量，且 crash 按定义会终结会话。无论目标答了什么，会话都会进入 fault，调用方必须重新连接并
+    /// 重复绕过，与参考在 crash 尝试之间重新连接的行为一致。</para>
+    /// </remarks>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>A task that completes with the session faulted; the method never returns normally.
+    /// <para>会话进入 fault 后完成的任务；该方法从不正常返回。</para></returns>
+    /// <exception cref="InvalidOperationException">Always raised after the exchanges were submitted;
+    /// the session is faulted and a reconnect is required.
+    /// <para>交互提交之后总是抛出；会话已进入 fault，需要重新连接。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    private async Task SubmitEnforcedCrashSequenceAsync(CancellationToken cancellationToken)
+    {
+        var submitted = new List<string>();
+        foreach (var mode in new[] { MtkDaCrashMode.Dasend1, MtkDaCrashMode.Daread, MtkDaCrashMode.Dasend2 })
+        {
+            MtkDaCrashResult result;
+            try
+            {
+                result = mode switch
+                {
+                    MtkDaCrashMode.Dasend1 => await CrashDasend1OwnedAsync(cancellationToken).ConfigureAwait(false),
+                    MtkDaCrashMode.Daread => await CrashDareadOwnedAsync(cancellationToken).ConfigureAwait(false),
+                    _ => await CrashDasend2OwnedAsync(cancellationToken).ConfigureAwait(false)
+                };
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                submitted.Add($"{mode} (stopped answering: {error.Message})");
+                break;
+            }
+
+            submitted.Add(mode.ToString());
+            if (!result.TrailingExchangeCompleted)
+            {
+                break;
+            }
+        }
+
+        RecordSecurityEvidence("enforce-crash", CommandOutcomeKind.Completed,
+            $"The enforce-crash sequence was submitted: {string.Join("; ", submitted)}. The session must be " +
+            "re-established before the bypass can be retried.");
+        _state = MtkSessionState.Faulted;
+        throw new InvalidOperationException(
+            "The enforce-crash sequence was submitted because the Boot ROM serial-link authentication blocks " +
+            "the path and no MEID was obtained; reconnect and repeat the bypass on a new session.");
     }
 
     /// <summary>Selects the only exploit family whose recorded registers are complete for this chip.
@@ -263,7 +339,11 @@ public sealed partial class MtkSession
             BinaryPrimitives.ReadUInt16BigEndian(versions),
             BinaryPrimitives.ReadUInt16BigEndian(versions.AsSpan(2)),
             BinaryPrimitives.ReadUInt16BigEndian(versions.AsSpan(4)),
-            BinaryPrimitives.ReadUInt32BigEndian(configuration));
+            BinaryPrimitives.ReadUInt32BigEndian(configuration),
+            DeviceInfo?.BlVersion,
+            DeviceInfo?.BromVersion,
+            DeviceInfo?.Meid,
+            DeviceInfo?.Socid);
         DeviceInfo = refreshed;
         _state = MtkSessionState.Bootloader;
         return refreshed;

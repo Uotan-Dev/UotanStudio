@@ -12,12 +12,28 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <para>由命令 FC 返回的软件修订版本。</para></param>
 /// <param name="TargetConfiguration">The unmodified target security bitfield.
 /// <para>未经修改的目标安全位字段。</para></param>
+/// <param name="BlVersion">The bootloader version byte reported by command FE, or null when the
+/// target did not answer the query.
+/// <para>由命令 FE 上报的 bootloader 版本字节；目标未应答查询时为 null。</para></param>
+/// <param name="BromVersion">The Boot ROM version byte reported by command FF, or null when the
+/// target did not answer the query.
+/// <para>由命令 FF 上报的 Boot ROM 版本字节；目标未应答查询时为 null。</para></param>
+/// <param name="Meid">The media device identifier reported by command E1, or null when the target
+/// did not report one.
+/// <para>由命令 E1 上报的媒体设备标识；目标未上报时为 null。</para></param>
+/// <param name="Socid">The secure on-chip identifier reported by command E7, or null when the
+/// target did not report one.
+/// <para>由命令 E7 上报的安全片上标识；目标未上报时为 null。</para></param>
 public sealed record MtkDeviceInfo(
     ushort HardwareCode,
     ushort HardwareSubCode,
     ushort HardwareVersion,
     ushort SoftwareVersion,
-    uint TargetConfiguration)
+    uint TargetConfiguration,
+    byte? BlVersion = null,
+    byte? BromVersion = null,
+    byte[]? Meid = null,
+    byte[]? Socid = null)
 {
     /// <summary>Gets whether secure boot is enabled.
     /// <para>获取是否已启用安全启动。</para></summary>

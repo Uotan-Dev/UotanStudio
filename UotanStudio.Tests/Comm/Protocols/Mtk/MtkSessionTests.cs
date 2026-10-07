@@ -27,7 +27,12 @@ public partial class MtkSessionTests
         Assert.True(info.DownloadAgentAuthenticationRequired);
         Assert.True(info.RootCertificateRequired);
         Assert.Equal(MtkSessionState.Bootloader, session.State);
-        Assert.Equal(new byte[] { 0xA0, 0x0A, 0x50, 0x05, 0xFD, 0xFC, 0xD8 }, transport.Writes.SelectMany(bytes => bytes));
+        Assert.Equal((byte)0, info.BlVersion);
+        Assert.Equal((byte)0, info.BromVersion);
+        Assert.Null(info.Meid);
+        Assert.Null(info.Socid);
+        Assert.Equal(new byte[] { 0xA0, 0x0A, 0x50, 0x05, 0xFD, 0xFC, 0xD8, 0xFE, 0xFF, 0xFE, 0xFE },
+            transport.Writes.SelectMany(bytes => bytes));
     }
 
     [Fact]
@@ -98,7 +103,7 @@ public partial class MtkSessionTests
 
         Assert.Equal((ushort)0x1D0D, error.Status);
         Assert.Equal(0, image.Position);
-        Assert.Equal(11, transport.Writes.Count);
+        Assert.Equal(15, transport.Writes.Count);
         Assert.Equal(MtkSessionState.Faulted, session.State);
     }
 
@@ -135,8 +140,8 @@ public partial class MtkSessionTests
 
         await session.UploadDownloadAgentAsync(image, 0x200000, 0x20000, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(0x20000, transport.Writes.Skip(11).Sum(bytes => bytes.Length));
-        Assert.All(transport.Writes.Skip(11), bytes => Assert.InRange(bytes.Length, 1, 1024));
+        Assert.Equal(0x20000, transport.Writes.Skip(15).Sum(bytes => bytes.Length));
+        Assert.All(transport.Writes.Skip(15), bytes => Assert.InRange(bytes.Length, 1, 1024));
         Assert.Equal(MtkSessionState.AgentUploaded, session.State);
     }
 
@@ -192,7 +197,7 @@ public partial class MtkSessionTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             session.UploadDownloadAgentAsync(image, 0x200000, 8, cancellationToken: cancellation.Token));
 
-        Assert.Equal(8, transport.Writes.Count);
+        Assert.Equal(12, transport.Writes.Count);
         Assert.Equal(MtkSessionState.Faulted, session.State);
     }
 
@@ -390,6 +395,8 @@ public partial class MtkSessionTests
         {
             transport.Enqueue(wire);
         }
+
+        transport.Enqueue([0, 0, 0, 0]);
     }
 
     private sealed class FragmentedSource(byte[] bytes) : MemoryStream(bytes)

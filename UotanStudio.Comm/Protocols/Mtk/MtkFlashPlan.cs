@@ -141,7 +141,7 @@ public sealed partial class MtkFlashPlan : IDisposable
     /// succeeds and never mutated during execution.
     /// <para>每个物理范围对应一项，稀疏 DONT_CARE 空洞已剔除；准备成功后即固定，执行期间保持恒定。</para>
     /// </value>
-    public IReadOnlyList<MtkFlashOperation> Operations { get; private set; } = Array.Empty<MtkFlashOperation>();
+    public IReadOnlyList<MtkFlashOperation> Operations { get; private set; } = [];
     /// <summary>
     /// Gets the checked sum of actual write/erase bytes, excluding readback and sparse holes.
     /// <para>获取实际写入/擦除字节的防溢出累加和，不含回读与稀疏空洞。</para>

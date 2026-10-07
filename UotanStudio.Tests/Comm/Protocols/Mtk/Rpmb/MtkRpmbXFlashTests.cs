@@ -442,7 +442,4 @@ public sealed class MtkRpmbXFlashTests
         Assert.True(result.IsComplete);
     }
 
-    [Fact(Skip = "Requires a physical MTK eMMC/UFS device. Set UOTAN_TEST_MTK_USB_ID to run read-only probing.")]
-    public async Task ReadXFlashRpmbFramesAsync_PhysicalDevice_ReportsGeometryWithoutWriting() =>
-        await Task.CompletedTask;
 }

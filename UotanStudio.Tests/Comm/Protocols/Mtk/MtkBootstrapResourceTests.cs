@@ -50,7 +50,7 @@ public partial class MtkSessionTests
             transport, options, TestContext.Current.CancellationToken));
 
         Assert.Equal(0, calls);
-        Assert.Equal(7, transport.Writes.Count);
+        Assert.Equal(11, transport.Writes.Count);
         Assert.Equal(1, transport.DisposeCount);
     }
 
@@ -117,7 +117,7 @@ public partial class MtkSessionTests
             BootResourceProvider = new BootResourceProvider((device, kind, token) =>
             {
                 Assert.Equal(0x766, device.HardwareCode);
-                Assert.Equal(7, transport.Writes.Count);
+                Assert.Equal(11, transport.Writes.Count);
                 token.ThrowIfCancellationRequested();
                 calls.Add(kind);
                 var stream = new MemoryStream([1, 2, 3, 4, 5, 6, 7, 8]);
@@ -131,9 +131,9 @@ public partial class MtkSessionTests
         Assert.Equal(order, calls);
         Assert.Equal(MtkSessionState.XFlashStorageReady, session.State);
         Assert.All(streams, stream => Assert.False(stream.CanRead));
-        Assert.Equal(new byte[] { authenticationFirst ? (byte)0xE2 : (byte)0xE0 }, transport.Writes[7]);
-        Assert.Equal(new byte[] { authenticationFirst ? (byte)0xE0 : (byte)0xE2 }, transport.Writes[10]);
-        Assert.Equal(new byte[] { 0xD7 }, transport.Writes[13]);
+        Assert.Equal(new byte[] { authenticationFirst ? (byte)0xE2 : (byte)0xE0 }, transport.Writes[11]);
+        Assert.Equal(new byte[] { authenticationFirst ? (byte)0xE0 : (byte)0xE2 }, transport.Writes[14]);
+        Assert.Equal(new byte[] { 0xD7 }, transport.Writes[17]);
     }
 
     [Fact]
@@ -289,7 +289,7 @@ public partial class MtkSessionTests
         await Assert.ThrowsAnyAsync<Exception>(() => MtkXFlashBootstrap.InitializeAsync(
             transport, options, TestContext.Current.CancellationToken));
 
-        Assert.Equal(7, transport.Writes.Count);
+        Assert.Equal(11, transport.Writes.Count);
         Assert.All(streams, stream => Assert.False(stream.CanRead));
         Assert.Equal(1, transport.DisposeCount);
     }
@@ -317,7 +317,7 @@ public partial class MtkSessionTests
             transport, options, TestContext.Current.CancellationToken));
 
         Assert.Equal(0x1D0Du, error.Status);
-        Assert.Equal(9, transport.Writes.Count);
+        Assert.Equal(13, transport.Writes.Count);
         Assert.Equal(2, streams.Count);
         Assert.All(streams, stream => Assert.False(stream.CanRead));
         Assert.Equal(1, transport.DisposeCount);
@@ -345,7 +345,7 @@ public partial class MtkSessionTests
             transport, options, cancellation.Token));
 
         Assert.False(stream.CanRead);
-        Assert.Equal(7, transport.Writes.Count);
+        Assert.Equal(11, transport.Writes.Count);
         Assert.Equal(1, transport.DisposeCount);
     }
 

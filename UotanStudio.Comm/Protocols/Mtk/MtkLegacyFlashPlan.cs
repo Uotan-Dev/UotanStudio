@@ -100,7 +100,7 @@ public sealed class MtkLegacyFlashPlan : IDisposable
     /// <value>One entry per extent, fixed once preparation succeeds.
     /// <para>每个范围对应一项；准备成功后即固定。</para></value>
     public IReadOnlyList<MtkLegacyFlashOperation> Operations { get; private set; } =
-        Array.Empty<MtkLegacyFlashOperation>();
+        [];
 
     /// <summary>Gets the checked sum of planned write and erase bytes.
     /// <para>获取计划写入与擦除字节的防溢出累加和。</para></summary>

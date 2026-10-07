@@ -55,6 +55,23 @@ public sealed record MtkBypassOptions
     /// </value>
     public bool AllowUnknownVar1Brute { get; init; }
 
+    /// <summary>Gets whether the bypass entry may auto-run the documented download-agent crash
+    /// sequence when the Boot ROM serial-link authentication blocks the path and no MEID was obtained.
+    /// <para>获取当 Boot ROM 串行链路认证阻断路径且未取得 MEID 时，绕过入口是否可以自动运行已记载的
+    /// 下载代理 crash 序列。</para></summary>
+    /// <value>
+    /// <see langword="false"/> by default: no crash frame is ever sent without this opt-in. When it is
+    /// set and the queried identity reports serial-link authentication with no MEID, the bypass entry
+    /// mirrors the reference <c>crasher</c> (<c>mtkclient/Library/mtk_class.py:169</c>) and submits the
+    /// crash exchanges; the target then stops answering and the session faults, so the caller must
+    /// reconnect and repeat the bypass.
+    /// <para>默认为 <see langword="false"/>：没有该选择时绝不会发送任何 crash 帧。该选择置位且查询到的身份
+    /// 报告串行链路认证要求、同时没有 MEID 时，绕过入口会对应参考的 <c>crasher</c>
+    /// （<c>mtkclient/Library/mtk_class.py:169</c>）提交 crash 交互；随后目标停止应答且会话进入 fault，
+    /// 调用方必须重新连接并重复绕过。</para>
+    /// </value>
+    public bool EnforceCrash { get; init; }
+
     /// <summary>Gets the exploit family to run.
     /// <para>获取要运行的漏洞家族。</para></summary>
     /// <value>

@@ -111,7 +111,7 @@ public partial class MtkSessionTests
         {
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 MtkXFlashBootstrap.InitializeAsync(transport, options, TestContext.Current.CancellationToken));
-            Assert.Equal(7, transport.Writes.Count);
+            Assert.Equal(11, transport.Writes.Count);
             Assert.Equal(1, transport.DisposeCount);
         }
     }
@@ -145,7 +145,7 @@ public partial class MtkSessionTests
 
         Assert.Equal(0x1D0Du, error.Status);
         Assert.Equal(1, transport.DisposeCount);
-        Assert.Equal(11, transport.Writes.Count);
+        Assert.Equal(15, transport.Writes.Count);
     }
 
     [Fact]

@@ -11,9 +11,6 @@ public sealed partial class MtkSessionTests
     private const byte PreloaderRead32 = 0xD1;
     private const byte PreloaderWrite32 = 0xD4;
 
-    public static bool PreloaderHardwareEnabled =>
-        Environment.GetEnvironmentVariable("UOTAN_MTK_PRELOADER") == "1";
-
     [Fact]
     public async Task ReadPreloader32Async_KnownWindow_SendsBigEndianEchoOrderAndKeepsWireOrder()
     {
@@ -442,19 +439,6 @@ public sealed partial class MtkSessionTests
 
         Assert.Equal(before, transport.Writes.Count);
         Assert.Equal(MtkSessionState.Bootloader, session.State);
-    }
-
-    [Fact(Skip = "Requires UOTAN_MTK_PRELOADER=1 and a 0E8D:2000 preloader endpoint; read-only probe only.",
-        SkipUnless = nameof(PreloaderHardwareEnabled))]
-    public async Task ReadPreloader32Async_PhysicalPreloaderEndpoint_ReadsChipIdWindow()
-    {
-        var port = Environment.GetEnvironmentVariable("UOTAN_MTK_PRELOADER_PORT") ?? "COM3";
-        using var session = await MtkSession.OpenSerialAsync(port,
-            cancellationToken: TestContext.Current.CancellationToken);
-        var values = await session.ReadPreloader16Async(0x8000_0008, 1,
-            TestContext.Current.CancellationToken);
-
-        Assert.Single(values);
     }
 
     private static async Task<MtkSession> CreatePreloaderSessionAsync(ScriptedCommTransport transport,

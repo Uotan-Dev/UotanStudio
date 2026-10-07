@@ -122,11 +122,15 @@ internal static class MtkRpmbTestHarness
         return session;
     }
 
-    internal static void EnqueueIdentity(ScriptedCommTransport transport) => transport.Enqueue([
-        0x5F, 0xF5, 0xAF, 0xFA,
-        0xFD, 0x07, 0x66, 0, 0,
-        0xFC, 0x8A, 0, 0xCA, 1, 0, 2, 0, 0,
-        0xD8, 0, 0, 0, 0x17, 0, 0]);
+    internal static void EnqueueIdentity(ScriptedCommTransport transport)
+    {
+        transport.Enqueue([
+            0x5F, 0xF5, 0xAF, 0xFA,
+            0xFD, 0x07, 0x66, 0, 0,
+            0xFC, 0x8A, 0, 0xCA, 1, 0, 2, 0, 0,
+            0xD8, 0, 0, 0, 0x17, 0, 0]);
+        transport.Enqueue([0, 0, 0, 0]);
+    }
 
     internal static byte[] LegacyEmmcGeometry(long rpmbBytes)
     {

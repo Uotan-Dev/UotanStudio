@@ -333,6 +333,7 @@ public sealed partial class MtkSession : IProtocolSession
                 await EchoAsync([0xD8], cancellationToken).ConfigureAwait(false);
                 var configuration = await ReadAsync(6, _timeoutMs, cancellationToken).ConfigureAwait(false);
                 CheckStatus(BinaryPrimitives.ReadUInt16BigEndian(configuration.AsSpan(4)), "target configuration query");
+                var identity = await QueryBootIdentityOwnedAsync(cancellationToken).ConfigureAwait(false);
 
                 ThrowIfDisposed();
                 DeviceInfo = new MtkDeviceInfo(
@@ -340,7 +341,11 @@ public sealed partial class MtkSession : IProtocolSession
                     BinaryPrimitives.ReadUInt16BigEndian(versions),
                     BinaryPrimitives.ReadUInt16BigEndian(versions.AsSpan(2)),
                     BinaryPrimitives.ReadUInt16BigEndian(versions.AsSpan(4)),
-                    BinaryPrimitives.ReadUInt32BigEndian(configuration));
+                    BinaryPrimitives.ReadUInt32BigEndian(configuration),
+                    identity.BootLoaderVersion,
+                    identity.BromVersion,
+                    identity.Meid,
+                    identity.Socid);
                 _state = MtkSessionState.Bootloader;
                 return DeviceInfo;
             }
@@ -578,6 +583,27 @@ public sealed partial class MtkSession : IProtocolSession
 
     private Task WriteAsync(byte[] bytes, int timeoutMs, CancellationToken cancellationToken)
         => WriteAsync(bytes, bytes.Length, timeoutMs, cancellationToken);
+
+    /// <summary>Writes one buffer slice with the shared incomplete-write guard.
+    /// <para>使用共用的不完整写入守卫写出一个缓冲区切片。</para></summary>
+    /// <param name="bytes">The source buffer. 源缓冲区。</param>
+    /// <param name="offset">The slice start. 切片起始。</param>
+    /// <param name="count">The slice length. 切片长度。</param>
+    /// <param name="timeoutMs">The time budget. 时间预算。</param>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    private async Task WriteAsync(byte[] bytes, int offset, int count, int timeoutMs,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ThrowIfDisposed();
+        var written = await Transport.WriteAsync(bytes, offset, count, timeoutMs, cancellationToken)
+            .ConfigureAwait(false);
+        if (written != count)
+        {
+            throw new MtkProtocolException("Incomplete boot protocol write; the session cannot be resumed.");
+        }
+    }
 
     private async Task WriteAsync(byte[] bytes, int count, int timeoutMs, CancellationToken cancellationToken)
     {
