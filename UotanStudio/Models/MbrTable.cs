@@ -322,7 +322,7 @@ public static class MbrTable
         }
 
         var diskSignature = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(DiskSignatureOffset));
-        var partitions = new List<MbrPartition>();
+        List<MbrPartition> partitions = [];
         ulong? extendedStart = null;
 
         for (var i = 0; i < MaxPrimaryPartitions; i++)

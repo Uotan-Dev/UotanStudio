@@ -19,6 +19,10 @@
     <x:String x:Key="NewProject_ImagesPlaceholder">支持多选IMG或选择ZIP、Super.img、Payload.bin 等格式文件</x:String>
     <x:String x:Key="NewProject_UnpackImages">解包为镜像</x:String>
     <x:String x:Key="NewProject_UnpackFully">完全解包</x:String>
+    <x:String x:Key="NewProject_MergeMyPartitions">合并my_分区到system</x:String>
+    <x:String x:Key="NewProject_MergeMyPartitionsTip">解包完成后把 my_* 分区目录树并入 system，并对分区自带的 file_contexts 与 fs_config 改基；合并成功后移除对应的 my_* 镜像。需要同时勾选“解包为镜像”和“完全解包”，且所选内容里的 system 与同槽位 my_* 分区成对；system_a 只并入 my_product_a，不动 my_product_b。</x:String>
+    <x:String x:Key="NewProject_MergingMyPartitions">正在合并 {0} 到 system…</x:String>
+    <x:String x:Key="NewProject_CleaningMergedPartitions">正在移除已合并的 my_* 镜像…</x:String>
     <x:String x:Key="NewProject_ImageName">镜像名称</x:String>
     <x:String x:Key="NewProject_ImageFormat">镜像格式</x:String>
     <x:String x:Key="NewProject_Create">创建</x:String>

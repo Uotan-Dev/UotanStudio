@@ -19,6 +19,10 @@
     <x:String x:Key="NewProject_ImagesPlaceholder">Select multiple IMG files, or ZIP, Super.img, Payload.bin and other formats</x:String>
     <x:String x:Key="NewProject_UnpackImages">Unpack to images</x:String>
     <x:String x:Key="NewProject_UnpackFully">Fully unpack</x:String>
+    <x:String x:Key="NewProject_MergeMyPartitions">Merge my_ partitions into system</x:String>
+    <x:String x:Key="NewProject_MergeMyPartitionsTip">After unpacking, my_* partition trees are merged into the system tree and their own file_contexts and fs_config are rebased; merged my_* images are removed afterwards. Requires both unpack options and a selection pairing system with at least one my_* partition of the same slot; system_a merges my_product_a and leaves my_product_b alone.</x:String>
+    <x:String x:Key="NewProject_MergingMyPartitions">Merging {0} into system…</x:String>
+    <x:String x:Key="NewProject_CleaningMergedPartitions">Removing merged my_ images…</x:String>
     <x:String x:Key="NewProject_ImageName">Image name</x:String>
     <x:String x:Key="NewProject_ImageFormat">Image format</x:String>
     <x:String x:Key="NewProject_Create">Create</x:String>

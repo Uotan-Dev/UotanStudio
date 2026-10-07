@@ -448,6 +448,7 @@
     <x:String x:Key="MirrorProperty_SourceColor">Source color space</x:String>
     <x:String x:Key="MirrorProperty_PixelFormat">Decoded pixel format</x:String>
     <x:String x:Key="MirrorProperty_Conversion">Display conversion</x:String>
+    <x:String x:Key="MirrorProperty_Presentation">Presentation path</x:String>
     <x:String x:Key="MirrorProperty_ReceiveFps">Receive rate (1 s)</x:String>
     <x:String x:Key="MirrorProperty_DecodeFps">Decode rate (1 s)</x:String>
     <x:String x:Key="MirrorProperty_UploadFps">Bitmap updates (1 s)</x:String>
@@ -474,6 +475,7 @@
   <x:String x:Key="MirrorSetting_BitRate">Video bitrate</x:String>
   <x:String x:Key="MirrorSetting_Control">Remote control</x:String>
   <x:String x:Key="MirrorSetting_Full">Full (0–255)</x:String>
+  <x:String x:Key="MirrorSetting_GpuExport">GPU zero-copy</x:String>
   <x:String x:Key="MirrorSetting_Limited">Limited (16–235)</x:String>
   <x:String x:Key="MirrorSetting_Matrix">Color matrix</x:String>
   <x:String x:Key="MirrorSetting_MaxFps">Frame rate limit</x:String>

@@ -27,6 +27,13 @@ public partial class App : Application
     public static string[] StartupFiles { get; set; } = [];
 
     /// <summary>
+    /// <para>命令行 <c>--open-screen-mirror</c> 携带的设备序列号；启动序列在设备扫描完成后打开投屏文档并启动会话。</para>
+    /// The device serial carried by the <c>--open-screen-mirror</c> command line; the startup sequence opens
+    /// the mirror document and starts its session after the device scan completes.
+    /// </summary>
+    public static string? StartupScreenMirrorSerial { get; set; }
+
+    /// <summary>
     /// <para>桌面进程唯一的设备监视组合实例，由应用组合根拥有并经由
     /// <see cref="DesktopApplicationServices"/> 在退出时释放；界面与设备服务统一读取此实例，
     /// <c>DeviceMonitorService</c> 不提供类型级全局单例。</para>
@@ -54,7 +61,7 @@ public partial class App : Application
 #if DEBUG
         if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
         {
-            this.AttachDeveloperTools();
+            // AttachDeveloperTools was removed with the DevTools diagnostics package.
         }
 #endif
     }
@@ -168,6 +175,12 @@ public partial class App : Application
             await ApplyStartupFilesAsync(splashWindow, StartupFiles).ConfigureAwait(true);
         }
 
+        if (StartupScreenMirrorSerial is { Length: > 0 } mirrorSerial)
+        {
+            await ReportAsync(SplashPhase.OpeningFiles);
+            ApplyStartupScreenMirror(splashWindow, mirrorSerial);
+        }
+
         LogService.Instance.Write(LogLevel.Info, "App",
             $"Startup sequence: initial USB scan found {devices.Count} device(s).");
 
@@ -222,6 +235,28 @@ public partial class App : Application
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "App", $"Open startup files failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>应用命令行选项：打开投屏文档并对指定序列号启动会话（失败仅记日志，不阻断启动）。</para>
+    /// Applies the startup screen-mirror input: opens the mirror document and starts a session for the
+    /// given serial (failures only log, never block startup).
+    /// </summary>
+    private void ApplyStartupScreenMirror(MainSplashWindow splashWindow, string serial)
+    {
+        try
+        {
+            if (splashWindow.PreparedMainWindow?.DataContext is MainViewModel mainVm &&
+                mainVm.WorkspaceVM.OpenScreenMirrorDocument() is { } mirror)
+            {
+                mirror.StartForDevice(serial);
+                LogService.Instance.Write(LogLevel.Info, "App", $"Startup screen mirror requested for {serial}.");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "App", $"Startup screen mirror failed: {ex.Message}");
         }
     }
 

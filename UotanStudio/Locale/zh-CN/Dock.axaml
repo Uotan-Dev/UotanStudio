@@ -448,6 +448,7 @@
     <x:String x:Key="MirrorProperty_SourceColor">源色彩空间</x:String>
     <x:String x:Key="MirrorProperty_PixelFormat">解码像素格式</x:String>
     <x:String x:Key="MirrorProperty_Conversion">显示色彩转换</x:String>
+    <x:String x:Key="MirrorProperty_Presentation">呈现路径</x:String>
     <x:String x:Key="MirrorProperty_ReceiveFps">接收帧率（1秒）</x:String>
     <x:String x:Key="MirrorProperty_DecodeFps">解码帧率（1秒）</x:String>
     <x:String x:Key="MirrorProperty_UploadFps">位图更新率（1秒）</x:String>
@@ -474,6 +475,7 @@
   <x:String x:Key="MirrorSetting_BitRate">视频码率</x:String>
   <x:String x:Key="MirrorSetting_Control">允许远程控制</x:String>
   <x:String x:Key="MirrorSetting_Full">全范围（0–255）</x:String>
+  <x:String x:Key="MirrorSetting_GpuExport">GPU 零拷贝</x:String>
   <x:String x:Key="MirrorSetting_Limited">有限范围（16–235）</x:String>
   <x:String x:Key="MirrorSetting_Matrix">色彩矩阵</x:String>
   <x:String x:Key="MirrorSetting_MaxFps">帧率上限</x:String>

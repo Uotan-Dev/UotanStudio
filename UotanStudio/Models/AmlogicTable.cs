@@ -255,7 +255,7 @@ public static class AmlogicTable
         }
 
         var diskSignature = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(DiskSignatureOffset));
-        var slots = new List<AmlogicPartition>();
+        List<AmlogicPartition> slots = [];
         ulong? extendedStart = null;
 
         for (var i = 0; i < MaxPrimaryPartitions; i++)
