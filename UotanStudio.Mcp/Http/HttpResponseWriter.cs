@@ -16,10 +16,16 @@ internal static class HttpResponseWriter
         => WriteAsync(stream, BuildHead(status, reason, keepAlive, contentType: null, contentLength: 0, chunked: false, extraHeaders: null), EmptyBody, cancellationToken);
 
     internal static Task WriteTextAsync(Stream stream, int status, string reason, string text, bool keepAlive, CancellationToken cancellationToken, string? extraHeaders = null)
-        => WriteAsync(stream, BuildHead(status, reason, keepAlive, "text/plain; charset=utf-8", Encoding.UTF8.GetByteCount(text), chunked: false, extraHeaders), Encoding.UTF8.GetBytes(text), cancellationToken);
+        => WriteBodyAsync(stream, status, reason, "text/plain; charset=utf-8", text, keepAlive, extraHeaders, cancellationToken);
 
     internal static Task WriteJsonAsync(Stream stream, int status, string reason, string json, bool keepAlive, CancellationToken cancellationToken)
-        => WriteAsync(stream, BuildHead(status, reason, keepAlive, "application/json; charset=utf-8", Encoding.UTF8.GetByteCount(json), chunked: false, extraHeaders: null), Encoding.UTF8.GetBytes(json), cancellationToken);
+        => WriteBodyAsync(stream, status, reason, "application/json; charset=utf-8", json, keepAlive, extraHeaders: null, cancellationToken);
+
+    private static Task WriteBodyAsync(Stream stream, int status, string reason, string contentType, string text, bool keepAlive, string? extraHeaders, CancellationToken cancellationToken)
+    {
+        var body = Encoding.UTF8.GetBytes(text);
+        return WriteAsync(stream, BuildHead(status, reason, keepAlive, contentType, body.Length, chunked: false, extraHeaders), body, cancellationToken);
+    }
 
     /// <summary>
     /// Writes a head for a streamed (chunked) response body.

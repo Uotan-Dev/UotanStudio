@@ -34,15 +34,15 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
     public IReadOnlyList<UsbDeviceInfo> ListUsbDevices()
     {
         var snapshot = Refresh();
-        return snapshot.Endpoints.Where(endpoint => IsRoutableUsb(snapshot, endpoint))
+        return [.. snapshot.Endpoints.Where(endpoint => IsRoutableUsb(snapshot, endpoint))
             .Select(endpoint => endpoint.UsbInfo ??
-                throw new InvalidDataException("USB endpoint has no inventory details.")).ToArray();
+                throw new InvalidDataException("USB endpoint has no inventory details."))];
     }
 
     public IReadOnlyList<(string Serial, string State)> ListAdbTargets()
     {
         var snapshot = Refresh();
-        return snapshot.Endpoints.Where(endpoint => endpoint.Protocol == "adb" &&
+        return [.. snapshot.Endpoints.Where(endpoint => endpoint.Protocol == "adb" &&
                 (endpoint.Route == "server" || IsRoutableUsb(snapshot, endpoint)))
             .Select(endpoint =>
             {
@@ -60,7 +60,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
                 {
                     return (identity, "offline");
                 }
-            }).ToArray();
+            })];
     }
 
     public TResult RunAdbService<TResult>(string serial, string service, Func<Stream, TResult> operation,
@@ -78,13 +78,13 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
     public void PushAdbFile(string serial, string localPath, string remotePath,
         CancellationToken cancellationToken = default)
     {
-        _ = RunAdb(serial, session =>
+        Complete(RunAdbAsync(serial, async session =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            using var sync = session.CreateSyncClient();
-            sync.Push(localPath, remotePath);
+            await using var sync = session.CreateSyncClient();
+            await sync.PushAsync(localPath, remotePath, cancellationToken: cancellationToken).ConfigureAwait(false);
             return true;
-        }, cancellationToken);
+        }, cancellationToken));
     }
 
     public void PullAdbFile(string serial, string remotePath, string localPath,
@@ -92,13 +92,37 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
-        _ = RunAdb(serial, session =>
+        Complete(RunAdbAsync(serial, async session =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            using var sync = session.CreateSyncClient();
-            sync.Pull(remotePath, localPath);
+            await using var sync = session.CreateSyncClient();
+            await sync.PullAsync(remotePath, localPath, cancellationToken).ConfigureAwait(false);
             return true;
-        }, cancellationToken);
+        }, cancellationToken));
+    }
+
+    private async Task<TResult> RunAdbAsync<TResult>(string serial,
+        Func<UotanStudio.Comm.Contracts.IAdbDeviceSession, Task<TResult>> operation,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serial);
+        ArgumentNullException.ThrowIfNull(operation);
+        var snapshot = Refresh(cancellationToken);
+        var endpoint = SelectAdb(snapshot, serial);
+        await using var lease = await _controller.OpenAsync(snapshot, endpoint.Id, DeviceSessionKind.Adb,
+            cancellationToken).ConfigureAwait(false);
+        if (!lease.TryGetSession<UotanStudio.Comm.Contracts.IAdbDeviceSession>(out var session))
+        {
+            throw new InvalidOperationException("ADB endpoint has no supported session.");
+        }
+
+        await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
+        if (!session.IsConnected)
+        {
+            throw new IOException("ADB authentication did not complete.");
+        }
+
+        return await operation(session).ConfigureAwait(false);
     }
 
     private TResult RunAdb<TResult>(string serial,

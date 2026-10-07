@@ -18,7 +18,8 @@ internal static class ToolJson
 {
     private static readonly JsonSerializerOptions SerializerOptions = CreateFrozenOptions();
 
-    private static readonly JsonTypeInfo<ToolResult> ResultTypeInfo = SerializerOptions.GetTypeInfo<ToolResult>();
+    private static readonly JsonTypeInfo<ToolResult> ResultTypeInfo =
+        (JsonTypeInfo<ToolResult>)SerializerOptions.GetTypeInfo(typeof(ToolResult));
 
     private static JsonSerializerOptions CreateFrozenOptions()
     {
@@ -37,6 +38,11 @@ internal static class ToolJson
     /// Serializes a result payload as the tool's JSON text output.
     /// <para>把结果负载序列化为工具的 JSON 文本输出。</para>
     /// </summary>
+    /// <param name="result">
+    /// Envelope written with camelCase names and without null properties; the optional
+    /// <see cref="ToolResult.Data"/> is omitted when it is <see langword="null"/>.
+    /// <para>以 camelCase 属性名写出并省略 null 属性的信封；可选的 <see cref="ToolResult.Data"/> 为 <see langword="null"/> 时不输出。</para>
+    /// </param>
     public static string Serialize(ToolResult result) => JsonSerializer.Serialize(result, ResultTypeInfo);
 
     /// <summary>
@@ -52,7 +58,8 @@ internal static class ToolJson
     /// <para><typeparamref name="T"/> 没有源生成元数据。</para></exception>
     public static JsonElement Data<T>(T value)
     {
-        if (!SerializerOptions.TryGetTypeInfo<T>(out var typeInfo) || typeInfo is null)
+        if (!SerializerOptions.TryGetTypeInfo(typeof(T), out JsonTypeInfo? info)
+            || info is not JsonTypeInfo<T> typeInfo)
         {
             throw new InvalidOperationException(
                 $"Type {typeof(T).Name} is not registered in {nameof(McpToolJsonContext)}.");
@@ -99,6 +106,12 @@ internal sealed record ToolResult(bool Success, string Summary, JsonElement? Dat
         new(false, $"{exception.GetType().Name}: {exception.Message}");
 
     /// <summary>Maps a <see cref="FirmwareOpResult"/> into the envelope, preserving entries/metadata. <para>把 <see cref="FirmwareOpResult"/> 映射进信封，保留条目与元数据。</para></summary>
+    /// <param name="op">
+    /// Operation result whose success flag and summary become the envelope fields; entries,
+    /// metadata and components are attached as structured data only when at least one of them
+    /// is non-empty.
+    /// <para>操作结果：其成功标志与摘要写入信封字段；只有条目、元数据、组件中至少一项非空时才附带结构化数据。</para>
+    /// </param>
     public static ToolResult From(FirmwareOpResult op) => new(op.Success, op.Summary,
         op.Entries.Count == 0 && op.Metadata.Count == 0 && op.Components.Count == 0
             ? null

@@ -99,31 +99,19 @@ internal sealed class HttpRequest
     /// <summary>Locates the blank line separating head and body. <para>定位分隔请求头与请求体的空行。</para></summary>
     private static bool TryFindHeadEnd(ReadOnlySpan<byte> data, out int headEnd, out int bodyStart)
     {
-        for (var i = 1; i < data.Length; i++)
+        var crlf = data.IndexOf("\r\n\r\n"u8);
+        var lf = data.IndexOf("\n\n"u8);
+        var terminator = crlf < 0 ? lf + 1 : lf < 0 ? crlf + 3 : Math.Min(crlf + 3, lf + 1);
+        if (terminator <= 0)
         {
-            if (data[i] != (byte)'\n')
-            {
-                continue;
-            }
-
-            if (i >= 3 && data[i - 3] == (byte)'\r' && data[i - 2] == (byte)'\n' && data[i - 1] == (byte)'\r')
-            {
-                headEnd = i - 1;
-                bodyStart = i + 1;
-                return true;
-            }
-
-            if (data[i - 1] == (byte)'\n')
-            {
-                headEnd = i - 1;
-                bodyStart = i + 1;
-                return true;
-            }
+            headEnd = 0;
+            bodyStart = 0;
+            return false;
         }
 
-        headEnd = 0;
-        bodyStart = 0;
-        return false;
+        headEnd = terminator - 1;
+        bodyStart = terminator + 1;
+        return true;
     }
 
     private static (string Method, string Target, bool KeepAlive, Dictionary<string, string> Headers) ParseHead(byte[] data)

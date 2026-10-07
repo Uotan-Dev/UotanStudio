@@ -15,6 +15,7 @@ internal static class DeliveryPlanJson
     /// Deserializes a delivery plan; returns null for structurally invalid JSON.
     /// <para>反序列化交付计划；结构非法的 JSON 返回 null。</para>
     /// </summary>
+    /// <param name="json">Plan JSON text read with the delivery library's source-generated context; a JSON <c>null</c> document yields no plan. <para>用交付库的源生成上下文读取的 JSON 文本；JSON 为 <c>null</c> 的文档不会得到计划。</para></param>
     public static DeliveryPlan? Deserialize(string json)
         => JsonSerializer.Deserialize(json, DeliveryJsonContext.Default.DeliveryPlan);
 
@@ -22,6 +23,11 @@ internal static class DeliveryPlanJson
     /// Parses a plan JSON and confines every path-bearing field to the sandbox.
     /// <para>解析计划 JSON 并把其中的路径限制到沙箱内。</para>
     /// </summary>
+    /// <param name="sandbox">Sandbox that resolves every path field of the plan. <para>用于解析计划中各路径字段的沙箱。</para></param>
+    /// <param name="planJson">
+    /// Plan JSON document; null or whitespace-only text is rejected before parsing.
+    /// <para>计划 JSON 文档；null 或仅含空白的文本会在解析前被拒绝。</para>
+    /// </param>
     public static DeliveryPlan ParseConfinedPlan(PathSandbox sandbox, string planJson)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(planJson);
@@ -69,8 +75,8 @@ internal static class DeliveryPlanJson
                 PostinstallFile = ConfineOptional(payload.PostinstallFile, sandbox)
             },
             LocalZstd = (plan.LocalZstd ?? []).ToDictionary(p => p.Key, p => ConfineOptional(p.Value, sandbox) ?? string.Empty),
-            Container = (plan.Container ?? []).Select(f => ConfineFile(f, sandbox)).ToList(),
-            Files = (plan.Files ?? []).Select(f => ConfineFile(f, sandbox)).ToList()
+            Container = [.. (plan.Container ?? []).Select(f => ConfineFile(f, sandbox))],
+            Files = [.. (plan.Files ?? []).Select(f => ConfineFile(f, sandbox))]
         };
     }
 

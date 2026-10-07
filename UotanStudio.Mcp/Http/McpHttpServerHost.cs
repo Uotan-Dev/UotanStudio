@@ -42,7 +42,7 @@ public sealed class McpHttpServerHost : IAsyncDisposable
     /// <summary>Source-generated metadata keeps request deserialization trimming/AOT safe.
     /// <para>使用源生成的元数据，使请求反序列化对裁剪/AOT 安全。</para></summary>
     private static readonly JsonTypeInfo<JsonRpcMessage> MessageTypeInfo =
-        McpJsonUtilities.DefaultOptions.GetTypeInfo<JsonRpcMessage>();
+        (JsonTypeInfo<JsonRpcMessage>)McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(JsonRpcMessage));
 
     private readonly IReadOnlyList<McpServerTool> _tools;
     private readonly IReadOnlyList<McpServerResource> _resources;

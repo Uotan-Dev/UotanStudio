@@ -400,7 +400,7 @@ internal static class DeviceToolHandlers
                 cancellationToken.ThrowIfCancellationRequested();
                 using var memory = new MemoryStream();
                 stream.CopyTo(memory);
-                return System.Text.Encoding.UTF8.GetString(memory.ToArray());
+                return System.Text.Encoding.UTF8.GetString(memory.GetBuffer().AsSpan(0, (int)memory.Length));
             }, cancellationToken);
             return new ToolResult(true, "Command completed.",
                 ToolJson.Data(new AdbShellPayload(serial, command, output)));
@@ -522,7 +522,7 @@ internal static class DeviceToolHandlers
                 cancellationToken.ThrowIfCancellationRequested();
                 using var memory = new MemoryStream();
                 stream.CopyTo(memory);
-                return System.Text.Encoding.UTF8.GetString(memory.ToArray());
+                return System.Text.Encoding.UTF8.GetString(memory.GetBuffer().AsSpan(0, (int)memory.Length));
             }, cancellationToken);
             return new ToolResult(true, $"Recovery {mode} requested on {serial}.",
                 ToolJson.Data(new Dictionary<string, string> { ["mode"] = mode, ["serial"] = serial, ["output"] = output }));

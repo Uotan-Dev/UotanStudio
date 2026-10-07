@@ -101,25 +101,19 @@ internal sealed class ChunkedBodyStream : Stream
     /// <summary>Writes the hexadecimal chunk size followed by CRLF. <para>写入十六进制分块长度与 CRLF。</para></summary>
     private static int WriteChunkHeader(uint size, Span<byte> destination)
     {
-        const string Digits = "0123456789ABCDEF";
-
-        Span<char> digits = stackalloc char[8];
-        var digitCount = 0;
+        ReadOnlySpan<byte> digits = "0123456789ABCDEF"u8;
+        var position = 8;
         do
         {
-            digits[digitCount++] = Digits[(int)(size & 0xF)];
+            destination[--position] = digits[(int)(size & 0xF)];
             size >>= 4;
         }
         while (size != 0);
 
-        var position = 0;
-        for (var i = digitCount - 1; i >= 0; i--)
-        {
-            destination[position++] = (byte)digits[i];
-        }
-
-        destination[position++] = (byte)'\r';
-        destination[position++] = (byte)'\n';
-        return position;
+        var digitCount = 8 - position;
+        destination[position..8].CopyTo(destination);
+        destination[digitCount] = (byte)'\r';
+        destination[digitCount + 1] = (byte)'\n';
+        return digitCount + 2;
     }
 }
