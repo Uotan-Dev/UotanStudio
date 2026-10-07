@@ -19,12 +19,12 @@ internal static partial class DeliveryPackageBuilder
             : DatFileSet.IsBrotli(Patch.FileName) ? Patch.FileName[..^3] : Patch.FileName;
     }
 
-    private static DatSet[] DatSets(DeliveryPlan plan) => Selected(plan).Where(f => IsDatArtifact(f.FileName))
+    private static DatSet[] DatSets(DeliveryPlan plan) => [.. Selected(plan).Where(f => IsDatArtifact(f.FileName))
         .GroupBy(f => DatStem(f.FileName), StringComparer.OrdinalIgnoreCase)
         .Select(g => new DatSet(
             g.Single(f => DatFileSet.IsTransferList(f.FileName)),
             g.Single(f => DatFileSet.IsNewData(f.FileName)),
-            g.SingleOrDefault(f => DatFileSet.IsPatchData(f.FileName)))).ToArray();
+            g.SingleOrDefault(f => DatFileSet.IsPatchData(f.FileName))))];
 
     private sealed record RecoveryImage(DeliveryFile File, string Member, DatSet? Dat = null);
 

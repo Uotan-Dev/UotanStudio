@@ -72,7 +72,7 @@ internal static class DeliveryRecoveryUpdater
             || BinaryPrimitives.ReadUInt16LittleEndian(header[18..]) is not (3 or 40 or 62 or 183 or 243))
             throw new InvalidDataException("DAT requires the original ROM's native Edify updater, not a shell installer.");
         var bytes = File.ReadAllBytes(file.SourcePath);
-        foreach (var required in new[] { "block_image_update", "block_image_verify", "package_extract_file", "file_getprop", "updater-script" })
+        foreach (var required in (ReadOnlySpan<string>)["block_image_update", "block_image_verify", "package_extract_file", "file_getprop", "updater-script"])
             if (bytes.AsSpan().IndexOf(Encoding.ASCII.GetBytes(required)) < 0)
                 throw new InvalidDataException("The Recovery updater does not expose the required Edify functions: " + required);
         return file.SourcePath;

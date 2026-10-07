@@ -50,7 +50,7 @@ internal static class DeliverySuperBuilder
         var partitions = ExpandPartitions(files, options);
         var builder = MetadataBuilder.New(options.DeviceSize, options.MetadataSize, options.Slots, options.BlockSize);
         var groups = DeliveryGroups.Parse(DeliveryGroups.Format(options.Groups));
-        if (groups.Count == 0) groups.Add(new() { Name = options.Group, Partitions = partitions.Select(p => p.Partition).ToList() });
+        if (groups.Count == 0) groups.Add(new() { Name = options.Group, Partitions = [.. partitions.Select(p => p.Partition)] });
         foreach (var group in groups) builder.AddGroup(group.Name, group.Size);
         var lengths = new List<long>();
         foreach (var file in partitions)

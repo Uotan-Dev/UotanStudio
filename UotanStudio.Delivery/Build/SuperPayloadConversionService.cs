@@ -277,7 +277,7 @@ public static class SuperPayloadConversionService
             }
 
             var dynamicConfig = Path.Combine(transaction, "dynamic_partitions_info.txt");
-            await File.WriteAllTextAsync(dynamicConfig, BuildDynamicConfiguration(metadata, selected.Select(item => item.Metadata).ToArray()),
+            await File.WriteAllTextAsync(dynamicConfig, BuildDynamicConfiguration(metadata, [.. selected.Select(item => item.Metadata)]),
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken).ConfigureAwait(false);
 
             var plan = new DeliveryPlan
@@ -294,14 +294,14 @@ public static class SuperPayloadConversionService
                     SigningKeyPath = options.SigningKeyPath,
                     SigningKeyFingerprint = options.SigningKeyFingerprint
                 },
-                Container = selected.Select(item => new DeliveryFile
+                Container = [.. selected.Select(item => new DeliveryFile
                 {
                     Partition = item.Name,
                     FileName = item.Name + ".img",
                     SourcePath = item.Path,
                     SourceLength = new FileInfo(item.Path).Length,
                     IncludeInSuper = true
-                }).ToList()
+                })]
             };
             await DeliveryPayloadBuilder.BuildAsync(plan, stagedPayload, progress, cancellationToken, signingKeys)
                 .ConfigureAwait(false);
@@ -322,7 +322,7 @@ public static class SuperPayloadConversionService
             }
 
             PublishPair(stagedPayload, output, stagedProperties, properties, backup, cancellationToken);
-            return new(output, properties, selected.Select(item => item.Name).ToArray(), (metadata.Header.Flags & 1) != 0);
+            return new(output, properties, [.. selected.Select(item => item.Name)], (metadata.Header.Flags & 1) != 0);
         }
         finally
         {
@@ -374,8 +374,8 @@ public static class SuperPayloadConversionService
         string backupDirectory, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(backupDirectory);
-        var pairs = new[] { (Staged: stagedPayload, Target: payload), (Staged: stagedProperties, Target: properties) };
-        var published = new List<(string Target, string? Backup)>();
+        (string Staged, string Target)[] pairs = [(stagedPayload, payload), (stagedProperties, properties)];
+        List<(string Target, string? Backup)> published = new(pairs.Length);
         try
         {
             foreach (var pair in pairs)

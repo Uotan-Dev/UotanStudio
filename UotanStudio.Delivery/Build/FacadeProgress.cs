@@ -53,29 +53,35 @@ public sealed record DeliveryBuildProgress(double Percent, string Message, strin
 /// </summary>
 internal static class DeliveryBuildProgressMapper
 {
-    /// <summary>
-    /// <para>把内部 <see cref="DeliveryProgress"/> 逐字段映射为 <see cref="DeliveryBuildProgress"/>。</para>
-    /// Maps an internal <see cref="DeliveryProgress"/> onto <see cref="DeliveryBuildProgress"/> field by field.
-    /// </summary>
-    internal static DeliveryBuildProgress ToBuildProgress(this DeliveryProgress value)
-        => new(value.Percent, value.Message, value.Stage, value.Detail,
-            value.Bytes?.Processed, value.Bytes?.Total, value.Items?.Processed, value.Items?.Total, value.Metadata);
-
-    /// <summary>
-    /// <para>把公共进度契约还原为内部 <see cref="DeliveryProgress"/>，供已直接消费内部记录的宿主界面复用同一套
-    /// 阶段统计逻辑。字节与条目度量只在两个分量同时存在时才重组为元组。</para>
-    /// Restores the internal <see cref="DeliveryProgress"/> from the public contract so hosts that already consume
-    /// the internal record keep one stage-statistics code path. Byte and item meters are rebuilt only when both
-    /// components are present.
-    /// </summary>
-    internal static DeliveryProgress ToDeliveryProgress(this DeliveryBuildProgress value)
+    extension(DeliveryProgress value)
     {
-        (long Processed, long Total)? bytes =
-            value.ProcessedBytes is { } processedBytes && value.TotalBytes is { } totalBytes
-                ? (processedBytes, totalBytes) : null;
-        (long Processed, long Total)? items =
-            value.ProcessedItems is { } processedItems && value.TotalItems is { } totalItems
-                ? (processedItems, totalItems) : null;
-        return new DeliveryProgress(value.Percent, value.Message, bytes, value.Stage, items, value.Detail, value.Metadata);
+        /// <summary>
+        /// <para>把内部 <see cref="DeliveryProgress"/> 逐字段映射为 <see cref="DeliveryBuildProgress"/>。</para>
+        /// Maps an internal <see cref="DeliveryProgress"/> onto <see cref="DeliveryBuildProgress"/> field by field.
+        /// </summary>
+        internal DeliveryBuildProgress ToBuildProgress()
+            => new(value.Percent, value.Message, value.Stage, value.Detail,
+                value.Bytes?.Processed, value.Bytes?.Total, value.Items?.Processed, value.Items?.Total, value.Metadata);
+    }
+
+    extension(DeliveryBuildProgress value)
+    {
+        /// <summary>
+        /// <para>把公共进度契约还原为内部 <see cref="DeliveryProgress"/>，供已直接消费内部记录的宿主界面复用同一套
+        /// 阶段统计逻辑。字节与条目度量只在两个分量同时存在时才重组为元组。</para>
+        /// Restores the internal <see cref="DeliveryProgress"/> from the public contract so hosts that already consume
+        /// the internal record keep one stage-statistics code path. Byte and item meters are rebuilt only when both
+        /// components are present.
+        /// </summary>
+        internal DeliveryProgress ToDeliveryProgress()
+        {
+            (long Processed, long Total)? bytes =
+                value.ProcessedBytes is { } processedBytes && value.TotalBytes is { } totalBytes
+                    ? (processedBytes, totalBytes) : null;
+            (long Processed, long Total)? items =
+                value.ProcessedItems is { } processedItems && value.TotalItems is { } totalItems
+                    ? (processedItems, totalItems) : null;
+            return new DeliveryProgress(value.Percent, value.Message, bytes, value.Stage, items, value.Detail, value.Metadata);
+        }
     }
 }

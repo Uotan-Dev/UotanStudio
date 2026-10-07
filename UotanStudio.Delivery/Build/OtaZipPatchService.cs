@@ -309,7 +309,7 @@ public static class OtaZipPatchService
         }
 
         var replacements = NormalizeReplacements(options.ReplacementFiles);
-        foreach (var generated in new[] { "payload.bin", "payload_properties.txt", "META-INF/com/android/metadata", "META-INF/com/android/otacert" })
+        foreach (var generated in (ReadOnlySpan<string>)["payload.bin", "payload_properties.txt", "META-INF/com/android/metadata", "META-INF/com/android/otacert"])
         {
             if (replacements.ContainsKey(generated))
             {
@@ -376,7 +376,7 @@ public static class OtaZipPatchService
                 new OtaZipPatchOptions { ReplacementFiles = replacements, AllowPayloadReplacement = true },
                 cancellationToken).ConfigureAwait(false);
             var actualRanges = DeliveryPackageBuilder.ReadStoredRanges(staged);
-            foreach (var entry in new[] { "payload.bin", "payload_properties.txt", "META-INF/com/android/metadata" })
+            foreach (var entry in (ReadOnlySpan<string>)["payload.bin", "payload_properties.txt", "META-INF/com/android/metadata"])
             {
                 if (RequiredRange(actualRanges, entry) != RequiredRange(expectedRanges, entry))
                 {

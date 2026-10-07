@@ -54,8 +54,8 @@ internal static class DeliveryGroups
         if (settings.Kind == "payload")
         {
             if (settings.OriginalStructures.Length == 0) return [];
-            return DynamicPartitionMetadata.Parser.ParseFrom(settings.OriginalStructures[0]).Groups.Select(g =>
-                new DeliveryGroup { Name = g.Name, Size = g.Size, Partitions = g.PartitionNames.ToList() }).ToList();
+            return [.. DynamicPartitionMetadata.Parser.ParseFrom(settings.OriginalStructures[0]).Groups.Select(g =>
+                new DeliveryGroup { Name = g.Name, Size = g.Size, Partitions = [.. g.PartitionNames] })];
         }
         if (settings.OriginalStructures.Length < 2) return [];
         var header = LpMetadataHeader.FromBytes(settings.OriginalStructures[1]);

@@ -122,7 +122,7 @@ internal sealed record DeliveryPlan
     {
         OrganizeDirectory = false,
         Files = [],
-        Container = Container.Select(file => file with { SourcePath = "", SourceLength = null }).ToList(),
+        Container = [.. Container.Select(file => file with { SourcePath = "", SourceLength = null })],
         Txt = false,
         Windows = false,
         Linux = false,
@@ -224,8 +224,8 @@ internal static class DeliveryPlanStore
         if (plan.PackPayload || plan.PackSuper)
             plan = plan with
             {
-                Files = plan.Files.Select(f => f.Generated && (f.Partition == "payload" || f.Partition == "super")
-                ? f with { FileName = DeliveryOutputService.ContainerFileName(plan) } : f).ToList()
+                Files = [.. plan.Files.Select(f => f.Generated && (f.Partition == "payload" || f.Partition == "super")
+                ? f with { FileName = DeliveryOutputService.ContainerFileName(plan) } : f)]
             };
         plan = plan with { Files = [], Container = [] };
         return Rebase(plan, path => Path.GetFullPath(path, root));

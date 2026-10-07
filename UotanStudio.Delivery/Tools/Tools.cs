@@ -52,6 +52,29 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
     /// Prepares platform-tools and, when compressed images are selected, zstd for each enabled platform, trims unused
     /// binaries, and materializes the Linux static zstd aliases into bin/android per the Recovery/organized Super convention.
     /// </summary>
+    /// <param name="plan">
+    /// Plan selecting the enabled platforms and deciding whether zstd is needed: files ending in
+    /// <c>.zst</c>, an organized Zstd Super, or a Recovery-only delivery with ZST files also stage the
+    /// Linux toolset.
+    /// <para>决定启用平台的交付计划；以 <c>.zst</c> 结尾的文件、组织式 Zstd Super，或带 ZST 文件的纯 Recovery
+    /// 都会额外暂存 Linux 工具集并准备 zstd。</para>
+    /// </param>
+    /// <param name="directory">
+    /// Staging root; each platform lands in <c>bin/Windows</c>, <c>bin/Linux</c> or <c>bin/macOS</c> and the
+    /// Linux zstd aliases in <c>bin/android</c>.
+    /// <para>暂存根目录；各平台分别落到 <c>bin/Windows</c>、<c>bin/Linux</c> 或 <c>bin/macOS</c>，
+    /// Linux 的 zstd 别名落到 <c>bin/android</c>。</para>
+    /// </param>
+    /// <param name="progress">
+    /// Sink for the <c>Delivery_ProgressTools</c> stage reports at 75 percent, one per platform and per
+    /// zstd download; <see langword="null"/> skips reporting.
+    /// <para>接收 75% 的 <c>Delivery_ProgressTools</c> 阶段上报，每个平台与每次 zstd 下载各一条；
+    /// 为 <see langword="null"/> 时不上报。</para>
+    /// </param>
+    /// <param name="token">
+    /// Cancellation token threaded through the downloads, archive extraction and file copies.
+    /// <para>贯穿下载、归档解压与文件复制的取消令牌。</para>
+    /// </param>
     public async Task PrepareAsync(DeliveryPlan plan, string directory, IProgress<DeliveryProgress>? progress, CancellationToken token)
     {
         var platforms = new List<(string Name, DeliveryToolPackage Package)>();
@@ -80,8 +103,8 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
             || (plan.Recovery && !plan.PackPayload && !plan.PackSuper
                 && plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase))))
         {
-            var mappings = new[] { (Source: "zstd-arm64", Name: "zstd"), (Source: "zstd-arm64", Name: "zstd-arm64"),
-                (Source: "zstd", Name: "zstd-x86_64"), (Source: "zstd-loong64", Name: "zstd-loong64") };
+            (string Source, string Name)[] mappings = [("zstd-arm64", "zstd"), ("zstd-arm64", "zstd-arm64"),
+                ("zstd", "zstd-x86_64"), ("zstd-loong64", "zstd-loong64")];
             var linuxDirectory = Path.Combine(directory, "bin", "Linux");
             if (mappings.Any(mapping => File.Exists(Path.Combine(linuxDirectory, mapping.Source))))
             {
@@ -101,9 +124,9 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
     /// Removes binaries the delivery scripts never use, keeping only fastboot and its runtime dependencies.</summary>
     internal static void TrimPlatformTools(string name, string target)
     {
-        var unused = name == "Windows"
-            ? new[] { "adb.exe", "etc1tool.exe", "hprof-conv.exe", "make_f2fs.exe", "make_f2fs_casefold.exe", "mke2fs.exe", "mke2fs.conf", "sqlite3.exe" }
-            : new[] { "adb", "etc1tool", "hprof-conv", "make_f2fs", "make_f2fs_casefold", "mke2fs", "mke2fs.conf", "sqlite3" };
+        string[] unused = name == "Windows"
+            ? ["adb.exe", "etc1tool.exe", "hprof-conv.exe", "make_f2fs.exe", "make_f2fs_casefold.exe", "mke2fs.exe", "mke2fs.conf", "sqlite3.exe"]
+            : ["adb", "etc1tool", "hprof-conv", "make_f2fs", "make_f2fs_casefold", "mke2fs", "mke2fs.conf", "sqlite3"];
         foreach (var file in unused)
         {
             var path = Path.Combine(target, file);

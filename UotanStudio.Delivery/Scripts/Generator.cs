@@ -84,7 +84,7 @@ internal static partial class DeliveryScriptGenerator
 
     /// <summary><para>解析本地化提示：localize 为空、返回键名本身或返回完整资源键名时使用英文回退。</para>
     /// Resolves a localized prompt; falls back to English when localize is null or returns the short key or the full resource key name.</summary>
-    private static string T(Func<string, string>? localize, string key, string fallback, params object[] args)
+    private static string T(Func<string, string>? localize, string key, string fallback, params ReadOnlySpan<object> args)
     {
         var text = localize?.Invoke(key) ?? fallback;
         if (text == key || text == "Delivery_Script_" + key) text = fallback;

@@ -6,9 +6,6 @@ using System.IO.Hashing;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using SharpCompress.Common;
-using SharpCompress.Writers;
-using SharpCompress.Writers.Zip;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.Core.Streams;
@@ -88,19 +85,19 @@ internal static partial class DeliveryPackageBuilder
             {
                 token.ThrowIfCancellationRequested();
                 await using var output = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, true);
-                using var writer = WriterFactory.OpenWriter(output, ArchiveType.Zip, new ZipWriterOptions(CompressionType.None) { UseZip64 = true });
-                writer.Write("payload.bin", new FileInfo(Path.Combine(images, "payload.bin")));
-                writer.Write("payload_properties.txt", new FileInfo(Path.Combine(images, "payload_properties.txt")));
+                using var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);
+                WriteStored(zip, "payload.bin", Path.Combine(images, "payload.bin"));
+                WriteStored(zip, "payload_properties.txt", Path.Combine(images, "payload_properties.txt"));
                 if (careMap is not null)
                 {
-                    writer.Write(CareMap.ZipEntryName, new MemoryStream(careMap));
+                    WriteStored(zip, CareMap.ZipEntryName, new MemoryStream(careMap));
                 }
 
-                writer.Write(MetadataEntryName, new MemoryStream(Encoding.UTF8.GetBytes(text)));
+                WriteStored(zip, MetadataEntryName, new MemoryStream(Encoding.UTF8.GetBytes(text)));
                 if (plan.Package.CertificatePath.Length > 0)
                 {
                     using var cert = LoadCertificate(plan.Package.CertificatePath);
-                    writer.Write("META-INF/com/android/otacert", new MemoryStream(Encoding.UTF8.GetBytes(cert.ExportCertificatePem())));
+                    WriteStored(zip, "META-INF/com/android/otacert", new MemoryStream(Encoding.UTF8.GetBytes(cert.ExportCertificatePem())));
                 }
             }
             await WriteZip(metadata + Properties("", ""));
@@ -197,40 +194,120 @@ internal static partial class DeliveryPackageBuilder
         }
     }
 
+    /// <summary>
+    /// <para>遍历中央目录，返回每个 stored 条目的数据起点与原始长度。大小与本地头偏移取自中央目录记录，ZIP64
+    /// 加宽的字段按扩展块内的固定顺序还原，因此条目本地头改用数据描述符承载大小（4 GiB 及以上的条目）时同样成立；
+    /// 非 stored 条目无法按偏移直读，仍会被拒绝。</para>
+    /// Walks the central directory and returns the data offset and uncompressed size of every stored entry. Sizes and
+    /// local header offsets come from the central directory records with ZIP64-widened fields restored in the order the
+    /// extra block fixes, so entries whose local header carries a data descriptor instead of sizes (any entry of 4 GiB
+    /// or more) resolve as well; entries that are not stored cannot be read by raw offset and are still rejected.
+    /// </summary>
+    /// <param name="path">Archive to inspect. <para>要检查的归档路径。</para></param>
+    /// <returns>Data offset and uncompressed size keyed by entry name. <para>按条目名索引的数据起点与原始长度。</para></returns>
+    /// <exception cref="InvalidDataException">A directory record is missing or malformed, or it names a non-stored entry.
+    /// <para>目录记录缺失或无效，或指向非 stored 条目。</para></exception>
     internal static Dictionary<string, (long Offset, ulong Size)> ReadStoredRanges(string path)
     {
         using var input = File.OpenRead(path);
+        var directoryStart = LocateCentralDirectory(input, out var entryCount);
         var result = new Dictionary<string, (long, ulong)>(StringComparer.Ordinal);
-        var header = new byte[30];
-        while (input.Position < input.Length)
+        var header = new byte[46];
+        input.Position = directoryStart;
+        for (var index = 0; index < entryCount; index++)
         {
             input.ReadExactly(header);
-            var signature = BinaryPrimitives.ReadUInt32LittleEndian(header);
-            if (signature == 0x02014b50) break;
-            if (signature != 0x04034b50
-                || (BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(6)) & 8) != 0
-                || BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(8)) != 0)
-                throw new InvalidDataException("OTA requires seekable, stored ZIP entries.");
-            var name = new byte[BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(26))]; input.ReadExactly(name);
-            var extra = new byte[BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(28))]; input.ReadExactly(extra);
-            ulong size = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(22));
-            if (size == uint.MaxValue)
-            {
-                var found = false;
-                for (var offset = 0; offset + 4 <= extra.Length;)
-                {
-                    var type = BinaryPrimitives.ReadUInt16LittleEndian(extra.AsSpan(offset));
-                    var length = BinaryPrimitives.ReadUInt16LittleEndian(extra.AsSpan(offset + 2));
-                    if (offset + 4 + length > extra.Length) throw new InvalidDataException("Invalid ZIP extra field.");
-                    if (type == 1 && length >= 16) { size = BinaryPrimitives.ReadUInt64LittleEndian(extra.AsSpan(offset + 4)); found = true; break; }
-                    offset += 4 + length;
-                }
-                if (!found) throw new InvalidDataException("ZIP64 entry is missing its sizes.");
-            }
-            result.Add(Encoding.UTF8.GetString(name), (input.Position, size));
-            input.Position = checked(input.Position + (long)size);
+            if (BinaryPrimitives.ReadUInt32LittleEndian(header) != 0x02014b50)
+                throw new InvalidDataException("OTA requires a well-formed ZIP central directory.");
+            if (BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(10)) != 0)
+                throw new InvalidDataException("OTA requires stored ZIP entries.");
+            var name = new byte[BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(28))]; input.ReadExactly(name);
+            var extra = new byte[BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(30))]; input.ReadExactly(extra);
+            input.Position = checked(input.Position + BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(32)));
+
+            ulong size = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(24));
+            long localHeaderStart = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(42));
+            if ((size == uint.MaxValue || localHeaderStart == uint.MaxValue) && !RestoreZip64Sizes(header, extra, ref size, ref localHeaderStart))
+                throw new InvalidDataException("ZIP64 entry is missing its sizes.");
+
+            result.Add(Encoding.UTF8.GetString(name), (LocalDataStart(input, localHeaderStart), size));
         }
         return result;
+    }
+
+    /// <summary>
+    /// <para>按 ZIP64 扩展字段的固定顺序还原被加宽的原始长度与本地头偏移，只读取中央目录记录中对应 32 位字段为占位值的项。</para>
+    /// Restores the widened uncompressed size and local header offset from the ZIP64 extra field in its fixed order,
+    /// reading only the items whose 32-bit counterparts in the central directory record hold their placeholders.
+    /// </summary>
+    /// <param name="header">Central directory record. <para>中央目录记录。</para></param>
+    /// <param name="extra">Entry extra block. <para>条目扩展块。</para></param>
+    /// <param name="size">Uncompressed size, replaced when it was widened. <para>原始长度，被加宽时替换。</para></param>
+    /// <param name="localHeaderStart">Local header offset, replaced when it was widened. <para>本地头偏移，被加宽时替换。</para></param>
+    /// <returns><see langword="true"/> when the ZIP64 field was found. <para>找到 ZIP64 字段时为 <see langword="true"/>。</para></returns>
+    /// <exception cref="InvalidDataException">The extra block is malformed or truncated.
+    /// <para>扩展块无效或被截断。</para></exception>
+    private static bool RestoreZip64Sizes(ReadOnlySpan<byte> header, ReadOnlySpan<byte> extra, ref ulong size, ref long localHeaderStart)
+    {
+        var compressedWidened = BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(20)) == uint.MaxValue;
+        var offsetWidened = localHeaderStart == uint.MaxValue;
+        for (var offset = 0; offset + 4 <= extra.Length;)
+        {
+            var type = BinaryPrimitives.ReadUInt16LittleEndian(extra.Slice(offset));
+            var length = BinaryPrimitives.ReadUInt16LittleEndian(extra.Slice(offset + 2));
+            if (offset + 4 + length > extra.Length)
+                throw new InvalidDataException("Invalid ZIP extra field.");
+            if (type != 1)
+            {
+                offset += 4 + length;
+                continue;
+            }
+
+            var end = offset + 4 + length;
+            var cursor = offset + 4;
+            if (size == uint.MaxValue) size = ReadZip64Value(extra, ref cursor, end);
+            if (compressedWidened) cursor += 8;
+            if (offsetWidened) localHeaderStart = checked((long)ReadZip64Value(extra, ref cursor, end));
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// <para>从扩展块游标处读取一个 8 字节 ZIP64 值并前移游标。</para>
+    /// Reads one eight-byte ZIP64 value at the extra-block cursor and advances the cursor.
+    /// </summary>
+    private static ulong ReadZip64Value(ReadOnlySpan<byte> extra, ref int cursor, int end)
+    {
+        if (cursor + 8 > end) throw new InvalidDataException("ZIP64 entry is missing its sizes.");
+        var value = BinaryPrimitives.ReadUInt64LittleEndian(extra.Slice(cursor));
+        cursor += 8;
+        return value;
+    }
+
+    /// <summary>
+    /// <para>读取条目本地头并返回其数据区起点，本地头的名称与扩展字段长度决定该偏移，与本地头是否承载大小无关。
+    /// 读取后归档流位置还原到调用前的位置，调用方可以继续顺序遍历中央目录。</para>
+    /// Reads an entry's local header and returns the start of its data, which the local name and extra lengths fix
+    /// regardless of whether the local header itself carries the sizes. The archive position is restored afterwards so
+    /// the caller can keep walking the central directory sequentially.
+    /// </summary>
+    /// <param name="archive">Archive stream, left at its previous position. <para>归档流，调用后仍停在原位置。</para></param>
+    /// <param name="localHeaderStart">Absolute offset of the local header. <para>本地头的绝对偏移。</para></param>
+    /// <returns>Absolute offset of the entry data. <para>条目数据的绝对偏移。</para></returns>
+    /// <exception cref="InvalidDataException">The local header signature is missing. <para>本地头签名缺失。</para></exception>
+    private static long LocalDataStart(Stream archive, long localHeaderStart)
+    {
+        var resume = archive.Position;
+        var header = new byte[30];
+        archive.Position = localHeaderStart;
+        archive.ReadExactly(header);
+        if (BinaryPrimitives.ReadUInt32LittleEndian(header) != 0x04034b50)
+            throw new InvalidDataException("OTA ZIP entry local header is missing.");
+        archive.Position = resume;
+        return checked(localHeaderStart + header.Length
+            + BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(26))
+            + BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(28)));
     }
 
     private const string MetadataEntryName = "META-INF/com/android/metadata";
@@ -473,7 +550,7 @@ internal static partial class DeliveryPackageBuilder
         stream.Write(buffer);
     }
 
-    private static DeliveryFile[] Selected(DeliveryPlan plan) => plan.Files.Where(f => !f.Optional || f.Default).ToArray();
+    private static DeliveryFile[] Selected(DeliveryPlan plan) => [.. plan.Files.Where(f => !f.Optional || f.Default)];
 
     /// <summary><para>为进入 Payload 的容器镜像生成 <c>care_map.pb</c> 字节；只收录受支持且带 AVB footer 的分区，
     /// 没有任何可校验分区时返回 null，让包保持与不带 verity 时一致的成员集合。</para>
@@ -592,6 +669,22 @@ internal static partial class DeliveryPackageBuilder
         var entry = zip.CreateEntry(name, CompressionLevel.NoCompression);
         entry.LastWriteTime = new DateTimeOffset(2009, 1, 1, 0, 0, 0, TimeSpan.Zero);
         return entry;
+    }
+
+    /// <summary><para>把整个文件作为 stored 条目写入归档，条目大小在本地文件头中直接可读。</para>
+    /// Writes a whole file as a stored entry whose sizes are readable from its local file header.</summary>
+    private static void WriteStored(ZipArchive zip, string name, string path)
+    {
+        using var source = File.OpenRead(path);
+        WriteStored(zip, name, source);
+    }
+
+    /// <summary><para>把流内容作为 stored 条目写入归档，写入完成后才释放条目流以确定大小与 CRC-32。</para>
+    /// Writes stream content as a stored entry, releasing the entry stream only after the data so sizes and CRC-32 are final.</summary>
+    private static void WriteStored(ZipArchive zip, string name, Stream source)
+    {
+        using var entry = Entry(zip, name).Open();
+        source.CopyTo(entry);
     }
     private static async Task AddTextAsync(ZipArchive zip, string name, string text, CancellationToken token)
     {

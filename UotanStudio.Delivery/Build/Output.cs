@@ -676,7 +676,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     /// <summary><para>提前扫描输出目录，返回本次输出会覆盖的已存在目标文件（排序去重）。</para>
     /// Scans the output directory in advance and returns planned destination files that already exist, sorted and deduplicated.</summary>
     internal static string[] FindExistingOutputs(DeliveryPlan plan)
-        => PlannedOutputPaths(plan).Where(File.Exists).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        => [.. PlannedOutputPaths(plan).Where(File.Exists).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
 
     private static string[] Publish(string stage, string output, CancellationToken token, IReadOnlySet<string>? overwrite = null)
     {
@@ -712,7 +712,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                 moved.Add(file);
             }
             foreach (var backup in backups) File.Delete(backup.Backup);
-            return moved.Select(f => f.Destination).ToArray();
+            return [.. moved.Select(f => f.Destination)];
         }
         catch
         {
