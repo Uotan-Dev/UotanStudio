@@ -47,6 +47,22 @@ public static class MetadataFormat
     public const int LP_PARTITION_RESERVED_BYTES = 4096;
 
     /// <summary>
+    /// On-disk byte width of the fixed name field shared by the three LP name kinds, namely the
+    /// partition name, the partition-group name and the block-device partition name. Upstream
+    /// <c>liblp</c> stores each of them as an ASCII C string in <c>LP_NAME_MAX_LENGTH</c> bytes, so a
+    /// value that does not fit cannot be stored at all and must never be clipped into the field.
+    /// <para>LP 三种名称（分区名、分区组名、块设备分区名）共用的定宽名称字段磁盘字节数。
+    /// 上游 <c>liblp</c> 把它们分别按 ASCII C 字符串存储在 <c>LP_NAME_MAX_LENGTH</c> 字节内，
+    /// 因此放不下的值根本无法存储，绝不能再裁剪写入字段。</para>
+    /// </summary>
+    /// <value>
+    /// The 36 bytes each name field occupies: bytes 0..35 of a partition or group entry and bytes
+    /// 24..59 of a block-device entry.
+    /// <para>每个名称字段占据的 36 字节：分区或组条目的第 0..35 字节，块设备条目的第 24..59 字节。</para>
+    /// </value>
+    internal const int NameFieldBytes = 36;
+
+    /// <summary>
     /// Extent target type whose target data is a linear sector offset into a block device.
     /// <para>extent 目标类型，其目标数据为块设备内的线性扇区偏移。</para>
     /// </summary>
@@ -525,8 +541,11 @@ public readonly struct LpMetadataPartition
     /// <para>分区条目的原始 36 字节名称字段。</para>
     /// </summary>
     /// <value>
-    /// Bytes 0..35 as stored, typically UTF-8 terminated by the first NUL; serialization truncates longer arrays and zero-fills the rest, and <c>null</c> writes zeros.
-    /// <para>按存储原样的第 0..35 字节，通常为以首个 NUL 结尾的 UTF-8；序列化会截断更长的数组并补零，<c>null</c> 写入全零。</para>
+    /// Bytes 0..35 as stored, terminated by the first NUL; serialization rejects arrays longer than
+    /// <see cref="MetadataFormat.NameFieldBytes"/>, zero-fills the rest of the field, and writes zeros
+    /// for <c>null</c>.
+    /// <para>按存储原样的第 0..35 字节，以首个 NUL 结尾；序列化会拒绝长度超过
+    /// <see cref="MetadataFormat.NameFieldBytes"/> 的数组，把字段其余部分补零，<c>null</c> 写入全零。</para>
     /// </value>
     public byte[] Name { get; init; }
 
@@ -620,10 +639,15 @@ public readonly struct LpMetadataPartition
     /// A new <see cref="MetadataFormat.Sizes.Partition"/>-byte little-endian array with the name field zero-padded.
     /// <para>新的 <see cref="MetadataFormat.Sizes.Partition"/> 字节小端数组，名称字段以零填充。</para>
     /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// <see cref="Name"/> is longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, which the
+    /// fixed name field cannot hold.
+    /// <para><see cref="Name"/> 的字节数大于 <see cref="MetadataFormat.NameFieldBytes"/>，定宽名称字段无法容纳。</para>
+    /// </exception>
     public byte[] ToBytes()
     {
         var data = new byte[MetadataFormat.Sizes.Partition];
-        WriteName(data, Name);
+        WriteName(data.AsSpan(0, MetadataFormat.NameFieldBytes), Name, "partition name");
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(36), Attributes);
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(40), FirstExtentIndex);
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(44), NumExtents);
@@ -634,14 +658,47 @@ public readonly struct LpMetadataPartition
     internal static string ReadName(byte[]? nameBytes)
         => nameBytes is null ? string.Empty : NulText.ReadCString(nameBytes, Encoding.UTF8);
 
-    internal static void WriteName(Span<byte> dest, byte[]? name)
+    /// <summary>
+    /// Writes one LP name into the bytes of its fixed field, failing instead of clipping when the value
+    /// does not fit. A clipped name would silently rename a partition on the device, because
+    /// <c>dump-super</c>, <c>fastboot</c> and the kernel read back exactly the bytes stored here, and a
+    /// value wider than the field would also overwrite the adjacent flags or index. The caller passes a
+    /// destination slice that starts at the field, and <see cref="MetadataFormat.NameFieldBytes"/> stays
+    /// the single authority on the accepted width for all three name kinds.
+    /// <para>把一个 LP 名称写入其定宽字节的字段；值放不下时直接失败而不是裁剪。裁剪后的名称会在设备上
+    /// 静默改名，因为 <c>dump-super</c>、<c>fastboot</c> 与内核读回的就是此处存储的字节；超出字段宽度的
+    /// 值还会覆盖相邻的标志或索引字段。调用方传入从该字段起始的目标切片，而
+    /// <see cref="MetadataFormat.NameFieldBytes"/> 始终是三种名称共用的唯一宽度依据。</para>
+    /// </summary>
+    /// <param name="dest">
+    /// The name-field window of the entry record, starting at that field's first byte.
+    /// <para>条目记录中的名称字段窗口，从该字段的首字节开始。</para>
+    /// </param>
+    /// <param name="name">
+    /// The already encoded name bytes, or <c>null</c> to leave the field zero-filled.
+    /// <para>已编码的名称字节；为 <c>null</c> 时字段保持全零。</para>
+    /// </param>
+    /// <param name="field">
+    /// The field label quoted in the failure message.
+    /// <para>失败消息中引用的字段标签。</para>
+    /// </param>
+    /// <exception cref="InvalidDataException">
+    /// <paramref name="name"/> has more bytes than <see cref="MetadataFormat.NameFieldBytes"/>.
+    /// <para><paramref name="name"/> 的字节数大于 <see cref="MetadataFormat.NameFieldBytes"/>。</para>
+    /// </exception>
+    internal static void WriteName(Span<byte> dest, byte[]? name, string field)
     {
         dest.Clear();
         if (name is null)
         {
             return;
         }
-        name.AsSpan(0, Math.Min(name.Length, dest.Length)).CopyTo(dest);
+        if (name.Length > MetadataFormat.NameFieldBytes)
+        {
+            throw new InvalidDataException(
+                $"LP {field} is not representable: {name.Length} UTF-8 bytes exceed the {MetadataFormat.NameFieldBytes}-byte name field: '{Encoding.UTF8.GetString(name)}'.");
+        }
+        name.CopyTo(dest);
     }
 }
 
@@ -748,8 +805,11 @@ public readonly struct LpMetadataPartitionGroup
     /// <para>分区组条目的原始 36 字节名称字段。</para>
     /// </summary>
     /// <value>
-    /// Bytes 0..35 as stored, typically UTF-8 terminated by the first NUL; serialization truncates longer arrays and zero-fills the rest, and <c>null</c> writes zeros.
-    /// <para>按存储原样的第 0..35 字节，通常为以首个 NUL 结尾的 UTF-8；序列化会截断更长的数组并补零，<c>null</c> 写入全零。</para>
+    /// Bytes 0..35 as stored, terminated by the first NUL; serialization rejects arrays longer than
+    /// <see cref="MetadataFormat.NameFieldBytes"/>, zero-fills the rest of the field, and writes zeros
+    /// for <c>null</c>.
+    /// <para>按存储原样的第 0..35 字节，以首个 NUL 结尾；序列化会拒绝长度超过
+    /// <see cref="MetadataFormat.NameFieldBytes"/> 的数组，把字段其余部分补零，<c>null</c> 写入全零。</para>
     /// </value>
     public byte[] Name { get; init; }
 
@@ -821,10 +881,15 @@ public readonly struct LpMetadataPartitionGroup
     /// A new <see cref="MetadataFormat.Sizes.PartitionGroup"/>-byte little-endian array with the name field zero-padded.
     /// <para>新的 <see cref="MetadataFormat.Sizes.PartitionGroup"/> 字节小端数组，名称字段以零填充。</para>
     /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// <see cref="Name"/> is longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, which the
+    /// fixed name field cannot hold.
+    /// <para><see cref="Name"/> 的字节数大于 <see cref="MetadataFormat.NameFieldBytes"/>，定宽名称字段无法容纳。</para>
+    /// </exception>
     public byte[] ToBytes()
     {
         var data = new byte[MetadataFormat.Sizes.PartitionGroup];
-        LpMetadataPartition.WriteName(data, Name);
+        LpMetadataPartition.WriteName(data.AsSpan(0, MetadataFormat.NameFieldBytes), Name, "group name");
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(36), Flags);
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(40), MaximumSize);
         return data;
@@ -882,8 +947,11 @@ public readonly struct LpMetadataBlockDevice
     /// <para>支撑该块设备的物理分区的原始 36 字节名称，存储于第 24..59 字节。</para>
     /// </summary>
     /// <value>
-    /// A fresh 36-byte copy, typically UTF-8 terminated by the first NUL; serialization truncates longer arrays and zero-fills the rest, and <c>null</c> writes zeros.
-    /// <para>新的 36 字节副本，通常为以首个 NUL 结尾的 UTF-8；序列化会截断更长的数组并补零，<c>null</c> 写入全零。</para>
+    /// A fresh 36-byte copy, terminated by the first NUL; serialization rejects arrays longer than
+    /// <see cref="MetadataFormat.NameFieldBytes"/>, zero-fills the rest of the field, and writes zeros
+    /// for <c>null</c>.
+    /// <para>新的 36 字节副本，以首个 NUL 结尾；序列化会拒绝长度超过
+    /// <see cref="MetadataFormat.NameFieldBytes"/> 的数组，把字段其余部分补零，<c>null</c> 写入全零。</para>
     /// </value>
     public byte[] PartitionName { get; init; }
 
@@ -934,6 +1002,11 @@ public readonly struct LpMetadataBlockDevice
     /// A new <see cref="MetadataFormat.Sizes.BlockDevice"/>-byte little-endian array with the partition-name field zero-padded.
     /// <para>新的 <see cref="MetadataFormat.Sizes.BlockDevice"/> 字节小端数组，分区名字段以零填充。</para>
     /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// <see cref="PartitionName"/> is longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes,
+    /// which the fixed name field cannot hold.
+    /// <para><see cref="PartitionName"/> 的字节数大于 <see cref="MetadataFormat.NameFieldBytes"/>，定宽名称字段无法容纳。</para>
+    /// </exception>
     public byte[] ToBytes()
     {
         var data = new byte[MetadataFormat.Sizes.BlockDevice];
@@ -941,7 +1014,7 @@ public readonly struct LpMetadataBlockDevice
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(8), Alignment);
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(12), AlignmentOffset);
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(16), Size);
-        LpMetadataPartition.WriteName(data.AsSpan(24), PartitionName);
+        LpMetadataPartition.WriteName(data.AsSpan(24, MetadataFormat.NameFieldBytes), PartitionName, "block-device partition name");
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(60), Flags);
         return data;
     }

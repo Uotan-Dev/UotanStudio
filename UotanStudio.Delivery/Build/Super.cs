@@ -34,13 +34,23 @@ internal static class DeliverySuperBuilder
     /// <para>构建 LP 元数据并写出完整 Super 镜像或独立的 super_empty.img（含可选的稀疏与 Zstd 阶段）。
     /// 在分配 extent 前先按容量预检，使容量超限的报错给出实际数值而不是裸参数名。
     /// 分区 extent 在写入前已在 LP 元数据中分配且互不重叠，因此分区解码与写入按
-    /// <see cref="FirmwareParallelism.Workers"/> 并发执行，最终镜像字节与完成顺序无关。</para>
+    /// <see cref="FirmwareParallelism.Workers"/> 并发执行，最终镜像字节与完成顺序无关。
+    /// 块设备名直接取自 <see cref="DeliverySuperOptions.DeviceName"/>，是否可表示由 LP 写入器的定宽 36 字节名称字段判定，
+    /// 并在任何输出文件创建之前由下方的序列化预检触发，因此本路径不再重复维护一套宽度规则。</para>
     /// Builds the LP metadata and writes the full Super image or the standalone super_empty.img, including optional Sparse
     /// and Zstd stages. Capacity is pre-checked before allocating extents so an over-capacity error reports actual numbers
     /// rather than a bare parameter name. Partition extents are allocated and non-overlapping before any data is written,
     /// so partitions decode and write concurrently up to <see cref="FirmwareParallelism.Workers"/> and the final image bytes
-    /// are independent of completion order.
+    /// are independent of completion order. The block-device name is taken straight from
+    /// <see cref="DeliverySuperOptions.DeviceName"/> and its representability is enforced by the LP writer's fixed 36-byte name
+    /// field, which is probed by the serialization pass below before any output file is created; this path therefore keeps no
+    /// second copy of that width rule.
     /// </summary>
+    /// <exception cref="InvalidDataException">
+    /// The Super device name does not fit the LP block-device name field, the declared capacity is exceeded, or a partition
+    /// size changed while the image was being written.
+    /// <para>super 设备名放不进 LP 块设备名称字段、声明容量被超出，或写入镜像期间分区大小发生变化。</para>
+    /// </exception>
     internal static Task BuildAsync(IReadOnlyList<DeliveryFile> files, DeliverySuperOptions options, string output,
         IProgress<double>? progress = null, CancellationToken token = default,
         IProgress<DeliveryProgress>? detailProgress = null) => Task.Run(async () =>

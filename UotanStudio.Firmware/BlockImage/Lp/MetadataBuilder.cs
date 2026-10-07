@@ -108,12 +108,13 @@ public sealed class MetadataBuilder
     /// <para>添加分区，大小向上对齐逻辑块；空分区不分配 extent。</para>
     /// </summary>
     /// <param name="name">
-    /// Partition name: 1 to 36 UTF-8 bytes without NUL, limited to ASCII letters, digits and underscores, unique across partitions.
-    /// <para>分区名：1 至 36 个 UTF-8 字节且不含 NUL，仅限 ASCII 字母、数字与下划线，且在所有分区间唯一。</para>
+    /// Partition name: 1 to 36 ASCII bytes without NUL, limited to ASCII letters, digits and underscores, unique across partitions.
+    /// <para>分区名：1 至 36 个 ASCII 字节且不含 NUL，仅限 ASCII 字母、数字与下划线，且在所有分区间唯一。</para>
     /// </param>
     /// <param name="groupName">
-    /// Owning group name, validated by the same name rules; the group itself is checked when <see cref="Build"/> runs.
-    /// <para>所属组名，按相同名称规则校验；组本身的存在性在 <see cref="Build"/> 时检查。</para>
+    /// Owning group name, checked by the shared ASCII length and NUL rules but not restricted to letters, digits and underscores;
+    /// the group itself is checked when <see cref="Build"/> runs.
+    /// <para>所属组名，按共用的 ASCII 长度与 NUL 规则校验，但不限定为字母、数字与下划线；组本身的存在性在 <see cref="Build"/> 时检查。</para>
     /// </param>
     /// <param name="sizeInBytes">
     /// Requested partition size, aligned up and appended to the next free linear extent position.
@@ -124,8 +125,10 @@ public sealed class MetadataBuilder
     /// <para>原样保存的 LP 分区属性标志。</para>
     /// </param>
     /// <exception cref="ArgumentException">
-    /// A name is invalid or duplicated, or the aligned size does not fit the device data area.
-    /// <para>名称无效或重复，或对齐后的大小超出设备数据区。</para>
+    /// A name is empty, longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, contains NUL, uses a character
+    /// outside its documented set, or is duplicated; or the aligned size does not fit the device data area.
+    /// <para>名称为空、超过 <see cref="MetadataFormat.NameFieldBytes"/> 字节、含 NUL、使用了其文档约定的字符集之外的字符，
+    /// 或名称重复；也可能是对齐后的大小超出设备数据区。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">
     /// The builder geometry fails validation.
@@ -133,10 +136,10 @@ public sealed class MetadataBuilder
     /// </exception>
     public void AddPartition(string name, string groupName, ulong sizeInBytes, uint attributes = 0)
     {
-        ValidateName(name, nameof(name));
+        ValidateName(name, "partition", nameof(name));
         if (name.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_'))
             throw new ArgumentException("LP partition names allow only ASCII letters, digits, and underscores.", nameof(name));
-        ValidateName(groupName, nameof(groupName));
+        ValidateName(groupName, "group", nameof(groupName));
         if (_partitions.Any(p => p.Name == name))
             throw new ArgumentException("Partition name already exists.", nameof(name));
         MetadataReader.ValidateGeometry(_geometry);
@@ -162,8 +165,8 @@ public sealed class MetadataBuilder
     /// <para>添加分区组。</para>
     /// </summary>
     /// <param name="name">
-    /// Group name: 1 to 36 UTF-8 bytes without NUL, unique across groups.
-    /// <para>组名：1 至 36 个 UTF-8 字节且不含 NUL，在所有组间唯一。</para>
+    /// Group name: 1 to 36 ASCII bytes without NUL, unique across groups.
+    /// <para>组名：1 至 36 个 ASCII 字节且不含 NUL，在所有组间唯一。</para>
     /// </param>
     /// <param name="maximumSize">
     /// Combined partition-size budget in bytes; <c>0</c> means unlimited.
@@ -174,12 +177,14 @@ public sealed class MetadataBuilder
     /// <para>原样保存的 LP 组标志。</para>
     /// </param>
     /// <exception cref="ArgumentException">
-    /// The name is invalid or already added.
-    /// <para>名称无效或已添加。</para>
+    /// The name is empty, longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, contains NUL,
+    /// contains a character above <c>U+007F</c>, or is already added.
+    /// <para>名称为空、超过 <see cref="MetadataFormat.NameFieldBytes"/> 字节、含 NUL、含大于 <c>U+007F</c>
+    /// 的字符，或已经添加。</para>
     /// </exception>
     public void AddGroup(string name, ulong maximumSize, uint flags = 0)
     {
-        ValidateName(name, nameof(name));
+        ValidateName(name, "group", nameof(name));
         if (_groups.Any(g => g.NameString == name))
             throw new ArgumentException("Group name already exists.", nameof(name));
         _groups.Add(new LpMetadataPartitionGroup
@@ -256,10 +261,61 @@ public sealed class MetadataBuilder
         return remainder == 0 ? size : checked(size + alignment - remainder);
     }
 
-    private static void ValidateName(string name, string parameterName)
+    /// <summary>
+    /// Rejects a name the 36-byte LP name field cannot carry: an empty value, a value wider than the
+    /// field in UTF-8 bytes, an embedded NUL, or any character outside ASCII. Upstream
+    /// <c>liblp</c>, <c>fastboot</c> and the kernel treat these names as ASCII, so a non-ASCII name
+    /// would be unreadable on the device even though its bytes would fit the field.
+    /// <para>拒绝 36 字节 LP 名称字段无法承载的名称：空值、UTF-8 字节宽度超出字段、内嵌 NUL，以及任何
+    /// 非 ASCII 字符。上游 <c>liblp</c>、<c>fastboot</c> 与内核都把这些名称当作 ASCII，因此即使字节数
+    /// 放得下，非 ASCII 名称在设备上也无法识别。</para>
+    /// </summary>
+    /// <param name="name">
+    /// The candidate partition or group name.
+    /// <para>待校验的分区名或组名。</para>
+    /// </param>
+    /// <param name="kind">
+    /// The name kind quoted in the failure message.
+    /// <para>失败消息中引用的名称种类。</para>
+    /// </param>
+    /// <param name="parameterName">
+    /// The caller's parameter name reported through <see cref="ArgumentException.ParamName"/>.
+    /// <para>通过 <see cref="ArgumentException.ParamName"/> 上报的调用方参数名。</para>
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="name"/> is empty, wider than <see cref="MetadataFormat.NameFieldBytes"/> UTF-8
+    /// bytes, contains NUL, or contains a character above <c>U+007F</c>.
+    /// <para><paramref name="name"/> 为空、宽度超过 <see cref="MetadataFormat.NameFieldBytes"/> 个
+    /// UTF-8 字节、含 NUL，或含大于 <c>U+007F</c> 的字符。</para>
+    /// </exception>
+    private static void ValidateName(string name, string kind, string parameterName)
     {
-        if (string.IsNullOrEmpty(name) || name.Contains('\0') || Encoding.UTF8.GetByteCount(name) > 36)
-            throw new ArgumentException("LP names must contain 1 to 36 UTF-8 bytes without NUL.", parameterName);
+        if (string.IsNullOrEmpty(name))
+        {
+            throw new ArgumentException(
+                $"LP {kind} name is not representable: an empty name cannot occupy the {MetadataFormat.NameFieldBytes}-byte name field.", parameterName);
+        }
+        var bytes = Encoding.UTF8.GetByteCount(name);
+        if (bytes > MetadataFormat.NameFieldBytes)
+        {
+            throw new ArgumentException(
+                $"LP {kind} name is not representable: {bytes} UTF-8 bytes exceed the {MetadataFormat.NameFieldBytes}-byte name field: '{name}'.", parameterName);
+        }
+        if (name.Contains('\0'))
+        {
+            throw new ArgumentException(
+                $"LP {kind} name is not representable: a NUL byte ends the {MetadataFormat.NameFieldBytes}-byte name field, so '{name}' would be read back truncated.", parameterName);
+        }
+        for (var position = 0; position < name.Length; position++)
+        {
+            if (char.IsAscii(name[position]))
+            {
+                continue;
+            }
+
+            throw new ArgumentException(
+                $"LP {kind} name is not representable: U+{(uint)name[position]:X4} is outside the ASCII range stored by the {MetadataFormat.NameFieldBytes}-byte name field: '{name}'.", parameterName);
+        }
     }
 
     /// <summary>Describes a planned partition. <para>描述规划中的分区。</para></summary>
