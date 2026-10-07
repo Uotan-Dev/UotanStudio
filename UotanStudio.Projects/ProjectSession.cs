@@ -286,7 +286,7 @@ public sealed partial class ProjectSession
 
         await transaction.StageAsync(firmwarePath, firmware, SolutionJsonContext.Default.FirmwareProjectSnapshot, cancellationToken);
         await transaction.StageAsync(path, solution, SolutionJsonContext.Default.SolutionSnapshot, cancellationToken);
-        await transaction.StageAsync(Path.Combine(stateDir, "history.json"), new List<HistoryOperationDto>(), HistoryJsonContext.Default.ListHistoryOperationDto, cancellationToken);
+        await transaction.StageAsync(Path.Combine(stateDir, "history.json"), [], HistoryJsonContext.Default.ListHistoryOperationDto, cancellationToken);
         await transaction.StageAsync(Path.Combine(stateDir, "settings.json"), new SolutionSettings(), SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken);
         transaction.Commit(cancellationToken);
         Context.OpenSolution(path, solution);
@@ -361,7 +361,7 @@ public sealed partial class ProjectSession
         }
         var firmware = target.FirmwareProjectPath is { } firmwarePath
             ? await SolutionPersistenceService.LoadFirmwareProjectAsync(firmwarePath, cancellationToken) : null;
-        var openedNodeProjects = new List<(string Name, NodeProjectSnapshot Snapshot)>();
+        List<(string Name, NodeProjectSnapshot Snapshot)> openedNodeProjects = new(target.NodeProjects.Count);
         foreach (var descriptor in target.NodeProjects.Where(project => project.IsOpen))
         {
             if (target.ResolveNodeProjectPath(descriptor) is not { } nodePath) continue;
@@ -718,7 +718,7 @@ public sealed partial class ProjectSession
 
         var openDocs = persistPageState ? _workspace.CaptureDocuments(rootDir) : [];
 
-        var subProjectDtos = new List<SubProjectDto>();
+        List<SubProjectDto> subProjectDtos = new(context.SubProjects.Count);
         foreach (var sp in context.SubProjects)
         {
             subProjectDtos.Add(new SubProjectDto
@@ -768,7 +768,7 @@ public sealed partial class ProjectSession
             var settingsPath = Path.Combine(stateDir, "settings.json");
             var solutionSettings = await SolutionSettingsService.LoadAsync(settingsPath, cancellationToken) ?? new SolutionSettings();
             if (persistPageState)
-                solutionSettings.RecentDocuments = openDocs.Select(d => d.RelativePath).Where(p => p.Length > 0).ToList();
+                solutionSettings.RecentDocuments = [.. openDocs.Select(d => d.RelativePath).Where(p => p.Length > 0)];
             await transaction.StageAsync(settingsPath, solutionSettings, SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken);
         }
         transaction.Commit(cancellationToken);

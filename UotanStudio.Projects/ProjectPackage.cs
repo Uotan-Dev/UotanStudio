@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.IO.Compression;
 
 namespace UotanStudio.Services.Projects;
@@ -8,6 +9,13 @@ namespace UotanStudio.Services.Projects;
 /// </summary>
 public static class ProjectPackage
 {
+    /// <summary>
+    /// Characters no packaged path segment may contain; one cached set serves every segment of every
+    /// entry instead of rebuilding the array for each check.
+    /// <para>打包路径段不得包含的字符；单个缓存集合服务每个条目的每一段，而不是每次检查都重新构建数组。</para>
+    /// </summary>
+    private static readonly SearchValues<char> InvalidSegmentChars = SearchValues.Create(['<', '>', '"', '|', '?', '*']);
+
     /// <summary>
     /// Extracts into a new destination directory and returns its solution path. Existing destinations are never replaced.
     /// <para>解压到一个新的目标目录并返回其解决方案路径。已存在的目标目录不会被替换。</para>
@@ -83,7 +91,7 @@ public static class ProjectPackage
                     remainingNames -= name.Length;
                     if (remainingNames < 0 || string.IsNullOrEmpty(name) || name.StartsWith('/') || name.Contains(':')
                         || name.Split('/').Any(p => p is "." or ".." || p.EndsWith(' ') || p.EndsWith('.')
-                            || p.IndexOfAny(['<', '>', '"', '|', '?', '*']) >= 0 || IsDeviceName(p)))
+                            || p.AsSpan().ContainsAny(InvalidSegmentChars) || IsDeviceName(p)))
                         throw new InvalidDataException("Invalid package entry path.");
                     if ((entry.ExternalAttributes >> 16 & 0xf000) == 0xa000)
                         throw new InvalidDataException("Package links are not supported.");

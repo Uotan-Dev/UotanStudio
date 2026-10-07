@@ -122,7 +122,7 @@ public sealed class ProjectDataWorkspace : IProjectWorkspace
     /// <para>打开的节点项目名称，按插入顺序。</para>
     /// </summary>
     /// <value>Keys of <see cref="Workflows"/>. <para>即 <see cref="Workflows"/> 的键。</para></value>
-    public IReadOnlyList<string> OpenWorkflowNames => Workflows.Keys.ToArray();
+    public IReadOnlyList<string> OpenWorkflowNames => [.. Workflows.Keys];
 
     /// <summary>
     /// The node project name this host presents as active; <see langword="null"/> when nothing is open.
@@ -198,8 +198,8 @@ public sealed class ProjectDataWorkspace : IProjectWorkspace
         {
             FormatVersion = workflow.FormatVersion,
             ProjectName = name,
-            Nodes = workflow.Nodes.ToList(),
-            Connections = workflow.Connections.ToList()
+            Nodes = [.. workflow.Nodes],
+            Connections = [.. workflow.Connections]
         };
         return true;
     }
@@ -211,7 +211,7 @@ public sealed class ProjectDataWorkspace : IProjectWorkspace
     /// A new list referencing the same entries; later edits do not affect the workspace.
     /// <para>引用相同条目的新列表；后续修改不影响工作区。</para>
     /// </returns>
-    public List<ImageEntryDto> CaptureImages() => Images.ToList();
+    public List<ImageEntryDto> CaptureImages() => [.. Images];
     /// <summary>
     /// Captures the current packing settings.
     /// <para>捕获当前打包设置。</para>
@@ -233,7 +233,7 @@ public sealed class ProjectDataWorkspace : IProjectWorkspace
     /// <para>由拷贝描述符组成的新列表；未设置的比较路径保持 <see langword="null"/>，文档根缺失时路径原样保留，
     /// 空的相对路径转为空字符串。</para>
     /// </returns>
-    public List<OpenDocumentDto> CaptureDocuments(string rootDirectory) => Documents.Select(document => new OpenDocumentDto
+    public List<OpenDocumentDto> CaptureDocuments(string rootDirectory) => [.. Documents.Select(document => new OpenDocumentDto
     {
         Kind = document.Kind,
         OpenMode = document.OpenMode,
@@ -241,7 +241,7 @@ public sealed class ProjectDataWorkspace : IProjectWorkspace
         RelativePath = Rebase(document.RelativePath, rootDirectory) ?? string.Empty,
         CompareLeftPath = Rebase(document.CompareLeftPath, rootDirectory),
         CompareRightPath = Rebase(document.CompareRightPath, rootDirectory)
-    }).ToList();
+    })];
 
     private string? Rebase(string? path, string destinationRoot)
         => string.IsNullOrEmpty(path) || _documentRoot is null ? path

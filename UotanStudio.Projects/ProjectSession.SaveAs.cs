@@ -48,7 +48,7 @@ public sealed partial class ProjectSession
         if (context.RootDirectory is null || context.SubProjects.Count == 0)
         {
             var fresh = new SubProjectDto { Name = destinationName, RelativePath = $"{destinationName}/{destinationName}.uotanfw" };
-            var freshSettings = new SolutionSettings { RecentDocuments = documents.Select(d => d.RelativePath).Where(p => p.Length > 0).ToList() };
+            var freshSettings = new SolutionSettings { RecentDocuments = [.. documents.Select(d => d.RelativePath).Where(p => p.Length > 0)] };
             await PublishCopyAsync(fullPath, destinationDirectory, [fresh], fresh, nodeProjects, images, packing, documents, freshSettings, history, cancellationToken);
             return;
         }
@@ -69,7 +69,7 @@ public sealed partial class ProjectSession
         var settings = sourceSettingsPath is null ? new SolutionSettings()
             : await SolutionSettingsService.LoadAsync(sourceSettingsPath, cancellationToken)
                 ?? (File.Exists(sourceSettingsPath) ? throw new InvalidDataException("Cannot read the source project settings.") : new SolutionSettings());
-        settings.RecentDocuments = documents.Select(d => d.RelativePath).Where(p => p.Length > 0).ToList();
+        settings.RecentDocuments = [.. documents.Select(d => d.RelativePath).Where(p => p.Length > 0)];
 
         await PublishCopyAsync(fullPath, destinationDirectory, references, active, nodeProjects, images, packing, documents, settings, history, cancellationToken);
     }

@@ -64,11 +64,11 @@ public sealed partial class ProjectSession
             var solution = await SolutionPersistenceService.LoadSolutionAsync(path, token)
                 ?? throw new InvalidDataException("Cannot read the current solution.");
             solution.FormatVersion = 1;
-            solution.SubProjects = Context.SubProjects.Where(p => newName is not null || p != project).Select(p => new SubProjectDto
+            solution.SubProjects = [.. Context.SubProjects.Where(p => newName is not null || p != project).Select(p => new SubProjectDto
             {
                 Name = p == project ? newName! : p.Name,
                 RelativePath = Path.GetRelativePath(Context.RootDirectory!, p.FwProjectPath).Replace(Path.DirectorySeparatorChar, '/')
-            }).ToList();
+            })];
             ProjectValidation.ValidateSolution(solution);
             var active = Context.ActiveSubProject;
             if (newName is null && active == project)

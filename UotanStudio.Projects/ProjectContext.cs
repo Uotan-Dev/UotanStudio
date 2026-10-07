@@ -220,7 +220,7 @@ public sealed class ProjectContext
         if (index < 0 || !projects[index].IsOpen) return false;
         for (var position = 0; position < projects.Count; position++)
             projects[position] = projects[position] with { IsActive = position == index };
-        NodeProjects = projects.ToArray();
+        NodeProjects = [.. projects];
         Changed?.Invoke();
         return true;
     }
@@ -244,7 +244,7 @@ public sealed class ProjectContext
                 if (projects[position].IsActive)
                     projects[position] = projects[position] with { IsActive = false };
         projects.Add(registration);
-        NodeProjects = projects.ToArray();
+        NodeProjects = [.. projects];
         Changed?.Invoke();
     }
 
@@ -265,7 +265,7 @@ public sealed class ProjectContext
         projects.RemoveAt(index);
         if (wasActive && projects.FindIndex(node => node.IsOpen) is >= 0 and var nextIndex)
             projects[nextIndex] = projects[nextIndex] with { IsActive = true };
-        NodeProjects = projects.ToArray();
+        NodeProjects = [.. projects];
         Changed?.Invoke();
         return true;
     }
@@ -289,7 +289,7 @@ public sealed class ProjectContext
             for (var position = 0; position < projects.Count; position++)
                 if (position != index && projects[position].IsActive)
                     projects[position] = projects[position] with { IsActive = false };
-        NodeProjects = projects.ToArray();
+        NodeProjects = [.. projects];
         Changed?.Invoke();
         return true;
     }
@@ -383,9 +383,7 @@ public sealed class ProjectContext
 
         SubProjects = subProjects;
         ActiveSubProject = subProjects.FirstOrDefault();
-        NodeProjects = (snapshot?.NodeProjects ?? [])
-            .Select(node => new NodeProjectContext(node.Name, node.RelativePath, node.IsOpen, node.IsActive))
-            .ToArray();
+        NodeProjects = [.. (snapshot?.NodeProjects ?? []).Select(node => new NodeProjectContext(node.Name, node.RelativePath, node.IsOpen, node.IsActive))];
         Changed?.Invoke();
     }
 

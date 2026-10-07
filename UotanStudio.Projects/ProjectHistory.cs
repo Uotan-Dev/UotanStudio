@@ -450,7 +450,7 @@ public sealed class ProjectHistory
     /// </returns>
     public List<HistoryOperationDto> CaptureSnapshot()
     {
-        var operations = new List<HistoryOperationDto>();
+        List<HistoryOperationDto> operations = new(_undoStack.Count);
         foreach (var entry in _undoStack)
         {
             if (entry.Operation is not null)
@@ -471,7 +471,7 @@ public sealed class ProjectHistory
     {
         var source = Path.GetFullPath(sourceRoot);
         var destination = Path.GetFullPath(destinationRoot);
-        return operations.Select(operation => new HistoryOperationDto
+        return [.. operations.Select(operation => new HistoryOperationDto
         {
             Kind = operation.Kind,
             Description = operation.Description,
@@ -479,10 +479,10 @@ public sealed class ProjectHistory
             Count = operation.Count,
             RelativePath = RebasePath(operation.RelativePath, source, destination),
             DestinationPath = RebasePath(operation.DestinationPath, source, destination),
-            RelativePaths = operation.RelativePaths.Select(path => RebasePath(path, source, destination)).ToList(),
-            OutputPaths = operation.OutputPaths.Select(path => RebasePath(path, source, destination)).ToList(),
-            BackupPaths = operation.BackupPaths.Select(path => RebasePath(path, source, destination)).ToList()
-        }).ToList();
+            RelativePaths = [.. operation.RelativePaths.Select(path => RebasePath(path, source, destination))],
+            OutputPaths = [.. operation.OutputPaths.Select(path => RebasePath(path, source, destination))],
+            BackupPaths = [.. operation.BackupPaths.Select(path => RebasePath(path, source, destination))]
+        })];
     }
 
     private static string RebasePath(string path, string sourceRoot, string destinationRoot)
@@ -587,6 +587,20 @@ public sealed class ProjectHistory
         /// Creates a history entry.
         /// <para>创建历史条目。</para>
         /// </summary>
+        /// <param name="description">Operation description shown in the history list. <para>历史列表中显示的操作描述。</para></param>
+        /// <param name="operation">
+        /// Optional serializable descriptor; entries without one stay in memory and are not written to
+        /// the history file.
+        /// <para>可选的可序列化描述符；缺少它的条目只留在内存中，不会写入历史文件。</para>
+        /// </param>
+        /// <param name="undoAction">
+        /// Synchronous undo callback; <see langword="null"/> when the entry only carries an asynchronous one.
+        /// <para>同步撤销回调；条目只有异步回调时为 <see langword="null"/>。</para>
+        /// </param>
+        /// <param name="redoAction">
+        /// Synchronous redo callback; <see langword="null"/> when the entry only carries an asynchronous one.
+        /// <para>同步重做回调；条目只有异步回调时为 <see langword="null"/>。</para>
+        /// </param>
         public HistoryEntry(string description, HistoryOperationDto? operation, Action? undoAction, Action? redoAction)
         {
             Description = description;

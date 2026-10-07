@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Frozen;
 
 namespace UotanStudio.Services.Projects;
@@ -14,6 +15,11 @@ public static class ProjectValidation
     private static readonly FrozenSet<string> ReservedDirectories =
         new[] { "images", "output", "delivery", "nodes", ".uotan", ".deleted", ".git" }
             .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Path separators a display name may never hold; name validation runs once per stored
+    /// reference, so the pair is cached instead of being reallocated per call.
+    /// <para>显示名称绝不允许包含的路径分隔符；名称校验会逐个持久化引用执行，因此这一对字符被缓存而不是每次调用重新分配。</para></summary>
+    private static readonly SearchValues<char> NamePathSeparators = SearchValues.Create(['/', '\\']);
 
     /// <summary>Decides whether a single directory name is one of the reserved data folders
     /// (<c>images</c>, <c>output</c>, <c>delivery</c>, <c>nodes</c>, <c>.uotan</c>, <c>.deleted</c>, <c>.git</c>).
@@ -155,7 +161,7 @@ public static class ProjectValidation
     public static void ValidateName(string name)
     {
         if (string.IsNullOrWhiteSpace(name) || name.Length > 255 || name is "." or ".." || name.Any(char.IsControl)
-            || name.IndexOfAny(['/', '\\']) >= 0)
+            || name.AsSpan().ContainsAny(NamePathSeparators))
             throw new ArgumentException("Invalid sub-project name.", nameof(name));
     }
 }
