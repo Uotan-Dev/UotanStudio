@@ -114,8 +114,8 @@ public sealed partial class DeviceMonitorService
                 try
                 {
                     var shell = session.CreateShellClient(command);
-                    var exitCode = await Task.Run(() => shell.ExecuteStreaming(
-                        buffer => stdout.Feed(buffer), buffer => stderr.Feed(buffer), token), token).ConfigureAwait(false);
+                    var exitCode = await shell.ExecuteStreamingAsync(
+                        buffer => stdout.Feed(buffer), buffer => stderr.Feed(buffer), token).ConfigureAwait(false);
                     token.ThrowIfCancellationRequested();
                     if (exitCode != 0) throw new InvalidOperationException($"ADB shell exited with code {exitCode}.");
                 }
@@ -199,8 +199,8 @@ public sealed partial class DeviceMonitorService
                 var stdout = new AdbLogcatLineDecoder(OnLine);
                 var stderr = new AdbLogcatLineDecoder(OnLine);
                 var shell = session.CreateShellClient(command);
-                exitCode = await Task.Run(() => shell.ExecuteStreaming(
-                    buffer => stdout.Feed(buffer), buffer => stderr.Feed(buffer), token), token).ConfigureAwait(false);
+                exitCode = await shell.ExecuteStreamingAsync(
+                    buffer => stdout.Feed(buffer), buffer => stderr.Feed(buffer), token).ConfigureAwait(false);
                 stdout.Feed([], flush: true);
                 stderr.Feed([], flush: true);
             }

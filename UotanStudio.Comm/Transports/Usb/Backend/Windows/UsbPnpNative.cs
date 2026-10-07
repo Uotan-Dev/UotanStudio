@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Comm.Text;
@@ -307,7 +308,7 @@ internal static partial class UsbPnpNative
 
     private static uint? ReadUInt32(uint devInst, in DEVPROPKEY key)
         => ReadProperty(devInst, key) is (DevPropTypeUint32, byte[] data) && data.Length >= 4
-            ? BitConverter.ToUInt32(data, 0)
+            ? BinaryPrimitives.ReadUInt32LittleEndian(data)
             : null;
 
     private static (uint Type, byte[]? Data)? ReadProperty(uint devInst, in DEVPROPKEY key)

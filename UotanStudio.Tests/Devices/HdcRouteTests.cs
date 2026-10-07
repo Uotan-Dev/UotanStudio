@@ -184,7 +184,7 @@ public sealed class HdcRouteTests
         Assert.Equal("target", request.Key);
         Assert.Equal("shell\0", request.Command);
         Assert.Equal("echo ready\n", request.Input);
-        Assert.Equal("ready\r\n", Encoding.UTF8.GetString(output.ToArray()));
+        Assert.Equal("ready\r\n", Encoding.UTF8.GetString(output.GetBuffer(), 0, (int)output.Length));
     }
 
     private static async Task WriteFrameAsync(NetworkStream stream, byte[] payload, CancellationToken ct)

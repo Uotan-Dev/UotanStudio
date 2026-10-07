@@ -59,11 +59,7 @@ public sealed class CompatibilityMatrixRegistrationTests
     [Fact]
     public void Validate_ResourceHashThatIsNotLowerHex64_ReportsError()
     {
-        var broken = new CompatibilityMatrixCell[]
-        {
-            new("mtk-da", "v6-emmc", CompatibilityMatrixStatus.DeviceReadonly,
-                "2026-09-01", "transcripts/mtk-da-v6.md", ["ZZZ"])
-        };
+        CompatibilityMatrixCell[] broken = [new("mtk-da", "v6-emmc", CompatibilityMatrixStatus.DeviceReadonly, "2026-09-01", "transcripts/mtk-da-v6.md", ["ZZZ"])];
 
         var errors = CompatibilityMatrix.Validate(broken);
 
@@ -100,7 +96,7 @@ internal readonly record struct CompatibilityMatrixCell(
     string? TranscriptPath,
     IReadOnlyList<string> ResourceSha256Hexes);
 
-internal static class CompatibilityMatrix
+file static class CompatibilityMatrix
 {
     internal static readonly CompatibilityMatrixCell[] Seed =
     [

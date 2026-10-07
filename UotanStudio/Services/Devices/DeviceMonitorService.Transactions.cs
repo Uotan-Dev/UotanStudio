@@ -17,18 +17,17 @@ public sealed partial class DeviceMonitorService
     public IReadOnlyList<UsbDeviceInfo> ListRoutableUsbDevices()
     {
         var snapshot = _controller.RefreshAsync().GetAwaiter().GetResult();
-        return snapshot.Endpoints.Where(endpoint =>
+        return [.. snapshot.Endpoints.Where(endpoint =>
             endpoint.Source == UotanStudio.Comm.Devices.Discovery.UsbDiscoverySource.SourceName &&
             endpoint.Route == "direct-usb" && endpoint.UsbInfo is not null)
-            .Select(endpoint => endpoint.UsbInfo!)
-            .ToArray();
+            .Select(endpoint => endpoint.UsbInfo!)];
     }
 
     /// <summary>Lists the routed server and direct USB targets.</summary>
     public IReadOnlyList<(string Serial, string State)> ListAdbTargets()
-        => Scan().Where(device => device.Protocol == DeviceProtocolKind.Adb)
+        => [.. Scan().Where(device => device.Protocol == DeviceProtocolKind.Adb)
             .Select(device => (device.Serial, device.Key.StartsWith("adb:", StringComparison.Ordinal)
-                ? device.State : ProbeAdb(device) ? "device" : "offline")).ToArray();
+                ? device.State : ProbeAdb(device) ? "device" : "offline"))];
 
     /// <summary>Forwards a service to the exact routed ADB target.</summary>
     public TResult RunAdbService<TResult>(string serial, string service, Func<Stream, TResult> operation)
@@ -43,15 +42,34 @@ public sealed partial class DeviceMonitorService
         });
     }
 
-    /// <summary>Uploads through the exact routed ADB target.</summary>
-    public void PushAdbFile(string serial, string localPath, string remotePath)
+    /// <summary>Uploads through the exact routed ADB target without parking a thread on the transfer.</summary>
+    public Task PushAdbFileAsync(DetectedDevice device, string localPath, string remotePath,
+        CancellationToken cancellationToken = default)
     {
-        _ = RunAdb(RequireUniqueAdbTarget(serial), session =>
+        ArgumentNullException.ThrowIfNull(device);
+        return RunAdbAsync(device, async session =>
         {
-            using var sync = session.CreateSyncClient();
-            sync.Push(localPath, remotePath);
+            cancellationToken.ThrowIfCancellationRequested();
+            await using var sync = session.CreateSyncClient();
+            await sync.PushAsync(localPath, remotePath, cancellationToken: cancellationToken).ConfigureAwait(false);
             return true;
-        });
+        }, cancellationToken);
+    }
+
+    /// <summary>Downloads through the exact routed ADB target without parking a thread on the transfer.</summary>
+    public Task PullAdbFileAsync(DetectedDevice device, string remotePath, string localPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
+        return RunAdbAsync(device, async session =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await using var sync = session.CreateSyncClient();
+            await sync.PullAsync(remotePath, localPath, cancellationToken).ConfigureAwait(false);
+            return true;
+        }, cancellationToken);
     }
 
     private DetectedDevice RequireUniqueAdbTarget(string serial)
@@ -144,7 +162,7 @@ public sealed partial class DeviceMonitorService
         {
             using (session)
             {
-                session.Connect();
+                await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
                 if (!session.IsConnected)
                     throw new InvalidOperationException("ADB session is not connected.");
                 cancellationToken.ThrowIfCancellationRequested();

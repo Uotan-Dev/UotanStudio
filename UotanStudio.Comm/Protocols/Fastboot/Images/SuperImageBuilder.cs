@@ -96,7 +96,7 @@ internal sealed class LpGeometry
     /// <para>Converts a Firmware <see cref="LpMetadataGeometry"/> to a compatible <see cref="LpGeometry"/>.</para>
     /// </summary>
     internal static LpGeometry FromFirmware(LpMetadataGeometry g)
-        => new(g.StructSize, g.Checksum.ToArray(), g.MetadataMaxSize, g.MetadataSlotCount, g.LogicalBlockSize, true);
+        => new(g.StructSize, [.. g.Checksum], g.MetadataMaxSize, g.MetadataSlotCount, g.LogicalBlockSize, true);
 }
 
 /// <summary>

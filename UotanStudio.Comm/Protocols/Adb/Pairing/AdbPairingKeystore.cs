@@ -1,11 +1,5 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Org.BouncyCastle.Asn1.X509;
-using Org.BouncyCastle.Crypto.Operators;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Math;
-using Org.BouncyCastle.Security;
-using Org.BouncyCastle.X509;
 
 namespace UotanStudio.Comm.Protocols.Adb.Pairing;
 
@@ -64,39 +58,10 @@ internal static class AdbPairingKeystore
 
     private static X509Certificate2 GenerateSelfSigned(RSA rsa)
     {
-        var parameters = rsa.ExportParameters(true);
-        var subject = new X509Name($"CN={Environment.UserName}@{Environment.MachineName}");
-        var serial = BigInteger.Arbitrary(64);
-        var notBefore = DateTime.UtcNow.AddDays(-1);
-        var notAfter = notBefore.AddYears(CertificateValidityYears);
-        var generator = new X509V3CertificateGenerator();
-        generator.SetSerialNumber(serial);
-        generator.SetIssuerDN(subject);
-        generator.SetSubjectDN(subject);
-        generator.SetNotBefore(notBefore);
-        generator.SetNotAfter(notAfter);
-        generator.SetPublicKey(DotNetUtilities.GetRsaPublicKey(rsa.ExportParameters(false)));
-        var signer = new Asn1SignatureFactory("SHA256withRSA", ToPrivateKeyParameter(parameters), null);
-        var generated = generator.Generate(signer);
-        var certificate = X509CertificateLoader.LoadCertificate(generated.GetEncoded());
-        return certificate.CopyWithPrivateKey(rsa);
-    }
-
-    private static Org.BouncyCastle.Crypto.AsymmetricKeyParameter ToPrivateKeyParameter(RSAParameters parameters)
-        => new RsaPrivateCrtKeyParameters(
-            ToBigInteger(parameters.Modulus),
-            ToBigInteger(parameters.Exponent),
-            ToBigInteger(parameters.D),
-            ToBigInteger(parameters.P),
-            ToBigInteger(parameters.Q),
-            ToBigInteger(parameters.DP),
-            ToBigInteger(parameters.DQ),
-            ToBigInteger(parameters.InverseQ));
-
-    private static BigInteger ToBigInteger(byte[]? value)
-    {
-        ArgumentNullException.ThrowIfNull(value);
-        return new BigInteger(1, value);
+        var subject = new X500DistinguishedName($"CN={Environment.UserName}@{Environment.MachineName}");
+        var request = new CertificateRequest(subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var notBefore = DateTimeOffset.UtcNow.AddDays(-1);
+        return request.CreateSelfSigned(notBefore, notBefore.AddYears(CertificateValidityYears));
     }
 
     private static X509Certificate2 CreateWithPrivateKey(string pem)

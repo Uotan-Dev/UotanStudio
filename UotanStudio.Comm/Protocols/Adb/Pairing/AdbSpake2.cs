@@ -128,7 +128,7 @@ internal sealed class AdbSpake2
         _passwordScalar = scalar;
 
         var basePointPart = ScalarMultiply(_privateKey, BasePoint);
-        var mask = (_role == RoleAlice) ? new[] { Mx, My } : new[] { Nx, Ny };
+        BigInteger[] mask = (_role == RoleAlice) ? [Mx, My] : [Nx, Ny];
         var message = Add(basePointPart, ScalarMultiply(scalar, mask));
         _myMsg = Encode(message);
         _messageGenerated = true;
@@ -157,7 +157,7 @@ internal sealed class AdbSpake2
         }
 
         var peerPoint = Decode(peerMessage);
-        var peerMaskPoint = (_role == RoleAlice) ? new[] { Nx, Ny } : new[] { Mx, My };
+        BigInteger[] peerMaskPoint = (_role == RoleAlice) ? [Nx, Ny] : [Mx, My];
         var peerMask = ScalarMultiply(_passwordScalar, peerMaskPoint);
         var shared = ScalarMultiply(_privateKey, Sub(ToExtended(peerPoint), peerMask));
         var sharedEncoded = Encode(shared);
@@ -341,6 +341,9 @@ internal sealed class AdbSpake2
 /// <summary>Extensions mirroring Java's BigInteger bit access for readability.</summary>
 internal static class AdbSpake2Extensions
 {
-    /// <summary>Returns whether bit <paramref name="index"/> of the value is set.</summary>
-    public static bool TestBit(this BigInteger value, int index) => !((value >> index) & BigInteger.One).IsZero;
+    extension(BigInteger value)
+    {
+        /// <summary>Returns whether bit <paramref name="index"/> of the value is set.</summary>
+        public bool TestBit(int index) => !((value >> index) & BigInteger.One).IsZero;
+    }
 }

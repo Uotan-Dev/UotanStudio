@@ -73,7 +73,7 @@ public sealed class HdcAppClient(HdcConnection connection) : UotanStudio.Comm.Co
             if (!packages.Contains(full, OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)) packages.Add(full);
         }
         if (packages.Count == 0) throw new ArgumentException("HDC install batch is empty.", nameof(paths));
-        return packages.Select(path => Install(path, options, cancellationToken)).ToArray();
+        return [.. packages.Select(path => Install(path, options, cancellationToken))];
     }
 
     /// <summary>

@@ -132,6 +132,15 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Uotan
     /// </summary>
     internal const int ChunkSourceBufferSize = HdcConstants.MaxPayloadSizeStable - 64;
 
+    /// <summary>
+    /// Characters a daemon-reported path segment may never contain; the set is fixed for the process,
+    /// so the per-entry receive loop scans against one cached instance instead of rebuilding the
+    /// platform array per segment.
+    /// <para>守护进程上报的路径段绝不允许包含的字符；该集合在进程内固定不变，因此逐项接收循环只需针对
+    /// 一个缓存实例扫描，而不是每段重建平台数组。</para>
+    /// </summary>
+    private static readonly SearchValues<char> InvalidRemoteNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
+
     private bool _disposed;
 
     /// <summary>
@@ -393,7 +402,7 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Uotan
                 total += config.FileSize;
                 var segments = config.OptionalName.Replace('\\', '/').Split('/');
                 if (segments.Length == 0 || segments.Any(s => s.Length == 0 || s is "." or ".."
-                    || s.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || s.Contains(':') || s.EndsWith('.') || s.EndsWith(' ')))
+                    || s.AsSpan().ContainsAny(InvalidRemoteNameChars) || s.Contains(':') || s.EndsWith('.') || s.EndsWith(' ')))
                     throw new InvalidDataException("Unsafe HDC directory entry name.");
                 var outputPath = Path.Combine(staging, Path.Combine(segments));
                 Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);

@@ -14,21 +14,19 @@ internal sealed class FastbootTcpFrames
 
     internal static void Handshake(NetworkStream stream)
     {
-        var handshake = Encoding.ASCII.GetBytes("FB01");
-        stream.Write(handshake);
+        stream.Write("FB01"u8);
         var response = new byte[4];
         if (ReadFully(stream, response, 0, 4) != 4)
         {
             throw new IOException("Fastboot TCP handshake failed: unexpected response or timeout.");
         }
 
-        var text = Encoding.ASCII.GetString(response);
-        if (!text.StartsWith("FB", StringComparison.Ordinal))
+        if (!response.AsSpan().StartsWith("FB"u8))
         {
             throw new IOException("Fastboot TCP handshake failed: unrecognized initialization Message.");
         }
 
-        var versionText = text.Substring(2, 2);
+        var versionText = Encoding.ASCII.GetString(response, 2, 2);
         if (!int.TryParse(versionText, out var version) || version < 1)
         {
             throw new IOException($"Fastboot TCP handshake failed: unknown TCP protocol version {versionText} (host version 01).");

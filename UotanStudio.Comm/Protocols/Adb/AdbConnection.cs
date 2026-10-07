@@ -1,3 +1,4 @@
+using System.Buffers;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Adb;
@@ -9,9 +10,27 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// </summary>
 internal sealed class AdbConnection : IDisposable
 {
+    /// <summary>Deadline applied to one transport message, both when queueing for the send gate and when
+    /// writing. <para>单条传输消息的期限，涵盖排队等待发送闸门与实际写入。</para></summary>
+    private const int TransportDeadlineMs = 5000;
+
+    /// <summary>How long <see cref="Dispose"/> waits for the dispatch loop to observe the shutdown.
+    /// <para><see cref="Dispose"/> 等待分发循环观察到关停信号的时长。</para></summary>
+    private static readonly TimeSpan MessageLoopJoinBudget = TimeSpan.FromSeconds(2);
+
     private readonly IReadOnlyList<AdbAuthentication> _authentications;
     private readonly AdbServerServices? _server;
     private readonly ICommTransport? _transport;
+    private readonly Lock _lock = new();
+    private readonly Dictionary<uint, AdbStream> _streams = [];
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
+    private readonly SemaphoreSlim _peerReady = new(0, 1);
+    private readonly CancellationTokenSource _loopCancellation = new();
+    private uint _nextLocalId = 1;
+    private bool _connected;
+    private bool _disposed;
+    private Exception? _loopFault;
+    private Task? _messageLoop;
 
     internal AdbConnection(AdbServerServices server)
     {
@@ -23,21 +42,12 @@ internal sealed class AdbConnection : IDisposable
     public bool UsesServer => _server is not null;
 
     private int _authKeyIndex;
-    private readonly Lock _lock = new();
-    private readonly Dictionary<uint, AdbStream> _streams = [];
-    private readonly Lock _sendLock = new();
-    private readonly ManualResetEventSlim _peerReady = new(false);
-    private uint _nextLocalId = 1;
-    private bool _connected;
-    private bool _disposed;
-    private Exception? _loopFault;
-    private Thread? _messageLoopThread;
 
     /// <summary>
     /// Gets why the message loop stopped, or <c>null</c> while it is still reading. The loop runs on
-    /// its own thread, so a handshake failure would otherwise never reach the caller that is waiting
+    /// its own long-running task, so a handshake failure would otherwise never reach the caller that is waiting
     /// for the peer banner.
-    /// <para>获取消息循环停止的原因；循环仍在读取时为 <c>null</c>。循环运行在自己的线程上，
+    /// <para>获取消息循环停止的原因；循环仍在读取时为 <c>null</c>。循环运行在自己的长任务上，
     /// 否则握手失败永远到不了正在等待对端横幅的调用方。</para>
     /// </summary>
     internal Exception? LoopFault => Volatile.Read(ref _loopFault);
@@ -86,7 +96,7 @@ internal sealed class AdbConnection : IDisposable
     /// <param name="transport">The device transport. 设备传输。</param>
     /// <param name="authentication">The RSA authentication identity. RSA 认证身份。</param>
     public AdbConnection(ICommTransport transport, AdbAuthentication authentication)
-        : this(transport, authentication is null ? Array.Empty<AdbAuthentication>() : [authentication])
+        : this(transport, authentication is null ? [] : [authentication])
     {
     }
 
@@ -118,36 +128,18 @@ internal sealed class AdbConnection : IDisposable
     /// Connects to the ADB peer (sends CNXN and starts the message loop).
     /// <para>连接到 ADB 对端（发送 CNXN 并启动消息循环）。</para>
     /// </summary>
+    /// <remarks>The synchronous entry point: it writes the handshake with the transport's blocking API and is
+    /// meant for callers that already own a worker thread for the connection. Data-plane traffic always goes
+    /// through the asynchronous path.
+    /// <para>同步入口：使用传输的阻塞 API 写出握手，供已经为该连接占用工作线程的调用方使用；数据面流量一律走异步路径。</para>
+    /// </remarks>
     public void Connect()
     {
-        lock (_lock)
+        if (!TryBeginHandshake())
         {
-            if (_disposed)
-            {
-                throw new ObjectDisposedException(nameof(AdbConnection));
-            }
-
-            if (_connected && _server is null)
-            {
-                return;
-            }
-        }
-
-        if (_server is not null)
-        {
-            try { _server.ValidateTarget(); }
-            catch { lock (_lock) _connected = false; throw; }
-            lock (_lock)
-            {
-                ObjectDisposedException.ThrowIf(_disposed, this);
-                _connected = true;
-                _peerReady.Set();
-            }
             return;
         }
-        if (_transport is UsbDeviceTransport usbTransport)
-            UotanStudio.Comm.Transports.Usb.Core.UsbAccessPolicy.RequireDirect(0xff, 0x42, 1,
-                usbTransport.Session.DeviceInfo.SerialNumber);
+
         try
         {
             Send(AdbMessaging.BuildConnect());
@@ -158,33 +150,174 @@ internal sealed class AdbConnection : IDisposable
             _transport.Reset();
             Send(AdbMessaging.BuildConnect());
         }
-        _connected = true;
-        _authKeyIndex = 0;
 
-        _messageLoopThread = new Thread(MessageLoop) { IsBackground = true, Name = "ADB message loop" };
-        _messageLoopThread.Start();
+        StartAfterHandshake();
     }
 
     /// <summary>
     /// Asynchronously connects to the ADB peer.
     /// <para>异步连接到 ADB 对端。</para>
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    public async Task ConnectAsync(CancellationToken cancellationToken = default) => await Task.Run(Connect, cancellationToken).ConfigureAwait(false);
+    /// <param name="cancellationToken">Cancels the handshake write. 取消握手写出。</param>
+    /// <returns>A task that completes once the handshake has been written and the dispatch loop is running.
+    /// <para>握手已写出且分发循环已启动后完成的任务。</para></returns>
+    /// <exception cref="ObjectDisposedException">The connection is disposed. <para>连接已被释放。</para></exception>
+    /// <exception cref="TimeoutException">The handshake did not reach the transport within the transport
+    /// deadline. <para>握手未在传输期限内抵达传输层。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    public async Task ConnectAsync(CancellationToken cancellationToken = default)
+    {
+        if (!TryBeginHandshake())
+        {
+            return;
+        }
+
+        try
+        {
+            await SendAsync(AdbMessaging.BuildConnect(), cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when ((ex is System.ComponentModel.Win32Exception or IOException)
+            && _transport is UsbDeviceTransport)
+        {
+            _transport.Reset();
+            await SendAsync(AdbMessaging.BuildConnect(), cancellationToken).ConfigureAwait(false);
+        }
+
+        StartAfterHandshake();
+    }
 
     /// <summary>
-    /// Opens a stream to a service (e.g. "shell:v2:...", "sync:").
-    /// <para>打开到服务的流。</para>
+    /// Performs the dispose checks, the server-target validation and the USB interface claim.
+    /// <para>完成释放检查、server 目标校验与 USB 接口申请。</para>
+    /// </summary>
+    /// <returns><see langword="true"/> when the caller still has to write the CNXN handshake.
+    /// <para>调用方仍需写出 CNXN 握手时返回 <see langword="true"/>。</para></returns>
+    /// <exception cref="ObjectDisposedException">The connection is disposed. <para>连接已被释放。</para></exception>
+    private bool TryBeginHandshake()
+    {
+        lock (_lock)
+        {
+            if (Volatile.Read(ref _disposed))
+            {
+                throw new ObjectDisposedException(nameof(AdbConnection));
+            }
+
+            if (_connected && _server is null)
+            {
+                return false;
+            }
+        }
+
+        if (_server is not null)
+        {
+            try { _server.ValidateTarget(); }
+            catch { lock (_lock) _connected = false; throw; }
+            lock (_lock)
+            {
+                ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
+                _connected = true;
+            }
+
+            Release(_peerReady);
+            return false;
+        }
+
+        if (_transport is UsbDeviceTransport directUsb)
+        {
+            UotanStudio.Comm.Transports.Usb.Core.UsbAccessPolicy.RequireDirect(0xff, 0x42, 1,
+                directUsb.Session.DeviceInfo.SerialNumber);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Marks the connection usable and starts the dispatch loop after the handshake was written.
+    /// <para>握手写出后把连接标记为可用并启动分发循环。</para>
+    /// </summary>
+    private void StartAfterHandshake()
+    {
+        lock (_lock)
+        {
+            _connected = true;
+        }
+
+        _authKeyIndex = 0;
+        _messageLoop = Task.Factory.StartNew(
+            () => MessageLoopAsync(_loopCancellation.Token),
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach,
+            TaskScheduler.Default).Unwrap();
+    }
+
+    /// <summary>
+    /// Opens a raw service stream with the sustained-output receive budget.
+    /// <para>以面向持续产出的接收预算打开裸服务流。</para>
     /// </summary>
     /// <param name="service">The service destination string. 服务目标字符串。</param>
     /// <returns>An ADB stream. ADB 流。</returns>
     public AdbStream OpenStream(string service)
-    {
-        if (service is null)
-        {
-            throw new ArgumentNullException(nameof(service));
-        }
+        => OpenStream(service, AdbStream.RawServiceReceiveBudgetBytes, AdbStream.DefaultWritePermitWaitMs);
 
+    /// <summary>
+    /// Opens a service stream with an explicit receive budget and write-permit wait.
+    /// <para>以显式接收预算与写入许可等待时长打开服务流。</para>
+    /// </summary>
+    /// <param name="service">The service destination string. 服务目标字符串。</param>
+    /// <param name="receiveBudgetBytes">Queued payload bytes the stream tolerates before faulting.
+    /// 流在判定故障前可容忍的队列负载字节数。</param>
+    /// <param name="writePermitWaitMs">Milliseconds a write waits for the previous chunk acknowledgement.
+    /// 写入等待上一块确认的毫秒数。</param>
+    /// <returns>An ADB stream. ADB 流。</returns>
+    internal AdbStream OpenStream(string service, int receiveBudgetBytes, int writePermitWaitMs)
+    {
+        var stream = RegisterStream(service, receiveBudgetBytes, writePermitWaitMs);
+        Send(AdbMessaging.BuildOpen(stream.LocalId, service));
+        return stream;
+    }
+
+    /// <summary>
+    /// Opens a protocol-client stream with the shell and sync receive budget.
+    /// <para>以 shell/sync 接收预算打开协议客户端流。</para>
+    /// </summary>
+    /// <param name="service">The service destination string. 服务目标字符串。</param>
+    /// <returns>An ADB stream. ADB 流。</returns>
+    internal AdbStream OpenProtocolStream(string service)
+        => OpenStream(service, AdbStream.ProtocolReceiveBudgetBytes, AdbStream.DefaultWritePermitWaitMs);
+
+    /// <summary>
+    /// Opens a protocol-client stream without blocking a thread on the OPEN frame.
+    /// <para>打开协议客户端流，等待 OPEN 帧时不占用线程。</para>
+    /// </summary>
+    /// <param name="service">The service destination string. 服务目标字符串。</param>
+    /// <param name="cancellationToken">Cancels the OPEN write. 取消 OPEN 写出。</param>
+    /// <returns>A task resolving to the opened stream. <para>结果为已打开流的任务。</para></returns>
+    /// <exception cref="TimeoutException">The OPEN frame did not reach the transport within the transport
+    /// deadline. <para>OPEN 帧未在传输期限内抵达传输层。</para></exception>
+    internal async ValueTask<AdbStream> OpenProtocolStreamAsync(string service, CancellationToken cancellationToken)
+    {
+        var stream = RegisterStream(service, AdbStream.ProtocolReceiveBudgetBytes, AdbStream.DefaultWritePermitWaitMs);
+        await SendAsync(AdbMessaging.BuildOpen(stream.LocalId, service), cancellationToken).ConfigureAwait(false);
+        return stream;
+    }
+
+    /// <summary>
+    /// Allocates and registers the stream object for a service destination.
+    /// <para>为服务目标分配并登记流对象。</para>
+    /// </summary>
+    /// <param name="service">The service destination string. 服务目标字符串。</param>
+    /// <param name="receiveBudgetBytes">Queued payload bytes tolerated before faulting.
+    /// 判定故障前可容忍的队列负载字节数。</param>
+    /// <param name="writePermitWaitMs">Milliseconds a write waits for an acknowledgement.
+    /// 写入等待确认的毫秒数。</param>
+    /// <exception cref="ArgumentNullException"><paramref name="service"/> is <see langword="null"/>.
+    /// <para><paramref name="service"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidOperationException">The connection has not been established.
+    /// <para>连接尚未建立。</para></exception>
+    private AdbStream RegisterStream(string service, int receiveBudgetBytes, int writePermitWaitMs)
+    {
+        ArgumentNullException.ThrowIfNull(service);
         EnsureConnected();
 
         if (_server is not null)
@@ -192,24 +325,26 @@ internal sealed class AdbConnection : IDisposable
             var serviceStream = _server.Open(service);
             lock (_lock)
             {
-                if (_disposed) { serviceStream.Dispose(); throw new ObjectDisposedException(nameof(AdbConnection)); }
+                if (Volatile.Read(ref _disposed))
+                {
+                    serviceStream.Dispose();
+                    throw new ObjectDisposedException(nameof(AdbConnection));
+                }
+
                 var id = _nextLocalId++;
                 var serverStream = new AdbStream(this, id, serviceStream);
                 _streams.Add(id, serverStream);
                 return serverStream;
             }
         }
-        uint localId;
-        AdbStream stream;
+
         lock (_lock)
         {
-            localId = _nextLocalId++;
-            stream = new AdbStream(this, localId);
+            var localId = _nextLocalId++;
+            var stream = new AdbStream(this, localId, receiveBudgetBytes, writePermitWaitMs);
             _streams[localId] = stream;
+            return stream;
         }
-
-        Send(AdbMessaging.BuildOpen(localId, service));
-        return stream;
     }
 
     /// <summary>
@@ -217,17 +352,36 @@ internal sealed class AdbConnection : IDisposable
     /// <para>等待对端 CNXN 横幅到达（握手完成）。</para>
     /// </summary>
     /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <returns><c>true</c> if the peer responded; otherwise, <c>false</c>. 对端是否响应。</returns>
     /// <param name="cancellationToken">Cancels the handshake wait.</param>
+    /// <returns><c>true</c> if the peer responded; otherwise, <c>false</c>. 对端是否响应。</returns>
     public bool WaitForPeer(int timeoutMs = 10000, CancellationToken cancellationToken = default)
         => _peerReady.Wait(timeoutMs, cancellationToken);
 
     /// <summary>
-    /// Writes data to the specified stream.
-    /// <para>向指定流写入数据。</para>
+    /// Waits for the peer CNXN banner without holding a thread.
+    /// <para>异步等待对端 CNXN 横幅，等待期间不占用线程。</para>
+    /// </summary>
+    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
+    /// <param name="cancellationToken">Cancels the handshake wait. 取消握手等待。</param>
+    /// <returns>A task whose result reports whether the peer banner arrived before the deadline.
+    /// <para>结果指示对端横幅是否在期限前到达。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    public Task<bool> WaitForPeerAsync(int timeoutMs, CancellationToken cancellationToken) =>
+        _peerReady.WaitAsync(TimeSpan.FromMilliseconds(timeoutMs), cancellationToken);
+
+    /// <summary>
+    /// Writes data to the specified stream on a caller thread that already owns it.
+    /// <para>在已持有该流的调用线程上同步向流写入数据。</para>
     /// </summary>
     /// <param name="stream">The target stream. 目标流。</param>
     /// <param name="data">The data to write. 要写入的数据。</param>
+    /// <remarks>Reserved for the synchronous byte façade and the one-shot device services; the header and its
+    /// payload stay two separate transport writes because ADB-over-USB has no zero-length packet handling.
+    /// <para>仅供同步字节门面与一次性设备服务使用；头部与其负载仍分两次传输写入，因为 ADB-over-USB 没有零长包处理。</para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The stream was not acknowledged by the peer.
+    /// <para>对端未确认该流。</para></exception>
     internal void WriteToStream(AdbStream stream, byte[] data)
     {
         EnsureConnected();
@@ -246,6 +400,35 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
+    /// Writes one acknowledged chunk of a stream without holding a thread.
+    /// <para>异步写入流的一个已确认数据块，等待期间不占用线程。</para>
+    /// </summary>
+    /// <param name="stream">The target stream. 目标流。</param>
+    /// <param name="data">The chunk payload. 块负载。</param>
+    /// <param name="cancellationToken">Cancels the write. 取消写入。</param>
+    /// <exception cref="InvalidOperationException">The stream was not acknowledged by the peer.
+    /// <para>对端未确认该流。</para></exception>
+    /// <exception cref="TimeoutException">The OPEN acknowledgement or the transport write exceeded its deadline
+    /// while <paramref name="cancellationToken"/> stayed unset.
+    /// <para>OPEN 确认或传输写出超过期限，且 <paramref name="cancellationToken"/> 未触发。</para></exception>
+    internal async ValueTask WriteToStreamAsync(AdbStream stream, byte[] data, CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+
+        if (stream.RemoteId == 0)
+        {
+            await stream.WaitReadyAsync(cancellationToken).ConfigureAwait(false);
+            if (stream.RemoteId == 0)
+            {
+                throw new InvalidOperationException("Stream was not acknowledged by the peer.");
+            }
+        }
+
+        await SendAsync(AdbMessaging.BuildWrite(stream.LocalId, stream.RemoteId, data), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Closes the specified stream and notifies the peer.
     /// <para>关闭指定流并通知对端。</para>
     /// </summary>
@@ -257,21 +440,109 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
-    /// Sends a message to the transport.
-    /// <para>向传输发送消息。</para>
+    /// Closes the specified stream and notifies the peer without holding a thread.
+    /// <para>异步关闭指定流并通知对端，等待期间不占用线程。</para>
+    /// </summary>
+    /// <param name="stream">The stream to close. 要关闭的流。</param>
+    /// <returns>A task that completes once the CLSE frame has been handed to the transport.
+    /// <para>CLSE 帧已交给传输后完成的任务。</para></returns>
+    internal async ValueTask CloseStreamAsync(AdbStream stream)
+    {
+        lock (_lock) { _streams.Remove(stream.LocalId); }
+        if (_server is null)
+        {
+            await SendAsync(AdbMessaging.BuildClose(stream.LocalId, stream.RemoteId), CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Sends a message to the transport from a synchronous boundary.
+    /// <para>从同步边界向传输发送一条消息。</para>
     /// </summary>
     /// <param name="message">The message to send. 要发送的消息。</param>
+    /// <remarks>Only handshake, OPEN and CLSE control frames use this path; WRTE payloads are written by
+    /// <see cref="SendAsync"/> so that a stalled peer cannot park a thread while the send gate is held. The
+    /// header and payload stay two separate bulk transfers, which is what ADB-over-USB requires.
+    /// <para>仅握手、OPEN 与 CLSE 控制帧走该路径；WRTE 负载一律由 <see cref="SendAsync"/> 写出，
+    /// 避免对端卡住时在持有发送闸门期间占用线程。头部与负载仍分两次批量传输，这是 ADB-over-USB 的要求。</para>
+    /// </remarks>
+    /// <exception cref="TimeoutException">The message did not reach the transport within the transport
+    /// deadline. <para>消息未在传输期限内抵达传输层。</para></exception>
     private void Send(AdbMessage message)
     {
-        lock (_sendLock)
+        if (!_sendLock.Wait(TransportDeadlineMs))
+        {
+            throw new TimeoutException("ADB transport send queue timed out.");
+        }
+
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
+        try
         {
             var header = AdbMessaging.SerializeHeader(message);
-            Transport.Write(header, 0, header.Length, 5000);
+            Transport.Write(header, 0, header.Length, TransportDeadlineMs);
 
             if (message.Payload is { Length: > 0 } payload)
             {
-                Transport.Write(payload, 0, payload.Length, 5000);
+                Transport.Write(payload, 0, payload.Length, TransportDeadlineMs);
             }
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Sends a message to the transport asynchronously.
+    /// <para>异步向传输发送一条消息。</para>
+    /// </summary>
+    /// <param name="message">The message to send. 要发送的消息。</param>
+    /// <param name="cancellationToken">Cancels the queue wait and both writes. 取消排队与两次写入。</param>
+    /// <remarks>The queue wait and the writes share one deadline expressed with
+    /// <c>CancellationTokenSource.CancelAfter</c>; the header and payload remain two separate bulk transfers,
+    /// which is what ADB-over-USB requires and what the peer's framing expects.
+    /// <para>排队等待与两次写入共用由 <c>CancellationTokenSource.CancelAfter</c> 表达的同一期限；头部与负载仍是两次
+    /// 独立的批量传输，这既是 ADB-over-USB 的要求也是对端的分帧预期。</para>
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The connection is disposed. <para>连接已被释放。</para></exception>
+    /// <exception cref="TimeoutException">The message did not reach the transport within the transport deadline
+    /// while <paramref name="cancellationToken"/> stayed unset.
+    /// <para>消息未在传输期限内抵达传输层，且 <paramref name="cancellationToken"/> 未触发。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    private async ValueTask SendAsync(AdbMessage message, CancellationToken cancellationToken)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TransportDeadlineMs);
+        var token = deadline.Token;
+        try
+        {
+            await _sendLock.WaitAsync(token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("ADB transport send queue timed out.");
+        }
+
+        try
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
+            var header = AdbMessaging.SerializeHeader(message);
+            await Transport.WriteAsync(header, 0, header.Length, Timeout.Infinite, token).ConfigureAwait(false);
+
+            if (message.Payload is { Length: > 0 } payload)
+            {
+                await Transport.WriteAsync(payload, 0, payload.Length, Timeout.Infinite, token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"ADB transport write timed out after {TransportDeadlineMs} ms.");
+        }
+        finally
+        {
+            _sendLock.Release();
         }
     }
 
@@ -279,9 +550,15 @@ internal sealed class AdbConnection : IDisposable
     /// Reads the next ADB message from the transport.
     /// <para>从传输读取下一条 ADB 消息。</para>
     /// </summary>
-    private AdbMessage ReadMessage()
+    /// <exception cref="InvalidDataException">The advertised payload length exceeds the protocol maximum, the
+    /// header magic is wrong, or the payload CRC matches neither the reserved zero value nor the legacy additive
+    /// checksum. <para>通告的负载长度超过协议上限、头部 magic 错误，或负载 CRC 既非保留零值也非旧式累加校验和。</para></exception>
+    /// <exception cref="TimeoutException">A partially received frame made no progress within the transport
+    /// deadline. <para>已部分接收的帧在传输期限内没有进展。</para></exception>
+    private async ValueTask<AdbMessage> ReadMessageAsync(CancellationToken cancellationToken)
     {
-        var header = ReadExact(AdbConstants.HeaderSize, 5000, allowIdle: true);
+        var header = await ReadExactAsync(AdbConstants.HeaderSize, TransportDeadlineMs, allowIdle: true,
+            cancellationToken).ConfigureAwait(false);
         (var command, var arg0, var arg1, var payloadLength, var payloadCrc) = AdbMessaging.ParseHeader(header);
 
         if (payloadLength > AdbConstants.MaxPayload)
@@ -292,7 +569,8 @@ internal sealed class AdbConnection : IDisposable
         byte[]? payload = null;
         if (payloadLength > 0)
         {
-            payload = ReadExact((int)payloadLength, 5000);
+            payload = await ReadExactAsync((int)payloadLength, TransportDeadlineMs, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
             AdbMessaging.VerifyCrc(payload, payloadCrc);
         }
 
@@ -300,30 +578,46 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
-    /// Main message dispatch loop running on a background thread.
-    /// <para>在后台线程上运行的主消息分发循环。</para>
+    /// Main message dispatch loop running as a long-running task.
+    /// <para>以长任务运行的主消息分发循环。</para>
     /// </summary>
-    private void MessageLoop()
+    /// <param name="cancellationToken">Stops the loop when the connection is disposed. 连接释放时停止循环。</param>
+    private async Task MessageLoopAsync(CancellationToken cancellationToken)
     {
         try
         {
-            while (!_disposed)
+            while (!Volatile.Read(ref _disposed) && !cancellationToken.IsCancellationRequested)
             {
-                var message = ReadMessage();
+                var message = await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
                 switch (message.Command)
                 {
-                    case AdbCommand.Auth: HandleAuth(message); break;
-                    case AdbCommand.Cnxn: HandleConnect(message); break;
-                    case AdbCommand.Open: HandleOpen(message); break;
-                    case AdbCommand.Okay: HandleOkay(message); break;
-                    case AdbCommand.Wrte: HandleWrite(message); break;
-                    case AdbCommand.Clse: HandleClose(message); break;
+                    case AdbCommand.Auth:
+                        await HandleAuthAsync(message, cancellationToken).ConfigureAwait(false);
+                        break;
+                    case AdbCommand.Cnxn:
+                        HandleConnect(message);
+                        break;
+                    case AdbCommand.Open:
+                        await HandleOpenAsync(message, cancellationToken).ConfigureAwait(false);
+                        break;
+                    case AdbCommand.Okay:
+                        await HandleOkayAsync(message, cancellationToken).ConfigureAwait(false);
+                        break;
+                    case AdbCommand.Wrte:
+                        await HandleWriteAsync(message, cancellationToken).ConfigureAwait(false);
+                        break;
+                    case AdbCommand.Clse:
+                        HandleClose(message);
+                        break;
                     case AdbCommand.Sync:
                         break;
                     default:
                         break;
                 }
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception ex)
         {
@@ -336,7 +630,8 @@ internal sealed class AdbConnection : IDisposable
     /// <para>处理来自对端的 AUTH 握手（TOKEN / SIGNATURE / RSAPUBLICKEY）。</para>
     /// </summary>
     /// <param name="message">The AUTH message. AUTH 消息。</param>
-    private void HandleAuth(AdbMessage message)
+    /// <param name="cancellationToken">Cancels the reply write. 取消应答写出。</param>
+    private async ValueTask HandleAuthAsync(AdbMessage message, CancellationToken cancellationToken)
     {
         switch ((AdbAuthType)message.Arg0)
         {
@@ -346,18 +641,22 @@ internal sealed class AdbConnection : IDisposable
                 {
                     var signature = _authentications[_authKeyIndex].SignToken(token);
                     _authKeyIndex++;
-                    Send(AdbMessaging.BuildAuth(AdbAuthType.Signature, signature));
+                    await SendAsync(AdbMessaging.BuildAuth(AdbAuthType.Signature, signature), cancellationToken)
+                        .ConfigureAwait(false);
                 }
                 else
                 {
                     var publicKey = _authentications[^1].BuildPublicKeyPayload();
-                    Send(AdbMessaging.BuildAuth(AdbAuthType.RsaPublicKey, publicKey));
+                    await SendAsync(AdbMessaging.BuildAuth(AdbAuthType.RsaPublicKey, publicKey), cancellationToken)
+                        .ConfigureAwait(false);
                 }
+
                 break;
 
             case AdbAuthType.RsaPublicKey:
                 var explicitPublicKey = _authentications[0].BuildPublicKeyPayload();
-                Send(AdbMessaging.BuildAuth(AdbAuthType.RsaPublicKey, explicitPublicKey));
+                await SendAsync(AdbMessaging.BuildAuth(AdbAuthType.RsaPublicKey, explicitPublicKey), cancellationToken)
+                    .ConfigureAwait(false);
                 break;
 
             case AdbAuthType.Signature:
@@ -378,7 +677,7 @@ internal sealed class AdbConnection : IDisposable
         PeerMaxPayload = message.Arg1;
         PeerBanner = message.PayloadAsString();
         PeerFeatures = ParseFeatures(PeerBanner);
-        _peerReady.Set();
+        Release(_peerReady);
     }
 
     /// <summary>
@@ -386,15 +685,18 @@ internal sealed class AdbConnection : IDisposable
     /// <para>处理来自对端的 OPEN 消息。</para>
     /// </summary>
     /// <param name="message">The OPEN message. OPEN 消息。</param>
-    private void HandleOpen(AdbMessage message)
+    /// <param name="cancellationToken">Cancels the OKAY reply. 取消 OKAY 应答。</param>
+    private async ValueTask HandleOpenAsync(AdbMessage message, CancellationToken cancellationToken)
     {
         AdbStream stream;
         lock (_lock)
         {
-            stream = new AdbStream(this, _nextLocalId++);
+            stream = new AdbStream(this, _nextLocalId++, AdbStream.RawServiceReceiveBudgetBytes,
+                AdbStream.DefaultWritePermitWaitMs);
             _streams[stream.LocalId] = stream;
         }
-        Send(AdbMessaging.BuildOkay(stream.LocalId, message.Arg0));
+
+        await SendAsync(AdbMessaging.BuildOkay(stream.LocalId, message.Arg0), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -402,7 +704,9 @@ internal sealed class AdbConnection : IDisposable
     /// <para>处理来自对端的 OKAY 消息。</para>
     /// </summary>
     /// <param name="message">The OKAY message. OKAY 消息。</param>
-    private void HandleOkay(AdbMessage message)
+    /// <param name="cancellationToken">Cancels the close reply sent to an unknown stream.
+    /// 取消向未知流发送的关闭帧。</param>
+    private async ValueTask HandleOkayAsync(AdbMessage message, CancellationToken cancellationToken)
     {
         AdbStream? stream;
         lock (_lock)
@@ -412,7 +716,8 @@ internal sealed class AdbConnection : IDisposable
 
         if (stream is null)
         {
-            Send(AdbMessaging.BuildClose(message.Arg1, message.Arg0));
+            await SendAsync(AdbMessaging.BuildClose(message.Arg1, message.Arg0), cancellationToken)
+                .ConfigureAwait(false);
             return;
         }
 
@@ -424,7 +729,9 @@ internal sealed class AdbConnection : IDisposable
     /// <para>处理来自对端的 WRTE 消息。</para>
     /// </summary>
     /// <param name="message">The WRTE message. WRTE 消息。</param>
-    private void HandleWrite(AdbMessage message)
+    /// <param name="cancellationToken">Cancels the acknowledgement or the close reply.
+    /// 取消确认或关闭应答。</param>
+    private async ValueTask HandleWriteAsync(AdbMessage message, CancellationToken cancellationToken)
     {
         AdbStream? stream;
         lock (_lock)
@@ -434,12 +741,13 @@ internal sealed class AdbConnection : IDisposable
 
         if (stream is null)
         {
-            Send(AdbMessaging.BuildClose(message.Arg1, message.Arg0));
+            await SendAsync(AdbMessaging.BuildClose(message.Arg1, message.Arg0), cancellationToken)
+                .ConfigureAwait(false);
             return;
         }
 
         stream.EnqueueData(message.Payload ?? []);
-        Send(AdbMessaging.BuildOkay(message.Arg1, message.Arg0));
+        await SendAsync(AdbMessaging.BuildOkay(message.Arg1, message.Arg0), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -507,48 +815,98 @@ internal sealed class AdbConnection : IDisposable
         var remainder = banner[(idx + "features=".Length)..];
         var end = remainder.IndexOf(';');
         var value = end >= 0 ? remainder[..end] : remainder;
-        return value
+        return [.. value
             .Split([','], StringSplitOptions.RemoveEmptyEntries)
             .Select(feature => feature.Trim())
-            .Where(feature => feature.Length > 0)
-            .ToArray();
+            .Where(feature => feature.Length > 0)];
     }
 
     /// <summary>
-    /// Reads an exact number of bytes from the transport.
-    /// <para>从传输读取精确数量的字节。</para>
+    /// Reads an exact number of bytes from the transport into a pooled frame buffer and copies the frame out at
+    /// its true length.
+    /// <para>从传输精确读取指定字节数到池化帧缓冲区，再按真实长度拷出该帧。</para>
     /// </summary>
     /// <param name="length">The number of bytes to read. 要读取的字节数。</param>
     /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <param name="allowIdle">Keep waiting between packets; incomplete packets still time out.</param>
-    private byte[] ReadExact(int length, int timeoutMs, bool allowIdle = false)
+    /// <param name="allowIdle">Keep waiting between packets; incomplete packets still time out.
+    /// <para>在包之间持续等待；未完成的包仍会超时。</para></param>
+    /// <param name="cancellationToken">Stops the read when the connection shuts down. 连接关停时停止读取。</param>
+    /// <returns>A task resolving to the frame bytes. <para>结果为帧字节的任务。</para></returns>
+    /// <remarks>The frame escapes into the owning stream's receive queue, whose accounting is sized by array
+    /// length, so the exact-length copy stays and one allocation per frame remains.
+    /// <para>帧会被交给流的接收队列，而队列记账以数组长度为键，因此恰长度拷贝无法省掉，每帧仍有一次分配。</para>
+    /// </remarks>
+    /// <exception cref="TimeoutException">A partially received frame made no progress within
+    /// <paramref name="timeoutMs"/>. <para>已部分接收的帧在 <paramref name="timeoutMs"/> 内没有进展。</para></exception>
+    /// <exception cref="ObjectDisposedException">The connection was disposed mid-read.
+    /// <para>读取过程中连接被释放。</para></exception>
+    private async ValueTask<byte[]> ReadExactAsync(int length, int timeoutMs, bool allowIdle = false,
+        CancellationToken cancellationToken = default)
     {
-        var buffer = new byte[length];
-        var totalRead = 0;
-        while (totalRead < length)
+        var buffer = ArrayPool<byte>.Shared.Rent(length);
+        try
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            int n;
-            try { n = Transport.Read(buffer, totalRead, length - totalRead, timeoutMs); }
-            catch (TimeoutException) when (allowIdle && totalRead == 0 && !_disposed && Transport.IsConnected)
+            var totalRead = 0;
+            while (totalRead < length)
             {
-                continue;
-            }
-            if (n == 0)
-            {
-                if (allowIdle && totalRead == 0 && !_disposed && Transport.IsConnected) continue;
-                throw new TimeoutException("ADB read timeout");
+                ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
+                int n;
+                try
+                {
+                    n = await Transport.ReadAsync(buffer, totalRead, length - totalRead, timeoutMs, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (TimeoutException) when (allowIdle && totalRead == 0 && !Volatile.Read(ref _disposed)
+                    && Transport.IsConnected)
+                {
+                    continue;
+                }
+
+                if (n == 0)
+                {
+                    if (allowIdle && totalRead == 0 && !Volatile.Read(ref _disposed) && Transport.IsConnected)
+                    {
+                        continue;
+                    }
+
+                    throw new TimeoutException("ADB read timeout");
+                }
+
+                totalRead += n;
             }
 
-            totalRead += n;
+            var frame = new byte[length];
+            Buffer.BlockCopy(buffer, 0, frame, 0, length);
+            return frame;
         }
-        return buffer;
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Signals a one-shot readiness primitive, ignoring the extra signals a repeated banner cannot use.
+    /// <para>触发一次性的就绪原语，并忽略重复横幅无法使用的多余信号。</para>
+    /// </summary>
+    /// <param name="signal">The primitive to signal. 待触发的原语。</param>
+    private static void Release(SemaphoreSlim signal)
+    {
+        try
+        {
+            signal.Release();
+        }
+        catch (SemaphoreFullException)
+        {
+        }
     }
 
     /// <summary>
     /// Ensures the connection is established before performing operations.
     /// <para>确保在执行操作之前已建立连接。</para>
     /// </summary>
+    /// <exception cref="InvalidOperationException">The connection has not been established.
+    /// <para>连接尚未建立。</para></exception>
     private void EnsureConnected()
     {
         if (!_connected)
@@ -561,14 +919,19 @@ internal sealed class AdbConnection : IDisposable
     /// Releases all resources used by the connection.
     /// <para>释放连接使用的所有资源。</para>
     /// </summary>
+    /// <remarks>Dispatch-loop shutdown is awaited with a bounded join: a loop still parked in a transport read
+    /// is left to observe the disposed transport rather than blocking teardown indefinitely.
+    /// <para>关停分发循环时只做有界等待：仍卡在传输读取里的循环交由已释放的传输本身结束，不会无限阻塞拆除。</para>
+    /// </remarks>
     public void Dispose()
     {
-        if (_disposed)
+        if (Volatile.Read(ref _disposed))
         {
             return;
         }
 
-        _disposed = true;
+        Volatile.Write(ref _disposed, true);
+        _loopCancellation.Cancel();
 
         lock (_lock)
         {
@@ -582,11 +945,21 @@ internal sealed class AdbConnection : IDisposable
         }
 
         _transport?.Dispose();
+
+        try
+        {
+            _ = _messageLoop?.Wait(MessageLoopJoinBudget);
+        }
+        catch (Exception)
+        {
+        }
+
         foreach (var auth in _authentications)
         {
             auth.Dispose();
         }
-        _peerReady.Dispose();
+
+        _loopCancellation.Dispose();
         GC.SuppressFinalize(this);
     }
 }

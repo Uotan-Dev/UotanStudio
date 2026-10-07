@@ -204,6 +204,6 @@ public static class UsbTopologyTree
             }
         }
 
-        return allNodes.Where(node => !reachable.Contains(node.InstanceId)).ToArray();
+        return [.. allNodes.Where(node => !reachable.Contains(node.InstanceId))];
     }
 }

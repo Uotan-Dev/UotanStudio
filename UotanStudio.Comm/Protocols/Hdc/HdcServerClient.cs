@@ -214,10 +214,10 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     {
         var output = Encoding.UTF8.GetStringTrimNul(ExecuteOnDevice(string.Empty, "list targets", timeoutMs));
         ThrowOnFailure(output);
-        return output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        return [.. output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(line => !line.StartsWith("[Empty]", StringComparison.Ordinal))
             .Select(line => line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)[0])
-            .Distinct(StringComparer.Ordinal).ToArray();
+            .Distinct(StringComparer.Ordinal)];
     }
     /// <summary>Lists authoritative transport and authorization state from the host server.<para>从宿主服务端列出权威的传输与授权状态。</para></summary>
     /// <param name="timeoutMs">Overall command deadline in milliseconds.<para>命令总体时限（毫秒）。</para></param>

@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Buffers.Text;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
@@ -194,7 +195,7 @@ public sealed class HdcConnection : IDisposable
         }
 
         Send(new HdcMessage(HdcCommand.Handshake, 0, _sessionId,
-            HdcDaemonCodec.Handshake(0, _sessionId, string.Empty, System.Text.Encoding.ASCII.GetBytes("authtype        1               1"), "Ver: 3.2.0f")));
+            HdcDaemonCodec.Handshake(0, _sessionId, string.Empty, "authtype        1               1"u8, "Ver: 3.2.0f")));
         var authenticated = false;
         var verifyType = _authentication.VerifyType;
         var authDeadline = Environment.TickCount64 + 120000;
@@ -243,7 +244,7 @@ public sealed class HdcConnection : IDisposable
             byte[] buffer = handshake.State switch
             {
                 3 => _authentication.BuildDaemonPublicKeyPayload(),
-                2 => System.Text.Encoding.ASCII.GetBytes(Convert.ToBase64String(_authentication.SignToken(handshake.Buffer, verifyType))),
+                2 => EncodeAuthenticationToken(_authentication.SignToken(handshake.Buffer, verifyType)),
                 5 => throw new UnauthorizedAccessException("HDC device rejected host authorization."),
                 _ => throw new NotSupportedException($"HDC authentication state {handshake.State} is not supported."),
             };
@@ -348,6 +349,21 @@ public sealed class HdcConnection : IDisposable
     /// <param name="dataSize">The <see cref="HdcUsbHead.DataSize"/> value carried by the USB header. <para>USB 头部携带的 <see cref="HdcUsbHead.DataSize"/> 值。</para></param>
     /// <returns><see langword="true"/> when the block is larger than <see cref="MaximumUsbBlockSize"/>. <para>块大于 <see cref="MaximumUsbBlockSize"/> 时为 <see langword="true"/>。</para></returns>
     internal static bool ExceedsUsbBlockLimit(uint dataSize) => dataSize > MaximumUsbBlockSize;
+
+    /// <summary>
+    /// Base64-encodes a signed authentication token straight to UTF-8 bytes, skipping the
+    /// intermediate string that <see cref="Convert.ToBase64String(byte[])"/> would allocate.
+    /// <para>把已签名的认证令牌直接 Base64 编码为 UTF-8 字节，省去
+    /// <see cref="Convert.ToBase64String(byte[])"/> 会分配的中间字符串。</para>
+    /// </summary>
+    /// <param name="token">The raw token bytes. <para>原始令牌字节。</para></param>
+    /// <returns>The Base64 text as UTF-8 bytes. <para>以 UTF-8 字节表示的 Base64 文本。</para></returns>
+    private static byte[] EncodeAuthenticationToken(byte[] token)
+    {
+        var encoded = new byte[Base64.GetMaxEncodedToUtf8Length(token.Length)];
+        _ = Base64.EncodeToUtf8(token, encoded, out _, out var written);
+        return written == encoded.Length ? encoded : encoded[..written];
+    }
 
     /// <summary>
     /// Opens a channel to a remote service (e.g. "shell:cmd", "file:sync", "forward:tcp:").

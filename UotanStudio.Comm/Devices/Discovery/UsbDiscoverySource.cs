@@ -100,9 +100,7 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
         }
 
         var probedSerials = await ProbeMissingFastbootSerialsAsync(devices, cancellationToken).ConfigureAwait(false);
-        return devices.Select(device => Project(device, probedSerials.GetValueOrDefault(device.DevicePath)))
-            .Where(endpoint => !IsServerOwned(endpoint.Protocol, adbServerLive, hdcServerLive))
-            .ToArray();
+        return [.. devices.Select(device => Project(device, probedSerials.GetValueOrDefault(device.DevicePath))).Where(endpoint => !IsServerOwned(endpoint.Protocol, adbServerLive, hdcServerLive))];
     }
 
     /// <summary>

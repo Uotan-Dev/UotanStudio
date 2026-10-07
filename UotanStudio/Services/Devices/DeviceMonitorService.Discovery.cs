@@ -49,7 +49,7 @@ public sealed partial class DeviceMonitorService
     /// </remarks>
     private IReadOnlyList<DetectedDevice> ScanCore()
     {
-        var devices = new List<DetectedDevice>();
+        List<DetectedDevice> devices = [];
         var endpoints = _controller.RefreshAsync().GetAwaiter().GetResult().Endpoints;
         var usbInfos = endpoints.Where(endpoint => endpoint.UsbInfo is not null)
             .Select(endpoint => endpoint.UsbInfo!).ToArray();
@@ -205,8 +205,7 @@ public sealed partial class DeviceMonitorService
 
     internal static IReadOnlyList<IReadOnlyList<DetectedDevice>> GroupPhysicalDevices(
         IEnumerable<DetectedDevice> endpoints)
-        => endpoints.GroupBy(device => device.GroupId, StringComparer.Ordinal)
-            .Select(group => OrderGroupLeader(group.ToArray())).ToArray();
+        => [.. endpoints.GroupBy(device => device.GroupId, StringComparer.Ordinal).Select(group => OrderGroupLeader([.. group]))];
 
     /// <summary>
     /// <para>把可拨号地址那一行放到组首，使合并后的卡片默认使用 server 直接列出的 <c>host:port</c> 端点，
@@ -220,7 +219,7 @@ public sealed partial class DeviceMonitorService
         var alias = group.FirstOrDefault(device => device.NetworkAlias is not null)?.NetworkAlias;
         return alias is null || group[0].Serial == alias
             ? group
-            : group.OrderBy(device => device.Serial == alias ? 0 : 1).ToArray();
+            : [.. group.OrderBy(device => device.Serial == alias ? 0 : 1)];
     }
 
     internal static IReadOnlyList<DetectedDevice> CoalesceSameEndpoint(IEnumerable<DetectedDevice> candidates)
@@ -238,7 +237,7 @@ public sealed partial class DeviceMonitorService
                 byKey.Add(device.Key, device);
             }
         }
-        return byKey.Values.ToArray();
+        return [.. byKey.Values];
     }
 
     private static int EndpointStateRank(string state) => state switch

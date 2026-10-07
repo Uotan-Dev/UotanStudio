@@ -244,13 +244,8 @@ public sealed partial class FastbootSession
 
             response.State = isInfo ? FastbootResponseState.Info : FastbootResponseState.Text;
 
-            var next = endIdx;
-            while (next < pending.Length && (pending[next] == '\0' || pending[next] == '\r' || pending[next] == '\n'))
-            {
-                next++;
-            }
-
-            return next - offset;
+            var padding = pending[endIdx..].IndexOfAnyExcept(ResponseDelimiters);
+            return (padding < 0 ? pending.Length : endIdx + padding) - offset;
         }
 
         var dataEnd = FindDataEnd(pending, offset + 4);
@@ -318,12 +313,10 @@ public sealed partial class FastbootSession
     private static int FindDataEnd(ReadOnlySpan<byte> pending, int start)
     {
         var limit = Math.Min(pending.Length, start + 8);
-        for (var i = start; i < limit; i++)
+        var stop = pending[start..limit].IndexOfAny(ResponseDelimiters);
+        if (stop >= 0)
         {
-            if (pending[i] == '\0' || pending[i] == '\r' || pending[i] == '\n')
-            {
-                return i;
-            }
+            return start + stop;
         }
 
         return pending.Length >= start + 8 ? start + 8 : -1;

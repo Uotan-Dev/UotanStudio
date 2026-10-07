@@ -446,6 +446,15 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
 }
 
 /// <summary>Preserves unread bytes when adapting ADB packet chunks to a byte-oriented stream.</summary>
+/// <remarks>
+/// The synchronous <see cref="Stream"/> members stay because most host paths consume this façade through
+/// blocking BCL helpers; <see cref="ReadAsync(Memory{byte}, CancellationToken)"/>,
+/// <see cref="WriteAsync(ReadOnlyMemory{byte}, CancellationToken)"/> and <see cref="FlushAsync"/> are the
+/// non-parking forms that <c>CopyToAsync</c> and the terminal relays use.
+/// <para>同步的 <see cref="Stream"/> 成员予以保留，因为宿主多数路径经由阻塞的 BCL 辅助方法消费该门面；
+/// <see cref="ReadAsync(Memory{byte}, CancellationToken)"/>、<see cref="WriteAsync(ReadOnlyMemory{byte}, CancellationToken)"/>
+/// 与 <see cref="FlushAsync"/> 是不占用线程的形式，供 <c>CopyToAsync</c> 与终端转发使用。</para>
+/// </remarks>
 internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream stream) : Stream
 {
     private bool _disposed;
@@ -473,24 +482,58 @@ internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream str
         if (destination.IsEmpty) return 0;
         if (_pending is null)
         {
-            _pending = stream.Read(ReadTimeout); _offset = 0;
+            _pending = ReadChunkBlocking();
             if (_pending is null)
             {
                 if (stream.IsFaulted) throw new IOException("ADB stream faulted.", stream.Fault);
                 if (!stream.IsClosed) throw new TimeoutException("ADB service read timed out.");
                 return 0;
             }
+
+            _offset = 0;
         }
-        int count = Math.Min(destination.Length, _pending.Length - _offset);
-        _pending.AsSpan(_offset, count).CopyTo(destination);
-        _offset += count;
-        if (_offset == _pending.Length) _pending = null;
-        return count;
+
+        return ConsumePending(destination);
     }
     /// <inheritdoc />
-    public override void Write(byte[] buffer, int offset, int count) => stream.Write(buffer.AsSpan(offset, count).ToArray());
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        if (buffer.IsEmpty) return 0;
+        if (_pending is null)
+        {
+            _pending = await ReadChunkAsync(cancellationToken).ConfigureAwait(false);
+            if (_pending is null)
+            {
+                if (stream.IsFaulted) throw new IOException("ADB stream faulted.", stream.Fault);
+                if (!stream.IsClosed) throw new TimeoutException("ADB service read timed out.");
+                return 0;
+            }
+
+            _offset = 0;
+        }
+
+        return ConsumePending(buffer);
+    }
+    /// <inheritdoc />
+    public override void Write(byte[] buffer, int offset, int count)
+    {
+        ArgumentNullException.ThrowIfNull(buffer);
+        if (count == 0) return;
+        WriteBlocking(offset == 0 && count == buffer.Length ? buffer : buffer.AsSpan(offset, count).ToArray());
+    }
+    /// <inheritdoc />
+    public override void Write(ReadOnlySpan<byte> buffer)
+    {
+        if (buffer.IsEmpty) return;
+        WriteBlocking(Exact(buffer));
+    }
+    /// <inheritdoc />
+    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        => stream.WriteAsync(buffer, cancellationToken);
     /// <inheritdoc />
     public override void Flush() { }
+    /// <inheritdoc />
+    public override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     /// <inheritdoc />
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
     /// <inheritdoc />
@@ -500,5 +543,103 @@ internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream str
     {
         if (disposing && !_disposed) { _disposed = true; stream.Dispose(); }
         base.Dispose(disposing);
+    }
+    /// <inheritdoc />
+    public override async ValueTask DisposeAsync()
+    {
+        if (!_disposed)
+        {
+            _disposed = true;
+            await stream.DisposeAsync().ConfigureAwait(false);
+        }
+
+        await base.DisposeAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>Copies buffered chunk bytes into the destination and forgets the chunk once it is consumed.
+    /// <para>把已缓冲的块字节拷入目标，并在用完后丢弃该块。</para></summary>
+    private int ConsumePending(Span<byte> destination)
+    {
+        var count = Math.Min(destination.Length, _pending!.Length - _offset);
+        _pending.AsSpan(_offset, count).CopyTo(destination);
+        _offset += count;
+        if (_offset == _pending.Length) _pending = null;
+        return count;
+    }
+
+    /// <summary>Memory form of the span overload. <para>Span 重载的 Memory 形式。</para></summary>
+    private int ConsumePending(Memory<byte> destination)
+    {
+        var count = Math.Min(destination.Length, _pending!.Length - _offset);
+        _pending.AsMemory(_offset, count).CopyTo(destination);
+        _offset += count;
+        if (_offset == _pending.Length) _pending = null;
+        return count;
+    }
+
+    /// <summary>Reads one packet chunk with the stream's own synchronous wait.
+    /// <para>用流自身的同步等待读取一个数据包块。</para></summary>
+    private byte[]? ReadChunkBlocking()
+    {
+        if (stream is AdbStream direct)
+        {
+            return direct.Read(ReadTimeout);
+        }
+
+        using var deadline = Deadline(CancellationToken.None);
+        try
+        {
+            return stream.ReadAsync(deadline.Token).AsTask().ConfigureAwait(false).GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException) when (!stream.IsClosed)
+        {
+            throw new TimeoutException("ADB service read timed out.");
+        }
+    }
+
+    /// <summary>Reads one packet chunk asynchronously, honouring <see cref="ReadTimeout"/> as a deadline.
+    /// <para>异步读取一个数据包块，并把 <see cref="ReadTimeout"/> 当作期限执行。</para></summary>
+    private async ValueTask<byte[]?> ReadChunkAsync(CancellationToken cancellationToken)
+    {
+        using var deadline = Deadline(cancellationToken);
+        try
+        {
+            return await stream.ReadAsync(deadline.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return stream.IsClosed ? null : throw new TimeoutException("ADB service read timed out.");
+        }
+    }
+
+    /// <summary>Builds the read deadline token source, leaving it unbounded when the caller opted out of
+    /// timeouts. <para>构造读取期限的令牌源；调用方取消超时约定时不设期限。</para></summary>
+    private CancellationTokenSource Deadline(CancellationToken cancellationToken)
+    {
+        var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (ReadTimeout > 0) linked.CancelAfter(ReadTimeout);
+        return linked;
+    }
+
+    /// <summary>Projects a span payload onto an array, avoiding the copy when the caller already owns an
+    /// exact-size array. <para>把 Span 负载映射为数组；调用方已持有恰好长度数组时不拷贝。</para></summary>
+    private static byte[] Exact(ReadOnlySpan<byte> buffer)
+    {
+        var payload = new byte[buffer.Length];
+        buffer.CopyTo(payload);
+        return payload;
+    }
+
+    /// <summary>Writes a payload with the stream's own synchronous write path.
+    /// <para>用流自身的同步写入路径写出负载。</para></summary>
+    private void WriteBlocking(byte[] payload)
+    {
+        if (stream is AdbStream direct)
+        {
+            direct.Write(payload);
+            return;
+        }
+
+        stream.WriteAsync(payload, CancellationToken.None).AsTask().ConfigureAwait(false).GetAwaiter().GetResult();
     }
 }

@@ -578,7 +578,7 @@ public sealed class LinuxSysfsTopologyTests
 
         internal string Root { get; }
 
-        internal string AddDirectory(string name, params (string Attribute, string Value)[] attributes)
+        internal string AddDirectory(string name, params ReadOnlySpan<(string Attribute, string Value)> attributes)
         {
             var path = Path.Combine(Root, name);
             Directory.CreateDirectory(path);

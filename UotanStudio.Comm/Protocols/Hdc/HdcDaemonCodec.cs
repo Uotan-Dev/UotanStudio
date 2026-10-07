@@ -101,7 +101,7 @@ internal static class HdcDaemonCodec
     }
 
     /// <summary>Serializes a daemon authentication handshake. Auth state is not a signing algorithm.</summary>
-    public static byte[] Handshake(byte authState, uint sessionId, string connectKey, byte[] buffer, string version)
+    public static byte[] Handshake(byte authState, uint sessionId, string connectKey, ReadOnlySpan<byte> buffer, string version)
     {
         using var output = new MemoryStream();
         Bytes(output, 1, Encoding.UTF8.GetBytes(HdcConstants.HandshakeMessage));
@@ -128,7 +128,7 @@ internal static class HdcDaemonCodec
         output.WriteByte((byte)value);
     }
     internal static void Number(Stream output, uint field, ulong value) { Varint(output, field << 3); Varint(output, value); }
-    internal static void Bytes(Stream output, uint field, byte[] value)
+    internal static void Bytes(Stream output, uint field, ReadOnlySpan<byte> value)
     {
         Varint(output, (field << 3) | 2); Varint(output, (uint)value.Length); output.Write(value);
     }
@@ -148,7 +148,7 @@ internal static class HdcDaemonCodec
     internal static Dictionary<uint, (ulong Number, byte[]? Bytes)> ReadFields(ReadOnlySpan<byte> input, bool allowPadding = false)
     {
         if (input.Length > HdcConstants.MaxPayloadSize) throw new InvalidDataException("HDC structure exceeds limit.");
-        var fields = new Dictionary<uint, (ulong, byte[]?)>();
+        Dictionary<uint, (ulong Number, byte[]? Bytes)> fields = new(8);
         var offset = 0;
         while (offset < input.Length)
         {

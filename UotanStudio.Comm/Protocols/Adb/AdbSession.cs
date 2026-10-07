@@ -164,8 +164,7 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     {
         ThrowIfDisposed();
         await Connection.ConnectAsync(cancellationToken).ConfigureAwait(false);
-        if (!await Task.Run(() => Connection.WaitForPeer(10000, cancellationToken), cancellationToken)
-                .ConfigureAwait(false))
+        if (!await Connection.WaitForPeerAsync(10000, cancellationToken).ConfigureAwait(false))
             throw HandshakeTimeout();
     }
 
@@ -236,11 +235,47 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Executes a shell command and returns the result.
     /// <para>执行 shell 命令并返回结果。</para>
     /// </summary>
+    /// <remarks>Synchronous boundary kept for callers that already run the whole ADB transaction on a worker
+    /// thread; it parks that thread on the asynchronous command execution.
+    /// <para>为已经在专用工作线程上运行整次 ADB 事务的调用方保留的同步边界；它会阻塞该线程等待异步命令执行完成。</para>
+    /// </remarks>
     /// <param name="command">The command to execute. 要执行的命令。</param>
     /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
     /// <returns>The shell execution result. Shell 执行结果。</returns>
+    /// <exception cref="TimeoutException">A read timed out while the stream was still open.
+    /// <para>流仍打开时读取超时。</para></exception>
     public ShellResult ExecuteCommand(string command, int timeoutMs = 30000)
-        => CreateShellClient(command).Execute(timeoutMs);
+        => ExecuteCommandAsync(command, timeoutMs, CancellationToken.None).AsTask().GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Executes a shell command asynchronously and returns the result.
+    /// <para>异步执行 shell 命令并返回结果。</para>
+    /// </summary>
+    /// <param name="command">The command to execute. 要执行的命令。</param>
+    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <returns>The shell execution result. Shell 执行结果。</returns>
+    /// <exception cref="TimeoutException">A read timed out after 30 seconds while the stream was still open.
+    /// <para>流仍打开时某次读取超过 30 秒。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    public ValueTask<ShellResult> ExecuteCommandAsync(string command, CancellationToken cancellationToken = default)
+        => ExecuteCommandAsync(command, 30000, cancellationToken);
+
+    /// <summary>
+    /// Executes a shell command with an explicit per-read wait.
+    /// <para>按显式的单次读取等待时长异步执行 shell 命令。</para>
+    /// </summary>
+    /// <param name="command">The command to execute. 要执行的命令。</param>
+    /// <param name="timeoutMs">Per-read wait in milliseconds. 单次读取的等待毫秒数。</param>
+    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <returns>A task resolving to the shell execution result. <para>结果为 shell 执行结果的任务。</para></returns>
+    /// <exception cref="TimeoutException">A read timed out while the stream was still open.
+    /// <para>流仍打开时读取超时。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    public ValueTask<ShellResult> ExecuteCommandAsync(string command, int timeoutMs,
+        CancellationToken cancellationToken)
+        => CreateShellClient(command).ExecuteAsync(timeoutMs, cancellationToken);
 
     /// <summary>
     /// Throws <see cref="ObjectDisposedException"/> if the session is disposed.

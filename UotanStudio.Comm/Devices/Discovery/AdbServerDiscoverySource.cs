@@ -80,7 +80,7 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
             cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         var aliases = await ResolveMdnsAliasesAsync(targets, host, port, cancellationToken).ConfigureAwait(false);
-        return targets.Select(target =>
+        return [.. targets.Select(target =>
         {
             var alias = aliases.TryGetValue(NormalizeInstance(target.Serial), out var address) ? address : null;
             return new DeviceEndpoint
@@ -97,7 +97,7 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
                     : target.Transport.Length == 0 ? null : target.Transport,
                 AliasAddress = alias
             };
-        }).ToArray();
+        })];
     }
 
     /// <summary>

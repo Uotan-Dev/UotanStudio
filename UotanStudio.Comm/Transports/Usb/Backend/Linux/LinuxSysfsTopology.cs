@@ -936,7 +936,7 @@ internal static class LinuxSysfsTopology
     {
         try
         {
-            return Directory.EnumerateDirectories(root).ToArray();
+            return [.. Directory.EnumerateDirectories(root)];
         }
         catch (Exception ex) when (IsIgnorableIoFailure(ex))
         {

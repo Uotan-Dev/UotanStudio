@@ -29,6 +29,6 @@ public sealed record HdcTargetInfo(string ConnectKey, string Transport, string S
             if (fields.Length < 3) throw new InvalidDataException("Malformed HDC verbose target entry.");
             targets[fields[0]] = new(fields[0], fields[1], fields[2], fields.Length > 3 ? fields[3] : string.Empty);
         }
-        return targets.Values.OrderBy(target => target.ConnectKey, StringComparer.Ordinal).ToArray();
+        return [.. targets.Values.OrderBy(target => target.ConnectKey, StringComparer.Ordinal)];
     }
 }

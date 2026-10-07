@@ -22,19 +22,19 @@ internal static class UsbInfoCopy
         InterfaceProtocol = info.InterfaceProtocol,
         InterfaceMetadataObserved = info.InterfaceMetadataObserved,
         Speed = info.Speed,
-        Interfaces = info.Interfaces.Select(iface => new UsbInterfaceInfo
+        Interfaces = [.. info.Interfaces.Select(iface => new UsbInterfaceInfo
         {
             InterfaceNumber = iface.InterfaceNumber,
             Class = iface.Class,
             SubClass = iface.SubClass,
             Protocol = iface.Protocol,
-            Endpoints = iface.Endpoints.Select(endpoint => new UsbEndpointInfo
+            Endpoints = [.. iface.Endpoints.Select(endpoint => new UsbEndpointInfo
             {
                 EndpointAddress = endpoint.EndpointAddress,
                 Attributes = endpoint.Attributes,
                 MaxPacketSize = endpoint.MaxPacketSize,
                 Interval = endpoint.Interval
-            }).ToArray()
-        }).ToArray()
+            })]
+        })]
     };
 }

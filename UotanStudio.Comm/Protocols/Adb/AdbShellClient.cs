@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Contracts;
 
@@ -100,7 +101,7 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
             var frames = new List<ShellFrame>();
             while (_end - _start >= FrameHeaderSize)
             {
-                var length = BitConverter.ToInt32(_buffer, _start + 1);
+                var length = BinaryPrimitives.ReadInt32LittleEndian(_buffer.AsSpan(_start + 1));
                 if (length < 0 || length > MaxFramePayloadSize)
                 {
                     throw new InvalidDataException($"Invalid shell v2 frame length: {length}.");
@@ -188,13 +189,23 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
     }
 
     /// <summary>
-    /// Executes the command and returns captured stdout/stderr/exit code.
-    /// <para>执行命令并返回捕获的 stdout / stderr / 退出码。</para>
+    /// Executes the command asynchronously and returns captured stdout/stderr/exit code.
+    /// <para>异步执行命令并返回捕获的 stdout / stderr / 退出码。</para>
     /// </summary>
     /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    public ShellResult Execute(int timeoutMs = 30000)
+    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <returns>A task resolving to the shell result. <para>结果为 shell 执行结果的任务。</para></returns>
+    /// <exception cref="TimeoutException">A read timed out while the stream was still open.
+    /// <para>流仍打开时读取超时。</para></exception>
+    /// <exception cref="InvalidDataException">The stream ended with a truncated shell v2 frame.
+    /// <para>流在 shell v2 帧未完整时结束。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    public async ValueTask<ShellResult> ExecuteAsync(int timeoutMs = 30000, CancellationToken cancellationToken = default)
     {
-        using var stream = _connection.OpenStream(BuildServiceString());
+        await using var stream = await _connection
+            .OpenProtocolStreamAsync(BuildServiceString(), cancellationToken)
+            .ConfigureAwait(false);
         var stdout = new MemoryStream();
         var stderr = new MemoryStream();
         var parser = new FrameParser();
@@ -202,7 +213,7 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
 
         while (exitCode is null)
         {
-            var chunk = stream.Read(timeoutMs);
+            var chunk = await ReadWithDeadlineAsync(stream, timeoutMs, cancellationToken).ConfigureAwait(false);
             if (chunk is null)
             {
                 if (!stream.IsClosed)
@@ -237,32 +248,43 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
         {
             parser.Complete();
         }
+
         return new ShellResult(stdout.ToArray(), stderr.ToArray(), exitCode ?? 0);
     }
 
     /// <summary>
-    /// Executes the command, streaming stdout/stderr chunks to callbacks.
-    /// <para>流式执行命令，将 stdout / stderr 块传递给回调。</para>
+    /// Executes the command asynchronously, streaming stdout/stderr chunks to callbacks.
+    /// <para>异步流式执行命令，将 stdout / stderr 块传递给回调。</para>
     /// </summary>
     /// <param name="onStdout">Callback for stdout chunks. stdout 块回调。</param>
     /// <param name="onStderr">Callback for stderr chunks. stderr 块回调。</param>
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    public int ExecuteStreaming(Action<byte[]>? onStdout, Action<byte[]>? onStderr, CancellationToken cancellationToken = default)
+    /// <returns>A task resolving to the exit code. <para>结果为退出码的任务。</para></returns>
+    /// <exception cref="InvalidDataException">The stream ended with a truncated shell v2 frame.
+    /// <para>流在 shell v2 帧未完整时结束。</para></exception>
+    public async ValueTask<int> ExecuteStreamingAsync(Action<byte[]>? onStdout, Action<byte[]>? onStderr,
+        CancellationToken cancellationToken = default)
     {
-        using var stream = _connection.OpenStream(BuildServiceString());
+        await using var stream = await _connection
+            .OpenProtocolStreamAsync(BuildServiceString(), cancellationToken)
+            .ConfigureAwait(false);
         var parser = new FrameParser();
         int? exitCode = null;
 
-        while (exitCode is null && !cancellationToken.IsCancellationRequested)
+        while (exitCode is null)
         {
-            var chunk = stream.Read(250);
+            byte[]? chunk;
+            try
+            {
+                chunk = await stream.ReadAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+
             if (chunk is null)
             {
-                if (!stream.IsClosed)
-                {
-                    continue;
-                }
-
                 parser.Complete();
                 break;
             }
@@ -290,7 +312,36 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
         {
             parser.Complete();
         }
+
         return exitCode ?? 0;
+    }
+
+    /// <summary>
+    /// Reads one chunk under a per-read deadline expressed as <c>CancelAfter</c>, so the wait is cancelled
+    /// rather than parked.
+    /// <para>按以 <c>CancelAfter</c> 表达的单次读取期限读取一块数据，使等待被取消而非占用线程。</para>
+    /// </summary>
+    /// <param name="stream">The shell stream. shell 流。</param>
+    /// <param name="timeoutMs">Per-read wait in milliseconds. 单次读取的等待毫秒数。</param>
+    /// <param name="cancellationToken">Caller token, which always outranks the deadline.
+    /// 调用方令牌，其优先级始终高于内部期限。</param>
+    /// <returns>The next chunk, or <see langword="null"/> when the deadline expired or the stream closed after
+    /// its queue drained. <para>下一块数据；期限到达，或流已关闭且队列读空时返回 <see langword="null"/>。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    private static async ValueTask<byte[]?> ReadWithDeadlineAsync(AdbStream stream, int timeoutMs,
+        CancellationToken cancellationToken)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeoutMs);
+        try
+        {
+            return await stream.ReadAsync(deadline.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
     }
 
     /// <summary>

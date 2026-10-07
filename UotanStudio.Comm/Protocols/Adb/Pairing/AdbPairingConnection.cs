@@ -135,7 +135,7 @@ internal static class AdbPairingConnection
             var keyMaterial = spake.ProcessMessage(peerPayload);
 
             var aesKey = HKDF.DeriveKey(HashAlgorithmName.SHA256, keyMaterial, 16,
-                salt: Array.Empty<byte>(), info: "adb pairing_auth aes-128-gcm key"u8.ToArray());
+                salt: [], info: "adb pairing_auth aes-128-gcm key"u8.ToArray());
             using var aes = new AesGcm(aesKey, 16);
             ulong sendSequence = 0;
             ulong receiveSequence = 0;
@@ -286,7 +286,7 @@ internal sealed class AdbPairingTlsClient(BcTlsCrypto crypto, byte[] certificate
 
         public TlsCredentials GetClientCredentials(CertificateRequest certificateRequest)
         {
-            var chain = new Certificate(Array.Empty<byte>(),
+            var chain = new Certificate([],
                 [new CertificateEntry(crypto.CreateCertificate(certificateDer), null)]);
             return new BcDefaultTlsCredentialedSigner(cryptoParameters, crypto, privateKey, chain,
                 SignatureAndHashAlgorithm.rsa_pss_rsae_sha256);

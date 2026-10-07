@@ -83,7 +83,7 @@ internal static partial class MacIoRegistryNative
             return [];
         }
 
-        return entries.Values.ToArray();
+        return [.. entries.Values];
     }
 
     private static void SeedDeviceServices(string className, Dictionary<string, MacIoRegistryEntry> entries)

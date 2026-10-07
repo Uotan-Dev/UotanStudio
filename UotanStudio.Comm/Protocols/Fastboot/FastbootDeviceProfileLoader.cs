@@ -140,7 +140,7 @@ internal static class FastbootDeviceProfileLoader
                 depth--;
                 if (depth == 0)
                 {
-                    return json.Substring(bracket, i - bracket + 1);
+                    return json[bracket..(i + 1)];
                 }
             }
         }
@@ -203,7 +203,7 @@ internal static class FastbootDeviceProfileLoader
                 yield break;
             }
 
-            yield return arrayJson.Substring(open, close - open + 1);
+            yield return arrayJson[open..(close + 1)];
             i = close + 1;
         }
     }

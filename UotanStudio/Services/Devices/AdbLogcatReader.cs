@@ -37,7 +37,7 @@ internal sealed class AdbLogcatReader(Func<string, Action<string>, CancellationT
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(3));
-        var names = new Dictionary<int, string>();
+        Dictionary<int, string> names = [];
         try
         {
             await executeShell("ps -A -o PID,NAME", line =>

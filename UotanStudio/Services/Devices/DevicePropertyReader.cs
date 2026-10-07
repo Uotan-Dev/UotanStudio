@@ -167,7 +167,7 @@ internal static class DevicePropertyReader
     /// </summary>
     internal static (int Level, string Text) ParseBattery(string info)
     {
-        var values = new List<string>();
+        List<string> values = [];
         var lines = info.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         foreach (var line in lines)
         {

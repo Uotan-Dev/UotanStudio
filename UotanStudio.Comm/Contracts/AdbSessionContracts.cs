@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using ShellResult = UotanStudio.Comm.Protocols.Adb.ShellResult;
 using SyncEntry = UotanStudio.Comm.Protocols.Adb.SyncEntry;
 
@@ -107,6 +108,13 @@ public interface IAdbDeviceSession : IDisposable
     IAdbDeviceServices CreateDeviceServices();
 
     /// <summary>Executes a shell command and returns the result. <para>执行 shell 命令并返回结果。</para></summary>
+    /// <remarks>
+    /// This is the blocking form of <see cref="ExecuteCommandAsync"/>: it parks the calling thread for the
+    /// whole command, so it belongs on a worker thread that already owns the ADB transaction, never on a UI
+    /// or request thread.
+    /// <para>本方法是 <see cref="ExecuteCommandAsync"/> 的阻塞形式：整个命令期间都会占用调用线程，因此只允许用于已持有该
+    /// ADB 事务的工作线程，不得在 UI 线程或请求线程上调用。</para>
+    /// </remarks>
     /// <param name="command">The command line for the device shell. <para>设备 shell 的命令行。</para></param>
     /// <param name="timeoutMs">Per-read wait in milliseconds before the command is considered
     /// stuck. <para>单次读取的等待毫秒数，超时即判定命令卡住。</para></param>
@@ -115,21 +123,53 @@ public interface IAdbDeviceSession : IDisposable
     /// <exception cref="TimeoutException">A read timed out while the stream was still open.
     /// <para>流仍打开时读取超时。</para></exception>
     ShellResult ExecuteCommand(string command, int timeoutMs = 30000);
+
+    /// <summary>Executes a shell command asynchronously and returns the result.
+    /// <para>异步执行 shell 命令并返回结果。</para></summary>
+    /// <param name="command">The command line for the device shell. <para>设备 shell 的命令行。</para></param>
+    /// <param name="cancellationToken">Cancels every stream read; pass a token armed with
+    /// <c>CancelAfter</c> to bound the wait. <para>取消每次流读取；用 <c>CancelAfter</c> 装配令牌即可限制等待时长。</para></param>
+    /// <returns>The captured stdout, stderr and exit code; the exit code is <c>0</c> when the
+    /// stream closed without an exit frame. <para>捕获的 stdout、stderr 与退出码；流关闭而未见退出帧时退出码为 <c>0</c>。</para></returns>
+    /// <exception cref="TimeoutException">A read timed out after 30 seconds while the stream was still
+    /// open. <para>流仍打开时某次读取超过 30 秒。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was
+    /// signalled. <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    ValueTask<ShellResult> ExecuteCommandAsync(string command, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// Host-facing raw ADB stream. <para>面向宿主的 ADB 原始流。</para>
+/// Host-facing raw ADB stream. Every read and write is asynchronous, so waiting for a peer
+/// acknowledgement or for inbound data never parks a thread.
+/// <para>面向宿主的 ADB 原始流。读写全部异步，等待对端确认或等待入站数据时不会占用线程。</para>
 /// </summary>
-public interface IAdbStream : IDisposable
+/// <remarks>The inherited <c>DisposeAsync</c> is the preferred teardown for asynchronous callers; the inherited
+/// <c>Dispose</c> stays so byte-oriented adapters can still release the stream synchronously.
+/// <para>继承的 <c>DisposeAsync</c> 是异步调用方的首选拆除方式；继承的 <c>Dispose</c> 予以保留，使面向字节的适配器仍能同步释放流。</para>
+/// </remarks>
+/// <remarks>
+/// <para>
+/// Fault handling deliberately differs from the HDC channel: a faulted ADB stream keeps the payloads it
+/// already queued readable, and only a read that finds the queue empty raises <see cref="IOException"/>.
+/// Draining before failing is what preserves the scrcpy server log and the trailing sync DONE frame when
+/// the transport dies in the middle of a transfer.
+/// </para>
+/// <para>
+/// 故障处理有意与 HDC 通道不同：故障的 ADB 流仍允许读完已入队的负载，只有在队列已空的读取上才抛
+/// <see cref="IOException"/>。先读完再失败，正是传输在传送途中断开时保留 scrcpy 服务端日志与 sync 尾部 DONE 帧的条件。
+/// </para>
+/// </remarks>
+public interface IAdbStream : IDisposable, IAsyncDisposable
 {
     /// <summary>Gets whether the stream is closed. <para>获取流是否已关闭。</para></summary>
-    /// <value><see langword="true"/> after a local close, a peer close or a fault.
-    /// <para>本地关闭、对端关闭或故障后为 <see langword="true"/>。</para></value>
+    /// <value><see langword="true"/> after a local close, a peer close or a fault. A faulted stream is
+    /// closed as well, yet its queued payloads stay readable.
+    /// <para>本地关闭、对端关闭或故障后为 <see langword="true"/>。故障流同样处于关闭状态，但其已入队负载仍可读完。</para></value>
     bool IsClosed { get; }
 
     /// <summary>Gets whether the stream has faulted. <para>获取流是否已故障。</para></summary>
-    /// <value><see langword="true"/> when a transport error terminated the stream; a faulted
-    /// stream is also closed. <para>传输错误终止流时为 <see langword="true"/>；故障流同时处于关闭状态。</para></value>
+    /// <value><see langword="true"/> when a transport error or an exceeded receive budget terminated the
+    /// stream. <para>传输错误或接收缓冲预算耗尽使流终止时为 <see langword="true"/>。</para></value>
     bool IsFaulted { get; }
 
     /// <summary>Gets the fault that terminated the stream, if any. <para>获取终止流的故障，若有。</para></summary>
@@ -137,26 +177,57 @@ public interface IAdbStream : IDisposable
     /// <para>已保存的异常；流未故障时为 <see langword="null"/>。</para></value>
     Exception? Fault { get; }
 
-    /// <summary>Writes a payload to the stream. <para>向流写入负载。</para></summary>
-    /// <param name="data">Bytes to send; split into chunks sized by the peer maximum payload
-    /// and sent one acknowledged chunk at a time. <para>待发送字节；按对端最大负载分块，并逐块等待确认后发送。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
-    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
+    /// <summary>Writes a payload to the stream. <para>向流异步写入负载。</para></summary>
+    /// <param name="data">Bytes to send; split into chunks sized by the peer maximum payload and sent one
+    /// acknowledged chunk at a time, awaiting each acknowledgement without holding a thread.
+    /// <para>待发送字节；按对端最大负载分块，逐块等待确认后发送，等待期间不占用线程。</para></param>
+    /// <param name="cancellationToken">Cancels a chunk wait; the cancellation never consumes the peer's
+    /// acknowledgement permit, so a later write can still proceed.
+    /// <para>取消某一块的等待；取消不会吞掉对端的确认许可，因此后续写入仍可继续。</para></param>
+    /// <returns>A task that completes once every chunk has been handed to the transport.
+    /// <para>全部负载块都已交给传输后完成的任务。</para></returns>
     /// <exception cref="InvalidOperationException">The stream is closed. <para>流已关闭。</para></exception>
-    /// <exception cref="TimeoutException">The peer did not acknowledge the previous chunk within
-    /// 10 seconds. <para>对端未在 10 秒内确认上一块。</para></exception>
-    void Write(byte[] data);
+    /// <exception cref="TimeoutException">The peer did not acknowledge the previous chunk within 10 seconds
+    /// while <paramref name="cancellationToken"/> stayed unset. <para>对端未在 10 秒内确认上一块，且
+    /// <paramref name="cancellationToken"/> 未触发。</para></exception>
+    /// <exception cref="IOException">The stream closed or faulted while chunks were still pending.
+    /// <para>仍有待发块时流被关闭或判定故障。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    ValueTask WriteAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default);
 
-    /// <summary>Reads one payload chunk, or <c>null</c> on timeout. <para>读取一个负载块，超时返回 <c>null</c>。</para></summary>
-    /// <param name="timeoutMs">Per-read wait in milliseconds; <see cref="System.Threading.Timeout.Infinite"/>
-    /// blocks until data arrives or the stream closes, and <c>0</c> polls.
-    /// <para>单次读取等待毫秒数；<see cref="System.Threading.Timeout.Infinite"/> 阻塞至数据到达或流关闭，<c>0</c> 表示轮询。</para></param>
-    /// <returns>The next queued payload, or <see langword="null"/> when the read timed out or the
-    /// stream is closed with no queued data. <para>下一个排队的负载；读取超时或流已关闭且无排队数据时返回 <see langword="null"/>。</para></returns>
-    byte[]? Read(int timeoutMs = System.Threading.Timeout.Infinite);
+    /// <summary>Reads the next payload chunk asynchronously. <para>异步读取下一个负载块。</para></summary>
+    /// <param name="cancellationToken">Bounds the wait for inbound data; cancellation surfaces as
+    /// <see cref="OperationCanceledException"/> rather than a timeout value, so callers express deadlines
+    /// with <c>CancellationTokenSource.CancelAfter</c>.
+    /// <para>限制入站数据的等待；取消表现为 <see cref="OperationCanceledException"/> 而非超时返回值，因此调用方用
+    /// <c>CancellationTokenSource.CancelAfter</c> 表达期限。</para></param>
+    /// <returns>The next queued payload, or <see langword="null"/> when the stream is closed with no queued
+    /// data. <para>下一个排队的负载；流已关闭且无排队数据时返回 <see langword="null"/>。</para></returns>
+    /// <exception cref="IOException">The stream is faulted and its queue has been drained; the stored fault
+    /// is attached as the inner exception. <para>流已故障且队列已读完；已保存的故障作为内部异常附加。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled while
+    /// no data was queued. <para>无排队数据时 <paramref name="cancellationToken"/> 已触发。</para></exception>
+    ValueTask<byte[]?> ReadAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Closes the stream. <para>关闭流。</para></summary>
-    void Close();
+    /// <summary>Dequeues a pending payload without waiting. <para>非阻塞地取出已排队的负载。</para></summary>
+    /// <param name="chunk">The next queued payload when the return value is <see langword="true"/>;
+    /// otherwise <see langword="null"/>. <para>返回 <see langword="true"/> 时为下一个排队负载；否则为
+    /// <see langword="null"/>。</para></param>
+    /// <returns><see langword="true"/> when a payload was already queued; <see langword="false"/> when the
+    /// queue is empty, which never blocks and never reports a close.
+    /// <para>队列中已有负载时返回 <see langword="true"/>；队列为空返回 <see langword="false"/>，既不阻塞也不报告关闭。</para></returns>
+    bool TryRead([NotNullWhen(true)] out byte[]? chunk);
+
+    /// <summary>Closes the stream and notifies the peer asynchronously.
+    /// <para>关闭流并异步通知对端。</para></summary>
+    /// <remarks>Unlike a synchronous close, a failed close frame is not reported: the stream is closed either
+    /// way, because a peer that stops answering must never block local teardown.
+    /// <para>与同步关闭不同，关闭帧发送失败不会上报：无论成败流都已关闭，因为对端停止响应时不得阻塞本地拆除。</para></remarks>
+    /// <returns>A task that completes once the close frame has been handed to the transport.
+    /// <para>关闭帧已交给传输后完成的任务。</para></returns>
+    Task CloseAsync();
+
 }
 
 /// <summary>
@@ -164,59 +235,78 @@ public interface IAdbStream : IDisposable
 /// </summary>
 public interface IAdbShellClient
 {
-    /// <summary>Executes the shell command and returns the captured result.
-    /// <para>执行 shell 命令并返回捕获的结果。</para></summary>
+    /// <summary>Executes the shell command asynchronously and returns the captured result.
+    /// <para>异步执行 shell 命令并返回捕获的结果。</para></summary>
     /// <param name="timeoutMs">Per-read wait in milliseconds before the command is considered
     /// stuck. <para>单次读取的等待毫秒数，超时即判定命令卡住。</para></param>
+    /// <param name="cancellationToken">Cancels the command between and during reads.
+    /// <para>在读取之间与读取期间取消命令。</para></param>
     /// <returns>The captured stdout, stderr and exit code; the exit code is <c>0</c> when the
     /// stream closed without an exit frame. <para>捕获的 stdout、stderr 与退出码；流关闭而未见退出帧时退出码为 <c>0</c>。</para></returns>
     /// <exception cref="TimeoutException">A read timed out while the stream was still open.
     /// <para>流仍打开时读取超时。</para></exception>
-    ShellResult Execute(int timeoutMs = 30000);
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    ValueTask<ShellResult> ExecuteAsync(int timeoutMs = 30000, CancellationToken cancellationToken = default);
 
-    /// <summary>Executes the shell command, streaming stdout/stderr until completion.
-    /// <para>执行 shell 命令，持续回调 stdout/stderr 直到结束。</para></summary>
+    /// <summary>Executes the shell command asynchronously, streaming stdout/stderr until completion.
+    /// <para>异步执行 shell 命令，持续回调 stdout/stderr 直到结束。</para></summary>
     /// <param name="onStdout">Callback invoked per stdout frame payload, or <see langword="null"/>
     /// to discard. <para>每个 stdout 帧负载的回调；<see langword="null"/> 表示丢弃。</para></param>
     /// <param name="onStderr">Callback invoked per stderr frame payload, or <see langword="null"/>
     /// to discard. <para>每个 stderr 帧负载的回调；<see langword="null"/> 表示丢弃。</para></param>
-    /// <param name="cancellationToken">Checked between frames; cancellation stops the loop but an
-    /// in-progress read may take one poll interval. <para>在帧之间检查；取消会停止循环，但进行中的读取最多再等待一个轮询间隔。</para></param>
+    /// <param name="cancellationToken">Cancels the read that is in progress; the loop stops as soon as the
+    /// wait observes the cancellation. <para>取消进行中的读取；等待一旦观察到取消即停止循环。</para></param>
     /// <returns>The exit code; <c>0</c> when the stream closed or cancellation took effect before
     /// an exit frame arrived. <para>退出码；流关闭或退出帧到达前被取消时为 <c>0</c>。</para></returns>
-    int ExecuteStreaming(Action<byte[]>? onStdout, Action<byte[]>? onStderr, CancellationToken cancellationToken = default);
+    /// <exception cref="InvalidDataException">The stream ended with a truncated shell v2 frame.
+    /// <para>流在 shell v2 帧未完整时结束。</para></exception>
+    ValueTask<int> ExecuteStreamingAsync(Action<byte[]>? onStdout, Action<byte[]>? onStderr,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// Host-facing ADB sync (file transfer) client. <para>面向宿主的 ADB sync（文件传输）客户端。</para>
+/// Host-facing ADB sync (file transfer) client. Every transfer is asynchronous and reports progress
+/// between packets rather than by holding a thread.
+/// <para>面向宿主的 ADB sync（文件传输）客户端。全部传输均为异步，并在数据包之间响应取消而不是占用线程。</para>
 /// </summary>
-public interface IAdbSyncClient : IDisposable
+/// <remarks>The inherited <c>DisposeAsync</c> sends the sync QUIT marker and releases the sync stream; a device
+/// that rejects the marker is ignored, so disposing a finished transfer never fails.
+/// <para>继承的 <c>DisposeAsync</c> 会发送 sync QUIT 标记并释放 sync 流；设备拒绝标记时被忽略，因此释放已完成的传输永不失败。</para>
+/// </remarks>
+public interface IAdbSyncClient : IAsyncDisposable
 {
-    /// <summary>Stats a remote path. <para>查询远程路径信息。</para></summary>
+    /// <summary>Stats a remote path. <para>异步查询远程路径信息。</para></summary>
     /// <param name="remotePath">Device-side path to stat. <para>待查询的设备侧路径。</para></param>
+    /// <param name="cancellationToken">Cancels the request or the reply wait.
+    /// <para>取消请求或应答等待。</para></param>
     /// <returns>The mode, size and mtime entry; the mode is <c>0</c> when the peer reports the
     /// path as absent. <para>包含 mode、size 与 mtime 的条目；对端报告路径不存在时 mode 为 <c>0</c>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">The peer rejected the request or answered with an
-    /// unexpected id. <para>对端拒绝请求或返回了非预期标识。</para></exception>
-    SyncEntry? Stat(string remotePath);
+    /// <exception cref="InvalidDataException">The peer rejected the request, answered with an unexpected id,
+    /// or reported a payload longer than the sync chunk limit. <para>对端拒绝请求、返回非预期标识，或上报超过 sync
+    /// 分块上限的负载。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    ValueTask<SyncEntry?> StatAsync(string remotePath, CancellationToken cancellationToken = default);
 
-    /// <summary>Lists a remote directory. <para>列出远程目录。</para></summary>
+    /// <summary>Lists a remote directory. <para>异步列出远程目录。</para></summary>
     /// <param name="remotePath">Device-side directory path. <para>设备侧目录路径。</para></param>
-    /// <param name="cancellationToken">Checked before each directory record; cancellation stops the LIST loop.
-    /// <para>在每条目录记录前检查；取消会停止 LIST 循环。</para></param>
+    /// <param name="cancellationToken">Checked before each directory record and during each read; cancellation
+    /// stops the LIST loop. <para>在每条目录记录前以及每次读取期间检查；取消会停止 LIST 循环。</para></param>
     /// <returns>Every entry received before the done marker; empty for an empty directory.
     /// <para>收到结束标记前的全部条目；空目录返回空列表。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">The peer rejected the request or answered with an
-    /// unexpected id. <para>对端拒绝请求或返回了非预期标识。</para></exception>
+    /// <exception cref="InvalidDataException">The peer rejected the request, answered with an unexpected id,
+    /// or reported a record longer than the sync chunk limit. <para>对端拒绝请求、返回非预期标识，或上报超过 sync
+    /// 分块上限的记录。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    IReadOnlyList<SyncEntry> List(string remotePath, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyList<SyncEntry>> ListAsync(string remotePath, CancellationToken cancellationToken = default);
 
-    /// <summary>Pushes a local file to the device. <para>推送本地文件到设备。</para></summary>
+    /// <summary>Pushes a local file to the device. <para>异步推送本地文件到设备。</para></summary>
     /// <param name="localPath">Existing local file opened for reading. <para>以只读方式打开的已存在本地文件。</para></param>
     /// <param name="remotePath">Destination path on the device. <para>设备上的目标路径。</para></param>
     /// <param name="mode">Unix permission bits encoded in the sync request as octal; the default
@@ -234,9 +324,10 @@ public interface IAdbSyncClient : IDisposable
     /// unexpected id. <para>设备拒绝传输或返回了非预期标识。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    void Push(string localPath, string remotePath, uint mode = 0x81A4, uint mtime = 0, CancellationToken cancellationToken = default);
+    ValueTask PushAsync(string localPath, string remotePath, uint mode = 0x81A4, uint mtime = 0,
+        CancellationToken cancellationToken = default);
 
-    /// <summary>Pushes a stream to the device. <para>推送流到设备。</para></summary>
+    /// <summary>Pushes a stream to the device. <para>异步推送流到设备。</para></summary>
     /// <param name="source">Read to end-of-stream in client chunk sizes; the caller keeps
     /// ownership. <para>按客户端块大小读至流末尾；所有权仍归调用方。</para></param>
     /// <param name="remotePath">Destination path on the device. <para>设备上的目标路径。</para></param>
@@ -253,9 +344,10 @@ public interface IAdbSyncClient : IDisposable
     /// unexpected id. <para>设备拒绝传输或返回了非预期标识。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    void PushStream(Stream source, string remotePath, uint mode = 0x81A4, uint mtime = 0, CancellationToken cancellationToken = default);
+    ValueTask PushStreamAsync(Stream source, string remotePath, uint mode = 0x81A4, uint mtime = 0,
+        CancellationToken cancellationToken = default);
 
-    /// <summary>Pulls a remote file to a local path. <para>拉取远程文件到本地路径。</para></summary>
+    /// <summary>Pulls a remote file to a local path. <para>异步拉取远程文件到本地路径。</para></summary>
     /// <param name="remotePath">Device-side source file. <para>设备侧源文件。</para></param>
     /// <param name="localPath">Local destination; created or truncated. <para>本地目标；不存在则创建，存在则截断。</para></param>
     /// <param name="cancellationToken">Checked before each device chunk is written; cancellation stops
@@ -267,9 +359,9 @@ public interface IAdbSyncClient : IDisposable
     /// unexpected id. <para>设备拒绝传输或返回了非预期标识。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    void Pull(string remotePath, string localPath, CancellationToken cancellationToken = default);
+    ValueTask PullAsync(string remotePath, string localPath, CancellationToken cancellationToken = default);
 
-    /// <summary>Pulls a remote file into a stream. <para>拉取远程文件到流。</para></summary>
+    /// <summary>Pulls a remote file into a stream. <para>异步拉取远程文件到流。</para></summary>
     /// <param name="remotePath">Device-side source file. <para>设备侧源文件。</para></param>
     /// <param name="destination">Written sequentially from the current position; the caller keeps
     /// ownership. <para>从当前位置顺序写入；所有权仍归调用方。</para></param>
@@ -282,7 +374,8 @@ public interface IAdbSyncClient : IDisposable
     /// unexpected id. <para>设备拒绝传输或返回了非预期标识。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    void PullStream(string remotePath, Stream destination, CancellationToken cancellationToken = default);
+    ValueTask PullStreamAsync(string remotePath, Stream destination, CancellationToken cancellationToken = default);
+
 }
 
 /// <summary>

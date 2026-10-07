@@ -190,9 +190,7 @@ public sealed partial class DeviceController
         List<DeviceLease> serverLeases;
         lock (_gate)
         {
-            serverLeases = _openLeases.Values
-                .Where(lease => lease.Endpoint.Route == "server")
-                .ToList();
+            serverLeases = [.. _openLeases.Values.Where(lease => lease.Endpoint.Route == "server")];
         }
 
         foreach (var group in serverLeases.GroupBy(lease => lease.Endpoint.Source))

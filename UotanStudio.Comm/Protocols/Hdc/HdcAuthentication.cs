@@ -1,8 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using Org.BouncyCastle.Crypto.Encodings;
-using Org.BouncyCastle.Crypto.Engines;
-using Org.BouncyCastle.Security;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -210,7 +207,8 @@ public sealed class HdcAuthentication : IDisposable
     /// <para>RSA-3072 模式返回 PSS SHA-512 签名（384 字节）；<see cref="HdcAuthVerifyType.RsaEncrypt"/> 模式返回整个令牌的 PKCS#1 v1.5 盲化私钥加密结果（384 字节）。</para>
     /// </returns>
     /// <exception cref="ArgumentException"><paramref name="token"/> is <see langword="null"/> or empty. <para><paramref name="token"/> 为 <see langword="null"/> 或空。</para></exception>
-    /// <exception cref="NotSupportedException"><paramref name="verifyType"/> selects an unimplemented algorithm; legacy mode additionally requires the token to fit the 3072-bit block. <para><paramref name="verifyType"/> 选择了未实现的算法；<see cref="HdcAuthVerifyType.RsaEncrypt"/> 模式还要求令牌适配 3072 位分组。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="verifyType"/> selects an unimplemented algorithm. <para><paramref name="verifyType"/> 选择了未实现的算法。</para></exception>
+    /// <exception cref="CryptographicException">Legacy mode requires a private key and a token that fits the 3072-bit type-1 block. <para>旧版模式要求存在私钥，且令牌能装入 3072 位 type-1 块。</para></exception>
     public byte[] SignToken(byte[] token, HdcAuthVerifyType verifyType)
     {
         if (token is null || token.Length == 0)
@@ -224,9 +222,7 @@ public sealed class HdcAuthentication : IDisposable
         }
         if (verifyType == HdcAuthVerifyType.RsaEncrypt)
         {
-            var signer = new Pkcs1Encoding(new RsaBlindedEngine());
-            signer.Init(true, DotNetUtilities.GetRsaKeyPair(_rsa).Private);
-            return signer.ProcessBlock(token, 0, token.Length);
+            return RsaTypeOneSignature.Sign(_rsa, token);
         }
         throw new NotSupportedException($"HDC authentication algorithm {verifyType} is not implemented.");
     }

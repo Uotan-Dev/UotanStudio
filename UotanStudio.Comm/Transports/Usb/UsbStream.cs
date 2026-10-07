@@ -135,18 +135,3 @@ internal sealed class UsbStream : Stream
     /// <inheritdoc />
     public override void SetLength(long value) => throw new NotSupportedException("USB streams are not seekable.");
 }
-
-/// <summary>
-/// Provides a <see cref="Stream"/> adapter for USB device sessions.
-/// <para>为 USB 设备会话提供 <see cref="Stream"/> 适配器。</para>
-/// </summary>
-internal static class UsbStreamExtensions
-{
-    /// <summary>
-    /// Wraps the session as a <see cref="Stream"/> (the caller keeps ownership of the session).
-    /// <para>将会话包装为 <see cref="Stream"/>（调用方保留会话的所有权）。</para>
-    /// </summary>
-    /// <param name="session">The opened USB device session. <para>已打开的 USB 设备会话。</para></param>
-    /// <returns>A stream adapter over the session. <para>会话上的流适配器。</para></returns>
-    public static UsbStream AsStream(this IUsbDeviceSession session) => new(session);
-}

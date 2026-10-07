@@ -54,11 +54,7 @@ public sealed class UsbTopologyTreeTests
     [Fact]
     public void Build_TwoNodeCycle_KeepsEveryNodeExactlyOnce()
     {
-        var nodes = new List<UsbTopologyNode>
-        {
-            Node("cycle-a", "cycle-b"),
-            Node("cycle-b", "cycle-a")
-        };
+        List<UsbTopologyNode> nodes = [Node("cycle-a", "cycle-b"), Node("cycle-b", "cycle-a")];
 
         var roots = UsbTopologyTree.Build(nodes);
 
@@ -112,11 +108,7 @@ public sealed class UsbTopologyTreeTests
     [Fact]
     public void Build_DuplicateInstanceIds_KeepsFirstOccurrenceOnly()
     {
-        var nodes = new List<UsbTopologyNode>
-        {
-            Node("dev1", description: "first"),
-            Node("dev1", description: "second")
-        };
+        List<UsbTopologyNode> nodes = [Node("dev1", description: "first"), Node("dev1", description: "second")];
 
         var roots = UsbTopologyTree.Build(nodes);
 
@@ -126,11 +118,7 @@ public sealed class UsbTopologyTreeTests
     [Fact]
     public void Build_BlankInstanceId_ExcludesOnlyTheUnusableNode()
     {
-        var nodes = new List<UsbTopologyNode>
-        {
-            Node(string.Empty),
-            Node("dev1")
-        };
+        List<UsbTopologyNode> nodes = [Node(string.Empty), Node("dev1")];
 
         var roots = UsbTopologyTree.Build(nodes);
 

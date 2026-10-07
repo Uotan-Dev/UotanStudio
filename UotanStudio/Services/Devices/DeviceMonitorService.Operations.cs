@@ -44,7 +44,7 @@ public sealed partial class DeviceMonitorService
 
     /// <summary>Enumerates serial endpoints without assigning an unverified device protocol.</summary>
     public IReadOnlyList<string> EnumerateSerialPorts()
-        => SerialTransport.GetAvailablePorts().OrderBy(port => port, StringComparer.Ordinal).ToArray();
+        => [.. SerialTransport.GetAvailablePorts().OrderBy(port => port, StringComparer.Ordinal)];
 
     internal static void RequireSerialTarget(SerialConnectionOptions selected, IReadOnlyList<string> ports)
     {
@@ -130,6 +130,10 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>Deploys and opens a native USB mirror stream on a manager-created session.</summary>
+    /// <remarks>Deployment is awaited to completion here because <see cref="StartMirror"/> is a synchronous
+    /// entry point: the blocking wait stays on this caller thread rather than leaking into the mirroring layer.
+    /// <para>本方法在此把部署等待到完成，因为 <see cref="StartMirror"/> 是同步入口：阻塞等待留在本调用线程，
+    /// 不会泄漏到投屏层。</para></remarks>
     private static (ScrcpyClient Client, Stream Shell) StartAdbUsbMirror(IAdbDeviceSession session, string jarPath,
         ScrcpyServerOptions options)
     {
@@ -137,7 +141,7 @@ public sealed partial class DeviceMonitorService
         ArgumentNullException.ThrowIfNull(options);
         if (session.UsesServer)
             throw new ArgumentException("A native USB ADB session is required.", nameof(session));
-        ScrcpyServerManager.PushServer(session, jarPath);
+        ScrcpyServerManager.PushServerAsync(session, jarPath).ConfigureAwait(false).GetAwaiter().GetResult();
         var shell = ScrcpyServerManager.StartServer(session, options).AsServiceStream();
         try { return (new ScrcpyClient(session, options), shell); }
         catch { shell.Dispose(); throw; }

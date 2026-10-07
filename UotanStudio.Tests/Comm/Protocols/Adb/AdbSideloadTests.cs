@@ -27,7 +27,7 @@ public class AdbSideloadTests
     }
 
     [Fact]
-    public void PushSideloadFile_StreamsOtaToSideloadPackageZip()
+    public async Task PushSideloadFileAsync_StreamsOtaToSideloadPackageZip()
     {
         var transport = new FakeAdbDeviceTransport();
         using var adb = new AdbSession(transport, AdbAuthentication.CreateNew());
@@ -38,7 +38,7 @@ public class AdbSideloadTests
         using var dir = new TempDirectory();
         var otaPath = dir.WriteBytes("ota-update.zip", otaBytes);
 
-        FlashService.PushSideloadFile(adb, otaPath, progress: null, CancellationToken.None);
+        await FlashService.PushSideloadFileAsync(adb, otaPath, progress: null, TestContext.Current.CancellationToken);
 
         Assert.Contains("sync:", transport.OpenedServices);
 
