@@ -79,7 +79,7 @@ internal sealed class TarArchiveReader
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        using var reader = new TarReader(stream, leaveOpen: true);
+        using var reader = new TarReader(new TarHeaderChecksumStream(stream), leaveOpen: true);
         while (reader.GetNextEntry(copyData: false) is { } tarEntry)
         {
             var fileType = tarEntry.EntryType switch
