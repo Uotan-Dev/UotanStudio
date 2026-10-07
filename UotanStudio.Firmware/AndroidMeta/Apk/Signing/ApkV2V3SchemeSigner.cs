@@ -94,9 +94,9 @@ public static class ApkV2V3SchemeSigner
         ]);
 
         var certificates = LengthPrefixSequence(chain.Select(static c => c.RawData));
-        var attributes = protectV3
-            ? LengthPrefixSequence([new byte[] { 0x0d, 0xf0, 0xef, 0xbe, 3, 0, 0, 0 }])
-            : new byte[] { 0, 0, 0, 0 };
+        byte[] attributes = protectV3
+            ? LengthPrefixSequence([[0x0d, 0xf0, 0xef, 0xbe, 3, 0, 0, 0]])
+            : [0, 0, 0, 0];
 
         return Concat(digests, certificates, attributes);
     }
@@ -113,7 +113,7 @@ public static class ApkV2V3SchemeSigner
         var signatures = LengthPrefixSequence([
             Concat(algoId.ToArray(), LengthPrefix(signature)),
         ]);
-        var publicKey = LengthPrefix(ExportSubjectPublicKeyInfo(key, Array.Empty<X509Certificate2>()));
+        var publicKey = LengthPrefix(ExportSubjectPublicKeyInfo(key, []));
 
         return Concat(LengthPrefix(signedData), signatures, publicKey);
     }
@@ -132,7 +132,7 @@ public static class ApkV2V3SchemeSigner
         ]);
 
         var certificates = LengthPrefixSequence(chain.Select(static c => c.RawData));
-        var attributes = new byte[] { 0, 0, 0, 0 };
+        byte[] attributes = [0, 0, 0, 0];
 
         Span<byte> minSdkBytes = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(minSdkBytes, (uint)minSdk);
@@ -155,7 +155,7 @@ public static class ApkV2V3SchemeSigner
         var signatures = LengthPrefixSequence([
             Concat(algoId.ToArray(), LengthPrefix(signature)),
         ]);
-        var publicKey = LengthPrefix(ExportSubjectPublicKeyInfo(key, Array.Empty<X509Certificate2>()));
+        var publicKey = LengthPrefix(ExportSubjectPublicKeyInfo(key, []));
 
         Span<byte> minSdkBytes = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(minSdkBytes, (uint)minSdk);
@@ -264,7 +264,7 @@ public static class ApkV2V3SchemeSigner
 
     private static byte[] BuildLengthPrefixed(byte[] content) => LengthPrefix(content);
 
-    private static byte[] Concat(params byte[][] parts)
+    private static byte[] Concat(params ReadOnlySpan<byte[]> parts)
     {
         long total = 0;
         foreach (var part in parts)

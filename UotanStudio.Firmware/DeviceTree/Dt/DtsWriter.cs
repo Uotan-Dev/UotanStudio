@@ -49,7 +49,7 @@ internal sealed class DtsWriter
         _indent++;
 
         var properties = _options.SortProperties
-            ? node.Properties.OrderBy(p => p.Name).ToList()
+            ? [.. node.Properties.OrderBy(p => p.Name)]
             : (IList<DeviceTreeProperty>)node.Properties;
 
         foreach (var prop in properties)

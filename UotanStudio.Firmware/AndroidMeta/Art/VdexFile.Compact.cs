@@ -16,6 +16,8 @@ internal static partial class VdexFile
         private uint _dataBase;
         private int _budget = 1_000_000;
         private long _instructionBudget = 64 * 1024 * 1024;
+        private static readonly ushort[] MandatoryMapTypes = [0, 0x1000];
+        private static readonly ushort[] RelocatedMapTypes = [0x1002, 0x1003, 0x2006];
         private ArtData Target => new(output, 0, output.Length, token);
 
         internal async Task RunAsync()
@@ -86,7 +88,7 @@ internal static partial class VdexFile
                 }
                 (type < 0x1000 ? _main : _shared).Check(offset, count == 0 ? 0 : 1);
             }
-            foreach (var type in new ushort[] { 0, 0x1000 })
+            foreach (var type in MandatoryMapTypes)
             {
                 if (!_maps.ContainsKey(type))
                 {
@@ -140,7 +142,7 @@ internal static partial class VdexFile
 
         private void RelocateDataPointers()
         {
-            foreach (var type in new ushort[] { 0x1002, 0x1003, 0x2006 })
+            foreach (var type in RelocatedMapTypes)
             {
                 if (!_maps.TryGetValue(type, out var section))
                 {
@@ -256,7 +258,7 @@ internal static partial class VdexFile
                 }
                 values[0] += values[1];
                 _instructionBudget -= units;
-                if (_instructionBudget < 0 || values.Any(v => v > ushort.MaxValue) || (method.Code & 1) != 0)
+                if (_instructionBudget < 0 || values.IndexOfAnyExceptInRange(0, ushort.MaxValue) >= 0 || (method.Code & 1) != 0)
                 {
                     throw new InvalidDataException("CompactDex code item exceeds its limits.");
                 }

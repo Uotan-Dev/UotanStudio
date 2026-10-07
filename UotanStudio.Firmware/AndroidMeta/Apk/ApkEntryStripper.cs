@@ -300,7 +300,9 @@ public static class ApkEntryStripper
     {
         var crc = new Crc32();
         crc.Append(content);
-        return BitConverter.ToUInt32(crc.GetCurrentHash());
+        Span<byte> hash = stackalloc byte[4];
+        crc.GetCurrentHash(hash);
+        return BinaryPrimitives.ReadUInt32LittleEndian(hash);
     }
 
     private static void WriteDosTimestamp(Span<byte> target)

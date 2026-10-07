@@ -316,7 +316,7 @@ public static partial class DtboFormat
         ArgumentNullException.ThrowIfNull(dtbs);
         if (dtbs.Count > MaximumEntries)
             throw new ArgumentException("DTBO entry count exceeds 65536.", nameof(dtbs));
-        return Pack(dtbs, dtbs.Select(_ => new DtboEntry()).ToArray(), pageSize, version);
+        return Pack(dtbs, [.. dtbs.Select(_ => new DtboEntry())], pageSize, version);
     }
 
     /// <summary>

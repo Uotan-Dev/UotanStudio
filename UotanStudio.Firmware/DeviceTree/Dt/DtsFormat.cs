@@ -385,7 +385,7 @@ public static class DtsFormat
                 {
                     case "define":
                         var argTrim = arg.Trim();
-                        var sep = argTrim.IndexOfAny(new[] { ' ', '\t' });
+                        var sep = argTrim.IndexOfAny([' ', '\t']);
                         if (sep < 0) macros[argTrim] = string.Empty;
                         else { var nm = argTrim.Substring(0, sep).Trim(); var vl = argTrim.Substring(sep).Trim(); macros[nm] = vl; }
                         break;
@@ -469,7 +469,7 @@ public static class DtsFormat
     private static (string directive, string arg) SplitDirective(string body)
     {
         if (body.Length == 0) return (string.Empty, string.Empty);
-        var sep = body.IndexOfAny(new[] { ' ', '\t' });
+        var sep = body.IndexOfAny([' ', '\t']);
         if (sep < 0) return (body, string.Empty);
         return (body.Substring(0, sep), body.Substring(sep + 1));
     }

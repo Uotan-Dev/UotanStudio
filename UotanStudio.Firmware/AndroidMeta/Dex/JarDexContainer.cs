@@ -116,10 +116,9 @@ public static class JarDexContainer
                 $"容器条目数 {archive.Entries.Count} 超过上限 {MaxEntryCount}。/ Container entry count exceeds the cap.");
         }
 
-        return archive.Entries
+        return [.. archive.Entries
             .Select(e => new JarEntryInfo(e.FullName, e.Length, Classify(e.FullName)))
-            .OrderBy(e => e.Name, StringComparer.Ordinal)
-            .ToArray();
+            .OrderBy(e => e.Name, StringComparer.Ordinal)];
     }
 
     /// <summary>
@@ -146,11 +145,10 @@ public static class JarDexContainer
                 $"容器条目数 {archive.Entries.Count} 超过上限 {MaxEntryCount}。/ Container entry count exceeds the cap.");
         }
 
-        return archive.Entries
+        return [.. archive.Entries
             .Where(e => IsDexEntryName(e.FullName))
             .Select(e => e.FullName)
-            .OrderBy(n => n, StringComparer.Ordinal)
-            .ToArray();
+            .OrderBy(n => n, StringComparer.Ordinal)];
     }
 
     /// <summary>

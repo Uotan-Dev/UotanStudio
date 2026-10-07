@@ -193,7 +193,7 @@ internal static class OatFile
     {
         if (offset == 0)
         {
-            return Array.Empty<OatLayoutHint>();
+            return [];
         }
         data.Check(offset, 80);
         var result = new List<OatLayoutHint>(10);
@@ -214,7 +214,7 @@ internal static class OatFile
     {
         if (offset == 0)
         {
-            return Array.Empty<OatMethodMapping>();
+            return [];
         }
         var count = data.U32(offset);
         if (count > methodCount || count > 65536)

@@ -45,18 +45,14 @@ public sealed class DexFormatHandler : IFormatHandler
             var header = FormatDetector.ReadHeader(filePath, 8);
 
 
-            if (header.Length < 8 || header[0] != (byte)'d' || header[1] != (byte)'e' || header[2] != (byte)'x' || header[3] != (byte)'\n')
+            if (header.Length < 8 || !header.AsSpan(0, 4).SequenceEqual("dex\n"u8))
             {
                 return false;
             }
-            if (header[4] < (byte)'0' || header[4] > (byte)'9'
-                || header[5] < (byte)'0' || header[5] > (byte)'9'
-                || header[6] < (byte)'0' || header[6] > (byte)'9'
-                || header[7] != 0)
-            {
-                return false;
-            }
-            return true;
+            return header[4] is >= (byte)'0' and <= (byte)'9'
+                && header[5] is >= (byte)'0' and <= (byte)'9'
+                && header[6] is >= (byte)'0' and <= (byte)'9'
+                && header[7] == 0;
         }
         catch
         {

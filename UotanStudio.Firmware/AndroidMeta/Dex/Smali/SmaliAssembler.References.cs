@@ -136,14 +136,14 @@ public static partial class SmaliAssembler
                 {
                     throw new FormatException("A range invocation must contain between one and 255 register words.");
                 }
-                return Enumerable.Range(first, count).ToArray();
+                return [.. Enumerable.Range(first, count)];
             }
             var values = body.Split(',', StringSplitOptions.TrimEntries);
             if (values.Length > 5)
             {
                 throw new FormatException("A fixed invocation register list cannot exceed five register words.");
             }
-            return values.Select(value => parse(value, 4)).ToArray();
+            return [.. values.Select(value => parse(value, 4))];
         }
     }
 }

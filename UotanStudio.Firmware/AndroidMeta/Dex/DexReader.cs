@@ -14,6 +14,17 @@ internal static class DexReader
     /// Parses a DEX byte array into the object model.
     /// <para>解析 DEX 字节数组为对象模型。</para>
     /// </summary>
+    /// <param name="data">
+    /// Complete little-endian DEX image of at least 0x70 bytes whose header file-size field equals
+    /// <c>data.Length</c>; versions 035, 037, 038, 039 and 040 are accepted and every table range is
+    /// bounds-checked because the input is treated as untrusted. <see langword="null"/> is rejected.
+    /// <para>至少 0x70 字节的完整小端 DEX 镜像，其头部文件大小字段必须等于 <c>data.Length</c>；接受
+    /// 035、037、038、039、040 版本，且因输入按不可信处理，各表范围均经过边界检查。<see langword="null"/> 会被拒绝。</para>
+    /// </param>
+    /// <returns>The model holding the validated header plus the decoded string, type, prototype, field,
+    /// method and class tables; call-site and method-handle entries are added when the map list declares
+    /// them. <para>返回的模型包含已校验的头部以及解码得到的 string、type、proto、field、method 与 class 各表；
+    /// map list 声明了调用点与方法句柄时一并加入。</para></returns>
     public static DexFile Parse(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -110,7 +121,7 @@ internal static class DexReader
                     EnsureRange(data, p, 1, "call_site_item");
                     var size = Leb128.ReadUleb128(data, ref p);
                     if (size > data.Length - p) throw new DexException("Truncated call-site array.");
-                    var values = new List<EncodedValue>();
+                    List<EncodedValue> values = new(checked((int)size));
                     for (var k = 0; k < size; k++) values.Add(ReadEncodedValue(data, ref p, dex));
                     dex.CallSites.Add(values);
                 }
@@ -130,11 +141,10 @@ internal static class DexReader
 
     private static bool IsValidMagic(ReadOnlySpan<byte> magic)
         => magic.Length == 8
-           && magic[0] == (byte)'d' && magic[1] == (byte)'e' && magic[2] == (byte)'x'
-           && magic[3] == (byte)'\n'
-           && magic[4] >= (byte)'0' && magic[4] <= (byte)'9'
-           && magic[5] >= (byte)'0' && magic[5] <= (byte)'9'
-           && magic[6] >= (byte)'0' && magic[6] <= (byte)'9'
+           && magic[..4].SequenceEqual("dex\n"u8)
+           && char.IsAsciiDigit((char)magic[4])
+           && char.IsAsciiDigit((char)magic[5])
+           && char.IsAsciiDigit((char)magic[6])
            && magic[7] == 0;
 
     private static DexHeader ReadHeader(byte[] data)

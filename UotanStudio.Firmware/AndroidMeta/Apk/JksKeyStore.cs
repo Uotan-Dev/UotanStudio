@@ -18,8 +18,10 @@ public sealed record JksEntry(int Tag, string Alias, DateTimeOffset Creation, by
 /// </summary>
 internal static class JksKeyStoreReader
 {
-    /// <summary>Parses all entries and verifies the trailing integrity digest.</summary>
+    /// <summary>
+    /// Parses all entries and verifies the trailing integrity digest.
     /// <para>解析全部条目并校验尾部完整性摘要。</para>
+    /// </summary>
     /// <param name="data">Complete keystore bytes (for example the output of <see cref="JksKeyStoreWriter.Build"/>); the caller keeps ownership. <para>完整密钥库字节（例如 <see cref="JksKeyStoreWriter.Build"/> 的输出）；所有权归调用方。</para></param>
     /// <param name="password">Keystore password, converted with the upstream big-endian UTF-16 pairing and keyed into the trailing "Mighty Aphrodite" SHA-1 digest. <para>密钥库密码，按上游大端 UTF-16 双字节编码并参与尾部 "Mighty Aphrodite" SHA-1 keyed 摘要。</para></param>
     /// <returns>All entries in file order; private-key entries keep the encrypted blob and are not decrypted here. <para>按文件顺序的全部条目；私钥条目保留加密数据块，此处不执行解密。</para></returns>
@@ -219,7 +221,7 @@ internal static class JksKeyStoreReader
             else throw new InvalidDataException("Invalid JKS string encoding.");
         }
         offset += length;
-        return new string(chars.ToArray());
+        return new string([.. chars]);
     }
 }
 
@@ -369,31 +371,6 @@ public static class JksKeyStoreWriter
         return target;
     }
 
-    private static void WriteBEInt32(this BinaryWriter writer, int value)
-    {
-        Span<byte> bytes = stackalloc byte[4];
-        bytes[0] = (byte)(value >> 24);
-        bytes[1] = (byte)(value >> 16);
-        bytes[2] = (byte)(value >> 8);
-        bytes[3] = (byte)value;
-        writer.Write(bytes);
-    }
-
-    private static void WriteBEInt16(this BinaryWriter writer, int value)
-    {
-        Span<byte> bytes = stackalloc byte[2];
-        bytes[0] = (byte)(value >> 8);
-        bytes[1] = (byte)value;
-        writer.Write(bytes);
-    }
-
-    private static void WriteBEInt64(this BinaryWriter writer, long value)
-    {
-        Span<byte> bytes = stackalloc byte[8];
-        for (var i = 0; i < 8; i++) bytes[i] = (byte)(value >> ((7 - i) * 8));
-        writer.Write(bytes);
-    }
-
     /// <summary>Encodes Java modified UTF-8 (U+0000 as C0 80; supplementary chars as surrogate pairs).</summary>
     /// <para>编码 Java 修改版 UTF-8（U+0000 写作 C0 80；增补字符按代理对处理）。</para>
     private static byte[] EncodeModifiedUtf(string value)
@@ -426,5 +403,35 @@ public static class JksKeyStoreWriter
             }
         }
         return bytes;
+    }
+}
+
+/// <summary>
+/// Big-endian fixed-width writers used by <see cref="JksKeyStoreWriter"/> when framing the
+/// upstream JKS layout; kept file-local because no other type writes big-endian JKS fields.
+/// <para>供 <see cref="JksKeyStoreWriter"/> 按上游 JKS 布局写出定宽大端字段；因没有其他类型写出大端 JKS 字段而保持文件局部。</para>
+/// </summary>
+file static class JksBigEndianWriterExtensions
+{
+    extension(BinaryWriter writer)
+    {
+        internal void WriteBEInt32(int value)
+        {
+            Span<byte> bytes = [(byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value];
+            writer.Write(bytes);
+        }
+
+        internal void WriteBEInt16(int value)
+        {
+            Span<byte> bytes = [(byte)(value >> 8), (byte)value];
+            writer.Write(bytes);
+        }
+
+        internal void WriteBEInt64(long value)
+        {
+            Span<byte> bytes = stackalloc byte[8];
+            for (var i = 0; i < 8; i++) bytes[i] = (byte)(value >> ((7 - i) * 8));
+            writer.Write(bytes);
+        }
     }
 }

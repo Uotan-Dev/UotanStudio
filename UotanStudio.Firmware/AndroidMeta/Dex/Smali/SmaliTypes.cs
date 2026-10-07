@@ -12,7 +12,7 @@ internal static class SmaliTypes
         }
         if (text.Contains(',') || IsReadable(text.Trim()))
         {
-            return text.Split(',').Select(t => Single(t.Trim(), allowVoid: false)).ToArray();
+            return [.. text.Split(',').Select(t => Single(t.Trim(), allowVoid: false))];
         }
         var descriptors = new List<string>();
         var position = 0;

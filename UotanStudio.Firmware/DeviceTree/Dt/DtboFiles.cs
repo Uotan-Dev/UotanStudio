@@ -231,7 +231,7 @@ public static partial class DtboFormat
         foreach (var name in names)
             File.Move(Path.Combine(staging, name), LocalFile(destination, name), options.Overwrite);
         options.Progress?.Report(100, "DTBO overlays and manifest extracted.");
-        return names.Select(name => Path.Combine(destination, name)).ToArray();
+        return [.. names.Select(name => Path.Combine(destination, name))];
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using DtTree = UotanStudio.Firmware.DeviceTree.Dt.DeviceTree;
@@ -484,7 +485,7 @@ internal sealed class DtsParser
         if (CurrentChar() == ';')
         {
             _currentPropertyName = null;
-            return new DeviceTreeProperty(name, ReadOnlySpan<byte>.Empty);
+            return new DeviceTreeProperty(name, []);
         }
 
         Expect("=");
@@ -511,7 +512,7 @@ internal sealed class DtsParser
                 Advance();
                 var refLabel = ParseIdentifier();
                 _pendingLabelValueReferences.Add((_currentNode!, _currentPropertyName!, refLabel));
-                parts.Add(Array.Empty<byte>());
+                parts.Add([]);
             }
             else if (Match("/incbin/")) parts.Add(ParseIncBin());
             else if (Match("/bits/"))
@@ -576,7 +577,7 @@ internal sealed class DtsParser
         }
 
         Expect(">");
-        return cells.ToArray();
+        return [.. cells];
     }
 
     private byte[] ParseStringLiteral()
@@ -630,7 +631,7 @@ internal sealed class DtsParser
             bytes.Add(ParseHexByte());
         }
         Expect("]");
-        return bytes.ToArray();
+        return [.. bytes];
     }
 
     private byte[] ParseIncBin()
@@ -703,7 +704,7 @@ internal sealed class DtsParser
             }
         }
         Expect(">");
-        return values.ToArray();
+        return [.. values];
     }
 
     private void ResolveLabelReferences(DtTree tree)
@@ -744,7 +745,7 @@ internal sealed class DtsParser
                 var offsets = local.FindProperty(propName)?.GetCells().ToList() ?? [];
                 offsets.Add((uint)offset);
                 local.RemoveProperty(propName);
-                local.AddPropertyCells(propName, offsets.ToArray());
+                local.AddPropertyCells(propName, [.. offsets]);
             }
         }
 
@@ -1282,11 +1283,14 @@ internal sealed class DtsParser
         _pos++;
     }
 
+    private static readonly SearchValues<char> IdentifierExtraChars = SearchValues.Create("_-.+#,@");
+    private static readonly SearchValues<char> IdentifierStartExtraChars = SearchValues.Create("_#");
+
     private static bool IsIdentifierChar(char ch) =>
-        char.IsLetterOrDigit(ch) || ch == '_' || ch == '-' || ch == '.' || ch == '+' || ch == '#' || ch == ',' || ch == '@';
+        char.IsLetterOrDigit(ch) || IdentifierExtraChars.Contains(ch);
 
     private static bool IsIdentifierStart(char ch) =>
-        char.IsLetterOrDigit(ch) || ch == '_' || ch == '#';
+        char.IsLetterOrDigit(ch) || IdentifierStartExtraChars.Contains(ch);
 
     private static bool IsHexDigit(char ch) =>
         char.IsDigit(ch) || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
