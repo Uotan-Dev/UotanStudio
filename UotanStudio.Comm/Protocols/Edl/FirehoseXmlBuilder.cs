@@ -255,9 +255,13 @@ public static partial class FirehoseXmlBuilder
     /// <param name="numPartitionSectors">The number of sectors to hash. <para>待计算哈希的扇区数。</para></param>
     /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
     /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="slot">Optional slot number emitted as the <c>slot</c> attribute when non-zero
+    /// (reference qdl <c>src/firehose.c</c> firehose_getsha256digest).
+    /// <para>可选槽位编号；非零时以 <c>slot</c> 属性输出（参考 qdl <c>src/firehose.c</c> 的
+    /// firehose_getsha256digest）。</para></param>
     /// <returns>The getsha256digest XML string. <para>getsha256digest XML 字符串。</para></returns>
     public static string BuildGetSha256Digest(long sectorSizeInBytes, long numPartitionSectors,
-        int physicalPartitionNumber, long startSector)
+        int physicalPartitionNumber, long startSector, int? slot = null)
     {
         var sb = new StringBuilder();
         sb.Append(EdlConstants.XmlHeader);
@@ -266,6 +270,11 @@ public static partial class FirehoseXmlBuilder
         sb.Append($" num_partition_sectors=\"{numPartitionSectors}\"");
         sb.Append($" physical_partition_number=\"{physicalPartitionNumber}\"");
         sb.Append($" start_sector=\"{startSector}\"");
+        if (slot.HasValue && slot.Value != 0)
+        {
+            sb.Append($" slot=\"{slot.Value}\"");
+        }
+
         sb.Append(" />\n");
         sb.Append(EdlConstants.DataClose);
         return sb.ToString();

@@ -22,7 +22,7 @@ public class FirehoseDigestTests
         var snapshot = await protocol.ReadGptAsync(0, TestContext.Current.CancellationToken);
 
         var result = await protocol.ProgramRawPartitionFromFileAsync(snapshot, "boot", path, 0, verify: true,
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(new FirehosePartitionWriteResult(512, 512), result);
         var commands = Commands(transport).ToArray();
@@ -47,7 +47,7 @@ public class FirehoseDigestTests
         var snapshot = await protocol.ReadGptAsync(0, TestContext.Current.CancellationToken);
 
         var result = await protocol.ProgramRawPartitionFromFileAsync(snapshot, "boot", path, 0, verify: true,
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(new FirehosePartitionWriteResult(512, 512), result);
         Assert.Contains(Commands(transport), command => command.Name.LocalName == "read");
@@ -66,7 +66,7 @@ public class FirehoseDigestTests
         var snapshot = await protocol.ReadGptAsync(0, TestContext.Current.CancellationToken);
 
         var result = await protocol.ProgramRawPartitionFromFileAsync(snapshot, "boot", path, 0, verify: true,
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(new FirehosePartitionWriteResult(512, 512), result);
         Assert.Contains(Commands(transport), command => command.Name.LocalName == "read");
@@ -86,7 +86,7 @@ public class FirehoseDigestTests
         var snapshot = await protocol.ReadGptAsync(0, TestContext.Current.CancellationToken);
 
         await Assert.ThrowsAnyAsync<Exception>(() => protocol.ProgramRawPartitionFromFileAsync(snapshot, "boot",
-            path, 0, verify: true, TestContext.Current.CancellationToken));
+            path, 0, verify: true, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Contains(Commands(transport), command => command.Name.LocalName == "read");
     }
 
@@ -165,7 +165,7 @@ public class FirehoseDigestTests
         using var protocol = Protocol(transport);
 
         var verified = await protocol.TryVerifyProgramWithTargetDigestOwnedAsync(source, 40, 1, 0,
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(verified);
     }

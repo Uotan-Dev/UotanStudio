@@ -195,18 +195,24 @@ public static partial class FirehoseXmlBuilder
     }
 
     /// <summary>
-    /// Builds the &lt;peek&gt; XML command for reading memory from the target device.
-    /// <para>构建用于从目标设备读取内存的 &lt;peek&gt; XML 命令。</para>
+    /// Builds the &lt;peek&gt; XML command for reading memory from the target device; some
+    /// programmers spell the size attribute <c>SizeInBytes</c>, hence the case switch mirroring the
+    /// poke builder.
+    /// <para>构建用于从目标设备读取内存的 &lt;peek&gt; XML 命令；部分 programmer 将大小属性拼写成
+    /// <c>SizeInBytes</c>，因此像 poke 构建器一样提供大小写切换。</para>
     /// </summary>
     /// <param name="sizeInBytes">The number of bytes to read. <para>待读取字节数。</para></param>
     /// <param name="address">The memory address to read from (hexadecimal string). <para>待读取的内存地址（十六进制字符串）。</para></param>
+    /// <param name="uppercaseSize">Whether the size attribute uses the <c>SizeInBytes</c> spelling.
+    /// <para>大小属性是否使用 <c>SizeInBytes</c> 拼写。</para></param>
     /// <returns>The peek XML string. <para>peek XML 字符串。</para></returns>
-    public static string BuildPeek(long sizeInBytes, string address)
+    public static string BuildPeek(long sizeInBytes, string address, bool uppercaseSize = false)
     {
+        var sizeAttribute = uppercaseSize ? "SizeInBytes" : "size_in_bytes";
         var sb = new StringBuilder();
         sb.Append(EdlConstants.XmlHeader);
         sb.Append(EdlConstants.DataOpen);
-        sb.Append($"<peek size_in_bytes=\"{sizeInBytes}\"");
+        sb.Append($"<peek {sizeAttribute}=\"{sizeInBytes}\"");
         sb.Append($" address=\"{EscapeXml(address)}\"");
         sb.Append(" />\n");
         sb.Append(EdlConstants.DataClose);

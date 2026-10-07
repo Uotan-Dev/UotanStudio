@@ -36,6 +36,76 @@ internal static class EdlGptPartitionService
     /// offset 0.</summary>
     private const uint StreamingPartitionTableAddress = 0u;
 
+    /// <summary><para>按名扫描时尝试的最高 LUN 编号，与刷写页 EdlLunBox 暴露的 0..7 一致。</para>
+    /// The highest LUN number probed by the by-name scan, matching the 0..7 range the flash page's
+    /// EdlLunBox exposes.</summary>
+    private const int MaxScannedLun = 7;
+
+    /// <summary>
+    /// <para>解析具名分区所在的 GPT 快照：显式给出 LUN 时只读该 LUN；为空时按 0..<see cref="MaxScannedLun"/>
+    /// 逐个扫描，返回第一个表内含该名称的 LUN。单个 LUN 的读取失败视为该 LUN 不可用并继续扫描；
+    /// 全部 LUN 都读不出 GPT 时把首次失败作为内部异常抛出，以保留真实故障原因。</para>
+    /// Resolves the GPT snapshot holding the named partition: an explicit LUN reads only that LUN, while a
+    /// <see langword="null"/> LUN scans 0..<see cref="MaxScannedLun"/> and returns the first table that
+    /// contains the name. A per-LUN read failure marks that LUN unusable and the scan continues; when no LUN
+    /// yields a readable GPT the first failure is rethrown as the inner exception to keep the real cause.
+    /// </summary>
+    /// <param name="firehose"><para>已初始化的 Firehose 协议实例。</para>The initialized Firehose protocol.</param>
+    /// <param name="partition"><para>要定位的分区名（精确匹配）。</para>The partition name to locate (exact match).</param>
+    /// <param name="lun"><para>显式 LUN；为空时按名扫描。</para>The explicit LUN; <see langword="null"/> scans by name.</param>
+    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
+    /// <returns><para>所在快照与对应分区项。</para>The owning snapshot and its partition entry.</returns>
+    /// <exception cref="OperationCanceledException"><para>扫描被取消。</para>The scan was cancelled.</exception>
+    /// <exception cref="InvalidOperationException"><para>没有任何 LUN 能读出 GPT。</para>
+    /// No LUN produced a readable GPT.</exception>
+    /// <exception cref="KeyNotFoundException"><para>所有可读 GPT 中都没有该分区名。</para>
+    /// No readable GPT carries the partition name.</exception>
+    internal static async Task<(FirehoseGptSnapshot Snapshot, GptPartition Entry)> ResolvePartitionSnapshotAsync(
+        FirehoseProtocol firehose, string partition, int? lun, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(firehose);
+        if (lun is { } explicitLun)
+        {
+            var snapshot = await firehose.ReadGptAsync(explicitLun, ct).ConfigureAwait(false);
+            return (snapshot, snapshot.Table.FindPartition(partition));
+        }
+
+        Exception? firstFailure = null;
+        var readableLunSeen = false;
+        for (var candidate = 0; candidate <= MaxScannedLun; candidate++)
+        {
+            ct.ThrowIfCancellationRequested();
+            FirehoseGptSnapshot scanned;
+            try
+            {
+                scanned = await firehose.ReadGptAsync(candidate, ct).ConfigureAwait(false);
+            }
+            catch (Exception failure) when (failure is not OperationCanceledException
+                and not ObjectDisposedException)
+            {
+                firstFailure ??= failure;
+                continue;
+            }
+
+            readableLunSeen = true;
+            if (scanned.Table.Partitions.Any(entry => string.Equals(entry.Name, partition, StringComparison.Ordinal)))
+            {
+                return (scanned, scanned.Table.FindPartition(partition));
+            }
+        }
+
+        if (!readableLunSeen)
+        {
+            throw new InvalidOperationException(
+                $"No LUN 0..{MaxScannedLun} reported a readable GPT. LUN 0..{MaxScannedLun} 均未能读出 GPT。",
+                firstFailure);
+        }
+
+        throw new KeyNotFoundException(
+            $"No readable GPT on LUN 0..{MaxScannedLun} carries a partition named '{partition}'. " +
+            $"LUN 0..{MaxScannedLun} 的可读 GPT 均未上报名为 '{partition}' 的分区。");
+    }
+
     /// <summary>
     /// <para>把设备 GPT 中的一项转成 rawprogram 形状的条目，供既有按条目流程（擦除、回读、清单生成）复用。</para>
     /// Converts one device-GPT entry into a rawprogram-shaped entry so the existing entry-driven
@@ -56,9 +126,13 @@ internal static class EdlGptPartitionService
         };
     }
 
-    /// <summary>Writes a raw image into the exactly named partition.</summary>
+    /// <summary>
+    /// <para>把镜像写入按名定位的分区；LUN 为空时按名跨 LUN 扫描定位。</para>
+    /// Writes a raw image into the named partition, located across LUNs when no LUN is given.
+    /// </summary>
     internal static async Task<FlashResult> FlashAsync(DeviceInfo device, string partition, string imagePath,
-        bool verify, IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null, EdlInitializationOptions? initialization = null)
+        bool verify, IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
+        EdlInitializationOptions? initialization = null, int? lun = null)
     {
         if (!File.Exists(imagePath))
         {
@@ -83,8 +157,8 @@ internal static class EdlGptPartitionService
 
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
-            var snapshot = await firehose.ReadGptAsync(cancellationToken: ct).ConfigureAwait(false);
-            var partitionEntry = snapshot.Table.FindPartition(partition);
+            var (snapshot, partitionEntry) = await ResolvePartitionSnapshotAsync(firehose, partition, lun, ct)
+                .ConfigureAwait(false);
             progress?.Report(new FlashProgress(partition, 30,
                 $"Programming {partition} at LBA {partitionEntry.FirstLba}... 正在编程 {partition}..."));
             var result = await firehose.ProgramRawPartitionFromFileAsync(snapshot, partition, imagePath,
@@ -101,9 +175,13 @@ internal static class EdlGptPartitionService
         }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Erases the exactly named partition using its reported range.</summary>
+    /// <summary>
+    /// <para>按分区上报的范围擦除该分区；LUN 为空时按名跨 LUN 扫描定位。</para>
+    /// Erases the named partition using its reported range, located across LUNs when no LUN is given.
+    /// </summary>
     internal static async Task<FlashResult> EraseAsync(DeviceInfo device, string partition,
-        IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null, EdlInitializationOptions? initialization = null)
+        IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
+        EdlInitializationOptions? initialization = null, int? lun = null)
     {
         progress?.Report(new FlashProgress(partition, 0, "Reading the device partition table... 正在读取设备分区表..."));
         return await App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
@@ -112,8 +190,8 @@ internal static class EdlGptPartitionService
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
-            var snapshot = await firehose.ReadGptAsync(cancellationToken: ct).ConfigureAwait(false);
-            var entry = snapshot.Table.FindPartition(partition);
+            var (snapshot, entry) = await ResolvePartitionSnapshotAsync(firehose, partition, lun, ct)
+                .ConfigureAwait(false);
             var start = checked((long)entry.FirstLba);
             var sectors = checked((long)(entry.LastLba - entry.FirstLba + 1UL));
             progress?.Report(new FlashProgress(partition, 30,
@@ -139,9 +217,106 @@ internal static class EdlGptPartitionService
         }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Copies the exactly named partition to a file, published atomically by the protocol.</summary>
+    /// <summary>
+    /// <para>按设备自身 GPT 精确解析名为 <c>userdata</c> 与 <c>metadata</c> 的分区并整区擦除，用同一条
+    /// Firehose 擦除路径把用户数据恢复到空状态。分区名精确匹配，LUN 传空时按名跨 LUN 扫描定位；
+    /// 缺失的分区被跳过并在结果摘要中报告，两个分区都不存在时返回失败结果，不做任何猜测。</para>
+    /// Resolves the partitions named exactly <c>userdata</c> and <c>metadata</c> against the device's own
+    /// GPT and erases each one whole through the same Firehose erase path, returning the user area to an
+    /// empty state. Names are matched exactly and located across LUNs when the LUN is null; an absent
+    /// partition is skipped and reported in the result summary, and a device reporting neither returns a
+    /// failure result instead of a guess.
+    /// </summary>
+    /// <param name="device"><para>目标 EDL 设备。</para>The target EDL device.</param>
+    /// <param name="progress"><para>阶段进度。</para>Phase progress.</param>
+    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
+    /// <param name="programmerPath"><para>可选的编程器覆盖路径。</para>Optional programmer override path.</param>
+    /// <param name="initialization"><para>可选的会话认证选项。</para>Optional session authentication options.</param>
+    /// <returns><para>擦除结果，摘要列出已擦除与被跳过的分区。</para>The erase result whose summary lists
+    /// the erased and the skipped partitions.</returns>
+    internal static async Task<FlashResult> FactoryResetAsync(DeviceInfo device,
+        IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
+        EdlInitializationOptions? initialization = null)
+    {
+        progress?.Report(new FlashProgress("factory-reset", 0,
+            "Reading the device partition tables... 正在读取设备分区表..."));
+        return await App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
+        {
+            using var programmer = OpenProgrammer(programmerPath);
+            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            var firehose = session.Firehose
+                ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
+            var erased = new List<string>();
+            var skipped = new List<string>();
+            foreach (var partition in new[] { "userdata", "metadata" })
+            {
+                ct.ThrowIfCancellationRequested();
+                FirehoseGptSnapshot snapshot;
+                GptPartition entry;
+                try
+                {
+                    (snapshot, entry) = await ResolvePartitionSnapshotAsync(firehose, partition, null, ct)
+                        .ConfigureAwait(false);
+                }
+                catch (KeyNotFoundException)
+                {
+                    skipped.Add(partition);
+                    continue;
+                }
+
+                var start = checked((long)entry.FirstLba);
+                var sectors = checked((long)(entry.LastLba - entry.FirstLba + 1UL));
+                progress?.Report(new FlashProgress(partition, 30,
+                    $"Erasing {sectors} sectors of {partition}... 正在擦除 {partition} 的 {sectors} 个扇区..."));
+                var response = await session.ErasePartitionAsync(start, sectors,
+                    snapshot.Geometry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
+                if (!response.IsAck)
+                {
+                    return new FlashResult
+                    {
+                        Success = false,
+                        Summary = (erased.Count > 0
+                                ? $"EDL factory reset erased '{string.Join("', '", erased)}' and then failed on "
+                                : "EDL factory reset failed on ") +
+                            $"'{partition}': {EdlFailureText.Describe(response)}. " +
+                            "擦除该分区时被设备拒绝，工厂重置未完成。"
+                    };
+                }
+
+                erased.Add(partition);
+                progress?.Report(new FlashProgress(partition, 100, "Erase complete. 分区擦除完成。"));
+            }
+
+            if (erased.Count == 0)
+            {
+                return new FlashResult
+                {
+                    Success = false,
+                    Summary = "No partition named 'userdata' or 'metadata' exists in any readable GPT, so the " +
+                        "factory reset erased nothing. 可读 GPT 中不存在名为 'userdata' 或 'metadata' 的分区，未擦除任何内容。"
+                };
+            }
+
+            progress?.Report(new FlashProgress("factory-reset", 100, "Factory reset complete. 工厂重置完成。"));
+            return new FlashResult
+            {
+                Success = true,
+                Summary = $"Erased '{string.Join("', '", erased)}' via Firehose erase" +
+                    (skipped.Count > 0
+                        ? $"; skipped absent '{string.Join("', '", skipped)}'. 已擦除所选分区；缺失的分区被跳过。"
+                        : ". 已完成工厂重置擦除。")
+            };
+        }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <para>把按名定位的分区复制到文件，由协议层原子发布；LUN 为空时按名跨 LUN 扫描定位。</para>
+    /// Copies the named partition to a file, published atomically by the protocol; located across LUNs
+    /// when no LUN is given.
+    /// </summary>
     internal static async Task<BackupResult> BackupAsync(DeviceInfo device, string partition, string outPath,
-        IProgress<BackupProgress>? progress, CancellationToken ct, string? programmerPath = null, EdlInitializationOptions? initialization = null)
+        IProgress<BackupProgress>? progress, CancellationToken ct, string? programmerPath = null,
+        EdlInitializationOptions? initialization = null, int? lun = null)
     {
         progress?.Report(new BackupProgress(partition, 0, "Reading the device partition table... 正在读取设备分区表..."));
         await App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
@@ -162,8 +337,8 @@ internal static class EdlGptPartitionService
 
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
-            var snapshot = await firehose.ReadGptAsync(cancellationToken: ct).ConfigureAwait(false);
-            var entry = snapshot.Table.FindPartition(partition);
+            var (snapshot, entry) = await ResolvePartitionSnapshotAsync(firehose, partition, lun, ct)
+                .ConfigureAwait(false);
             progress?.Report(new BackupProgress(partition, 10,
                 $"Reading {entry.ByteLength / snapshot.Geometry.SectorSize} sectors of {partition}... 正在读取 {partition}..."));
             await firehose.ReadPartitionToFileAsync(snapshot, partition, outPath, cancellationToken: ct)

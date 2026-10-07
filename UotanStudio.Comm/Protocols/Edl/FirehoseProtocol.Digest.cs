@@ -110,8 +110,18 @@ public sealed partial class FirehoseProtocol
     /// <para>在已持有的租约上发送 <c>&lt;getsha256digest&gt;</c>，并从目标日志或响应属性中提取摘要。
     /// NAK 或缺少摘要时返回 <see langword="null"/>，会话保持可用。</para>
     /// </summary>
+    /// <param name="startSector">The absolute starting sector. <para>绝对起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors to hash. <para>待计算哈希的扇区数。</para></param>
+    /// <param name="physicalPartition">The physical storage region or LUN. <para>物理存储区域或 LUN。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="slot">
+    /// Optional slot number for the <c>slot</c> attribute; <see langword="null"/> or zero omits it so
+    /// existing callers keep the exact wire form they used before.
+    /// <para>可选的 <c>slot</c> 属性槽位编号；<see langword="null"/> 或零时省略，使既有调用方保持
+    /// 与此前完全一致的线上形式。</para>
+    /// </param>
     internal async Task<byte[]?> GetSha256DigestCoreAsync(long startSector, long numSectors,
-        int physicalPartition, CancellationToken cancellationToken)
+        int physicalPartition, CancellationToken cancellationToken, int? slot = null)
     {
         ThrowIfDisposed();
         ArgumentOutOfRangeException.ThrowIfNegative(startSector);
@@ -120,7 +130,7 @@ public sealed partial class FirehoseProtocol
         var logs = new List<string>();
         var response = await SendCommandAndWaitResponseAsync(
             FirehoseXmlBuilder.BuildGetSha256Digest(Configuration.SectorSize, numSectors, physicalPartition,
-                startSector),
+                startSector, slot),
             cancellationToken,
             blockObserver: block => logs.AddRange(block.Logs)).ConfigureAwait(false);
         if (!response.IsAck)

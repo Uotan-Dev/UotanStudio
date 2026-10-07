@@ -52,7 +52,7 @@ public sealed partial class FirehoseProtocol
             while (consumed < _rxBufferBytes)
             {
                 var value = _rxBuffer[consumed++];
-                if (length == 0 && value is 0 or (byte)' ' or (byte)'\r' or (byte)'\n' or (byte)'\t')
+                if (length == 0 && EdlConstants.DocumentLeadingPadding.Contains(value))
                 {
                     continue;
                 }

@@ -198,6 +198,45 @@ public class FirehoseDebugTests
     }
 
     [Fact]
+    public async Task PeekAsync_NakWithLowercase_RetriesUppercaseAttribute()
+    {
+        var payload = new byte[] { 0xDE, 0xAD };
+        using var transport = new ScriptedCommTransport();
+        var attempts = 0;
+        transport.OnWrite = bytes =>
+        {
+            attempts++;
+            var xml = Encoding.UTF8.GetString(bytes);
+            if (!xml.Contains("<peek", StringComparison.Ordinal))
+            {
+                return [Encoding.UTF8.GetBytes("<data><response value='ACK' rawmode='false'/></data>")];
+            }
+
+            if (attempts == 1)
+            {
+                Assert.Contains("size_in_bytes", xml);
+                return [Encoding.UTF8.GetBytes("<data><response value='NAK' rawmode='false'/></data>")];
+            }
+
+            Assert.Contains("SizeInBytes", xml);
+            return
+            [
+                Encoding.UTF8.GetBytes("<data><response value='ACK' rawmode='true'/></data>"),
+                payload,
+                Encoding.UTF8.GetBytes("<data><response value='ACK' rawmode='false'/></data>")
+            ];
+        };
+        using var protocol = new FirehoseProtocol(transport,
+            new FirehoseConfiguration { SectorSize = 512, AutoDetectSectorSize = false });
+
+        var (response, data) = await protocol.PeekAsync(payload.Length, 0x400, TestContext.Current.CancellationToken);
+
+        Assert.True(response.IsAck);
+        Assert.Equal(payload, data);
+        Assert.Equal(2, attempts);
+    }
+
+    [Fact]
     public void DetectActiveSlot_BootAActiveFlag_ReturnsA()
     {
         using var transport = new ScriptedCommTransport();

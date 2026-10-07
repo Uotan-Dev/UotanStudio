@@ -143,8 +143,40 @@ internal sealed class UfsProvisionEpilogue : UfsProvisionEntryState
 /// <para>三个分支都是引用类型，因此持有它们不会装箱。默认值不携带任何条目，
 /// 所以每次读取要么对分支做模式匹配，要么显式回退。</para>
 /// </summary>
-internal union UfsProvisionEntry(UfsProvisionCommon, UfsProvisionBody, UfsProvisionEpilogue)
+internal sealed class UfsProvisionEntry
 {
+    /// <summary>
+    /// Creates an entry holding one of the three closed case shapes.
+    /// <para>创建持有三种闭合分支形态之一的条目。</para>
+    /// </summary>
+    /// <param name="value">The case instance to hold.
+    /// <para>要持有的分支实例。</para></param>
+    /// <exception cref="ArgumentNullException">The case instance is null.
+    /// <para>分支实例为 null。</para></exception>
+    private UfsProvisionEntry(object value) => Value = value is null
+        ? throw new ArgumentNullException(nameof(value))
+        : value;
+
+    /// <summary>
+    /// Gets the held case instance, which is always one of <see cref="UfsProvisionCommon"/>,
+    /// <see cref="UfsProvisionBody"/> and <see cref="UfsProvisionEpilogue"/> and never null.
+    /// <para>获取持有的分支实例；它始终是三者之一且不为 null。</para>
+    /// </summary>
+    /// <value>The held case instance. <para>持有的分支实例。</para></value>
+    internal object Value { get; }
+
+    /// <summary>Creates an entry holding a common case. 创建持有 common 分支的条目。</summary>
+    /// <param name="common">The common case. <para>common 分支。</para></param>
+    public static implicit operator UfsProvisionEntry(UfsProvisionCommon common) => new(common);
+
+    /// <summary>Creates an entry holding a body case. 创建持有 body 分支的条目。</summary>
+    /// <param name="body">The body case. <para>body 分支。</para></param>
+    public static implicit operator UfsProvisionEntry(UfsProvisionBody body) => new(body);
+
+    /// <summary>Creates an entry holding an epilogue case. 创建持有 epilogue 分支的条目。</summary>
+    /// <param name="epilogue">The epilogue case. <para>epilogue 分支。</para></param>
+    public static implicit operator UfsProvisionEntry(UfsProvisionEpilogue epilogue) => new(epilogue);
+
     /// <summary>
     /// Gets the type of this UFS provisioning entry, derived from the case it holds so it can never
     /// disagree with the case's own shape.

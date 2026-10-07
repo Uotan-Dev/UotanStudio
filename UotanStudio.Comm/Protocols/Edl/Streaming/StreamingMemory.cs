@@ -423,7 +423,7 @@ public sealed partial class StreamingProtocol
                 await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
                 var more = await ReceiveDiagFrameOwnedAsync(verifyCrc: false, cancellationToken)
                     .ConfigureAwait(false);
-                reply = reply.Concat(more).ToArray();
+                reply = [.. reply, .. more];
             }
 
             if (reply.Length < 4 + size)

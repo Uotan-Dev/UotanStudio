@@ -287,13 +287,6 @@ public class StreamingNandTests
         Assert.Empty(transport.Writes);
     }
 
-    [Fact(Skip = "Requires UOTAN_EDL_STREAMING target (065C:9008/9006 command-mode Sahara)")]
-    public async Task BadBlockTable_CheckBlock_OnNandTarget_ReadsMarkerPage()
-    {
-        await Task.CompletedTask;
-        Assert.Fail("The gated hardware path never executed.");
-    }
-
     private static byte[] BuildLegacyTable()
     {
         var table = new byte[StreamingConstants.PartitionTableBytes];

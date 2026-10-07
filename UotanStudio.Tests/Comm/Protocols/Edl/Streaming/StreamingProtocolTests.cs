@@ -422,10 +422,4 @@ public class StreamingProtocolTests
         Assert.Empty(transport.Writes);
     }
 
-    [Fact(Skip = "Requires UOTAN_EDL_STREAMING target (065C:9008/9006 command-mode Sahara)")]
-    public async Task HelloAsync_OnCommandModeTarget_NegotiatesHostMagic()
-    {
-        await Task.CompletedTask;
-        Assert.Fail("The gated hardware path never executed.");
-    }
 }

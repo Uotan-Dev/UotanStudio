@@ -27,7 +27,7 @@ public partial class FirehoseGptTests
         var before = transport.Writes.Count;
 
         var result = await protocol.ProgramRawPartitionFromFileAsync(snapshot, "boot", path, 512, verify,
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(new FirehosePartitionWriteResult(512, verify ? 512 : 0), result);
         Assert.Equal(payload, disk[(41 * 512)..(42 * 512)]);

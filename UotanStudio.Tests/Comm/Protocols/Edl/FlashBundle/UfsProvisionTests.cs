@@ -34,7 +34,7 @@ public class UfsProvisionTests
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes($"<data><ufs type='{type}' {key}='7'/></data>"));
             var entry = Assert.Single(UfsProvisionParser.Parse(stream).Entries);
-            var wire = entry switch
+            var wire = entry.Value switch
             {
                 UfsProvisionCommon common => FirehoseXmlBuilder.BuildUfsCommon(new UfsCommon
                 {

@@ -106,9 +106,9 @@ public sealed partial class FlashBundleOrchestrator
     private UfsProvisionPlan PrepareUfs(UfsProvisionFile document, FlashBundleOptions options)
     {
         var entries = document.Entries;
-        if (entries.Count is < 3 or > 258 || entries[0] is not UfsProvisionCommon common
-            || entries[^1] is not UfsProvisionEpilogue epilogue
-            || entries.Skip(1).SkipLast(1).Any(entry => entry is not UfsProvisionBody))
+        if (entries.Count is < 3 or > 258 || entries[0].Value is not UfsProvisionCommon common
+            || entries[^1].Value is not UfsProvisionEpilogue epilogue
+            || entries.Skip(1).SkipLast(1).Any(entry => entry.Value is not UfsProvisionBody))
         {
             throw new InvalidDataException("UFS provisioning requires one common entry, one or more bodies, then one epilogue.");
         }
@@ -124,7 +124,7 @@ public sealed partial class FlashBundleOrchestrator
                 throw new InvalidDataException("A UFS entry slot disagrees with the selected bundle slot.");
             }
         }
-        return UfsProvisionPlan.Prepare(MapUfsCommon(common), document.Bodies.Select(MapUfsBody).ToArray(),
+        return UfsProvisionPlan.Prepare(MapUfsCommon(common), [.. document.Bodies.Select(MapUfsBody)],
             MapUfsEpilogue(epilogue), options.UfsCommit ?? epilogue.Commit == 1, slot);
     }
 

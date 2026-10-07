@@ -565,7 +565,7 @@ public sealed partial class EdlSession : IProtocolSession
                 {
                     AuthenticationResult = new EdlAuthenticationResult
                     {
-                        Evidence = _authenticationEvidence.ToArray(),
+                        Evidence = [.. _authenticationEvidence],
                         ReachedStage = EdlAuthStage.Completed,
                         AuthenticationRequested = authenticationRequested,
                         Disposition = EdlAuthSessionDisposition.CanContinue
@@ -579,7 +579,7 @@ public sealed partial class EdlSession : IProtocolSession
             {
                 AuthenticationResult = new EdlAuthenticationResult
                 {
-                    Evidence = _authenticationEvidence.ToArray(),
+                    Evidence = [.. _authenticationEvidence],
                     ReachedStage = lastAuthStage == EdlAuthStage.NotRequired ? EdlAuthStage.Failed : lastAuthStage,
                     AuthenticationRequested = authenticationRequested,
                     Disposition = EdlAuthSessionDisposition.RequiresReconnect

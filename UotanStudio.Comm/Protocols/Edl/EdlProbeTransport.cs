@@ -91,10 +91,8 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
         var foundLog = false;
         while (!bytes.IsEmpty)
         {
-            while (!bytes.IsEmpty && bytes[0] is 0 or (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
-            {
-                bytes = bytes[1..];
-            }
+            var padding = bytes.IndexOfAnyExcept(EdlConstants.DocumentLeadingPadding);
+            bytes = padding >= 0 ? bytes[padding..] : default;
             if (bytes.IsEmpty)
             {
                 break;
@@ -189,10 +187,8 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
 
         while (!bytes.IsEmpty)
         {
-            while (!bytes.IsEmpty && bytes[0] is 0 or (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
-            {
-                bytes = bytes[1..];
-            }
+            var padding = bytes.IndexOfAnyExcept(EdlConstants.DocumentLeadingPadding);
+            bytes = padding >= 0 ? bytes[padding..] : default;
             var end = bytes.IndexOf("</data>"u8);
             if (end < 0)
             {

@@ -229,7 +229,10 @@ public sealed partial class FirehoseProtocol
 
     /// <summary>
     /// Runs the peek exchange on an already-owned operation lease; the caller must hold the lease.
-    /// <para>在已持有的操作租约上执行 peek 交换；调用方必须已持有该租约。</para>
+    /// A NAK triggers one retry with the uppercase <c>SizeInBytes</c> attribute spelling some
+    /// programmers require, mirroring the poke path.
+    /// <para>在已持有的操作租约上执行 peek 交换；调用方必须已持有该租约。收到 NAK 时按部分
+    /// programmer 要求的大写 <c>SizeInBytes</c> 属性拼写重试一次，与 poke 路径一致。</para>
     /// </summary>
     internal async Task<(FirehoseResponse Response, byte[] Data)> PeekCoreAsync(long sizeInBytes, long address,
         CancellationToken cancellationToken)
@@ -246,6 +249,13 @@ public sealed partial class FirehoseProtocol
         try
         {
             var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
+            if (!response.IsAck)
+            {
+                Log("The target rejected <peek>; retrying with the SizeInBytes attribute spelling.");
+                response = await SendCommandAndWaitResponseAsync(
+                    FirehoseXmlBuilder.BuildPeek(sizeInBytes, addressStr, uppercaseSize: true), cancellationToken);
+            }
+
             RequireRawMode(response, EdlErrorCode.PeekFailed);
             using var ms = new MemoryStream();
             await ReadRawPayloadToStreamAsync(ms, sizeInBytes, cancellationToken);

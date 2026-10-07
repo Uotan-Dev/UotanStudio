@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
@@ -269,6 +271,15 @@ internal static class EdlConstants
     /// <para>&lt;/data&gt; 结束标签。</para>
     /// </summary>
     public const string DataClose = "</data>\n";
+
+    /// <summary>
+    /// Bytes an EDL text parser skips before a Firehose document: NUL padding that fills a USB packet
+    /// plus the ASCII whitespace a target emits between the packet boundary and the opening tag.
+    /// <para>EDL 文本解析器在 Firehose 文档之前跳过的字节：NUL 包填充，以及目标在 USB 包边界与开始标签
+    /// 之间输出的 ASCII 空白。</para>
+    /// </summary>
+    public static readonly SearchValues<byte> DocumentLeadingPadding =
+        SearchValues.Create([(byte)'\0', (byte)' ', (byte)'\t', (byte)'\r', (byte)'\n']);
 
     /// <summary>
     /// Default command timeout in milliseconds.

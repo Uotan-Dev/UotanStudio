@@ -328,13 +328,6 @@ public class StreamingTransferTests
         Assert.Empty(transport.Writes);
     }
 
-    [Fact(Skip = "Requires UOTAN_EDL_STREAMING target (065C:9008/9006 command-mode Sahara)")]
-    public async Task WriteFlashAsync_OnCommandModeTarget_ProgramsSectionEndToEnd()
-    {
-        await Task.CompletedTask;
-        Assert.Fail("The gated hardware path never executed.");
-    }
-
     private static Func<byte[], IEnumerable<byte[]>> DiagFlashResponder()
         => frame =>
         {

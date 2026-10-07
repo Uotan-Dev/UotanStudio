@@ -399,7 +399,7 @@ public sealed partial class SaharaProtocol
                     {
                         throw new SaharaException("Firehose probe exceeds its response limit.");
                     }
-                    if (length == 0 && value is 0 or (byte)' ' or (byte)'\r' or (byte)'\n' or (byte)'\t')
+                    if (length == 0 && EdlConstants.DocumentLeadingPadding.Contains(value))
                     {
                         continue;
                     }

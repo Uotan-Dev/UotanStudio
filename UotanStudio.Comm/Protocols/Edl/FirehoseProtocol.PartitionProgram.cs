@@ -48,6 +48,16 @@ public sealed partial class FirehoseProtocol
     /// Whether to require full readback comparison before returning success.
     /// <para>是否要求在返回成功之前完成完整的回读比对。</para>
     /// </param>
+    /// <param name="skipMatchedRegions">
+    /// Opt-in skip-before-write fast path (qdl skipblock): when <paramref name="verify"/> is also
+    /// requested and the storage is not NAND, the region is walked in bounded chunks and chunks
+    /// whose source already matches the on-target digest are left untouched. Targets without digest
+    /// support fall back to a normal program of the whole region. The returned result still reports
+    /// the full requested length, because digest-matched chunks are confirmed present on the target.
+    /// <para>可选的“先比对后跳过”快速路径（qdl 的 skipblock）：当同时请求 <paramref name="verify"/>
+    /// 且存储不是 NAND 时，区域按有界分块遍历，源数据已与目标摘要一致的块保持不动。目标不支持摘要时
+    /// 回退为整区域的常规编程。返回结果仍报告完整的请求长度，因为摘要匹配的块已确认存在于目标上。</para>
+    /// </param>
     /// <param name="cancellationToken">
     /// Cancellation for preflight, lease, metadata and transfers.
     /// <para>取消覆盖预检、租约等待、元数据与数据传输。</para>
@@ -84,7 +94,7 @@ public sealed partial class FirehoseProtocol
     /// <para>协议已被释放。</para></exception>
     public async Task<FirehosePartitionWriteResult> ProgramRawPartitionFromFileAsync(FirehoseGptSnapshot snapshot,
         string partitionName, string sourcePath, long partitionOffset = 0, bool verify = false,
-        CancellationToken cancellationToken = default)
+        bool skipMatchedRegions = false, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
@@ -112,8 +122,21 @@ public sealed partial class FirehoseProtocol
         var start = checked((long)partition.FirstLba + partitionOffset / sectorSize);
         var sectors = length / sectorSize;
         var region = snapshot.Geometry.PhysicalPartitionNumber;
-        await ProgramCoreAsync(source, new FirehoseSectorAddress(start, false), sectors, "partition.bin",
-            region, cancellationToken).ConfigureAwait(false);
+        var skipblockActive = skipMatchedRegions && verify;
+        var skipblockHandled = skipblockActive
+            && await TryProgramSkipblockOwnedAsync(source, start, sectors, "partition.bin", region,
+                cancellationToken).ConfigureAwait(false);
+        if (!skipblockHandled)
+        {
+            if (skipblockActive)
+            {
+                source.Seek(0, SeekOrigin.Begin);
+            }
+
+            await ProgramCoreAsync(source, new FirehoseSectorAddress(start, false), sectors, "partition.bin",
+                region, cancellationToken).ConfigureAwait(false);
+        }
+
         ValidateGptBinding(snapshot);
         if (verify)
         {
