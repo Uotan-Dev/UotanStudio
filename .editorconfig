@@ -377,6 +377,6 @@ dotnet_diagnostic.CS1591.severity = warning
 dotnet_diagnostic.IDE0110.severity = none
 
 [*.{cs,vb}]
-# Keeps the .NET 11 lock modernization from regressing: every lock field must be System.Threading.Lock,
+# Every lock field must be System.Threading.Lock instead of a monitor object,
 # which avoids Monitor/SyncBlock inflation. Enforced in the build via EnforceCodeStyleInBuild.
 dotnet_diagnostic.IDE0330.severity = error

@@ -8,7 +8,7 @@
    <img src="https://img.shields.io/badge/Uotan%20Project-ff4e45?style=for-the-badge" alt="Uotan Project"/>
   </a>
   <img src="https://img.shields.io/badge/License-GPL--3.0-orange?style=for-the-badge" alt="GPL-3.0"/>
-  <img src="https://img.shields.io/badge/.NET-11-5C2D91?style=for-the-badge" alt=".NET 11"/>
+  <img src="https://img.shields.io/badge/.NET-10-5C2D91?style=for-the-badge" alt=".NET 10"/>
   <img src="https://img.shields.io/badge/Avalonia-12.1-1E9AE0?style=for-the-badge" alt="Avalonia 12.1"/>
   <img src="https://img.shields.io/badge/Platforms-Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-2f6f4f?style=for-the-badge" alt="Platforms"/>
  </div>
