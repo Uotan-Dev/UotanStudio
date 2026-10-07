@@ -422,7 +422,7 @@ public static class DhtbTool
         }
     }
 
-    private static uint ReadUInt32LE(byte[] data, int offset) => offset + 4 > data.Length ? 0 : BinaryReaderHelpers.ReadUInt32LE(data, offset);
+    private static uint ReadUInt32LE(byte[] data, int offset) => offset + 4 > data.Length ? 0 : data.ReadUInt32LE(offset);
 
     private static string ReadString(byte[] data, int offset, int length)
     {

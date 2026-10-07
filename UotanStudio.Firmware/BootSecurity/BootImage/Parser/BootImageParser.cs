@@ -82,7 +82,7 @@ public class BootImageParser : IDisposable
         input.ReadExactly(prefix);
         if (!prefix.AsSpan(0, 8).SequenceEqual("ANDROID!"u8))
             throw new InvalidDataException("Invalid boot image magic.");
-        var version = BinaryReaderHelpers.ReadUInt32LE(prefix, 40);
+        var version = prefix.ReadUInt32LE(40);
         var size = version switch
         {
             0 => 1632,
@@ -99,7 +99,7 @@ public class BootImageParser : IDisposable
         if (version <= 2)
         {
             parser.ParseV0V2(bytes, version);
-            if (version >= 1) parser.Header.HeaderSize = BinaryReaderHelpers.ReadUInt32LE(bytes, 1644);
+            if (version >= 1) parser.Header.HeaderSize = bytes.ReadUInt32LE(1644);
         }
         else if (version == 3)
         {
@@ -167,7 +167,7 @@ public class BootImageParser : IDisposable
             throw new ImageParseException($"文件太小，无法读取头部版本字段: {read} 字节");
         }
 
-        var headerVersionField = BinaryReaderHelpers.ReadUInt32LE(headerBuf, 40);
+        var headerVersionField = headerBuf.ReadUInt32LE(40);
         if (headerVersionField <= 2)
         {
             ParseV0V2(headerBuf, headerVersionField, fs);
@@ -216,7 +216,7 @@ public class BootImageParser : IDisposable
             throw new ImageParseException($"文件太小，无法读取头部版本字段: {data.Length} 字节");
         }
 
-        var headerVersionField = BinaryReaderHelpers.ReadUInt32LE(data, 40);
+        var headerVersionField = data.ReadUInt32LE(40);
         using var ms = new MemoryStream(data, writable: false);
         if (headerVersionField <= 2)
         {
@@ -275,15 +275,15 @@ public class BootImageParser : IDisposable
             _ => BootImageVersion.V0
         };
 
-        Header.KernelSize = BinaryReaderHelpers.ReadUInt32LE(data, 8);
-        Header.KernelAddr = BinaryReaderHelpers.ReadUInt32LE(data, 12);
-        Header.RamdiskSize = BinaryReaderHelpers.ReadUInt32LE(data, 16);
-        Header.RamdiskAddr = BinaryReaderHelpers.ReadUInt32LE(data, 20);
-        Header.SecondSize = BinaryReaderHelpers.ReadUInt32LE(data, 24);
-        Header.SecondAddr = BinaryReaderHelpers.ReadUInt32LE(data, 28);
-        Header.TagsAddr = BinaryReaderHelpers.ReadUInt32LE(data, 32);
-        Header.PageSize = BinaryReaderHelpers.ReadUInt32LE(data, 36);
-        Header.OsVersion = BinaryReaderHelpers.ReadUInt32LE(data, 44);
+        Header.KernelSize = data.ReadUInt32LE(8);
+        Header.KernelAddr = data.ReadUInt32LE(12);
+        Header.RamdiskSize = data.ReadUInt32LE(16);
+        Header.RamdiskAddr = data.ReadUInt32LE(20);
+        Header.SecondSize = data.ReadUInt32LE(24);
+        Header.SecondAddr = data.ReadUInt32LE(28);
+        Header.TagsAddr = data.ReadUInt32LE(32);
+        Header.PageSize = data.ReadUInt32LE(36);
+        Header.OsVersion = data.ReadUInt32LE(44);
         Header.ImageName = ReadString(data, 48, 16).TrimEnd('\0');
         var commandLine = new byte[1536];
         var first = data.AsSpan(64, 512);
@@ -299,19 +299,19 @@ public class BootImageParser : IDisposable
 
         for (var i = 0; i < 8; i++)
         {
-            Header.Ids[i] = BinaryReaderHelpers.ReadUInt32LE(data, 576 + (i * 4));
+            Header.Ids[i] = data.ReadUInt32LE(576 + (i * 4));
         }
 
         if (headerVersion >= 1 && data.Length >= 1644)
         {
-            Header.RecoveryDtboSize = BinaryReaderHelpers.ReadUInt32LE(data, 1632);
-            Header.RecoveryDtboOffset = BinaryReaderHelpers.ReadUInt64LE(data, 1636);
+            Header.RecoveryDtboSize = data.ReadUInt32LE(1632);
+            Header.RecoveryDtboOffset = data.ReadUInt64LE(1636);
         }
 
         if (headerVersion >= 2 && data.Length >= 1660)
         {
-            Header.DtbSize = BinaryReaderHelpers.ReadUInt32LE(data, 1648);
-            Header.KernelLoadAddr = BinaryReaderHelpers.ReadUInt64LE(data, 1652);
+            Header.DtbSize = data.ReadUInt32LE(1648);
+            Header.KernelLoadAddr = data.ReadUInt64LE(1652);
         }
 
         Header.PageSize = Header.PageSize > 0 ? Header.PageSize : 2048;
@@ -333,10 +333,10 @@ public class BootImageParser : IDisposable
     private void ParseV3(byte[] data)
     {
         Header.HeaderVersion = BootImageVersion.V3;
-        Header.KernelSize = BinaryReaderHelpers.ReadUInt32LE(data, 8);
-        Header.RamdiskSize = BinaryReaderHelpers.ReadUInt32LE(data, 12);
-        Header.OsVersion = BinaryReaderHelpers.ReadUInt32LE(data, 16);
-        Header.HeaderSize = Math.Max(BinaryReaderHelpers.ReadUInt32LE(data, 20), CanonicalV3HeaderSize);
+        Header.KernelSize = data.ReadUInt32LE(8);
+        Header.RamdiskSize = data.ReadUInt32LE(12);
+        Header.OsVersion = data.ReadUInt32LE(16);
+        Header.HeaderSize = Math.Max(data.ReadUInt32LE(20), CanonicalV3HeaderSize);
         Header.CommandLine = ReadString(data, 44, 1536).TrimEnd('\0');
         Header.PageSize = 4096;
         Header.SecondSize = 0;
@@ -354,10 +354,10 @@ public class BootImageParser : IDisposable
     private void ParseV4(byte[] data)
     {
         Header.HeaderVersion = BootImageVersion.V4;
-        Header.KernelSize = BinaryReaderHelpers.ReadUInt32LE(data, 8);
-        Header.RamdiskSize = BinaryReaderHelpers.ReadUInt32LE(data, 12);
-        Header.OsVersion = BinaryReaderHelpers.ReadUInt32LE(data, 16);
-        Header.HeaderSize = Math.Max(BinaryReaderHelpers.ReadUInt32LE(data, 20), CanonicalV4HeaderSize);
+        Header.KernelSize = data.ReadUInt32LE(8);
+        Header.RamdiskSize = data.ReadUInt32LE(12);
+        Header.OsVersion = data.ReadUInt32LE(16);
+        Header.HeaderSize = Math.Max(data.ReadUInt32LE(20), CanonicalV4HeaderSize);
         Header.CommandLine = ReadString(data, 44, 1536).TrimEnd('\0');
         Header.PageSize = 4096;
         Header.SecondSize = 0;
@@ -366,7 +366,7 @@ public class BootImageParser : IDisposable
 
         if (data.Length >= 1584)
         {
-            Header.SignatureSize = BinaryReaderHelpers.ReadUInt32LE(data, 1580);
+            Header.SignatureSize = data.ReadUInt32LE(1580);
         }
     }
 
@@ -717,6 +717,15 @@ public class BootImageParser : IDisposable
     /// Core method for releasing resources.
     /// <para>释放资源的核心方法。</para>
     /// </summary>
+    /// <param name="disposing">
+    /// <see langword="true"/> to replace the parsed component buffers (<c>Kernel</c>, <c>Ramdisk</c>,
+    /// <c>Second</c>, <c>Dtb</c>, <c>Extra</c>, <c>RecoveryDtbo</c> and <c>Signature</c>) with empty
+    /// arrays; <see langword="false"/> only marks the instance as disposed. An already disposed instance
+    /// returns immediately, and this parser has no finalizer, so <see cref="Dispose()"/> is the only caller.
+    /// <para><see langword="true"/> 表示把已解析的组件缓冲区（<c>Kernel</c>、<c>Ramdisk</c>、<c>Second</c>、
+    /// <c>Dtb</c>、<c>Extra</c>、<c>RecoveryDtbo</c> 与 <c>Signature</c>）替换为空数组；<see langword="false"/>
+    /// 仅将实例标记为已释放。已释放的实例会立即返回，且该解析器没有终结器，因此 <see cref="Dispose()"/> 是唯一调用方。</para>
+    /// </param>
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed)

@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Security.Cryptography;
-using Org.BouncyCastle.Crypto.Parameters;
 using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
@@ -172,13 +171,6 @@ public static class AvbRsaPublicKeyCodec
             File.Delete(temporary);
             CryptographicOperations.ZeroMemory(blob);
         }
-    }
-
-    internal static byte[] Export(RsaKeyParameters key, int keyBits)
-    {
-        ArgumentNullException.ThrowIfNull(key);
-        var modulus = key.Modulus.ToByteArrayUnsigned();
-        return Export(modulus, keyBits);
     }
 
     private static byte[] Export(ReadOnlySpan<byte> modulus, int keyBits)

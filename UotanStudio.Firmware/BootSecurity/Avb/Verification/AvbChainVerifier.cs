@@ -83,9 +83,9 @@ public static partial class AvbChainVerifier
             RollbackIndexesAreValid = _rollback is null ? null : _errors.Count == 0 && _images.All(image => image.RollbackIndexIsValid == true),
             ContainsNestedChains = _nested,
             RootFlags = _rootFlags,
-            Images = _images.ToArray(),
-            Partitions = _partitions.ToArray(),
-            Errors = _errors.ToArray()
+            Images = [.. _images],
+            Partitions = [.. _partitions],
+            Errors = [.. _errors]
         };
 
         internal async Task<bool> VisitAsync(string name, byte[]? expectedKey, uint? parentSlot, int depth)

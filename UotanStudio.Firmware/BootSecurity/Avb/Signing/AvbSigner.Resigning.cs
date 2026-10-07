@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using Org.BouncyCastle.Crypto.Parameters;
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
@@ -10,7 +9,7 @@ namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 public static partial class AvbSigner
 {
     internal static async Task<AvbSignResult> ResignFooterAsync(
-        string imagePath, string outputPath, RsaKeyParameters key, AvbResignOptions options,
+        string imagePath, string outputPath, RSA key, AvbResignOptions options,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -19,7 +18,7 @@ public static partial class AvbSigner
             ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
             ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
             ValidatePartitionName(options.PartitionName);
-            if (options.PartitionName.Contains('\0') || !key.IsPrivate ||
+            if (options.PartitionName.Contains('\0') || !HasPrivateKey(key) ||
                 options.Mode is not (AvbResignMode.Hash or AvbResignMode.Hashtree))
             {
                 return Fail("A private RSA key, a valid partition name and a supported resign mode are required.");
@@ -46,7 +45,7 @@ public static partial class AvbSigner
                 return Fail("FEC requires hashtree mode and 1 to 254 roots.");
             }
 
-            var keyBits = key.Modulus.BitLength;
+            var keyBits = key.KeySize;
             var algorithm = GetAlgorithmType(keyBits);
             var salt = options.Salt?.ToArray() ?? RandomNumberGenerator.GetBytes(Sha256Size);
             await using var image = await AvbImageSource.OpenAsync(imagePath, cancellationToken).ConfigureAwait(false);
@@ -195,6 +194,19 @@ public static partial class AvbSigner
         catch (Exception ex)
         {
             return Fail(ex.Message);
+        }
+    }
+
+    private static bool HasPrivateKey(RSA key)
+    {
+        try
+        {
+            CryptographicOperations.ZeroMemory(key.ExportRSAPrivateKey());
+            return true;
+        }
+        catch (CryptographicException)
+        {
+            return false;
         }
     }
 

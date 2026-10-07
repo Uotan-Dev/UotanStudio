@@ -1,7 +1,5 @@
 using System.Numerics;
 using System.Security.Cryptography;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Crypto.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Verification;
 
@@ -69,7 +67,7 @@ internal static class AvbPartitionVerifier
             {
                 return Result("The protected image size exceeds the partition stream.");
             }
-            var hasher = CreateHasher(descriptor.HashAlgorithm);
+            using var hasher = CreateDescriptorDigest(descriptor.HashAlgorithm);
             if (hasher is null)
             {
                 return Result("The descriptor hash algorithm is unsupported.");
@@ -79,7 +77,7 @@ internal static class AvbPartitionVerifier
             {
                 return Result("Persistent digests require an external trusted digest and are not verified by this entry point.");
             }
-            if (expectedDigest.Length != hasher.GetDigestSize())
+            if (expectedDigest.Length != hasher.HashLengthInBytes)
             {
                 return Result("The descriptor digest length does not match its algorithm.");
             }
@@ -90,19 +88,19 @@ internal static class AvbPartitionVerifier
                     return Result("The hash descriptor contains unsupported flags.");
                 }
                 image.Position = 0;
-                hasher.BlockUpdate(salt);
+                hasher.AppendData(salt);
                 var buffer = new byte[64 * 1024];
                 var remaining = (long)descriptor.ImageSize;
                 while (remaining > 0)
                 {
                     var count = (int)Math.Min(buffer.Length, remaining);
                     await image.ReadExactlyAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
-                    hasher.BlockUpdate(buffer, 0, count);
+                    hasher.AppendData(buffer.AsSpan(0, count));
                     remaining -= count;
                 }
                 cancellationToken.ThrowIfCancellationRequested();
-                var digest = new byte[hasher.GetDigestSize()];
-                hasher.DoFinal(digest);
+                var digest = new byte[hasher.HashLengthInBytes];
+                hasher.GetHashAndReset(digest);
                 return Result(CryptographicOperations.FixedTimeEquals(digest, expectedDigest) ? null : "Partition hash mismatch.");
             }
             var geometryError = ValidateTreeGeometry(descriptor, (ulong)image.Length);
@@ -110,7 +108,7 @@ internal static class AvbPartitionVerifier
             {
                 return Result(geometryError);
             }
-            var slotSize = (int)BitOperations.RoundUpToPowerOf2((uint)hasher.GetDigestSize());
+            var slotSize = (int)BitOperations.RoundUpToPowerOf2((uint)hasher.HashLengthInBytes);
             var levels = CalculateLevels((long)descriptor.ImageSize, (int)descriptor.DataBlockSize, (int)descriptor.HashBlockSize, slotSize);
             var calculatedSize = levels.Sum(level => level.Size);
             if ((ulong)calculatedSize != descriptor.TreeSize)
@@ -119,7 +117,7 @@ internal static class AvbPartitionVerifier
             }
             var sourceBlock = new byte[Math.Max(descriptor.DataBlockSize, descriptor.HashBlockSize)];
             var computedBlock = new byte[descriptor.HashBlockSize];
-            var digestBytes = new byte[hasher.GetDigestSize()];
+            var digestBytes = new byte[hasher.HashLengthInBytes];
             var sourceOffset = 0L;
             var sourceSize = (long)descriptor.ImageSize;
             var sourceBlockSize = (int)descriptor.DataBlockSize;
@@ -207,21 +205,31 @@ internal static class AvbPartitionVerifier
         };
     }
 
-    private static IDigest? CreateHasher(string? algorithm) => algorithm switch
+    private static void HashBlock(IncrementalHash hasher, byte[] salt, ReadOnlySpan<byte> block, byte[] digest)
     {
-        "sha1" => new Sha1Digest(),
-        "sha256" => new Sha256Digest(),
-        "sha512" => new Sha512Digest(),
-        "blake2b-256" => new Blake2bDigest(256),
+        hasher.AppendData(salt);
+        hasher.AppendData(block);
+        hasher.GetHashAndReset(digest);
+    }
+
+    /// <summary>
+    /// Creates the digest an AVB descriptor names, or <see langword="null"/> when the name is outside the set
+    /// this descriptor accepts. <see cref="IncrementalHash"/> covers the BCL SHA family, which is the whole set:
+    /// libavb carries only <c>sha1</c>, <c>sha256</c> and <c>sha512</c>, and avbtool special-cases
+    /// <c>blake2b-256</c> in its hashtree hasher only, while the hash-descriptor and vbmeta digest paths call
+    /// plain <c>hashlib.new(name)</c> and therefore reject that name.
+    /// <para>创建 AVB 描述符所指定的摘要；名称不在该描述符接受的集合内时返回 <see langword="null"/>。
+    /// <see cref="IncrementalHash"/> 覆盖 BCL SHA 系列，而该系列就是完整集合：libavb 只带 <c>sha1</c>、
+    /// <c>sha256</c>、<c>sha512</c>，avbtool 只在 hashtree 摘要器里特判 <c>blake2b-256</c>，其哈希描述符与
+    /// vbmeta 摘要路径都使用裸 <c>hashlib.new(name)</c>，因此不接受该名称。</para>
+    /// </summary>
+    private static IncrementalHash? CreateDescriptorDigest(string? algorithm) => algorithm switch
+    {
+        "sha1" => IncrementalHash.CreateHash(HashAlgorithmName.SHA1),
+        "sha256" => IncrementalHash.CreateHash(HashAlgorithmName.SHA256),
+        "sha512" => IncrementalHash.CreateHash(HashAlgorithmName.SHA512),
         _ => null
     };
-
-    private static void HashBlock(IDigest hasher, byte[] salt, ReadOnlySpan<byte> block, byte[] digest)
-    {
-        hasher.BlockUpdate(salt);
-        hasher.BlockUpdate(block);
-        hasher.DoFinal(digest);
-    }
 
     private static string? ValidateTreeGeometry(AvbDescriptorInfo descriptor, ulong length)
     {

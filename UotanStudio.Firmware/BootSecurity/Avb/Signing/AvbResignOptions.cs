@@ -1,4 +1,4 @@
-using Org.BouncyCastle.Crypto.Parameters;
+using System.Security.Cryptography;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 
@@ -95,7 +95,8 @@ public static class AvbResigner
     /// <para>原始或 Android Sparse 分区；已有有效 footer 元数据会被替换。</para></param>
     /// <param name="outputPath">Raw destination image written atomically after signature and content validation.
     /// <para>经签名和内容校验后原子写入的原始目标镜像。</para></param>
-    /// <param name="key">RSA key pair supplied to the signer for the VBMeta signature. <para>提供给签名方用于 VBMeta 签名的 RSA 密钥。</para></param>
+    /// <param name="key">RSA key pair supplied to the signer for the VBMeta signature; it must carry a private key.
+    /// <para>提供给签名方用于 VBMeta 签名的 RSA 密钥；必须带私钥。</para></param>
     /// <param name="options">Protection scheme and its parameters; <see cref="AvbResignOptions.Mode"/> selects the branch.
     /// <para>保护方案及其参数；由 <see cref="AvbResignOptions.Mode"/> 选择分派分支。</para></param>
     /// <param name="cancellationToken">Cancels the signing run. <para>取消签名过程。</para></param>
@@ -106,7 +107,7 @@ public static class AvbResigner
     public static Task<AvbSignResult> ResignImageAsync(
         string imagePath,
         string outputPath,
-        RsaKeyParameters key,
+        RSA key,
         AvbResignOptions options,
         CancellationToken cancellationToken = default)
     {

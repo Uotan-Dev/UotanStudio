@@ -494,9 +494,9 @@ public static partial class Extractor
     public static byte[] GetOutBytes(byte[] data, Asset asset)
     {
         if (asset.DataOff is null)
-            return Array.Empty<byte>();
+            return [];
         var got = TryDeflate(data, asset.DataOff.Value);
-        return got?.Output ?? Array.Empty<byte>();
+        return got?.Output ?? [];
     }
 
     /// <summary>

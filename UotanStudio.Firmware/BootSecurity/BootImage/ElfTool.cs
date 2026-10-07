@@ -569,11 +569,11 @@ public static class ElfTool
         => name.Equals(pattern, StringComparison.Ordinal)
            || (pattern.EndsWith("*", StringComparison.Ordinal) && name.StartsWith(pattern[..^1], StringComparison.Ordinal));
 
-    private static ushort ReadUInt16LE(byte[] data, int offset) => offset + 2 > data.Length ? (ushort)0 : BinaryReaderHelpers.ReadUInt16LE(data, offset);
+    private static ushort ReadUInt16LE(byte[] data, int offset) => offset + 2 > data.Length ? (ushort)0 : data.ReadUInt16LE(offset);
 
-    private static uint ReadUInt32LE(byte[] data, int offset) => offset + 4 > data.Length ? 0 : BinaryReaderHelpers.ReadUInt32LE(data, offset);
+    private static uint ReadUInt32LE(byte[] data, int offset) => offset + 4 > data.Length ? 0 : data.ReadUInt32LE(offset);
 
-    private static ulong ReadUInt64LE(byte[] data, int offset) => offset + 8 > data.Length ? 0 : BinaryReaderHelpers.ReadUInt64LE(data, offset);
+    private static ulong ReadUInt64LE(byte[] data, int offset) => offset + 8 > data.Length ? 0 : data.ReadUInt64LE(offset);
 
     private static void WriteUInt32LE(byte[] data, int offset, uint value) => ByteWriter.WriteUInt32LE(data, offset, value);
 

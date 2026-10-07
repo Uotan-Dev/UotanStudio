@@ -312,7 +312,7 @@ public class MtkBootParser : IDisposable
         }
     }
 
-    private static uint ReadUInt32LE(byte[] data, int offset) => offset + 4 > data.Length ? 0 : BinaryReaderHelpers.ReadUInt32LE(data, offset);
+    private static uint ReadUInt32LE(byte[] data, int offset) => offset + 4 > data.Length ? 0 : data.ReadUInt32LE(offset);
 
     private static string ReadString(byte[] data, int offset, int length)
     {
@@ -349,6 +349,15 @@ public class MtkBootParser : IDisposable
     /// Core method for releasing resources.
     /// <para>释放资源的核心方法。</para>
     /// </summary>
+    /// <param name="disposing">
+    /// <see langword="true"/> to replace the parsed component buffers (<c>Kernel</c>, <c>Ramdisk</c>,
+    /// <c>Second</c> and <c>Dtb</c>) with empty arrays; <see langword="false"/> only marks the instance as
+    /// disposed. An already disposed instance returns immediately, and this parser has no finalizer, so
+    /// <see cref="Dispose()"/> is the only caller.
+    /// <para><see langword="true"/> 表示把已解析的组件缓冲区（<c>Kernel</c>、<c>Ramdisk</c>、<c>Second</c> 与
+    /// <c>Dtb</c>）替换为空数组；<see langword="false"/> 仅将实例标记为已释放。已释放的实例会立即返回，
+    /// 且该解析器没有终结器，因此 <see cref="Dispose()"/> 是唯一调用方。</para>
+    /// </param>
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed)

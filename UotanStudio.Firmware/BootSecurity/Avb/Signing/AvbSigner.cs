@@ -1,12 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Crypto.Digests;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Crypto.Signers;
-using Org.BouncyCastle.OpenSsl;
-using Org.BouncyCastle.Security;
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
@@ -181,7 +175,7 @@ public static partial class AvbSigner
     /// <para><paramref name="key"/> 或 <paramref name="descriptors"/> 为 <see langword="null"/>。</para></exception>
     public static async Task<AvbSignResult> SignVbmetaAsync(
         string vbmetaPath,
-        RsaKeyParameters key,
+        RSA key,
         string outputPath,
         IEnumerable<AvbHashDescriptor> descriptors,
         CancellationToken cancellationToken = default)
@@ -212,7 +206,7 @@ public static partial class AvbSigner
             }
 
             var descriptorList = descriptors.ToList();
-            var keyBits = key.Modulus.BitLength;
+            var keyBits = key.KeySize;
             var algorithmType = GetAlgorithmType(keyBits);
 
             var headerBytes = await ReadHeaderBytesAsync(vbmetaPath, cancellationToken);
@@ -286,7 +280,7 @@ public static partial class AvbSigner
     /// <para><paramref name="key"/> 或 <paramref name="descriptors"/> 为 <see langword="null"/>。</para></exception>
     public static async Task<AvbSignResult> SignVbmetaAsync<TDescriptor>(
         string vbmetaPath,
-        RsaKeyParameters key,
+        RSA key,
         string outputPath,
         IReadOnlyList<TDescriptor> descriptors,
         CancellationToken cancellationToken = default)
@@ -317,8 +311,8 @@ public static partial class AvbSigner
                 return Fail("Output path must differ from the source vbmeta. 输出路径不能与源 vbmeta 相同。");
             }
 
-            var descriptorList = descriptors as IReadOnlyList<object> ?? descriptors.Cast<object>().ToList();
-            var keyBits = key.Modulus.BitLength;
+            var descriptorList = descriptors as IReadOnlyList<object> ?? [.. descriptors.Cast<object>()];
+            var keyBits = key.KeySize;
             var algorithmType = GetAlgorithmType(keyBits);
 
             var headerBytes = await ReadHeaderBytesAsync(vbmetaPath, cancellationToken);
@@ -397,7 +391,7 @@ public static partial class AvbSigner
     public static Task<AvbSignResult> AddHashtreeFooterAsync(
         string imagePath,
         string partitionName,
-        RsaKeyParameters key,
+        RSA key,
         string outputPath,
         byte[]? salt = null,
         CancellationToken cancellationToken = default)
@@ -429,7 +423,7 @@ public static partial class AvbSigner
     public static Task<AvbSignResult> AddHashFooterAsync(
         string imagePath,
         string partitionName,
-        RsaKeyParameters key,
+        RSA key,
         string outputPath,
         CancellationToken cancellationToken = default)
     {
@@ -442,12 +436,17 @@ public static partial class AvbSigner
     /// <para>从 PEM 或 DER 文件加载 RSA 私钥。</para>
     /// </summary>
     /// <param name="path">
-    /// Key file path; PEM (BouncyCastle <c>PemReader</c>) is tried first, then DER limited to 4 MiB (<c>PrivateKeyFactory</c>). A blank or missing path yields <see langword="null"/>.
-    /// <para>密钥文件路径；先按 PEM（BouncyCastle <c>PemReader</c>）尝试，再按至多 4 MiB 的 DER（<c>PrivateKeyFactory</c>）尝试。空白或不存在的路径返回 <see langword="null"/>。</para>
+    /// Key file path; PEM is tried first through <see cref="RSA.ImportFromPem(System.ReadOnlySpan{char})"/>, then DER limited to 4 MiB through
+    /// <see cref="RSA.ImportRSAPrivateKey(System.ReadOnlySpan{byte}, out int)"/> and <see cref="RSA.ImportPkcs8PrivateKey(System.ReadOnlySpan{byte}, out int)"/>.
+    /// A blank or missing path yields <see langword="null"/>.
+    /// <para>密钥文件路径；先按 PEM 经 <see cref="RSA.ImportFromPem(System.ReadOnlySpan{char})"/> 尝试，再按至多 4 MiB 的 DER 经
+    /// <see cref="RSA.ImportRSAPrivateKey(System.ReadOnlySpan{byte}, out int)"/> 与 <see cref="RSA.ImportPkcs8PrivateKey(System.ReadOnlySpan{byte}, out int)"/> 尝试。
+    /// 空白或不存在的路径返回 <see langword="null"/>。</para>
     /// </param>
-    /// <returns>The private key parameters, or <see langword="null"/> when the file cannot be read or is not a parseable RSA private key; no exception escapes.
-    /// <para>私钥参数；文件不可读或不是可解析的 RSA 私钥时返回 <see langword="null"/>，不抛出异常。</para></returns>
-    public static RsaKeyParameters? LoadRsaPrivateKey(string path)
+    /// <returns>The private key, or <see langword="null"/> when the file cannot be read or is not a parseable RSA private key; no exception escapes.
+    /// The caller owns and must dispose the returned instance.
+    /// <para>私钥；文件不可读或不是可解析的 RSA 私钥时返回 <see langword="null"/>，不抛出异常。调用方持有并负责释放返回的实例。</para></returns>
+    public static RSA? LoadRsaPrivateKey(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
@@ -456,17 +455,16 @@ public static partial class AvbSigner
 
         try
         {
-            using var reader = new StreamReader(path);
-            var pemObject = new PemReader(reader).ReadObject();
-            var pemKey = pemObject switch
+            var pem = File.ReadAllText(path);
+            var fromPem = RSA.Create();
+            try
             {
-                AsymmetricCipherKeyPair keyPair => keyPair.Private as RsaKeyParameters,
-                RsaKeyParameters rsaKey => rsaKey,
-                _ => null
-            };
-            if (pemKey != null)
+                fromPem.ImportFromPem(pem);
+                return fromPem;
+            }
+            catch (Exception)
             {
-                return pemKey;
+                fromPem.Dispose();
             }
         }
         catch (Exception)
@@ -500,7 +498,26 @@ public static partial class AvbSigner
                 return null;
             }
 
-            return PrivateKeyFactory.CreateKey(buffer) as RsaKeyParameters;
+            var rsa = RSA.Create();
+            try
+            {
+                rsa.ImportRSAPrivateKey(buffer, out _);
+                return rsa;
+            }
+            catch (CryptographicException)
+            {
+            }
+
+            try
+            {
+                rsa.ImportPkcs8PrivateKey(buffer, out _);
+                return rsa;
+            }
+            catch (CryptographicException)
+            {
+                rsa.Dispose();
+                return null;
+            }
         }
         catch (Exception)
         {
@@ -510,7 +527,7 @@ public static partial class AvbSigner
 
     private static byte[] BuildSignedVbmeta(
         IReadOnlyList<AvbHashDescriptor> descriptors,
-        RsaKeyParameters key,
+        RSA key,
         int keyBits,
         uint algorithmType,
         ulong rollbackIndex,
@@ -526,7 +543,7 @@ public static partial class AvbSigner
 
     private static byte[] BuildSignedVbmetaCore(
         byte[] descriptorBytes,
-        RsaKeyParameters key,
+        RSA key,
         int keyBits,
         uint algorithmType,
         ulong rollbackIndex,
@@ -541,7 +558,7 @@ public static partial class AvbSigner
             requiredMinor = Math.Max(requiredMinor, 2);
         }
         var keyNumBytes = keyBits / 8;
-        var publicKeyBlob = AvbRsaPublicKeyCodec.Export(key, keyBits);
+        var publicKeyBlob = AvbRsaPublicKeyCodec.Export(key);
         var auxSize = checked(((ulong)publicKeyBlob.Length + (ulong)descriptorBytes.Length + 63) & ~63UL);
         var authSize = checked((Sha256Size + (ulong)keyNumBytes + 63) & ~63UL);
 
@@ -860,13 +877,8 @@ public static partial class AvbSigner
 
     private static int Utf8ByteCount(string? value) => Encoding.UTF8.GetByteCount(value ?? string.Empty);
 
-    private static byte[] SignData(byte[] data, RsaKeyParameters key)
-    {
-        var signer = new RsaDigestSigner(new Sha256Digest());
-        signer.Init(true, key);
-        signer.BlockUpdate(data, 0, data.Length);
-        return signer.GenerateSignature();
-    }
+    private static byte[] SignData(byte[] data, RSA key)
+        => key.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 
     private static uint GetAlgorithmType(int keyBits) => keyBits switch
     {

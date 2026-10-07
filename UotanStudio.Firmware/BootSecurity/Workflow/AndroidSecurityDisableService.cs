@@ -186,7 +186,7 @@ internal static class AndroidSecurityDisableService
 
             cancellationToken.ThrowIfCancellationRequested();
             Publish(staged, backup, cancellationToken);
-            return new(staged.Select(item => item.Target).ToArray(), changes);
+            return new([.. staged.Select(item => item.Target)], changes);
         }
         finally
         {

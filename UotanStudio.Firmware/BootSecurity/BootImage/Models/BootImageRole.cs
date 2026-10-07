@@ -94,7 +94,7 @@ internal static class BootImageRoleResolver
         var trimmed = partitionName.Trim();
         yield return trimmed;
         if (trimmed.Length > 2 && trimmed[^2] == '_'
-            && (trimmed[^1] == 'a' || trimmed[^1] == 'b' || trimmed[^1] == 'A' || trimmed[^1] == 'B'))
+            && trimmed[^1] is 'a' or 'b' or 'A' or 'B')
         {
             yield return trimmed[..^2];
         }

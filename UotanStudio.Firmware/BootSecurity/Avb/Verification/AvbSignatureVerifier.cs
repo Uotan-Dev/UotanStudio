@@ -2,11 +2,6 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Crypto.Digests;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Crypto.Signers;
-using Org.BouncyCastle.Math;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Firmware.Core.Text;
 
@@ -765,36 +760,14 @@ public static partial class AvbSignatureVerifier
         var signedData = Combine(
             vbmetaData.AsSpan(0, HeaderSize).ToArray(),
             vbmetaData.AsSpan(HeaderSize + (int)authSize, (int)auxSize).ToArray());
-        var keyParams = ToRsaKeyParameters(key);
-        if (keyParams == null)
-        {
-            return false;
-        }
-
         try
         {
-            IDigest digest = hashName == "SHA512" ? new Sha512Digest() : new Sha256Digest();
-            ISigner signer = new RsaDigestSigner(digest);
-            signer.Init(false, keyParams);
-            signer.BlockUpdate(signedData, 0, signedData.Length);
-            return signer.VerifySignature(signature);
+            var hashAlgorithm = hashName == "SHA512" ? HashAlgorithmName.SHA512 : HashAlgorithmName.SHA256;
+            return key.VerifyData(signedData, signature, hashAlgorithm, RSASignaturePadding.Pkcs1);
         }
         catch
         {
             return false;
-        }
-    }
-
-    private static RsaKeyParameters? ToRsaKeyParameters(RSA key)
-    {
-        try
-        {
-            var parameters = key.ExportParameters(false);
-            return new RsaKeyParameters(false, new BigInteger(1, parameters.Modulus!), new BigInteger(1, parameters.Exponent!));
-        }
-        catch
-        {
-            return null;
         }
     }
 

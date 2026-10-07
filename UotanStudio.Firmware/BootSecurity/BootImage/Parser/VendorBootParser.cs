@@ -179,7 +179,7 @@ public class VendorBootParser : IDisposable
         ArgumentNullException.ThrowIfNull(data);
 
 
-        var stream = new MemoryStream(data.ToArray(), writable: false);
+        var stream = new MemoryStream([.. data], writable: false);
         AttachSource(stream);
     }
 
@@ -230,7 +230,7 @@ public class VendorBootParser : IDisposable
             throw new ImageParseException($"Invalid vendor boot image magic: {magic}");
         }
 
-        Header.HeaderVersion = BinaryReaderHelpers.ReadUInt32LE(prefix, 8);
+        Header.HeaderVersion = prefix.ReadUInt32LE(8);
         var minimumHeaderSize = Header.HeaderVersion switch
         {
             3 => V3HeaderSize,
@@ -253,16 +253,16 @@ public class VendorBootParser : IDisposable
 
     private void ParseHeader(byte[] data, int minimumHeaderSize)
     {
-        Header.PageSize = BinaryReaderHelpers.ReadUInt32LE(data, 12);
-        Header.KernelLoadAddress = BinaryReaderHelpers.ReadUInt32LE(data, 16);
-        Header.RamdiskLoadAddress = BinaryReaderHelpers.ReadUInt32LE(data, 20);
-        Header.VendorRamdiskSize = BinaryReaderHelpers.ReadUInt32LE(data, 24);
+        Header.PageSize = data.ReadUInt32LE(12);
+        Header.KernelLoadAddress = data.ReadUInt32LE(16);
+        Header.RamdiskLoadAddress = data.ReadUInt32LE(20);
+        Header.VendorRamdiskSize = data.ReadUInt32LE(24);
         Header.VendorCmdline = ReadString(data, 28, VendorCmdlineSize).TrimEnd('\0');
-        Header.TagsLoadAddress = BinaryReaderHelpers.ReadUInt32LE(data, 2076);
+        Header.TagsLoadAddress = data.ReadUInt32LE(2076);
         Header.VendorName = ReadString(data, 2080, 16).TrimEnd('\0');
-        Header.VendorHeaderSize = BinaryReaderHelpers.ReadUInt32LE(data, 2096);
-        Header.DtbSize = BinaryReaderHelpers.ReadUInt32LE(data, 2100);
-        Header.DtbAddress = BinaryReaderHelpers.ReadUInt64LE(data, 2104);
+        Header.VendorHeaderSize = data.ReadUInt32LE(2096);
+        Header.DtbSize = data.ReadUInt32LE(2100);
+        Header.DtbAddress = data.ReadUInt64LE(2104);
 
         if (Header.PageSize == 0 || (Header.PageSize & (Header.PageSize - 1)) != 0)
         {
@@ -275,10 +275,10 @@ public class VendorBootParser : IDisposable
 
         if (Header.HeaderVersion == 4)
         {
-            Header.VendorRamdiskTableSize = BinaryReaderHelpers.ReadUInt32LE(data, 2112);
-            Header.VendorRamdiskTableEntryNum = BinaryReaderHelpers.ReadUInt32LE(data, 2116);
-            Header.VendorRamdiskTableEntrySize = BinaryReaderHelpers.ReadUInt32LE(data, 2120);
-            Header.VendorBootconfigSize = BinaryReaderHelpers.ReadUInt32LE(data, 2124);
+            Header.VendorRamdiskTableSize = data.ReadUInt32LE(2112);
+            Header.VendorRamdiskTableEntryNum = data.ReadUInt32LE(2116);
+            Header.VendorRamdiskTableEntrySize = data.ReadUInt32LE(2120);
+            Header.VendorBootconfigSize = data.ReadUInt32LE(2124);
             ValidateTableFields();
         }
 
@@ -359,9 +359,9 @@ public class VendorBootParser : IDisposable
             var data = ReadRange(stream, entryOffset, RamdiskTableEntryMinSize, $"vendor ramdisk table entry {i}");
             var entry = new VendorRamdiskTableEntry
             {
-                RamdiskSize = BinaryReaderHelpers.ReadUInt32LE(data, 0),
-                RamdiskOffset = BinaryReaderHelpers.ReadUInt32LE(data, 4),
-                RamdiskType = BinaryReaderHelpers.ReadUInt32LE(data, 8),
+                RamdiskSize = data.ReadUInt32LE(0),
+                RamdiskOffset = data.ReadUInt32LE(4),
+                RamdiskType = data.ReadUInt32LE(8),
                 RamdiskName = ReadString(data, 12, RamdiskNameSize).TrimEnd('\0')
             };
             if ((ulong)entry.RamdiskOffset + entry.RamdiskSize > _vendorRamdiskSize)
@@ -370,7 +370,7 @@ public class VendorBootParser : IDisposable
             }
             for (var j = 0; j < RamdiskBoardIdCount; j++)
             {
-                entry.RamdiskBoardId[j] = BinaryReaderHelpers.ReadUInt32LE(data, 12 + RamdiskNameSize + (j * 4));
+                entry.RamdiskBoardId[j] = data.ReadUInt32LE(12 + RamdiskNameSize + (j * 4));
             }
             RamdiskTable.Add(entry);
         }

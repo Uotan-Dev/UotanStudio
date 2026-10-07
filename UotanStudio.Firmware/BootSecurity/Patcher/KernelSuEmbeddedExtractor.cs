@@ -27,7 +27,7 @@ internal static class KernelSuEmbeddedExtractor
         var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (Match match in Regex.Matches(text, @"(?i)(android\d+(?:\.\d+)?[-_]\d+\.\d+)_kernelsu\.ko"))
             found.Add(match.Groups[1].Value.Replace('_', '-'));
-        return found.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ToArray();
+        return [.. found.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase)];
     }
 
     /// <summary>
@@ -54,7 +54,7 @@ internal static class KernelSuEmbeddedExtractor
                 if (!TryGetKmi(asset.Name, out var assetKmi) || !string.Equals(assetKmi, kmi, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!asset.Verified) continue;
                 var data = Extractor.GetOutBytes(elf.Data, asset);
-                if (data.Length > 0 && data.AsSpan().StartsWith("\x7fELF"u8)) return data;
+                if (data.Length > 0 && data.AsSpan().StartsWith("\u007fELF"u8)) return data;
             }
         }
         catch { }
@@ -82,7 +82,7 @@ internal static class KernelSuEmbeddedExtractor
                 if (data.Length == 0) continue;
                 var name = asset.Name.Replace('\\', '/');
                 if (!name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase)
-                    && !data.AsSpan().StartsWith("\x7fELF"u8)) continue;
+                    && !data.AsSpan().StartsWith("\u007fELF"u8)) continue;
                 TryGetKmi(name, out var kmi);
                 var arch = TryGetArchitecture(name) ?? BootPatchAnalyzer.DetectElfArchitecture(data);
                 assets.Add(new KernelSuKmiAsset(name, kmi, arch, asset.Method, asset.Verified, data.Length));
@@ -109,11 +109,12 @@ internal static class KernelSuEmbeddedExtractor
         kmi = null;
         var normalized = name.Replace('\\', '/');
         normalized = Regex.Replace(normalized, @"(?i)_kernelsu\.ko$", string.Empty);
-        var patterns = new[] {
+        string[] patterns =
+        [
             @"(?i)(android\d+(?:\.\d+)?[-_]\d+\.\d+(?:[-_][0-9A-Za-z.]+)?)",
             @"(?i)(\d+\.\d+(?:\.\d+)?[-_]android\d+)",
             @"(?i)(\d+\.\d+(?:\.\d+)?)"
-        };
+        ];
         foreach (var pattern in patterns)
         {
             var m = Regex.Match(normalized, pattern);

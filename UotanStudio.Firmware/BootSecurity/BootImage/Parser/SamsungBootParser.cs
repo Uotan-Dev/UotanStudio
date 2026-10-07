@@ -335,9 +335,9 @@ public class SamsungBootParser : IDisposable
         }
     }
 
-    private static uint ReadUInt32LE(byte[] data, int offset) => offset + 4 > data.Length ? 0 : BinaryReaderHelpers.ReadUInt32LE(data, offset);
+    private static uint ReadUInt32LE(byte[] data, int offset) => offset + 4 > data.Length ? 0 : data.ReadUInt32LE(offset);
 
-    private static ulong ReadUInt64LE(byte[] data, int offset) => offset + 8 > data.Length ? 0 : BinaryReaderHelpers.ReadUInt64LE(data, offset);
+    private static ulong ReadUInt64LE(byte[] data, int offset) => offset + 8 > data.Length ? 0 : data.ReadUInt64LE(offset);
 
     private static string ReadString(byte[] data, int offset, int length)
     {

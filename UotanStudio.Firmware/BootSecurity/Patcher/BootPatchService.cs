@@ -391,7 +391,7 @@ public sealed class BootPatchService
         kernelBody = rawKernel.ToArray();
         kernelDtb = null;
         if (parser.Header.HeaderVersion != BootImageVersion.V1) return;
-        ReadOnlySpan<byte> dtbMagic = "\xD0\x0D\xFE\xED"u8;
+        ReadOnlySpan<byte> dtbMagic = [0xD0, 0x0D, 0xFE, 0xED];
         for (var offset = Math.Max(0, rawKernel.Length - 8 * 1024 * 1024); offset <= rawKernel.Length - 40; offset++)
         {
             if (!rawKernel.Slice(offset, 4).SequenceEqual(dtbMagic)) continue;

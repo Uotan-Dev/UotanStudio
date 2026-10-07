@@ -299,7 +299,7 @@ public static class BootPatchAnalyzer
             }
         }
         return new(kind, abis, version, kind == BootPatchKind.Magisk ? supportedOptions : null,
-            kmiNames.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ToArray());
+            [.. kmiNames.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase)]);
     }
 
     private static void AddSupportedOption(string script, HashSet<BootPatchOption> options, BootPatchOption option, string token)
