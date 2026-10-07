@@ -89,7 +89,7 @@ internal sealed class SelinuxFileLabelInference
                     throw new FileSystemUnsupportedFeatureException($"Unsupported SELinux regex in {path}: {pattern}", error);
                 }
             }
-            policies.Add(rules.ToArray());
+            policies.Add([.. rules]);
         }
     }
 

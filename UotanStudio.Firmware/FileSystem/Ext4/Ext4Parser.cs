@@ -66,6 +66,8 @@ public sealed class Ext4Parser : IDisposable
 
     private const int MaxXattrValueSize = 64 * 1024;
 
+    private static readonly uint[] SparseSuperGroupBases = [3, 5, 7];
+
     private static readonly string[] XattrNameIndexPrefixes =
     [
         "",
@@ -377,7 +379,7 @@ public sealed class Ext4Parser : IDisposable
         {
             return true;
         }
-        foreach (var @base in new uint[] { 3, 5, 7 })
+        foreach (var @base in SparseSuperGroupBases)
         {
             for (var power = @base; power <= group && power <= uint.MaxValue / @base; power *= @base)
             {

@@ -208,7 +208,7 @@ internal sealed class FileSystemEditPlan
                 else
                 {
                     alias.Xattrs ??= new(StringComparer.Ordinal);
-                    alias.Xattrs[edit.Name] = edit.Value.ToArray();
+                    alias.Xattrs[edit.Name] = [.. edit.Value];
                 }
             }
         }
@@ -293,7 +293,7 @@ internal sealed class FileSystemEditPlan
     {
         if (entry.Xattrs is not { } attributes) return;
         if (attributes.TryGetValue("system.posix_acl_default", out var defaults))
-            attributes["system.posix_acl_access"] = defaults.ToArray();
+            attributes["system.posix_acl_access"] = [.. defaults];
         if (!attributes.TryGetValue("system.posix_acl_access", out var acl)) return;
         if (acl.Length < 4) throw new FileSystemCorruptedException("Truncated inherited POSIX ACL.");
         var version = BinaryPrimitives.ReadUInt32LittleEndian(acl);

@@ -133,7 +133,7 @@ public static partial class FileSystemPreservation
         if (format == "EXT4")
         {
             using var parser = new Ext4Parser(source);
-            return parser.ListEntriesWithRoot().Select(e => new PreservedInodeEntry
+            return [.. parser.ListEntriesWithRoot().Select(e => new PreservedInodeEntry
             {
                 Path = e.Path,
                 Size = e.Size,
@@ -146,12 +146,12 @@ public static partial class FileSystemPreservation
                 Metadata = e.Metadata,
                 SymlinkTarget = (e.Mode & 0xF000) == 0xA000 ? ReadSymlink(output => parser.ReadFile(e.Path, output)) : null,
                 Xattrs = e.Xattrs?.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)
-            }).ToList();
+            })];
         }
         if (format == "EROFS")
         {
             using var parser = OpenErofsParser(source, requireCompleteMetadata: true);
-            return parser.EnumerateEntries().Select(e => new PreservedInodeEntry
+            return [.. parser.EnumerateEntries().Select(e => new PreservedInodeEntry
             {
                 Path = e.Path,
                 Size = e.Size,
@@ -167,12 +167,12 @@ public static partial class FileSystemPreservation
                 },
                 SymlinkTarget = (e.Mode & 0xF000) == 0xA000 ? ReadSymlink(output => parser.ReadFile(e.Path, output)) : null,
                 Xattrs = e.Xattrs?.GroupBy(x => x.Name, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal)
-            }).ToList();
+            })];
         }
         if (format == "F2FS")
         {
             using var parser = new F2fsParser(source);
-            return parser.ListEntriesWithRoot().Select(e => new PreservedInodeEntry
+            return [.. parser.ListEntriesWithRoot().Select(e => new PreservedInodeEntry
             {
                 Path = e.Path,
                 Size = e.Size,
@@ -185,7 +185,7 @@ public static partial class FileSystemPreservation
                 Metadata = e.Metadata,
                 SymlinkTarget = (e.Mode & 0xF000) == 0xA000 ? ReadSymlink(output => parser.ReadFile(e.Path, output)) : null,
                 Xattrs = e.Xattrs?.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)
-            }).ToList();
+            })];
         }
         return [];
     }

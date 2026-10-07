@@ -46,22 +46,19 @@ public sealed partial class ErofsParser
         {
             if (seenNids.Add(entry.Nid)) entries.Add(entry);
         }
-        var records = new ErofsSourceInode?[entries.Count];
-        Core.FirmwareParallelism.ForEach(entries, entry =>
-        {
-            records[entries.IndexOf(entry)] = ReadRebuildInodeRecord(entry, codecs, defaultAlgorithm);
-        });
+        var records = Core.FirmwareParallelism.SelectArray(entries,
+            (entry, _) => ReadRebuildInodeRecord(entry, codecs, defaultAlgorithm));
         var inodes = new Dictionary<ulong, ErofsSourceInode>(entries.Count);
         var compressed = false;
-        foreach (var (entry, record) in entries.Zip(records))
+        for (var i = 0; i < entries.Count; i++)
         {
-            if (record is null) continue;
+            var record = records[i];
             if (record.Compressed && !compressed)
             {
                 compressed = true;
                 defaultAlgorithm = record.Algorithm;
             }
-            inodes.Add(entry.Nid, record);
+            inodes.Add(entries[i].Nid, record);
         }
         var byPath = inodes.Values
             .Where(record => record.Path is { Length: > 0 })
@@ -70,7 +67,7 @@ public sealed partial class ErofsParser
         var selected = codecs.GetValueOrDefault(defaultAlgorithm) ?? new ErofsOptions { BlockSize = _blockSize };
         selected.SourceInodesByPath = byPath;
         selected.Compress = compressed || _superblock.HasBigPcluster && _superblock.AvailableComprAlgs != 0;
-        selected.Uuid = _superblock.Uuid.ToArray();
+        selected.Uuid = [.. _superblock.Uuid];
         selected.VolumeName = _superblock.VolumeName;
         selected.SourceVolumeNameBytes = _superblock.VolumeNameBytes;
         selected.BuildTime = _superblock.BuildTime;
@@ -83,7 +80,7 @@ public sealed partial class ErofsParser
         selected.SourceMetaboxCompressed = _superblock.HasMetabox && _superblock.MetaBoxNid != 0
             && ReadInode(_superblock.MetaBoxNid).IsCompressed;
         selected.SourceDeviceTable = _deviceSlots?.Skip(1)
-            .Select(slot => new ErofsSourceDevice(slot.Tag.ToArray(), slot.Blocks, slot.UniAddr))
+            .Select(slot => new ErofsSourceDevice([.. slot.Tag], slot.Blocks, slot.UniAddr))
             .ToArray();
         selected.Fragments = _superblock.PackedNid != 0;
         selected.CompressedTailPacking = _superblock.HasZtailpacking;

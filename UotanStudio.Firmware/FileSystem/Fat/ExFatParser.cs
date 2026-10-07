@@ -258,7 +258,7 @@ public sealed class ExFatParser : IDisposable
     /// </returns>
     public static bool IsExFatBootRecord(ReadOnlySpan<byte> header, long? imageLength = null) =>
         header.Length >= BootRecordBytes && header[510] == 0x55 && header[511] == 0xAA
-        && Encoding.ASCII.GetString(header.Slice(3, 8)) == "EXFAT   "
+        && header.Slice(3, 8).SequenceEqual("EXFAT   "u8)
         && ValidateGeometry(header, imageLength);
 
     /// <summary>
@@ -423,7 +423,7 @@ public sealed class ExFatParser : IDisposable
         var boot = new byte[BootRecordBytes];
         stream.ReadExactly(boot);
         if (boot[510] != 0x55 || boot[511] != 0xAA
-            || Encoding.ASCII.GetString(boot, 3, 8) != "EXFAT   ")
+            || !boot.AsSpan(3, 8).SequenceEqual("EXFAT   "u8))
         {
             return null;
         }

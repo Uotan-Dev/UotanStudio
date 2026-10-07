@@ -257,6 +257,7 @@ public sealed partial class Ext4Builder
     /// Computes and writes the CRC32c inode checksum, matching e2fsprogs ext2fs_inode_csum: seed = crc32c(~0, uuid), then the LE32 inode number, LE32 i_generation and the whole inode are fed in (with checksum_lo at 124 / checksum_hi at 130 cleared first).
     /// <para>计算并写入 inode 的 CRC32c 校验和。</para>
     /// </summary>
+    [System.Runtime.CompilerServices.SkipLocalsInit]
     private static void WriteInodeChecksum(byte[] inode, uint inodeNumber, byte[] uuid)
     {
 

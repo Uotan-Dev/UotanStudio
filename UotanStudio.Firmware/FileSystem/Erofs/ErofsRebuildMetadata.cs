@@ -67,7 +67,7 @@ internal static class ErofsRebuildMetadata
             {
                 parameters.SourceDevices.Add(new ErofsRebuildDevice
                 {
-                    Tag = device.Tag.ToArray(),
+                    Tag = [.. device.Tag],
                     Blocks = device.Blocks,
                     UniAddr = device.UniAddr
                 });
@@ -138,13 +138,13 @@ internal static class ErofsRebuildMetadata
         {
             if (devices.Count > ushort.MaxValue)
                 throw new FileSystemCorruptedException("EROFS source device table exceeds the on-disk limit.");
-            options.SourceDeviceTable = devices.Select(device =>
+            options.SourceDeviceTable = [.. devices.Select(device =>
             {
                 if (device is null || device.Tag is not { Length: ErofsDeviceSlot.TagSize }
                     || device.Blocks == 0 || device.Blocks >= 1UL << 48 || device.UniAddr >= 1UL << 48)
                     throw new FileSystemCorruptedException("Invalid EROFS source device descriptor.");
-                return new ErofsSourceDevice(device.Tag.ToArray(), device.Blocks, device.UniAddr);
-            }).ToArray();
+                return new ErofsSourceDevice([.. device.Tag], device.Blocks, device.UniAddr);
+            })];
         }
 
         if (parameters.Codecs.Count > 0)

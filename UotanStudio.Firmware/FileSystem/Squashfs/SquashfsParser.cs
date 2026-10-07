@@ -129,7 +129,7 @@ internal sealed class SquashfsParser
             }
         }
 
-        var written = new List<string>();
+        List<string> written = new(entries.Count);
         var processed = 0L;
         byteProgress?.Report((0, total));
         foreach (var entry in entries)

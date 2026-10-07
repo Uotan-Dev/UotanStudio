@@ -184,7 +184,7 @@ public sealed partial class Ext4Builder
             _staging = staging;
             UniqueBlockCount = uniqueBlockCount;
             HasDuplicates = hasDuplicates;
-            PhysicalBlocks = Enumerable.Repeat(-1L, checked((int)uniqueBlockCount)).ToArray();
+            PhysicalBlocks = [.. Enumerable.Repeat(-1L, checked((int)uniqueBlockCount))];
         }
 
         public long UniqueBlockCount { get; }
@@ -348,6 +348,7 @@ public sealed partial class Ext4Builder
         public long UniqueBlockCount { get; private set; }
         public bool HasDuplicates { get; private set; }
 
+        [System.Runtime.CompilerServices.SkipLocalsInit]
         public long Resolve(ReadOnlyMemory<byte> content)
         {
             Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];

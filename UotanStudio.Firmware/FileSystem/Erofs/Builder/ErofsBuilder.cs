@@ -38,8 +38,8 @@ public sealed partial class ErofsBuilder
         public long __unused2;
     }
 
-    [DllImport("libc", EntryPoint = "lstat", SetLastError = true)]
-    private static extern int LStat(string path, out LinuxStat buf);
+    [LibraryImport("libc", EntryPoint = "lstat", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int LStat(string path, out LinuxStat buf);
 
     /// <summary>
     /// Packs a directory into erofs image bytes.
@@ -171,8 +171,8 @@ public sealed partial class ErofsBuilder
             throw new ArgumentException("The output stream must be writable.", nameof(output));
         }
 
-        var excludedPaths = output is FileStream fileStream
-            ? new[] { Path.GetFullPath(fileStream.Name) }
+        string[] excludedPaths = output is FileStream fileStream
+            ? [Path.GetFullPath(fileStream.Name)]
             : [];
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"uotan-erofs-{Guid.NewGuid():N}.tmp");
         var stagingExclusions = excludedPaths.Append(Path.GetFullPath(temporaryPath)).ToArray();
@@ -600,6 +600,12 @@ public sealed partial class ErofsBuilder
         /// Starts capturing writes to [start, start+length) in image coordinates.
         /// <para>开始捕获镜像内 [start, start+length) 的写入字节。</para>
         /// </summary>
+        /// <param name="start">First captured byte in the same coordinates as <see cref="Position"/>, so it is
+        /// relative to the base offset rather than to the underlying stream.
+        /// <para>首个被捕获字节的位置，与 <see cref="Position"/> 使用同一坐标，即相对基准偏移而非底层流的绝对位置。</para></param>
+        /// <param name="length">Window width in bytes and length of the array exposed by
+        /// <see cref="CapturedWindow"/>; a later call replaces the window captured earlier.
+        /// <para>窗口宽度（字节），同时也是 <see cref="CapturedWindow"/> 所暴露数组的长度；再次调用会替换先前设定的窗口。</para></param>
         public void CaptureWindow(long start, int length)
         {
             _captureStart = start;

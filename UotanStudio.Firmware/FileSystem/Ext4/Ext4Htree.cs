@@ -35,6 +35,12 @@ internal static class Ext4Htree
     /// Computes the ext4 Half-MD4 hash of a directory name (buf[1] &amp; ~1), matching the EXT2_HASH_HALF_MD4 branch of e2fsprogs ext2fs_dirhash: an all-zero seed selects the default MD4 init vector and the name is transformed in 32-byte chunks.
     /// <para>计算目录名的 ext4 Half-MD4 哈希（返回 buf[1] &amp; ~1）。</para>
     /// </summary>
+    /// <param name="name">Directory entry name; it is UTF-8 encoded and consumed in 32-byte chunks.
+    /// <para>目录项名称；先按 UTF-8 编码，再以 32 字节分块消费。</para></param>
+    /// <param name="seed">At least four seed words from the superblock hash seed; an all-zero vector selects the default MD4 initial state.
+    /// <para>超级块哈希种子中至少四个种子词；全零向量改用默认 MD4 初始状态。</para></param>
+    /// <returns>The directory hash, which is state word 1 with its least significant bit cleared.
+    /// <para>目录哈希值，即清除最低有效位后的状态字 1。</para></returns>
     public static uint HalfMd4Hash(string name, uint[] seed)
     {
         ArgumentNullException.ThrowIfNull(seed);
@@ -160,6 +166,12 @@ internal static class Ext4Htree
     /// Parses the dx_entry list from the dx_root in directory block 0, returning (hash, block) for every child block. entry[0]'s hash is not stored on disk (its area holds limit/count), so 0 is reported; its block points at the first child.
     /// <para>从目录块 0 解析 dx_root 的 dx_entry 列表：返回每个子块（叶块/索引块）的 (hash, block)。</para>
     /// </summary>
+    /// <param name="block0">Bytes of directory logical block 0; the leading "." and ".." records, the dx_root_info and the count/limit area are validated before any entry is read.
+    /// <para>目录逻辑块 0 的字节；读取条目前先校验开头的 "." 与 ".." 记录、dx_root_info 以及 count/limit 区。</para></param>
+    /// <param name="blockSize">Directory block size in bytes, used to check the ".." record length and to cap the entry count at the space left after the dx_root header.
+    /// <para>目录块大小（字节），用于检查 ".." 记录长度，并将条目数限制在 dx_root 头之后的剩余空间内。</para></param>
+    /// <returns>Hash and child block number of every dx_entry, empty when the bytes are shorter than the dx_root header, are not shaped like "."/".." plus dx_root_info, or use a hash version other than Half-MD4.
+    /// <para>每个 dx_entry 的哈希与子块号；字节短于 dx_root 头、不符合 "."/".." 加 dx_root_info 的结构，或哈希版本不是 Half-MD4 时为空。</para></returns>
     public static List<(uint Hash, uint Block)> ParseDxEntries(ReadOnlySpan<byte> block0, int blockSize)
     {
         if (block0.Length < DxRootCountOffset + DxEntrySize)
@@ -211,6 +223,14 @@ internal static class Ext4Htree
     /// Overload of the htree builder that fills "." and ".." with inode 0 (structure/parse tests only).
     /// <para>构建 htree 索引的重载：不提供 "."/".." 的 inode 号时以 0 填充（仅用于结构/解析测试）。</para>
     /// </summary>
+    /// <param name="entries">Directory records to index as (name, inode, file type) triples; the list is
+    /// sorted by hash and may be empty. <para>待索引的目录项三元组（名称、inode、文件类型）；按哈希排序，可以为空列表。</para></param>
+    /// <param name="blockSize">Directory block size in bytes for the root, leaf and index blocks.
+    /// <para>根块、叶块与索引块使用的目录块大小（字节）。</para></param>
+    /// <param name="hashSeed">At least four seed words from the superblock hash seed used by Half-MD4.
+    /// <para>Half-MD4 使用的超级块哈希种子，至少包含四个种子词。</para></param>
+    /// <returns>The plan holding the dx_root block, the leaf blocks, any dx_node index blocks and the
+    /// indirect level count. <para>包含 dx_root 块、叶块、可选的 dx_node 索引块与间接层级数的方案。</para></returns>
     public static HtreePlan BuildHtree(
         List<(string Name, uint Inode, byte FileType)> entries,
         int blockSize,
@@ -223,6 +243,26 @@ internal static class Ext4Htree
     /// Builds an htree index for a directory.
     /// <para>为目录构建 htree 索引。</para>
     /// </summary>
+    /// <param name="directoryInode">Inode number written into the "." record and mixed into every
+    /// metadata checksum. <para>写入 "." 记录并参与所有元数据校验和的 inode 号。</para></param>
+    /// <param name="parentInode">Inode number written into the ".." record.
+    /// <para>写入 ".." 记录的 inode 号。</para></param>
+    /// <param name="entries">Directory records to index as (name, inode, file type) triples, sorted by
+    /// Half-MD4 hash and then by ordinal name; names longer than 255 UTF-8 bytes are truncated.
+    /// <para>待索引的目录项三元组（名称、inode、文件类型），先按 Half-MD4 哈希再按名称序号排序；超过 255 个
+    /// UTF-8 字节的名称会被截断。</para></param>
+    /// <param name="blockSize">Directory block size in bytes for the root, leaf and index blocks.
+    /// <para>根块、叶块与索引块使用的目录块大小（字节）。</para></param>
+    /// <param name="hashSeed">At least four seed words from the superblock hash seed used by Half-MD4.
+    /// <para>Half-MD4 使用的超级块哈希种子，至少包含四个种子词。</para></param>
+    /// <param name="enableMetadataCsum">Reserve the dirent/dx tail space and write CRC32C checksums.
+    /// <para>预留 dirent/dx 尾部空间并写入 CRC32C 校验和。</para></param>
+    /// <param name="uuid">Superblock UUID bytes seeding the checksums; <see langword="null"/> seeds them
+    /// with sixteen zero bytes. <para>作为校验和种子的超级块 UUID 字节；为 <see langword="null"/> 时使用十六个零字节。</para></param>
+    /// <param name="generation">Inode generation mixed into the checksums alongside <paramref name="directoryInode"/>.
+    /// <para>与 <paramref name="directoryInode"/> 一同参与校验和的 inode 世代号。</para></param>
+    /// <returns>The plan holding the dx_root block, the leaf blocks, any dx_node index blocks and the
+    /// indirect level count. <para>包含 dx_root 块、叶块、可选的 dx_node 索引块与间接层级数的方案。</para></returns>
     public static HtreePlan BuildHtree(
         uint directoryInode,
         uint parentInode,
@@ -361,8 +401,9 @@ internal static class Ext4Htree
         for (var i = 0; i < sorted.Count; i++)
         {
             var (hash, name, inode, fileType) = sorted[i];
+            FileSystemNameLimits.Validate(name, "EXT4");
             var nameBytes = Encoding.UTF8.GetBytes(name);
-            var nameLen = Math.Min(nameBytes.Length, 255);
+            var nameLen = nameBytes.Length;
             var naturalLength = (8 + nameLen + 3) & ~3;
             if (entriesInBlock > 0 && offset + naturalLength > endCap)
             {
@@ -517,6 +558,7 @@ internal static class Ext4Htree
     /// Writes the 12-byte struct ext2_dir_entry_tail at the end of a directory leaf block and computes the dirent checksum matching e2fsprogs ext2fs_dirent_csum: seed = crc32c(~0, uuid), then the LE32 inode number, LE32 i_generation and the block bytes from its start up to (excluding) the tail.
     /// <para>在目录叶块尾部写入 struct ext2_dir_entry_tail（12 字节）并计算 dirent 校验和。</para>
     /// </summary>
+    [System.Runtime.CompilerServices.SkipLocalsInit]
     private static void WriteDirentTail(byte[] block, int endCap, uint directoryInode, byte[]? uuid, uint generation)
     {
         WriteU32(block, endCap, 0);
@@ -542,6 +584,7 @@ internal static class Ext4Htree
     /// Writes dx_tail and computes checksum matching e2fsprogs 1.47.4 ext2fs_dx_csum. dx_tail is at countOffset + limit * DxEntrySize.
     /// <para>写入 dx_tail 结构并计算校验和。</para>
     /// </summary>
+    [System.Runtime.CompilerServices.SkipLocalsInit]
     private static void WriteDxTail(byte[] block, int countOffset, int count, int limit, uint directoryInode, byte[]? uuid, uint generation)
     {
 

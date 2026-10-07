@@ -153,7 +153,7 @@ public static partial class FileSystemPreservation
     /// covers the payload content and can be compared both at capture and at read time.
     /// <para>对移除保留负载自身摘要后的元数据文档计算哈希，使摘要覆盖负载内容，并可在采集与读取两侧比对。</para>
     /// </summary>
-    private static string HashConfiguration(RepackMetadata metadata)
+    internal static string HashConfiguration(RepackMetadata metadata)
     {
         var json = JsonSerializer.SerializeToNode(metadata, RepackJsonContext.Default.RepackMetadata)!.AsObject();
         if (json["fileSystemPreservation"] is JsonObject payload) payload.Remove("configurationHash");

@@ -21,7 +21,6 @@ public sealed partial class F2fsBuilder
     private const uint CkptSegments = 2;
     private const int BlocksPerSeg = 512;
     private const uint OverprovSlackSegments = 8;
-    private const int MaxNameBytes = 255;
 
     private const uint RsvdSegments = 6;
 
@@ -260,8 +259,8 @@ public sealed partial class F2fsBuilder
             throw new ArgumentException("The output stream must be writable.", nameof(output));
         }
 
-        var excludedPaths = output is FileStream fileStream
-            ? new[] { Path.GetFullPath(fileStream.Name) }
+        string[] excludedPaths = output is FileStream fileStream
+            ? [Path.GetFullPath(fileStream.Name)]
             : [];
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"uotan-f2fs-{Guid.NewGuid():N}.tmp");
         var stagingExclusions = excludedPaths.Append(Path.GetFullPath(temporaryPath)).ToArray();
@@ -913,10 +912,7 @@ public sealed partial class F2fsBuilder
 
     private static void PlanDirectoryBlocks(BuildNode node)
     {
-        if (node.Name.Length > MaxNameBytes)
-        {
-            throw new InvalidOperationException($"File name too long (>{MaxNameBytes} bytes): '{node.Name}'.");
-        }
+        FileSystemNameLimits.Validate(node.Name, "F2FS");
 
         var blocks = new List<List<F2fsDirectoryEntry>>
         {
@@ -930,10 +926,12 @@ public sealed partial class F2fsBuilder
         uint currentDepth = 0;
         foreach (var child in node.Children.OrderBy(static c => c.Name, StringComparer.Ordinal))
         {
-            if (child.Name.Length == 0 || child.Name.Length > MaxNameBytes || !IsSafeName(child.Name))
+            if (child.Name.Length == 0 || !IsSafeName(child.Name))
             {
                 throw new InvalidOperationException($"Invalid f2fs file name: '{child.Name}'.");
             }
+
+            FileSystemNameLimits.Validate(child.Name, "F2FS");
 
             var type = child.IsDirectory ? F2fsDirectoryEntry.TypeDirectory
                 : child.IsSymlink ? F2fsDirectoryEntry.TypeSymlink
@@ -986,7 +984,7 @@ public sealed partial class F2fsBuilder
                 $"Directory '{node.Name}' exceeds the supported size ({blocks.Count} dentry blocks, max {F2fsNode.DefAddrsPerInode}).");
         }
 
-        node.DirBlocks = blocks.Select(static b => BuildDirBlock(b)).ToList();
+        node.DirBlocks = [.. blocks.Select(static b => BuildDirBlock(b))];
         node.Size = (long)node.DirBlocks.Count * F2fsNode.NodeSize;
 
         node.DirDepth = currentDepth + 1;

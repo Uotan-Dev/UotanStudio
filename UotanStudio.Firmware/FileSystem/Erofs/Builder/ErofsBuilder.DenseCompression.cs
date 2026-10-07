@@ -81,7 +81,7 @@ public sealed partial class ErofsBuilder
             }
         }
         return plans.Sum(p => CeilDiv(p.CompressedLength, blockSize)) < CeilDiv(node.Size, blockSize)
-            ? plans.ToArray() : null;
+            ? [.. plans] : null;
     }
 
     private static long PlanEndCluster(BuildNode node, int index)

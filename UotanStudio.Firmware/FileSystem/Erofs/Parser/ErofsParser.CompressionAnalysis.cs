@@ -9,8 +9,7 @@ internal sealed class ErofsCompressionEstimate(ErofsOptions options)
     internal ErofsOptions Options { get; } = options;
     internal int Samples { get; private set; }
     internal long SampleBytes { get; private set; }
-    internal Candidate[] Candidates { get; } = Levels(options.Algorithm)
-        .Select(candidate => new Candidate(candidate.Level, candidate.HighCompression)).ToArray();
+    internal Candidate[] Candidates { get; } = [.. Levels(options.Algorithm).Select(candidate => new Candidate(candidate.Level, candidate.HighCompression))];
     internal Candidate Inferred => Candidates.OrderByDescending(c => c.ExactMatches).ThenBy(c => c.Error).ThenBy(c => c.Level).First();
     internal Candidate Smallest => Candidates.OrderBy(c => c.Bytes).ThenBy(c => c.Level).First();
 
@@ -86,6 +85,6 @@ public sealed partial class ErofsParser
             {
             }
         }
-        return estimates.Values.Where(e => e.Samples > 0).OrderBy(e => e.Options.Algorithm).ToList();
+        return [.. estimates.Values.Where(e => e.Samples > 0).OrderBy(e => e.Options.Algorithm)];
     }
 }

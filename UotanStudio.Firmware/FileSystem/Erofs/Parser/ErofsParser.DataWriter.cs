@@ -234,10 +234,11 @@ public sealed partial class ErofsParser
     /// 非尾部打包；编码 LZMA 或 ZSTD 流的 PLAIN head 按内核语义仍整体视为明文（SHIFTED）。</para>
     /// </summary>
     private void WriteCompressedData(ulong nid, ErofsInode inode, Stream output,
-        CompressionObserver? observer = null, CancellationToken cancellationToken = default)
+        CompressionObserver? observer = null, CancellationToken cancellationToken = default,
+        ExtentWriteScratch? extentScratch = null)
     {
         if (TryWriteNonLclusterLayout(nid, inode, output, observer, cancellationToken,
-            out var header, out var headerOffset))
+            out var header, out var headerOffset, extentScratch))
         {
             return;
         }
@@ -331,7 +332,7 @@ public sealed partial class ErofsParser
     /// </summary>
     private bool TryWriteNonLclusterLayout(ulong nid, ErofsInode inode, Stream output,
         CompressionObserver? observer, CancellationToken cancellationToken,
-        out ZErofsMapHeader header, out long headerOffset)
+        out ZErofsMapHeader header, out long headerOffset, ExtentWriteScratch? extentScratch = null)
     {
         var inodeLoc = InodeOffset(nid);
 
@@ -358,7 +359,19 @@ public sealed partial class ErofsParser
                 return true;
             }
 
-            WriteExtentsData(nid, inode, header, headerBytes, headerOffset, output, cancellationToken);
+            var scratch = extentScratch ?? new ExtentWriteScratch();
+            var ownsScratch = extentScratch is null;
+            try
+            {
+                WriteExtentsData(nid, inode, header, headerBytes, headerOffset, output, scratch, cancellationToken);
+            }
+            finally
+            {
+                if (ownsScratch)
+                {
+                    scratch.Dispose();
+                }
+            }
             return true;
         }
 
@@ -734,6 +747,86 @@ public sealed partial class ErofsParser
     }
 
     /// <summary>
+    /// Per-call pooled extent buffers shared by every extent of one compressed-inode walk: the
+    /// encoded-input and decoded-output arrays grow in place to the largest extent seen so far, so a
+    /// file with many extents rents from the pool a small number of times instead of once per extent.
+    /// Instances are call-scoped because parser instances are shared across threads.
+    /// <para>单次调用内、被一个压缩 inode 的全部 extent 共享的池化缓冲：压缩输入与解码输出数组按
+    /// 已遇到的最大 extent 就地扩容，因此含大量 extent 的文件只从池中租借少量次数而非每个 extent
+    /// 一次。实例必须按调用作用域持有，因为解析器实例是跨线程共享的。</para>
+    /// </summary>
+    internal sealed class ExtentWriteScratch : IDisposable
+    {
+        /// <summary>Pooled encoded-extent buffer, at least the last requested encoded length.
+        /// <para>池化的压缩 extent 缓冲，不小于最近一次请求的压缩长度。</para></summary>
+        internal byte[] Compressed = [];
+
+        /// <summary>Pooled decoded-extent buffer, at least the last requested logical length.
+        /// <para>池化的解码 extent 缓冲，不小于最近一次请求的逻辑长度。</para></summary>
+        internal byte[] Decoded = [];
+
+        /// <summary>Number of pool rentals this scratch has performed.
+        /// <para>本缓冲组已执行的池租借次数。</para></summary>
+        internal int RentCount { get; private set; }
+
+        /// <summary>
+        /// Grows the two buffers in place only when an extent needs more bytes than they currently
+        /// hold; a buffer that is already large enough is kept untouched. Growth doubles the previous
+        /// capacity so alternating extent sizes do not re-rent on every step.
+        /// <para>仅在某个 extent 需要的字节数超过当前容量时就地扩容两个缓冲；已经足够大的缓冲保持不动。
+        /// 扩容按上一容量倍增，避免大小交替的 extent 每一步都重新租借。</para>
+        /// </summary>
+        /// <param name="compressedLength">Encoded extent bytes to read; must be non-negative. <para>待读取的压缩 extent 字节数，不得为负。</para></param>
+        /// <param name="decodedLength">Logical extent bytes to decode; must be non-negative. <para>待解压的逻辑 extent 字节数，不得为负。</para></param>
+        /// <exception cref="ArgumentOutOfRangeException">Either length is negative. <para>任一长度为负数。</para></exception>
+        internal void Ensure(int compressedLength, int decodedLength)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(compressedLength);
+            ArgumentOutOfRangeException.ThrowIfNegative(decodedLength);
+            if (Compressed.Length < compressedLength)
+            {
+                Compressed = Grow(Compressed, compressedLength);
+            }
+            if (Decoded.Length < decodedLength)
+            {
+                Decoded = Grow(Decoded, decodedLength);
+            }
+        }
+
+        /// <summary>Releases both buffers back to the pool, leaving empty arrays behind.
+        /// <para>把两个缓冲归还池中，并留下空数组。</para></summary>
+        internal void Release()
+        {
+            if (Compressed.Length > 0)
+            {
+                ArrayPool<byte>.Shared.Return(Compressed);
+            }
+            if (Decoded.Length > 0)
+            {
+                ArrayPool<byte>.Shared.Return(Decoded);
+            }
+            Compressed = [];
+            Decoded = [];
+        }
+
+        /// <summary>Releases the pooled buffers owned by this scratch. <para>释放本缓冲组持有的池化缓冲。</para></summary>
+        public void Dispose() => Release();
+
+        private byte[] Grow(byte[] current, int required)
+        {
+            if (current.Length > 0)
+            {
+                ArrayPool<byte>.Shared.Return(current);
+            }
+            var capacity = current.Length == 0 || current.Length > int.MaxValue / 2
+                ? required
+                : Math.Max(required, current.Length * 2);
+            RentCount++;
+            return ArrayPool<byte>.Shared.Rent(capacity);
+        }
+    }
+
+    /// <summary>
     /// Per-iteration state of one logical cluster run inside the compressed write loop, shared by
     /// the plain, interlaced and encoded pcluster writers.
     /// <para>压缩写出循环中单个逻辑簇区段的每次迭代状态，供 plain、interlaced 与压缩 pcluster 写出
@@ -911,13 +1004,47 @@ public sealed partial class ErofsParser
     }
 
     /// <summary>
+    /// Writes one file's data with the extent scratch buffers supplied by the caller, so a repeated
+    /// read path can reuse one pooled pair instead of renting per walk.
+    /// <para>使用调用方给出的 extent 缓冲组写出单个文件的数据，使重复读取路径复用同一对池化缓冲，
+    /// 而不是每次遍历都重新租借。</para>
+    /// </summary>
+    /// <param name="path">File path as reported by <see cref="EnumerateFiles"/>. <para>按 <see cref="EnumerateFiles"/> 报告的文件路径。</para></param>
+    /// <param name="output">Sink receiving the decoded bytes. <para>接收解码字节的写出流。</para></param>
+    /// <param name="scratch">Caller-owned extent buffers. <para>调用方持有的 extent 缓冲组。</para></param>
+    /// <param name="cancellationToken">Token checked between extents. <para>在 extent 之间检查的取消令牌。</para></param>
+    /// <exception cref="FileNotFoundException">No entry carries <paramref name="path"/>. <para>没有任何条目携带 <paramref name="path"/>。</para></exception>
+    internal void WriteCompressedExtentData(string path, Stream output, ExtentWriteScratch scratch,
+        CancellationToken cancellationToken = default)
+    {
+        var nid = FindFile(path);
+        WriteCompressedData(nid, ReadInode(nid), output, null, cancellationToken, scratch);
+    }
+
+    /// <summary>Diagnostic companion reporting where a compressed inode's map header lives in the image,
+    /// which is also where the extent index records that follow it begin.
+    /// <para>诊断伴侣：报告压缩 inode 映射头在镜像中的位置，该位置之后即其 extent 索引记录的起点。</para></summary>
+    /// <param name="path">File path as reported by <see cref="EnumerateFiles"/>. <para>按 <see cref="EnumerateFiles"/> 报告的文件路径。</para></param>
+    /// <returns>The byte offset of the map header from the stream base. <para>映射头相对流起点的字节偏移。</para></returns>
+    /// <exception cref="FileNotFoundException">No entry carries <paramref name="path"/>. <para>没有任何条目携带 <paramref name="path"/>。</para></exception>
+    internal long CompressedMapHeaderOffset(string path)
+    {
+        var nid = FindFile(path);
+        var inode = ReadInode(nid);
+        return AlignUp(InodeOffset(nid) + inode.OnDiskSize + inode.XattrTotalSize, 8);
+    }
+
+    /// <summary>
     /// Reads a COMRESSED_FULL inode whose map header carries extent metadata: the index area is
     /// a sorted array of variable-size z_erofs_extent records (fs/erofs/zmap.c z_erofs_map_blocks_ext).
+    /// The encoded and decoded extent buffers come from <paramref name="scratch"/>, which the caller
+    /// owns for the whole walk so consecutive extents reuse them.
     /// <para>读取携带 extent 元数据的 COMRESSED_FULL inode：索引区为按逻辑偏移排序的可变长度
-    /// z_erofs_extent 记录数组（fs/erofs/zmap.c z_erofs_map_blocks_ext）。</para>
+    /// z_erofs_extent 记录数组（fs/erofs/zmap.c z_erofs_map_blocks_ext）。压缩与解码缓冲来自
+    /// <paramref name="scratch"/>，由调用方在整个遍历期间持有，使相邻 extent 复用同一对缓冲。</para>
     /// </summary>
     private void WriteExtentsData(ulong nid, ErofsInode inode, ZErofsMapHeader header, byte[] headerBytes,
-        long headerOffset, Stream output, CancellationToken cancellationToken)
+        long headerOffset, Stream output, ExtentWriteScratch scratch, CancellationToken cancellationToken)
     {
         var extentCount = (ulong)(BinaryPrimitives.ReadUInt32LittleEndian(headerBytes)
             | ((ulong)header.ExtentsHi << 32));
@@ -925,7 +1052,7 @@ public sealed partial class ErofsParser
         var extentsBase = checked((long)AlignUp(headerOffset + ZErofsMapHeader.Size, recSize));
         if (recSize is 4 or 8)
         {
-            WriteShortExtentsData(nid, inode, header, extentsBase, recSize, output, cancellationToken);
+            WriteShortExtentsData(nid, inode, header, extentsBase, recSize, output, scratch, cancellationToken);
             return;
         }
         if (extentCount == 0)
@@ -995,7 +1122,7 @@ public sealed partial class ErofsParser
             else
             {
                 WriteCompressedExtent(nid, inode, record, recSize, logicalStart, logicalLength,
-                    (ErofsAlgorithm)(fmt - 1), output, cancellationToken, physicalOffset);
+                    (ErofsAlgorithm)(fmt - 1), output, scratch, cancellationToken, physicalOffset);
             }
 
             logicalOffset = logicalEnd;
@@ -1015,7 +1142,7 @@ public sealed partial class ErofsParser
     }
 
     private void WriteShortExtentsData(ulong nid, ErofsInode inode, ZErofsMapHeader header,
-        long indexStart, int recordSize, Stream output, CancellationToken cancellationToken)
+        long indexStart, int recordSize, Stream output, ExtentWriteScratch scratch, CancellationToken cancellationToken)
     {
         if (inode.Size == 0)
         {
@@ -1078,7 +1205,7 @@ public sealed partial class ErofsParser
                     throw new FileSystemCorruptedException($"Unknown EROFS short extent compression algorithm {format - 1}.");
                 }
                 WriteCompressedExtent(nid, inode, record, recordSize, i * clusterSize, logicalLength,
-                    (ErofsAlgorithm)(format - 1), output, cancellationToken, physical);
+                    (ErofsAlgorithm)(format - 1), output, scratch, cancellationToken, physical);
             }
             if (recordSize == 4)
             {
@@ -1112,8 +1239,17 @@ public sealed partial class ErofsParser
         CopyFromSource(output, source, logicalLength);
     }
 
+    /// <summary>
+    /// Decompresses and writes one extent's logical range. The encoded and decoded buffers are the
+    /// caller-scoped <paramref name="scratch"/> pair, grown in place only when an extent needs more
+    /// bytes than it currently holds, so a run of extents performs no further pool round-trips.
+    /// <para>解压并写出单个 extent 的逻辑区间。压缩与解码缓冲为调用方作用域的
+    /// <paramref name="scratch"/> 配对缓冲，仅在某个 extent 需要更多字节时就地扩容，因此连续
+    /// extent 不再产生额外的池往返。</para>
+    /// </summary>
     private void WriteCompressedExtent(ulong nid, ErofsInode inode, byte[] record, int recSize,
-        long logicalOffset, long logicalLength, ErofsAlgorithm algorithm, Stream output, CancellationToken cancellationToken,
+        long logicalOffset, long logicalLength, ErofsAlgorithm algorithm, Stream output,
+        ExtentWriteScratch scratch, CancellationToken cancellationToken,
         long? physicalOverride = null)
     {
         if (logicalLength <= 0)
@@ -1149,55 +1285,48 @@ public sealed partial class ErofsParser
         }
 
         CheckRange(pstart, compressedLength, "Compressed extent data");
-        var compressed = ArrayPool<byte>.Shared.Rent(compressedLength);
-        var decoded = ArrayPool<byte>.Shared.Rent((int)logicalLength);
+        scratch.Ensure(compressedLength, (int)logicalLength);
+        var compressed = scratch.Compressed;
+        var decoded = scratch.Decoded;
+        lock (_streamLock)
+        {
+            _stream.Position = checked(_baseOffset + pstart);
+            _stream.ReadExactly(compressed, 0, compressedLength);
+        }
+
+        int decodedLength;
         try
         {
-            lock (_streamLock)
+            var inputMargin = 0;
+            if (algorithm == ErofsAlgorithm.Lz4
+                && (_superblock.FeatureIncompat & ErofsSuperblock.IncompatLz4_0Padding) != 0)
             {
-                _stream.Position = checked(_baseOffset + pstart);
-                _stream.ReadExactly(compressed, 0, compressedLength);
-            }
-
-            int decodedLength;
-            try
-            {
-                var inputMargin = 0;
-                if (algorithm == ErofsAlgorithm.Lz4
-                    && (_superblock.FeatureIncompat & ErofsSuperblock.IncompatLz4_0Padding) != 0)
+                while (inputMargin < compressedLength && compressed[inputMargin] == 0)
                 {
-                    while (inputMargin < compressedLength && compressed[inputMargin] == 0)
-                    {
-                        inputMargin++;
-                    }
+                    inputMargin++;
                 }
-                if (inputMargin == compressedLength)
-                {
-                    throw new FileSystemCorruptedException("EROFS compressed extent is entirely zero-padded.");
-                }
-                decodedLength = ErofsCompression.AlgorithmDecompress(
-                    algorithm, compressed, inputMargin, compressedLength - inputMargin, decoded, 0, (int)logicalLength);
             }
-            catch (Exception ex) when (ex is InvalidDataException or FileSystemException or InvalidOperationException or ArgumentException)
+            if (inputMargin == compressedLength)
             {
-                throw new FileSystemCorruptedException(
-                    $"Extent of nid {nid} failed to decompress ({algorithm}): {ex.Message}");
+                throw new FileSystemCorruptedException("EROFS compressed extent is entirely zero-padded.");
             }
-
-            if (decodedLength != (int)logicalLength)
-            {
-                throw new FileSystemCorruptedException(
-                    $"Extent of nid {nid} decoded to {decodedLength} bytes, expected {logicalLength}; " +
-                    $"algorithm={algorithm}, physical={pstart}, encoded={compressedLength}, prefix={Convert.ToHexString(compressed.AsSpan(0, Math.Min(16, compressedLength)))}.");
-            }
-
-            output.Write(decoded, 0, (int)logicalLength);
+            decodedLength = ErofsCompression.AlgorithmDecompress(
+                algorithm, compressed, inputMargin, compressedLength - inputMargin, decoded, 0, (int)logicalLength);
         }
-        finally
+        catch (Exception ex) when (ex is InvalidDataException or FileSystemException or InvalidOperationException or ArgumentException)
         {
-            ArrayPool<byte>.Shared.Return(compressed);
-            ArrayPool<byte>.Shared.Return(decoded);
+            throw new FileSystemCorruptedException(
+                $"Extent of nid {nid} failed to decompress ({algorithm}): {ex.Message}");
         }
+
+        if (decodedLength != (int)logicalLength)
+        {
+            throw new FileSystemCorruptedException(
+                $"Extent of nid {nid} decoded to {decodedLength} bytes, expected {logicalLength}; " +
+                $"algorithm={algorithm}, physical={pstart}, encoded={compressedLength}, prefix={Convert.ToHexString(compressed.AsSpan(0, Math.Min(16, compressedLength)))}.");
+        }
+
+        output.Write(decoded, 0, (int)logicalLength);
     }
 
     /// <summary>

@@ -29,7 +29,11 @@ public sealed partial class ErofsBuilder
             new DirEntry(new BuildNode { Nid = dotDotNid, IsDirectory = true, Name = ".." }, ".."u8.ToArray()),
         };
         entries.AddRange(node.Children
-            .Select(child => new DirEntry(child, Encoding.UTF8.GetBytes(child.Name)))
+            .Select(child =>
+            {
+                FileSystemNameLimits.Validate(child.Name, "EROFS");
+                return new DirEntry(child, Encoding.UTF8.GetBytes(child.Name));
+            })
             .OrderBy(e => e.NameBytes, ByteArrayComparer.Instance));
         return entries;
     }

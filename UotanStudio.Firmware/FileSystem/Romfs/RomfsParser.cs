@@ -415,7 +415,7 @@ internal sealed class RomfsParser
         }
 
         nameRegionBytes = checked((int)RoundTo16((long)terminator + 1));
-        return collected.ToArray();
+        return [.. collected];
     }
 
     private void ValidateChecksum(long regionOffset, int regionBytes, uint storedChecksum)
@@ -464,7 +464,7 @@ internal sealed class RomfsParser
             position++;
             if (b == 0)
             {
-                return Encoding.UTF8.GetString(collected.ToArray());
+                return Encoding.UTF8.GetString([.. collected]);
             }
 
             collected.Add((byte)b);

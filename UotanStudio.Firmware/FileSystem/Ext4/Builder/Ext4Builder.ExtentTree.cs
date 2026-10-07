@@ -134,7 +134,7 @@ public sealed partial class Ext4Builder
         for (var i = 0; i < extents.Count; i += epb)
         {
             var count = Math.Min(epb, extents.Count - i);
-            leafGroups.Add(extents.GetRange(i, count).ToArray());
+            leafGroups.Add([.. extents.GetRange(i, count)]);
         }
 
         if (leafBlocks.Length < leafGroups.Count)
@@ -157,7 +157,7 @@ public sealed partial class Ext4Builder
         }
 
 
-        var indexEntries = new List<(uint LogicalStart, long BlockAddress)>();
+        List<(uint LogicalStart, long BlockAddress)> indexEntries = new(leafGroups.Count);
         for (var g = 0; g < leafGroups.Count; g++)
         {
             indexEntries.Add((leafGroups[g][0].Logical, leafBlocks[g]));
@@ -180,7 +180,7 @@ public sealed partial class Ext4Builder
         for (var i = 0; i < indexEntries.Count; i += epb)
         {
             var count = Math.Min(epb, indexEntries.Count - i);
-            indexGroups.Add(indexEntries.GetRange(i, count).ToArray());
+            indexGroups.Add([.. indexEntries.GetRange(i, count)]);
         }
 
         if (indexBlocks.Length < indexGroups.Count)

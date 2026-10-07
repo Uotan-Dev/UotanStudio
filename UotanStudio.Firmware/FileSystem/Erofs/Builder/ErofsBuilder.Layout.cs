@@ -227,7 +227,7 @@ public sealed partial class ErofsBuilder
                     node.Size = 0;
                 }
 
-                node.XattrIbody = entry.Xattrs is { Count: > 0 } ? ErofsXattr.EncodeInline(entry.Xattrs.Select(p => new ErofsXattrEntry { Name = p.Key, Value = p.Value }).ToList()) : [];
+                node.XattrIbody = entry.Xattrs is { Count: > 0 } ? ErofsXattr.EncodeInline([.. entry.Xattrs.Select(p => new ErofsXattrEntry { Name = p.Key, Value = p.Value })]) : [];
             }
         }
 
@@ -483,7 +483,7 @@ public sealed partial class ErofsBuilder
                 return;
             }
 
-            MetaboxResident = Ordered.Where(node => IsMetaboxEligible(node, BlockSize)).ToList();
+            MetaboxResident = [.. Ordered.Where(node => IsMetaboxEligible(node, BlockSize))];
             if (MetaboxResident.Count > 0)
             {
                 var metaboxLength = 0L;

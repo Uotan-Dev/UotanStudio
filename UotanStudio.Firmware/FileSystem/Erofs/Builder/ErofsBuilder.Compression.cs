@@ -155,7 +155,7 @@ public sealed partial class ErofsBuilder
             return null;
         }
 
-        return plans.ToArray();
+        return [.. plans];
     }
 
     /// <summary>

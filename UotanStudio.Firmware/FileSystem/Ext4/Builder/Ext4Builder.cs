@@ -276,7 +276,7 @@ public sealed partial class Ext4Builder
             return buffer.Array;
         }
 
-        return buffer.AsSpan().ToArray();
+        return [.. buffer];
     }
 
     /// <summary>
@@ -347,7 +347,7 @@ public sealed partial class Ext4Builder
         }
 
         var effective = Validate(sourceDirectory, options);
-        var excludedFiles = output is FileStream fileStream ? new[] { Path.GetFullPath(fileStream.Name) } : [];
+        string[] excludedFiles = output is FileStream fileStream ? [Path.GetFullPath(fileStream.Name)] : [];
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"uotan-ext4-{Guid.NewGuid():N}.tmp");
 
         var stagingExclusions = excludedFiles.Append(Path.GetFullPath(temporaryPath)).ToArray();
@@ -1446,6 +1446,7 @@ public sealed partial class Ext4Builder
         for (var i = 0; i < entries.Count; i++)
         {
             var (name, fileType, inode) = entries[i];
+            FileSystemNameLimits.Validate(name, "EXT4");
             var nameBytes = Encoding.UTF8.GetBytes(name);
             var naturalLength = (8 + nameBytes.Length + 3) & ~3;
             if (lastEntryOffset >= 0 && offset + naturalLength > endCap)
@@ -1495,6 +1496,7 @@ public sealed partial class Ext4Builder
     /// Writes the directory block tail with its CRC32c checksum.
     /// <para>写入目录块尾部结构及其 CRC32c 校验和。</para>
     /// </summary>
+    [System.Runtime.CompilerServices.SkipLocalsInit]
     private static void WriteDirectoryTail(byte[] block, int endCap, uint dirInode, byte[] uuid, uint generation)
     {
         WriteU32(block, endCap, 0);
