@@ -335,7 +335,7 @@ public partial class CompareView
         var oldName = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
         var newName = await DialogService.InputAsync(owner, LanguageService.Instance.GetString("Dialog_Rename"), oldName);
         if (string.IsNullOrWhiteSpace(newName) || newName == oldName
-            || newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            || newName.AsSpan().ContainsAny(PathSearchValues.InvalidFileName))
         {
             return;
         }

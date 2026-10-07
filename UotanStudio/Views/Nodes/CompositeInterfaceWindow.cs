@@ -50,13 +50,13 @@ internal sealed class CompositeInterfaceWindow : Window
 
     private static IReadOnlyList<VisualPluginPortDefinition> Collect(List<PortRow> rows)
     {
-        return rows.Where(row => row.Included).OrderBy(row => row.Order.Value).Select(row =>
+        return [.. rows.Where(row => row.Included).OrderBy(row => row.Order.Value).Select(row =>
         {
             row.Definition.Name = row.Name.Text!.Trim();
             row.Definition.Required = row.Required.IsChecked == true;
             row.Definition.DefaultValue = row.Definition.IsSensitive || string.IsNullOrEmpty(row.Default.Text) ? null : row.Default.Text;
             return row.Definition;
-        }).ToArray();
+        })];
     }
 
     private static void AddSection(StackPanel content, string title, IReadOnlyList<VisualPluginPortDefinition> discovered,

@@ -161,6 +161,10 @@
                         <CheckBox Name="SelectAllBox" Content="{DynamicResource Menu_SelectAll}" IsChecked="True" />
                         <CheckBox Name="UnpackImagesBox" Content="{DynamicResource NewProject_UnpackImages}" IsChecked="True" />
                         <CheckBox Name="UnpackFullyBox" Content="{DynamicResource NewProject_UnpackFully}" IsChecked="True" />
+                        <CheckBox Name="MergeMyPartitionsBox" IsVisible="False" IsChecked="False"
+                                  Content="{DynamicResource NewProject_MergeMyPartitions}"
+                                  ToolTip.Tip="{DynamicResource NewProject_MergeMyPartitionsTip}"
+                                  AutomationProperties.Name="{DynamicResource NewProject_MergeMyPartitions}" />
                     </StackPanel>
                 </Grid>
             </StackPanel>

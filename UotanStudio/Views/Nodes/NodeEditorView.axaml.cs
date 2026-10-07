@@ -331,7 +331,7 @@ public partial class NodeEditorView : UserControl
     private IReadOnlyList<FlowNodeViewModel> NodesIntersectingSelection(Point first, Point second)
     {
         var selection = CreateSelectionRectangle(first, second);
-        var result = new List<FlowNodeViewModel>();
+        List<FlowNodeViewModel> result = [];
         if (DataContext is not NodeEditorViewModel vm) return result;
 
         foreach (var node in vm.Nodes)

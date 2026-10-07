@@ -92,13 +92,13 @@ public partial class LogWindow : Window
             Title = LanguageService.Instance.GetString("Log_Export"),
             DefaultExtension = "log",
             SuggestedFileName = Path.GetFileNameWithoutExtension(suggestedName),
-            FileTypeChoices = new[]
-            {
+            FileTypeChoices =
+            [
                 new FilePickerFileType("Log files")
                 {
-                    Patterns = new[] { "*.log", "*.txt" },
+                    Patterns = ["*.log", "*.txt"],
                 },
-            },
+            ],
         });
 
         if (file is null)

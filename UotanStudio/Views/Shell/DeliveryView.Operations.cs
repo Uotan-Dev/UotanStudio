@@ -180,7 +180,7 @@ public partial class DeliveryView
         PackSuper = PackSuperBox.IsChecked == true,
         ContainerConfirmed = Composition.Model.Confirmed,
         Super = ReadDeliverySuperOptions(),
-        Container = Composition.Model.Container.Select(i => i.Snapshot()).ToList()
+        Container = [.. Composition.Model.Container.Select(i => i.Snapshot())]
     }) with
     {
         ArchiveName = ZipArchiveNameBox.Text?.Trim() ?? "",

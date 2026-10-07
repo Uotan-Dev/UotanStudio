@@ -25,7 +25,7 @@ public partial class ApkSigningWindow : Window
 
     private void RefreshKeys()
     {
-        _keys = _keyLibrary.List().Where(key => key.Kind == ManagedKeyKind.Apk).ToArray();
+        _keys = [.. _keyLibrary.List().Where(key => key.Kind == ManagedKeyKind.Apk)];
         SigningKeyBox.ItemsSource = _keys;
         SigningCertificateBox.ItemsSource = _keys;
         if (DataContext is ApkEditorViewModel vm)

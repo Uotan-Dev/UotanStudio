@@ -137,7 +137,7 @@ public partial class CompareView
     /// <summary>枚举当前对比中的编辑器及其所属侧。 Enumerates the compare editors with the side they show.</summary>
     private List<(TextEditor Editor, bool LeftSide)> EnumerateCompareEditors()
     {
-        var result = new List<(TextEditor, bool)>();
+        List<(TextEditor, bool)> result = [];
         foreach (var visuals in _columnVisuals)
         {
             if (visuals.CompareEditor is { } editor && visuals.Column.IsCompareSide)
@@ -591,7 +591,7 @@ public partial class CompareView
             var selection = textArea.Selection;
             var start = Math.Min(selection.StartPosition.Line, selection.EndPosition.Line) - 1;
             var end = Math.Max(selection.StartPosition.Line, selection.EndPosition.Line) - 1;
-            var indices = new List<int>();
+            List<int> indices = [];
             for (var line = Math.Max(start, 0); line <= Math.Max(end, 0); line++)
             {
                 indices.Add(line);

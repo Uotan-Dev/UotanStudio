@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
 using Avalonia.Styling;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Shell;
@@ -140,7 +141,7 @@ public partial class MainWindow : Window
     private void MainWindow_Opened(object? sender, EventArgs e)
     {
         _dockDebugOverlay?.Dispose();
-        _dockDebugOverlay = this.AttachDockDebugOverlay();
+        _dockDebugOverlay = this.AttachDockDebugOverlay(new KeyGesture(Key.F9));
     }
 #endif
 

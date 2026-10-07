@@ -117,8 +117,8 @@ public partial class VisualPluginEditorWindow : Window
         var inputTargets = inputs.SelectMany(port => port.GetBindings()).Select(binding => (binding.NodeInstanceId, binding.PortId)).ToHashSet();
         var outputTargets = outputs.Select(port => (port.NodeInstanceId, port.PortId)).ToHashSet();
         var review = new CompositeBoundaryAnalysis(inputs, outputs,
-            analysis.Inputs.Concat(analysis.InputCandidates).Where(port => !inputTargets.Contains((port.NodeInstanceId, port.PortId))).ToArray(),
-            analysis.Outputs.Concat(analysis.OutputCandidates).Where(port => !outputTargets.Contains((port.NodeInstanceId, port.PortId))).ToArray());
+            [.. analysis.Inputs.Concat(analysis.InputCandidates).Where(port => !inputTargets.Contains((port.NodeInstanceId, port.PortId)))],
+            [.. analysis.Outputs.Concat(analysis.OutputCandidates).Where(port => !outputTargets.Contains((port.NodeInstanceId, port.PortId)))]);
         var dialog = new Nodes.CompositeInterfaceWindow(review, package.Manifest.Name);
         if (await dialog.ShowDialog<bool>(this))
         {
@@ -140,11 +140,11 @@ public partial class VisualPluginEditorWindow : Window
         DefaultValue = port.DefaultValue,
         Required = port.Required,
         IsSensitive = port.IsSensitive,
-        AdditionalBindings = port.AdditionalBindings.Select(binding => new VisualPluginPortBinding
+        AdditionalBindings = [.. port.AdditionalBindings.Select(binding => new VisualPluginPortBinding
         {
             NodeInstanceId = binding.NodeInstanceId,
             PortId = binding.PortId
-        }).ToList()
+        })]
     };
 
     private void SetResourceScope(VisualPluginPackage package)
@@ -168,12 +168,12 @@ public partial class VisualPluginEditorWindow : Window
                 Platforms = [.. package.Manifest.Platforms],
                 Capabilities = [.. package.Manifest.Capabilities],
                 RequiredNodeTypes = [.. package.Manifest.RequiredNodeTypes],
-                Dependencies = package.Manifest.Dependencies.Select(dependency => new VisualPluginDependency
+                Dependencies = [.. package.Manifest.Dependencies.Select(dependency => new VisualPluginDependency
                 {
                     Id = dependency.Id,
                     MinimumVersion = dependency.MinimumVersion,
                     MaximumVersionExclusive = dependency.MaximumVersionExclusive
-                }).ToList(),
+                })],
                 Conflicts = [.. package.Manifest.Conflicts]
             },
             Graph = package.Graph,
@@ -313,7 +313,7 @@ public partial class VisualPluginEditorWindow : Window
         var previousVersion = package.Manifest.Version;
         try
         {
-            var dependencies = new List<VisualPluginDependency>();
+            List<VisualPluginDependency> dependencies = [];
             foreach (var line in (DependenciesInput.Text ?? string.Empty).Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
             {
                 var fields = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
@@ -326,8 +326,7 @@ public partial class VisualPluginEditorWindow : Window
                 });
             }
             package.Manifest.Dependencies = dependencies;
-            package.Manifest.Conflicts = (ConflictsInput.Text ?? string.Empty)
-                .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+            package.Manifest.Conflicts = [.. (ConflictsInput.Text ?? string.Empty).Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)];
             package.Manifest.Version = VersionInput.Text?.Trim() ?? string.Empty;
             if (VisualPluginValidation.Validate(package).Count > 0) throw new InvalidDataException();
             _invalidRequirements = false;

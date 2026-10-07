@@ -129,7 +129,7 @@ public partial class WorkspaceView
             var excluded = open.Select(SearchPath).OfType<string>().Select(Path.GetFullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var found = await Task.Run(() =>
             {
-                var matches = new List<(SearchDocument Document, TextSearchMatch Match)>();
+                List<(SearchDocument Document, TextSearchMatch Match)> matches = [];
                 foreach (var snapshot in snapshots)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -236,7 +236,7 @@ public partial class WorkspaceView
             if (groups.Length > 1 && DialogService.GetOwnerWindow() is { } owner
                 && !await DialogService.ConfirmAsync(owner, LanguageService.Instance.GetString("FindReplace_ReplaceAll"),
                     string.Format(LanguageService.Instance.GetString("FindReplace_ConfirmReplaceAll"), targets.Length, groups.Length))) return;
-            var edits = new List<(IDockable Document, SearchDocument Snapshot, TextSearchMatch[] Matches, string Result)>();
+            List<(IDockable Document, SearchDocument Snapshot, TextSearchMatch[] Matches, string Result)> edits = [];
             long replacementSize = 0;
             foreach (var group in groups)
             {

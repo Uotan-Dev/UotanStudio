@@ -37,7 +37,7 @@ public partial class NodeEditorView
             SetViewport(1, new Point());
             return;
         }
-        var nodes = action == NodeViewportAction.FocusSelection ? vm.SelectedNodes.ToArray() : vm.Nodes.ToArray();
+        var nodes = action == NodeViewportAction.FocusSelection ? vm.SelectedNodes.ToArray() : [.. vm.Nodes];
         if (nodes.Length == 0 || EditorSurface.Bounds.Width <= 0 || EditorSurface.Bounds.Height <= 0)
         {
             return;

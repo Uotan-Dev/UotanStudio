@@ -931,7 +931,7 @@ public partial class CompareView : UserControl
                 AllowMultiple = true
             });
 
-            var paths = new List<string>();
+            List<string> paths = [];
             foreach (var folder in folders)
             {
                 if (folder.TryGetLocalPath() is { Length: > 0 } path)

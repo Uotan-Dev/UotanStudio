@@ -156,7 +156,7 @@ public partial class DeliveryCompositionView : UserControl
 
     internal void SetImages(IReadOnlyList<PackImageSelection> images)
     {
-        Model.SelectSources(images.Select(i => new DeliveryFile
+        Model.SelectSources([.. images.Select(i => new DeliveryFile
         {
             SourcePath = i.FilePath,
             FileName = Path.GetFileName(i.FilePath),
@@ -164,7 +164,7 @@ public partial class DeliveryCompositionView : UserControl
                 ? DeliveryPackageBuilder.DatStem(Path.GetFileName(i.FilePath)) : Path.GetFileNameWithoutExtension(i.FilePath),
             SourceGroup = i.GroupName,
             SourceLength = i.SizeBytes
-        }).ToArray());
+        })]);
         foreach (var image in images) Model.ApplySourcePartitions(image.FilePath, image.DynamicPartitions);
     }
 

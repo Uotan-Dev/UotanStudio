@@ -386,16 +386,16 @@ public static class FileOpenMode
             || header[..4].SequenceEqual("AVBf"u8)
             || header[..4].SequenceEqual("RKFW"u8)
             || header[..4].SequenceEqual("RKAF"u8)
-            || header[..4].SequenceEqual(new byte[] { 0x55, 0xAA, 0x5A, 0xA5 })))
+            || header is [0x55, 0xAA, 0x5A, 0xA5, ..]))
         {
             return true;
         }
 
         return header.Length >= 0x28
-            && (header.Slice(0x24, 4).SequenceEqual(new byte[] { 0x18, 0x28, 0x6F, 0x01 })
-                || header.Slice(0x24, 4).SequenceEqual(new byte[] { 0xED, 0xFE, 0x0F, 0x00 })
-                || header.Slice(0x24, 4).SequenceEqual(new byte[] { 0x00, 0x0F, 0xFE, 0xED })
-                || header.Slice(0x24, 4).SequenceEqual(new byte[] { 0x01, 0x6F, 0x28, 0x18 }));
+            && (header.Slice(0x24, 4) is [0x18, 0x28, 0x6F, 0x01]
+                || header.Slice(0x24, 4) is [0xED, 0xFE, 0x0F, 0x00]
+                || header.Slice(0x24, 4) is [0x00, 0x0F, 0xFE, 0xED]
+                || header.Slice(0x24, 4) is [0x01, 0x6F, 0x28, 0x18]);
     }
 
     /// <summary>
@@ -440,7 +440,7 @@ public static class FileOpenMode
     /// </summary>
     public static bool IsExFatMagic(ReadOnlySpan<byte> header) =>
         header.Length >= 512 && header[510] == 0x55 && header[511] == 0xAA
-        && Encoding.ASCII.GetString(header.Slice(3, 8)) == "EXFAT   ";
+        && header.Slice(3, 8).SequenceEqual("EXFAT   "u8);
 
     /// <summary>
     /// <para>是否为 ext4 魔数（小端 0xEF53 位于偏移 1080）。</para>
@@ -715,7 +715,7 @@ public static class FileOpenMode
 
         FirmwareFormatRegistry.RegisterAll();
 
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> set = new(StringComparer.OrdinalIgnoreCase);
         foreach (var handler in FormatDetector.RegisteredHandlers)
         {
             foreach (var extension in handler.FileExtensions)

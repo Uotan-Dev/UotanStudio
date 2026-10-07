@@ -228,7 +228,7 @@ public partial class DeliveryOutputView : UserControl
             Scripts = _allDocuments.ToDictionary(p => p.Key, p => p.Value.Document.Text),
             ScriptFingerprint = _fingerprint,
             GeneratedScripts = _allDocuments.Where(p => p.Value.Baseline is not null).ToDictionary(p => p.Key, p => p.Value.Baseline!),
-            OpenScripts = _documents.Select(d => d.Title).ToList(),
+            OpenScripts = [.. _documents.Select(d => d.Title)],
             ScriptCarets = _allDocuments.ToDictionary(p => p.Key, p => p.Value.CaretOffset)
         };
     }

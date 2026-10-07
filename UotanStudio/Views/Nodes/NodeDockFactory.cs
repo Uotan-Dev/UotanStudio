@@ -201,10 +201,7 @@ public class NodeDockFactory : Factory
                 }
             }
 
-            if (dockable != null)
-            {
-                dockable.Owner = null;
-            }
+            dockable?.Owner = null;
         }
         catch
         {

@@ -52,6 +52,7 @@ public enum NewProjectWindowMode
 /// </param>
 /// <param name="UnpackImages"><para>是否解压镜像。</para>Whether to unpack images.</param>
 /// <param name="UnpackFully"><para>是否把解出的受支持 img 继续解压为同名文件夹。</para>Whether to unpack extracted supported imgs into same-name folders.</param>
+/// <param name="MergeMyPartitions"><para>解包完成后是否把 my_* 分区树合并进 system。</para>Whether my_* partition trees are merged into system after unpacking.</param>
 public sealed record NewProjectFormResult(
     string ProjectName,
     string Location,
@@ -63,7 +64,8 @@ public sealed record NewProjectFormResult(
     bool UnpackImages,
     bool UnpackFully,
     bool CopyOriginal = true,
-    string? RemoteUrl = null);
+    string? RemoteUrl = null,
+    bool MergeMyPartitions = false);
 
 /// <summary>
 /// <para>新建项目配置窗口；维护表单与文件选择，通过 <see cref="CreateAsync"/> 等待调用方完成创建和解包后关闭。
@@ -218,10 +220,12 @@ public partial class NewProjectWindow : Window
         UnpackFullyBox.IsCheckedChanged += (_, _) =>
         {
             if (UnpackFullyBox.IsChecked == true) UnpackImagesBox.IsChecked = true;
+            UpdateMergeOption();
         };
         UnpackImagesBox.IsCheckedChanged += (_, _) =>
         {
             if (UnpackImagesBox.IsChecked != true) UnpackFullyBox.IsChecked = false;
+            UpdateMergeOption();
         };
 
         ProjectNameBox.TextChanging += OnProjectNameChanged;
@@ -487,6 +491,7 @@ public partial class NewProjectWindow : Window
         _updatingSelection = true;
         foreach (var image in _images) image.IsSelected = SelectAllBox.IsChecked == true;
         _updatingSelection = false;
+        UpdateMergeOption();
     }
 
     private void OnImageSelectionChanged(object? sender, PropertyChangedEventArgs e)
@@ -499,6 +504,28 @@ public partial class NewProjectWindow : Window
         _updatingSelection = true;
         SelectAllBox.IsChecked = _images.Where(image => image.IsSelectable).All(image => image.IsSelected);
         _updatingSelection = false;
+        UpdateMergeOption();
+    }
+
+    /// <summary>
+    /// <para>刷新「合并my_分区到system」选项的可见性：仅在勾选两个解包选项、且勾选条目里
+    /// system 分区（可带槽位后缀）与至少一个同槽位的 my_ 前缀分区成对出现时显示；
+    /// 条件破坏时隐藏并重置勾选。</para>
+    /// Refreshes the visibility of the merge-my-partitions option: shown only when both unpack options
+    /// are checked and the selected entries pair a system partition (a slot suffix such as system_a
+    /// still names it) with at least one my_ prefixed partition of the same slot; a broken condition
+    /// hides the option and resets its check state.
+    /// </summary>
+    private void UpdateMergeOption()
+    {
+        var partitionNames = _images.Where(image => image.IsSelectable && image.IsSelected)
+            .Select(image => MyPartitionMergePlanner.DerivePartitionName(image.Name,
+                _containerKind is ContainerKind.Super or ContainerKind.Payload || image.FromPayload))
+            .OfType<string>();
+        var offered = MyPartitionMergePlanner.ShouldOffer(
+            UnpackImagesBox.IsChecked == true, UnpackFullyBox.IsChecked == true, partitionNames);
+        MergeMyPartitionsBox.IsVisible = offered;
+        if (!offered) MergeMyPartitionsBox.IsChecked = false;
     }
 
     private void OnClearImagesClick(object? sender, RoutedEventArgs e)
@@ -580,14 +607,14 @@ public partial class NewProjectWindow : Window
             ProjectLocationBox.Text?.Trim() ?? string.Empty,
             kind,
             containerPath,
-            selected.Where(image => image.FilePath is not null).Select(image => image.FilePath!).ToArray(),
-            selected.Where(image => image.FilePath is null && !image.FromPayload).Select(image => image.Name).ToArray(),
-            selected.Where(image => image.FilePath is null && (kind != ContainerKind.Zip || image.FromPayload))
-                .Select(image => image.Name).ToArray(),
+            [.. selected.Where(image => image.FilePath is not null).Select(image => image.FilePath!)],
+            [.. selected.Where(image => image.FilePath is null && !image.FromPayload).Select(image => image.Name)],
+            [.. selected.Where(image => image.FilePath is null && (kind != ContainerKind.Zip || image.FromPayload)).Select(image => image.Name)],
             UnpackImagesBox.IsChecked == true,
             UnpackFullyBox.IsChecked == true,
             selected.Any(image => image.FilePath == containerPath || image.IsRemoteSource),
-            _remoteUrl);
+            _remoteUrl,
+            MergeMyPartitionsBox.IsChecked == true);
         _isCreating = true;
         UpdateCreateEnabled();
         _creationCancellation = new CancellationTokenSource();
@@ -647,7 +674,7 @@ public partial class NewProjectWindow : Window
     {
         var plainImages = form.ContainerKind == ContainerKind.None;
         var copyPaths = plainImages ? form.SelectedImagePaths
-            : form.CopyOriginal && form.ContainerPath is not null ? new[] { form.ContainerPath } : [];
+            : form.CopyOriginal && form.ContainerPath is not null ? [form.ContainerPath] : [];
         var selected = form.UnpackImages ? _containerEntries.Where(entry =>
             (entry.FromPayload || form.ContainerKind != ContainerKind.Zip
                 ? form.SelectedPartitions : form.SelectedZipMembers).Contains(entry.Name, StringComparer.Ordinal)).ToArray() : [];
@@ -687,7 +714,7 @@ public partial class NewProjectWindow : Window
         if (_isAnalyzing || _isCreating) return false;
         var name = ProjectNameBox.Text?.Trim() ?? "";
         if (string.IsNullOrWhiteSpace(name) || name is "." or "..") return false;
-        if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name.IndexOfAny(['/', '\\']) >= 0) return false;
+        if (name.AsSpan().ContainsAny(PathSearchValues.InvalidFileName) || name.IndexOfAny(['/', '\\']) >= 0) return false;
         if (ReservedNames.Contains(name, StringComparer.OrdinalIgnoreCase)) return false;
         return ProjectLocationBox.Text is { } location
             && !string.IsNullOrWhiteSpace(location)

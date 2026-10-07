@@ -167,13 +167,13 @@ public partial class PackImageSelectionView : UserControl
     {
         if (!Directory.Exists(directory)) return [];
 
-        return Directory.EnumerateFiles(directory).TakeWhile(_ => !token.IsCancellationRequested)
+        return [.. Directory.EnumerateFiles(directory).TakeWhile(_ => !token.IsCancellationRequested)
             .Where(path => Path.GetExtension(path).ToLowerInvariant() is
                 ".img" or ".bin" or ".raw" or ".simg" or ".sparse" or ".ext4" or ".erofs" or ".f2fs"
                 or ".dat" or ".br" or ".zst" or ".dtb" or ".dtbo"
                 || DatFileSet.IsTransferList(path))
             .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
-            .Select(PackImageFileInfo.Read).ToArray();
+            .Select(PackImageFileInfo.Read)];
     }
 
     private void ApplyGroupOptions()
@@ -402,7 +402,7 @@ public partial class PackImageSelectionView : UserControl
         RenderGroups();
     }
 
-    internal PackImageSelection[] GetSelectedImages() => _groups.SelectMany(group =>
+    internal PackImageSelection[] GetSelectedImages() => [.. _groups.SelectMany(group =>
         group.Entries.Where(image => image.IsSelected).Select(image => new PackImageSelection(group.Name, image.FilePath)
-        { SizeBytes = image.SizeBytes, DynamicPartitions = group.DynamicPartitions })).ToArray();
+        { SizeBytes = image.SizeBytes, DynamicPartitions = group.DynamicPartitions }))];
 }

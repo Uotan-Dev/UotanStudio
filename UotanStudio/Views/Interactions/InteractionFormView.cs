@@ -175,7 +175,7 @@ public sealed class InteractionFormView : UserControl
             var checks = field.Options.Select(option => new CheckBox { Content = option, IsChecked = initial.Selection?.Contains(option, StringComparer.Ordinal) == true }).ToArray();
             foreach (var check in checks)
             {
-                check.IsCheckedChanged += (_, _) => _state.SetValue(field.Id, new InteractionValue { Selection = checks.Where(item => item.IsChecked == true).Select(item => (string)item.Content!).ToArray() });
+                check.IsCheckedChanged += (_, _) => _state.SetValue(field.Id, new InteractionValue { Selection = [.. checks.Where(item => item.IsChecked == true).Select(item => (string)item.Content!)] });
                 panel.Children.Add(check);
             }
             return panel;

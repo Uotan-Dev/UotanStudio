@@ -72,7 +72,7 @@ internal sealed partial class PackImageGroup : ObservableObject, IDisposable
     {
         Name = name;
         IsExternal = isExternal;
-        _entries = entries.ToArray();
+        _entries = [.. entries];
         foreach (var entry in _entries) entry.PropertyChanged += OnSelectionChanged;
         ShowOriginalImages(false);
     }

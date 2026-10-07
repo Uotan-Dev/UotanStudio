@@ -60,7 +60,7 @@ public class HexViewer : Grid
         }
     }
 
-    private byte[]? _data = System.Array.Empty<byte>();
+    private byte[]? _data = [];
     private readonly ScrollViewer _scroll;
     private readonly HexViewport _viewport;
     private readonly TextBox _gotoBox;
@@ -181,7 +181,7 @@ public class HexViewer : Grid
         private static readonly Typeface MonospaceTypeface = new("Consolas");
 
         private readonly ScrollViewer _scroll;
-        private byte[]? _data = System.Array.Empty<byte>();
+        private byte[]? _data = [];
         private System.Text.Encoding _textEncoding = System.Text.Encoding.ASCII;
 
         /// <summary>
@@ -253,7 +253,7 @@ public class HexViewer : Grid
 
         public void SetData(byte[]? data)
         {
-            _data = data ?? System.Array.Empty<byte>();
+            _data = data ?? [];
             _caretOffset = 0;
             _selectionAnchor = -1;
             _hasSelection = false;

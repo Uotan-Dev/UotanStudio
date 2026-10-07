@@ -45,7 +45,7 @@ public partial class DeliveryView
         _selectingPayloadKey = true;
         try
         {
-            _payloadKeys = _payloadKeyLibrary.List().Where(k => k.Kind == ManagedKeyKind.Payload).ToArray();
+            _payloadKeys = [.. _payloadKeyLibrary.List().Where(k => k.Kind == ManagedKeyKind.Payload)];
             PayloadSigningKeyBox.ItemsSource = new[] { LanguageService.Instance.GetString("Keys_Unsigned") }
                 .Concat(_payloadKeys.Select(k => $"{k.Name} · RSA {k.Bits} · {k.Fingerprint[^12..]}")).ToArray();
             var path = _payloadSigningIdentityPath.Trim();
@@ -86,9 +86,7 @@ public partial class DeliveryView
         _selectingZipSigningKey = true;
         try
         {
-            _zipSigningKeys = _payloadKeyLibrary.List()
-                .Where(k => k.Kind == ManagedKeyKind.Zip)
-                .ToArray();
+            _zipSigningKeys = [.. _payloadKeyLibrary.List().Where(k => k.Kind == ManagedKeyKind.Zip)];
             ZipSigningKeyBox.ItemsSource = new[] { LanguageService.Instance.GetString("Keys_Unsigned") }
                 .Concat(_zipSigningKeys.Select(k => $"{k.Name} · RSA {k.Bits} · {k.Fingerprint[^12..]}"))
                 .ToArray();

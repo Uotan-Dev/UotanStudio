@@ -44,7 +44,7 @@ internal static class FileDropPaths
         var items = transfer.TryGetFiles();
         if (items is { Length: > 0 })
         {
-            return items.Select(static item => item.Path.LocalPath).ToList();
+            return [.. items.Select(static item => item.Path.LocalPath)];
         }
 
         foreach (var format in transfer.Formats)
@@ -68,7 +68,7 @@ internal static class FileDropPaths
                         var storage = enumerable.OfType<IStorageItem>().ToArray();
                         if (storage.Length > 0)
                         {
-                            return storage.Select(static s => s.Path.LocalPath).ToList();
+                            return [.. storage.Select(static s => s.Path.LocalPath)];
                         }
                     }
                 }
