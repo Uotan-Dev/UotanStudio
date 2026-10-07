@@ -35,6 +35,13 @@ internal sealed class Magic5Parser
     /// <para>解析单个片段文本，返回顶层规则列表。</para>
     /// Parses one fragment's text into its top-level rule list.
     /// </summary>
+    /// <param name="text">
+    /// Fragment text read line by line; empty lines and <c>#</c> comments are skipped, malformed lines are
+    /// counted and dropped, and empty text yields an empty list. A <see langword="null"/> text is rejected
+    /// before reading.
+    /// <para>逐行读取的片段文本；空行与 <c>#</c> 注释被跳过，格式非法的行被计数后丢弃，空文本返回空列表；
+    /// <see langword="null"/> 文本在读取前即被拒绝。</para>
+    /// </param>
     public List<RuleAst> ParseFragment(string text)
     {
         var tops = new List<RuleAst>();
@@ -517,7 +524,7 @@ internal sealed class Magic5Parser
         if (valueTok.Length == 1 && valueTok[0] == 'x')
         {
             rule.Relation = MagicRelation.Any;
-            rule.Pattern = Array.Empty<byte>();
+            rule.Pattern = [];
             return true;
         }
 
@@ -537,7 +544,7 @@ internal sealed class Magic5Parser
         if (valueTok.Length == 1 && valueTok[0] == 'x')
         {
             rule.Relation = MagicRelation.Any;
-            rule.Pattern = Array.Empty<byte>();
+            rule.Pattern = [];
             return true;
         }
 
@@ -563,7 +570,7 @@ internal sealed class Magic5Parser
             }
         }
 
-        rule.Pattern = b.ToArray();
+        rule.Pattern = [.. b];
         return true;
     }
 
@@ -948,7 +955,7 @@ internal sealed class Magic5Parser
             i++;
         }
 
-        return bytes.ToArray();
+        return [.. bytes];
     }
 
     private static bool TryParseLong(string token, out long value)

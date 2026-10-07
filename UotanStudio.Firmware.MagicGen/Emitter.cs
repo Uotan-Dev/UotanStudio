@@ -58,7 +58,7 @@ internal static class Emitter
         bw.Write(r.Source ?? string.Empty);
         bw.Write(r.RegexPattern ?? string.Empty);
 
-        byte[] pattern = r.Pattern ?? Array.Empty<byte>();
+        byte[] pattern = r.Pattern ?? [];
         bw.Write(pattern.Length);
         if (pattern.Length > 0)
         {
