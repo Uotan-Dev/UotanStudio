@@ -17,7 +17,7 @@ env:
 
 jobs:
   build-format-test:
-    name: windows / net11
+    name: windows / net10
     runs-on: windows-latest
 
     steps:
@@ -26,8 +26,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "11.0.x"
-          dotnet-quality: "preview"
+          dotnet-version: "10.0.x"
 
       - name: Restore
         run: dotnet restore UotanStudio.slnx

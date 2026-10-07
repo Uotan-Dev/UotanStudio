@@ -24,8 +24,8 @@
     <PackageReference Include="SharpCompress" />
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
-    <PackageReference Include="BouncyCastle.Cryptography" />
     <PackageReference Include="YamlDotNet" />
+    <PackageReference Include="ZstdSharp.Port" />
   </ItemGroup>
 
   <ItemGroup>

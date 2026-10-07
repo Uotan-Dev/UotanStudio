@@ -69,8 +69,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "11.0.x"
-          dotnet-quality: "preview"
+          dotnet-version: "10.0.x"
 
       - name: Install NativeAOT toolchain (Linux)
         if: matrix.os == 'linux'
@@ -104,8 +103,9 @@ jobs:
         run: |
           $stage = Join-Path $env:RUNNER_TEMP "pkg"
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Get-ChildItem "$env:RUNNER_TEMP/publish" -Recurse |
-            Where-Object { $_.Name -notlike "*.pdb" } |
+          $exclude = @('*.pdb', '*.dbg', '*.xml', '*LICENSE*', 'COPYING')
+          Get-ChildItem "$env:RUNNER_TEMP/publish" -Recurse -File |
+            Where-Object { $name = $_.Name; $p = $_.FullName; -not (($exclude | Where-Object { $name -like $_ }) -or $p -like "*.dSYM*") } |
             ForEach-Object {
               $rel = $_.FullName.Substring("$env:RUNNER_TEMP/publish".Length).TrimStart('\','/')
               $dst = Join-Path $stage $rel
@@ -119,8 +119,10 @@ jobs:
         shell: bash
         run: |
           cd "$RUNNER_TEMP/publish"
-          find . -name "*.pdb" -delete
+          find . -type f \( -name "*.pdb" -o -name "*.dbg" -o -name "*.xml" -o -name "*LICENSE*" -o -name "COPYING" \) -delete
+          rm -rf *.dSYM
           chmod +x UotanStudio.Desktop 2>/dev/null || true
+          find . -type d -empty -delete
           tar -czf "$RUNNER_TEMP/uotanstudio-${{ matrix.rid }}.tar.gz" -C "$RUNNER_TEMP/publish" .
 
       - name: Upload artifact
