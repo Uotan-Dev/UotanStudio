@@ -63,6 +63,11 @@ internal sealed class LiteralExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder appended with the invariant-culture digits and the <c>L</c> suffix when the value is
+    /// outside the <c>int</c> range.
+    /// <para>按固定区域性追加数字，并在值超出 <c>int</c> 范围时追加 <c>L</c> 后缀的构建器。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         sb.Append(Value.ToString(CultureInfo.InvariantCulture));
@@ -103,6 +108,10 @@ internal sealed class StringExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder appended with the opening quote, the escaped characters and the closing quote.
+    /// <para>依次追加起始引号、转义后的字符与结束引号的构建器。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         sb.Append('"');
@@ -152,6 +161,10 @@ internal sealed class ClassLiteralExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder appended with the stored type name followed by <c>.class</c>.
+    /// <para>追加所存类型名及其后 <c>.class</c> 的构建器。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb) => sb.Append(TypeName).Append(".class");
 }
 
@@ -177,6 +190,10 @@ internal sealed class NullExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder appended with the four characters of the Java keyword <c>null</c>.
+    /// <para>追加 Java 关键字 <c>null</c> 四个字符的构建器。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb) => sb.Append("null");
 }
 
@@ -228,6 +245,10 @@ internal sealed class LocalExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder appended with the bare register name; <see cref="Type"/> is not rendered.
+    /// <para>追加裸寄存器名称的构建器；<see cref="Type"/> 不参与渲染。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb) => sb.Append(Name);
 }
 
@@ -326,6 +347,12 @@ internal sealed class FieldExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder appended with <c>OwnerClass.Name</c> for a static field, with the rendered target
+    /// followed by <c>.Name</c> for an instance field, and with the bare name otherwise.
+    /// <para>静态字段追加 <c>OwnerClass.Name</c>；实例字段先渲染目标表达式再追加 <c>.Name</c>；
+    /// 其余情况只追加裸名称。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         if (IsStatic)
@@ -472,6 +499,11 @@ internal sealed class MethodCallExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder appended with the callee in its precedence form, then <c>(</c>, the arguments separated
+    /// by <c>, </c> and the closing <c>)</c>.
+    /// <para>按优先级形式追加被调用者，随后依次追加 <c>(</c>、以 <c>, </c> 分隔的实参与结尾的 <c>)</c>。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         if (IsSuperCall)
@@ -542,6 +574,12 @@ internal sealed class NewInstanceExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder appended with <c>new Type(</c>, the arguments separated by <c>, </c> and the closing
+    /// <c>)</c>; a <see langword="null"/> <see cref="Args"/> leaves the parentheses empty.
+    /// <para>依次追加 <c>new Type(</c>、以 <c>, </c> 分隔的实参与结尾的 <c>)</c>；<see cref="Args"/> 为
+    /// <see langword="null"/> 时括号内为空。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         sb.Append("new ").Append(Type).Append('(');
@@ -607,6 +645,11 @@ internal sealed class ConstructorCallExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder that receives <c>this(</c> or <c>super(</c>, the comma-separated arguments and the
+    /// closing <c>)</c>; a single space follows each comma.
+    /// <para>接收 <c>this(</c> 或 <c>super(</c>、逗号分隔的实参以及右括号的构建器；每个逗号后跟一个空格。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         sb.Append(IsThisCall ? "this(" : "super(");
@@ -680,6 +723,12 @@ internal sealed class NewArrayExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder that receives <c>new </c>, the element type and either the initializer list with the
+    /// bracket count taken from <see cref="Initializers"/>, or a single bracket pair holding
+    /// <see cref="Size"/> when the initializer list is empty.
+    /// <para>接收 <c>new </c>、元素类型，以及初始化列表与取自 <see cref="Initializers"/> 的方括号数量；当初始化列表为空时改为写入仅含 <see cref="Size"/> 的一对括号。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         sb.Append("new ").Append(ElementType);
@@ -751,6 +800,11 @@ internal sealed class CastExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder that receives <c>(Type)</c>, one following space and then the cast operand; the operand
+    /// is never wrapped in its own parentheses.
+    /// <para>接收 <c>(Type)</c>、随后的一个空格以及被转型操作数；操作数不会额外加括号。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         sb.Append('(').Append(Type).Append(") ");
@@ -821,6 +875,11 @@ internal sealed class BinaryExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder that receives an opening <c>(</c>, the left operand, <c> op </c> with one space on each
+    /// side, the right operand and a closing <c>)</c>.
+    /// <para>接收左括号、左操作数、两侧各带一个空格的 <c> op </c>、右操作数以及右括号。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         sb.Append('(');
@@ -881,6 +940,11 @@ internal sealed class UnaryExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder that receives the operator text with no separating space, followed by the operand,
+    /// which gains parentheses only when it is itself a <see cref="BinaryExpr"/>.
+    /// <para>接收不加空格的运算符文本以及其后的操作数；仅当操作数本身是 <see cref="BinaryExpr"/> 时才为其加括号。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         sb.Append(Op);
@@ -962,6 +1026,11 @@ internal sealed class ArrayAccessExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder that receives the array expression, an opening bracket, the index expression and a
+    /// closing bracket; <see cref="Type"/> is metadata and is not written.
+    /// <para>接收数组表达式、左方括号、下标表达式以及右方括号；<see cref="Type"/> 只是元数据，不会写出。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         Array.WriteTo(sb);
@@ -1019,6 +1088,11 @@ internal sealed class InstanceOfExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder that receives the tested expression and the verbatim <c> instanceof Type</c> suffix;
+    /// neither part is parenthesized.
+    /// <para>接收被测试的表达式以及原样的 <c> instanceof Type</c> 后缀；两部分都不加括号。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         Inner.WriteTo(sb);
@@ -1089,6 +1163,11 @@ internal sealed class TernaryExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder that receives an opening <c>(</c>, the condition, <c> ? </c>, the true branch,
+    /// <c> : </c>, the false branch and a closing <c>)</c>.
+    /// <para>接收左括号、条件、<c> ? </c>、成立分支、<c> : </c>、不成立分支以及右括号。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb)
     {
         sb.Append('(');
@@ -1132,5 +1211,9 @@ internal sealed class UnknownExpr : JavaExpr
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">
+    /// Builder that receives the <see cref="Hint"/> placeholder text appended verbatim.
+    /// <para>原样追加 <see cref="Hint"/> 占位文本的构建器。</para>
+    /// </param>
     public override void WriteTo(StringBuilder sb) => sb.Append(Hint);
 }

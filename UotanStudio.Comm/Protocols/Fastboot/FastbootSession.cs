@@ -11,8 +11,9 @@ namespace UotanStudio.Comm.Protocols.Fastboot;
 public sealed partial class FastbootSession : IProtocolSession
 {
     /// <summary>
-    /// Frame delimiters used to find the end of an INFO/TEXT payload.
-    /// <para>用于查找 INFO/TEXT 负载结尾的帧分隔符。</para>
+    /// Frame delimiters: they end an INFO/TEXT payload or a DATA size field, and a run of them after a
+    /// frame is padding that belongs to that frame.
+    /// <para>帧分隔符：用于结束 INFO/TEXT 负载或 DATA 尺寸字段，帧之后的连续分隔符属于该帧的填充。</para>
     /// </summary>
     private static readonly SearchValues<byte> ResponseDelimiters = SearchValues.Create([(byte)'\0', (byte)'\r', (byte)'\n']);
     private readonly int _timeoutMs;

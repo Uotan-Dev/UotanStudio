@@ -36,8 +36,12 @@ internal static partial class MfInterop
     [LibraryImport(MfPlat)]
     public static partial int MFCreateAlignedMemoryBuffer(uint cbMaxLength, uint cbAligment, out IntPtr ppBuffer);
 
-    /// <summary>MFCreateDXGIDeviceManager — creates the shared D3D11 device manager.</summary>
-    /// <summary>MFCreateDXGIDeviceManager — 创建共享的 D3D11 设备管理器。</summary>
+    /// <summary>
+    /// MFCreateDXGIDeviceManager — creates the shared D3D11 device manager.
+    /// <para>MFCreateDXGIDeviceManager——创建共享的 D3D11 设备管理器。</para>
+    /// </summary>
+    /// <param name="resetToken">Reset token to be handed to <c>IMFDXGIDeviceManager.ResetDevice</c>. <para>需交给 <c>IMFDXGIDeviceManager.ResetDevice</c> 使用的重置令牌。</para></param>
+    /// <param name="ppDeviceManager">IMFDXGIDeviceManager pointer with one reference held on success. <para>成功时持有一个引用的 IMFDXGIDeviceManager 指针。</para></param>
     [LibraryImport(MfPlat)]
     public static partial int MFCreateDXGIDeviceManager(out uint resetToken, out IntPtr ppDeviceManager);
 
@@ -374,16 +378,25 @@ internal static unsafe class MfCom
             return ((delegate* unmanaged[Stdcall]<nint, uint, nint*, int>)Slot(eventGenerator, 3))(eventGenerator, eventFlags, e);
     }
 
-    /// <summary>IMFMediaEvent.GetType (slot 33; out-parameter form).</summary>
-    /// <summary>IMFMediaEvent.GetType（槽位 33；out 参数形式）。</summary>
+    /// <summary>
+    /// IMFMediaEvent.GetType (slot 33; out-parameter form).
+    /// <para>IMFMediaEvent.GetType（槽位 33；out 参数形式）。</para>
+    /// </summary>
+    /// <param name="mediaEvent">IMFMediaEvent interface pointer. <para>IMFMediaEvent 接口指针。</para></param>
+    /// <param name="eventType">Event type code, e.g. <see cref="D3D11Interop.MeTransformNeedInput"/>. <para>事件类型码，例如 <see cref="D3D11Interop.MeTransformNeedInput"/>。</para></param>
     public static int EventType(nint mediaEvent, out uint eventType)
     {
         fixed (uint* t = &eventType)
             return ((delegate* unmanaged[Stdcall]<nint, uint*, int>)Slot(mediaEvent, 33))(mediaEvent, t);
     }
 
-    /// <summary>IMFMediaEvent.GetUINT32 (slot 7).</summary>
-    /// <summary>IMFMediaEvent.GetUINT32（槽位 7）。</summary>
+    /// <summary>
+    /// IMFMediaEvent.GetUINT32 (slot 7).
+    /// <para>IMFMediaEvent.GetUINT32（槽位 7）。</para>
+    /// </summary>
+    /// <param name="mediaEvent">IMFMediaEvent interface pointer. <para>IMFMediaEvent 接口指针。</para></param>
+    /// <param name="key">Attribute GUID read from the event payload. <para>从事件负载读取的属性 GUID。</para></param>
+    /// <param name="value">UINT32 attribute value read from the event. <para>从事件读出的 UINT32 属性值。</para></param>
     public static int EventUInt32(nint mediaEvent, in Guid key, out uint value)
     {
         fixed (Guid* k = &key) fixed (uint* v = &value)
@@ -398,8 +411,12 @@ internal static unsafe class MfCom
             return ((delegate* unmanaged[Stdcall]<nint, uint, nint*, int>)Slot(sample, 40))(sample, index, b);
     }
 
-    /// <summary>IMFSample.GetBufferCount (slot 39; out-parameter form).</summary>
-    /// <summary>IMFSample.GetBufferCount（槽位 39；out 参数形式）。</summary>
+    /// <summary>
+    /// IMFSample.GetBufferCount (slot 39; out-parameter form).
+    /// <para>IMFSample.GetBufferCount（槽位 39；out 参数形式）。</para>
+    /// </summary>
+    /// <param name="sample">IMFSample interface pointer. <para>IMFSample 接口指针。</para></param>
+    /// <param name="count">Number of buffers attached to the sample; 0 means the sample carries no data. <para>样例挂载的缓冲区数量；0 表示样例没有数据。</para></param>
     public static int BufferCount(nint sample, out uint count)
     {
         fixed (uint* c = &count)
@@ -414,28 +431,46 @@ internal static unsafe class MfCom
             return ((delegate* unmanaged[Stdcall]<nint, Guid*, Guid*, nint*, int>)Slot(attributes, 17))(attributes, k, i, r);
     }
 
-    /// <summary>IMFDXGIBuffer.GetResource (slot 3).</summary>
-    /// <summary>IMFDXGIBuffer.GetResource（槽位 3）。</summary>
+    /// <summary>
+    /// IMFDXGIBuffer.GetResource (slot 3).
+    /// <para>IMFDXGIBuffer.GetResource（槽位 3）。</para>
+    /// </summary>
+    /// <param name="dxgiBuffer">IMFDXGIBuffer interface pointer. <para>IMFDXGIBuffer 接口指针。</para></param>
+    /// <param name="iid">Interface GUID of the requested resource, e.g. <see cref="D3D11Interop.IidTexture2D"/>. <para>所需资源的接口 GUID，如 <see cref="D3D11Interop.IidTexture2D"/>。</para></param>
+    /// <param name="resource">Resource interface pointer with one reference held on success; released by the caller. <para>成功时持有一个引用的资源接口指针，由调用方释放。</para></param>
     public static int DxgiGetResource(nint dxgiBuffer, in Guid iid, out nint resource)
     {
         fixed (Guid* i = &iid) fixed (nint* r = &resource)
             return ((delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int>)Slot(dxgiBuffer, 3))(dxgiBuffer, i, r);
     }
 
-    /// <summary>IMFDXGIBuffer.GetSubresourceIndex (slot 4; out-parameter form).</summary>
-    /// <summary>IMFDXGIBuffer.GetSubresourceIndex（槽位 4；out 参数形式）。</summary>
+    /// <summary>
+    /// IMFDXGIBuffer.GetSubresourceIndex (slot 4; out-parameter form).
+    /// <para>IMFDXGIBuffer.GetSubresourceIndex（槽位 4；out 参数形式）。</para>
+    /// </summary>
+    /// <param name="dxgiBuffer">IMFDXGIBuffer interface pointer. <para>IMFDXGIBuffer 接口指针。</para></param>
+    /// <param name="subresource">Texture-array slice holding the sample planes, validated against the texture array size by the caller. <para>承载样例平面的纹理数组切片，调用方会按纹理数组大小校验该值。</para></param>
     public static int DxgiSubresourceIndex(nint dxgiBuffer, out uint subresource)
     {
         fixed (uint* s = &subresource)
             return ((delegate* unmanaged[Stdcall]<nint, uint*, int>)Slot(dxgiBuffer, 4))(dxgiBuffer, s);
     }
 
-    /// <summary>IMFDXGIDeviceManager.ResetDevice (slot 7).</summary>
-    /// <summary>IMFDXGIDeviceManager.ResetDevice（槽位 7）。</summary>
+    /// <summary>
+    /// IMFDXGIDeviceManager.ResetDevice (slot 7).
+    /// <para>IMFDXGIDeviceManager.ResetDevice（槽位 7）。</para>
+    /// </summary>
+    /// <param name="deviceManager">IMFDXGIDeviceManager interface pointer. <para>IMFDXGIDeviceManager 接口指针。</para></param>
+    /// <param name="device">ID3D11Device pointer the manager binds to Media Foundation. <para>交给 Media Foundation 使用的 ID3D11Device 指针。</para></param>
+    /// <param name="token">Reset token returned by <see cref="MfInterop.MFCreateDXGIDeviceManager"/>. <para><see cref="MfInterop.MFCreateDXGIDeviceManager"/> 返回的重置令牌。</para></param>
     public static int DxgiResetDevice(nint deviceManager, nint device, uint token) =>
         ((delegate* unmanaged[Stdcall]<nint, nint, uint, int>)Slot(deviceManager, 7))(deviceManager, device, token);
 
-    /// <summary>ID3D11Texture2D.GetDesc (slot 10), including padded texture dimensions.</summary>
+    /// <summary>
+    /// ID3D11Texture2D.GetDesc (slot 10), including padded texture dimensions.
+    /// <para>ID3D11Texture2D.GetDesc（槽位 10），返回含填充后的纹理尺寸。</para>
+    /// </summary>
+    /// <param name="texture">ID3D11Texture2D interface pointer. <para>ID3D11Texture2D 接口指针。</para></param>
     public static D3D11Interop.Texture2DDesc D3DGetTexture2DDesc(nint texture)
     {
         D3D11Interop.Texture2DDesc desc = default;
@@ -443,98 +478,220 @@ internal static unsafe class MfCom
         return desc;
     }
 
-    /// <summary>ID3D11Device.CreateTexture2D (slot 5).</summary>
+    /// <summary>
+    /// ID3D11Device.CreateTexture2D (slot 5).
+    /// <para>ID3D11Device.CreateTexture2D（槽位 5）。</para>
+    /// </summary>
+    /// <param name="device">ID3D11Device interface pointer. <para>ID3D11Device 接口指针。</para></param>
+    /// <param name="desc">
+    /// Texture layout: dimensions, <c>DXGI_FORMAT</c>, usage, bind and CPU-access flags.
+    /// <para>纹理布局：尺寸、<c>DXGI_FORMAT</c>、usage、bind 与 CPU 访问标志。</para>
+    /// </param>
+    /// <param name="initialData">Pointer to <c>D3D11_SUBRESOURCE_DATA</c>; 0 creates an uninitialized texture. <para>指向 <c>D3D11_SUBRESOURCE_DATA</c> 的指针；0 表示创建未初始化纹理。</para></param>
+    /// <param name="texture">Created ID3D11Texture2D pointer with one reference held on success. <para>成功时持有 1 个引用的新建 ID3D11Texture2D 指针。</para></param>
     public static int D3DCreateTexture2D(nint device, in D3D11Interop.Texture2DDesc desc, nint initialData, out nint texture)
     {
         fixed (D3D11Interop.Texture2DDesc* d = &desc) fixed (nint* t = &texture)
             return ((delegate* unmanaged[Stdcall]<nint, D3D11Interop.Texture2DDesc*, nint, nint*, int>)Slot(device, 5))(device, d, initialData, t);
     }
 
-    /// <summary>ID3D11Device.QueryInterface via MfCom.QueryInterface.</summary>
-    /// <summary>ID3D11Device.QueryInterface，经 MfCom.QueryInterface。</summary>
+    /// <summary>
+    /// ID3D11Device.QueryInterface via MfCom.QueryInterface.
+    /// <para>ID3D11Device.QueryInterface，经 MfCom.QueryInterface 转发。</para>
+    /// </summary>
+    /// <param name="value">ID3D11Device interface pointer. <para>ID3D11Device 接口指针。</para></param>
+    /// <param name="iid">Interface GUID requested from the device. <para>向设备请求的接口 GUID。</para></param>
+    /// <param name="result">Queried interface pointer with one reference held on success. <para>成功时持有 1 个引用的查询结果接口指针。</para></param>
     public static int D3DQueryInterface(nint value, in Guid iid, out nint result) => QueryInterface(value, iid, out result);
 
-    /// <summary>ID3D11DeviceContext.Map (slot 14).</summary>
-    /// <summary>ID3D11DeviceContext.Map（槽位 14）。</summary>
+    /// <summary>
+    /// ID3D11DeviceContext.Map (slot 14).
+    /// <para>ID3D11DeviceContext.Map（槽位 14）。</para>
+    /// </summary>
+    /// <param name="context">ID3D11DeviceContext interface pointer. <para>ID3D11DeviceContext 接口指针。</para></param>
+    /// <param name="resource">Staging resource to map; only <c>D3D11_USAGE_STAGING</c> textures are readable from the CPU. <para>待映射的 staging 资源；只有 <c>D3D11_USAGE_STAGING</c> 纹理可被 CPU 读取。</para></param>
+    /// <param name="subresource">Subresource index within the resource, 0 for single-slice textures. <para>资源内的子资源索引，单切片纹理为 0。</para></param>
+    /// <param name="mapType"><c>D3D11_MAP</c> value; the read-back paths pass 1 (<c>D3D11_MAP_READ</c>). <para><c>D3D11_MAP</c> 值，读回路径传 1（<c>D3D11_MAP_READ</c>）。</para></param>
+    /// <param name="mapFlags"><c>D3D11_MAP_FLAG_*</c> bitmask; 0 for the current read-back paths. <para><c>D3D11_MAP_FLAG_*</c> 位掩码，当前读回路径传 0。</para></param>
+    /// <param name="mapped">
+    /// Data pointer plus row and depth pitch; valid until the matching Unmap call.
+    /// <para>数据指针与行距、深度间距；在配对的 Unmap 调用之前有效。</para>
+    /// </param>
     public static int D3DMap(nint context, nint resource, uint subresource, uint mapType, uint mapFlags, out D3D11Interop.MappedSubresource mapped)
     {
         fixed (D3D11Interop.MappedSubresource* m = &mapped)
             return ((delegate* unmanaged[Stdcall]<nint, nint, uint, uint, uint, D3D11Interop.MappedSubresource*, int>)Slot(context, 14))(context, resource, subresource, mapType, mapFlags, m);
     }
 
-    /// <summary>ID3D11DeviceContext.Unmap (slot 15).</summary>
-    /// <summary>ID3D11DeviceContext.Unmap（槽位 15）。</summary>
+    /// <summary>
+    /// ID3D11DeviceContext.Unmap (slot 15).
+    /// <para>ID3D11DeviceContext.Unmap（槽位 15）。</para>
+    /// </summary>
+    /// <param name="context">ID3D11DeviceContext interface pointer that performed the map. <para>执行本次映射的 ID3D11DeviceContext 接口指针。</para></param>
+    /// <param name="resource">Resource passed to the matching Map call. <para>与配对 Map 调用相同的资源。</para></param>
+    /// <param name="subresource">Subresource index handed back; the read-back paths use 0. <para>交还的子资源索引，读回路径使用 0。</para></param>
     public static void D3DUnmap(nint context, nint resource, uint subresource) =>
         ((delegate* unmanaged[Stdcall]<nint, nint, uint, void>)Slot(context, 15))(context, resource, subresource);
 
-    /// <summary>ID3D11DeviceContext.CopySubresourceRegion (slot 46).</summary>
-    /// <summary>ID3D11DeviceContext.CopySubresourceRegion（槽位 46）。</summary>
+    /// <summary>
+    /// ID3D11DeviceContext.CopySubresourceRegion (slot 46).
+    /// <para>ID3D11DeviceContext.CopySubresourceRegion（槽位 46）。</para>
+    /// </summary>
+    /// <param name="context">ID3D11DeviceContext interface pointer. <para>ID3D11DeviceContext 接口指针。</para></param>
+    /// <param name="destination">Destination resource. <para>目标资源。</para></param>
+    /// <param name="destinationSubresource">Destination subresource index. <para>目标子资源索引。</para></param>
+    /// <param name="destinationX">Texel offset on the destination X axis. <para>目标 X 轴的纹素偏移。</para></param>
+    /// <param name="destinationY">Texel offset on the destination Y axis. <para>目标 Y 轴的纹素偏移。</para></param>
+    /// <param name="destinationZ">Texel offset on the destination Z axis or array slice. <para>目标 Z 轴或数组切片的纹素偏移。</para></param>
+    /// <param name="source">Source resource. <para>源资源。</para></param>
+    /// <param name="sourceSubresource">Source subresource index, typically the decoder buffer slice. <para>源子资源索引，通常为解码器缓冲区切片。</para></param>
+    /// <param name="sourceBox">
+    /// Pointer to a <c>D3D11_BOX</c> limiting the copied region; 0 copies the whole subresource.
+    /// <para>限定拷贝区域的 <c>D3D11_BOX</c> 指针；0 表示复制整个子资源。</para>
+    /// </param>
     public static void D3DCopySubresourceRegion(nint context, nint destination, uint destinationSubresource, uint destinationX, uint destinationY, uint destinationZ, nint source, uint sourceSubresource, nint sourceBox) =>
         ((delegate* unmanaged[Stdcall]<nint, nint, uint, uint, uint, uint, nint, uint, nint, void>)Slot(context, 46))(context, destination, destinationSubresource, destinationX, destinationY, destinationZ, source, sourceSubresource, sourceBox);
 
-    /// <summary>ID3D11VideoDevice.CreateVideoProcessorEnumerator (slot 10).</summary>
-    /// <summary>ID3D11VideoDevice.CreateVideoProcessorEnumerator（槽位 10）。</summary>
+    /// <summary>
+    /// ID3D11VideoDevice.CreateVideoProcessorEnumerator (slot 10).
+    /// <para>ID3D11VideoDevice.CreateVideoProcessorEnumerator（槽位 10）。</para>
+    /// </summary>
+    /// <param name="videoDevice">ID3D11VideoDevice interface pointer. <para>ID3D11VideoDevice 接口指针。</para></param>
+    /// <param name="desc">
+    /// Requested input/output sizes, frame rates and usage
+    /// (<c>D3D11_VIDEO_PROCESSOR_CONTENT_DESC</c>).
+    /// <para>请求的输入/输出尺寸、帧率与用途（<c>D3D11_VIDEO_PROCESSOR_CONTENT_DESC</c>）。</para>
+    /// </param>
+    /// <param name="enumerator">Created enumerator with one reference held on success; it also describes the supported caps. <para>成功时持有 1 个引用的新建枚举器，同时描述支持的能力。</para></param>
     public static int D3DCreateVideoProcessorEnumerator(nint videoDevice, in D3D11VideoProcessorContentDesc desc, out nint enumerator)
     {
         fixed (D3D11VideoProcessorContentDesc* d = &desc) fixed (nint* e = &enumerator)
             return ((delegate* unmanaged[Stdcall]<nint, D3D11VideoProcessorContentDesc*, nint*, int>)Slot(videoDevice, 10))(videoDevice, d, e);
     }
 
-    /// <summary>ID3D11VideoDevice.CreateVideoProcessor (slot 4).</summary>
-    /// <summary>ID3D11VideoDevice.CreateVideoProcessor（槽位 4）。</summary>
+    /// <summary>
+    /// ID3D11VideoDevice.CreateVideoProcessor (slot 4).
+    /// <para>ID3D11VideoDevice.CreateVideoProcessor（槽位 4）。</para>
+    /// </summary>
+    /// <param name="videoDevice">ID3D11VideoDevice interface pointer. <para>ID3D11VideoDevice 接口指针。</para></param>
+    /// <param name="enumerator">Enumerator describing the requested content. <para>描述所请求内容的枚举器。</para></param>
+    /// <param name="rateConversionIndex">Rate-conversion quality index from the enumerator caps; 0 selects the first mode. <para>取自枚举器能力表的帧率转换质量索引；0 选择首个模式。</para></param>
+    /// <param name="processor">Created ID3D11VideoProcessor with one reference held on success. <para>成功时持有 1 个引用的新建 ID3D11VideoProcessor。</para></param>
     public static int D3DCreateVideoProcessor(nint videoDevice, nint enumerator, uint rateConversionIndex, out nint processor)
     {
         fixed (nint* p = &processor)
             return ((delegate* unmanaged[Stdcall]<nint, nint, uint, nint*, int>)Slot(videoDevice, 4))(videoDevice, enumerator, rateConversionIndex, p);
     }
 
-    /// <summary>ID3D11VideoDevice.CreateVideoProcessorInputView (slot 8).</summary>
-    /// <summary>ID3D11VideoDevice.CreateVideoProcessorInputView（槽位 8）。</summary>
+    /// <summary>
+    /// ID3D11VideoDevice.CreateVideoProcessorInputView (slot 8).
+    /// <para>ID3D11VideoDevice.CreateVideoProcessorInputView（槽位 8）。</para>
+    /// </summary>
+    /// <param name="videoDevice">ID3D11VideoDevice interface pointer. <para>ID3D11VideoDevice 接口指针。</para></param>
+    /// <param name="resource">Decoder texture holding the source NV12 planes. <para>承载源 NV12 平面的解码器纹理。</para></param>
+    /// <param name="enumerator">Enumerator the view is validated against. <para>用于校验该视图的枚举器。</para></param>
+    /// <param name="desc">
+    /// View dimension and the texture mip slice / array slice to read.
+    /// <para>视图维度与要读取的纹理 mip 切片/数组切片。</para>
+    /// </param>
+    /// <param name="view">Created input view with one reference held on success; released by the caller. <para>成功时持有 1 个引用的新建输入视图，由调用方释放。</para></param>
     public static int D3DCreateVideoProcessorInputView(nint videoDevice, nint resource, nint enumerator, in D3D11Interop.VideoProcessorInputViewDesc desc, out nint view)
     {
         fixed (D3D11Interop.VideoProcessorInputViewDesc* d = &desc) fixed (nint* v = &view)
             return ((delegate* unmanaged[Stdcall]<nint, nint, nint, D3D11Interop.VideoProcessorInputViewDesc*, nint*, int>)Slot(videoDevice, 8))(videoDevice, resource, enumerator, d, v);
     }
 
-    /// <summary>ID3D11VideoDevice.CreateVideoProcessorOutputView (slot 9).</summary>
-    /// <summary>ID3D11VideoDevice.CreateVideoProcessorOutputView（槽位 9）。</summary>
+    /// <summary>
+    /// ID3D11VideoDevice.CreateVideoProcessorOutputView (slot 9).
+    /// <para>ID3D11VideoDevice.CreateVideoProcessorOutputView（槽位 9）。</para>
+    /// </summary>
+    /// <param name="videoDevice">ID3D11VideoDevice interface pointer. <para>ID3D11VideoDevice 接口指针。</para></param>
+    /// <param name="resource">Destination texture, e.g. the BGRA output or a shared export-slot texture. <para>目标纹理，如 BGRA 输出纹理或共享导出槽纹理。</para></param>
+    /// <param name="enumerator">Enumerator the view is validated against. <para>用于校验该视图的枚举器。</para></param>
+    /// <param name="desc">
+    /// View dimension and the mip slice / array range written by the blit.
+    /// <para>视图维度与 blit 写入的 mip 切片/数组范围。</para>
+    /// </param>
+    /// <param name="view">Created output view with one reference held on success. <para>成功时持有 1 个引用的新建输出视图。</para></param>
     public static int D3DCreateVideoProcessorOutputView(nint videoDevice, nint resource, nint enumerator, in D3D11Interop.VideoProcessorOutputViewDesc desc, out nint view)
     {
         fixed (D3D11Interop.VideoProcessorOutputViewDesc* d = &desc) fixed (nint* v = &view)
             return ((delegate* unmanaged[Stdcall]<nint, nint, nint, D3D11Interop.VideoProcessorOutputViewDesc*, nint*, int>)Slot(videoDevice, 9))(videoDevice, resource, enumerator, d, v);
     }
 
-    /// <summary>ID3D11VideoContext.VideoProcessorBlt (slot 53).</summary>
-    /// <summary>ID3D11VideoContext.VideoProcessorBlt（槽位 53）。</summary>
+    /// <summary>
+    /// ID3D11VideoContext.VideoProcessorBlt (slot 53).
+    /// <para>ID3D11VideoContext.VideoProcessorBlt（槽位 53）。</para>
+    /// </summary>
+    /// <param name="videoContext">ID3D11VideoContext interface pointer. <para>ID3D11VideoContext 接口指针。</para></param>
+    /// <param name="processor">Video processor configured with the stream color spaces. <para>已按流色彩空间配置的处理器。</para></param>
+    /// <param name="outputView">Output view receiving the converted frame. <para>接收转换后帧的输出视图。</para></param>
+    /// <param name="outputFrame">Presentation index assigned to the produced frame. <para>为产出帧指定的呈现索引。</para></param>
+    /// <param name="streamCount">Number of <c>D3D11_VIDEO_PROCESSOR_STREAM</c> entries read from <paramref name="stream"/>; the decode path passes 1. <para>从 <paramref name="stream"/> 读取的 <c>D3D11_VIDEO_PROCESSOR_STREAM</c> 条目数；解码路径传 1。</para></param>
+    /// <param name="stream">
+    /// First stream descriptor: enabled flag and the input view pointer.
+    /// <para>首个流描述符：启用标志与输入视图指针。</para>
+    /// </param>
     public static int D3DVideoProcessorBlt(nint videoContext, nint processor, nint outputView, uint outputFrame, uint streamCount, in D3D11Interop.VideoProcessorStream stream)
     {
         fixed (D3D11Interop.VideoProcessorStream* s = &stream)
             return ((delegate* unmanaged[Stdcall]<nint, nint, nint, uint, uint, D3D11Interop.VideoProcessorStream*, int>)Slot(videoContext, 53))(videoContext, processor, outputView, outputFrame, streamCount, s);
     }
 
-    /// <summary>ID3D11VideoContext.VideoProcessorSetStreamFrameFormat (slot 27).</summary>
-    /// <summary>ID3D11VideoContext.VideoProcessorSetStreamFrameFormat（槽位 27）。</summary>
+    /// <summary>
+    /// ID3D11VideoContext.VideoProcessorSetStreamFrameFormat (slot 27).
+    /// <para>ID3D11VideoContext.VideoProcessorSetStreamFrameFormat（槽位 27）。</para>
+    /// </summary>
+    /// <param name="videoContext">ID3D11VideoContext interface pointer. <para>ID3D11VideoContext 接口指针。</para></param>
+    /// <param name="processor">Video processor whose stream is configured. <para>待配置流的视频处理器。</para></param>
+    /// <param name="streamIndex">Zero-based input stream index. <para>从 0 开始的输入流索引。</para></param>
+    /// <param name="frameFormat"><c>D3D11_VIDEO_FRAME_FORMAT</c> value; <see cref="D3D11Interop.VideoFrameFormatProgressive"/> (0) is passed for decoded progressive frames. <para><c>D3D11_VIDEO_FRAME_FORMAT</c> 值；解码的逐行帧传入 <see cref="D3D11Interop.VideoFrameFormatProgressive"/>（0）。</para></param>
     public static void D3DVideoProcessorSetStreamFrameFormat(nint videoContext, nint processor, uint streamIndex, uint frameFormat) =>
         ((delegate* unmanaged[Stdcall]<nint, nint, uint, uint, void>)Slot(videoContext, 27))(videoContext, processor, streamIndex, frameFormat);
 
-    /// <summary>ID3D11VideoContext.VideoProcessorSetStreamColorSpace (slot 28).</summary>
-    /// <summary>ID3D11VideoContext.VideoProcessorSetStreamColorSpace（槽位 28）。</summary>
+    /// <summary>
+    /// ID3D11VideoContext.VideoProcessorSetStreamColorSpace (slot 28).
+    /// <para>ID3D11VideoContext.VideoProcessorSetStreamColorSpace（槽位 28）。</para>
+    /// </summary>
+    /// <param name="videoContext">ID3D11VideoContext interface pointer. <para>ID3D11VideoContext 接口指针。</para></param>
+    /// <param name="processor">Video processor whose stream is configured. <para>待配置流的视频处理器。</para></param>
+    /// <param name="streamIndex">Zero-based input stream index. <para>从 0 开始的输入流索引。</para></param>
+    /// <param name="colorSpace">
+    /// Packed <c>D3D11_VIDEO_PROCESSOR_COLOR_SPACE</c> describing the source YUV matrix and
+    /// nominal range.
+    /// <para>描述源 YUV 矩阵与标称范围的打包 <c>D3D11_VIDEO_PROCESSOR_COLOR_SPACE</c>。</para>
+    /// </param>
     public static void D3DVideoProcessorSetStreamColorSpace(nint videoContext, nint processor, uint streamIndex, in D3D11VideoProcessorColorSpace colorSpace)
     {
         fixed (D3D11VideoProcessorColorSpace* c = &colorSpace)
             ((delegate* unmanaged[Stdcall]<nint, nint, uint, D3D11VideoProcessorColorSpace*, void>)Slot(videoContext, 28))(videoContext, processor, streamIndex, c);
     }
 
-    /// <summary>ID3D11VideoContext.VideoProcessorSetOutputColorSpace (slot 15).</summary>
-    /// <summary>ID3D11VideoContext.VideoProcessorSetOutputColorSpace（槽位 15）。</summary>
+    /// <summary>
+    /// ID3D11VideoContext.VideoProcessorSetOutputColorSpace (slot 15).
+    /// <para>ID3D11VideoContext.VideoProcessorSetOutputColorSpace（槽位 15）。</para>
+    /// </summary>
+    /// <param name="videoContext">ID3D11VideoContext interface pointer. <para>ID3D11VideoContext 接口指针。</para></param>
+    /// <param name="processor">Video processor whose output is configured. <para>待配置输出的视频处理器。</para></param>
+    /// <param name="colorSpace">
+    /// Packed color space for the destination surface; the decode path selects the full
+    /// 0-255 nominal range.
+    /// <para>目标表面的打包色彩空间；解码路径选择 0-255 的完整标称范围。</para>
+    /// </param>
     public static void D3DVideoProcessorSetOutputColorSpace(nint videoContext, nint processor, in D3D11VideoProcessorColorSpace colorSpace)
     {
         fixed (D3D11VideoProcessorColorSpace* c = &colorSpace)
             ((delegate* unmanaged[Stdcall]<nint, nint, D3D11VideoProcessorColorSpace*, void>)Slot(videoContext, 15))(videoContext, processor, c);
     }
 
-    /// <summary>ID3D11VideoContext.VideoProcessorSetStreamAutoProcessingMode (slot 37).</summary>
-    /// <summary>ID3D11VideoContext.VideoProcessorSetStreamAutoProcessingMode（槽位 37）。</summary>
+    /// <summary>
+    /// ID3D11VideoContext.VideoProcessorSetStreamAutoProcessingMode (slot 37).
+    /// <para>ID3D11VideoContext.VideoProcessorSetStreamAutoProcessingMode（槽位 37）。</para>
+    /// </summary>
+    /// <param name="videoContext">ID3D11VideoContext interface pointer. <para>ID3D11VideoContext 接口指针。</para></param>
+    /// <param name="processor">Video processor whose stream is configured. <para>待配置流的视频处理器。</para></param>
+    /// <param name="streamIndex">Zero-based input stream index. <para>从 0 开始的输入流索引。</para></param>
+    /// <param name="enable">Win32 <c>BOOL</c> as an int; the decode path passes 0 so the explicit frame format and color space settings are used. <para>以 int 表示的 Win32 <c>BOOL</c>；解码路径传 0，使显式设置的帧格式与色彩空间生效。</para></param>
     public static void D3DVideoProcessorSetStreamAutoProcessingMode(nint videoContext, nint processor, uint streamIndex, int enable) =>
         ((delegate* unmanaged[Stdcall]<nint, nint, uint, int, void>)Slot(videoContext, 37))(videoContext, processor, streamIndex, enable);
 }
@@ -562,6 +719,15 @@ internal struct D3D11VideoProcessorContentDesc
 internal struct D3D11VideoProcessorColorSpace
 {
     public uint Bits;
-    /// <summary>Creates the native bitfield value defined by d3d11.h.</summary>
+    /// <summary>
+    /// Creates the native bitfield value defined by d3d11.h.
+    /// <para>按 d3d11.h 定义构造原生位域值。</para>
+    /// </summary>
+    /// <param name="bits">
+    /// Packed <c>D3D11_VIDEO_PROCESSOR_COLOR_SPACE</c> bits; bit 2 carries the YCbCr matrix
+    /// (set = BT.709) and bits 4-5 the nominal range (2 = 0-255, 1 = 16-235).
+    /// <para>打包的 <c>D3D11_VIDEO_PROCESSOR_COLOR_SPACE</c> 位；bit 2 为 YCbCr 矩阵（置位表示 BT.709），
+    /// bit 4-5 为标称范围（2 = 0-255，1 = 16-235）。</para>
+    /// </param>
     public static D3D11VideoProcessorColorSpace FromBits(uint bits) => new() { Bits = bits };
 }

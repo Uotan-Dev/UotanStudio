@@ -14,6 +14,14 @@ internal static class Ext4Extent
     /// Resolves a logical block to its physical block, returning null for holes and unwritten extents.
     /// <para>将逻辑块解析为物理块，稀疏洞与未写 extent 返回 null。</para>
     /// </summary>
+    /// <param name="extentBytes">Block or inode-body bytes starting with the extent header; fewer than 12 bytes or a magic other than <see cref="MagicValue"/> is treated as data that carries no extent tree.
+    /// <para>以 extent 头起始的数据块或 inode 体字节；不足 12 字节，或魔数不是 <see cref="MagicValue"/>，视为不含 extent 树的数据。</para></param>
+    /// <param name="logicalBlock">Zero-based logical block index inside the file.
+    /// <para>文件内从 0 开始的逻辑块序号。</para></param>
+    /// <param name="readBlock">Reads the bytes of a filesystem block by its physical block number; it is called once per index level and never for a depth-0 tree.
+    /// <para>按物理块号读取文件系统块字节；每层索引调用一次，深度为 0 的树不会调用。</para></param>
+    /// <returns>Physical block number holding <paramref name="logicalBlock"/>, or <see langword="null"/> when no extent tree is present, no index or leaf entry covers the block (a hole), or the covering leaf entry has the unwritten flag.
+    /// <para>承载 <paramref name="logicalBlock"/> 的物理块号；没有 extent 树、没有任何索引或叶子项覆盖该块（空洞），或覆盖它的叶子项带未写标志时返回 <see langword="null"/>。</para></returns>
     public static long? Resolve(ReadOnlySpan<byte> extentBytes, uint logicalBlock, Func<ulong, byte[]> readBlock)
         => ResolveAtDepth(extentBytes, logicalBlock, readBlock, MaxExtentDepth);
 

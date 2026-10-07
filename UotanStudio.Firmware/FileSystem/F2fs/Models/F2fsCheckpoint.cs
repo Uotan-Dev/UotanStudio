@@ -80,6 +80,10 @@ internal sealed record F2fsCheckpoint
     /// Parses a checkpoint from its block.
     /// <para>从 checkpoint 块解析。</para>
     /// </summary>
+    /// <param name="block">One full checkpoint block of at least the F2FS node size, holding the little-endian checkpoint fields and the four eight-element current-segment arrays.
+    /// <para>完整的一个 checkpoint 块，长度至少为 F2FS 节点大小，内含小端的 checkpoint 字段与四个各含八个元素的当前段数组。</para></param>
+    /// <returns>Checkpoint record whose scalar fields and current node/data segno and blkoff arrays are read from their fixed offsets; the trailing version-bitmap area is left out of the record.
+    /// <para>checkpoint 记录，其标量字段与当前 node/data 的 segno、blkoff 数组都按固定偏移读取；尾部的版本位图区域不写入记录。</para></returns>
     public static F2fsCheckpoint FromBytes(ReadOnlySpan<byte> block)
     {
         if (block.Length < F2fsNode.NodeSize)
@@ -113,9 +117,13 @@ internal sealed record F2fsCheckpoint
     }
 
     /// <summary>
-    /// Writes the checkpoint key fields into a block (the version bitmap area and the checksum are written as well).
-    /// <para>将 checkpoint 关键字段写入块（版本位图区域与 checksum 一并写入）。</para>
+    /// Writes the checkpoint key fields into a block (the version bitmap area and the checksum offset field are written as well).
+    /// <para>将 checkpoint 关键字段写入块（版本位图区域与 checksum 偏移字段也一并写入）。</para>
     /// </summary>
+    /// <param name="block">Destination checkpoint block of at least the F2FS node size; it is cleared first, and current-segment array slots beyond the stored element count are filled with an all-ones segno and a zero blkoff.
+    /// <para>目标 checkpoint 块，长度至少为 F2FS 节点大小；写入前先清零，超出已存储元素数量的当前段数组槽用 segno 全 1、blkoff 为 0 填充。</para></param>
+    /// <param name="versionBitmap">Bitmap bytes copied into the trailing version-bitmap area, truncated to the space the block leaves there; an empty span leaves that area zeroed.
+    /// <para>复制到尾部版本位图区的位图字节，超出该区域剩余空间的部分会被丢弃；空区间时该区域保持全零。</para></param>
     public void WriteTo(Span<byte> block, ReadOnlySpan<byte> versionBitmap)
     {
         if (block.Length < F2fsNode.NodeSize)

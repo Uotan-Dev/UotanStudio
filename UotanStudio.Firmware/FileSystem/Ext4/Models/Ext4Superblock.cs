@@ -90,6 +90,10 @@ internal sealed class Ext4Superblock
     /// Parses the superblock from the beginning of an image buffer (little-endian).
     /// <para>从镜像缓冲区起始处解析超级块（小端）。</para>
     /// </summary>
+    /// <param name="data">Image bytes from offset 0, including the reserved boot region; the record itself starts at <see cref="SuperblockOffset"/> and needs 360 bytes there, while the backup-group, encoding and checksum fields are read only when the buffer reaches their offsets.
+    /// <para>从偏移 0 起始的镜像字节，含保留的引导区；记录本身从 <see cref="SuperblockOffset"/> 开始且该处至少要有 360 字节，备份组、文件名编码与校验和字段只在缓冲区覆盖到相应偏移时才读取。</para></param>
+    /// <returns>Superblock with the magic verified and both per-group counts non-zero, combining the 64-bit block counters, the NUL-trimmed volume name, the UUID, the four hash-seed words and zero for any field beyond the buffer.
+    /// <para>已校验魔数且两个每组计数均非零的超级块，合并 64 位块计数、去除尾部 NUL 的卷标、UUID、四个哈希种子字，缓冲区未覆盖的字段取 0。</para></returns>
     public static Ext4Superblock FromBytes(ReadOnlySpan<byte> data)
     {
         if (data.Length < SuperblockOffset + 360)

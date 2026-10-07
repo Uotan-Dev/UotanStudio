@@ -94,6 +94,9 @@ internal sealed class AssignStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with the indented <c>Target = Value;</c> text and no trailing newline. <para>承接缩进的 <c>Target = Value;</c> 文本且不追加结尾换行的构建器。</para></param>
+    /// <param name="indent">Indentation level counted in four-space blocks. <para>以四个空格为一级的缩进层级。</para></param>
+    /// <param name="options">Formatting options this override does not read; the target and value render through their own expression writers. <para>本重写不读取的格式化选项；目标与被赋值表达式由各自的表达式渲染器写出。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -129,6 +132,9 @@ internal sealed class ExprStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with the indented expression and its trailing <c>;</c>, and no final newline. <para>承接缩进后的表达式与结尾 <c>;</c> 的构建器，不追加结尾换行。</para></param>
+    /// <param name="indent">Indentation level counted in four-space blocks. <para>以四个空格为一级的缩进层级。</para></param>
+    /// <param name="options">Formatting options this override does not read; the expression renders through its own writer. <para>本重写不读取的格式化选项；表达式由其自身的渲染器写出。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -162,6 +168,9 @@ internal sealed class ReturnStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with <c>return;</c>, or <c>return expr;</c> when a value is present; no trailing newline is written. <para>写入 <c>return;</c>，带值时写入 <c>return expr;</c> 的构建器；不追加结尾换行。</para></param>
+    /// <param name="indent">Indentation level counted in four-space blocks. <para>以四个空格为一级的缩进层级。</para></param>
+    /// <param name="options">Formatting options this override does not read; the returned expression renders through its own writer. <para>本重写不读取的格式化选项；被返回表达式由其自身的渲染器写出。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -200,6 +209,9 @@ internal sealed class ThrowStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with <c>throw expr;</c> and no trailing newline. <para>写入 <c>throw expr;</c> 且不追加结尾换行的构建器。</para></param>
+    /// <param name="indent">Indentation level counted in four-space blocks. <para>以四个空格为一级的缩进层级。</para></param>
+    /// <param name="options">Formatting options this override does not read; the exception expression renders through its own writer. <para>本重写不读取的格式化选项；异常表达式由其自身的渲染器写出。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -234,6 +246,9 @@ internal sealed class RawCommentStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with <c>// Text</c>; the comment text is written verbatim, so embedded newlines would break the enclosing line, and no newline or semicolon is added. <para>写入 <c>// Text</c> 的构建器；注释文本原样输出，因此其中包含换行会破坏所在行，且不追加分号与换行。</para></param>
+    /// <param name="indent">Indentation level counted in four-space blocks. <para>以四个空格为一级的缩进层级。</para></param>
+    /// <param name="options">Formatting options this override does not read. <para>本重写不读取的格式化选项。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -259,6 +274,9 @@ internal sealed class BlockStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with <c>{</c>, one platform newline per rendered line, the nested statements and the indented closing <c>}</c>; an empty <see cref="Statements"/> list yields the two braces with a newline between them. <para>写入 <c>{</c>、每行一个平台换行符、嵌套语句以及缩进的右 <c>}</c> 的构建器；<see cref="Statements"/> 为空时仅输出两个花括号及其间的换行。</para></param>
+    /// <param name="indent">Indentation level of the braces, counted in four-space blocks; each statement is written one level deeper. <para>花括号的缩进层级，以四个空格为一级；每条语句按更深一级写出。</para></param>
+    /// <param name="options">Formatting options forwarded unchanged to every nested statement. <para>原样传递给每条嵌套语句的格式化选项。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -314,6 +332,9 @@ internal sealed class IfStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with <c>if (cond) {</c>, one platform newline per rendered line, the then-branch statements, and <c>}</c> or the <c>else</c> arms; a single nested <see cref="IfStmt"/> in <see cref="Else"/> is written inline as <c>else if</c>. <para>写入 <c>if (cond) {</c>、每行一个平台换行符、then 分支语句以及 <c>}</c> 或 <c>else</c> 分支的构建器；<see cref="Else"/> 中仅有一条嵌套 <see cref="IfStmt"/> 时按 <c>else if</c> 内联写出。</para></param>
+    /// <param name="indent">Indentation level of the <c>if</c> keyword and the braces, counted in four-space blocks; branch statements are written one level deeper. <para><c>if</c> 关键字与花括号的缩进层级，以四个空格为一级；分支语句按更深一级写出。</para></param>
+    /// <param name="options">Formatting options forwarded unchanged to the branch statements; the inlined <c>else if</c> body also receives them. <para>原样传递给分支语句的格式化选项；内联的 <c>else if</c> 分支体同样会收到。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -405,6 +426,9 @@ internal sealed class WhileStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with <c>while (cond) {</c>, one platform newline per rendered line, the body statements and the indented closing <c>}</c>; an empty <see cref="Body"/> yields the two braces with a newline between them. <para>写入 <c>while (cond) {</c>、每行一个平台换行符、循环体语句以及缩进的右 <c>}</c> 的构建器；<see cref="Body"/> 为空时仅输出两个花括号及其间的换行。</para></param>
+    /// <param name="indent">Indentation level of the <c>while</c> keyword and the braces, counted in four-space blocks; body statements are written one level deeper. <para><c>while</c> 关键字与花括号的缩进层级，以四个空格为一级；循环体语句按更深一级写出。</para></param>
+    /// <param name="options">Formatting options forwarded unchanged to every body statement. <para>原样传递给每条循环体语句的格式化选项。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -454,6 +478,9 @@ internal sealed class DoWhileStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with <c>do {</c>, one platform newline per rendered line, the body statements and the indented <c>} while (cond);</c> tail. <para>写入 <c>do {</c>、每行一个平台换行符、循环体语句以及缩进的 <c>} while (cond);</c> 结尾的构建器。</para></param>
+    /// <param name="indent">Indentation level of the <c>do</c> keyword and the closing brace, counted in four-space blocks; body statements are written one level deeper. <para><c>do</c> 关键字与右花括号的缩进层级，以四个空格为一级；循环体语句按更深一级写出。</para></param>
+    /// <param name="options">Formatting options forwarded unchanged to every body statement. <para>原样传递给每条循环体语句的格式化选项。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -488,6 +515,9 @@ internal sealed class InfiniteLoopStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with the literal <c>while (true) {</c>, one platform newline per rendered line, the body statements and the indented closing <c>}</c>; no condition expression is evaluated or printed. <para>写入固定的 <c>while (true) {</c>、每行一个平台换行符、循环体语句以及缩进的右 <c>}</c> 的构建器；不会求值或输出任何条件表达式。</para></param>
+    /// <param name="indent">Indentation level of the header and the braces, counted in four-space blocks; body statements are written one level deeper. <para>循环头部与花括号的缩进层级，以四个空格为一级；循环体语句按更深一级写出。</para></param>
+    /// <param name="options">Formatting options forwarded unchanged to every body statement. <para>原样传递给每条循环体语句的格式化选项。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -543,6 +573,9 @@ internal sealed class SwitchStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with <c>switch (value) {</c>, one platform newline per rendered line, each <see cref="Cases"/> arm as <c>case &lt;key&gt;: {</c> plus its statements and an explicit <c>break;</c>, the <see cref="DefaultBody"/> arm only when it is non-empty, and the indented closing <c>}</c>. <para>写入 <c>switch (value) {</c>、每行一个平台换行符、每个 <see cref="Cases"/> 分支的 <c>case &lt;key&gt;: {</c> 与其语句和显式的 <c>break;</c>、仅在非空时输出的 <see cref="DefaultBody"/> 分支，以及缩进的右 <c>}</c> 的构建器。</para></param>
+    /// <param name="indent">Indentation level of the <c>switch</c> keyword and the outer braces, counted in four-space blocks; case labels are written one level deeper and case statements two levels deeper. <para><c>switch</c> 关键字与外层花括号的缩进层级，以四个空格为一级；case 标签深一级，case 语句深两级。</para></param>
+    /// <param name="options">Formatting options forwarded unchanged to the case and default statements. <para>原样传递给 case 与 default 语句的格式化选项。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -590,6 +623,9 @@ internal sealed class BreakStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with the fixed <c>break;</c> text and no trailing newline. <para>写入固定的 <c>break;</c> 文本且不追加结尾换行的构建器。</para></param>
+    /// <param name="indent">Indentation level counted in four-space blocks. <para>以四个空格为一级的缩进层级。</para></param>
+    /// <param name="options">Formatting options this override does not read. <para>本重写不读取的格式化选项。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -622,6 +658,9 @@ internal sealed class GotoCommentStmt : JavaStmt
     /// Writes the Java representation to the output.
     /// <para>向输出写入 Java 表示。</para>
     /// </summary>
+    /// <param name="sb">Builder appended to with <c>// goto </c> followed by <see cref="Label"/> verbatim; the comment has no semicolon and no trailing newline. <para>写入 <c>// goto </c> 并原样接上 <see cref="Label"/> 的构建器；该注释不带分号与结尾换行。</para></param>
+    /// <param name="indent">Indentation level counted in four-space blocks. <para>以四个空格为一级的缩进层级。</para></param>
+    /// <param name="options">Formatting options this override does not read. <para>本重写不读取的格式化选项。</para></param>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);

@@ -104,10 +104,10 @@ internal static partial class UsbHostAPI
     public static bool IsAvailable =>
         DeviceClass.Value != IntPtr.Zero && InterfaceClass.Value != IntPtr.Zero;
 
-    /// <summary>Resolves the +1 retained <c>IOUSBHostDevice</c> class pointer.</summary>
+    /// <summary>Resolves the +1 retained <c>IOUSBHostDevice</c> class pointer. <para>解析 +1 持有的 <c>IOUSBHostDevice</c> 类指针。</para></summary>
     public static IntPtr GetDeviceClass() => DeviceClass.Value;
 
-    /// <summary>Resolves the +1 retained <c>IOUSBHostInterface</c> class pointer.</summary>
+    /// <summary>Resolves the +1 retained <c>IOUSBHostInterface</c> class pointer. <para>解析 +1 持有的 <c>IOUSBHostInterface</c> 类指针。</para></summary>
     public static IntPtr GetInterfaceClass() => InterfaceClass.Value;
 
     /// <summary>
@@ -119,6 +119,9 @@ internal static partial class UsbHostAPI
     /// 该调用本身即独占打开：成功后调用方持有对象直至 <see cref="Destroy"/>。
     /// 失败返回 Zero 并给出 IOReturn 码（如被其他客户端占用时为 kIOReturnExclusiveAccess）。</para>
     /// </summary>
+    /// <param name="objcClass">IOUSBHostDevice or IOUSBHostInterface class pointer. <para>IOUSBHostDevice 或 IOUSBHostInterface 类指针。</para></param>
+    /// <param name="ioService">io_service_t mach port name of the IOKit service to open. <para>待打开 IOKit 服务的 io_service_t mach port 名。</para></param>
+    /// <param name="ioReturn">IOReturn code, 0 (<c>Ok</c>) on success; the NSError code when initialization fails. <para>IOReturn 码，成功为 0（<c>Ok</c>）；初始化失败时为 NSError 携带的码。</para></param>
     public static IntPtr CreateObject(IntPtr objcClass, uint ioService, out int ioReturn)
     {
         ioReturn = Ok;
@@ -145,6 +148,7 @@ internal static partial class UsbHostAPI
     /// Destroys the user client and releases the object (safe to call on Zero).
     /// <para>销毁用户客户端并释放对象（对 Zero 安全）。</para>
     /// </summary>
+    /// <param name="obj">User client object pointer; <see cref="IntPtr.Zero"/> is ignored. <para>用户客户端对象指针；<see cref="IntPtr.Zero"/> 直接忽略。</para></param>
     public static void Destroy(IntPtr obj)
     {
         if (obj != IntPtr.Zero)
@@ -155,6 +159,7 @@ internal static partial class UsbHostAPI
     }
 
     /// <summary>Reads the io_service_t backing an IOUSBHostObject. <para>读取对象背后的 io_service_t。</para></summary>
+    /// <param name="obj">IOUSBHostObject instance pointer. <para>IOUSBHostObject 实例指针。</para></param>
     public static uint GetIoService(IntPtr obj) => ObjcRuntime.MsgSendUint(obj, IoServiceSel.Value);
 
     /// <summary>
@@ -217,6 +222,8 @@ internal static partial class UsbHostAPI
     /// Returns a +1 retained IOUSBHostPipe for an endpoint address, or Zero.
     /// <para>返回 +1 持有的 IOUSBHostPipe，失败为 Zero。</para>
     /// </summary>
+    /// <param name="usbInterface">IOUSBHostInterface instance pointer. <para>IOUSBHostInterface 实例指针。</para></param>
+    /// <param name="endpointAddress">Endpoint address including the direction bit (bit 7). <para>含方向位（bit 7）的端点地址。</para></param>
     public static IntPtr CopyPipe(IntPtr usbInterface, ulong endpointAddress)
     {
         var pipe = ObjcRuntime.MsgSendObject_Ulong_Error(usbInterface, CopyPipeSel.Value, endpointAddress, out var error);
@@ -225,6 +232,7 @@ internal static partial class UsbHostAPI
     }
 
     /// <summary>Releases a pipe obtained from <see cref="CopyPipe"/>. <para>释放 <see cref="CopyPipe"/> 得到的管道。</para></summary>
+    /// <param name="pipe">Pipe object pointer; <see cref="IntPtr.Zero"/> is ignored and a non-zero pointer drops one <c>objc_release</c> hold. <para>管道对象指针；<see cref="IntPtr.Zero"/> 直接忽略，非零指针经 <c>objc_release</c> 释放一次持有。</para></param>
     public static void ReleasePipe(IntPtr pipe)
     {
         if (pipe != IntPtr.Zero)
@@ -234,6 +242,7 @@ internal static partial class UsbHostAPI
     }
 
     /// <summary>Reads an IOUSBHostIOSource (pipe) endpoint address. <para>读取管道的端点地址。</para></summary>
+    /// <param name="pipe">IOUSBHostPipe instance pointer. <para>IOUSBHostPipe 实例指针。</para></param>
     public static ulong GetPipeEndpointAddress(IntPtr pipe) => ObjcRuntime.MsgSendUlong(pipe, EndpointAddressSel.Value);
 
     /// <summary>
@@ -283,6 +292,7 @@ internal static partial class UsbHostAPI
     /// <para>重置 USB 设备（<c>resetWithError:</c>——端口级复位，设备会重新枚举，
     /// 会话随之失效）。</para>
     /// </summary>
+    /// <param name="device">IOUSBHostDevice instance pointer. <para>IOUSBHostDevice 实例指针。</para></param>
     public static int ResetDevice(IntPtr device)
     {
         var ok = ObjcRuntime.MsgSendBool_OutErr(device, ResetSel.Value, out var error);
@@ -298,6 +308,7 @@ internal static partial class UsbHostAPI
     /// <c>sendIORequest</c> 立即以 <c>kIOReturnAborted</c> 返回，因此释放管道前
     /// 可等待调用方退出传输路径。</para>
     /// </summary>
+    /// <param name="pipe">IOUSBHostPipe instance pointer; <see cref="IntPtr.Zero"/> is ignored. <para>IOUSBHostPipe 实例指针；<see cref="IntPtr.Zero"/> 直接忽略。</para></param>
     public static void AbortPipe(IntPtr pipe)
     {
         if (pipe != IntPtr.Zero)
@@ -310,6 +321,8 @@ internal static partial class UsbHostAPI
     /// Sends a zero-length packet (nil data) on a pipe — the USB zero-length-packet write.
     /// <para>经管道发送零长度包（nil data），即 USB 的 ZLP 写。</para>
     /// </summary>
+    /// <param name="pipe">IOUSBHostPipe instance pointer used as the OUT source. <para>用作 OUT 方向的 IOUSBHostPipe 实例指针。</para></param>
+    /// <param name="timeoutMs">Completion timeout in ms, converted to seconds for the ObjC call (0 = wait forever). <para>完成超时（毫秒），调用时换算为秒（0 表示无限等待）。</para></param>
     public static int SendIoRequestZero(IntPtr pipe, int timeoutMs)
     {
         ulong unused = 0;
@@ -380,6 +393,14 @@ internal static partial class UsbHostAPI
     /// (<c>sendControlRequest:data:bytesTransferred:completionTimeout:error:</c>).
     /// <para>经接口管道的同步控制传输。</para>
     /// </summary>
+    /// <param name="pipe">Pipe object pointer carrying the request. <para>承载该请求的管道对象指针。</para></param>
+    /// <param name="request">Setup packet. <para>建立包。</para></param>
+    /// <param name="buffer">
+    /// Data stage buffer; null for zero-length requests.
+    /// <para>数据阶段缓冲；零长度请求为 null。</para>
+    /// </param>
+    /// <param name="timeoutMs">Completion timeout in ms (0 = wait forever). <para>完成超时（毫秒，0 表示无限等待）。</para></param>
+    /// <param name="transferred">Actual data-stage byte count. <para>实际传输字节数。</para></param>
     public static int SendControlRequest(IntPtr pipe, ObjcRuntime.UsbHostDeviceRequest request, byte[]? buffer, int timeoutMs, out int transferred)
     {
         transferred = 0;
@@ -413,6 +434,8 @@ internal static partial class UsbHostAPI
     }
 
     /// <summary>Selects an interface alternate setting. <para>选择接口备用设置。</para></summary>
+    /// <param name="usbInterface">IOUSBHostInterface instance pointer. <para>IOUSBHostInterface 实例指针。</para></param>
+    /// <param name="alternateSetting">Alternate setting index from the interface descriptor. <para>来自接口描述符的备用设置索引。</para></param>
     public static int SelectAlternateSetting(IntPtr usbInterface, ulong alternateSetting)
     {
         var ok = ObjcRuntime.MsgSendBool_Ulong_OutErr(usbInterface, SelectAltSettingSel.Value, alternateSetting, out var error);
@@ -424,6 +447,7 @@ internal static partial class UsbHostAPI
     /// while the interface object is alive).
     /// <para>接口 packed 描述符指针（随接口对象生存期有效）。</para>
     /// </summary>
+    /// <param name="usbInterface">IOUSBHostInterface instance pointer. <para>IOUSBHostInterface 实例指针。</para></param>
     public static IntPtr GetInterfaceDescriptor(IntPtr usbInterface) =>
         ObjcRuntime.MsgSendObject(usbInterface, InterfaceDescriptorSel.Value);
 
@@ -431,6 +455,7 @@ internal static partial class UsbHostAPI
     /// Pointer to the device/interface's packed configuration descriptor.
     /// <para>配置描述符指针。</para>
     /// </summary>
+    /// <param name="receiver">IOUSBHostDevice or IOUSBHostInterface instance pointer. <para>IOUSBHostDevice 或 IOUSBHostInterface 实例指针。</para></param>
     public static IntPtr GetConfigurationDescriptor(IntPtr receiver) =>
         ObjcRuntime.MsgSendObject(receiver, ConfigDescriptorSel.Value);
 
@@ -506,6 +531,7 @@ internal static partial class UsbHostAPI
     /// <c>bInterfaceNumber</c> 属性存在为准识别——其注册表名是产品/接口标签
     /// （如 "ADB Interface"），不是类名。</para>
     /// </summary>
+    /// <param name="parentService">Device io_service_t whose IOService-plane children are scanned. <para>待扫描 IOService 平面子项的设备 io_service_t。</para></param>
     public static List<uint> GetInterfaceServices(uint parentService)
     {
         var result = new List<uint>();

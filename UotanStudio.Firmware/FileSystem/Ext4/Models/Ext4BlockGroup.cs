@@ -40,6 +40,12 @@ internal sealed record Ext4BlockGroup
     /// Parses one group descriptor. data must be at least descSize bytes; 64-bit fields are only read when descSize is 64 or greater.
     /// <para>解析单个组描述符。</para>
     /// </summary>
+    /// <param name="data">Descriptor bytes of one block group, holding the little-endian low halves at offsets 0 to 17, the descriptor checksum at 30 and the high halves at 32 to 49 in the 64-bit layout.
+    /// <para>单个块组的描述符字节：偏移 0 至 17 是小端低位半部，30 处是描述符校验和，64 位布局的 32 至 49 处是高位半部。</para></param>
+    /// <param name="descSize">Descriptor size announced by the superblock; values below 32 are treated as 32 and only 64 or more reads the high halves of the bitmaps, inode table and counters.
+    /// <para>超级块声明的描述符大小；小于 32 时按 32 处理，只有不小于 64 才会读取位图、inode 表与计数的高位半部。</para></param>
+    /// <returns>Descriptor whose combined 64-bit <c>BlockBitmap</c>, <c>InodeBitmap</c> and <c>InodeTable</c> values stay 32-bit unless <paramref name="descSize"/> is 64 or greater.
+    /// <para>描述符结果；除非 <paramref name="descSize"/> 不小于 64，合并后的 64 位 <c>BlockBitmap</c>、<c>InodeBitmap</c> 与 <c>InodeTable</c> 仍只有 32 位有效。</para></returns>
     public static Ext4BlockGroup FromBytes(ReadOnlySpan<byte> data, int descSize)
     {
         var size = Math.Max(descSize, 32);

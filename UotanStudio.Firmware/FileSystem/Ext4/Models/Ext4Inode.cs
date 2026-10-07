@@ -51,6 +51,10 @@ internal sealed record Ext4Inode
     /// Returns the inline payload capacity including the system.data value.
     /// <para>返回包含 system.data 属性值的内联载荷容量。</para>
     /// </summary>
+    /// <param name="inodeSize">Filesystem inode size in bytes; the result is taken from the parsed <see cref="InlineData"/> payload, so this value does not alter it.
+    /// <para>文件系统 inode 大小（字节）；结果取自解析得到的 <see cref="InlineData"/> 载荷，因此该值不会改变结果。</para></param>
+    /// <returns>Bytes of inline payload: the 60-byte i_block area plus the <c>system.data</c> xattr value, and 0 for an inode parsed without the inline-data flag.
+    /// <para>内联载荷字节数：60 字节 i_block 区加上 <c>system.data</c> 扩展属性值；解析时未设置内联数据标志的 inode 为 0。</para></returns>
     public int InlineDataCapacity(int inodeSize) => InlineData.Length;
 
     public byte[] InlineData { get; init; } = [];
@@ -65,6 +69,12 @@ internal sealed record Ext4Inode
     /// Parses an inode from raw bytes. inodeSize must match the filesystem inode size; i_size_high is read unconditionally (offset 108 lies within every inode size of at least 128 bytes, matching the kernel's ext4_isize()).
     /// <para>从原始字节解析 inode。</para>
     /// </summary>
+    /// <param name="data">Inode record bytes read little-endian, holding the mode at 0, size at 4, flags at 32, the fifteen block pointers at 40 to 100 and the extra fields from 128 onward.
+    /// <para>按小端读取的 inode 记录字节：0 处是模式，4 处是大小，32 处是标志，40 至 100 是十五个块指针，128 之后是扩展字段。</para></param>
+    /// <param name="inodeSize">Filesystem inode size taken from the superblock, at least 128; a smaller value, or fewer bytes than it in <paramref name="data"/>, is reported as a truncated inode, and it also bounds the extra-field window.
+    /// <para>取自超级块的文件系统 inode 大小，至少 128；该值过小、<paramref name="data"/> 字节不足都会被视为 inode 截断，同时它也限定扩展字段的可读范围。</para></param>
+    /// <returns>Inode carrying the combined 64-bit size and uid/gid, the pointer array, the raw i_block bytes, inline payload when the inline flag is set, the decoded timestamps and the file ACL.
+    /// <para>返回的 inode 含合并后的 64 位大小与 uid/gid、块指针数组、原始 i_block 字节、设置了内联标志时的内联载荷、解码出的时间戳以及文件 ACL。</para></returns>
     public static Ext4Inode FromBytes(ReadOnlySpan<byte> data, int inodeSize)
     {
         if (inodeSize < 128 || data.Length < inodeSize)

@@ -145,6 +145,12 @@ internal sealed record F2fsInode
     /// Parses the inode from a node page (the footer must be validated separately: nid == ino marks an inode node).
     /// <para>从节点页解析 inode（页脚需同时校验：nid == ino 表示 inode 节点）。</para>
     /// </summary>
+    /// <param name="node">Complete inode node page of at least the F2FS node size, whose i_addr array of 923 entries starts at <see cref="F2fsNode.AddrArrayOffset"/>, i_nid array at <see cref="F2fsNode.NidArrayOffset"/>, first extent at <see cref="F2fsExtent.InodeOffset"/> and name bytes at the offset following the name length.
+    /// <para>完整的 inode 节点页，长度至少为 F2FS 节点大小：923 项的 i_addr 数组起始于 <see cref="F2fsNode.AddrArrayOffset"/>，i_nid 数组起始于 <see cref="F2fsNode.NidArrayOffset"/>，首个 extent 位于 <see cref="F2fsExtent.InodeOffset"/>，名称字节从名称长度之后的偏移开始。</para></param>
+    /// <param name="flexibleInlineXattr">When <see langword="false"/> and the inode marks inline xattr, the inline xattr size is taken as 50 address slots instead of the stored field; <see langword="true"/>, the default, always reads the stored value.
+    /// <para>为 <see langword="false"/> 且 inode 标记了内联 xattr 时，内联 xattr 大小按 50 个地址槽取值而不读磁盘字段；默认值 <see langword="true"/> 始终读取存储的值。</para></param>
+    /// <returns>Decoded inode with the address and nid arrays, the NUL-trimmed name, the first extent and the timestamp fields; project id, birth time and the compression attributes stay absent while the recorded extra-attribute size does not reach their offsets. A short page, an extra size that is not a multiple of four or exceeds the address array, a compressed inode without 36 bytes of extra attributes and a cluster exponent outside 2 to 8 are rejected.
+    /// <para>返回已解码的 inode，含地址与 nid 数组、去除尾部 NUL 的名称、首个 extent 与时间戳字段；记录的扩展属性大小未触及相应偏移时，project id、创建时间与压缩属性保持缺失。页长不足、扩展大小不是 4 的倍数或超过地址数组、压缩 inode 缺少 36 字节扩展属性、簇指数不在 2 到 8 范围内都会被拒绝。</para></returns>
     public static F2fsInode FromBytes(ReadOnlySpan<byte> node, bool flexibleInlineXattr = true)
     {
         if (node.Length < F2fsNode.NodeSize)
@@ -220,6 +226,8 @@ internal sealed record F2fsInode
     /// Writes the inode fields into a node page (the footer is written separately by the caller; untouched fields keep their previous values).
     /// <para>将 inode 字段写入节点页（页脚由调用方另行写入；未覆盖字段保持原样）。</para>
     /// </summary>
+    /// <param name="node">Destination node page with at least the F2FS node size writable bytes. Mode, ownership, size, timestamps, flags, parent, name length, the name bytes, the first extent and the address and nid arrays are written in place, the extra-attribute block is written only while the inline byte carries the extra-attribute flag, and the name field is cleared over its whole width before the available bytes are copied. A nanosecond component of one second or more stops the write after mode, ownership, size and block count were already stored.
+    /// <para>目标节点页，可写字节至少为 F2FS 节点大小。模式、属主、大小、时间戳、标志、父目录 inode、名称长度、名称字节、首个 extent 以及地址与 nid 数组都就地写入；只有 inline 字节带扩展属性标志时才写扩展属性区块；名称字段先按整个宽度清零再复制可用字节。纳秒分量达到 1 秒或以上会中止写入，但此时模式、属主、大小与块数已经写入。</para></param>
     public void WriteTo(Span<byte> node)
     {
         if (node.Length < F2fsNode.NodeSize)
@@ -290,6 +298,12 @@ internal sealed record F2fsInode
     /// Reads the file content bytes from the inline area (for inline data and fast symlinks).
     /// <para>从 inline 区域读取文件内容字节（供 inline data 与快速符号链接使用）。</para>
     /// </summary>
+    /// <param name="node">Inode node page the payload is sliced from; it must reach the inline area this inode's extra size and inline xattr size select.
+    /// <para>用于切出载荷的 inode 节点页；页长必须覆盖由该 inode 的扩展大小与内联 xattr 大小所选中的内联区域。</para></param>
+    /// <param name="size">Logical file size in bytes; the smaller of it and <c>MaxInlineData</c> decides how many bytes are returned, and 0 yields an empty array.
+    /// <para>逻辑文件大小（字节）；它与 <c>MaxInlineData</c> 中较小者决定返回的字节数，为 0 时返回空数组。</para></param>
+    /// <returns>Copied inline bytes, the requested size capped at the inode's inline capacity, and an empty array when that capacity is 0; a range reaching past the inode end offset is reported as corruption.
+    /// <para>复制出的内联字节，取请求大小与该 inode 内联容量中的较小值；容量为 0 时返回空数组。范围越过 inode 末尾偏移时按损坏上报。</para></returns>
     public byte[] ReadInlineBytes(ReadOnlySpan<byte> node, ulong size)
     {
         var offset = InlineDataOffset;

@@ -300,6 +300,18 @@ internal sealed class BufferedDecryptStream : Stream
     /// Sets the stream position relative to the specified origin.
     /// <para>相对于指定起点设置流位置。</para>
     /// </summary>
+    /// <param name="offset">
+    /// Byte offset to move from <paramref name="origin"/> inside the buffered plaintext; negative values move backwards.
+    /// <para>相对 <paramref name="origin"/> 在缓冲明文内移动的字节数；负值表示向后移动。</para>
+    /// </param>
+    /// <param name="origin">
+    /// Reference point used to interpret <paramref name="offset"/>.
+    /// <para>用于解释 <paramref name="offset"/> 的参考原点。</para>
+    /// </param>
+    /// <returns>
+    /// The new zero-based position within the buffered plaintext.
+    /// <para>缓冲明文中的新零基位置。</para>
+    /// </returns>
     public override long Seek(long offset, SeekOrigin origin) => _buffer.Seek(offset, origin);
     /// <summary>
     /// Performs no operation.
@@ -310,6 +322,10 @@ internal sealed class BufferedDecryptStream : Stream
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="value">
+    /// Requested stream length; never read because the call always throws.
+    /// <para>请求的流长度；因调用必定抛出异常而不会被读取。</para>
+    /// </param>
     public override void SetLength(long value) => throw new NotSupportedException();
     /// <summary>
     /// Throws because this operation is not supported.
@@ -371,6 +387,18 @@ internal sealed class BufferedEncryptStream : Stream
     /// Writes bytes to the stream.
     /// <para>向流写入字节。</para>
     /// </summary>
+    /// <param name="buffer">
+    /// Plaintext source array whose range is appended to the pending buffer.
+    /// <para>将其区间追加到待加密缓冲区的明文源数组。</para>
+    /// </param>
+    /// <param name="offset">
+    /// Index in <paramref name="buffer"/> of the first plaintext byte.
+    /// <para><paramref name="buffer"/> 中首个明文字节的索引。</para>
+    /// </param>
+    /// <param name="count">
+    /// Number of plaintext bytes appended; the buffered total never passes the configured maximum.
+    /// <para>追加的明文字节数；缓冲区累计量不会超过配置的上限。</para>
+    /// </param>
     public override void Write(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);
@@ -393,6 +421,11 @@ internal sealed class BufferedEncryptStream : Stream
     /// Writes bytes to the stream.
     /// <para>向流写入字节。</para>
     /// </summary>
+    /// <param name="buffer">
+    /// Plaintext source span appended to the pending buffer; an empty span still checks the buffered
+    /// total but stores nothing.
+    /// <para>追加到待加密缓冲区的明文源区间；空区间仍会检查累计量但不存储任何字节。</para>
+    /// </param>
     public override void Write(ReadOnlySpan<byte> buffer)
     {
         ThrowIfDisposed();
@@ -408,18 +441,42 @@ internal sealed class BufferedEncryptStream : Stream
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="buffer">
+    /// Destination array; never read because the call always throws.
+    /// <para>目标数组；因调用必定抛出异常而不会被读取。</para>
+    /// </param>
+    /// <param name="offset">
+    /// Write index into <paramref name="buffer"/>; never read because the call always throws.
+    /// <para><paramref name="buffer"/> 中的写入起始索引；因调用必定抛出异常而不会被读取。</para>
+    /// </param>
+    /// <param name="count">
+    /// Requested byte count; never read because the call always throws.
+    /// <para>请求读取的字节数；因调用必定抛出异常而不会被读取。</para>
+    /// </param>
     public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
     /// <summary>
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="offset">
+    /// Requested byte offset; never read because the call always throws.
+    /// <para>请求的字节偏移量；因调用必定抛出异常而不会被读取。</para>
+    /// </param>
+    /// <param name="origin">
+    /// Reference point for <paramref name="offset"/>; never read because the call always throws.
+    /// <para><paramref name="offset"/> 的参考原点；因调用必定抛出异常而不会被读取。</para>
+    /// </param>
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
 
     /// <summary>
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="value">
+    /// Requested stream length; never read because the call always throws.
+    /// <para>请求的流长度；因调用必定抛出异常而不会被读取。</para>
+    /// </param>
     public override void SetLength(long value) => throw new NotSupportedException();
 
     /// <summary>

@@ -83,6 +83,13 @@ public sealed class CountingReadStream : Stream
     /// Reads bytes from the stream.
     /// <para>从流中读取字节。</para>
     /// </summary>
+    /// <param name="buffer">Destination array receiving the bytes read from the wrapped stream.
+    /// <para>接收被包装流读取字节的目标数组。</para></param>
+    /// <param name="offset">Index in <paramref name="buffer"/> where the copied bytes start.
+    /// <para><paramref name="buffer"/> 中复制字节的起始索引。</para></param>
+    /// <param name="count">Maximum number of bytes to read. <para>最多读取的字节数。</para></param>
+    /// <returns>The number of bytes returned by the wrapped stream, added to the running counter;
+    /// <c>0</c> at end of stream. <para>被包装流返回的字节数，会计入累计计数；流结束时为 <c>0</c>。</para></returns>
     public override int Read(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);
@@ -97,6 +104,10 @@ public sealed class CountingReadStream : Stream
     /// Reads bytes from the stream.
     /// <para>从流中读取字节。</para>
     /// </summary>
+    /// <param name="buffer">Destination span to fill; an empty span reads nothing and leaves the counter
+    /// unchanged. <para>要填充的目标区间；空区间不读取且不改动计数。</para></param>
+    /// <returns>The number of bytes returned by the wrapped stream, added to the running counter;
+    /// <c>0</c> at end of stream. <para>被包装流返回的字节数，会计入累计计数；流结束时为 <c>0</c>。</para></returns>
     public override int Read(Span<byte> buffer)
     {
         ThrowIfDisposed();

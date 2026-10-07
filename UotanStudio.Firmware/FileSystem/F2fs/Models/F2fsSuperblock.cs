@@ -133,6 +133,10 @@ internal sealed class F2fsSuperblock
     /// Checks whether the image head contains the F2FS magic (4 bytes at offset 1024).
     /// <para>判断镜像头部是否包含 f2fs 魔数（偏移 1024 处 4 字节）。</para>
     /// </summary>
+    /// <param name="image">Leading image bytes counted from offset 0; fewer than <see cref="SuperblockOffset"/> plus four bytes cannot hold the magic.
+    /// <para>从偏移 0 计算的镜像前导字节；不足 <see cref="SuperblockOffset"/> 加 4 字节时不可能含魔数。</para></param>
+    /// <returns><see langword="true"/> when the little-endian uint32 stored at <see cref="SuperblockOffset"/> equals <see cref="Magic"/>.
+    /// <para><see cref="SuperblockOffset"/> 处的小端 uint32 等于 <see cref="Magic"/> 时返回 <see langword="true"/>。</para></returns>
     public static bool HasMagic(ReadOnlySpan<byte> image)
         => image.Length >= SuperblockOffset + 4
            && BinaryPrimitives.ReadUInt32LittleEndian(image.Slice(SuperblockOffset, 4)) == Magic;
@@ -141,6 +145,10 @@ internal sealed class F2fsSuperblock
     /// Checks whether a 4-byte slice holds the magic value (little-endian 0xF2F52010).
     /// <para>判断 4 字节片段是否为魔数（小端 0xF2F52010）。</para>
     /// </summary>
+    /// <param name="fourBytes">Slice taken from anywhere in the image; fewer than four bytes never match.
+    /// <para>可取自镜像任意位置的片段；不足 4 字节时永不匹配。</para></param>
+    /// <returns><see langword="true"/> when the slice's little-endian uint32 equals <see cref="Magic"/>.
+    /// <para>片段的小端 uint32 等于 <see cref="Magic"/> 时返回 <see langword="true"/>。</para></returns>
     public static bool IsMagicBytes(ReadOnlySpan<byte> fourBytes)
         => fourBytes.Length >= 4
            && BinaryPrimitives.ReadUInt32LittleEndian(fourBytes) == Magic;
@@ -149,6 +157,10 @@ internal sealed class F2fsSuperblock
     /// Parses the superblock from the superblock region (at least 3072 bytes starting at offset 1024); throws FormatException when the magic does not match.
     /// <para>从超级块区域（偏移 1024 起、长度至少 3072 字节）解析超级块；魔数不符时抛出 FormatException。</para>
     /// </summary>
+    /// <param name="data">Superblock region counted from its own offset 0 and at least <see cref="SuperblockSize"/> bytes long, so the magic sits at the start of the span rather than at the image offset.
+    /// <para>以其自身偏移 0 起始的超级块区域，长度至少为 <see cref="SuperblockSize"/> 字节，因此魔数位于该区间起始处而不是镜像偏移处。</para></param>
+    /// <returns>Superblock holding the geometry exponents, section and segment counts, area start blocks, root, node and meta inode numbers, the 16-byte UUID, the volume name decoded up to the first zero UTF-16 unit, cp payload, 256 version bytes and the feature word.
+    /// <para>返回的超级块含几何指数、section 与 segment 计数、各区域起始块、root/node/meta inode 号、16 字节 UUID、在首个零 UTF-16 单元前解码出的卷标、cp payload、256 字节版本信息以及 feature 字。</para></returns>
     public static F2fsSuperblock FromBytes(ReadOnlySpan<byte> data)
     {
         if (data.Length < SuperblockSize)
@@ -202,6 +214,10 @@ internal sealed class F2fsSuperblock
     /// Parses the superblock from a full image (locating offset 1024 automatically).
     /// <para>从完整镜像解析超级块（自动定位到偏移 1024）。</para>
     /// </summary>
+    /// <param name="image">Image bytes from offset 0 including the reserved boot area; <see cref="SuperblockOffset"/> plus <see cref="SuperblockSize"/> bytes must be present.
+    /// <para>从偏移 0 起始的镜像字节，含保留引导区；必须能覆盖 <see cref="SuperblockOffset"/> 加 <see cref="SuperblockSize"/> 字节。</para></param>
+    /// <returns>Superblock read from the region beginning at <see cref="SuperblockOffset"/>, with the same magic requirement as <see cref="FromBytes"/>.
+    /// <para>取自 <see cref="SuperblockOffset"/> 起始区域的超级块，魔数要求与 <see cref="FromBytes"/> 相同。</para></returns>
     public static F2fsSuperblock FromImage(ReadOnlySpan<byte> image)
     {
         if (image.Length < SuperblockOffset + SuperblockSize)
@@ -216,6 +232,8 @@ internal sealed class F2fsSuperblock
     /// Serializes the superblock into a buffer of at least 3072 bytes (unimplemented tail fields stay zero).
     /// <para>将超级块序列化到缓冲区（长度至少 3072 字节；未实现的尾部字段保持为零）。</para>
     /// </summary>
+    /// <param name="destination">Buffer offering at least <see cref="SuperblockSize"/> writable bytes; it is cleared entirely, the magic is written as the constant value, the UUID and version bytes are truncated to 16 and 256 bytes, the volume name is re-encoded as UTF-16 units and bytes of fields this model does not carry stay zero.
+    /// <para>至少提供 <see cref="SuperblockSize"/> 个可写字节的缓冲区；整个缓冲区先清零，魔数按常量写入，UUID 与版本字节分别截断到 16 与 256 字节，卷标重新编码为 UTF-16 单元，本模型未承载字段对应的字节保持为 0。</para></param>
     public void WriteTo(Span<byte> destination)
     {
         if (destination.Length < SuperblockSize)

@@ -157,12 +157,24 @@ internal sealed class ErofsSuperblock
     /// Computes the absolute byte offset of an inode from its nid: (meta_blkaddr &lt;&lt; s_blkszbits) + nid.
     /// <para>根据 nid 计算 inode 的绝对字节偏移：(meta_blkaddr &lt;&lt; s_blkszbits) + nid。</para>
     /// </summary>
+    /// <param name="nid">Inode number counted in <see cref="CompactInodeSize"/>-byte slots from the start of the
+    /// metadata area. <para>自元数据区起点、按 <see cref="CompactInodeSize"/> 字节槽计位的 inode 编号。</para></param>
+    /// <returns>The absolute image offset of that inode: <see cref="MetadataByteOffset"/> plus
+    /// <paramref name="nid"/> scaled by <see cref="CompactInodeSize"/>.
+    /// <para>该 inode 的镜像绝对偏移：<see cref="MetadataByteOffset"/> 加上 <paramref name="nid"/> 与
+    /// <see cref="CompactInodeSize"/> 的乘积。</para></returns>
     public long GetInodeOffset(ulong nid) => MetadataByteOffset + (long)nid * CompactInodeSize;
 
     /// <summary>
     /// Checks whether the image contains the EROFS magic (4 bytes at offset 1024).
     /// <para>判断镜像头部是否包含 erofs 魔数（偏移 1024 处 4 字节）。</para>
     /// </summary>
+    /// <param name="image">Leading image bytes; a span shorter than <see cref="SuperblockOffset"/> + 4 cannot
+    /// reach the magic field. <para>镜像起始字节；跨度短于 <see cref="SuperblockOffset"/> + 4 时无法触及魔数字段。</para></param>
+    /// <returns><see langword="true"/> when the four little-endian bytes at <see cref="SuperblockOffset"/> equal
+    /// <see cref="Magic"/>; otherwise <see langword="false"/>.
+    /// <para>偏移 <see cref="SuperblockOffset"/> 处的 4 字节小端值等于 <see cref="Magic"/> 时为
+    /// <see langword="true"/>，否则为 <see langword="false"/>。</para></returns>
     public static bool HasMagic(ReadOnlySpan<byte> image)
         => image.Length >= SuperblockOffset + 4
            && BinaryPrimitives.ReadUInt32LittleEndian(image.Slice(SuperblockOffset, 4)) == Magic;
@@ -171,6 +183,12 @@ internal sealed class ErofsSuperblock
     /// Checks whether a 4-byte slice holds the magic value (little-endian 0xE0F5E1E2).
     /// <para>判断 4 字节片段是否为魔数（小端 0xE0F5E1E2）。</para>
     /// </summary>
+    /// <param name="fourBytes">Candidate slice read little-endian; fewer than four bytes are never
+    /// accepted. <para>按小端读取的候选片段；不足 4 字节时一律不接受。</para></param>
+    /// <returns><see langword="true"/> when <paramref name="fourBytes"/> holds at least four bytes equal to
+    /// <see cref="Magic"/> in little-endian order; otherwise <see langword="false"/>.
+    /// <para><paramref name="fourBytes"/> 至少含 4 字节且按小端等于 <see cref="Magic"/> 时为
+    /// <see langword="true"/>，否则为 <see langword="false"/>。</para></returns>
     public static bool IsMagicBytes(ReadOnlySpan<byte> fourBytes)
         => fourBytes.Length >= 4
            && BinaryPrimitives.ReadUInt32LittleEndian(fourBytes) == Magic;
@@ -235,6 +253,13 @@ internal sealed class ErofsSuperblock
     /// Parses the superblock from the superblock region (at least 112 bytes starting at offset 1024); throws FormatException when the magic does not match.
     /// <para>从超级块区域（偏移 1024 起、长度至少 112 字节）解析超级块；魔数不符时抛出 FormatException。</para>
     /// </summary>
+    /// <param name="data">Superblock region starting at the magic field rather than at
+    /// <see cref="SuperblockOffset"/>; fewer than 112 bytes are rejected, and the trailing 48-bit fields decode
+    /// only when <paramref name="data"/> reaches their offsets.
+    /// <para>起始于魔数字段而非 <see cref="SuperblockOffset"/> 的超级块区域；不足 112 字节会被拒绝，
+    /// 尾部 48 位字段仅当 <paramref name="data"/> 覆盖其偏移时才解析。</para></param>
+    /// <returns>The decoded superblock, whose <see cref="MagicValue"/> carries the checked magic.
+    /// <para>解码得到的超级块，其 <see cref="MagicValue"/> 为已校验的魔数。</para></returns>
     public static ErofsSuperblock FromBytes(ReadOnlySpan<byte> data)
     {
         if (data.Length < SuperblockSize)
@@ -300,6 +325,13 @@ internal sealed class ErofsSuperblock
     /// Parses the superblock from a full image (locating offset 1024 automatically).
     /// <para>从完整镜像解析超级块（自动定位到偏移 1024）。</para>
     /// </summary>
+    /// <param name="image">Whole image bytes; the region from <see cref="SuperblockOffset"/> must hold at least
+    /// 112 bytes, and a wider slot of <see cref="SuperblockSize"/> plus <see cref="SbExtSlots"/> multiplied by
+    /// <see cref="ExtSlotSize"/> is re-read whenever the image reaches it.
+    /// <para>完整镜像字节；自 <see cref="SuperblockOffset"/> 起的区域至少要有 112 字节；镜像覆盖更宽槽位时，
+    /// 按 <see cref="SuperblockSize"/> 加上 <see cref="SbExtSlots"/> 与 <see cref="ExtSlotSize"/> 的乘积重新读取。</para></param>
+    /// <returns>The superblock parsed from the widest slot the image actually contains.
+    /// <para>按镜像实际包含的最宽槽位解析得到的超级块。</para></returns>
     public static ErofsSuperblock FromImage(ReadOnlySpan<byte> image)
     {
         if (image.Length < SuperblockOffset + SuperblockSize - 16)
@@ -323,6 +355,9 @@ internal sealed class ErofsSuperblock
     /// Serializes the superblock into a buffer of at least 128 bytes (the classic layout fills the whole 128-byte slot).
     /// <para>将超级块序列化到缓冲区（长度至少 128 字节；经典布局写满 128 字节槽位）。</para>
     /// </summary>
+    /// <param name="destination">Destination span of at least <see cref="SuperblockSize"/> bytes; the span is
+    /// cleared before each field is written at its fixed little-endian offset.
+    /// <para>至少 <see cref="SuperblockSize"/> 字节的目标区间；先整体清零，再按固定小端偏移逐个写入字段。</para></param>
     public void WriteTo(Span<byte> destination)
     {
         if (destination.Length < SuperblockSize)

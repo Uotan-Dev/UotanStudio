@@ -37,6 +37,10 @@ internal readonly record struct Ext4DirectoryEntry
     /// Enumerates the directory entries inside one directory block.
     /// <para>枚举一个目录块内的所有目录项；遇到空尾部项（inode 为 0 且名称为 0） 或异常记录长度时停止。</para>
     /// </summary>
+    /// <param name="block">Bytes of one directory block; a record needs 8 header bytes plus its name, and a name longer than the space left in the block is truncated to it.
+    /// <para>单个目录块的字节；每条记录至少需要 8 字节头加上名称，超出块剩余空间的名称会被截断。</para></param>
+    /// <returns>Records with a non-zero inode in block order, empty when the first record is shorter than 8 bytes, declares a record length below 8 or carries an empty name.
+    /// <para>按块内顺序返回 inode 非零的记录；首条记录不足 8 字节、声明的记录长度小于 8 或名称为空时返回空列表。</para></returns>
     public static IReadOnlyList<Ext4DirectoryEntry> Enumerate(ReadOnlySpan<byte> block)
     {
         var result = new List<Ext4DirectoryEntry>();

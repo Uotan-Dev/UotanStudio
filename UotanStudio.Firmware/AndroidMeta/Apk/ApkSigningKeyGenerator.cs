@@ -90,8 +90,10 @@ public sealed record ApkSigningKeyOptions
     public string? KeyPassword { get; init; }
 }
 
-/// <summary>Paths of the generated signing material written to disk.</summary>
+/// <summary>
+/// Paths of the generated signing material written to disk.
 /// <para>生成并写入磁盘的签名材料路径。</para>
+/// </summary>
 /// <param name="PrivateKeyPath">Path of the PKCS#8 PEM private key (<c>baseName</c>.pk8). <para>PKCS#8 PEM 私钥路径（<c>baseName</c>.pk8）。</para></param>
 /// <param name="CertificatePath">Path of the self-signed certificate PEM (<c>baseName</c>.pem). <para>自签证书 PEM 路径（<c>baseName</c>.pem）。</para></param>
 /// <param name="PfxPath">Path of the PKCS#12 bundle (<c>baseName</c>.pfx), or <see langword="null"/> when PFX export was not requested. <para>PKCS#12 合并文件路径（<c>baseName</c>.pfx）；未请求导出 PFX 时为 null。</para></param>

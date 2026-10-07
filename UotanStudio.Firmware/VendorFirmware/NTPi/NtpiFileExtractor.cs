@@ -205,6 +205,15 @@ internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compresso
     /// Verifies the SHA-256 hash of extracted file data.
     /// <para>验证提取的文件数据的 SHA-256 哈希值。</para>
     /// </summary>
+    /// <param name="entry">
+    /// File entry whose declared <c>FileSha256Hash</c> is the expected value; an empty or <see langword="null"/> hash
+    /// means the entry declares no hash and the check passes.
+    /// <para>以其声明的 <c>FileSha256Hash</c> 作为期望值的文件条目；哈希为空或 <see langword="null"/> 表示该条目未声明哈希，检查直接通过。</para>
+    /// </param>
+    /// <param name="data">
+    /// Extracted bytes that are hashed; the array is read only and an empty array hashes to the SHA-256 of nothing.
+    /// <para>参与计算哈希的已提取字节；该数组只被读取，空数组按空输入的 SHA-256 计算。</para>
+    /// </param>
     public void VerifyHash(FileEntry entry, byte[] data)
     {
         ArgumentNullException.ThrowIfNull(entry);

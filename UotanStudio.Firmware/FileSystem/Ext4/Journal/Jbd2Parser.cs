@@ -30,6 +30,12 @@ internal sealed class Jbd2Parser
     /// Scans the journal log and returns all committed transactions.
     /// <para>扫描 journal 日志并返回所有已提交事务。</para>
     /// </summary>
+    /// <param name="journalSb">Parsed journal superblock supplying the start block, first sequence number, block count, block size and feature flags; a superblock without journal contents ends the scan immediately.
+    /// <para>已解析的日志超级块，提供起始块号、首个事务序列号、块数、块大小与特性标志；没有日志内容时扫描立即结束。</para></param>
+    /// <param name="readBlock">Reads one journal block by its 1-based block number and returns its bytes; a block shorter than the journal block size is left out of the transaction.
+    /// <para>按从 1 开始的块号读取单个日志块并返回其字节；短于日志块大小的块不计入事务。</para></param>
+    /// <returns>Transactions holding both a descriptor block and a matching commit block, in ascending sequence order; the walk covers only the consecutive blocks from the start block that keep the recorded sequence.
+    /// <para>同时具备描述符块与匹配提交块的事务，按序列号升序排列；扫描只覆盖从起始块开始且序列号连续的相邻块。</para></returns>
     public static List<CommittedTransaction> ScanTransactions(
         JournalSuperblock journalSb,
         Func<uint, byte[]> readBlock)

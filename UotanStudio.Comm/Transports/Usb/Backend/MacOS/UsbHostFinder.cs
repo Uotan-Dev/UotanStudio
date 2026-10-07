@@ -61,6 +61,13 @@ internal static partial class UsbHostFinder
     /// <see cref="UsbHostDevice"/> 对象。IOUSBHost ObjC 类必须可加载——否则返回空
     /// 列表（提供器回退到 IOKit 经典查找器）。</para>
     /// </summary>
+    /// <param name="filter">
+    /// Optional vendor/product/serial filter; null keeps every service with a known
+    /// VID or PID. A blank <see cref="UsbDeviceFilter.SerialNumber"/> is ignored and a
+    /// provided one matches case-insensitively.
+    /// <para>可选的厂商/产品/序列号过滤器；null 时保留所有已知 VID 或 PID 的服务。
+    /// <see cref="UsbDeviceFilter.SerialNumber"/> 为空时忽略该项，提供时按不区分大小写匹配。</para>
+    /// </param>
     public static List<UsbDevice> FindDevice(UsbDeviceFilter? filter = null)
     {
         List<UsbDevice> devices = [];

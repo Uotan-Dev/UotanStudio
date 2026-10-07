@@ -13,6 +13,17 @@ internal static partial class DexWriter
     /// Serializes the model into a DEX byte array.
     /// <para>把模型序列化为 DEX 字节数组。</para>
     /// </summary>
+    /// <param name="dex">
+    /// Model to serialize; its <c>Header.Version</c> must be 035, 037, 038, 039 or 040 and method
+    /// handles or call sites require 038 or newer. Header fields, table offsets and sizes are
+    /// recomputed, so stored values are not reused. <see langword="null"/> is rejected.
+    /// <para>待序列化的模型；其 <c>Header.Version</c> 必须为 035、037、038、039 或 040，方法句柄或调用点则要求
+    /// 038 及以上。头部字段与各表的偏移和大小都会重新计算，已有取值不会被沿用。<see langword="null"/> 会被拒绝。</para>
+    /// </param>
+    /// <returns>The little-endian DEX image bytes, with the SHA-1 signature taken over every byte after
+    /// the signature field and the Adler-32 checksum taken over every byte after the checksum field both
+    /// written back into the header. <para>返回小端 DEX 镜像字节：对签名字段之后的全部字节计算 SHA-1 签名、
+    /// 对校验字段之后的全部字节计算 Adler-32 校验和，两者均回写到头部。</para></returns>
     public static byte[] Write(DexFile dex)
     {
         ArgumentNullException.ThrowIfNull(dex);

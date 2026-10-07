@@ -23,6 +23,11 @@ internal sealed class CompressionPayloadStaging : IDisposable
     /// length separately.
     /// <para>追加一个负载并返回其写入偏移；负载长度由调用方另行记录。</para>
     /// </summary>
+    /// <param name="payload">Compressed payload bytes appended at the current end of the staging file;
+    /// an empty span writes nothing and still yields the end offset held before the call.
+    /// <para>追加到暂存文件末尾的压缩负载字节；为空时不写入任何内容，仍返回调用前的末尾偏移。</para></param>
+    /// <returns>Absolute offset of <paramref name="payload"/> within the staging file.
+    /// <para>负载在暂存文件中的绝对起始偏移。</para></returns>
     public long Append(ReadOnlySpan<byte> payload)
     {
         lock (_appendLock)
@@ -37,6 +42,11 @@ internal sealed class CompressionPayloadStaging : IDisposable
     /// Reads a staged payload back into <paramref name="target"/>.
     /// <para>把一个暂存负载读回 <paramref name="target"/>。</para>
     /// </summary>
+    /// <param name="offset">Absolute offset returned by <see cref="Append"/> for the staged payload;
+    /// seeking to it is not bounded, so an offset past the end leaves too few bytes to read.
+    /// <para><see cref="Append"/> 为该暂存负载返回的绝对偏移；定位本身不做边界校验，偏移超出文件末尾时剩余字节不足。</para></param>
+    /// <param name="target">Destination span whose length selects how many staged bytes are read.
+    /// <para>目标区间，其长度决定读取的暂存字节数。</para></param>
     public void Read(long offset, Span<byte> target)
     {
         _file.Seek(offset, SeekOrigin.Begin);

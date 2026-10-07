@@ -80,51 +80,104 @@ internal static partial class ObjcRuntime
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial IntPtr MsgSendObject(IntPtr receiver, IntPtr sel);
 
-    /// <summary>-(NSUInteger)method — NSUInteger getters.</summary>
+    /// <summary>-(NSUInteger)method — NSUInteger getters. <para>NSUInteger getter 方法的调用形状。</para></summary>
+    /// <param name="receiver">ObjC receiver object pointer. <para>接收者对象指针。</para></param>
+    /// <param name="sel">Registered selector. <para>已注册的选择器。</para></param>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial ulong MsgSendUlong(IntPtr receiver, IntPtr sel);
 
-    /// <summary>-(io_service_t)method — 32-bit mach port getters (e.g. ioService).</summary>
+    /// <summary>-(io_service_t)method — 32-bit mach port getters (e.g. ioService). <para>io_service_t 等 32 位 mach port getter 方法的调用形状（如 ioService）。</para></summary>
+    /// <param name="receiver">ObjC receiver object pointer. <para>接收者对象指针。</para></param>
+    /// <param name="sel">Registered selector. <para>已注册的选择器。</para></param>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial uint MsgSendUint(IntPtr receiver, IntPtr sel);
 
-    /// <summary>-(void)method:(NSUInteger)value — e.g. setLength:.</summary>
+    /// <summary>-(void)method:(NSUInteger)value — e.g. setLength:. <para>带一个 NSUInteger 参数的 void 方法调用形状，如 setLength:。</para></summary>
+    /// <param name="receiver">ObjC receiver object pointer. <para>接收者对象指针。</para></param>
+    /// <param name="sel">Registered selector. <para>已注册的选择器。</para></param>
+    /// <param name="arg">The NSUInteger argument. <para>传入的 NSUInteger 参数。</para></param>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial void MsgSendVoid_Ulong(IntPtr receiver, IntPtr sel, ulong arg);
 
-    /// <summary>-(id)method:(NSUInteger)value — e.g. dataWithCapacity:.</summary>
+    /// <summary>-(id)method:(NSUInteger)value — e.g. dataWithCapacity:. <para>接受一个 NSUInteger 参数并返回对象的调用形状，如 dataWithCapacity:。</para></summary>
+    /// <param name="receiver">ObjC receiver object pointer. <para>接收者对象指针。</para></param>
+    /// <param name="sel">Registered selector. <para>已注册的选择器。</para></param>
+    /// <param name="arg">The NSUInteger argument. <para>传入的 NSUInteger 参数。</para></param>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial IntPtr MsgSendObject_Ulong(IntPtr receiver, IntPtr sel, ulong arg);
 
-    /// <summary>-(id)method:(NSUInteger)value error:(NSError**) — e.g. copyPipeWithAddress:error:.</summary>
+    /// <summary>-(id)method:(NSUInteger)value error:(NSError**) — e.g. copyPipeWithAddress:error:. <para>接受 NSUInteger 与 NSError** 并返回对象的调用形状，如 copyPipeWithAddress:error:。</para></summary>
+    /// <param name="receiver">ObjC receiver object pointer. <para>接收者对象指针。</para></param>
+    /// <param name="sel">Registered selector. <para>已注册的选择器。</para></param>
+    /// <param name="arg">The NSUInteger argument, e.g. an endpoint address. <para>NSUInteger 参数，如端点地址。</para></param>
+    /// <param name="error">NSError** slot written by the method on failure. <para>NSError** 槽位，方法失败时写入错误对象指针。</para></param>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial IntPtr MsgSendObject_Ulong_Error(IntPtr receiver, IntPtr sel, ulong arg, out IntPtr error);
 
-    /// <summary>-(BOOL)methodWithError:(NSError**) — e.g. resetWithError:.</summary>
+    /// <summary>-(BOOL)methodWithError:(NSError**) — e.g. resetWithError:. <para>只带 NSError** 的 BOOL 方法调用形状，如 resetWithError:。</para></summary>
+    /// <param name="receiver">ObjC receiver object pointer. <para>接收者对象指针。</para></param>
+    /// <param name="sel">Registered selector. <para>已注册的选择器。</para></param>
+    /// <param name="error">NSError** slot written by the method on failure. <para>NSError** 槽位，方法失败时写入错误对象指针。</para></param>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial byte MsgSendBool_OutErr(IntPtr receiver, IntPtr sel, out IntPtr error);
 
-    /// <summary>-(BOOL)selectAlternateSetting:(NSUInteger)alternateSetting error:(NSError**).</summary>
+    /// <summary>-(BOOL)selectAlternateSetting:(NSUInteger)alternateSetting error:(NSError**). <para>selectAlternateSetting:error: 的调用形状。</para></summary>
+    /// <param name="receiver">IOUSBHostInterface object pointer. <para>IOUSBHostInterface 对象指针。</para></param>
+    /// <param name="sel">Registered selector. <para>已注册的选择器。</para></param>
+    /// <param name="arg">Alternate setting index. <para>备用设置索引。</para></param>
+    /// <param name="error">NSError** slot written by the method on failure. <para>NSError** 槽位，方法失败时写入错误对象指针。</para></param>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial byte MsgSendBool_Ulong_OutErr(IntPtr receiver, IntPtr sel, ulong arg, out IntPtr error);
 
-    /// <summary>-(BOOL)configureWithValue:(NSUInteger)value matchInterfaces:(BOOL)matchInterfaces error:(NSError**).</summary>
+    /// <summary>-(BOOL)configureWithValue:(NSUInteger)value matchInterfaces:(BOOL)matchInterfaces error:(NSError**). <para>configureWithValue:matchInterfaces:error: 的调用形状。</para></summary>
+    /// <param name="receiver">ObjC receiver object pointer. <para>接收者对象指针。</para></param>
+    /// <param name="sel">Registered selector. <para>已注册的选择器。</para></param>
+    /// <param name="value">Configuration value. <para>配置值。</para></param>
+    /// <param name="matchInterfaces">ObjC BOOL as a byte; 0 = NO, any other value = YES. <para>以字节表示的 ObjC BOOL；0 为 NO，其余为 YES。</para></param>
+    /// <param name="error">NSError** slot written by the method on failure. <para>NSError** 槽位，方法失败时写入错误对象指针。</para></param>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial byte MsgSendBool_Ulong_Bool_OutErr(IntPtr receiver, IntPtr sel, ulong value, byte matchInterfaces, out IntPtr error);
 
-    /// <summary>-(id)initWithIOService:(uint)ioService options:(NSUInteger)options queue:(dispatch_queue_t)queue error:(NSError**)error interestHandler:(id)interestHandler.</summary>
+    /// <summary>-(id)initWithIOService:(uint)ioService options:(NSUInteger)options queue:(dispatch_queue_t)queue error:(NSError**)error interestHandler:(id)interestHandler. <para>initWithIOService:options:queue:error:interestHandler: 的调用形状。</para></summary>
+    /// <param name="receiver">Allocated instance pointer. <para>已分配（alloc）的实例指针。</para></param>
+    /// <param name="sel">Registered selector. <para>已注册的选择器。</para></param>
+    /// <param name="ioService">io_service_t mach port name of the IOKit service. <para>IOKit 服务的 io_service_t mach port 名。</para></param>
+    /// <param name="options">Open options bitmask. <para>打开选项位掩码。</para></param>
+    /// <param name="queue">dispatch_queue_t for interest notifications; nil is <see cref="IntPtr.Zero"/>. <para>投递 interest 通知的 dispatch_queue_t；nil 即 <see cref="IntPtr.Zero"/>。</para></param>
+    /// <param name="error">NSError** slot written by the method on failure. <para>NSError** 槽位，方法失败时写入错误对象指针。</para></param>
+    /// <param name="interestHandler">Observer object notified on device interest changes; nil is <see cref="IntPtr.Zero"/>. <para>设备 interest 变化的观察对象；nil 即 <see cref="IntPtr.Zero"/>。</para></param>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial IntPtr MsgSendObject_Init(IntPtr receiver, IntPtr sel, uint ioService, ulong options, IntPtr queue, out IntPtr error, IntPtr interestHandler);
 
-    /// <summary>-(BOOL)sendIORequestWithData:(NSMutableData*)data bytesTransferred:(NSUInteger*)bytesTransferred completionTimeout:(double)completionTimeout error:(NSError**)error.</summary>
+    /// <summary>-(BOOL)sendIORequestWithData:(NSMutableData*)data bytesTransferred:(NSUInteger*)bytesTransferred completionTimeout:(double)completionTimeout error:(NSError**)error. <para>sendIORequestWithData:bytesTransferred:completionTimeout:error: 的调用形状。</para></summary>
+    /// <param name="receiver">IOUSBHostPipe object pointer. <para>IOUSBHostPipe 对象指针。</para></param>
+    /// <param name="sel">Registered selector. <para>已注册的选择器。</para></param>
+    /// <param name="data">NSMutableData holding the transfer buffer; <see cref="IntPtr.Zero"/> (nil) sends a zero-length packet. <para>承载传输缓冲的 NSMutableData；<see cref="IntPtr.Zero"/>（nil）发送零长度包。</para></param>
+    /// <param name="bytesTransferred">NSUInteger receiving the transferred byte count. <para>返回实际传输字节数的 NSUInteger。</para></param>
+    /// <param name="completionTimeout">Timeout in seconds (NSTimeInterval); 0 waits without a timeout. <para>超时秒数（NSTimeInterval）；0 表示不设超时。</para></param>
+    /// <param name="error">NSError** slot written by the method on failure. <para>NSError** 槽位，方法失败时写入错误对象指针。</para></param>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial byte MsgSendBool_IO(IntPtr receiver, IntPtr sel, IntPtr data, ref ulong bytesTransferred, double completionTimeout, out IntPtr error);
 
-    /// <summary>-(BOOL)sendControlRequest:(IOUSBDeviceRequest)request data:(NSMutableData*)data bytesTransferred:(NSUInteger*)bytesTransferred completionTimeout:(double)completionTimeout error:(NSError**)error.</summary>
+    /// <summary>-(BOOL)sendControlRequest:(IOUSBDeviceRequest)request data:(NSMutableData*)data bytesTransferred:(NSUInteger*)bytesTransferred completionTimeout:(double)completionTimeout error:(NSError**)error. <para>sendControlRequest:data:bytesTransferred:completionTimeout:error: 的调用形状。</para></summary>
+    /// <param name="receiver">IOUSBHostInterface object pointer. <para>IOUSBHostInterface 对象指针。</para></param>
+    /// <param name="sel">Registered selector. <para>已注册的选择器。</para></param>
+    /// <param name="request">Setup packet passed by value in one integer register. <para>按值在单个整数寄存器中传递的建立包。</para></param>
+    /// <param name="data">NSMutableData holding the data stage; <see cref="IntPtr.Zero"/> for a zero-length request. <para>承载数据阶段的 NSMutableData；零长度请求为 <see cref="IntPtr.Zero"/>。</para></param>
+    /// <param name="bytesTransferred">NSUInteger receiving the data-stage byte count. <para>返回数据阶段实际字节数的 NSUInteger。</para></param>
+    /// <param name="completionTimeout">Timeout in seconds (NSTimeInterval); 0 waits without a timeout. <para>超时秒数（NSTimeInterval）；0 表示不设超时。</para></param>
+    /// <param name="error">NSError** slot written by the method on failure. <para>NSError** 槽位，方法失败时写入错误对象指针。</para></param>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial byte MsgSendBool_Control(IntPtr receiver, IntPtr sel, UsbHostDeviceRequest request, IntPtr data, ref ulong bytesTransferred, double completionTimeout, out IntPtr error);
 
-    /// <summary>-(BOOL)sendDeviceRequest:(IOUSBDeviceRequest)request data:(NSMutableData*)data bytesTransferred:(NSUInteger*)bytesTransferred completionTimeout:(double)completionTimeout error:(NSError**)error.</summary>
+    /// <summary>-(BOOL)sendDeviceRequest:(IOUSBDeviceRequest)request data:(NSMutableData*)data bytesTransferred:(NSUInteger*)bytesTransferred completionTimeout:(double)completionTimeout error:(NSError**)error. <para>sendDeviceRequest:data:bytesTransferred:completionTimeout:error: 的调用形状。</para></summary>
+    /// <param name="receiver">IOUSBHostDevice object pointer. <para>IOUSBHostDevice 对象指针。</para></param>
+    /// <param name="sel">Registered selector. <para>已注册的选择器。</para></param>
+    /// <param name="request">Setup packet passed by value in one integer register. <para>按值在单个整数寄存器中传递的建立包。</para></param>
+    /// <param name="data">NSMutableData holding the data stage; <see cref="IntPtr.Zero"/> for a zero-length request. <para>承载数据阶段的 NSMutableData；零长度请求为 <see cref="IntPtr.Zero"/>。</para></param>
+    /// <param name="bytesTransferred">NSUInteger receiving the data-stage byte count. <para>返回数据阶段实际字节数的 NSUInteger。</para></param>
+    /// <param name="completionTimeout">Timeout in seconds (NSTimeInterval); 0 waits without a timeout. <para>超时秒数（NSTimeInterval）；0 表示不设超时。</para></param>
+    /// <param name="error">NSError** slot written by the method on failure. <para>NSError** 槽位，方法失败时写入错误对象指针。</para></param>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial byte MsgSendBool_DeviceRequest(IntPtr receiver, IntPtr sel, UsbHostDeviceRequest request, IntPtr data, ref ulong bytesTransferred, double completionTimeout, out IntPtr error);
 
@@ -156,6 +209,11 @@ internal static partial class ObjcRuntime
         /// Builds a setup packet from USB 2.0 §9.3 fields.
         /// <para>由 USB 2.0 §9.3 字段构造建立包。</para>
         /// </summary>
+        /// <param name="bmRequestType">Direction, type and recipient byte. <para>方向、类型与接收者字节。</para></param>
+        /// <param name="bRequest">Standard or class request code. <para>标准或类请求码。</para></param>
+        /// <param name="wValue">Request-specific 16-bit value. <para>与请求相关的 16 位值。</para></param>
+        /// <param name="wIndex">Index, usually an interface or endpoint number. <para>索引，通常为接口号或端点号。</para></param>
+        /// <param name="wLength">Data-stage byte count; 0 for requests without a data stage. <para>数据阶段字节数；无数据阶段时为 0。</para></param>
         public UsbHostDeviceRequest(byte bmRequestType, byte bRequest, ushort wValue, ushort wIndex, ushort wLength)
         {
             BmRequestType = bmRequestType;

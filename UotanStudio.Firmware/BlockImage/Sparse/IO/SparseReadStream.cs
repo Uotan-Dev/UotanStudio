@@ -89,6 +89,10 @@ public sealed class SparseReadStream : Stream
     /// Reads up to buffer.Length bytes starting at the current position and advances the position by the number of bytes actually read.
     /// <para>从当前位置读取最多 buffer.Length 个字节，并将位置前进实际读取的字节数。</para>
     /// </summary>
+    /// <param name="buffer">Destination span to fill; an empty span reads nothing and leaves the position unchanged.
+    /// <para>要填充的目标区间；空区间不读取任何字节，位置保持不变。</para></param>
+    /// <returns>The number of bytes copied into <paramref name="buffer"/>, <c>0</c> once the position reaches the end of the logical image.
+    /// <para>复制到 <paramref name="buffer"/> 的字节数；位置到达逻辑镜像末尾时为 <c>0</c>。</para></returns>
     public override int Read(Span<byte> buffer)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -115,6 +119,13 @@ public sealed class SparseReadStream : Stream
     /// Reads up to count bytes starting at the current position and advances the position by the number of bytes actually read.
     /// <para>从当前位置读取最多 count 个字节，并将位置前进实际读取的字节数。</para>
     /// </summary>
+    /// <param name="buffer">Destination array receiving the logical bytes. <para>接收逻辑字节的目标数组。</para></param>
+    /// <param name="offset">Index in <paramref name="buffer"/> where the copied bytes start.
+    /// <para><paramref name="buffer"/> 中复制字节的起始索引。</para></param>
+    /// <param name="count">Maximum number of bytes to read; holes and don't-care regions yield zeros.
+    /// <para>最多读取的字节数；空隙与 don't-care 区域返回零。</para></param>
+    /// <returns>The number of bytes written into <paramref name="buffer"/>, <c>0</c> once the position reaches the end of the logical image.
+    /// <para>写入 <paramref name="buffer"/> 的字节数；位置到达逻辑镜像末尾时为 <c>0</c>。</para></returns>
     public override int Read(byte[] buffer, int offset, int count)
     {
         ValidateBufferArguments(buffer, offset, count);
@@ -125,6 +136,26 @@ public sealed class SparseReadStream : Stream
     /// Sets the position within the logical image relative to the specified origin.
     /// <para>设置逻辑镜像中相对于指定参考点的位置。</para>
     /// </summary>
+    /// <param name="offset">Byte displacement added to the origin; negative values are accepted for
+    /// <see cref="SeekOrigin.Current"/> and <see cref="SeekOrigin.End"/>, the addition rejects overflow,
+    /// and a target before the start of the stream is rejected.
+    /// <para>叠加在参考点上的字节位移；<see cref="SeekOrigin.Current"/> 与 <see cref="SeekOrigin.End"/>
+    /// 允许负值，相加时拒绝溢出，落在流起点之前的目标会被拒绝。</para></param>
+    /// <param name="origin">Reference point: <see cref="SeekOrigin.Begin"/> measures from the start of the
+    /// logical stream, <see cref="SeekOrigin.Current"/> from the current position and
+    /// <see cref="SeekOrigin.End"/> from <see cref="Length"/>; only these three values are accepted.
+    /// <para>参考点：<see cref="SeekOrigin.Begin"/> 从逻辑流起点计算，<see cref="SeekOrigin.Current"/>
+    /// 从当前位置计算，<see cref="SeekOrigin.End"/> 从 <see cref="Length"/> 计算；仅接受这三个值。</para></param>
+    /// <returns>The new absolute position, which may exceed <see cref="Length"/>; reads at such a
+    /// position return <c>0</c> bytes.
+    /// <para>新的绝对位置，可以超出 <see cref="Length"/>；在该位置读取返回 <c>0</c> 字节。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="origin"/> is not one of the three supported
+    /// seek origins. <para><paramref name="origin"/> 不是三个受支持的寻址参考点之一。</para></exception>
+    /// <exception cref="IOException">The computed target position lies before the beginning of the stream.
+    /// <para>计算出的目标位置位于流起点之前。</para></exception>
+    /// <exception cref="OverflowException">Adding <paramref name="offset"/> to the current position or to
+    /// <see cref="Length"/> overflows <see cref="long"/>.
+    /// <para><paramref name="offset"/> 与当前位置或 <see cref="Length"/> 相加时溢出 <see cref="long"/>。</para></exception>
     public override long Seek(long offset, SeekOrigin origin)
     {
         if (origin is < SeekOrigin.Begin or > SeekOrigin.End)
@@ -160,12 +191,21 @@ public sealed class SparseReadStream : Stream
     /// Throws NotSupportedException because the stream is read-only.
     /// <para>因为流是只读的而抛出 NotSupportedException。</para>
     /// </summary>
+    /// <param name="buffer">Ignored; no bytes are read from it. <para>被忽略；不会从中读取字节。</para></param>
+    /// <param name="offset">Ignored index into <paramref name="buffer"/>. <para>被忽略的 <paramref name="buffer"/> 内索引。</para></param>
+    /// <param name="count">Ignored byte count. <para>被忽略的字节数量。</para></param>
+    /// <exception cref="NotSupportedException">Always thrown: the stream exposes expanded image bytes and accepts no writes.
+    /// <para>总是抛出：该流仅公开展开后的镜像字节，不接受写入。</para></exception>
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException("SparseReadStream is read-only.");
 
     /// <summary>
     /// Throws NotSupportedException because the stream is read-only.
     /// <para>因为流是只读的而抛出 NotSupportedException。</para>
     /// </summary>
+    /// <param name="value">Ignored length; the logical size always comes from the sparse header.
+    /// <para>被忽略的长度；逻辑大小始终取自稀疏头部。</para></param>
+    /// <exception cref="NotSupportedException">Always thrown because the logical size cannot be changed.
+    /// <para>总是抛出，因为逻辑大小无法更改。</para></exception>
     public override void SetLength(long value) => throw new NotSupportedException("SparseReadStream is read-only.");
 
     /// <summary>

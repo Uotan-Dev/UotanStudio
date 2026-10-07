@@ -94,6 +94,12 @@ public sealed class CountingWriteStream : Stream
     /// Writes bytes to the stream.
     /// <para>向流写入字节。</para>
     /// </summary>
+    /// <param name="buffer">Source array whose bytes are forwarded to the inner stream.
+    /// <para>将其字节转发给底层流的源数组。</para></param>
+    /// <param name="offset">Index in <paramref name="buffer"/> of the first byte to write.
+    /// <para><paramref name="buffer"/> 中待写入首字节的索引。</para></param>
+    /// <param name="count">Number of bytes to write; the value counts against <see cref="MaximumBytes"/>.
+    /// <para>待写入的字节数；该值会计入 <see cref="MaximumBytes"/> 预算。</para></param>
     public override void Write(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);
@@ -107,6 +113,12 @@ public sealed class CountingWriteStream : Stream
     /// Writes bytes to the stream.
     /// <para>向流写入字节。</para>
     /// </summary>
+    /// <param name="buffer">Source span forwarded to the inner stream; an empty span still checks the
+    /// write budget but transfers nothing.
+    /// <para>转发给底层流的目标区间；空区间仍会检查写入预算但不传输任何字节。</para></param>
+    /// <exception cref="IOException">Adding <paramref name="buffer"/> to <see cref="BytesWritten"/>
+    /// overflows or exceeds <see cref="MaximumBytes"/>.
+    /// <para>将 <paramref name="buffer"/> 累加到 <see cref="BytesWritten"/> 后溢出或超出 <see cref="MaximumBytes"/>。</para></exception>
     public override void Write(ReadOnlySpan<byte> buffer)
     {
         ThrowIfDisposed();
@@ -121,6 +133,11 @@ public sealed class CountingWriteStream : Stream
     /// Writes bytes to the stream asynchronously.
     /// <para>异步向流写入字节。</para>
     /// </summary>
+    /// <param name="buffer">Bytes forwarded to the inner stream; an empty memory still counts as zero bytes
+    /// and is passed through. <para>转发给底层流的字节；为空时按 0 字节计入预算并仍然转发。</para></param>
+    /// <param name="cancellationToken">Token checked before the budget test and forwarded to the inner stream;
+    /// an already cancelled token throws without writing any byte.
+    /// <para>在预算校验前检查并转发给底层流的取消令牌；若令牌已被取消则直接抛出，不写入任何字节。</para></param>
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -140,21 +157,35 @@ public sealed class CountingWriteStream : Stream
     /// Flushes buffered data asynchronously.
     /// <para>异步刷新缓冲数据。</para>
     /// </summary>
+    /// <param name="cancellationToken">Token handed to the inner stream; this wrapper only rejects a disposed
+    /// counter and does not test the token itself. <para>交给底层流的取消令牌；本包装器只拒绝已释放的计数器，自身不检查该令牌。</para></param>
     public override Task FlushAsync(CancellationToken cancellationToken) { ThrowIfDisposed(); return _inner.FlushAsync(cancellationToken); }
     /// <summary>
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="buffer">Buffer never touched, since the wrapper forwards writes only.
+    /// <para>从不接触的缓冲区，因为包装器只转发写入。</para></param>
+    /// <param name="offset">Index rejected together with the call. <para>随调用一并被拒绝的索引。</para></param>
+    /// <param name="count">Byte count rejected together with the call. <para>随调用一并被拒绝的字节数。</para></param>
     public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     /// <summary>
     /// Repositions the underlying stream while continuing to count writes.
     /// <para>定位到底层流位置并继续累计写入字节。</para>
     /// </summary>
+    /// <param name="offset">Displacement interpreted through <paramref name="origin"/> and handed to the inner
+    /// stream unchanged. <para>按 <paramref name="origin"/> 解释并原样交给底层流的偏移量。</para></param>
+    /// <param name="origin">Reference point of the displacement. <para>偏移量的参照点。</para></param>
+    /// <returns>The new position reported by the inner stream; <see cref="BytesWritten"/> is untouched.
+    /// <para>底层流报告的新位置；<see cref="BytesWritten"/> 保持不变。</para></returns>
     public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
     /// <summary>
     /// Resizes the underlying stream while continuing to count writes.
     /// <para>调整底层流大小并继续累计写入字节。</para>
     /// </summary>
+    /// <param name="value">New length of the inner stream in bytes; the write budget exposed by
+    /// <see cref="MaximumBytes"/> and the counter in <see cref="BytesWritten"/> stay unchanged.
+    /// <para>底层流的新长度（字节）；<see cref="MaximumBytes"/> 表示的写入预算与 <see cref="BytesWritten"/> 计数均保持不变。</para></param>
     public override void SetLength(long value) => _inner.SetLength(value);
 
     /// <summary>

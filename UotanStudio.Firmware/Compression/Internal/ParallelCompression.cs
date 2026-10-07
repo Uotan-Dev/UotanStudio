@@ -8,6 +8,23 @@ internal static class ParallelCompression
     /// When parallelism is applicable (degree &gt; 1 and at least two chunks), compresses the chunks in parallel and returns the concatenated result in chunk order; otherwise returns null and the caller should use its existing sequential path (byte-identical to the previous implementation).
     /// <para>若并行可用（并行度 &gt; 1 且至少两个块），并行压缩各块并返回按序拼接结果； 否则返回 null，调用方应走原有串行路径（输出与既有实现逐字节一致）。</para>
     /// </summary>
+    /// <param name="data">Complete uncompressed input, split into <see cref="DefaultChunkSize"/>-byte
+    /// chunks with a shorter final chunk; an empty array always takes the sequential path and yields
+    /// <see langword="null"/>. <para>完整的未压缩输入，按 <see cref="DefaultChunkSize"/> 字节切块，最后一块可以更短；
+    /// 空数组始终走串行路径并返回 <see langword="null"/>。</para></param>
+    /// <param name="maxDegreeOfParallelism">Caller request resolved by <c>Parallelism.Resolve</c> against
+    /// the chunk count; <see langword="null"/> or any value of 1 and below leaves the result
+    /// <see langword="null"/>. <para>调用方请求，由 <c>Parallelism.Resolve</c> 与块数量共同解析；为
+    /// <see langword="null"/> 或不大于 1 时结果为 <see langword="null"/>。</para></param>
+    /// <param name="compressChunk">Callback invoked once per chunk with its start offset in
+    /// <paramref name="data"/> and its length, returning that chunk's compressed bytes; it may run on
+    /// several threads at once and must be thread-safe. A <see langword="null"/> callback is not detected
+    /// up front and fails when the first chunk is invoked.
+    /// <para>每个块调用一次的回调，参数为该块在 <paramref name="data"/> 中的起始偏移与长度，返回该块的压缩字节；
+    /// 它可能同时在多个线程上运行，因此必须线程安全。<see langword="null"/> 回调不会被提前发现，并在调用首个块时失败。</para></param>
+    /// <returns>The chunk results concatenated in chunk order, or <see langword="null"/> when parallelism
+    /// does not apply and the caller should compress sequentially.
+    /// <para>按块顺序拼接后的各块结果；并行不适用、调用方应改为串行压缩时返回 <see langword="null"/>。</para></returns>
     public static byte[]? TryCompressChunks(byte[] data, int? maxDegreeOfParallelism, Func<int, int, byte[]> compressChunk)
     {
         if (data.Length == 0)

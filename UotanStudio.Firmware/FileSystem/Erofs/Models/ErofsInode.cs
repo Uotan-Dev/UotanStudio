@@ -158,6 +158,13 @@ internal sealed class ErofsInode
     /// Parses an inode from bytes; selects compact/extended layout from the extended flag in i_format.
     /// <para>从字节解析 inode；根据 i_format 的 extended 标志自动选择 compact/extended 布局。</para>
     /// </summary>
+    /// <param name="data">Inode bytes beginning with the two-byte little-endian <c>i_format</c> advise field;
+    /// the extended layout needs <see cref="ExtendedSize"/> bytes and the compact layout
+    /// <see cref="CompactSize"/>.
+    /// <para>起始于 2 字节小端 <c>i_format</c> advise 字段的 inode 字节；extended 布局需要
+    /// <see cref="ExtendedSize"/> 字节，compact 布局需要 <see cref="CompactSize"/> 字节。</para></param>
+    /// <returns>The inode decoded with the layout selected by the extended flag of
+    /// <paramref name="data"/>. <para>按 <paramref name="data"/> 的 extended 标志选定布局解码得到的 inode。</para></returns>
     public static ErofsInode FromBytes(ReadOnlySpan<byte> data)
     {
         if (data.Length < 2)
@@ -224,6 +231,9 @@ internal sealed class ErofsInode
     /// Serializes the inode into a buffer of at least OnDiskSize bytes.
     /// <para>将 inode 序列化到缓冲区（长度须至少为 OnDiskSize）。</para>
     /// </summary>
+    /// <param name="destination">Destination span of at least <see cref="OnDiskSize"/> bytes; the span is cleared
+    /// before the compact or extended layout is written little-endian.
+    /// <para>至少 <see cref="OnDiskSize"/> 字节的目标区间；写入 compact 或 extended 小端布局前先整体清零。</para></param>
     public void WriteTo(Span<byte> destination)
     {
         if (destination.Length < OnDiskSize)

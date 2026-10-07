@@ -42,12 +42,29 @@ internal sealed class VerifyingReadStream : Stream
     /// Reads bytes from the stream into the buffer.
     /// <para>从流中读取字节到缓冲区。</para>
     /// </summary>
+    /// <param name="buffer">Destination array receiving the digested bytes.
+    /// <para>接收已计入摘要字节的目标数组。</para></param>
+    /// <param name="offset">Index in <paramref name="buffer"/> where the copied bytes start.
+    /// <para><paramref name="buffer"/> 中复制字节的起始索引。</para></param>
+    /// <param name="count">Maximum number of bytes to read. <para>最多读取的字节数。</para></param>
+    /// <returns>The number of bytes copied, fewer than <paramref name="count"/> at a buffering boundary or
+    /// end of input, <c>0</c> once the input is exhausted.
+    /// <para>复制的字节数；在缓冲边界或输入结尾处少于 <paramref name="count"/>；输入耗尽后为 <c>0</c>。</para></returns>
     public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
 
     /// <summary>
     /// Reads bytes from the stream into the buffer.
     /// <para>从流中读取字节到缓冲区。</para>
     /// </summary>
+    /// <param name="buffer">Destination span to fill; a span of at least 64 KiB is served straight from the
+    /// hashing wrapper, otherwise the pooled buffer is refilled on demand. An empty span reads nothing.
+    /// <para>要填充的目标区间；不小于 64 KiB 的区间由带摘要的包装器直接服务，否则按需重填池化缓冲区；
+    /// 空区间不读取任何字节。</para></param>
+    /// <returns>The number of bytes copied, fewer than the span length at a buffering boundary or end of
+    /// input, <c>0</c> once the input is exhausted.
+    /// <para>复制的字节数；在缓冲边界或输入结尾处少于区间长度；输入耗尽后为 <c>0</c>。</para></returns>
+    /// <exception cref="ObjectDisposedException">The pooled buffer has been returned by disposal.
+    /// <para>池化缓冲区已随释放归还。</para></exception>
     public override int Read(Span<byte> buffer)
     {
         ObjectDisposedException.ThrowIf(_buffer is null, this);
@@ -63,7 +80,12 @@ internal sealed class VerifyingReadStream : Stream
         return count;
     }
 
-    /// <summary>Serves codec byte reads without a lock, seek, allocation or hash update per byte.</summary>
+    /// <summary>Serves codec byte reads without a lock, seek, allocation or hash update per byte.
+    /// <para>为编解码器的逐字节读取服务：每个字节都不加锁、不定位、不分配，也不单独更新摘要。</para></summary>
+    /// <returns>The next byte of decompressed input as an <c>int</c> in the range 0 to 255, or <c>-1</c> once the input is exhausted.
+    /// <para>解压输入的下一个字节，取值 0 到 255；输入耗尽后为 <c>-1</c>。</para></returns>
+    /// <exception cref="ObjectDisposedException">The pooled buffer has been returned by disposal.
+    /// <para>池化缓冲区已随释放归还。</para></exception>
     public override int ReadByte()
     {
         ObjectDisposedException.ThrowIf(_buffer is null, this);
@@ -126,15 +148,23 @@ internal sealed class VerifyingReadStream : Stream
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="offset">Displacement ignored; seeking would skip bytes out of the SHA-256 digest.
+    /// <para>被忽略的偏移量；定位会让字节跳过 SHA-256 摘要计算。</para></param>
+    /// <param name="origin">Reference point ignored together with the call. <para>随调用一并被忽略的参照点。</para></param>
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
     /// <summary>
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="value">Requested length ignored; the input length belongs to the wrapped operation stream.
+    /// <para>被忽略的请求长度；输入长度归被包装的操作流所有。</para></param>
     public override void SetLength(long value) => throw new NotSupportedException();
     /// <summary>
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="buffer">Array never touched, since the stream is read-only. <para>从不接触的数组，因为该流只读。</para></param>
+    /// <param name="offset">Index ignored together with the call. <para>随调用一并被忽略的索引。</para></param>
+    /// <param name="count">Byte count ignored together with the call. <para>随调用一并被忽略的字节数。</para></param>
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 }

@@ -92,6 +92,12 @@ public sealed class HashingWriteStream : Stream
     /// Writes bytes to the stream.
     /// <para>向流写入字节。</para>
     /// </summary>
+    /// <param name="buffer">Source array whose bytes are digested and forwarded to the inner stream.
+    /// <para>其字节先并入摘要再转发给底层流的源数组。</para></param>
+    /// <param name="offset">Index in <paramref name="buffer"/> of the first byte written.
+    /// <para><paramref name="buffer"/> 中首个写入字节的索引。</para></param>
+    /// <param name="count">Number of bytes written; a zero count digests and forwards nothing.
+    /// <para>写入的字节数；为 0 时既不并入摘要也不转发。</para></param>
     public override void Write(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);
@@ -105,6 +111,9 @@ public sealed class HashingWriteStream : Stream
     /// Writes bytes to the stream.
     /// <para>向流写入字节。</para>
     /// </summary>
+    /// <param name="buffer">Source span whose full contents are digested and forwarded to the inner
+    /// stream; an empty span changes neither the digest nor the byte counter.
+    /// <para>整体先并入摘要再转发给底层流的源区间；空区间既不改变摘要也不改变字节计数。</para></param>
     public override void Write(ReadOnlySpan<byte> buffer)
     {
         ThrowIfDisposed();
@@ -120,6 +129,12 @@ public sealed class HashingWriteStream : Stream
     /// Writes bytes to the stream asynchronously.
     /// <para>异步向流写入字节。</para>
     /// </summary>
+    /// <param name="buffer">Bytes folded into the digest and forwarded to the inner stream; an empty memory is
+    /// not forwarded and leaves both the digest and the byte counter untouched.
+    /// <para>并入摘要并转发给底层流的字节；为空时不转发，摘要与字节计数都保持不变。</para></param>
+    /// <param name="cancellationToken">Token forwarded to the inner stream; the wrapper never tests it, so the
+    /// bytes enter the digest even when the token is already cancelled.
+    /// <para>转发给底层流的取消令牌；包装器不检查该令牌，因此即使令牌已被取消，字节仍会先并入摘要。</para></param>
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -140,16 +155,25 @@ public sealed class HashingWriteStream : Stream
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="buffer">Buffer never touched, since the wrapper accepts writes only.
+    /// <para>从不接触的缓冲区，因为包装器只接受写入。</para></param>
+    /// <param name="offset">Index rejected together with the call. <para>随调用一并被拒绝的索引。</para></param>
+    /// <param name="count">Byte count rejected together with the call. <para>随调用一并被拒绝的字节数。</para></param>
     public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     /// <summary>
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="offset">Displacement ignored, since seeking would let writes bypass the digest.
+    /// <para>被忽略的偏移量；定位会让写入绕过摘要计算。</para></param>
+    /// <param name="origin">Reference point ignored together with the call. <para>随调用一并被忽略的参照点。</para></param>
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
     /// <summary>
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="value">Requested length ignored, since the wrapper never queries or resizes the inner
+    /// stream. <para>被忽略的请求长度；包装器从不查询或调整底层流的长度。</para></param>
     public override void SetLength(long value) => throw new NotSupportedException();
 
     /// <summary>

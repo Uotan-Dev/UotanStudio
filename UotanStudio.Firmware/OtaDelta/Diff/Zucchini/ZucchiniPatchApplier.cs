@@ -8,6 +8,11 @@ internal static class ZucchiniPatchApplier
 {
     /// <summary>Describes a caller-confirmed raw equivalence used by the limited Raw/NoOp writer.
     /// <para>描述受限 Raw/NoOp 写入器使用的调用方确认的原始等价区间。</para></summary>
+    /// <param name="SourceOffset">Start offset of the run inside the old image. <para>该区段在旧镜像中的起始偏移。</para></param>
+    /// <param name="DestinationOffset">Start offset of the run inside the new image; the writer requires it to be at or
+    /// after the end of the previous run. <para>该区段在新镜像中的起始偏移；写入器要求它不小于前一段的结束位置。</para></param>
+    /// <param name="Length">Byte length of the identical run, which must be non-zero and fit in both images.
+    /// <para>相同字节段的长度，必须非零且在两个镜像内都不越界。</para></param>
     public readonly record struct Equivalence(uint SourceOffset, uint DestinationOffset, uint Length);
 
     /// <summary>
@@ -16,6 +21,16 @@ internal static class ZucchiniPatchApplier
     /// <para>根据调用方确认的原始等价区间创建标准 Zucc 补丁。写入器仅生成 Raw/NoOp 元素，绝不生成可执行引用或池；
     /// 不提供面向可执行文件的 Chromium Zucchini 生成。</para>
     /// </summary>
+    /// <param name="oldData">Source image the patch is built against; its length and CRC32 are recorded in the header.
+    /// <para>补丁所依据的源镜像；其长度与 CRC32 会记录在头部。</para></param>
+    /// <param name="newData">Target image the patch must reproduce; bytes not covered by an equivalence are stored literally.
+    /// <para>补丁需要重现的目标镜像；未被任何等价区间覆盖的字节按原样存入。</para></param>
+    /// <param name="equivalences">Runs in list order, each with a non-zero length that fits both images and a destination start at or after the previous run's end; gaps between runs contribute literal bytes. <see langword="null"/> is rejected and an empty list turns the whole target into literal bytes.
+    /// <para>按列表顺序处理的区段，每段长度非零、在两个镜像内都不越界，且起始偏移不早于前一段的结束位置；区段之间的空隙按字面字节写入。<see langword="null"/> 会被拒绝，空列表则把整个目标镜像写成字面字节。</para></param>
+    /// <param name="cancellationToken">Checked before every run and before each copied or differenced byte; cancellation leaves no partial patch because the result is returned only at the end.
+    /// <para>在处理每段之前以及每次复制或求差字节之前检查；由于结果只在末尾返回，取消不会留下半成品补丁。</para></param>
+    /// <returns>Complete <c>Zucc</c> container: header with magic, version, both sizes and both CRC32 values, the Raw executable type, then the length-prefixed source-skip, destination-skip, length, extra-byte, delta-skip and delta-byte streams.
+    /// <para>完整的 <c>Zucc</c> 容器：含魔数、版本、两个长度与两个 CRC32 的头部，Raw 可执行类型，随后是带长度前缀的 source-skip、destination-skip、length、extra、delta-skip 与 delta-byte 流。</para></returns>
     public static byte[] CreateRawPatch(ReadOnlySpan<byte> oldData, ReadOnlySpan<byte> newData,
         IReadOnlyList<Equivalence> equivalences, CancellationToken cancellationToken = default)
     {

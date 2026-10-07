@@ -11,6 +11,11 @@ internal sealed class KeyDerivationCache : IDisposable
     /// Gets or derives a QC key.
     /// <para>获取或派生 QC 密钥。</para>
     /// </summary>
+    /// <param name="entry">QC key material whose <c>KeyId</c> is the cache slot; a new entry is derived on the first
+    /// lookup for that identifier and reused afterwards. Must not be <see langword="null"/>.
+    /// <para>QC 密钥材料，其 <c>KeyId</c> 即缓存槽位；某个标识符首次查询时派生新结果，之后重复使用。不得为 <see langword="null"/>。</para></param>
+    /// <returns>Fresh clones of the derived 16-byte AES key and IV, so mutating them does not affect the cached
+    /// material. <para>派生的 AES 密钥与 IV 的新克隆，修改返回值不会影响缓存中的材料。</para></returns>
     public (byte[] AesKey, byte[] AesIv) GetOrDeriveQcKey(QcKeyEntry entry)
     {
         if (entry is null)
@@ -26,6 +31,12 @@ internal sealed class KeyDerivationCache : IDisposable
     /// Gets or derives an MTK key.
     /// <para>获取或派生 MTK 密钥。</para>
     /// </summary>
+    /// <param name="entry">MTK key material whose <c>KeyId</c> is the cache slot; <c>Is3Element</c> selects the wrapped
+    /// derivation and <c>Is2Element</c> the direct-text one. Must not be <see langword="null"/>.
+    /// <para>MTK 密钥材料，其 <c>KeyId</c> 即缓存槽位；<c>Is3Element</c> 选择包装派生，<c>Is2Element</c> 选择直接文本派生。不得为 <see langword="null"/>。</para></param>
+    /// <returns>Fresh clones of the derived AES key and IV, so mutating them does not affect the cached material. An
+    /// entry in neither shape fails the derivation.
+    /// <para>派生的 AES 密钥与 IV 的新克隆，修改返回值不会影响缓存中的材料。两种形态都不满足的条目会使派生失败。</para></returns>
     public (byte[] AesKey, byte[] AesIv) GetOrDeriveMtkKey(MtkKeyEntry entry)
     {
         if (entry is null)

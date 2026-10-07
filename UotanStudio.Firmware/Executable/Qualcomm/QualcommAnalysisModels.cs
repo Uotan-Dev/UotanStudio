@@ -78,6 +78,14 @@ public sealed record QualcommSegmentDigest(int SegmentIndex, int? PageIndex, Qua
 
 /// <summary>Describes one bounded ELF component discovered in a Qualcomm multi-component image.
 /// <para>描述 Qualcomm 多组件镜像中发现的一个有界 ELF 组件。</para></summary>
+/// <param name="Offset">Absolute offset of the ELF magic of this component inside the scanned image.
+/// <para>该组件的 ELF 魔数在被扫描镜像中的绝对偏移。</para></param>
+/// <param name="Length">Bytes attributed to the component, measured up to the start of the next component or,
+/// for the last one, up to the end of the image. <para>归属该组件的字节数，以下一个组件起点或镜像末尾为界。</para></param>
+/// <param name="Is64Bit"><see langword="true"/> for an ELFCLASS64 header; <see langword="false"/> reports an
+/// ELFCLASS32 header. <para>ELFCLASS64 头为 <see langword="true"/>，<see langword="false"/> 表示 ELFCLASS32 头。</para></param>
+/// <param name="Machine">Declared <c>e_machine</c> value, such as <c>0xB7</c> for AArch64.
+/// <para>声明的 <c>e_machine</c> 值，例如 AArch64 为 <c>0xB7</c>。</para></param>
 public sealed record QualcommMelfComponent(long Offset, long Length, bool Is64Bit, ushort Machine);
 
 /// <summary>Exposes bounded certificate metadata without exporting private keys.

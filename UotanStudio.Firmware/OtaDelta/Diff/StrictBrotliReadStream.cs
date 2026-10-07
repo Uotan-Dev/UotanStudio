@@ -90,14 +90,20 @@ public sealed class StrictBrotliReadStream(Stream input) : Stream
     public override void Flush() { }
 
     /// <summary>Not supported. <para>不支持。</para></summary>
+    /// <param name="offset">Displacement ignored; the Brotli output has no positional model. <para>被忽略的偏移量；Brotli 解压输出没有位置模型。</para></param>
+    /// <param name="origin">Reference point ignored together with the call. <para>随调用一并被忽略的参照点。</para></param>
     /// <exception cref="NotSupportedException">Always thrown. <para>始终抛出。</para></exception>
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
 
     /// <summary>Not supported. <para>不支持。</para></summary>
+    /// <param name="value">Requested length ignored; the stream never resizes its source. <para>被忽略的请求长度；该流从不改变源流大小。</para></param>
     /// <exception cref="NotSupportedException">Always thrown. <para>始终抛出。</para></exception>
     public override void SetLength(long value) => throw new NotSupportedException();
 
     /// <summary>Not supported. <para>不支持。</para></summary>
+    /// <param name="buffer">Array never touched, since the stream is read-only. <para>从不接触的数组，因为该流只读。</para></param>
+    /// <param name="offset">Index ignored together with the call. <para>随调用一并被忽略的索引。</para></param>
+    /// <param name="count">Byte count ignored together with the call. <para>随调用一并被忽略的字节数。</para></param>
     /// <exception cref="NotSupportedException">Always thrown. <para>始终抛出。</para></exception>
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 }

@@ -123,6 +123,22 @@ public sealed class BoundedReadStream : Stream
     /// Reads bytes from the stream into the buffer.
     /// <para>从流中读取字节到缓冲区。</para>
     /// </summary>
+    /// <param name="buffer">Destination array receiving the window bytes. <para>接收窗口字节的目标数组。</para></param>
+    /// <param name="offset">Index in <paramref name="buffer"/> where the copied bytes start.
+    /// <para><paramref name="buffer"/> 中复制字节的起始索引。</para></param>
+    /// <param name="count">Maximum number of bytes to read; the request is trimmed to the bytes left in
+    /// the window before the inner stream is touched.
+    /// <para>最多读取的字节数；在访问底层流前先裁剪到窗口内的剩余字节数。</para></param>
+    /// <returns>The number of bytes copied into <paramref name="buffer"/>, <c>0</c> at the window end.
+    /// <para>复制到 <paramref name="buffer"/> 的字节数；到达窗口末尾时为 <c>0</c>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="buffer"/> is <see langword="null"/>.
+    /// <para><paramref name="buffer"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> or <paramref name="count"/> is negative.
+    /// <para><paramref name="offset"/> 或 <paramref name="count"/> 为负数。</para></exception>
+    /// <exception cref="ArgumentException">The <paramref name="offset"/>/<paramref name="count"/> range does not fit <paramref name="buffer"/>.
+    /// <para><paramref name="offset"/>/<paramref name="count"/> 区间超出 <paramref name="buffer"/>。</para></exception>
+    /// <exception cref="ObjectDisposedException">The view has been disposed.
+    /// <para>视图已被释放。</para></exception>
     public override int Read(byte[] buffer, int offset, int count)
     {
         ValidateBuffer(buffer, offset, count);
@@ -149,6 +165,12 @@ public sealed class BoundedReadStream : Stream
     /// Reads bytes from the stream into the buffer.
     /// <para>从流中读取字节到缓冲区。</para>
     /// </summary>
+    /// <param name="buffer">Destination span receiving the window bytes; an empty span reads nothing.
+    /// <para>接收窗口字节的目标区间；空区间不读取任何字节。</para></param>
+    /// <returns>The number of bytes copied into <paramref name="buffer"/>, <c>0</c> at the window end.
+    /// <para>复制到 <paramref name="buffer"/> 的字节数；到达窗口末尾时为 <c>0</c>。</para></returns>
+    /// <exception cref="ObjectDisposedException">The view has been disposed.
+    /// <para>视图已被释放。</para></exception>
     public override int Read(Span<byte> buffer)
     {
         ThrowIfDisposed();
@@ -174,6 +196,13 @@ public sealed class BoundedReadStream : Stream
     /// Reads bytes from the stream asynchronously.
     /// <para>异步从流中读取字节。</para>
     /// </summary>
+    /// <param name="buffer">Destination memory filled with at most the smaller of its length and the bytes
+    /// still inside the window. <para>目标内存区，写入量不超过其长度与窗口剩余字节中的较小值。</para></param>
+    /// <param name="cancellationToken">Token checked before the read starts and forwarded to the inner stream;
+    /// a token already cancelled throws without advancing the window position.
+    /// <para>读取开始前检查并转发给底层流的取消令牌；若令牌已被取消则直接抛出，窗口位置不会前移。</para></param>
+    /// <returns>A task producing the number of bytes stored at the start of <paramref name="buffer"/>;
+    /// <c>0</c> marks the window end. <para>任务结果为写入 <paramref name="buffer"/> 起始处的字节数；<c>0</c> 表示已到达窗口末尾。</para></returns>
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -238,11 +267,17 @@ public sealed class BoundedReadStream : Stream
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="value">Requested length; the read-only window rejects the call before inspecting it.
+    /// <para>请求的长度；只读窗口在检查该值之前就会拒绝调用。</para></param>
     public override void SetLength(long value) => throw new NotSupportedException();
     /// <summary>
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="buffer">Destination buffer; the read-only window rejects the call before inspecting it.
+    /// <para>目标缓冲区；只读窗口在检查它之前就会拒绝调用。</para></param>
+    /// <param name="offset">Buffer index rejected together with the call. <para>随调用一并被拒绝的缓冲区索引。</para></param>
+    /// <param name="count">Byte count rejected together with the call. <para>随调用一并被拒绝的字节数。</para></param>
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
     /// <summary>

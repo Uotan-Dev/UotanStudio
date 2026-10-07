@@ -43,6 +43,12 @@ internal sealed record F2fsDirectoryEntry
     /// Tests whether bit index is set in a f2fs bitmap (LSB-first within each byte, matching the kernel's test_bit_le).
     /// <para>判断位图中第 index 位是否置位（f2fs 位图为每字节 LSB-first， 对齐内核 test_bit_le）。</para>
     /// </summary>
+    /// <param name="bitmap">Bitmap bytes to inspect; the addressable width is eight times its length.
+    /// <para>待检查的位图字节，可寻址宽度为其字节长度的 8 倍。</para></param>
+    /// <param name="index">Zero-based bit index, least significant bit first inside each byte; an index outside the bitmap reports a cleared bit instead of throwing.
+    /// <para>从 0 开始的位序号，每个字节内按低位在前；超出位图范围时按未置位返回，不会抛出异常。</para></param>
+    /// <returns><see langword="true"/> when the addressed bit is set.
+    /// <para>被寻址的位已置位时返回 <see langword="true"/>。</para></returns>
     public static bool TestBit(ReadOnlySpan<byte> bitmap, int index)
         => index >= 0 && index < bitmap.Length * 8
            && (bitmap[index >> 3] & (1 << (index & 7))) != 0;
@@ -51,6 +57,10 @@ internal sealed record F2fsDirectoryEntry
     /// Sets bit index in a f2fs bitmap.
     /// <para>设置位图第 index 位。</para>
     /// </summary>
+    /// <param name="bitmap">Writable bitmap bytes; the bit is OR-ed into the byte holding it and no other byte changes.
+    /// <para>可写的位图字节；该位按或运算写入所属字节，其他字节不会变动。</para></param>
+    /// <param name="index">Zero-based bit index, least significant bit first inside each byte, which must fall inside the first <c>bitmap.Length * 8</c> bits.
+    /// <para>从 0 开始的位序号，每个字节内按低位在前，必须落在前 <c>bitmap.Length * 8</c> 位之内。</para></param>
     public static void SetBit(Span<byte> bitmap, int index)
     {
         if (index < 0 || index >= bitmap.Length * 8)
@@ -65,6 +75,12 @@ internal sealed record F2fsDirectoryEntry
     /// Parses a single 11-byte entry (without the name).
     /// <para>解析单个 11 字节条目（不含名称）。</para>
     /// </summary>
+    /// <param name="data">Entry bytes holding the little-endian hash code at 0, inode number at 4, name length at 8 and file-type byte at 10; at least <see cref="DirectoryEntrySize"/> bytes must be present.
+    /// <para>条目字节依次为偏移 0 的小端哈希码、偏移 4 的 inode 号、偏移 8 的名称长度与偏移 10 的文件类型字节；至少要有 <see cref="DirectoryEntrySize"/> 字节。</para></param>
+    /// <param name="name">Name text already decoded from the filename area and stored verbatim; an empty string produces an entry with no name.
+    /// <para>已从文件名区域解码并原样保存的名称文本；空字符串会产生一条没有名称的条目。</para></param>
+    /// <returns>Entry record whose slot demand derives from the on-disk name length rather than from <paramref name="name"/>.
+    /// <para>返回的条目记录，其槽位需求取自磁盘上的名称长度，而不是 <paramref name="name"/> 的长度。</para></returns>
     public static F2fsDirectoryEntry FromBytes(ReadOnlySpan<byte> data, string name)
     {
         if (data.Length < DirectoryEntrySize)
@@ -86,6 +102,18 @@ internal sealed record F2fsDirectoryEntry
     /// Parses a directory data area (flat layout of bitmap + reserved + dentry + filename) using the kernel's slot-skip iteration: each bitmap bit maps to an 8-byte slot; a name may span several slots and the cursor advances by the slot count of name_len after each entry.
     /// <para>解析一个目录数据区域（位图 + 保留 + dentry + filename 的扁平布局），按内核 f2fs_readdir 的槽位推进算法遍历：每位对应一个 8 字节槽；条目名可跨多个槽，读取后 前进 name_len 对应的槽数。</para>
     /// </summary>
+    /// <param name="area">Flat directory data area; the bitmap occupies its first <paramref name="bitmapSize"/> bytes, then <paramref name="reservedSize"/> bytes, then <paramref name="slotCount"/> 11-byte dentry records and finally <paramref name="slotCount"/> 8-byte name slots.
+    /// <para>扁平的目录数据区域：前 <paramref name="bitmapSize"/> 字节是位图，随后 <paramref name="reservedSize"/> 字节保留，接着是 <paramref name="slotCount"/> 条 11 字节 dentry 记录，最后是 <paramref name="slotCount"/> 个 8 字节名称槽。</para></param>
+    /// <param name="bitmapSize">Bytes of the leading allocation bitmap, each bit marking one slot as in use.
+    /// <para>前导分配位图的字节数，每一位标记一个槽是否在用。</para></param>
+    /// <param name="reservedSize">Bytes skipped between the bitmap and the dentry array.
+    /// <para>位图与 dentry 数组之间跳过的字节数。</para></param>
+    /// <param name="slotCount">Number of 8-byte slots the area provides, bounding both arrays and the iteration.
+    /// <para>该区域提供的 8 字节槽数量，同时限定两个数组范围与遍历上限。</para></param>
+    /// <param name="blockLength">Minimum bytes required in <paramref name="area"/> before any field is read; a shorter area is reported as truncated.
+    /// <para>读取任何字段前 <paramref name="area"/> 必须具有的最少字节数，不足时按截断上报。</para></param>
+    /// <returns>Entries whose slot bit is set and whose inode is non-zero, in slot order; the walk stops early when a record claims no slot or its name would extend past the last slot.
+    /// <para>返回槽位已置位且 inode 非零的条目，按槽顺序排列；某条记录声明的槽数为 0，或其名称越过最后一个槽时提前结束遍历。</para></returns>
     public static List<F2fsDirectoryEntry> ParseArea(
         ReadOnlySpan<byte> area,
         int bitmapSize,
@@ -146,6 +174,10 @@ internal sealed record F2fsDirectoryEntry
     /// Parses one full dentry block (4096 bytes).
     /// <para>解析一个完整目录块（块大小 4096）。</para>
     /// </summary>
+    /// <param name="block">Bytes of one dentry block in the standard layout: <see cref="BitmapSize"/> bitmap bytes, <see cref="ReservedSize"/> reserved bytes, then <see cref="SlotsPerBlock"/> dentry records and name slots; shorter input is reported as a truncated area.
+    /// <para>单个 dentry 块的字节，采用标准布局：<see cref="BitmapSize"/> 字节位图、<see cref="ReservedSize"/> 字节保留区，随后 <see cref="SlotsPerBlock"/> 条 dentry 记录与名称槽；输入过短会按区域截断上报。</para></param>
+    /// <returns>Live entries decoded from the block, in slot order.
+    /// <para>按槽顺序返回该块中仍然有效的条目。</para></returns>
     public static List<F2fsDirectoryEntry> ParseBlock(ReadOnlySpan<byte> block)
         => ParseArea(block, BitmapSize, ReservedSize, SlotsPerBlock, F2fsNode.NodeSize);
 
@@ -153,6 +185,12 @@ internal sealed record F2fsDirectoryEntry
     /// Builds a dentry block by appending entries like mkfs.f2fs add_dentry (the dentry struct is written at the first slot, the name spans slots, and every slot bit is set).
     /// <para>构建一个目录块：仿 mkfs.f2fs add_dentry 逐项写入（首槽写 dentry 结构，名称跨槽存储， 每槽置位），生成哈希码与文件类型。</para>
     /// </summary>
+    /// <param name="block">Destination buffer with at least <paramref name="blockSize"/> writable bytes; the whole buffer is cleared before the first entry is written and a shorter buffer is rejected.
+    /// <para>目标缓冲区，可写字节至少为 <paramref name="blockSize"/>；写入首条 entry 前会清空整个缓冲区，长度不足时被拒绝。</para></param>
+    /// <param name="entries">Entries appended in order, each starting at the next free slot: the 11-byte record at <see cref="DentriesOffset"/> carries the hash code, inode, the length of the UTF-8 name bytes and the file type, the name is split across <see cref="SlotLength"/>-byte slots from <see cref="FilenamesOffset"/>, and one bitmap bit is set per slot. The slot reservation itself uses <c>SlotCount</c>, which follows the stored name length. An empty list leaves the block zeroed.
+    /// <para>按顺序追加的条目，每条从下一个空闲槽开始：<see cref="DentriesOffset"/> 处的 11 字节记录写入哈希码、inode、UTF-8 名称字节长度与文件类型；名称按 <see cref="SlotLength"/> 字节从 <see cref="FilenamesOffset"/> 起跨槽存放，每个槽都置一位。槽位占用按 <c>SlotCount</c> 计算，即由存储的名称长度决定。空列表只会留下全零块。</para></param>
+    /// <param name="blockSize">Bytes the caller treats as one dentry block, checked against the buffer length; slot capacity is always <see cref="SlotsPerBlock"/> regardless of it.
+    /// <para>调用方认定的单个 dentry 块字节数，只用于校验缓冲区长度；槽位容量始终为 <see cref="SlotsPerBlock"/>。</para></param>
     public static void BuildBlock(Span<byte> block, IReadOnlyList<F2fsDirectoryEntry> entries, int blockSize)
     {
         if (block.Length < blockSize)

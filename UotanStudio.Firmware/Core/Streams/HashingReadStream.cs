@@ -92,6 +92,15 @@ public sealed class HashingReadStream : Stream
     /// Reads bytes from the stream into the buffer.
     /// <para>从流中读取字节到缓冲区。</para>
     /// </summary>
+    /// <param name="buffer">Destination array receiving the bytes; the digest covers exactly the range
+    /// starting at <paramref name="offset"/> and spanning the returned byte count.
+    /// <para>接收字节的目标数组；摘要覆盖的范围恰好是从 <paramref name="offset"/> 起、长度等于返回字节数的区间。</para></param>
+    /// <param name="offset">Index in <paramref name="buffer"/> where the inner stream starts writing.
+    /// <para>底层流在 <paramref name="buffer"/> 中开始写入的索引。</para></param>
+    /// <param name="count">Maximum number of bytes requested from the inner stream.
+    /// <para>向底层流请求的最大字节数。</para></param>
+    /// <returns>The number of bytes returned by the inner stream and folded into the digest; <c>0</c> at
+    /// end of stream. <para>底层流返回并入摘要的字节数；流结束时为 <c>0</c>。</para></returns>
     public override int Read(byte[] buffer, int offset, int count)
     {
         var read = _inner.Read(buffer, offset, count);
@@ -107,6 +116,11 @@ public sealed class HashingReadStream : Stream
     /// Reads bytes from the stream into the buffer.
     /// <para>从流中读取字节到缓冲区。</para>
     /// </summary>
+    /// <param name="buffer">Destination span receiving the bytes; the digest covers only the leading
+    /// part of the span actually filled.
+    /// <para>接收字节的目标区间；摘要仅覆盖该区间中实际被填充的前缀。</para></param>
+    /// <returns>The number of bytes returned by the inner stream and folded into the digest; <c>0</c> at
+    /// end of stream. <para>底层流返回并入摘要的字节数；流结束时为 <c>0</c>。</para></returns>
     public override int Read(Span<byte> buffer)
     {
         var read = _inner.Read(buffer);
@@ -122,6 +136,13 @@ public sealed class HashingReadStream : Stream
     /// Reads bytes from the stream asynchronously.
     /// <para>异步从流中读取字节。</para>
     /// </summary>
+    /// <param name="buffer">Destination memory handed to the inner stream unchanged; only the range the inner
+    /// stream returns is folded into the digest. <para>原样交给底层流的目标内存区；只有底层流实际返回的范围会并入摘要。</para></param>
+    /// <param name="cancellationToken">Token forwarded to the inner stream; this wrapper does not test it.
+    /// <para>转发给底层流的取消令牌；本包装器自身不检查该令牌。</para></param>
+    /// <returns>A task producing the number of bytes stored at the start of <paramref name="buffer"/>; <c>0</c>
+    /// marks the end of the inner stream and adds nothing to the digest.
+    /// <para>任务结果为写入 <paramref name="buffer"/> 起始处的字节数；<c>0</c> 表示底层流已结束，不会向摘要追加内容。</para></returns>
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
         var read = await _inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
@@ -142,16 +163,25 @@ public sealed class HashingReadStream : Stream
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="offset">Displacement ignored, since seeking would let bytes bypass the digest.
+    /// <para>被忽略的偏移量；定位会让字节绕过摘要计算。</para></param>
+    /// <param name="origin">Reference point ignored together with the call. <para>随调用一并被忽略的参照点。</para></param>
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
     /// <summary>
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="value">Requested length ignored, since the wrapper exposes no write path.
+    /// <para>被忽略的请求长度；包装器不暴露写入路径。</para></param>
     public override void SetLength(long value) => throw new NotSupportedException();
     /// <summary>
     /// Throws because this operation is not supported.
     /// <para>此操作不受支持，调用时抛出异常。</para>
     /// </summary>
+    /// <param name="buffer">Buffer never touched, since the wrapper digests reads only.
+    /// <para>从不接触的缓冲区，因为包装器只对读取做摘要。</para></param>
+    /// <param name="offset">Index rejected together with the call. <para>随调用一并被拒绝的索引。</para></param>
+    /// <param name="count">Byte count rejected together with the call. <para>随调用一并被拒绝的字节数。</para></param>
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
     /// <summary>

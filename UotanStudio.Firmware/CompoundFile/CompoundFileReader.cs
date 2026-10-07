@@ -769,6 +769,7 @@ public sealed class CompoundFileStream : Stream
     /// Not supported; compound file streams are read-only.
     /// <para>不支持；复合文档流为只读。</para>
     /// </summary>
+    /// <param name="value">Ignored length; <see cref="Length"/> is fixed to the directory-entry size captured when the stream was opened. <para>被忽略的长度；<see cref="Length"/> 固定为打开流时记录的目录项大小。</para></param>
     /// <exception cref="NotSupportedException">
     /// <para>总是抛出。</para>
     /// Always thrown.
@@ -779,6 +780,9 @@ public sealed class CompoundFileStream : Stream
     /// Not supported; compound file streams are read-only.
     /// <para>不支持；复合文档流为只读。</para>
     /// </summary>
+    /// <param name="buffer">Ignored source array; no bytes are read from it. <para>被忽略的源数组；不会从中读取字节。</para></param>
+    /// <param name="offset">Ignored index into <paramref name="buffer"/>; it is not validated. <para>被忽略的 <paramref name="buffer"/> 内索引；不会对其校验。</para></param>
+    /// <param name="count">Ignored byte count; it is not validated. <para>被忽略的字节数量；不会对其校验。</para></param>
     /// <exception cref="NotSupportedException">
     /// <para>总是抛出。</para>
     /// Always thrown.

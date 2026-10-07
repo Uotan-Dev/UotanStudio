@@ -32,6 +32,10 @@ internal sealed class FastbootFactory : IProtocolFactory
 
     /// <summary>Creates a new fastboot factory that matches a specific VID/PID.
     /// <para>创建匹配指定 VID/PID 的新工厂。</para></summary>
+    /// <param name="vendorId">USB vendor identifier the device must report in addition to the interface or profile rule.
+    /// <para>除接口或档案规则之外设备还必须上报的 USB 厂商标识符。</para></param>
+    /// <param name="productId">USB product identifier the device must report in addition to the interface or profile rule.
+    /// <para>除接口或档案规则之外设备还必须上报的 USB 产品标识符。</para></param>
     public FastbootFactory(ushort vendorId, ushort productId)
     {
         _vendorId = vendorId;
@@ -40,6 +44,9 @@ internal sealed class FastbootFactory : IProtocolFactory
 
     /// <summary>Creates a new fastboot factory with a specific I/O timeout.
     /// <para>创建具有特定 I/O 超时的新工厂。</para></summary>
+    /// <param name="timeoutMs">I/O timeout in milliseconds handed to every session this factory creates; a factory built
+    /// without it lets the session use its default timeout. <para>交给本工厂创建的每个会话的 I/O 超时毫秒数；未使用本构造时，
+    /// 会话采用其默认超时。</para></param>
     public FastbootFactory(int timeoutMs)
     {
         _timeoutMs = timeoutMs;
