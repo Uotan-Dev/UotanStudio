@@ -149,8 +149,8 @@ public static class QualcommImageAnalyzer
         }
 
         var results = new List<QualcommComponentAuthenticationResult>(components.Count);
-        var hashed = new List<(long Start, long End)>();
-        var diagnostics = new List<string>();
+        List<(long Start, long End)> hashed = new(components.Count);
+        List<string> diagnostics = new(components.Count);
         var combined = QualcommVerificationStatus.NotChecked;
         var analyzed = 0;
         for (var index = 0; index < components.Count; index++)

@@ -41,7 +41,7 @@ internal static class KdzBuilder
     {
         ArgumentNullException.ThrowIfNull(entries);
         var sources = entries.ToArray();
-        var order = payloadOrder?.ToArray() ?? Enumerable.Range(0, sources.Length).ToArray();
+        var order = payloadOrder?.ToArray() ?? [.. Enumerable.Range(0, sources.Length)];
         return Task.Run(() =>
         {
             ValidateSources(sources, outputPath, cancellationToken);

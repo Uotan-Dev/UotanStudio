@@ -447,8 +447,7 @@ public static partial class InitRcPatch
     /// <para><paramref name="token"/> 已发出取消信号。</para></exception>
     public static IReadOnlyList<string> Read(string text, InitRcSection kind, string selector, string directive,
         int expectedSections, int expectedMatches, CancellationToken token)
-        => Select(text, kind, selector, directive, expectedSections, expectedMatches, token)
-            .Select(line => text[line.Start..line.End]).ToArray();
+        => [.. Select(text, kind, selector, directive, expectedSections, expectedMatches, token).Select(line => text[line.Start..line.End])];
 
     /// <summary>
     /// Replaces or deletes matching body statements; headers are read-only in this API.
@@ -570,7 +569,7 @@ public static partial class InitRcPatch
             throw new InvalidDataException($"Expected {expectedSections} init sections, found {sections.Length}.");
         }
         var matches = sections.SelectMany(section => directive.Length == 0
-            ? new[] { section.Header } : section.Body.Where(line => line.Words[0] == directive)).ToList();
+            ? [section.Header] : section.Body.Where(line => line.Words[0] == directive)).ToList();
         if (matches.Count != expectedMatches)
         {
             throw new InvalidDataException($"Expected {expectedMatches} init statements, found {matches.Count}.");

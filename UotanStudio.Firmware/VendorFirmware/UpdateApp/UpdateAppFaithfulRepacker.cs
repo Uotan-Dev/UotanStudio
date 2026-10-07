@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
@@ -23,6 +24,8 @@ public static class UpdateAppFaithfulRepacker
     private const int MaximumInlinePayloadBytes = 1024 * 1024;
     private const long MaximumLayoutBytes = 64 * 1024 * 1024;
     private const int CopyBufferSize = 128 * 1024;
+
+    private static readonly SearchValues<char> ForbiddenNameChars = SearchValues.Create(['/', '\\', '\0', ':']);
 
     /// <summary>
     /// Validates that a container is within the faithful-repack bounds without writing any artifacts.
@@ -215,7 +218,7 @@ public static class UpdateAppFaithfulRepacker
             if (item["file"] is JsonNode fileNode)
             {
                 var fileName = fileNode.GetValue<string>();
-                if (fileName.Length is < 1 or > 260 || fileName.IndexOfAny(['/', '\\', '\0', ':']) >= 0)
+                if (fileName.Length is < 1 or > 260 || fileName.AsSpan().ContainsAny(ForbiddenNameChars))
                     throw new InvalidDataException("Unsafe UPDATE.APP payload file name.");
                 payloadPath = FileExtraction.ResolvePath(inputPath, fileName);
             }
@@ -253,7 +256,7 @@ public static class UpdateAppFaithfulRepacker
         var metadataDirectory = Path.GetDirectoryName(Path.GetFullPath(metadataPath))!;
         var artifactName = config["layoutFile"]?.GetValue<string>()
             ?? throw new InvalidDataException("Missing UPDATE.APP layout artifact name.");
-        if (artifactName.Length is < 1 or > 128 || artifactName.IndexOfAny(['/', '\\', '\0', ':']) >= 0)
+        if (artifactName.Length is < 1 or > 128 || artifactName.AsSpan().ContainsAny(ForbiddenNameChars))
             throw new InvalidDataException("Unsafe UPDATE.APP layout artifact name.");
         var artifactPath = FileExtraction.ResolvePath(metadataDirectory, artifactName);
         var expectedDigest = Convert.FromHexString(config["layoutSha256"]?.GetValue<string>()

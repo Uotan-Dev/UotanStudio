@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
@@ -734,7 +735,7 @@ public sealed partial class OppReader
         };
     }
 
-    private static readonly HashSet<char> InvalidFileNameChars = [.. Path.GetInvalidFileNameChars()];
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
 
     /// <summary>
     /// Sanitizes illegal characters from a file name.

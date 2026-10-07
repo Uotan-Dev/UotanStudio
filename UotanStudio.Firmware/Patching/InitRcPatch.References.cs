@@ -130,7 +130,7 @@ public static partial class InitRcPatch
                 if (!services.Contains(command[^1])) { missing.Add(command[^1]); }
             }
         }
-        return new InitRcReferenceReport(services.Order(StringComparer.Ordinal).ToArray(), missing.Order(StringComparer.Ordinal).ToArray(),
-            dynamic, invalid, ambiguous.Order(StringComparer.Ordinal).ToArray(), count);
+        return new InitRcReferenceReport([.. services.Order(StringComparer.Ordinal)], [.. missing.Order(StringComparer.Ordinal)],
+            dynamic, invalid, [.. ambiguous.Order(StringComparer.Ordinal)], count);
     }
 }

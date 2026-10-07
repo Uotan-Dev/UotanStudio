@@ -74,8 +74,8 @@ public static class BinaryPattern
         }
         var pattern = ParseHex(find);
         var changed = ParseHex(replacement);
-        var mask = string.IsNullOrWhiteSpace(replaceMask) ? Enumerable.Repeat((byte)255, pattern.Length).ToArray() : ParseHex(replaceMask);
-        var originalMask = string.IsNullOrWhiteSpace(findMask) ? Enumerable.Repeat((byte)255, pattern.Length).ToArray() : ParseHex(findMask);
+        var mask = string.IsNullOrWhiteSpace(replaceMask) ? [.. Enumerable.Repeat((byte)255, pattern.Length)] : ParseHex(replaceMask);
+        var originalMask = string.IsNullOrWhiteSpace(findMask) ? [.. Enumerable.Repeat((byte)255, pattern.Length)] : ParseHex(findMask);
         if (changed.Length != pattern.Length || mask.Length != pattern.Length)
         {
             throw new InvalidDataException("Binary replacements and masks must preserve the pattern length.");
@@ -176,7 +176,7 @@ public static class BinaryPattern
             throw new ArgumentException("Binary search requires a readable seekable stream.", nameof(source));
         }
         var pattern = ParseHex(find);
-        var bits = string.IsNullOrWhiteSpace(mask) ? Enumerable.Repeat((byte)255, pattern.Length).ToArray() : ParseHex(mask);
+        var bits = string.IsNullOrWhiteSpace(mask) ? [.. Enumerable.Repeat((byte)255, pattern.Length)] : ParseHex(mask);
         if (bits.Length != pattern.Length || bits.All(value => value == 0))
         {
             throw new InvalidDataException("Find mask must match the pattern length and contain a significant bit.");

@@ -170,7 +170,7 @@ internal static class QualcommMetadataReader
             ApplicationId = values[6][0],
             Flags = values[7][0],
             SocVersions = values[8],
-            SerialNumbers = values[9].Select(value => (ulong)value).ToArray(),
+            SerialNumbers = [.. values[9].Select(value => (ulong)value)],
             RootCertificateSlot = values[10][0],
             AntiRollbackVersion = values[11][0]
         };
@@ -312,7 +312,7 @@ internal static class QualcommMetadataReader
             SoftwareSize = Small("SW_SIZE"),
             AntiRollbackVersion = sw.HasValue ? (uint)(sw.Value >> 32) : null,
             RootCertificateSlot = Small("MRC_INDEX"),
-            SocVersions = Values("SOC_VERS").Where(v => v <= uint.MaxValue).Select(v => (uint)v).ToArray(),
+            SocVersions = [.. Values("SOC_VERS").Where(v => v <= uint.MaxValue).Select(v => (uint)v)],
             SerialNumbers = Values("SN")
         };
 

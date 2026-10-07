@@ -247,10 +247,10 @@ public static class ImageConfigurationEditor
         if (format == "EXT4")
         {
             using var parser = new Ext4Parser(stream, 100000, 16 * 1024 * 1024, token);
-            return parser.ListFiles().Select(entry => Check(entry.Path, entry.Size)).ToArray();
+            return [.. parser.ListFiles().Select(entry => Check(entry.Path, entry.Size))];
         }
         using var erofs = new ErofsParser(stream, 100000, 16 * 1024 * 1024, token);
-        return erofs.EnumerateFiles().Select(entry => Check(entry.Path, entry.Size)).ToArray();
+        return [.. erofs.EnumerateFiles().Select(entry => Check(entry.Path, entry.Size))];
 
         string Check(string path, long size)
         {

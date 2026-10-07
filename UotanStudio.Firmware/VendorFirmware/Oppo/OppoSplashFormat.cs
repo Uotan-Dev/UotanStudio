@@ -256,7 +256,7 @@ internal static class OppoSplashFormat
         var normalized = entry.Name.Replace('\\', '/');
         var baseName = normalized[(normalized.LastIndexOf('/') + 1)..];
         var characters = Path.GetInvalidFileNameChars();
-        var cleaned = new string(baseName.Where(c => !characters.Contains(c) && c > 0x1F).ToArray()).TrimEnd('.', ' ');
+        var cleaned = new string([.. baseName.Where(c => !characters.Contains(c) && c > 0x1F)]).TrimEnd('.', ' ');
         if (cleaned.Length == 0 || cleaned is "." or "..")
         {
             cleaned = $"image_{index}.bin";

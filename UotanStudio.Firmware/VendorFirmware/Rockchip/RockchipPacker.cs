@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
@@ -319,7 +320,7 @@ public static class RockchipPacker
             return entries;
         }
 
-        return Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+        return [.. Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
             .Select(path => new { Path = path, Relative = NormalizeRelativePath(root, path) })
             .Where(file => !IsHelperFile(file.Relative))
             .OrderBy(file => file.Relative, StringComparer.Ordinal)
@@ -328,8 +329,7 @@ public static class RockchipPacker
                     ? "parameter"
                     : Path.GetFileNameWithoutExtension(file.Relative),
                 file.Relative,
-                file.Path))
-            .ToList();
+                file.Path))];
     }
 
     private static string ResolveTemplatePath(byte[]? template, string name, string fallback)
@@ -480,10 +480,12 @@ public static class RockchipPacker
         }
     }
 
+    private static readonly SearchValues<char> ForbiddenIdentityChars = SearchValues.Create(['\0', '\r', '\n']);
+
     private static void WriteIdentity(Span<byte> field, string value, string description)
     {
         var length = Encoding.UTF8.GetByteCount(value);
-        if (string.IsNullOrEmpty(value) || value.IndexOfAny(['\0', '\r', '\n']) >= 0 || length >= field.Length)
+        if (string.IsNullOrEmpty(value) || value.AsSpan().ContainsAny(ForbiddenIdentityChars) || length >= field.Length)
         {
             throw new InvalidDataException($"Rockchip {description} is invalid or too long: '{value}'.");
         }

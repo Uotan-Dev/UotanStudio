@@ -135,8 +135,7 @@ public static class FstabPatch
         int expectedMatches, CancellationToken token)
     {
         ValidateField(field);
-        return Select(text, mountPoint, fileSystem, expectedMatches, token)
-            .Select(row => text.Substring(row[(int)field].Start, row[(int)field].Length)).ToArray();
+        return [.. Select(text, mountPoint, fileSystem, expectedMatches, token).Select(row => text.Substring(row[(int)field].Start, row[(int)field].Length))];
     }
 
     /// <summary>

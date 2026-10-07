@@ -111,7 +111,7 @@ public static class ImageAttributeReader
     {
         if (value is null) { return null; }
         if (value.Length > 65536) { throw new PatchingCorruptedException("Extended attribute value exceeds 64 KiB."); }
-        return value.ToArray();
+        return [.. value];
     }
 }
 

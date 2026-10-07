@@ -53,7 +53,7 @@ public static class XmlPatch
     /// <para>超出大小或数量上限、命名空间映射格式错误，或表达式选中的节点不是元素或属性。</para></exception>
     public static IReadOnlyList<string> Query(string text, string xpath, string namespaces, int expectedMatches)
     {
-        return Select(Parse(text), xpath, namespaces, expectedMatches).Select(Value).ToArray();
+        return [.. Select(Parse(text), xpath, namespaces, expectedMatches).Select(Value)];
     }
 
     /// <summary>

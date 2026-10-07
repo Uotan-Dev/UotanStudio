@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
@@ -642,9 +643,11 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
         ValidateName(source.SubType, capacity, "sub type");
     }
 
+    private static readonly SearchValues<char> ForbiddenNameChars = SearchValues.Create(['\0', '/', '\\']);
+
     private static void ValidateName(string value, int capacity, string description)
     {
-        if (string.IsNullOrWhiteSpace(value) || value.IndexOfAny(['\0', '/', '\\']) >= 0 || Encoding.UTF8.GetByteCount(value) >= capacity)
+        if (string.IsNullOrWhiteSpace(value) || value.AsSpan().ContainsAny(ForbiddenNameChars) || Encoding.UTF8.GetByteCount(value) >= capacity)
         {
             throw new InvalidDataException($"AMLogic {description} '{value}' is invalid for the selected version.");
         }

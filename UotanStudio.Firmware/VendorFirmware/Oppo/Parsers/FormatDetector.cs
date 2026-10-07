@@ -99,7 +99,7 @@ internal static class FormatDetector
             }
 
 
-            var pageSizes = new[] { 0x200, 0x1000 };
+            int[] pageSizes = [0x200, 0x1000];
             foreach (var pageSize in pageSizes)
             {
                 if (fileSize < pageSize)

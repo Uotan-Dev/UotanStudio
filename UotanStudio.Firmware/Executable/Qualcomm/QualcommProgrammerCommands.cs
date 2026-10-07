@@ -70,7 +70,7 @@ internal static class QualcommProgrammerCommands
 
         if (strings.Count < 3)
         {
-            return weak.Values.OrderBy(value => value.FileOffset).ToArray();
+            return [.. weak.Values.OrderBy(value => value.FileOffset)];
         }
 
         var pointerSize = elf.Header.Is64Bit ? 8 : 4;
@@ -114,12 +114,12 @@ internal static class QualcommProgrammerCommands
                         weak[entry.Name] = entry;
                     }
 
-                    return weak.Values.OrderBy(value => value.FileOffset).ToArray();
+                    return [.. weak.Values.OrderBy(value => value.FileOffset)];
                 }
             }
         }
 
-        return weak.Values.OrderBy(value => value.FileOffset).ToArray();
+        return [.. weak.Values.OrderBy(value => value.FileOffset)];
     }
 
     internal static IReadOnlyList<QualcommCommandEvidence> FindUnmapped(
@@ -160,7 +160,7 @@ internal static class QualcommProgrammerCommands
             i++;
         }
 
-        return found.Values.OrderBy(value => value.FileOffset).ToArray();
+        return [.. found.Values.OrderBy(value => value.FileOffset)];
     }
 
     private static ulong ReadPointer(ReadOnlySpan<byte> bytes, int size)

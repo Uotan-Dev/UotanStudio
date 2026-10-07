@@ -416,8 +416,8 @@ internal static class QualcommAuthentication
                     var masks = authority == "QTI"
                         ? new[] { (mbn.Version == 7 ? 32 : 28, 4), (mbn.Version == 7 ? 36 : 36, 4),
                             (mbn.OemMetadataOffset, mbn.OemMetadataLength) }
-                        : new[] { (mbn.Version == 7 ? 24 : 8, 4), (mbn.Version == 7 ? 28 : 12, 4),
-                            (mbn.QualcommMetadataOffset, mbn.QualcommMetadataLength) };
+                        : [ (mbn.Version == 7 ? 24 : 8, 4), (mbn.Version == 7 ? 28 : 12, 4),
+                            (mbn.QualcommMetadataOffset, mbn.QualcommMetadataLength) ];
                     var cursor = baseOffset;
                     foreach (var (offset, length) in masks.Where(mask => mask.Item2 > 0).OrderBy(mask => mask.Item1))
                     {
@@ -531,7 +531,7 @@ internal static class QualcommAuthentication
         Span<byte> zeros = stackalloc byte[4096]; zeros.Clear();
         var masks = authority == "QTI"
             ? new[] { (layout.Version == 7 ? 32 : 28, 4), (layout.Version == 7 ? 36 : 36, 4), (layout.OemMetadataOffset, layout.OemMetadataLength) }
-            : new[] { (layout.Version == 7 ? 24 : 8, 4), (layout.Version == 7 ? 28 : 12, 4), (layout.QualcommMetadataOffset, layout.QualcommMetadataLength) };
+            : [(layout.Version == 7 ? 24 : 8, 4), (layout.Version == 7 ? 28 : 12, 4), (layout.QualcommMetadataOffset, layout.QualcommMetadataLength)];
         var cursor = baseOffset;
         foreach (var (offset, length) in masks.Where(mask => mask.Item2 > 0).OrderBy(mask => mask.Item1))
         {

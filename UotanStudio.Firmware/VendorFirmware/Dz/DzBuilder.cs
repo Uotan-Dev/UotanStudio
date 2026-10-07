@@ -54,7 +54,7 @@ public static class DzBuilder
             throw new InvalidDataException("DZ chunk count exceeds the rebuild limit.");
         }
         var preservedHeader = header.ToArray();
-        var sources = chunks.Select(source => source with { Header = source.Header.ToArray() }).ToArray();
+        var sources = chunks.Select(source => source with { Header = [.. source.Header] }).ToArray();
         return Task.Run(() => Write(preservedHeader, sources, outputPath, logicalBlockSize, cancellationToken),
             cancellationToken);
     }

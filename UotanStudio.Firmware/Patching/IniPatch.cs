@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace UotanStudio.Firmware.Patching;
 
 /// <summary>
@@ -6,6 +8,8 @@ namespace UotanStudio.Firmware.Patching;
 /// </summary>
 public static class IniPatch
 {
+    private static readonly SearchValues<char> ForbiddenNameChars = SearchValues.Create(['\r', '\n', '\0', '[', ']', '=']);
+
     /// <summary>
     /// Reads a key from a named section, or the global section when section is empty.
     /// <para>读取指定段中的键；<paramref name="section"/> 为空时读取全局段。</para>
@@ -202,7 +206,7 @@ public static class IniPatch
     {
         ArgumentNullException.ThrowIfNull(name);
         if ((!allowEmpty && name.Length == 0) || name.Length > 4096 || name != name.Trim()
-            || name.IndexOfAny(['\r', '\n', '\0', '[', ']', '=']) >= 0
+            || name.AsSpan().ContainsAny(ForbiddenNameChars)
             || name.Length > 0 && name[0] is '#' or ';')
         {
             throw new InvalidDataException("Invalid INI section or key name.");
