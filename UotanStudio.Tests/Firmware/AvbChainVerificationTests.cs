@@ -1,7 +1,5 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Security;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
@@ -399,7 +397,7 @@ public sealed class AvbChainVerificationTests
             var output = Path.Combine(_root, name + ".img");
             await File.WriteAllBytesAsync(template, header, TestContext.Current.CancellationToken);
             using var otherKey = alternate ? SigningTestKeys.Create(alternate: true) : null;
-            var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(otherKey ?? _key).Private;
+            var privateKey = otherKey ?? _key;
             var result = await AvbSigner.SignVbmetaAsync<object>(template, privateKey, output, descriptors, TestContext.Current.CancellationToken);
             Assert.True(result.Success, result.ErrorMessage);
             Paths[name] = output;
@@ -418,7 +416,7 @@ public sealed class AvbChainVerificationTests
             var input = Path.Combine(_root, name + ".raw");
             var output = Path.Combine(_root, name + ".img");
             await File.WriteAllBytesAsync(input, data, TestContext.Current.CancellationToken);
-            var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(_key).Private;
+            var privateKey = _key;
             var result = await AvbSigner.AddHashFooterAsync(input, name, privateKey, output, TestContext.Current.CancellationToken);
             Assert.True(result.Success, result.ErrorMessage);
             Paths[name] = output;

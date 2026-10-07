@@ -95,7 +95,7 @@ public class ArscFormatConformanceTests
         return stream.ToArray();
     }
 
-    private static byte[] Pool(params string[] strings)
+    private static byte[] Pool(params ReadOnlySpan<string> strings)
     {
         using var stream = new MemoryStream(); using var writer = new BinaryWriter(stream, Encoding.UTF8, true);
         writer.Write((ushort)1); writer.Write((ushort)28); writer.Write(0u); writer.Write((uint)strings.Length);

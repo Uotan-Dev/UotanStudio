@@ -646,7 +646,7 @@ public sealed class BootImageSpecialFormatTests
     private static void WriteRockchipEntry(byte[] data, int offset, string name, uint blockOffset, uint size)
     {
         "ENTR"u8.CopyTo(data.AsSpan(offset));
-        Encoding.UTF8.GetBytes(name).CopyTo(data.AsSpan(offset + 4));
+        Encoding.UTF8.GetBytes(name.AsSpan(), data.AsSpan(offset + 4));
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(offset + 260), blockOffset);
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(offset + 264), size);
     }

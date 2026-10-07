@@ -36,11 +36,7 @@ public class ApkSigningTests : IDisposable
     [Fact]
     public void SigningBlock_BuildAndParse_RoundTrips()
     {
-        var pairs = new List<(uint, byte[])>
-        {
-            (0x12345678u, [1, 2, 3, 4]),
-            (ApkSignatureConstants.V2BlockId, new byte[64]),
-        };
+        List<(uint, byte[])> pairs = [(0x12345678u, [1, 2, 3, 4]), (ApkSignatureConstants.V2BlockId, new byte[64]),];
 
         var block = ApkSigningBlock.Build(pairs);
         var parsed = ApkSigningBlock.ParsePairs(block);
@@ -347,7 +343,7 @@ public class ApkSigningTests : IDisposable
 /// is bundled into the product).
 /// <para>为签名测试生成确定性测试密钥/证书（仅测试使用；产品不内置任何密钥材料）。</para>
 /// </summary>
-internal static class TestKeyFactory
+file static class TestKeyFactory
 {
     public static (ApkSignerKeyMaterial Material, string KeyPath) CreateRsa(string root, bool alternate = false)
     {

@@ -342,7 +342,7 @@ public sealed class ImageConfigurationEditorTests : IDisposable
         using var input = File.OpenRead(image);
         using var output = new MemoryStream();
         ImageConfigurationReader.Extract(input, format, path, output, Token);
-        return Encoding.UTF8.GetString(output.ToArray());
+        return Encoding.UTF8.GetString(output.GetBuffer(), 0, (int)output.Length);
     }
 
     private static (ushort Mode, uint Uid, uint Gid) Attributes(string image, string format, string path)

@@ -26,7 +26,7 @@ public class PacFormatHandlerTests
     /// HeadCrc 覆盖前 2120 字节）、每个文件一个 2580 字节的 SprdFile 条目、条目数据，
     /// DataCrc 覆盖头部之后的全部内容。</para>
     /// </summary>
-    internal static byte[] BuildPac(params (string Name, byte[] Data)[] entries)
+    internal static byte[] BuildPac(params ReadOnlySpan<(string Name, byte[] Data)> entries)
     {
         var dirSize = entries.Length * SprdFile.StructFixedSize;
         var dataOffsets = new uint[entries.Length];

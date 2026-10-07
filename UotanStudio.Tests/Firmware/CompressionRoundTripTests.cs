@@ -97,13 +97,7 @@ public class CompressionRoundTripTests
     [Fact]
     public void Lzop_Lzo1xCompressedBlock_Decompresses()
     {
-        var compressedBlock = new byte[]
-        {
-            0x15,
-            (byte)'A', (byte)'A', (byte)'A', (byte)'A',
-            0x20, 0x01, 0x0C, 0x00,
-            0x10, 0x01, 0x00, 0x00,
-        };
+        byte[] compressedBlock = [0x15, (byte)'A', (byte)'A', (byte)'A', (byte)'A', 0x20, 0x01, 0x0C, 0x00, 0x10, 0x01, 0x00, 0x00,];
 
         var expected = Enumerable.Repeat((byte)'A', 38).ToArray();
         var lzop = BuildMinimalLzop(expected, compressedBlock);

@@ -80,6 +80,7 @@ public sealed class AvbPartitionVerificationTests
 
     [Theory]
     [InlineData("unknown", 32, 0)]
+    [InlineData("blake2b-256", 32, 0)]
     [InlineData("sha256", 31, 0)]
     [InlineData("sha256", 32, 2)]
     public async Task VerifyAsync_InvalidHashParameters_RejectsBeforeReading(string algorithm, int digestLength, uint flags)

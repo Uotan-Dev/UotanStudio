@@ -12,7 +12,7 @@ namespace UotanStudio.Tests.Firmware;
 
 public class ErofsParserStreamingTests
 {
-    private static byte[] BuildImage(TempDirectory temp, params (string Path, byte[] Content)[] files)
+    private static byte[] BuildImage(TempDirectory temp, params ReadOnlySpan<(string Path, byte[] Content)> files)
     {
         foreach (var file in files)
         {

@@ -31,8 +31,8 @@ public sealed class MpkTests : IDisposable
         "!MPK"u8.CopyTo(archive);
         BinaryPrimitives.WriteUInt32LittleEndian(archive.AsSpan(4), version);
         BinaryPrimitives.WriteUInt32LittleEndian(archive.AsSpan(8), crc);
-        Encoding.UTF8.GetBytes(identifier).CopyTo(archive, 12);
-        Encoding.UTF8.GetBytes(name).CopyTo(archive, 172);
+        Encoding.UTF8.GetBytes(identifier.AsSpan(), archive.AsSpan(12));
+        Encoding.UTF8.GetBytes(name.AsSpan(), archive.AsSpan(172));
         "flyme"u8.CopyTo(archive.AsSpan(428));
         "17"u8.CopyTo(archive.AsSpan(436));
         BinaryPrimitives.WriteUInt32LittleEndian(archive.AsSpan(2044), (uint)files.Length);
@@ -41,7 +41,7 @@ public sealed class MpkTests : IDisposable
         {
             var record = MpkFormat.HeaderSize + index * MpkFormat.EntryRecordSize;
             "!F"u8.CopyTo(archive.AsSpan(record));
-            Encoding.UTF8.GetBytes(files[index].Path).CopyTo(archive, record + 2);
+            Encoding.UTF8.GetBytes(files[index].Path.AsSpan(), archive.AsSpan(record + 2));
             BinaryPrimitives.WriteUInt32LittleEndian(archive.AsSpan(record + 492), 0u);
             BinaryPrimitives.WriteUInt64LittleEndian(archive.AsSpan(record + 496), (ulong)dataOffset);
             BinaryPrimitives.WriteUInt64LittleEndian(archive.AsSpan(record + 504), (ulong)files[index].Payload.Length);

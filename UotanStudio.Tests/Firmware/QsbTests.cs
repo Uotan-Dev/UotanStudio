@@ -22,7 +22,7 @@ public sealed class QsbTests : IDisposable
         }
     }
 
-    private static string Rawprogram(params (string Filename, long Start, long Sectors, long FileOffset, long SectorSize)[] programs)
+    private static string Rawprogram(params ReadOnlySpan<(string Filename, long Start, long Sectors, long FileOffset, long SectorSize)> programs)
     {
         var builder = new StringBuilder("<?xml version=\"1.0\"?>\n<data>\n");
         foreach (var program in programs)

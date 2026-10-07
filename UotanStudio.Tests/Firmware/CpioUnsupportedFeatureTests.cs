@@ -181,12 +181,7 @@ public sealed class CpioUnsupportedFeatureTests
 
     private static byte[] BuildXzContainer(byte[] uncompressed, byte checkId, bool prependX86Filter)
     {
-        var payload = new List<byte>
-        {
-            0x01,
-            (byte)((uncompressed.Length - 1) >> 8),
-            (byte)((uncompressed.Length - 1) & 0xFF),
-        };
+        List<byte> payload = [0x01, (byte)((uncompressed.Length - 1) >> 8), (byte)((uncompressed.Length - 1) & 0xFF),];
         payload.AddRange(uncompressed);
         payload.Add(0x00);
 

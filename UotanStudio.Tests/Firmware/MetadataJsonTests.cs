@@ -179,7 +179,7 @@ public sealed class MetadataJsonTests : IDisposable
         using var parser = new Ext4Parser(logical);
         using var decoded = new MemoryStream();
         parser.ReadFile("data", decoded);
-        Assert.Equal("json-sparse-content", Encoding.UTF8.GetString(decoded.ToArray()));
+        Assert.Equal("json-sparse-content", Encoding.UTF8.GetString(decoded.GetBuffer(), 0, (int)decoded.Length));
     }
 
     private async Task<string> UnpackAsync(IFormatHandler handler, string image)

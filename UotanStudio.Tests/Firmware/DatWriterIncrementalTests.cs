@@ -77,7 +77,7 @@ public class DatWriterIncrementalTests
         return data;
     }
 
-    private static byte[] Concat(params byte[][] parts)
+    private static byte[] Concat(params ReadOnlySpan<byte[]> parts)
     {
         var buffer = new List<byte>();
         foreach (var part in parts) buffer.AddRange(part);

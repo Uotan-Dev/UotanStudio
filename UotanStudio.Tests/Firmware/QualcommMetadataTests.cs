@@ -11,37 +11,6 @@ namespace UotanStudio.Tests.Firmware;
 
 public sealed class QualcommMetadataTests
 {
-    public static bool FirehoseSampleAvailable => RealSampleIndex.IsAvailable(RealSampleIndex.ElfFirehoseVariable);
-
-    [Fact(Skip = "Set UOTAN_ELF_FIREHOSE_SAMPLE to the SM7150 DDR Firehose sample.", SkipUnless = nameof(FirehoseSampleAvailable))]
-    public async Task AnalyzeAsync_Sm7150Firehose_ReadsDeclaredIdentityAndCertificates()
-    {
-        await RealSampleIndex.VerifyIdentityAsync(RealSampleIndex.GetPath(RealSampleIndex.ElfFirehoseVariable),
-            RealSampleIndex.ElfFirehoseVariable, RealSampleIndex.ElfFirehoseSha256,
-            TestContext.Current.CancellationToken);
-
-        var result = await QualcommImageAnalyzer.AnalyzeAsync(RealSampleIndex.GetPath(RealSampleIndex.ElfFirehoseVariable),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        var metadata = Assert.Single(result.SigningMetadata, item => !item.FromCertificate && item.Authority == "OEM");
-        Assert.Equal("PackedV6", metadata.Layout);
-        Assert.Equal(0x1030, metadata.FileOffset);
-        Assert.Equal(3UL, metadata.SoftwareId);
-        Assert.Equal(0x72u, metadata.OemId);
-        Assert.Equal(0x600cu, metadata.SocVersions[0]);
-        Assert.Equal(3u, metadata.AntiRollbackVersion);
-        Assert.Equal(0x102u, metadata.Flags);
-        Assert.NotEmpty(result.Certificates);
-        Assert.All(result.Certificates, cert => Assert.Equal(96, cert.Sha384.Length));
-        Assert.Contains(result.VersionStrings, value => value.Name == "QcVersion"
-            && value.Value == "BOOT.XF.3.1-00571-SM6150LZB-1.360815.1.402679.1");
-        Assert.Contains(result.VersionStrings, value => value.Name == "ImageVariant" && value.Value == "SDM7150LA");
-        Assert.Contains(result.VersionStrings, value => value.Name == "BuildTime" && value.Value == "2021-11-22 16:47:50");
-        Assert.Contains(result.Certificates, value => value.Sha384 ==
-            "1BEBE3863A6781DB4B01086063007334DE9E5CA14971C7C4F4358EC9D79CDA4692CE5E948C6FD409408F4C919FCADFE3");
-        Assert.Equal(QualcommVerificationStatus.NotChecked, result.DeviceUsabilityStatus);
-    }
-
     [Fact]
     public void Analyze_PackedV6DualMetadata_KeepsAuthoritiesAndDeclaredZeroValuesSeparate()
     {

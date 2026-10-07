@@ -123,6 +123,47 @@ public sealed class ZstdDictionaryTests
         Assert.NotEmpty(output.ToArray());
     }
 
+    [Fact]
+    public async Task AddPartitionZstd_MultiChunkSingleWorker_ReusesDictionaryAndHashesEveryFrame()
+    {
+        var dictionary = Pattern(64 * 1024);
+        const int chunkBytes = 1024 * 1024;
+        var image = new byte[3 * chunkBytes];
+        for (var offset = 0; offset < image.Length; offset += dictionary.Length)
+        {
+            Array.Copy(dictionary, 0, image, offset, Math.Min(dictionary.Length, image.Length - offset));
+        }
+        RandomNumberGenerator.Fill(image.AsSpan(0, 64));
+        RandomNumberGenerator.Fill(image.AsSpan(chunkBytes, 64));
+        RandomNumberGenerator.Fill(image.AsSpan(2 * chunkBytes, 64));
+        using var temp = new TempDirectory();
+        var payload = Path.Combine(temp.Path, "payload.bin");
+        using (var builder = new PayloadBuilder())
+        {
+            builder.WithCompressionWorkers(1).AddPartitionZstd("system", new MemoryStream(image), dictionary);
+            await builder.BuildAsync(payload, TestContext.Current.CancellationToken);
+        }
+
+        var bytes = File.ReadAllBytes(payload);
+        var manifestLength = checked((int)BinaryPrimitives.ReadUInt64BigEndian(bytes.AsSpan(12)));
+        var metadataSignatureLength = (int)BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20));
+        var blobStart = 24 + manifestLength + metadataSignatureLength;
+        var manifest = DeltaArchiveManifest.Parser.ParseFrom(bytes[24..(24 + manifestLength)]);
+        var partition = Assert.Single(manifest.Partitions);
+        Assert.Equal(3, partition.Operations.Count);
+        using var rebuilt = new MemoryStream();
+        foreach (var op in partition.Operations)
+        {
+            var start = blobStart + (int)op.DataOffset;
+            var frame = bytes[start..(start + (int)op.DataLength)];
+            Assert.Equal(SHA256.HashData(frame), op.DataSha256Hash.ToByteArray());
+            Assert.Equal([0x28, 0xB5, 0x2F, 0xFD], frame[..4]);
+            ZstdReplaceDecoder.Decode(new MemoryStream(frame), rebuilt, dictionary, TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(image, rebuilt.ToArray());
+    }
+
     private static byte[] Pattern(int length)
     {
         var data = new byte[length];

@@ -19,8 +19,8 @@ public sealed class RockchipTests : IDisposable
         "RKAF"u8.CopyTo(image);
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(4), (uint)image.Length - 4);
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(136), 1);
-        Encoding.UTF8.GetBytes("boot").CopyTo(image, 140);
-        Encoding.UTF8.GetBytes(path).CopyTo(image, 172);
+        "boot"u8.CopyTo(image.AsSpan(140));
+        Encoding.UTF8.GetBytes(path.AsSpan(), image.AsSpan(172));
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(236), 2048);
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(244), 1);
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(248), (uint)payload.Length);

@@ -188,7 +188,7 @@ public class Nb0StreamingTests
         }
     }
 
-    private static byte[] BuildMd5Entry(long dataSectionOffset, params (long Offset, uint Length, byte[] Md5)[] records)
+    private static byte[] BuildMd5Entry(long dataSectionOffset, params ReadOnlySpan<(long Offset, uint Length, byte[] Md5)> records)
     {
         var data = new byte[records.Length * Nb0Md5Record.StructSize];
         var offset = 0;

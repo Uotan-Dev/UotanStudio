@@ -129,13 +129,7 @@ public class Lzo1xTests
     [Fact]
     public void Decompress_ZeroRunBitstream_LzoRle_ClearedOutput()
     {
-        var bitstream = new byte[]
-        {
-            17, 1,
-            0x03, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
-            0x18, 0xFC, 0xFF, 0x00,
-            0x11, 0x00, 0x00,
-        };
+        byte[] bitstream = [17, 1, 0x03, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x18, 0xFC, 0xFF, 0x00, 0x11, 0x00, 0x00,];
         var output = new byte[16];
         var status = Lzo1x.TryDecompress(bitstream, output, out var written);
 

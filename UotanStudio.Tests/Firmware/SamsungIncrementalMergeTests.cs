@@ -25,14 +25,6 @@ public class SamsungIncrementalMergeTests
     private static readonly byte[] OldSystem = BlockPattern(0x40, 4);
     private static readonly byte[] NewSystem = WithBlocks(OldSystem, [(1, (byte)0xD1), (3, (byte)0xD3)]);
 
-    /// <summary>Whether the closed samsung_dat_merge oracle ELF is configured for this run.
-    /// <para>本次运行是否配置了闭源 samsung_dat_merge oracle ELF。</para></summary>
-    public static bool DatMergeOracleAvailable => NativeOracleGate.SamsungDatMergeOracleAvailable;
-
-    /// <summary>Whether the closed samsung_payload_merge oracle ELF is configured for this run.
-    /// <para>本次运行是否配置了闭源 samsung_payload_merge oracle ELF。</para></summary>
-    public static bool PayloadMergeOracleAvailable => NativeOracleGate.SamsungPayloadMergeOracleAvailable;
-
     [Fact]
     public async Task MergeDat_LooseSlotSuffixedTriple_PairsBaseAfterSlotStripAndReproducesTarget()
     {
@@ -364,28 +356,6 @@ public class SamsungIncrementalMergeTests
             .MergePayloadAsync(payloadPath, oldDirectory, ["vendor"], Path.Combine(temp.Path, "merged"),
                 cancellationToken: TestContext.Current.CancellationToken));
         Assert.Contains("ambiguous", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact(Skip = "Set UOTAN_SAMSUNG_DAT_MERGE_ORACLE to the closed samsung_dat_merge arm64 ELF; the emulation harness is not persistent on this machine, so byte-level oracle equivalence stays unverified.",
-        SkipUnless = nameof(DatMergeOracleAvailable))]
-    public async Task MergeDat_MatchesClosedSamsungDatMergeOracle()
-    {
-        var oraclePath = RealSampleIndex.GetPath(RealSampleIndex.SamsungDatMergeOracleVariable);
-        await RealSampleIndex.VerifyIdentityAsync(oraclePath, RealSampleIndex.SamsungDatMergeOracleVariable,
-            RealSampleIndex.SamsungDatMergeOracleSha256, TestContext.Current.CancellationToken);
-        Assert.Skip("The samsung_dat_merge command-line contract is not pinned and no persistent arm64 " +
-            "emulation harness exists on this machine (UOTAN_SAMSUNG_DAT_MERGE_ORACLE).");
-    }
-
-    [Fact(Skip = "Set UOTAN_SAMSUNG_PAYLOAD_MERGE_ORACLE to the closed samsung_payload_merge arm64 ELF; the emulation harness is not persistent on this machine, so byte-level oracle equivalence stays unverified.",
-        SkipUnless = nameof(PayloadMergeOracleAvailable))]
-    public async Task MergePayload_MatchesClosedSamsungPayloadMergeOracle()
-    {
-        var oraclePath = RealSampleIndex.GetPath(RealSampleIndex.SamsungPayloadMergeOracleVariable);
-        await RealSampleIndex.VerifyIdentityAsync(oraclePath, RealSampleIndex.SamsungPayloadMergeOracleVariable,
-            RealSampleIndex.SamsungPayloadMergeOracleSha256, TestContext.Current.CancellationToken);
-        Assert.Skip("The samsung_payload_merge command-line contract is not pinned and no persistent arm64 " +
-            "emulation harness exists on this machine (UOTAN_SAMSUNG_PAYLOAD_MERGE_ORACLE).");
     }
 
     private static readonly byte[] OldSystem32 = BlockPattern(0x30, 8);

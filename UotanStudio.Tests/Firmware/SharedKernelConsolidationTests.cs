@@ -65,7 +65,7 @@ public class BinaryReaderHelpersTests
     {
         using var stream = new MemoryStream([0x01, 0x02, 0x03, 0x04]);
 
-        Assert.Equal(0x04030201u, BinaryReaderHelpers.ReadUInt32LE(stream));
+        Assert.Equal(0x04030201u, stream.ReadUInt32LE());
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class BinaryReaderHelpersTests
     {
         using var stream = new MemoryStream([0x01]);
 
-        Assert.Throws<EndOfStreamException>(() => BinaryReaderHelpers.ReadUInt16LE(stream));
+        Assert.Throws<EndOfStreamException>(() => stream.ReadUInt16LE());
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class BinaryReaderHelpersTests
     {
         byte[] buffer = [0xFF, 0x01, 0x02, 0x03, 0x04];
 
-        Assert.Equal(0x04030201u, BinaryReaderHelpers.ReadUInt32LE(buffer, 1));
+        Assert.Equal(0x04030201u, buffer.ReadUInt32LE(1));
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class BinaryReaderHelpersTests
     {
         byte[] buffer = [0x01, 0x02, 0x03];
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => BinaryReaderHelpers.ReadUInt32LE(buffer, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => buffer.ReadUInt32LE(0));
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public class BinaryReaderHelpersTests
     {
         byte[] buffer = [0x01, 0x02, 0x03, 0x04];
 
-        Assert.Equal(0x01020304u, BinaryReaderHelpers.ReadUInt32BE(buffer, 0));
+        Assert.Equal(0x01020304u, buffer.ReadUInt32BE(0));
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public class BinaryReaderHelpersTests
     {
         byte[] buffer = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
 
-        Assert.Equal(0x0807060504030201ul, BinaryReaderHelpers.ReadUInt64LE(buffer, 0));
+        Assert.Equal(0x0807060504030201ul, buffer.ReadUInt64LE(0));
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class BinaryReaderHelpersTests
     {
         using var stream = new MemoryStream([0x01, 0x02, 0x03, 0x04]);
 
-        var value = await BinaryReaderHelpers.ReadUInt32BEAsync(stream, TestContext.Current.CancellationToken);
+        var value = await stream.ReadUInt32BEAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(0x01020304u, value);
     }
@@ -123,7 +123,7 @@ public class BinaryReaderHelpersTests
     {
         using var stream = new MemoryStream([0x01, 0x02]);
 
-        await Assert.ThrowsAsync<EndOfStreamException>(() => BinaryReaderHelpers.ReadUInt64BEAsync(stream, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<EndOfStreamException>(() => stream.ReadUInt64BEAsync(TestContext.Current.CancellationToken));
     }
 }
 

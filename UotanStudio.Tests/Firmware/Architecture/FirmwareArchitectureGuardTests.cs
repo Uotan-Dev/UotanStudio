@@ -28,6 +28,7 @@ public class FirmwareArchitectureGuardTests
         "Radio -> CompoundFile",
         "VendorFirmware -> BlockImage",
         "VendorFirmware -> Compression",
+        "VendorFirmware -> FileSystem",
         "VendorFirmware -> OtaDelta",
         "VendorFirmware -> Patching",
     ];

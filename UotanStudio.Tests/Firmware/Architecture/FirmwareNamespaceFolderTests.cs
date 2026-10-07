@@ -77,6 +77,6 @@ public class FirmwareNamespaceFolderTests
     }
 
     private static readonly Regex FirmwareThirdPartyReferencePattern = new(
-        @"\b(?:BrotliSharpLib|BsDiff|Google\.Protobuf|K4os|LZMA|SharpCompress|SharpZipLib|BouncyCastle|YamlDotNet|System\.Security\.Cryptography\.Pkcs)\b",
+        @"\b(?:BrotliSharpLib|BsDiff|Google\.Protobuf|K4os|LZMA|SharpCompress|SharpZipLib|ZstdSharp|BouncyCastle|YamlDotNet|System\.Security\.Cryptography\.Pkcs)\b",
         RegexOptions.CultureInvariant);
 }

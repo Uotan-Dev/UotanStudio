@@ -62,7 +62,7 @@ public class VendorBootValidationTests
         RamdiskName = name,
     };
 
-    private static VendorBootPacker NewV4Packer(params VendorRamdiskTableEntry[] entries)
+    private static VendorBootPacker NewV4Packer(params ReadOnlySpan<VendorRamdiskTableEntry> entries)
     {
         var packer = new VendorBootPacker
         {

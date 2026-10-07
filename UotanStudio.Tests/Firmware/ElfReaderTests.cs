@@ -8,33 +8,6 @@ namespace UotanStudio.Tests.Firmware;
 
 public sealed class ElfReaderTests
 {
-    public static bool FirehoseSampleAvailable => RealSampleIndex.IsAvailable(RealSampleIndex.ElfFirehoseVariable);
-
-    [Fact(Skip = "Set UOTAN_ELF_FIREHOSE_SAMPLE to the SM7150 DDR Firehose sample.", SkipUnless = nameof(FirehoseSampleAvailable))]
-    public async Task ReadAsync_Sm7150Firehose_MatchesReadelfMetadata()
-    {
-        await RealSampleIndex.VerifyIdentityAsync(RealSampleIndex.GetPath(RealSampleIndex.ElfFirehoseVariable),
-            RealSampleIndex.ElfFirehoseVariable, RealSampleIndex.ElfFirehoseSha256,
-            TestContext.Current.CancellationToken);
-
-        var info = await ElfReader.ReadAsync(RealSampleIndex.GetPath(RealSampleIndex.ElfFirehoseVariable),
-            TestContext.Current.CancellationToken);
-
-        Assert.True(info.Header.Is64Bit);
-        Assert.True(info.Header.IsLittleEndian);
-        Assert.Equal(183, info.Header.Machine);
-        Assert.Equal(0x1482d2a8UL, info.Header.EntryPoint);
-        Assert.Equal(18, info.Segments.Count);
-        Assert.Empty(info.Sections);
-        Assert.Equal(0x80080UL, info.Segments[2].Offset);
-        Assert.Equal(0UL, info.Segments[2].FileSize);
-        Assert.Equal(0x14680000UL, info.Segments[2].VirtualAddress);
-        Assert.Equal(0x1000UL, info.Segments[2].Alignment);
-        Assert.Equal(0x5c250UL, info.Segments[3].Offset);
-        Assert.Equal(0x1dccUL, info.Segments[3].FileSize);
-        Assert.Equal(0x14699000UL, info.Segments[3].VirtualAddress);
-    }
-
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]

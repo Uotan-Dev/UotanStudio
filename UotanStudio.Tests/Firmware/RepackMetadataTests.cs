@@ -285,6 +285,19 @@ public sealed class RepackMetadataTests : IDisposable
         Assert.True(found);
     }
 
+    [Theory]
+    [InlineData("my_product_a", "my_product")]
+    [InlineData("System_B", "System")]
+    [InlineData("a_b_c", "a_b")]
+    [InlineData("my_a", "my")]
+    [InlineData("my_product", "my_product")]
+    [InlineData("system", "system")]
+    [InlineData("my_product2", "my_product2")]
+    [InlineData("a_b", "a")]
+    [InlineData("ab", "ab")]
+    public void StripSlotSuffix_NamesWithAndWithoutSlotLetter_ReturnsBaseName(string name, string expected)
+        => Assert.Equal(expected, RepackMetadata.StripSlotSuffix(name));
+
     private void EditMetadata(Action<JsonObject> edit)
     {
         var path = Path.Combine(Extracted, RepackMetadata.FileName);

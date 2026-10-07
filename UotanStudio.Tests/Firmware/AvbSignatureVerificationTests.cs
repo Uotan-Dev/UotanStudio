@@ -2,8 +2,6 @@ using System.Buffers.Binary;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Security;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;
@@ -176,7 +174,7 @@ public class AvbSignatureVerificationTests
     public async Task SignVbmeta_SignedImage_VerifiesThenRejectsTampering()
     {
         using var rsa = SigningTestKeys.Create(2048);
-        var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var privateKey = rsa;
         var root = CreateTempDir();
         try
         {
@@ -229,7 +227,7 @@ public class AvbSignatureVerificationTests
     public async Task AddHashFooter_SignedImage_VerifiesThenRejectsTampering()
     {
         using var rsa = SigningTestKeys.Create(2048);
-        var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var privateKey = rsa;
         var root = CreateTempDir();
         try
         {

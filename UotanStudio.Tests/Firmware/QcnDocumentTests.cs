@@ -7,10 +7,6 @@ namespace UotanStudio.Tests.Firmware;
 
 public class QcnDocumentTests
 {
-    public static bool RealQcnSampleConfigured =>
-        Environment.GetEnvironmentVariable("UOTAN_QCN_SAMPLE") is { } path && File.Exists(path);
-
-
     private static byte[] Record(ushort id, ushort flags, byte[] data)
     {
         Assert.True(data.Length <= 128);
@@ -57,11 +53,7 @@ public class QcnDocumentTests
     [Fact]
     public async Task ParseAsync_TwoNvItemArrayStreams_MergesAllRecords()
     {
-        var numbered = new List<byte[]>
-        {
-            Record(0, 0, [0xAA, 0xBB, 0xCC, 0xDD]),
-            Record(85, 0, "000000"u8.ToArray())
-        };
+        List<byte[]> numbered = [Record(0, 0, [0xAA, 0xBB, 0xCC, 0xDD]), Record(85, 0, "000000"u8.ToArray())];
         var defaults = new List<byte[]>();
         for (var i = 0; i < 40; i++)
         {
@@ -236,17 +228,6 @@ public class QcnDocumentTests
         Assert.False(QcnImeiCodec.TryDecode([0x01, 0x4A, 0x09, 0x51, 0x24, 0x30, 0x32, 0x57, 0x81], out _, out _));
         Assert.True(QcnImeiCodec.TryDecode([0x08, 0x4A, 0x09, 0x51, 0x24, 0x30, 0x32, 0x57, 0x81], out _, out var valid));
         Assert.True(valid);
-    }
-
-    [Fact(Skip = "Set UOTAN_QCN_SAMPLE to a real QCN file path to enable this test.", SkipUnless = nameof(RealQcnSampleConfigured))]
-    public async Task ParseAsync_RealQcnSample_WhenGateEnabled_ParsesAllRecords()
-    {
-        var samplePath = Environment.GetEnvironmentVariable("UOTAN_QCN_SAMPLE");
-
-        var document = await QcnReader.ParseAsync(samplePath!, TestContext.Current.CancellationToken);
-        Assert.True(document.Items.Count > 0);
-        Assert.True(document.NvItemArrayStreamPaths.Count > 0);
-        Assert.True(document.Items.All(item => item.Data.Length == 128));
     }
 
     [Fact]

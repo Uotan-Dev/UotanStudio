@@ -147,7 +147,7 @@ public class PayloadToolTests
         Assert.Equal(boot, PayloadTool.ExtractImage(payload, "boot"));
     }
 
-    private static string BuildRealPayload(TempDirectory temp, string firstName, byte[] firstImage, params (string Name, byte[] Image)[] extra)
+    private static string BuildRealPayload(TempDirectory temp, string firstName, byte[] firstImage, params ReadOnlySpan<(string Name, byte[] Image)> extra)
     {
         var path = Path.Combine(temp.Path, "payload.bin");
         var sources = new List<MemoryStream>();

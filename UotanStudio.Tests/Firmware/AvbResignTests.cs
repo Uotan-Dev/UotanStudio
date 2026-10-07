@@ -1,7 +1,5 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Security;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
@@ -57,7 +55,7 @@ public sealed class AvbResignTests : IDisposable
         var output = Path.Combine(_root, "output.img");
         await File.WriteAllBytesAsync(source, Enumerable.Range(0, 17001).Select(i => (byte)(i * 31)).ToArray(), token);
         using var rsa = SigningTestKeys.Create();
-        var key = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var key = rsa;
         var options = new AvbResignOptions { Mode = mode, PartitionName = "system", Salt = [] };
         var first = await AvbResigner.ResignImageAsync(source, signed, key, options, token);
         Assert.True(first.Success, first.ErrorMessage);
@@ -94,7 +92,7 @@ public sealed class AvbResignTests : IDisposable
         var output = Path.Combine(_root, "output.img");
         await File.WriteAllBytesAsync(output, [7, 6, 5], token);
         using var rsa = SigningTestKeys.Create();
-        var key = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var key = rsa;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
         cancellation.Cancel();
 
@@ -120,7 +118,7 @@ public sealed class AvbResignTests : IDisposable
         var data = Enumerable.Range(0, 129 * dataBlockSize - 13).Select(i => (byte)(i * 19)).ToArray();
         await File.WriteAllBytesAsync(source, data, token);
         using var rsa = SigningTestKeys.Create();
-        var key = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var key = rsa;
         var options = new AvbResignOptions
         {
             Mode = mode,
@@ -179,7 +177,7 @@ public sealed class AvbResignTests : IDisposable
         var output = Path.Combine(_root, "output.img");
         await File.WriteAllBytesAsync(source, new byte[4097], token);
         using var rsa = SigningTestKeys.Create();
-        var key = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var key = rsa;
         var first = await AvbResigner.ResignImageAsync(source, output, key,
             new AvbResignOptions { Mode = mode, PartitionName = "boot", Salt = [] }, token);
         Assert.True(first.Success, first.ErrorMessage);
@@ -214,7 +212,7 @@ public sealed class AvbResignTests : IDisposable
         await File.WriteAllBytesAsync(source, new byte[8192], token);
         await File.WriteAllBytesAsync(output, [9, 8, 7], token);
         using var rsa = SigningTestKeys.Create();
-        var key = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var key = rsa;
 
         var result = await AvbResigner.ResignImageAsync(source, output, key, new AvbResignOptions
         {
@@ -244,7 +242,7 @@ public sealed class AvbResignTests : IDisposable
         await File.WriteAllBytesAsync(source, bytes, token);
         await File.WriteAllBytesAsync(output, [1], token);
         using var rsa = SigningTestKeys.Create();
-        var key = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var key = rsa;
 
         var result = await AvbResigner.ResignImageAsync(source, output, key,
             new AvbResignOptions { PartitionName = "boot" }, token);

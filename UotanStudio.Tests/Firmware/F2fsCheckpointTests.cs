@@ -63,7 +63,7 @@ public class F2fsCheckpointTests
         using var parser = new F2fsParser(new MemoryStream(image));
         using var output = new MemoryStream();
         parser.ReadFile("test.txt", output);
-        Assert.Equal("new-data", Encoding.UTF8.GetString(output.ToArray()));
+        Assert.Equal("new-data", Encoding.UTF8.GetString(output.GetBuffer(), 0, (int)output.Length));
     }
 
     [Fact]

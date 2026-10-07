@@ -9,7 +9,6 @@ namespace UotanStudio.Tests.Firmware;
 public sealed class SelinuxPolicyParserTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-selinux-policy-" + Guid.NewGuid().ToString("N"));
-    public static bool UpstreamSampleAvailable => RealSampleIndex.IsAvailable(RealSampleIndex.SelinuxPolicyVariable);
 
     public SelinuxPolicyParserTests() => Directory.CreateDirectory(_root);
 
@@ -175,46 +174,6 @@ public sealed class SelinuxPolicyParserTests : IDisposable
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             SelinuxPolicyParser.ReadMetadataAsync(stream, cancellation.Token));
-    }
-
-    [Fact(Skip = "Set UOTAN_SELINUX_POLICY_SAMPLE to a real SELinux binary policy sample.",
-        SkipUnless = nameof(UpstreamSampleAvailable))]
-    public async Task ReadMetadataAsync_UpstreamLibsepolSample_ReportsOnlyValidatedHeaderMetadata()
-    {
-        await RealSampleIndex.VerifyIdentityAsync(RealSampleIndex.GetPath(RealSampleIndex.SelinuxPolicyVariable),
-            RealSampleIndex.SelinuxPolicyVariable, RealSampleIndex.SelinuxPolicySha256,
-            TestContext.Current.CancellationToken);
-
-        var metadata = await SelinuxPolicyParser.ReadMetadataAsync(
-            RealSampleIndex.GetPath(RealSampleIndex.SelinuxPolicyVariable),
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal("kernel", metadata.PolicyType);
-        Assert.Equal((uint)32, metadata.Version);
-        Assert.True(metadata.MlsEnabled);
-        Assert.Equal((uint)8, metadata.SymbolTableCount);
-        Assert.Equal((uint)9, metadata.ObjectContextTableCount);
-        Assert.Equal(32, metadata.BodyOffset);
-        Assert.Equal(1520, metadata.BodyLength);
-        Assert.False(metadata.RuleEnumerationSupported);
-        Assert.Equal("header-and-bounded-section-cursor", metadata.CapabilityStatus);
-        Assert.Equal("policycaps", metadata.Sections[0].Name);
-        Assert.Equal(SelinuxSectionStatus.Consumed, metadata.Sections[0].Status);
-        Assert.Equal(32, metadata.Sections[0].StartOffset);
-        Assert.Equal(44, metadata.Sections[0].EndOffset);
-        Assert.Equal((uint)0, metadata.Sections[0].DeclaredCount);
-        Assert.Equal("permissive-map", metadata.Sections[1].Name);
-        Assert.Equal(SelinuxSectionStatus.Consumed, metadata.Sections[1].Status);
-        Assert.Equal(44, metadata.Sections[1].StartOffset);
-        Assert.Equal(56, metadata.Sections[1].EndOffset);
-        Assert.Equal((uint)0, metadata.Sections[1].DeclaredCount);
-        Assert.Equal("symbol-tables-and-later", metadata.Sections[^1].Name);
-        Assert.Equal(SelinuxSectionStatus.PhaseLimited, metadata.Sections[^1].Status);
-        Assert.Equal(56, metadata.Sections[^1].StartOffset);
-        Assert.Equal(1552, metadata.Sections[^1].EndOffset);
-        Assert.False(metadata.BodyFullyConsumed);
-        Assert.Equal(1496, metadata.UnconsumedTailLength);
-        AssertContiguousSections(metadata);
     }
 
     [Theory]

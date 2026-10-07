@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Security;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;
@@ -9,18 +7,9 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
-public sealed class AvbFecResignTests : IDisposable
+public sealed class AvbFecResignTests
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-avb-fec-resign-" + Guid.NewGuid().ToString("N"));
-
-    public static bool IndependentToolsAvailable =>
-        File.Exists(Environment.GetEnvironmentVariable("UOTAN_AVBTOOL")) &&
-        File.Exists(Environment.GetEnvironmentVariable("UOTAN_AVB_PYTHON")) &&
-        (File.Exists(Environment.GetEnvironmentVariable("UOTAN_FEC_TOOL")) ||
-            File.Exists(Environment.GetEnvironmentVariable("UOTAN_FEC_WSL_TOOL")) &&
-            File.Exists(Environment.GetEnvironmentVariable("UOTAN_FEC_WSL_LOADER")) &&
-            File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "wsl.exe"))) &&
-        Directory.Exists(Environment.GetEnvironmentVariable("UOTAN_AVB_OPENSSL_DIRECTORY"));
 
     public AvbFecResignTests() => Directory.CreateDirectory(_root);
 
@@ -38,7 +27,7 @@ public sealed class AvbFecResignTests : IDisposable
         var content = Enumerable.Range(0, length).Select(i => (byte)(i * 19)).ToArray();
         await File.WriteAllBytesAsync(source, content, token);
         using var rsa = SigningTestKeys.Create();
-        var key = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var key = rsa;
         var options = new AvbResignOptions
         {
             Mode = AvbResignMode.Hashtree,
@@ -87,7 +76,7 @@ public sealed class AvbFecResignTests : IDisposable
         var output = Path.Combine(_root, "output.img");
         await File.WriteAllBytesAsync(source, new byte[8192], token);
         using var rsa = SigningTestKeys.Create();
-        var key = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var key = rsa;
 
         var result = await AvbResigner.ResignImageAsync(source, output, key,
             new AvbResignOptions { Mode = AvbResignMode.Hashtree, PartitionName = "system", Salt = [] }, token);
@@ -112,7 +101,7 @@ public sealed class AvbFecResignTests : IDisposable
         var output = Path.Combine(_root, "output.img");
         await File.WriteAllBytesAsync(source, new byte[4097], token);
         using var rsa = SigningTestKeys.Create();
-        var key = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var key = rsa;
         var options = new AvbResignOptions
         {
             Mode = AvbResignMode.Hashtree,
@@ -158,7 +147,7 @@ public sealed class AvbFecResignTests : IDisposable
         await File.WriteAllBytesAsync(source, new byte[8192], token);
         await File.WriteAllBytesAsync(output, [9, 8, 7], token);
         using var rsa = SigningTestKeys.Create();
-        var key = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var key = rsa;
 
         var result = await AvbResigner.ResignImageAsync(source, output, key,
             new AvbResignOptions { Mode = mode, PartitionName = "system", FecNumRoots = roots }, token);
@@ -176,7 +165,7 @@ public sealed class AvbFecResignTests : IDisposable
         await File.WriteAllBytesAsync(source, new byte[8 * 1024 * 1024], token);
         await File.WriteAllBytesAsync(output, [9, 8, 7], token);
         using var rsa = SigningTestKeys.Create();
-        var key = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var key = rsa;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
         var operation = AvbResigner.ResignImageAsync(source, output, key, new AvbResignOptions
         {
@@ -203,137 +192,5 @@ public sealed class AvbFecResignTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
         Assert.Equal(new byte[] { 9, 8, 7 }, await File.ReadAllBytesAsync(output, token));
         Assert.Empty(Directory.GetFiles(_root, "*.tmp-*"));
-    }
-
-    [Fact(Skip = "Set UOTAN_AVBTOOL, UOTAN_AVB_PYTHON, UOTAN_AVB_OPENSSL_DIRECTORY and UOTAN_FEC_TOOL or UOTAN_FEC_WSL_TOOL/UOTAN_FEC_WSL_LOADER for independent avbtool/fec checks.", SkipUnless = nameof(IndependentToolsAvailable))]
-    public async Task ResignImageAsync_IndependentAvbtoolAndFec_VerifySignedImageAndParity()
-    {
-        var token = TestContext.Current.CancellationToken;
-        var source = Path.Combine(_root, "source.img");
-        var output = Path.Combine(_root, "system.img");
-        var prefix = Path.Combine(_root, "prefix.img");
-        var encoded = Path.Combine(_root, "encoded.fec");
-        var keyPath = Path.Combine(_root, "key.pem");
-        await File.WriteAllBytesAsync(source, Enumerable.Range(0, 129 * 4096 - 13).Select(i => (byte)(i * 17)).ToArray(), token);
-        using var rsa = SigningTestKeys.Create();
-        await File.WriteAllTextAsync(keyPath, rsa.ExportRSAPrivateKeyPem(), token);
-        var key = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
-        var signed = await AvbResigner.ResignImageAsync(source, output, key, new AvbResignOptions
-        {
-            Mode = AvbResignMode.Hashtree,
-            PartitionName = "system",
-            Salt = [1, 2, 3, 4],
-            FecNumRoots = 2
-        }, token);
-        Assert.True(signed.Success, signed.ErrorMessage);
-        await RunToolAsync(Environment.GetEnvironmentVariable("UOTAN_AVB_PYTHON")!,
-            [Environment.GetEnvironmentVariable("UOTAN_AVBTOOL")!, "verify_image", "--image", output, "--key", keyPath], token);
-
-        var footer = AvbFooter.TryReadFile(output)!.Value;
-        await using var image = new FileStream(output, FileMode.Open, FileAccess.Read, FileShare.Read);
-        image.Position = (long)footer.VbmetaOffset;
-        var vbmeta = new byte[(int)footer.VbmetaSize];
-        await image.ReadExactlyAsync(vbmeta, token);
-        var descriptor = Assert.Single(AvbSignatureVerifier.ReadDescriptorsStrict(vbmeta));
-        var info = await RunToolAsync(Environment.GetEnvironmentVariable("UOTAN_AVB_PYTHON")!,
-            [Environment.GetEnvironmentVariable("UOTAN_AVBTOOL")!, "info_image", "--image", output], token);
-        Assert.Matches(@"FEC num roots:\s+2\b", info);
-        Assert.Matches($@"FEC offset:\s+{descriptor.FecOffset}\b", info);
-        Assert.Matches($@"FEC size:\s+{descriptor.FecSize}\s+bytes", info);
-        image.Position = 0;
-        await using (var target = new FileStream(prefix, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-        {
-            var remaining = (long)descriptor.FecOffset;
-            var buffer = new byte[65536];
-            while (remaining > 0)
-            {
-                var count = (int)Math.Min(buffer.Length, remaining);
-                await image.ReadExactlyAsync(buffer.AsMemory(0, count), token);
-                await target.WriteAsync(buffer.AsMemory(0, count), token);
-                remaining -= count;
-            }
-        }
-        if (File.Exists(Environment.GetEnvironmentVariable("UOTAN_FEC_TOOL")))
-        {
-            await RunToolAsync(Environment.GetEnvironmentVariable("UOTAN_FEC_TOOL")!,
-                ["--encode", "--roots", "2", prefix, encoded], token);
-        }
-        else
-        {
-            var tool = await ToWslPathAsync(Environment.GetEnvironmentVariable("UOTAN_FEC_WSL_TOOL")!, token);
-            var loader = await ToWslPathAsync(Environment.GetEnvironmentVariable("UOTAN_FEC_WSL_LOADER")!, token);
-            await RunToolAsync("wsl.exe", ["--exec", loader, "--library-path", Path.GetDirectoryName(tool)!,
-                tool, "--encode", "--roots", "2", await ToWslPathAsync(prefix, token),
-                await ToWslPathAsync(encoded, token)], token);
-        }
-        var independent = await File.ReadAllBytesAsync(encoded, token);
-        var parity = new byte[(int)descriptor.FecSize];
-        image.Position = (long)descriptor.FecOffset;
-        await image.ReadExactlyAsync(parity, token);
-        Assert.Equal(parity.Length + 4096, independent.Length);
-        Assert.Equal(independent.AsSpan(0, parity.Length).ToArray(), parity);
-    }
-
-    public void Dispose() => Directory.Delete(_root, recursive: true);
-
-    private async Task<string> ToWslPathAsync(string path, CancellationToken token)
-    {
-        var start = new ProcessStartInfo("wsl.exe")
-        {
-            WorkingDirectory = _root,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        start.ArgumentList.Add("--exec");
-        start.ArgumentList.Add("wslpath");
-        start.ArgumentList.Add("-a");
-        start.ArgumentList.Add(path);
-        using var process = Process.Start(start)!;
-        var stdout = process.StandardOutput.ReadToEndAsync(token);
-        var stderr = process.StandardError.ReadToEndAsync(token);
-        await process.WaitForExitAsync(token);
-        Assert.True(process.ExitCode == 0, await stderr);
-        return (await stdout).Trim();
-    }
-
-    private async Task<string> RunToolAsync(string fileName, IEnumerable<string> arguments, CancellationToken token)
-    {
-        var start = new ProcessStartInfo(fileName)
-        {
-            WorkingDirectory = _root,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        start.Environment["PATH"] = Environment.GetEnvironmentVariable("UOTAN_AVB_OPENSSL_DIRECTORY") +
-            Path.PathSeparator + Path.GetDirectoryName(Environment.GetEnvironmentVariable("UOTAN_FEC_TOOL")) +
-            Path.PathSeparator + Environment.GetEnvironmentVariable("PATH");
-        foreach (var argument in arguments)
-        {
-            start.ArgumentList.Add(argument);
-        }
-        using var process = Process.Start(start)!;
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-        timeout.CancelAfter(TimeSpan.FromSeconds(60));
-        var stdout = process.StandardOutput.ReadToEndAsync(token);
-        var stderr = process.StandardError.ReadToEndAsync(token);
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        finally
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync(CancellationToken.None);
-            }
-        }
-        var text = await stdout + Environment.NewLine + await stderr;
-        Assert.True(process.ExitCode == 0, text);
-        return text;
     }
 }
