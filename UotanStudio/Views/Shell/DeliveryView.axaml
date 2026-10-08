@@ -170,6 +170,7 @@
                         </StackPanel>
                         <WrapPanel Name="SuperImageOptions" Orientation="Horizontal" ItemsAlignment="Center" ItemSpacing="12" LineSpacing="6">
                             <CheckBox Name="SuperZstdBox" Content="{DynamicResource Delivery_ZstdCompression}" />
+                            <CheckBox Name="SuperZstdChunkedBox" Content="{DynamicResource Delivery_ZstdChunkedParallel}" />
                             <CheckBox Name="GenerateSuperEmptyBox" IsChecked="False"
                                       AutomationProperties.Name="{DynamicResource Delivery_GenerateSuperEmpty}">
                                 <TextBlock Text="{DynamicResource Delivery_GenerateSuperEmpty}" />

@@ -56,7 +56,7 @@ public partial class DeliveryView
                      DynamicPartitionsFileBox, PayloadPostinstallBox, PayloadTimestampBox, PayloadSecurityPatchBox })
             box.TextChanged += (_, _) => QueueDeliveryChange();
         foreach (var box in new ToggleButton[] { DirectOutputBox, PackSuperBox, PackPayloadBox, SuperRawBox, SuperSparseBox,
-                     SuperZstdBox, SuperVabBox, SuperAbBox, SuperAOnlyBox, GenerateSuperEmptyBox })
+                     SuperZstdBox, SuperZstdChunkedBox, SuperVabBox, SuperAbBox, SuperAOnlyBox, GenerateSuperEmptyBox })
             box.IsCheckedChanged += (_, _) => QueueDeliveryChange();
 
         SuperZstdBox.IsCheckedChanged += (_, _) =>
@@ -125,6 +125,7 @@ public partial class DeliveryView
             AutoZero = Composition.AutoZero && SuperAOnlyBox.IsChecked != true,
             DeviceType = SuperVabBox.IsChecked == true ? "VAB" : SuperAbBox.IsChecked == true ? "AB" : "AOnly",
             Zstd = SuperZstdBox.IsChecked == true,
+            ZstdChunkedParallel = SuperZstdChunkedBox.IsChecked == true,
             Empty = GenerateSuperEmptyBox.IsChecked == true
         };
     }
@@ -343,6 +344,7 @@ public partial class DeliveryView
             PayloadTimestampBox.Text = plan.Payload.MaxTimestamp.ToString(CultureInfo.InvariantCulture);
             PayloadSecurityPatchBox.Text = plan.Payload.SecurityPatchLevel;
             SuperZstdBox.IsChecked = plan.Super.Zstd && !plan.Super.Empty;
+            SuperZstdChunkedBox.IsChecked = plan.Super.ZstdChunkedParallel;
             _deliveryGroups = plan.Super.Groups;
             OutputDirectoryBox.Text = plan.OutputDirectory;
             SuperDeviceNameBox.Text = plan.PackPayload ? "payload.bin" : plan.Super.DeviceName; SuperGroupNameBox.Text = plan.Super.Group;

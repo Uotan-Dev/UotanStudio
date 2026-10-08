@@ -21,6 +21,7 @@
     <x:String x:Key="Delivery_MetadataSize">元数据大小</x:String>
     <x:String x:Key="Delivery_BlockSize">块大小</x:String>
     <x:String x:Key="Delivery_ZstdCompression">压缩为ZST</x:String>
+    <x:String x:Key="Delivery_ZstdChunkedParallel">分块并行压缩</x:String>
     <x:String x:Key="Delivery_BuildFingerprint">构建指纹</x:String>
     <x:String x:Key="Delivery_Incremental">增量编号</x:String>
     <x:String x:Key="Delivery_SdkLevel">SDK等级</x:String>

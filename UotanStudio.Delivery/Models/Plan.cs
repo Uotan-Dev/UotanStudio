@@ -88,6 +88,19 @@ internal sealed record DeliverySuperOptions
         options.ZstdLevel is >= 1 and <= 22 ? options.ZstdLevel : DefaultZstdLevel;
 
     /// <summary>
+    /// Switch for the Super Zstd container layout, off by default: off emits one streaming frame, which is markedly
+    /// faster at high levels and compresses better, while on splits the input into 1 MiB chunks that are encoded
+    /// concurrently and concatenated so every chunk carries its own frame header. The two layouts produce different
+    /// container bytes for the same input and decode to the same plaintext, so a Super image written by one layout is
+    /// not byte-equal to the same image written by the other. Enable it only when wall-clock concurrency matters more
+    /// than level cost, which is the low-level case.
+    /// <para>Super 的 Zstd 容器布局开关，默认关闭：关闭时串接单个流式帧，高等级下明显更快且压缩率更好；打开时把输入按
+    /// 1 MiB 切块并发编码后串接，每块自带一个帧头。两种布局对同一份输入产出的容器字节不同，解码后的明文相同，因此按某一
+    /// 布局写出的 Super 镜像与按另一布局写出的并不逐字节相等。只有在并发收益比等级开销更重要（低等级场景）时才打开。</para>
+    /// </summary>
+    public bool ZstdChunkedParallel { get; init; }
+
+    /// <summary>
     /// <para>Super 块设备大小（字节）。没有可用的默认值：LP 元数据里的这个数与设备实际 super 不一致时，
     /// 大于实际值会让 liblp 拒绝加载元数据、动态分区整体不可用，小于实际值则会静默留下未分配的尾部空间并
     /// 破坏后续 OTA 的快照分配。作者必须按设备读数（例如 <c>fastboot getvar super-partition-size</c>）显式填写。</para>

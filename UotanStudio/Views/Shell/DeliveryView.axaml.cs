@@ -266,7 +266,7 @@ public partial class DeliveryView : UserControl
         _zipSigningCertificatePath = "";
         PayloadPostinstallBox.Text = string.Empty;
         PayloadTimestampBox.Text = "0"; PayloadSecurityPatchBox.Text = "";
-        SuperZstdBox.IsChecked = false; _deliveryGroups = [];
+        SuperZstdBox.IsChecked = false; SuperZstdChunkedBox.IsChecked = false; _deliveryGroups = [];
     }
 
     private void OnSuperDeviceTypeChanged(object? sender, RoutedEventArgs e)

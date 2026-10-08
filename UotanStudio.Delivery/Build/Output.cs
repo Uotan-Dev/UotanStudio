@@ -247,13 +247,14 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                             ZstdCompressor.Compress(input, tracked, new CompressionOptions
                             {
                                 Level = DeliverySuperOptions.ResolveZstdLevel(plan.Super),
-                                MaxDegreeOfParallelism = FirmwareParallelism.Workers
+                                MaxDegreeOfParallelism = plan.Super.ZstdChunkedParallel ? FirmwareParallelism.Workers : null
                             });
                         }, token).ConfigureAwait(false);
                         File.Delete(superOutput);
                     }
                 }
             }
+            var sourceIdentities = new Dictionary<string, (string Hash, long Length)>(StringComparer.Ordinal);
             if (plan.OrganizeDirectory)
             {
                 var copy = plan.Files.Where(f => !f.Generated).ToArray();
@@ -274,10 +275,11 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                     var completed = copied;
                     var destination = OrganizedImagePath(plan, stage, copy[i]);
                     Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                    await CopyFileAsync(copy[i].SourcePath, destination, token,
+                    var identity = await CopyFileAsync(copy[i].SourcePath, destination, token,
                         p => progress?.Report(new(55 + (index + p / 100) * 20 / Math.Max(1, copy.Length), "Copying images",
                             (completed + (long)(copyLengths[index] * p / 100), copyTotal), "Delivery_ProgressCopy", Detail: copy[index].FileName)),
                         expandSparse: plan.PackSuper).ConfigureAwait(false);
+                    if (identity.HasValue) sourceIdentities[copy[i].SourcePath] = identity.Value;
                     copied += copyLengths[i];
                 }
                 await tools.PrepareAsync(plan, stage, progress, token).ConfigureAwait(false);
@@ -313,7 +315,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
             if (plan.PackPayload && !plan.OrganizeDirectory)
                 File.Delete(Path.Combine(imageDirectory, "payload_properties.txt"));
             var stagedFiles = Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
-            var (_, stagedHashes) = await VerifyStagedEquivalenceWithHashesAsync(plan, stage, progress, token).ConfigureAwait(false);
+            var (_, stagedHashes) = await VerifyStagedEquivalenceWithHashesAsync(plan, stage, progress, token, sourceIdentities).ConfigureAwait(false);
             if (plan.OrganizeDirectory)
             {
                 long totalBytes = 0;
@@ -408,8 +410,9 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     /// the caller's previous output stays untouched.
     /// </summary>
     internal static async Task<IReadOnlyList<DeliveryStagedEquivalence>> VerifyStagedEquivalenceAsync(DeliveryPlan plan, string stage,
-        IProgress<DeliveryProgress>? progress, CancellationToken token)
-        => (await VerifyStagedEquivalenceWithHashesAsync(plan, stage, progress, token).ConfigureAwait(false)).Rows;
+        IProgress<DeliveryProgress>? progress, CancellationToken token,
+        IReadOnlyDictionary<string, (string Hash, long Length)>? fusedSourceIdentities = null)
+        => (await VerifyStagedEquivalenceWithHashesAsync(plan, stage, progress, token, fusedSourceIdentities).ConfigureAwait(false)).Rows;
 
     /// <summary>
     /// <para>与 <see cref="VerifyStagedEquivalenceAsync"/> 相同的等价校验，同时返回每个已评估字节维度的暂存镜像
@@ -419,9 +422,22 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     /// SHA-256 of every staged image whose byte dimension was evaluated (lowercase hexadecimal, keyed by the staged absolute
     /// path) so the checksums.sha256 stage can reuse them instead of re-reading the same multi-gigabyte images.
     /// </summary>
+    /// <param name="plan">Delivery plan supplying the file set and options under verification.
+    /// <para>提供待校验文件集合与选项的交付计划。</para></param>
+    /// <param name="stage">Staged output directory holding the copied images. <para>保存已拷贝镜像的暂存输出目录。</para></param>
+    /// <param name="progress">Optional progress sink; may be <see langword="null"/>. <para>可选进度接收端，可为 <see langword="null"/>。</para></param>
+    /// <param name="token">Cancels hashing and verification. <para>取消哈希与校验的令牌。</para></param>
+    /// <param name="fusedSourceIdentities">
+    /// <para>暂存复制阶段顺带算出的源镜像身份，键为 <see cref="DeliveryFile.SourcePath"/> 原文；命中时本方法不再对
+    /// 源镜像做第二次全量 SHA-256。只收录逐字节纯拷贝得到的条目，缺少条目的文件仍按原路径重读。</para>
+    /// Source image identities folded out of the staging copy pass, keyed by the verbatim
+    /// <see cref="DeliveryFile.SourcePath"/>; when an entry is present the source image is not SHA-256ed a second time.
+    /// Only pure byte copies are recorded, and files without an entry are still read from disk.
+    /// </param>
     internal static async Task<(IReadOnlyList<DeliveryStagedEquivalence> Rows, IReadOnlyDictionary<string, string> StagedSha256)>
         VerifyStagedEquivalenceWithHashesAsync(DeliveryPlan plan, string stage,
-        IProgress<DeliveryProgress>? progress, CancellationToken token)
+        IProgress<DeliveryProgress>? progress, CancellationToken token,
+        IReadOnlyDictionary<string, (string Hash, long Length)>? fusedSourceIdentities = null)
     {
         var results = new List<DeliveryStagedEquivalence>();
         var stagedHashes = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -449,7 +465,8 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                 }
                 progress?.Report(new(90, "Verifying image equivalence",
                     Stage: "Delivery_ProgressEquivalence", Detail: file.FileName));
-                var result = await EvaluateStagedEquivalenceAsync(file, staged, plan.PackSuper, ct).ConfigureAwait(false);
+                var result = await EvaluateStagedEquivalenceAsync(file, staged, plan.PackSuper, ct,
+                    FusedSourceIdentity(fusedSourceIdentities, file)).ConfigureAwait(false);
                 var failure = result.Result.RequiredFailure;
                 if (failure is not null)
                 {
@@ -492,11 +509,27 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     /// on disk, since otherwise the evidence describes a different file. The inherited byte verdict stays readable in
     /// Details, while the report's byte dimension is always replaced by delivery's own copy check.
     /// </summary>
+    /// <param name="file">Delivered file entry whose equivalence is evaluated. <para>要评估等价性的交付条目。</para></param>
+    /// <param name="stagedPath">Staged copy of the source image. <para>源镜像的暂存副本路径。</para></param>
+    /// <param name="expandedToLogicalImage">True when staging expanded the source through the sparse layout, so the
+    /// container bytes no longer describe the source. <para>暂存已按稀疏布局展开源数据时为 true，此时容器字节不再等同源字节。</para></param>
+    /// <param name="token">Cancels hashing and verification. <para>取消哈希与校验。</para></param>
+    /// <param name="fusedIdentity">
+    /// <para>暂存复制阶段顺带算出的同一份源字节摘要与长度；为 null 时本方法自己重读源镜像。它只在逐字节纯拷贝
+    /// （即 <paramref name="expandedToLogicalImage"/> 为 false，拷贝未按稀疏布局展开）时才会被提供，因此描述的就是
+    /// 同一批字节；暂存副本仍会单独读取并哈希，拷贝错误照样能被发现。</para>
+    /// The digest and length of the same source bytes folded out of the staging copy pass; when null the source image is
+    /// re-read here instead. It is only supplied for a pure byte copy (that is, when
+    /// <paramref name="expandedToLogicalImage"/> is <see langword="false"/> and the copy was not expanded through the
+    /// sparse layout), so it describes exactly those bytes, and the staged copy is still read and hashed separately so a
+    /// botched copy keeps getting caught.
+    /// </param>
     /// <returns>The equivalence row plus the staged image's lowercase SHA-256 when the byte dimension was evaluated,
     /// otherwise <see langword="null"/> for the hash.
     /// <para>等价结果行；评估了字节维度时附带暂存镜像的小写 SHA-256，否则为 <see langword="null"/>。</para></returns>
     internal static async Task<(DeliveryStagedEquivalence Result, string? StagedSha256)> EvaluateStagedEquivalenceAsync(DeliveryFile file,
-        string stagedPath, bool expandedToLogicalImage, CancellationToken token)
+        string stagedPath, bool expandedToLogicalImage, CancellationToken token,
+        (string Hash, long Length)? fusedIdentity = null)
     {
         var details = file.RebuildEquivalence ?? new Dictionary<string, string>();
         var required = new List<DeliveryEquivalenceDimension>();
@@ -506,7 +539,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         if (!expandedToLogicalImage)
         {
             required.Add(DeliveryEquivalenceDimension.Byte);
-            var (sourceHash, sourceLength) = await ReadSourceIdentityAsync(file.SourcePath, token).ConfigureAwait(false);
+            var (sourceHash, sourceLength) = fusedIdentity ?? await ReadSourceIdentityAsync(file.SourcePath, token).ConfigureAwait(false);
             if (file.RebuildEquivalence is { Count: > 0 } && TryRecordedSourceIdentity(details, out var recordedHash, out var recordedLength))
             {
                 if (sourceLength != recordedLength
@@ -554,8 +587,10 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
-    /// <para>读取镜像的 SHA-256 摘要（小写十六进制）与长度，流式有界缓冲，取消令牌逐块观察。</para>
-    /// Reads an image's lowercase SHA-256 digest and length through a bounded streaming buffer, observing the token per block.
+    /// <para>读取镜像的 SHA-256 摘要（小写十六进制）与长度，流式有界缓冲，取消令牌逐块观察。暂存复制已经交出过
+    /// 同一批字节时不再走这里，见 <see cref="CopyFileAsync"/>。</para>
+    /// Reads an image's lowercase SHA-256 digest and length through a bounded streaming buffer, observing the token per
+    /// block. It is skipped when the staging copy already handed over those same bytes; see <see cref="CopyFileAsync"/>.
     /// </summary>
     private static async Task<(string Hash, long Length)> ReadSourceIdentityAsync(string path, CancellationToken token)
     {
@@ -565,6 +600,16 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         var hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(source, token).ConfigureAwait(false));
         return (hash, length);
     }
+
+    /// <summary>
+    /// <para>取出暂存复制阶段为该镜像记下的源身份；没有记录（例如非组织目录布局的调用方或展开过的拷贝）时返回
+    /// <see langword="null"/>，由调用方回退到重读源镜像。</para>
+    /// Looks up the source identity the staging copy recorded for this image; returns <see langword="null"/> when nothing
+    /// was recorded (a caller outside the organized layout, or an expanded copy) so the caller falls back to re-reading.
+    /// </summary>
+    private static (string Hash, long Length)? FusedSourceIdentity(
+        IReadOnlyDictionary<string, (string Hash, long Length)>? identities, DeliveryFile file)
+        => identities is not null && identities.TryGetValue(file.SourcePath, out var identity) ? identity : null;
 
     /// <summary>
     /// <para>从等价元数据里取出库记录的源摘要与源长度（SourceImageHash、SourceImageLength），用于判断这份证据是否
@@ -630,10 +675,19 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
-    /// <para>流式复制源文件到目标并报告进度；expandSparse 时把稀疏镜像展开（Recovery 按物理块写入桌面暂存目录）。</para>
-    /// Streams a source file to a destination with progress; when expandSparse is set, sparse images are expanded in the staging directory.
+    /// <para>流式复制源文件到目标并报告进度；expandSparse 时把稀疏镜像展开（Recovery 按物理块写入桌面暂存目录）。
+    /// 未展开时这份拷贝是逐字节的，因此顺带把读到的源字节并入 SHA-256，返回源身份（小写十六进制摘要与长度），
+    /// 让等价校验不必再对同一批 GB 级源字节做第二次全量读取；展开路径产出的是逻辑镜像而不是源文件的字节，
+    /// 摘要对它没有意义，返回 <see langword="null"/>。</para>
+    /// Streams a source file to a destination with progress; when expandSparse is set, sparse images are expanded in the
+    /// staging directory. An unexpanded copy is byte for byte, so the bytes read from the source are folded into a SHA-256
+    /// on the way through and the source identity (lowercase digest plus length) is returned, which saves equivalence
+    /// verification a second full read of the same multi-gigabyte source bytes. The expanded path yields the logical image
+    /// rather than the source file's bytes, so a digest would say nothing about them and <see langword="null"/> is returned.
     /// </summary>
-    internal static async Task CopyFileAsync(string source, string destination, CancellationToken token, Action<double>? progress = null,
+    /// <returns>The source digest and length for a pure byte copy, or <see langword="null"/> when the copy was expanded.
+    /// <para>逐字节拷贝返回源的摘要与长度；展开过的拷贝返回 <see langword="null"/>。</para></returns>
+    internal static async Task<(string Hash, long Length)?> CopyFileAsync(string source, string destination, CancellationToken token, Action<double>? progress = null,
         bool expandSparse = false)
     {
         await using var input = expandSparse ? MetadataReader.OpenImage(source)
@@ -641,18 +695,22 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
         await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, true);
         var length = input.Length;
+        using IncrementalHash? hashing = expandSparse ? null : IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = new byte[1024 * 1024];
         long copied = 0, last = 0;
         while (copied < length)
         {
             var count = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, length - copied)), token).ConfigureAwait(false);
             if (count == 0) throw new EndOfStreamException("Source truncated while copying.");
+            hashing?.AppendData(buffer, 0, count);
             await output.WriteAsync(buffer.AsMemory(0, count), token).ConfigureAwait(false);
             copied += count;
             if (Environment.TickCount64 - last >= 100) { progress?.Invoke(copied * 100.0 / Math.Max(1, length)); last = Environment.TickCount64; }
         }
         if (input.Length != length) throw new IOException("Source changed while copying.");
         progress?.Invoke(100);
+        if (hashing is null) return null;
+        return (Convert.ToHexStringLower(hashing.GetHashAndReset()), length);
     }
 
     /// <summary><para>计算本次输出会写到的全部目标文件路径（完整绝对路径，含组织目录布局、脚本与容器）。</para>

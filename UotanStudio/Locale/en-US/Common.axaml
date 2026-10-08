@@ -21,6 +21,7 @@
     <x:String x:Key="Delivery_MetadataSize">Metadata size</x:String>
     <x:String x:Key="Delivery_BlockSize">Block size</x:String>
     <x:String x:Key="Delivery_ZstdCompression">Compress to ZST</x:String>
+    <x:String x:Key="Delivery_ZstdChunkedParallel">Compress in parallel chunks</x:String>
     <x:String x:Key="Delivery_BuildFingerprint">Build fingerprint</x:String>
     <x:String x:Key="Delivery_Incremental">Incremental number</x:String>
     <x:String x:Key="Delivery_SdkLevel">SDK level</x:String>
