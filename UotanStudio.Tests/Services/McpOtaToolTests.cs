@@ -68,7 +68,7 @@ public sealed class McpOtaToolTests : IDisposable
         var sandbox = new PathSandbox(_root);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => OtaToolHandlers.VerifyAsync(
-            sandbox, @"..\outside.zip", TestContext.Current.CancellationToken));
+            sandbox, Path.Combine("..", "outside.zip"), TestContext.Current.CancellationToken));
     }
 
     [Fact]

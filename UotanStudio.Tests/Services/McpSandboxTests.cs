@@ -40,7 +40,7 @@ public class McpSandboxTests : IDisposable
     public void Resolve_TraversalEscape_Throws()
     {
         var sandbox = new PathSandbox(_root);
-        Assert.Throws<UnauthorizedAccessException>(() => sandbox.Resolve(@"..\outside.bin"));
+        Assert.Throws<UnauthorizedAccessException>(() => sandbox.Resolve(Path.Combine("..", "outside.bin")));
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public class McpSandboxTests : IDisposable
     {
         var sandbox = new PathSandbox(_root);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
-            () => FirmwareToolHandlers.ExtractAsync(sandbox, @"..\evil.zip", ["x"], "out", false, 1024 * 1024,
+            () => FirmwareToolHandlers.ExtractAsync(sandbox, Path.Combine("..", "evil.zip"), ["x"], "out", false, 1024 * 1024,
                 progress: null, cancellationToken: TestContext.Current.CancellationToken));
     }
 
@@ -298,7 +298,7 @@ public class McpSandboxTests : IDisposable
     {
         var sandbox = new PathSandbox(_root);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
-            () => FirmwareToolHandlers.UnpackAsync(sandbox, @"..\evil.bin", "out", 1024 * 1024,
+            () => FirmwareToolHandlers.UnpackAsync(sandbox, Path.Combine("..", "evil.bin"), "out", 1024 * 1024,
                 TestContext.Current.CancellationToken));
     }
 
