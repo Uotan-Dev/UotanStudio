@@ -62,6 +62,17 @@ public class AppSettings : IJsonOnDeserialized
         global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultLegacyCompatibility;
 
     /// <summary>
+    /// <para>获取或设置 EROFS 受保留重建是否在解包时采集的压缩估算之间搜索最小镜像；开启后一次重建最多完整
+    /// 构建三次，且只对开启状态下解包的快照生效。</para>
+    /// Gets or sets whether a preserved EROFS rebuild searches the compression estimates captured at extraction
+    /// for the smallest image; enabling it may build the whole image up to three times and only affects
+    /// snapshots extracted while the setting was on.
+    /// </summary>
+    [JsonPropertyName("erofsRebuildOptimization")]
+    public bool ErofsRebuildOptimization { get; set; } =
+        global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultRebuildOptimization;
+
+    /// <summary>
     /// <para>获取或设置当前语言的文化名称（如 "en-US"、"zh-CN"）。空字符串表示跟随系统。</para>
     /// Gets or sets the culture name of the current language (e.g., "en-US", "zh-CN"). Empty string means follow system.
     /// </summary>

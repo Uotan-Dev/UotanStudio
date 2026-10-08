@@ -8,6 +8,8 @@
     <x:String x:Key="Settings_FirmwareParallelismHint">Default: detected physical core count. Range: 1-64. Applies to new firmware packing and extraction tasks that support parallel processing. More workers generally use more memory.</x:String>
     <x:String x:Key="Settings_ErofsLegacy">EROFS legacy layout</x:String>
     <x:String x:Key="Settings_ErofsLegacyHint">Build new EROFS images with the pre-5.13 layout (no big-pcluster) so Linux 5.4/5.10 kernels can mount them. Disable only when the target kernel is 5.13+ and a smaller image is preferred.</x:String>
+    <x:String x:Key="Settings_ErofsRebuildOptimization">EROFS rebuild search</x:String>
+    <x:String x:Key="Settings_ErofsRebuildOptimizationHint">Records bounded compression candidate estimates while extracting, then rebuilds a preserved EROFS image up to three times to keep the smallest candidate. Off by default. Re-extract an image before its rebuild can use the search, and rebuilds that carry packing overrides skip the preserved path entirely, so this toggle has no effect on them.</x:String>
     <x:String x:Key="Settings_Flash">Flash</x:String>
     <x:String x:Key="Settings_NodeEditor">Node Editor</x:String>
     <x:String x:Key="Settings_Language">Language</x:String>

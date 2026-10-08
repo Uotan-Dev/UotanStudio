@@ -191,6 +191,24 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// <para>获取或设置 EROFS 受保留重建是否在解包时采集的压缩估算之间搜索最小镜像。</para>
+    /// Gets or sets whether a preserved EROFS rebuild searches the compression estimates captured at extraction
+    /// for the smallest image.
+    /// </summary>
+    public bool ErofsRebuildOptimization
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.RebuildOptimization = value;
+                DebouncedSaveSettings();
+            }
+        }
+    }
+
+    /// <summary>
     /// <para>获取或设置 MCP 服务器暴露端口（限制在有效端口范围内）。</para>
     /// Gets or sets the MCP server exposure port (clamped to the valid port range).
     /// </summary>
@@ -425,8 +443,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             global::UotanStudio.Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
             global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = settings.ErofsLegacyCompatibility;
+            global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.RebuildOptimization = settings.ErofsRebuildOptimization;
 
             ErofsLegacyCompatibility = settings.ErofsLegacyCompatibility;
+            ErofsRebuildOptimization = settings.ErofsRebuildOptimization;
             SelectedLanguage = string.IsNullOrEmpty(settings.CultureName)
                 ? LanguageInfo.SystemLanguage
                 : LanguageService.Instance.AvailableLanguages.FirstOrDefault(l => l.CultureName == settings.CultureName)
@@ -541,6 +561,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.AutoBackupBeforeFlash = FlashAutoBackup;
         _appSettings.DebugMode = DebugMode;
         _appSettings.ErofsLegacyCompatibility = ErofsLegacyCompatibility;
+        _appSettings.ErofsRebuildOptimization = ErofsRebuildOptimization;
 
         var latest = SettingsPersistenceService.Instance.LoadSettings();
         _appSettings.RecentProjects = latest.RecentProjects;

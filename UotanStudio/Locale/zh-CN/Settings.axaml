@@ -8,6 +8,8 @@
     <x:String x:Key="Settings_FirmwareParallelismHint">默认使用当前设备的物理核心数量，可设置为 1-64。用于支持并行的固件打包和解包，修改后对新任务生效。数量越大，内存占用通常越高。</x:String>
     <x:String x:Key="Settings_ErofsLegacy">EROFS legacy 布局</x:String>
     <x:String x:Key="Settings_ErofsLegacyHint">新建 EROFS 镜像采用 pre-5.13 布局（不使用 big-pcluster），使 Linux 5.4/5.10 内核可直接挂载。仅当目标内核为 5.13+ 且希望镜像更小时才关闭。</x:String>
+    <x:String x:Key="Settings_ErofsRebuildOptimization">EROFS 重建搜索</x:String>
+    <x:String x:Key="Settings_ErofsRebuildOptimizationHint">解包时采集有上限的压缩候选估算，回写受保留的 EROFS 镜像时在这些候选之间搜索，为保留最小结果最多完整重建三次，默认关闭。开启后需重新解包镜像才会采集估算；带打包覆盖项的重打包不走受保留重建路径，本开关对其没有效果。</x:String>
     <x:String x:Key="Settings_Flash">烧录设置</x:String>
     <x:String x:Key="Settings_NodeEditor">节点编辑器</x:String>
     <x:String x:Key="Settings_Language">语言</x:String>

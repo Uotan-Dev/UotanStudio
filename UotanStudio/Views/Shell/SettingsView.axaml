@@ -121,6 +121,13 @@
                         <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0" FontSize="12" Opacity="0.7"
                                    Text="{DynamicResource Settings_ErofsLegacyHint}" TextWrapping="Wrap" />
                     </Grid>
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto" Margin="0,4">
+                        <TextBlock Text="{DynamicResource Settings_ErofsRebuildOptimization}" VerticalAlignment="Center" FontSize="13" />
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding ErofsRebuildOptimization, Mode=TwoWay}"
+                                      HorizontalAlignment="Left" />
+                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0" FontSize="12" Opacity="0.7"
+                                   Text="{DynamicResource Settings_ErofsRebuildOptimizationHint}" TextWrapping="Wrap" />
+                    </Grid>
                 </StackPanel>
 
                 <views:AiSettingsView DataContext="{Binding Ai}"
