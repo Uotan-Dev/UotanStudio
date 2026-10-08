@@ -89,6 +89,11 @@ public sealed class AdbTlsTransportTests
     [Fact]
     public async Task Negotiate_BouncyCastleTlsServer_CompletesHandshakePresentsClientCertificateAndEchoesData()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            Assert.Skip("AppleCrypto rejects the BouncyCastle loopback fixture's TLS 1.3 signature algorithms.");
+        }
+
         var certificate = TestCertificate();
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();

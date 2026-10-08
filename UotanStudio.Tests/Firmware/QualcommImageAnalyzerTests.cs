@@ -303,8 +303,7 @@ public sealed class QualcommImageAnalyzerTests
     public void Analyze_TamperedCertificate_DoesNotTrustEmbeddedRoot(bool sha384)
     {
         var fixture = SignedImage.Create();
-        var image = (byte[])fixture.Elf.Clone();
-        image[^1] ^= 1;
+        var image = SignedImage.TamperEmbeddedRoot(fixture.Elf);
         using var stream = new MemoryStream(image);
 
         var result = QualcommImageAnalyzer.Analyze(stream, sha384 ? fixture.TrustSha384() : fixture.Trust(),
@@ -1008,6 +1007,23 @@ public sealed class QualcommImageAnalyzerTests
 
         public byte[] Mbn { get; }
         public byte[] Elf { get; }
+
+        /// <summary>
+        /// Corrupts bytes inside the embedded root's own signature. Flipping the final image byte only reached the
+        /// root's DER signature padding, which AppleCrypto tolerates inside a CustomRootTrust chain, so the tamper has
+        /// to land inside the signed structure every chain builder must verify.
+        /// <para>破坏内嵌根证书自身签名中的字节。仅翻转镜像末字节只会落到根证书 DER 签名的填充区，AppleCrypto
+        /// 在 CustomRootTrust 链中会容忍该改动，因此篡改必须落在所有链构建器都必须校验的签名结构内部。</para>
+        /// </summary>
+        public static byte[] TamperEmbeddedRoot(byte[] elf)
+        {
+            var image = (byte[])elf.Clone();
+            for (var offset = image.Length - 16; offset < image.Length; offset++)
+            {
+                image[offset] ^= 0x5A;
+            }
+            return image;
+        }
 
         public SignedImage WithHeaderVersion(uint version, uint? rootSlot = null,
             bool metadataHash = false, bool corruptRootDigest = false,
