@@ -20,6 +20,13 @@ public sealed record FsConfigRebaseResult(string Text, int PrefixedEntries, int 
 public static class FsConfigPatch
 {
     /// <summary>
+    /// <c>0755</c> directory default appended to a rebased document, held as permission bits so the shared
+    /// <see cref="FsConfigModes"/> formatter owns its spelling.
+    /// <para>改基文档末尾追加的 <c>0755</c> 目录默认值，仅以权限位保存，拼写交由共享的
+    /// <see cref="FsConfigModes"/> 格式化器决定。</para>
+    /// </summary>
+    private const ushort DefaultDirectoryMode = 0x1ED;
+    /// <summary>
     /// Rebases a partition-owned fs_config document under <c>&lt;rootPrefix&gt;&lt;partition&gt;</c>: removes the
     /// root <c>/</c> default entry and duplicate prefix defaults, prefixes every other entry path with the
     /// configured root, keeps already-rebased entries verbatim, and appends the <c>0 0 0755</c> default entry.
@@ -121,7 +128,7 @@ public static class FsConfigPatch
         }
 
         var separator = output.Length > 0 && output[^1] != '\n' ? newline : "";
-        output.Append(separator).Append(root).Append(" 0 0 0755").Append(newline);
+        output.Append(separator).Append(root).Append(" 0 0 ").Append(FsConfigModes.Format(DefaultDirectoryMode)).Append(newline);
         var result = output.ToString();
         TextPatch.ValidateSize(result);
         return new FsConfigRebaseResult(result, prefixed, dropped,
@@ -145,7 +152,7 @@ public static class FsConfigPatch
     /// Unsigned decimal group identity. <para>无符号十进制组标识。</para>
     /// </param>
     /// <param name="mode">
-    /// Decimal or zero-prefixed octal permission mode limited to the low twelve bits. <para>十进制或以 <c>0</c> 为前缀的八进制权限模式，仅限低十二位。</para>
+    /// Octal permission mode limited to the low twelve bits. <para>八进制权限模式，仅限低十二位。</para>
     /// </param>
     /// <param name="token">
     /// Cancels the bounded line scan. <para>取消有界的逐行扫描。</para>
@@ -171,7 +178,7 @@ public static class FsConfigPatch
         var imagePath = path.Trim('/');
         if (imagePath.Length == 0) { imagePath = "/"; }
         var result = text + separator + imagePath + " " + desired.Uid.ToString(CultureInfo.InvariantCulture) + " "
-            + desired.Gid.ToString(CultureInfo.InvariantCulture) + " " + desired.Mode.ToString(CultureInfo.InvariantCulture) + " 0" + newline;
+            + desired.Gid.ToString(CultureInfo.InvariantCulture) + " " + FsConfigModes.Format(desired.Mode) + " 0" + newline;
         Read(result, path, token);
         return new TextPatchResult(result, 0, true);
     }
@@ -196,7 +203,7 @@ public static class FsConfigPatch
     /// Unsigned decimal group identity required when <paramref name="checkOldValue"/> is set. <para>当 <paramref name="checkOldValue"/> 置位时要求的无符号十进制组标识。</para>
     /// </param>
     /// <param name="expectedMode">
-    /// Decimal or zero-prefixed octal mode required when <paramref name="checkOldValue"/> is set. <para>当 <paramref name="checkOldValue"/> 置位时要求的十进制或以 <c>0</c> 为前缀的八进制模式。</para>
+    /// Octal permission mode required when <paramref name="checkOldValue"/> is set. <para>当 <paramref name="checkOldValue"/> 置位时要求的八进制权限模式。</para>
     /// </param>
     /// <param name="token">
     /// Cancels the bounded line scan. <para>取消有界的逐行扫描。</para>
@@ -229,8 +236,8 @@ public static class FsConfigPatch
         return new TextPatchResult(text[..start] + text[end..], 1, true);
     }
     /// <summary>
-    /// Reads one exact image path. Decimal modes and zero-prefixed octal match the existing builder dialect.
-    /// <para>读取一个精确的镜像路径。十进制模式和以 <c>0</c> 为前缀的八进制与现有构建器方言一致。</para>
+    /// Reads one exact image path. Mode tokens are octal, the single dialect both the export and AOSP tools use.
+    /// <para>读取一个精确的镜像路径。模式记号为八进制，即导出文件与 AOSP 工具共同使用的唯一方言。</para>
     /// </summary>
     /// <param name="text">
     /// The fs_config source text. <para>fs_config 源文本。</para>
@@ -273,7 +280,7 @@ public static class FsConfigPatch
     /// Unsigned decimal group identity to write. <para>要写入的无符号十进制组标识。</para>
     /// </param>
     /// <param name="mode">
-    /// Decimal or zero-prefixed octal permission mode to write. <para>要写入的十进制或以 <c>0</c> 为前缀的八进制权限模式。</para>
+    /// Octal permission mode to write. <para>要写入的八进制权限模式。</para>
     /// </param>
     /// <param name="checkOldValue">
     /// When <see langword="true"/>, the current values must equal the expected ones. <para>为 <see langword="true"/> 时，当前值必须与期望值相等。</para>
@@ -285,7 +292,7 @@ public static class FsConfigPatch
     /// Unsigned decimal group identity required when <paramref name="checkOldValue"/> is set. <para>当 <paramref name="checkOldValue"/> 置位时要求的无符号十进制组标识。</para>
     /// </param>
     /// <param name="expectedMode">
-    /// Decimal or zero-prefixed octal mode required when <paramref name="checkOldValue"/> is set. <para>当 <paramref name="checkOldValue"/> 置位时要求的十进制或以 <c>0</c> 为前缀的八进制模式。</para>
+    /// Octal permission mode required when <paramref name="checkOldValue"/> is set. <para>当 <paramref name="checkOldValue"/> 置位时要求的八进制权限模式。</para>
     /// </param>
     /// <param name="token">
     /// Cancels the bounded line scan. <para>取消有界的逐行扫描。</para>
@@ -310,7 +317,7 @@ public static class FsConfigPatch
         if (current == desired) { return new TextPatchResult(text, 1, false); }
         var fields = Select(text, path, token);
         string[] values = ["", desired.Uid.ToString(CultureInfo.InvariantCulture), desired.Gid.ToString(CultureInfo.InvariantCulture),
-            desired.Mode.ToString(CultureInfo.InvariantCulture)];
+            FsConfigModes.Format(desired.Mode)];
         var output = new System.Text.StringBuilder();
         var position = 0;
         for (var index = 1; index < 4; index++)
@@ -332,14 +339,17 @@ public static class FsConfigPatch
 
     private static ushort ParseMode(string value)
     {
-        if (value.Length is < 1 or > 5 || value.Any(character => character is < '0' or > '9'))
+        if (!FsConfigModes.TryParse(value, out var mode))
         {
-            throw new PatchingCorruptedException("Invalid filesystem permission mode.");
+            throw new PatchingCorruptedException("Mode must be an octal token of digits 0-7.");
         }
-        var octal = value.Length > 1 && value[0] == '0';
-        if (octal && value.Any(character => character > '7')) { throw new PatchingCorruptedException("Invalid octal mode."); }
-        var result = Convert.ToUInt32(value, octal ? 8 : 10);
-        return result <= 0xFFF ? (ushort)result : throw new PatchingCorruptedException("Mode must contain only permission/special bits.");
+
+        if (value.TrimStart('0').Length > 4)
+        {
+            throw new PatchingCorruptedException("Mode must contain only permission/special bits.");
+        }
+
+        return mode;
     }
 
     private static (int Start, int Length)[] Select(string text, string path, CancellationToken token, bool allowMissing = false)

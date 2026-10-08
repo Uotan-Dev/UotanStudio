@@ -12,9 +12,9 @@ namespace UotanStudio.Firmware.FileSystem.Metadata;
 /// <para>以不变文化十进制解析的所有者用户 ID。</para></param>
 /// <param name="Gid">Owner group identifier parsed as an invariant decimal.
 /// <para>以不变文化十进制解析的所有者组 ID。</para></param>
-/// <param name="Mode">Permission bits, accepted either as a decimal value or as a leading-zero
-/// octal string of digits <c>0</c>-<c>7</c>.
-/// <para>权限位；接受十进制值，或以 <c>0</c> 开头、仅含 <c>0</c>-<c>7</c> 数字的八进制字符串。</para></param>
+/// <param name="Mode">Permission bits read as octal digits, with or without a leading <c>0</c>; a token
+/// holding <c>8</c>, <c>9</c> or any non-digit is not a valid mode.
+/// <para>权限位按八进制数字读取，可带前导 <c>0</c>；含 <c>8</c>、<c>9</c> 或非数字的记号不是合法模式。</para></param>
 public readonly record struct FsConfigEntry(uint Uid, uint Gid, ushort Mode);
 
 /// <summary>
@@ -35,10 +35,12 @@ internal static class FileSystemMetadataOverrides
     /// <paramref name="path"/> 为 null、空或不可读时返回空字典。</para>
     /// </summary>
     /// <param name="path">File path; <see langword="null"/>, whitespace, a missing file or a
-    /// reparse point yields an empty table. Lines need at least four space-separated tokens and
-    /// lines with unparsable numeric fields are skipped; a repeated path overwrites the earlier entry.
+    /// reparse point yields an empty table. Lines need at least four space-separated tokens, and lines whose
+    /// uid or gid is not decimal or whose mode is not an octal token are skipped; a repeated path overwrites
+    /// the earlier entry.
     /// <para>文件路径；为 <see langword="null"/>、仅空白、文件不存在或为重解析点时返回空表。
-    /// 每行至少需要四个以空格分隔的记号，数值字段无法解析的行会被跳过；重复路径覆盖先前条目。</para></param>
+    /// 每行至少需要四个以空格分隔的记号；uid 或 gid 非十进制、模式非八进制记号的行会被跳过；
+    /// 重复路径覆盖先前条目。</para></param>
     /// <returns>Ordinal path-keyed entries with leading and trailing <c>/</c> stripped from keys.
     /// <para>以序号方式比较路径的查找表，键已去除首尾 <c>/</c>。</para></returns>
     /// <exception cref="InvalidDataException">The file is larger than 64 MiB.
@@ -53,7 +55,7 @@ internal static class FileSystemMetadataOverrides
             var imagePath = NormalizeImagePath(parts[0]);
             if (!uint.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var uid)) continue;
             if (!uint.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var gid)) continue;
-            if (!TryParseMode(parts[3], out var mode)) continue;
+            if (!FsConfigModes.TryParse(parts[3], out var mode)) continue;
             result[imagePath] = new FsConfigEntry(uid, gid, mode);
         }
 
@@ -179,17 +181,6 @@ internal static class FileSystemMetadataOverrides
         return normalized == "." ? string.Empty : normalized;
     }
 
-    private static bool TryParseMode(string text, out ushort mode)
-    {
-        if (text.Length > 1 && text[0] == '0' && text.All(static c => c is >= '0' and <= '7'))
-        {
-            mode = Convert.ToUInt16(text, 8);
-            return true;
-        }
-
-        return ushort.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out mode);
-    }
-
     private static IEnumerable<string> ReadLines(string? path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) yield break;
@@ -217,37 +208,28 @@ internal static class FileSystemMetadataOverrides
         => FileSystemPreservation.ReadPayload(metadata);
 
     /// <summary>
-    /// Loads the filesystem override tables, preferring the structured preservation payload inside the
-    /// metadata file and falling back to parsing the flat sidecars when the format recorded none.
-    /// <para>加载文件系统覆盖表：优先使用元数据文件内的结构化保留负载，格式未记录时回退解析扁平附属文件。</para>
+    /// Loads the filesystem override tables from the structured preservation payload carried by the metadata
+    /// file. That payload is the only pack-time input: the flat <c>fs_config</c>, <c>file_contexts</c> and
+    /// <c>info</c> files beside the metadata are extraction-time exports for external tools and this path never
+    /// reads them back, so a pack cannot be steered by a sidecar the same extraction wrote.
+    /// <para>从元数据文件携带的结构化保留负载加载文件系统覆盖表。该负载是打包期唯一的输入：元数据旁的扁平
+    /// <c>fs_config</c>、<c>file_contexts</c> 与 <c>info</c> 只是供外部工具消费的解包期导出物，本路径绝不回读，
+    /// 因此打包不可能被同一次解包写出的附属文件左右。</para>
     /// </summary>
     /// <param name="metadata"><para>已解析的元数据实例。</para>The parsed metadata instance.</param>
-    /// <param name="metadataDirectory"><para>扁平附属文件所在目录。</para>Directory holding the flat sidecars.</param>
-    /// <param name="requireStructured"><para>为 <see langword="true"/> 时缺少结构化负载即抛出异常，绝不回退。</para>
-    /// When <see langword="true"/>, a missing structured payload throws instead of falling back.</param>
+    /// <returns>The tables and rebuild parameters recorded in the payload.
+    /// <para>负载中记录的各表与重建参数。</para></returns>
+    /// <exception cref="InvalidDataException">The metadata records no structured payload, or the payload fails
+    /// validation; there is no flat-sidecar fallback.
+    /// <para>元数据未记录结构化负载，或负载校验失败；不存在扁平附属文件回退。</para></exception>
     internal static (
         IReadOnlyDictionary<string, FsConfigEntry> FsConfig,
         IReadOnlyDictionary<string, string> FileContexts,
         IReadOnlyDictionary<string, string> PartitionInfo,
-        RebuildParameters? Rebuild) LoadTables(RepackMetadata metadata, string metadataDirectory,
-            bool requireStructured = false)
+        RebuildParameters? Rebuild) LoadTables(RepackMetadata metadata)
     {
-        var document = TryLoadDocument(metadata);
-        if (document is null)
-        {
-            if (requireStructured)
-            {
-                throw new InvalidDataException("Filesystem structured rebuild metadata is missing or invalid.");
-            }
-            var partition = RepackMetadata.DetectPartitionName(metadata.SourceFileName);
-            var prefix = FileSystemMetadataGenerator.GetMetadataFileName(partition, "");
-            return (
-                LoadFsConfig(Path.Combine(metadataDirectory, prefix + "fs_config")),
-                LoadFileContexts(Path.Combine(metadataDirectory, prefix + "file_contexts")),
-                LoadPartitionInfo(Path.Combine(metadataDirectory, prefix + "info")),
-                null);
-        }
-
+        var document = TryLoadDocument(metadata)
+            ?? throw new InvalidDataException("Filesystem structured rebuild metadata is missing or invalid.");
         return (document.FsConfig, document.FileContexts, document.PartitionInfo, document.Rebuild);
     }
 }

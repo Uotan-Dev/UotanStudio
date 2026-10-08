@@ -332,7 +332,7 @@ public sealed class PatchNodeTests : IDisposable
             new NodeExecutionOptions { Preview = preview });
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         Assert.Equal(!preview, File.Exists(target));
-        var expected = delete ? "# keep\n" : "# keep\nfile 0 0 420 0\n";
+        var expected = delete ? "# keep\n" : "# keep\nfile 0 0 0644 0\n";
         Assert.Equal(expected, edit.Output.Single(port => port.Title == "Text").Data);
         if (!preview)
         {
@@ -346,7 +346,7 @@ public sealed class PatchNodeTests : IDisposable
     public async Task Execute_FsConfigEdit_PreviewsOrPublishesMetadata(bool preview)
     {
         var edit = PatchNodeViewModel.Create("Config.FsConfig.Edit");
-        Set(edit, "Text", "vendor/bin/test 0 0 493 0\r\n");
+        Set(edit, "Text", "vendor/bin/test 0 0 0755 0\r\n");
         Set(edit, "Image Path", "vendor/bin/test");
         Set(edit, "UID", "1000");
         Set(edit, "Mode", "0644");
@@ -364,7 +364,7 @@ public sealed class PatchNodeTests : IDisposable
         Assert.Equal(!preview, File.Exists(target));
         if (!preview)
         {
-            Assert.Equal("vendor/bin/test 1000 0 420 0\r\n", await File.ReadAllTextAsync(target, TestContext.Current.CancellationToken));
+            Assert.Equal("vendor/bin/test 1000 0 0644 0\r\n", await File.ReadAllTextAsync(target, TestContext.Current.CancellationToken));
         }
     }
 
