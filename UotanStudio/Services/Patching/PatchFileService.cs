@@ -180,9 +180,21 @@ public static class PatchFileService
         _ => throw new InvalidDataException("Unsupported text encoding.")
     };
 
+    /// <summary>
+    /// Rejects reparse points between the deepest already existing ancestor of the path and the path itself. The walk
+    /// stops at that existing ancestor instead of continuing to the filesystem root, because ancestors above a
+    /// workspace root are chosen by the user or the operating system and are not archive-controlled. macOS resolves
+    /// <c>Path.GetTempPath()</c> through the <c>/var</c> to <c>/private/var</c> symbolic link, so an unbounded walk
+    /// rejects every legitimate workspace.
+    /// </summary>
     private static void RejectLinks(string path)
     {
-        for (var current = Path.GetFullPath(path); current is not null; current = Path.GetDirectoryName(current))
+        var full = Path.GetFullPath(path);
+        var boundary = DeepestExistingAncestor(full);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        for (var current = full;
+            current is not null && !string.Equals(current, boundary, comparison);
+            current = Path.GetDirectoryName(current))
         {
             if ((File.Exists(current) || Directory.Exists(current))
                 && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
@@ -190,6 +202,32 @@ public static class PatchFileService
                 throw new IOException("Patch paths must not traverse symbolic links or junctions.");
             }
         }
+        if ((File.Exists(boundary) || Directory.Exists(boundary))
+            && (File.GetAttributes(boundary) & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new IOException("Patch paths must not traverse symbolic links or junctions.");
+        }
+    }
+
+    /// <summary>
+    /// Returns the deepest ancestor that already exists as a directory or reparse point. Descendants of a dangling
+    /// symbolic link report no attributes at all, so the walk skips them and keeps descending until it reaches the
+    /// link itself, which <see cref="RejectLinks"/> then rejects.
+    /// </summary>
+    private static string DeepestExistingAncestor(string full)
+    {
+        for (var current = Path.GetDirectoryName(full); current is not null; current = Path.GetDirectoryName(current))
+        {
+            if (!Directory.Exists(current))
+            {
+                return current;
+            }
+            if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+            {
+                return current;
+            }
+        }
+        return Path.GetPathRoot(full) ?? full;
     }
 }
 
