@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Payload.Builder;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 
@@ -121,13 +122,21 @@ internal static class DeliveryPayloadBuilder
     }
 
     /// <summary>
-    /// <para>构建完整 Payload 到输出文件，并按 update_engine 约定写出 payload 的属性哈希文件；可选使用所选私钥签名。</para>
-    /// Builds a full payload to the output file and writes the update_engine property hashes, optionally signed with the selected private key.
+    /// <para>构建完整 Payload 到输出文件，并按 update_engine 约定写出 payload 的属性哈希文件；可选使用所选私钥签名。
+    /// 写盘侧套一层 <see cref="HashingWriteStream"/>，FILE_HASH 直接由写出的字节算出，因此不会第二次全量读取刚写完的
+    /// payload.bin；METADATA_HASH 需要成品清单里元数据区的那段字节，所以只对元数据区做一次有界读取，无法并入写侧。</para>
+    /// Builds a full payload to the output file and writes the update_engine property hashes, optionally signed with the
+    /// selected private key. The write side is wrapped in a <see cref="HashingWriteStream"/> so FILE_HASH comes straight
+    /// off the bytes as they leave the builder, which keeps the freshly written payload.bin from being read in full a
+    /// second time; METADATA_HASH needs the metadata region of the finished manifest, so that region alone is re-read
+    /// through a bounded pass and cannot be fused into the write stream.
     /// </summary>
     internal static async Task BuildAsync(DeliveryPlan plan, string output, IProgress<DeliveryProgress>? progress,
         CancellationToken token, IDeliverySigningKeyProvider? signingKeys = null)
     {
         Validate(plan);
+        var fileHash = Array.Empty<byte>();
+        long fileSize = 0;
         await Task.Run(async () =>
         {
             var inputs = new List<Stream>();
@@ -155,14 +164,17 @@ internal static class DeliveryPayloadBuilder
                 if (layout is not null) builder.WithDynamicPartitions(layout);
                 progress?.Report(new(10, "Writing Payload", (0, 0), "Delivery_ProgressPayloadWrite"));
                 using var destination = new FileStream(output, FileMode.CreateNew, FileAccess.Write);
-                using var tracked = new DeliveryWriteProgressStream(destination, written => progress?.Report(new(35, "Writing Payload",
+                using var hashed = new HashingWriteStream(destination, leaveOpen: true);
+                using var tracked = new DeliveryWriteProgressStream(hashed, written => progress?.Report(new(35, "Writing Payload",
                     (written, 0), "Delivery_ProgressPayloadWrite")), token);
                 await builder.BuildAsync(tracked, token).ConfigureAwait(false);
                 progress?.Report(new(45, "Writing Payload", (tracked.Length, tracked.Length), "Delivery_ProgressPayloadWrite"));
+                fileHash = hashed.GetHashAndReset();
+                fileSize = hashed.BytesWritten;
             }
             finally { foreach (var input in inputs) input.Dispose(); }
         }, token).ConfigureAwait(false);
-        await WritePropertiesAsync(output, Path.Combine(Path.GetDirectoryName(output)!, "payload_properties.txt"), token).ConfigureAwait(false);
+        await WritePropertiesAsync(output, Path.Combine(Path.GetDirectoryName(output)!, "payload_properties.txt"), fileHash, fileSize, token).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -185,14 +197,24 @@ internal static class DeliveryPayloadBuilder
         catch { key.Dispose(); throw; }
     }
 
-    private static async Task WritePropertiesAsync(string image, string properties, CancellationToken token)
+    /// <summary>
+    /// <para>写出 update_engine 的四个属性：FILE_HASH 与 FILE_SIZE 取自写入 payload.bin 时顺带算出的整份摘要，
+    /// 只有 METADATA_HASH 需要再读一次元数据区（24 字节头加上头部声明的元数据长度），其余字节不做二次读取。
+    /// 传入的摘要与长度必须描述磁盘上已经写好的那份文件；一旦对不上，说明写出与落盘不一致，交付直接中止。</para>
+    /// Writes the four update_engine properties: FILE_HASH and FILE_SIZE come from the whole-file digest folded out of
+    /// the write pass, and only METADATA_HASH re-reads the metadata region (the 24-byte header plus the metadata length it
+    /// declares), leaving every other byte unread a second time. The supplied digest and length must describe the file as
+    /// it now stands on disk; a mismatch means the written bytes and the published file disagree, and the delivery aborts.
+    /// </summary>
+    private static async Task WritePropertiesAsync(string image, string properties, byte[] fileHash, long fileSize, CancellationToken token)
     {
         await using var input = File.OpenRead(image);
+        if (fileHash.Length != 32 || input.Length != fileSize)
+            throw new IOException("Payload digest does not describe the finished image.");
         var header = new byte[24]; await input.ReadExactlyAsync(header, token).ConfigureAwait(false);
         var size = checked(24L + (long)BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(12, 8)));
         input.Position = 0;
         using var metadata = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        using var file = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = new byte[1024 * 1024];
         long remaining = size;
         while (remaining > 0)
@@ -200,17 +222,10 @@ internal static class DeliveryPayloadBuilder
             var count = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), token).ConfigureAwait(false);
             if (count == 0) throw new EndOfStreamException();
             metadata.AppendData(buffer, 0, count);
-            file.AppendData(buffer, 0, count);
             remaining -= count;
         }
 
-        int read;
-        while ((read = await input.ReadAsync(buffer, token).ConfigureAwait(false)) != 0)
-        {
-            file.AppendData(buffer, 0, read);
-        }
-
-        var text = $"FILE_HASH={Convert.ToBase64String(file.GetHashAndReset())}\nFILE_SIZE={input.Length}\nMETADATA_HASH={Convert.ToBase64String(metadata.GetHashAndReset())}\nMETADATA_SIZE={size}\n";
+        var text = $"FILE_HASH={Convert.ToBase64String(fileHash)}\nFILE_SIZE={fileSize}\nMETADATA_HASH={Convert.ToBase64String(metadata.GetHashAndReset())}\nMETADATA_SIZE={size}\n";
         await File.WriteAllTextAsync(properties, text, new UTF8Encoding(false), token).ConfigureAwait(false);
     }
 }

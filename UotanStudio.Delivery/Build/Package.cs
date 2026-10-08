@@ -86,18 +86,18 @@ internal static partial class DeliveryPackageBuilder
                 token.ThrowIfCancellationRequested();
                 await using var output = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, true);
                 using var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);
-                WriteStored(zip, "payload.bin", Path.Combine(images, "payload.bin"));
-                WriteStored(zip, "payload_properties.txt", Path.Combine(images, "payload_properties.txt"));
+                await WriteStoredAsync(zip, "payload.bin", Path.Combine(images, "payload.bin"), token);
+                await WriteStoredAsync(zip, "payload_properties.txt", Path.Combine(images, "payload_properties.txt"), token);
                 if (careMap is not null)
                 {
-                    WriteStored(zip, CareMap.ZipEntryName, new MemoryStream(careMap));
+                    await WriteStoredAsync(zip, CareMap.ZipEntryName, new MemoryStream(careMap), token);
                 }
 
-                WriteStored(zip, MetadataEntryName, new MemoryStream(Encoding.UTF8.GetBytes(text)));
+                await WriteStoredAsync(zip, MetadataEntryName, new MemoryStream(Encoding.UTF8.GetBytes(text)), token);
                 if (plan.Package.CertificatePath.Length > 0)
                 {
                     using var cert = LoadCertificate(plan.Package.CertificatePath);
-                    WriteStored(zip, "META-INF/com/android/otacert", new MemoryStream(Encoding.UTF8.GetBytes(cert.ExportCertificatePem())));
+                    await WriteStoredAsync(zip, "META-INF/com/android/otacert", new MemoryStream(Encoding.UTF8.GetBytes(cert.ExportCertificatePem())), token);
                 }
             }
             await WriteZip(metadata + Properties("", ""));
@@ -671,20 +671,33 @@ internal static partial class DeliveryPackageBuilder
         return entry;
     }
 
-    /// <summary><para>把整个文件作为 stored 条目写入归档，条目大小在本地文件头中直接可读。</para>
-    /// Writes a whole file as a stored entry whose sizes are readable from its local file header.</summary>
-    private static void WriteStored(ZipArchive zip, string name, string path)
+    /// <summary>
+    /// <para>把整个文件作为 stored 条目写入归档，条目大小在本地文件头中直接可读。复制按
+    /// <see cref="AddHashedMemberAsync"/> 的分块循环形状进行，逐块检查取消令牌，因此超过 4 GiB 的
+    /// <c>payload.bin</c> 在传输中途仍可取消。这里不把摘要顺带算出来：OTA 归档的 stored 成员没有逐成员校验清单，
+    /// payload.bin 的摘要已经由 payload_properties.txt 交付。</para>
+    /// Writes a whole file as a stored entry whose sizes are readable from its local file header. The copy follows the
+    /// chunked loop shape of <see cref="AddHashedMemberAsync"/>, checking the cancellation token per block, so a
+    /// <c>payload.bin</c> beyond 4 GiB stays cancellable while it transfers. No digest is folded into the loop: the OTA
+    /// archive keeps no per-member checksum list, and payload.bin's hash is already delivered through
+    /// payload_properties.txt.
+    /// </summary>
+    private static async Task WriteStoredAsync(ZipArchive zip, string name, string path, CancellationToken token)
     {
-        using var source = File.OpenRead(path);
-        WriteStored(zip, name, source);
+        await using var source = File.OpenRead(path);
+        await WriteStoredAsync(zip, name, source, token).ConfigureAwait(false);
     }
 
-    /// <summary><para>把流内容作为 stored 条目写入归档，写入完成后才释放条目流以确定大小与 CRC-32。</para>
-    /// Writes stream content as a stored entry, releasing the entry stream only after the data so sizes and CRC-32 are final.</summary>
-    private static void WriteStored(ZipArchive zip, string name, Stream source)
+    /// <summary>
+    /// <para>把流内容作为 stored 条目写入归档，写入完成后才释放条目流以确定大小与 CRC-32；转移按 1 MiB 分块并
+    /// 逐块响应取消。</para>
+    /// Writes stream content as a stored entry, releasing the entry stream only after the data so sizes and CRC-32 are
+    /// final; the transfer moves in 1 MiB blocks and honours cancellation block by block.
+    /// </summary>
+    private static async Task WriteStoredAsync(ZipArchive zip, string name, Stream source, CancellationToken token)
     {
-        using var entry = Entry(zip, name).Open();
-        source.CopyTo(entry);
+        await using var entry = Entry(zip, name).Open();
+        await source.CopyToAsync(entry, 1024 * 1024, token).ConfigureAwait(false);
     }
     private static async Task AddTextAsync(ZipArchive zip, string name, string text, CancellationToken token)
     {
