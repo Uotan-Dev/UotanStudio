@@ -56,7 +56,7 @@ public sealed partial class ErofsBuilder
         Core.CompressionPayloadStaging staging)
     {
         if (options.OptimizeCompression && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
-            return TryPlanDenseCompressed(node, blockSize, options);
+            return TryPlanDenseCompressed(node, blockSize, options, staging);
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         var clusterSize = node.LogicalClusterSize;
         if (options.Algorithm == ErofsCompressionAlgorithm.Lz4 && options.Lz4MaxDistance != 0
@@ -159,11 +159,13 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Writes each planned pcluster: staged encodings from the planning pass are copied directly, and
-    /// only plans produced without staging (dense planner) or plain clusters re-read the source, so a
-    /// pcluster accepted by the binary-search probe is never compressed a second time.
-    /// <para>写出每个规划的 pcluster：规划阶段暂存的编码直接复制，只有未经暂存的规划（密集规划器）与
-    /// 原样簇才重读源文件，因此二分探测接受的 pcluster 不会被压缩第二次。</para>
+    /// Writes each planned pcluster: the encoding accepted by either planner during the planning pass is
+    /// copied from the staging file, and only plain clusters re-read the source, so no accepted pcluster is
+    /// compressed twice. A plan without a staged offset stays supported by re-reading and re-compressing
+    /// the source, which has to reproduce the planned length exactly.
+    /// <para>写出每个规划的 pcluster：任一规划器在规划阶段接受的编码都从暂存文件复制，只有原样簇会
+    /// 重读源文件，因此被接受的 pcluster 不会被压缩第二次。未记录暂存偏移的规划仍受支持：重读源文件
+    /// 并重新压缩，其结果长度必须与规划值完全一致。</para>
     /// </summary>
     private static void WriteCompressedData(Stream output, BuildNode node, int blockSize, ErofsOptions options,
         Core.CompressionPayloadStaging staging)

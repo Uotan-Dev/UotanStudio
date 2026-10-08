@@ -546,3 +546,6 @@ UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.SystemMetad
 UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.SystemPartitionName.set -> void
 UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.SystemMetadataDirectory.set -> void
 UotanStudio.Firmware.VendorFirmware.Workflow.MyPartitionMergeOptions.SystemPartitionName.get -> string?
+static UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.RebuildOptimization.get -> bool
+static UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.RebuildOptimization.set -> void
+const UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultRebuildOptimization = false -> bool

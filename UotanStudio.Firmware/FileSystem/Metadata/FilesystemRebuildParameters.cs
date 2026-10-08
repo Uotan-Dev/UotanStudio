@@ -118,6 +118,20 @@ internal sealed class ErofsRebuildParameters
     public List<ErofsRebuildCodec> Codecs { get; set; } = [];
     /// <summary>Gets the per-inode source storage strategy.<para>获取逐 inode 源存储策略。</para></summary>
     public List<ErofsRebuildInode> Inodes { get; set; } = [];
+    /// <summary>Gets the bounded per-codec compression candidate estimates sampled from the live source
+    /// parser at extraction. It is empty when the rebuild optimizer was disabled at extraction, when the
+    /// source declared no compression configuration record, or when the snapshot predates this field, so
+    /// such a rebuild keeps using the single inherited-profile build.
+    /// <para>获取解包时从活动源解析器采样的逐编解码有界压缩候选估算。若解包时重建优化器处于关闭状态、
+    /// 源未声明压缩配置记录，或快照早于该字段，本列表为空，此时重建继续使用单一继承档案构建。</para></summary>
+    public List<ErofsRebuildCompressionEstimate> CompressionEstimates { get; set; } = [];
+    /// <summary>Gets the authoritative source filesystem extent in bytes recorded at extraction, computed
+    /// from the superblock's 64-bit block count times the block size, or <see langword="null"/> when the
+    /// snapshot predates this field. The 32-bit superblock block count truncates images whose block count
+    /// exceeds it, so the rebuild size search compares against this value instead.
+    /// <para>获取解包时记录的源文件系统权威字节范围，由超级块 64 位块数乘以块大小算得；快照早于该字段时为
+    /// <see langword="null"/>。32 位超级块块数会在块数超出时截断，因此重建体积搜索改用本值。</para></summary>
+    public long? SourceFilesystemBytes { get; set; }
 }
 
 /// <summary>One EROFS compression configuration record captured from the source image.<para>从源镜像采集的一条 EROFS 压缩配置记录。</para></summary>
@@ -175,4 +189,47 @@ internal sealed class ErofsRebuildInode
     public int? SourceExtentClusterSize { get; set; }
     /// <summary>Gets the original extent record width in bytes.</summary>
     public int? SourceExtentRecordSize { get; set; }
+}
+
+/// <summary>
+/// Bounded compression estimate for one EROFS codec, sampled at extraction from encoded clusters of the
+/// largest compressed inodes. It carries the counters the rebuild search replays, never a claim about the
+/// encoder that produced the source image, and the sampled cluster count is capped per codec.
+/// <para>单个 EROFS 编解码的有界压缩估算，解包时从最大压缩 inode 的已编码簇采样得到。它只携带重建搜索
+/// 需要重放的计数，绝不宣称源镜像由哪个编码器产生，且每种编解码的采样簇数量都有上限。</para>
+/// </summary>
+internal sealed class ErofsRebuildCompressionEstimate
+{
+    /// <summary>Gets the codec algorithm name as the <c>ErofsCompressionAlgorithm</c> member name; an
+    /// unknown name is ignored by the rebuild search rather than throwing.
+    /// <para>获取以 <c>ErofsCompressionAlgorithm</c> 成员名表示的编解码算法名；无法识别的名称由重建搜索
+    /// 忽略而不抛出。</para></summary>
+    public string Algorithm { get; set; } = "";
+    /// <summary>Gets the number of source clusters sampled for this codec. <para>获取该编解码采样的源簇数量。</para></summary>
+    public int Samples { get; set; }
+    /// <summary>Gets the decoded sample volume in bytes. <para>获取已解码样本的字节总量。</para></summary>
+    public long SampleBytes { get; set; }
+    /// <summary>Gets the candidate encoders in the order the parser enumerated them; the rebuild search
+    /// replays the inferred best, the smallest and the last entry.
+    /// <para>获取解析器枚举顺序的候选编码器；重建搜索会重放推断最优项、最小项与末项。</para></summary>
+    public List<ErofsRebuildCompressionCandidate> Candidates { get; set; } = [];
+}
+
+/// <summary>One candidate encoder of an EROFS compression estimate, recorded as raw numbers so the report
+/// needs no locale. <para>EROFS 压缩估算的一个候选编码器，仅记录原始数值，使报告无需依赖语言环境。</para></summary>
+internal sealed class ErofsRebuildCompressionCandidate
+{
+    /// <summary>Gets the candidate compression level. <para>获取候选压缩级别。</para></summary>
+    public int Level { get; set; }
+    /// <summary>Gets whether the candidate used the LZ4HC encoder. <para>获取候选是否使用 LZ4HC 编码器。</para></summary>
+    public bool HighCompression { get; set; }
+    /// <summary>Gets the accumulated re-encoded size in bytes across the samples.
+    /// <para>获取跨样本的累计重编码字节数。</para></summary>
+    public long Bytes { get; set; }
+    /// <summary>Gets the accumulated relative size deviation against the source clusters.
+    /// <para>获取相对源簇的累计体积偏差比例。</para></summary>
+    public double Error { get; set; }
+    /// <summary>Gets the number of samples whose re-encoding was byte-identical to the source cluster.
+    /// <para>获取重编码后与源簇逐字节一致的样本数。</para></summary>
+    public int ExactMatches { get; set; }
 }

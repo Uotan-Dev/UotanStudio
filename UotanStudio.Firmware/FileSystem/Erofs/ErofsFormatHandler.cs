@@ -370,18 +370,28 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
                     && !lz4HighCompression
                     && UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility;
                 var progressSink = progress is null ? null : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
-                builder.Build(inputPath, outputPath, new ErofsOptions
+                var erofsOptions = new ErofsOptions
                 {
                     BlockSize = FileSystemPackingOptions.IntegerOption(options, "BlockSize", 4096),
                     VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "erofs",
-                    FsConfigPath = FileSystemPackingOptions.NullIfEmpty(options, "FsConfigPath"),
-                    FileContextsPath = FileSystemPackingOptions.NullIfEmpty(options, "FileContextsPath"),
                     Algorithm = algorithm,
                     Lz4HighCompression = lz4HighCompression,
                     CompressionLevel = compressionLevel,
                     LegacyCompatibility = legacyCompatibility,
                     CancellationToken = cancellationToken,
-                }, progressSink);
+                };
+                if (FileSystemPackingOptions.TryReadPreservedTables(inputPath) is { } preservedTables)
+                {
+                    erofsOptions.FsConfig = preservedTables.FsConfig;
+                    erofsOptions.FileContexts = preservedTables.FileContexts;
+                }
+                else
+                {
+                    erofsOptions.FsConfigPath = FileSystemPackingOptions.NullIfEmpty(options, "FsConfigPath");
+                    erofsOptions.FileContextsPath = FileSystemPackingOptions.NullIfEmpty(options, "FileContextsPath");
+                }
+
+                builder.Build(inputPath, outputPath, erofsOptions, progressSink);
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (EROFS).");
             }

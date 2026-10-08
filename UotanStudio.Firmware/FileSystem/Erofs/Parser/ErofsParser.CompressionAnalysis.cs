@@ -1,17 +1,45 @@
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Metadata;
 namespace UotanStudio.Firmware.FileSystem.Erofs.Parser;
 
 internal delegate bool CompressionObserver(ErofsCompressionAlgorithm algorithm,
     ReadOnlySpan<byte> encoded, ReadOnlySpan<byte> decoded, int clusterOfs, int kernelExpectedOutputSize);
 
-internal sealed class ErofsCompressionEstimate(ErofsOptions options)
+internal sealed class ErofsCompressionEstimate
 {
-    internal ErofsOptions Options { get; } = options;
+    internal ErofsCompressionEstimate(ErofsOptions options)
+        : this(options, [.. Levels(options.Algorithm)
+            .Select(candidate => new Candidate(candidate.Level, candidate.HighCompression))], 0, 0)
+    {
+    }
+
+    private ErofsCompressionEstimate(ErofsOptions options, Candidate[] candidates, int samples, long sampleBytes)
+    {
+        Options = options;
+        Candidates = candidates;
+        Samples = samples;
+        SampleBytes = sampleBytes;
+    }
+
+    internal ErofsOptions Options { get; }
     internal int Samples { get; private set; }
     internal long SampleBytes { get; private set; }
-    internal Candidate[] Candidates { get; } = [.. Levels(options.Algorithm).Select(candidate => new Candidate(candidate.Level, candidate.HighCompression))];
+    internal Candidate[] Candidates { get; }
     internal Candidate Inferred => Candidates.OrderByDescending(c => c.ExactMatches).ThenBy(c => c.Error).ThenBy(c => c.Level).First();
     internal Candidate Smallest => Candidates.OrderBy(c => c.Bytes).ThenBy(c => c.Level).First();
+
+    /// <summary>Replays the candidate counters persisted at extraction so a rebuild that no longer holds the
+    /// source image selects exactly what the bounded source sampling inferred.
+    /// <para>重放解包时持久化的候选计数，使不再持有源镜像的重建得到有界源采样当初推断出的同一选择。</para></summary>
+    /// <param name="options">Codec options the rebuild feeds the selected level into; ownership transfers to
+    /// the returned estimate. <para>重建将所选级别写入的编解码选项；所有权转移给返回的估算。</para></param>
+    /// <param name="record">Persisted estimate for exactly this codec. <para>与该编解码精确对应的持久化估算。</para></param>
+    /// <returns>An estimate whose candidates come from the record instead of the current level ladder.
+    /// <para>返回一个候选来自记录而非当前级别阶梯的估算。</para></returns>
+    internal static ErofsCompressionEstimate Restored(ErofsOptions options, ErofsRebuildCompressionEstimate record)
+        => new(options, [.. record.Candidates.Select(candidate => new Candidate(candidate.Level, candidate.HighCompression)
+            { Bytes = candidate.Bytes, Error = candidate.Error, ExactMatches = candidate.ExactMatches })],
+            record.Samples, record.SampleBytes);
 
     internal void Observe(ReadOnlySpan<byte> encoded, ReadOnlySpan<byte> decoded)
     {

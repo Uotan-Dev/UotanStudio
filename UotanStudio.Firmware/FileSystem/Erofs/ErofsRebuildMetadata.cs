@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Metadata;
@@ -94,6 +95,56 @@ internal static class ErofsRebuildMetadata
                     SourceExtentRecordSize = inode.Value.SourceExtentRecordSize,
                 });
             }
+        }
+
+        return parameters;
+    }
+
+    /// <summary>
+    /// Captures the persisted profile together with what the rebuild search needs: the authoritative 64-bit
+    /// source extent and, only while <see cref="ErofsBuildDefaults.RebuildOptimization"/> is enabled, the
+    /// bounded candidate estimates sampled from the parser that is still live at extraction. Sampling decodes
+    /// and re-encodes a capped number of clusters, so it is skipped entirely when the search is off and the
+    /// snapshot stays as it was before this feature. A candidate deviation that is not finite is persisted as
+    /// the largest representable deviation, because a zero-length source cluster would otherwise make the
+    /// whole preservation document unserializable.
+    /// <para>采集持久化档案以及重建搜索所需的内容：权威 64 位源范围，以及仅在
+    /// <see cref="ErofsBuildDefaults.RebuildOptimization"/> 开启时、由解包阶段仍活动的解析器采样得到的有界候选估算。
+    /// 采样会解码并重编码有上限数量的簇，因此搜索关闭时整体跳过，快照与引入该功能之前保持一致。非有限的候选
+    /// 偏差以可表示的最大偏差持久化，否则长度为零的源簇会让整份保留文档无法序列化。</para>
+    /// </summary>
+    /// <param name="options">Options derived from the verified source image. <para>由已校验源镜像推导出的选项。</para></param>
+    /// <param name="source">Parser still holding the frozen source image; ownership stays with the caller.
+    /// <para>仍持有冻结源镜像的解析器；所有权保留在调用方。</para></param>
+    /// <param name="sourceFilesystemBytes">Source extent in bytes computed from the 64-bit block count; a
+    /// non-positive value is stored as <see langword="null"/> so the rebuild search declines to run.
+    /// <para>由 64 位块数算得的源范围字节数；非正值以 <see langword="null"/> 存储，使重建搜索拒绝执行。</para></param>
+    /// <param name="token">Cancels the cluster sampling. <para>取消簇采样。</para></param>
+    /// <returns>The profile with the recorded extent and any sampled estimates.
+    /// <para>记录了范围与采样估算（若有）的档案。</para></returns>
+    internal static ErofsRebuildParameters Capture(ErofsOptions options, ErofsParser source,
+        long sourceFilesystemBytes, CancellationToken token)
+    {
+        var parameters = Capture(options);
+        parameters.SourceFilesystemBytes = sourceFilesystemBytes > 0 ? sourceFilesystemBytes : null;
+        if (!ErofsBuildDefaults.RebuildOptimization || options.SourceCompressionOptions is not { Count: > 0 })
+            return parameters;
+        foreach (var estimate in source.AnalyzeCompression(options, token))
+        {
+            parameters.CompressionEstimates.Add(new ErofsRebuildCompressionEstimate
+            {
+                Algorithm = estimate.Options.Algorithm.ToString(),
+                Samples = estimate.Samples,
+                SampleBytes = estimate.SampleBytes,
+                Candidates = [.. estimate.Candidates.Select(candidate => new ErofsRebuildCompressionCandidate
+                {
+                    Level = candidate.Level,
+                    HighCompression = candidate.HighCompression,
+                    Bytes = candidate.Bytes,
+                    Error = double.IsFinite(candidate.Error) ? candidate.Error : double.MaxValue,
+                    ExactMatches = candidate.ExactMatches,
+                })],
+            });
         }
 
         return parameters;

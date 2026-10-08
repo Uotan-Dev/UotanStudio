@@ -528,10 +528,9 @@ public sealed partial class ErofsBuilder
         public uint BlockAddress;
         public bool Plain;
 
-        /// <summary>Staging-file offset of this pcluster's accepted encoding; -1 when the plan was
-        /// produced without staging (dense planner) and the write pass must re-compress.
-        /// <para>该 pcluster 已接受编码在暂存文件中的偏移；规划未经过暂存（密集规划器）时为 -1，
-        /// 写出阶段需要重新压缩。</para></summary>
+        /// <summary>Staging-file offset of this pcluster's accepted encoding; -1 for a plain cluster, where the
+        /// write pass copies the source bytes as they stand instead of reading the staging file.
+        /// <para>该 pcluster 已接受编码在暂存文件中的偏移；原样簇为 -1，写出阶段直接复制源字节而不读暂存文件。</para></summary>
         public long StagedOffset = -1;
     }
 
