@@ -72,11 +72,13 @@ public sealed class MetadataConsolidationTests : IDisposable
         Assert.True(File.Exists(Path.Combine(metaDir, "system_file_contexts")));
         Assert.True(File.Exists(Path.Combine(metaDir, "system_info")));
         var fsConfig = File.ReadAllText(Path.Combine(metaDir, "system_fs_config"));
-        Assert.Contains("/hello.txt 0 0 420 0", fsConfig.ReplaceLineEndings());
+        Assert.Contains("/hello.txt 0 0 0644 0", fsConfig.ReplaceLineEndings());
         var contexts = File.ReadAllText(Path.Combine(metaDir, "system_file_contexts"));
         Assert.Empty(contexts);
         var info = File.ReadAllText(Path.Combine(metaDir, "system_info"));
         Assert.Contains("system.", info);
+        byte[] bom = [0xEF, 0xBB, 0xBF];
+        Assert.False(File.ReadAllBytes(Path.Combine(metaDir, "system_fs_config")).AsSpan(0, 3).SequenceEqual(bom));
     }
 
     [Fact]
@@ -102,14 +104,15 @@ public sealed class MetadataConsolidationTests : IDisposable
     }
 
     [Fact]
-    public void MetadataOverrides_ParseFsConfigModesOctalAndDecimal()
+    public void MetadataOverrides_LoadFsConfig_ParsesOctalTokensAndSkipsDecimalSpelling()
     {
         var config = Path.Combine(_root, "p_fs_config");
         File.WriteAllLines(config,
         [
             "# comment",
             "/bin/sh 0 2000 0755 0",
-            "/system/xbin/su 0 0 493 0",
+            "/system/xbin/su 0 0 4755 0",
+            "/system/bin/decimal 0 0 493 0",
         ]);
         var table = FileSystemMetadataOverrides.LoadFsConfig(config);
         Assert.Equal(2, table.Count);
@@ -118,7 +121,112 @@ public sealed class MetadataConsolidationTests : IDisposable
         Assert.Equal(2000u, sh.Gid);
         Assert.Equal((ushort)493, sh.Mode);
         Assert.True(FileSystemMetadataOverrides.TryGetFsConfig(table, "system/xbin/su", out var su));
-        Assert.Equal((ushort)493, su.Mode);
+        Assert.Equal((ushort)2541, su.Mode);
+        Assert.False(FileSystemMetadataOverrides.TryGetFsConfig(table, "system/bin/decimal", out _));
+    }
+
+    [Fact]
+    public void GenerateForExt4_FsConfigRows_AreFourDigitOctalAndReparseToInodeBits()
+    {
+        var staging = Path.Combine(_root, "octal-staging");
+        Directory.CreateDirectory(Path.Combine(staging, "bin"));
+        File.WriteAllText(Path.Combine(staging, "su"), "echo");
+        var octalImage = Path.Combine(_root, "octal.img");
+        Ext4Builder.Build(staging, octalImage);
+        using var parser = new Ext4Parser(octalImage);
+        var metadata = Path.Combine(_root, "octal-meta");
+        Assert.Empty(FileSystemMetadataGenerator.GenerateForExt4(metadata, "octal", parser));
+        var rows = File.ReadAllLines(Path.Combine(metadata, "octal_fs_config"));
+        Assert.NotEmpty(rows);
+        foreach (var row in rows)
+        {
+            Assert.Matches("^[0-7]{4}$", row.Split(' ')[3]);
+        }
+
+        var suMode = parser.ListEntriesWithRoot().Single(e => e.Path == "su").Mode;
+        var suTokens = rows.Single(line => line.StartsWith("/su ", StringComparison.Ordinal)).Split(' ');
+        Assert.Equal(5, suTokens.Length);
+        Assert.Equal(FsConfigModes.Format(suMode), suTokens[3]);
+        Assert.True(FsConfigModes.TryParse(suTokens[3], out var suPermissions));
+        Assert.Equal((ushort)(suMode & 0xFFF), suPermissions);
+    }
+
+    [Fact]
+    public void GenerateForExt4_SymlinkEntry_IsSkippedAndReportedInsteadOfWrittenAsFile()
+    {
+        var staging = Path.Combine(_root, "symlink-staging");
+        Directory.CreateDirectory(staging);
+        File.WriteAllText(Path.Combine(staging, "target.txt"), "target");
+        var created = TryCreateSymlink(Path.Combine(staging, "link.txt"), "target.txt");
+        Assert.SkipUnless(created, "Symbolic link creation is unavailable on this host.");
+        var linkImage = Path.Combine(_root, "symlink.img");
+        Ext4Builder.Build(staging, linkImage);
+        using var parser = new Ext4Parser(linkImage);
+        Assert.Contains(parser.ListEntriesWithRoot(), entry =>
+            entry.Path == "link.txt" && entry.Kind == Ext4Parser.Ext4EntryKind.Symlink);
+        var metadata = Path.Combine(_root, "symlink-meta");
+        var warnings = FileSystemMetadataGenerator.GenerateForExt4(metadata, "sym", parser);
+        var rows = File.ReadAllLines(Path.Combine(metadata, "sym_fs_config"));
+        Assert.Contains(rows, row => row.StartsWith("/target.txt ", StringComparison.Ordinal));
+        Assert.DoesNotContain(rows, row => row.StartsWith("/link.txt", StringComparison.Ordinal));
+        Assert.Contains(warnings, warning => warning.Contains("/link.txt", StringComparison.Ordinal)
+            && warning.Contains("symbolic link", StringComparison.Ordinal)
+            && warning.Contains("no file-type column", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void GenerateFromDirectory_UnknownModes_AreWrittenAsLiteral0000()
+    {
+        var tree = Path.Combine(_root, "dir-tree");
+        Directory.CreateDirectory(Path.Combine(tree, "etc"));
+        File.WriteAllText(Path.Combine(tree, "etc", "plain.conf"), "x");
+        var metadata = Path.Combine(_root, "dir-meta");
+        Assert.Empty(FileSystemMetadataGenerator.GenerateFromDirectory(metadata, "dir", tree));
+        var rows = File.ReadAllLines(Path.Combine(metadata, "dir_fs_config"));
+        Assert.Contains("/etc 0 0 0000 0", rows);
+        Assert.Contains("/etc/plain.conf 0 0 0000 0", rows);
+        var table = FileSystemMetadataOverrides.LoadFsConfig(Path.Combine(metadata, "dir_fs_config"));
+        Assert.Equal((ushort)0, table["etc/plain.conf"].Mode);
+        Assert.Equal((ushort)0, table["etc"].Mode);
+    }
+
+    [Fact]
+    public void GenerateFromDirectory_PathsAndLabelsWithWhitespace_AreSkippedWithWarnings()
+    {
+        var tree = Path.Combine(_root, "space-tree");
+        Directory.CreateDirectory(Path.Combine(tree, "etc"));
+        File.WriteAllText(Path.Combine(tree, "etc", "plain.conf"), "x");
+        File.WriteAllText(Path.Combine(tree, "etc", "spaced name.conf"), "y");
+        var metadata = Path.Combine(_root, "space-meta");
+        var warnings = FileSystemMetadataGenerator.GenerateFromDirectory(metadata, "space", tree);
+        var rows = File.ReadAllLines(Path.Combine(metadata, "space_fs_config"));
+        Assert.Contains(rows, row => row.StartsWith("/etc/plain.conf ", StringComparison.Ordinal));
+        Assert.DoesNotContain(rows, row => row.Contains("spaced", StringComparison.Ordinal));
+        Assert.DoesNotContain(File.ReadAllText(Path.Combine(metadata, "space_file_contexts")), "spaced", StringComparison.Ordinal);
+        Assert.Equal(2, warnings.Count);
+        Assert.All(warnings, warning => Assert.Contains("spaced name.conf", warning, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void GenerateFromDirectory_FlatExports_StartWithoutUtf8BomAndUseOneSpaceRows()
+    {
+        var tree = Path.Combine(_root, "bom-tree");
+        Directory.CreateDirectory(tree);
+        File.WriteAllText(Path.Combine(tree, "a.txt"), "a");
+        var metadata = Path.Combine(_root, "bom-meta");
+        Assert.Empty(FileSystemMetadataGenerator.GenerateFromDirectory(metadata, "bom", tree));
+        string[] exports = ["bom_fs_config", "bom_file_contexts"];
+        byte[] bom = [0xEF, 0xBB, 0xBF];
+        foreach (var name in exports)
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(metadata, name));
+            Assert.False(bytes.AsSpan(0, 3).SequenceEqual(bom), name);
+            Assert.Equal((byte)'/', bytes[0]);
+        }
+
+        var contexts = File.ReadAllText(Path.Combine(metadata, "bom_file_contexts"));
+        Assert.Contains("/a.txt u:object_r:system_file:s0", contexts, StringComparison.Ordinal);
+        Assert.DoesNotContain("    ", contexts, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -159,7 +267,7 @@ public sealed class MetadataConsolidationTests : IDisposable
         Directory.CreateDirectory(Path.Combine(staging, "bin"));
         File.WriteAllText(Path.Combine(staging, "bin", "sh"), "#!/system/bin/sh");
         var fsConfig = Path.Combine(_root, "in_fs_config");
-        File.WriteAllLines(fsConfig, ["/ 0 0 493 0", "/bin 0 2000 488 0", "/bin/sh 1000 1001 493 0"]);
+        File.WriteAllLines(fsConfig, ["/ 0 0 0755 0", "/bin 0 2000 0750 0", "/bin/sh 1000 1001 0755 0"]);
         var contexts = Path.Combine(_root, "in_file_contexts");
         File.WriteAllLines(contexts, ["/bin/sh    u:object_r:shell_exec:s0"]);
 
@@ -192,7 +300,7 @@ public sealed class MetadataConsolidationTests : IDisposable
         Directory.CreateDirectory(staging);
         File.WriteAllText(Path.Combine(staging, "run.sh"), "echo hi");
         var fsConfig = Path.Combine(_root, "in_fs_config");
-        File.WriteAllLines(fsConfig, ["/run.sh 1000 1001 384 0"]);
+        File.WriteAllLines(fsConfig, ["/run.sh 1000 1001 0600 0"]);
 
         new ErofsBuilder().Build(staging, Image, new ErofsOptions { FsConfigPath = fsConfig });
 
@@ -201,5 +309,18 @@ public sealed class MetadataConsolidationTests : IDisposable
         Assert.Equal(1000u, entry.Uid);
         Assert.Equal(1001u, entry.Gid);
         Assert.Equal((ushort)384, entry.Mode & 0xFFF);
+    }
+
+    private static bool TryCreateSymlink(string linkPath, string target)
+    {
+        try
+        {
+            File.CreateSymbolicLink(linkPath, target);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
     }
 }

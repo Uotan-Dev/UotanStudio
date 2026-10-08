@@ -11,6 +11,7 @@ using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.FileSystem.Metadata;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
 using Xunit;
 using F2fsFormatHandler = UotanStudio.Firmware.FileSystem.F2fs.F2fsFormatHandler;
 
@@ -73,12 +74,12 @@ public sealed class MetadataJsonTests : IDisposable
     }
 
     [Fact]
-    public async Task LoadTables_PrefersStructuredPayload_AndFallsBackToFlatSidecars()
+    public async Task LoadTables_MissingStructuredPayload_FailsInsteadOfFallingBackToFlatSidecars()
     {
         var (_, extracted) = await BuildAndUnpackAsync();
         var meta = RepackMetadata.Read(extracted)!;
 
-        var json = FileSystemMetadataOverrides.LoadTables(meta, extracted);
+        var json = FileSystemMetadataOverrides.LoadTables(meta);
         Assert.True(FileSystemMetadataOverrides.TryGetFsConfig(json.FsConfig, "/", out var jsonRoot));
         Assert.Equal(9000u, jsonRoot.Uid);
         Assert.True(FileSystemMetadataOverrides.TryGetLabel(json.FileContexts, "/data", out var jsonLabel));
@@ -89,12 +90,137 @@ public sealed class MetadataJsonTests : IDisposable
         var document = JsonNode.Parse(File.ReadAllText(metadataPath))!.AsObject();
         document.Remove("fileSystemPreservation");
         File.WriteAllText(metadataPath, document.ToJsonString());
-        var flat = FileSystemMetadataOverrides.LoadTables(RepackMetadata.Read(extracted)!, extracted);
-        Assert.Null(flat.Rebuild);
-        Assert.True(FileSystemMetadataOverrides.TryGetFsConfig(flat.FsConfig, "/", out var flatRoot));
-        Assert.Equal(9000u, flatRoot.Uid);
-        Assert.True(FileSystemMetadataOverrides.TryGetLabel(flat.FileContexts, "/data", out var flatLabel));
-        Assert.Equal("u:object_r:system_file:s0", flatLabel);
+
+        Assert.True(File.Exists(Path.Combine(extracted, "system_fs_config")));
+        Assert.True(File.Exists(Path.Combine(extracted, "system_file_contexts")));
+        Assert.True(File.Exists(Path.Combine(extracted, "system_info")));
+        var error = Assert.Throws<InvalidDataException>(
+            () => FileSystemMetadataOverrides.LoadTables(RepackMetadata.Read(extracted)!));
+        Assert.Contains("structured rebuild metadata is missing", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Repack_PreservedExtraction_NeverReadsSelfGeneratedSidecars()
+    {
+        var (_, extracted) = await BuildAndUnpackAsync();
+        var sidecar = Path.Combine(extracted, "system_fs_config");
+        File.WriteAllLines(sidecar, ["/ 12345 12345 0700 0", "/data 12345 12345 0700 0"]);
+
+        var output = Path.Combine(_root, "sidecar-guard.img");
+        var result = await new Ext4FormatHandler().PackAsync(extracted, output, Token);
+        Assert.True(result.Success, result.Summary);
+        using (var parser = new Ext4Parser(output))
+        {
+            var entries = parser.ListEntriesWithRoot().ToDictionary(entry => entry.Path, StringComparer.Ordinal);
+            var data = entries["data"];
+            Assert.Equal(9000u, data.Uid);
+            Assert.Equal(9001u, data.Gid);
+            Assert.Equal(0x1A0, data.Mode & 0x0FFF);
+            var root = entries.Single(pair => pair.Key is "." or "/" or "").Value;
+            Assert.Equal(9000u, root.Uid);
+            Assert.Equal(0x1ED, root.Mode & 0x0FFF);
+        }
+
+        var metadataPath = Path.Combine(extracted, RepackMetadata.FileName);
+        var document = JsonNode.Parse(File.ReadAllText(metadataPath))!.AsObject();
+        document.Remove("fileSystemPreservation");
+        File.WriteAllText(metadataPath, document.ToJsonString());
+
+        var options = FileSystemPackingOptions.OptionsFor(extracted, "EXT4");
+        Assert.False(options.ContainsKey("FsConfigPath"));
+        Assert.False(options.ContainsKey("FileContextsPath"));
+
+        var withoutPayload = Path.Combine(_root, "sidecar-without-payload.img");
+        var failure = await new Ext4FormatHandler().PackAsync(extracted, withoutPayload, Token);
+        Assert.False(failure.Success);
+        Assert.Contains("preservation data is missing", failure.Summary, StringComparison.Ordinal);
+        Assert.False(File.Exists(withoutPayload));
+    }
+
+    [Fact]
+    public async Task ErofsRepack_WithPackingOverrides_StillUsesStructuredPayload()
+    {
+        var (_, extracted) = await BuildAndUnpackAsync("EROFS");
+        File.WriteAllLines(Path.Combine(extracted, "system_fs_config"),
+            ["/ 12345 12345 0700 0", "/data 12345 12345 0700 0"]);
+        File.WriteAllLines(Path.Combine(extracted, "system_file_contexts"),
+            ["/data u:object_r:stale_label:s0"]);
+        Assert.Equal("erofs", RepackMetadata.Read(extracted)!.PackingOptions["VolumeName"]);
+        using var overrides = RepackMetadata.UsePackingOverrides(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["ErofsAlgorithm"] = "lz4hc",
+                ["ErofsCompressionLevel"] = "9",
+                ["VolumeName"] = "erofs-ovr",
+            });
+
+        var output = Path.Combine(_root, "erofs-overrides.img");
+        var result = await new ErofsFormatHandler().PackAsync(extracted, output, Token);
+
+        Assert.True(result.Success, result.Summary);
+        using var parser = new ErofsParser(output);
+        Assert.Equal("erofs-ovr", parser.VolumeName);
+        var entries = parser.EnumerateEntries().ToDictionary(entry => entry.Path, StringComparer.Ordinal);
+        var data = entries["data"];
+        Assert.Equal(9000u, data.Uid);
+        Assert.Equal(9001u, data.Gid);
+        Assert.Equal(0x1A0, data.Mode & 0x0FFF);
+        var label = Assert.Single(data.Xattrs!, xattr => xattr.Name == "security.selinux");
+        Assert.Equal("u:object_r:system_file:s0", Encoding.UTF8.GetString(label.Value).TrimEnd('\0'));
+    }
+
+    [Fact]
+    public async Task F2fsRepack_FromPreservedExtraction_WritesPayloadUidGidModeAndLabel()
+    {
+        var (_, extracted) = await BuildAndUnpackAsync("F2FS");
+        var fsConfig = Path.Combine(extracted, "system_fs_config");
+        var fileContexts = Path.Combine(extracted, "system_file_contexts");
+        Assert.True(File.Exists(fsConfig));
+        Assert.True(File.Exists(fileContexts));
+        File.WriteAllLines(fsConfig, ["/ 12345 12345 0700 0", "/data 12345 12345 0700 0"]);
+        File.WriteAllLines(fileContexts, ["/data u:object_r:stale_label:s0"]);
+
+        var output = Path.Combine(_root, "f2fs-payload-attributes.img");
+        var result = await new F2fsFormatHandler().PackAsync(extracted, output, Token);
+
+        Assert.True(result.Success, result.Summary);
+        using var parser = new UotanStudio.Firmware.FileSystem.F2fs.F2fsParser(output);
+        var entries = parser.ListEntriesWithRoot().ToDictionary(entry => entry.Path, StringComparer.Ordinal);
+        var data = entries["data"];
+        Assert.Equal(9000u, data.Uid);
+        Assert.Equal(9001u, data.Gid);
+        Assert.Equal(0x1A0, data.Mode & 0x0FFF);
+        Assert.NotNull(data.Xattrs);
+        Assert.True(data.Xattrs!.TryGetValue("security.selinux", out var label));
+        Assert.Equal("u:object_r:system_file:s0", Encoding.UTF8.GetString(label).TrimEnd('\0'));
+        var root = entries["."];
+        Assert.Equal(9000u, root.Uid);
+        Assert.Equal(9001u, root.Gid);
+        Assert.Equal(0x1ED, root.Mode & 0x0FFF);
+    }
+
+    [Fact]
+    public async Task F2fsRepack_MissingPayload_FailsWithoutReadingExportedSidecars()
+    {
+        var (_, extracted) = await BuildAndUnpackAsync("F2FS");
+        File.WriteAllLines(Path.Combine(extracted, "system_fs_config"),
+            ["/ 12345 12345 0700 0", "/data 12345 12345 0700 0"]);
+        File.WriteAllLines(Path.Combine(extracted, "system_file_contexts"), ["/data u:object_r:stale_label:s0"]);
+
+        var metadataPath = Path.Combine(extracted, RepackMetadata.FileName);
+        var document = JsonNode.Parse(File.ReadAllText(metadataPath))!.AsObject();
+        document.Remove("fileSystemPreservation");
+        File.WriteAllText(metadataPath, document.ToJsonString());
+
+        var options = FileSystemPackingOptions.OptionsFor(extracted, "F2FS");
+        Assert.False(options.ContainsKey("FsConfigPath"));
+        Assert.False(options.ContainsKey("FileContextsPath"));
+
+        var output = Path.Combine(_root, "f2fs-without-payload.img");
+        var failure = await new F2fsFormatHandler().PackAsync(extracted, output, Token);
+        Assert.False(failure.Success);
+        Assert.Contains("preservation data is missing", failure.Summary, StringComparison.Ordinal);
+        Assert.False(File.Exists(output));
     }
 
     [Fact]

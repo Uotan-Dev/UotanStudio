@@ -2,6 +2,9 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Metadata;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
 
 namespace UotanStudio.Firmware.FileSystem.Native;
 
@@ -321,15 +324,18 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
 
         var source = Path.GetFullPath(sourceDir);
         var destination = Path.GetFullPath(outputPath);
+        using var sidecars = NativeMetadataSidecars.TryCreate(source, cancellationToken);
+        var fsConfigPath = sidecars?.FsConfigPath ?? options.FsConfigPath;
+        var fileContextsPath = sidecars?.FileContextsPath ?? options.FileContextsPath;
         if (!Directory.Exists(source))
         {
             throw new DirectoryNotFoundException(source);
         }
-        if (options.FsConfigPath is { } fsConfig && !File.Exists(fsConfig))
+        if (fsConfigPath is { } fsConfig && !File.Exists(fsConfig))
         {
             throw new FileNotFoundException("Android fs_config file was not found.", fsConfig);
         }
-        if (options.FileContextsPath is { } fileContexts && !File.Exists(fileContexts))
+        if (fileContextsPath is { } fileContexts && !File.Exists(fileContexts))
         {
             throw new FileNotFoundException("Android file_contexts file was not found.", fileContexts);
         }
@@ -350,15 +356,15 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
                 arguments.Add("-T");
                 arguments.Add(timestamp.ToString(CultureInfo.InvariantCulture));
             }
-            if (options.FsConfigPath is not null)
+            if (fsConfigPath is not null)
             {
                 arguments.Add("-f");
-                arguments.Add(await PathForToolAsync(options.FsConfigPath, cancellationToken).ConfigureAwait(false));
+                arguments.Add(await PathForToolAsync(fsConfigPath, cancellationToken).ConfigureAwait(false));
             }
-            if (options.FileContextsPath is not null)
+            if (fileContextsPath is not null)
             {
                 arguments.Add("-S");
-                arguments.Add(await PathForToolAsync(options.FileContextsPath, cancellationToken).ConfigureAwait(false));
+                arguments.Add(await PathForToolAsync(fileContextsPath, cancellationToken).ConfigureAwait(false));
             }
             if (options.Label is { } label)
             {
@@ -453,24 +459,28 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
         {
             throw new ArgumentOutOfRangeException(nameof(options), "e2fsdroid timestamp must be between 0 and year 2100.");
         }
+        var source = Path.GetFullPath(sourceDir);
+        var destination = Path.GetFullPath(outputPath);
         var fsConfigIsBuiltin = options.FsConfig is "A" or "B" or "T" or "U" or "all_a" or "system";
-        if (!fsConfigIsBuiltin && (options.FsConfig.Length == 0 || !File.Exists(options.FsConfig)))
+        using var sidecars = NativeMetadataSidecars.TryCreate(source, cancellationToken);
+        var fsConfigPath = !fsConfigIsBuiltin && sidecars?.FsConfigPath is { } materializedFsConfig
+            ? materializedFsConfig
+            : options.FsConfig;
+        var fileContextsPath = sidecars?.FileContextsPath ?? options.FileContextsPath;
+        if (!fsConfigIsBuiltin && (fsConfigPath.Length == 0 || !File.Exists(fsConfigPath)))
         {
             throw new InvalidDataException("The e2fsdroid fs_config value is neither an existing file nor a built-in token.");
         }
-
-        var source = Path.GetFullPath(sourceDir);
-        var destination = Path.GetFullPath(outputPath);
         if (!Directory.Exists(source))
         {
             throw new DirectoryNotFoundException(source);
         }
-        if (options.FileContextsPath is { } fileContexts && !File.Exists(fileContexts))
+        if (fileContextsPath is { } fileContexts && !File.Exists(fileContexts))
         {
             throw new FileNotFoundException("Android file_contexts file was not found.", fileContexts);
         }
         RejectOutputInsideSource(source, destination);
-        var fsConfigToolPath = fsConfigIsBuiltin ? options.FsConfig : await PathForToolAsync(options.FsConfig, cancellationToken).ConfigureAwait(false);
+        var fsConfigToolPath = fsConfigIsBuiltin ? options.FsConfig : await PathForToolAsync(fsConfigPath, cancellationToken).ConfigureAwait(false);
 
         var directory = Path.GetDirectoryName(destination)!;
         Directory.CreateDirectory(directory);
@@ -497,10 +507,10 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
             RequireSuccess("mke2fs", await RunAsync("mke2fs", mkfsArguments, cancellationToken).ConfigureAwait(false));
 
             List<string> droidArguments = ["-e", fsConfigToolPath];
-            if (options.FileContextsPath is not null)
+            if (fileContextsPath is not null)
             {
                 droidArguments.Add("-S");
-                droidArguments.Add(await PathForToolAsync(options.FileContextsPath, cancellationToken).ConfigureAwait(false));
+                droidArguments.Add(await PathForToolAsync(fileContextsPath, cancellationToken).ConfigureAwait(false));
             }
             droidArguments.Add("-a");
             droidArguments.Add(options.MountPoint);
@@ -615,6 +625,187 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
 /// <param name="Output">stdout and stderr merged into one string, truncated at 16384 characters.
 /// <para>stdout 与 stderr 的合并字符串，截断于 16384 字符。</para></param>
 public readonly record struct NativeToolResult(int ExitCode, string Output);
+
+/// <summary>
+/// Materialises the structured preservation payload of an extraction directory into the temporary flat
+/// <c>fs_config</c> and <c>file_contexts</c> files native tools require, because their command-line contract is
+/// "a file already exists at this path". Rows follow the strict AOSP dialect shared with the extraction-time
+/// export: space-delimited fields, four-digit octal mode, a literal <c>0</c> capabilities column, LF endings and
+/// no UTF BOM, and the grammar cannot carry a path or label holding whitespace or an inode type with no type
+/// column, so those rows are skipped. The published files are written through atomic publication and removed when
+/// the instance is disposed, which keeps a tool run from ever reading a sidecar left behind by an earlier
+/// extraction. A directory whose metadata carries no payload yields no instance, so an externally supplied
+/// hand-authored sidecar keeps working for a directory build.
+/// <para>把解包目录的结构化保留负载具象化为本机工具所需的临时扁平 <c>fs_config</c> 与 <c>file_contexts</c> 文件，
+/// 因为它们的命令行约定是“该路径上已存在文件”。行与解包期导出共用严格的 AOSP 方言：以空格分隔字段、四位八进制
+/// 模式、字面 <c>0</c> 的 capabilities 列、LF 行尾且不带 UTF BOM；该语法无法承载含空白的路径或标签，也没有文件
+/// 类型列可供特殊节点使用，因此这些行会被跳过。发布出的文件经原子发布写出，实例释放时移除，使工具运行绝不会读到
+/// 上一次解包遗留的附属文件。元数据不携带负载的目录不会产生实例，因此目录构建仍可继续使用外部提供的、人工编写的
+/// 附属文件。</para>
+/// </summary>
+internal sealed class NativeMetadataSidecars : IDisposable
+{
+    /// <summary>
+    /// BOM-free UTF-8 for both materialised files, matching the extraction-time export so a native reader never
+    /// sees <c>EF BB BF</c> on line 1.
+    /// <para>两个具象化文件使用的无 BOM UTF-8，与解包期导出一致，使本机读取器不会在第一行看到 <c>EF BB BF</c>。</para>
+    /// </summary>
+    private static readonly UTF8Encoding SidecarEncoding = new(false);
+
+    private string? _directory;
+
+    private NativeMetadataSidecars(string directory, string fsConfigPath, string fileContextsPath)
+    {
+        _directory = directory;
+        FsConfigPath = fsConfigPath;
+        FileContextsPath = fileContextsPath;
+    }
+
+    /// <summary>Temporary <c>fs_config</c> path handed to the tool.
+    /// <para>交给工具的临时 <c>fs_config</c> 路径。</para></summary>
+    /// <value>An existing file path inside the temporary directory. <para>临时目录内已存在的文件路径。</para></value>
+    internal string FsConfigPath { get; }
+
+    /// <summary>Temporary <c>file_contexts</c> path handed to the tool.
+    /// <para>交给工具的临时 <c>file_contexts</c> 路径。</para></summary>
+    /// <value>An existing file path inside the temporary directory. <para>临时目录内已存在的文件路径。</para></value>
+    internal string FileContextsPath { get; }
+
+    /// <summary>
+    /// Writes both sidecars for a preserved extraction directory.
+    /// <para>为受保留的解包目录写出两个附属文件。</para>
+    /// </summary>
+    /// <param name="sourceDirectory">Directory being packed, read for its metadata and payload.
+    /// <para>正在打包的目录，用于读取其元数据与负载。</para></param>
+    /// <param name="cancellationToken">Cancels the sidecar writes. <para>取消附属文件写出。</para></param>
+    /// <returns>The materialised paths, or <see langword="null"/> when the directory carries no structured
+    /// preservation payload. <para>具象化后的路径；目录不携带结构化保留负载时返回 <see langword="null"/>。</para></returns>
+    /// <exception cref="IOException">The temporary directory or a staged sidecar cannot be written.
+    /// <para>无法写出临时目录或暂存附属文件。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
+    internal static NativeMetadataSidecars? TryCreate(string sourceDirectory, CancellationToken cancellationToken)
+    {
+        var payload = FileSystemPreservation.ReadPayload(RepackMetadata.Read(sourceDirectory));
+        if (payload is null)
+        {
+            return null;
+        }
+
+        var directory = TempFileHelper.CreateScratchPath("uotan-native-sidecar", ".d");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var fsConfigPath = WriteSidecar(directory, "fs_config", BuildFsConfigRows(payload), cancellationToken);
+            var fileContextsPath = WriteSidecar(directory, "file_contexts", BuildFileContextsRows(payload), cancellationToken);
+            return new NativeMetadataSidecars(directory, fsConfigPath, fileContextsPath);
+        }
+        catch
+        {
+            TryDeleteDirectory(directory);
+            throw;
+        }
+    }
+
+    /// <summary>Removes the temporary directory holding both sidecars; a delete that fails leaves the files for
+    /// the system temporary-directory sweep.
+    /// <para>移除持有两个附属文件的临时目录；删除失败时把文件留给系统临时目录清理。</para></summary>
+    public void Dispose()
+    {
+        if (_directory is not { } directory)
+        {
+            return;
+        }
+
+        _directory = null;
+        TryDeleteDirectory(directory);
+    }
+
+    private static string WriteSidecar(string directory, string fileName, List<string> rows,
+        CancellationToken cancellationToken)
+    {
+        var builder = new StringBuilder();
+        foreach (var row in rows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            builder.Append(row).Append('\n');
+        }
+
+        var target = Path.Combine(directory, fileName);
+        var staged = TempFileHelper.CreateAdjacentPath(target);
+        try
+        {
+            File.WriteAllText(staged, builder.ToString(), SidecarEncoding);
+            AtomicPublish.Publish(staged, target);
+            return target;
+        }
+        finally
+        {
+            TempFileHelper.SafeDelete(staged);
+        }
+    }
+
+    private static List<string> BuildFsConfigRows(FileSystemPreservationData payload)
+    {
+        Dictionary<string, ushort> typeBits = new(StringComparer.Ordinal);
+        foreach (var entry in payload.ParsedEntries)
+        {
+            typeBits[FileSystemEditPlan.Normalize(entry.Path)] = (ushort)(entry.Mode & InodeTypeBits.FormatMask);
+        }
+
+        List<string> rows = [];
+        foreach (var (key, value) in payload.FsConfig.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            var imagePath = key.Length == 0 ? "/" : "/" + key;
+            if (imagePath.Any(char.IsWhiteSpace))
+            {
+                continue;
+            }
+
+            if (typeBits.TryGetValue(key, out var type)
+                && type is not (0 or InodeTypeBits.RegularFile or InodeTypeBits.Directory))
+            {
+                continue;
+            }
+
+            rows.Add($"{imagePath} {value.Uid.ToString(CultureInfo.InvariantCulture)} " +
+                $"{value.Gid.ToString(CultureInfo.InvariantCulture)} {FsConfigModes.Format(value.Mode)} 0");
+        }
+
+        return rows;
+    }
+
+    private static List<string> BuildFileContextsRows(FileSystemPreservationData payload)
+    {
+        List<string> rows = [];
+        foreach (var (key, label) in payload.FileContexts.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            var imagePath = key.Length == 0 ? "/" : "/" + key;
+            if (imagePath.Any(char.IsWhiteSpace) || label.Any(char.IsWhiteSpace))
+            {
+                continue;
+            }
+
+            rows.Add($"{imagePath} {label}");
+        }
+
+        return rows;
+    }
+
+    private static void TryDeleteDirectory(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+}
 
 /// <summary>
 /// Argument mapping for one <c>make_ext4fs</c> run; each optional property translates to exactly one tool flag

@@ -29,10 +29,15 @@ internal static class AndroidF2fsImageBuilder
     /// <c>/</c> and contain no <c>..</c> segment. Defaults to <c>/system</c>.
     /// <para><c>sload.f2fs</c> 记录的绝对 Android 挂载点；须以 <c>/</c> 开头且不含 <c>..</c> 段，
     /// 默认 <c>/system</c>。</para></param>
-    /// <param name="fsConfigPath">Optional Android-style <c>fs_config</c> file passed via <c>-C</c>; the file must exist.
-    /// <para>可选的 Android 风格 <c>fs_config</c> 文件，经 <c>-C</c> 传入；文件必须存在。</para></param>
-    /// <param name="fileContextsPath">Optional Android-style <c>file_contexts</c> file passed via <c>-s</c>; the file must exist.
-    /// <para>可选的 Android 风格 <c>file_contexts</c> 文件，经 <c>-s</c> 传入；文件必须存在。</para></param>
+    /// <param name="fsConfigPath">Optional Android-style <c>fs_config</c> file passed via <c>-C</c>; the file must
+    /// exist. For a preserved extraction directory the payload in <c>metadata.json</c> is materialised into a
+    /// temporary octal sidecar instead and this path is not consulted.
+    /// <para>可选的 Android 风格 <c>fs_config</c> 文件，经 <c>-C</c> 传入；文件必须存在。对受保留的解包目录，
+    /// <c>metadata.json</c> 内的负载会被具象化为临时八进制附属文件，此路径不再被参考。</para></param>
+    /// <param name="fileContextsPath">Optional Android-style <c>file_contexts</c> file passed via <c>-s</c>; the
+    /// file must exist. For a preserved extraction directory the payload provides a temporary sidecar instead.
+    /// <para>可选的 Android 风格 <c>file_contexts</c> 文件，经 <c>-s</c> 传入；文件必须存在。对受保留的解包目录，
+    /// 改由负载提供临时附属文件。</para></param>
     /// <param name="enableCompression">Adds the <c>compression</c> feature and the <c>-c</c> flag; only LZ4 is supported.
     /// <para>启用则追加 <c>compression</c> 特性与 <c>-c</c> 标志；仅支持 LZ4。</para></param>
     /// <param name="compressionAlgorithm">Declared compression codec; any value other than LZ4 is rejected when compression is enabled.
@@ -68,17 +73,20 @@ internal static class AndroidF2fsImageBuilder
         ArgumentNullException.ThrowIfNull(tools);
         var source = Path.GetFullPath(sourceDirectory);
         var destination = Path.GetFullPath(outputPath);
+        using var sidecars = NativeMetadataSidecars.TryCreate(source, cancellationToken);
+        var effectiveFsConfigPath = sidecars?.FsConfigPath ?? fsConfigPath;
+        var effectiveFileContextsPath = sidecars?.FileContextsPath ?? fileContextsPath;
         if (!Directory.Exists(source))
         {
             throw new DirectoryNotFoundException(source);
         }
-        if (fsConfigPath is not null && !File.Exists(fsConfigPath))
+        if (effectiveFsConfigPath is not null && !File.Exists(effectiveFsConfigPath))
         {
-            throw new FileNotFoundException("Android fs_config file was not found.", fsConfigPath);
+            throw new FileNotFoundException("Android fs_config file was not found.", effectiveFsConfigPath);
         }
-        if (fileContextsPath is not null && !File.Exists(fileContextsPath))
+        if (effectiveFileContextsPath is not null && !File.Exists(effectiveFileContextsPath))
         {
-            throw new FileNotFoundException("Android file_contexts file was not found.", fileContextsPath);
+            throw new FileNotFoundException("Android file_contexts file was not found.", effectiveFileContextsPath);
         }
         if (imageSizeBytes < 64L * 1024 * 1024 || imageSizeBytes % (2 * 1024 * 1024) != 0)
         {
@@ -117,15 +125,15 @@ internal static class AndroidF2fsImageBuilder
             NativeFileSystemTools.RequireSuccess("mkfs.f2fs", mkfs);
 
             List<string> args = ["-f", sourcePath, "-t", mountPoint];
-            if (fsConfigPath is not null)
+            if (effectiveFsConfigPath is not null)
             {
                 args.Add("-C");
-                args.Add(await tools.PathForToolAsync(fsConfigPath, cancellationToken).ConfigureAwait(false));
+                args.Add(await tools.PathForToolAsync(effectiveFsConfigPath, cancellationToken).ConfigureAwait(false));
             }
-            if (fileContextsPath is not null)
+            if (effectiveFileContextsPath is not null)
             {
                 args.Add("-s");
-                args.Add(await tools.PathForToolAsync(fileContextsPath, cancellationToken).ConfigureAwait(false));
+                args.Add(await tools.PathForToolAsync(effectiveFileContextsPath, cancellationToken).ConfigureAwait(false));
             }
             if (enableCompression)
             {

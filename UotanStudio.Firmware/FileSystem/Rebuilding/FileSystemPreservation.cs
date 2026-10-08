@@ -105,12 +105,58 @@ public static partial class FileSystemPreservation
             : data;
     }
 
+    /// <summary>
+    /// Captures the preservation payload of an extracted filesystem image: rebuild parameters and inode entries
+    /// are read back from the source image itself, and the capture is verified against it.
+    /// <para>采集已解包文件系统镜像的保留负载：重建参数与 inode 条目都从源镜像本身读回，并据此校验采集结果。</para>
+    /// </summary>
+    /// <param name="source">Source image file the extraction was taken from.
+    /// <para>解包所依据的源镜像文件。</para></param>
+    /// <param name="extraction">Extraction output tree that is projected. <para>被投影的解包输出目录树。</para></param>
+    /// <param name="metadataDirectory">Directory receiving <c>metadata.json</c>.
+    /// <para>接收 <c>metadata.json</c> 的目录。</para></param>
+    /// <param name="metadata">Metadata instance the payload is attached to.
+    /// <para>负载所附加到的元数据实例。</para></param>
+    /// <param name="cancellationToken">Cancels hashing, projection and verification.
+    /// <para>取消摘要计算、投影与校验。</para></param>
     internal static void CaptureAsync(string source, string extraction, string metadataDirectory,
         RepackMetadata metadata, CancellationToken cancellationToken)
     {
-        var rebuild = BuildRebuildParameters(source, metadata.FormatName);
+        var rebuild = BuildRebuildParameters(source, metadata.FormatName, cancellationToken);
         var parsedEntries = ReadEntries(source, metadata.FormatName);
         ValidateInodeFlags(parsedEntries, rebuild?.InnerFormat ?? metadata.FormatName);
+        CapturePayload(source, extraction, metadataDirectory, metadata, rebuild, parsedEntries,
+            verifyContents: true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Captures the preservation payload of an extracted archive container, whose per-entry ownership, group and
+    /// permission bits are supplied by the caller from the archive headers rather than from a filesystem parser.
+    /// No rebuild parameters exist for a container, and its contents are not re-read from the source image here:
+    /// the projected host tree and the recorded header table are the preserved record.
+    /// <para>为已解包的归档容器采集保留负载：每个条目的属主、属组与权限位由调用方从归档头提供，而非来自文件系统
+    /// 解析器。容器没有重建参数，其内容也不在此从源镜像重新读取：宿主投影与记录的条目表就是保留记录。</para>
+    /// </summary>
+    /// <param name="source">Source archive file the extraction was taken from.
+    /// <para>解包所依据的源归档文件。</para></param>
+    /// <param name="extraction">Extraction output tree that is projected.
+    /// <para>被投影的解包输出目录树。</para></param>
+    /// <param name="metadataDirectory">Directory receiving <c>metadata.json</c>.
+    /// <para>接收 <c>metadata.json</c> 的目录。</para></param>
+    /// <param name="metadata">Metadata instance the payload is attached to.
+    /// <para>负载所附加到的元数据实例。</para></param>
+    /// <param name="entries">Per-entry POSIX attributes read from the archive headers.
+    /// <para>从归档头读出的每条目 POSIX 属性。</para></param>
+    /// <param name="cancellationToken">Cancels hashing and projection. <para>取消摘要计算与投影。</para></param>
+    internal static void CaptureArchivePayload(string source, string extraction, string metadataDirectory,
+        RepackMetadata metadata, IReadOnlyList<PreservedInodeEntry> entries, CancellationToken cancellationToken)
+        => CapturePayload(source, extraction, metadataDirectory, metadata, null, entries,
+            verifyContents: false, cancellationToken);
+
+    private static void CapturePayload(string source, string extraction, string metadataDirectory,
+        RepackMetadata metadata, RebuildParameters? rebuild, IReadOnlyList<PreservedInodeEntry> parsedEntries,
+        bool verifyContents, CancellationToken cancellationToken)
+    {
         var imageBytes = new ExtractionByteCounter(new FileInfo(source).Length,
             FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.VerifyingImage), cancellationToken);
         var sourceHash = HashFile(source, cancellationToken, imageBytes.Add);
@@ -134,11 +180,14 @@ public static partial class FileSystemPreservation
                 .ToDictionary(entry => FileSystemEditPlan.Normalize(entry.Path),
                     entry => Encoding.UTF8.GetStringTrimNul(entry.Xattrs!["security.selinux"]), StringComparer.Ordinal),
             ImagePaths = CapturedPaths.Value is { } paths ? new(paths, StringComparer.Ordinal) : [],
-            ParsedEntries = parsedEntries,
+            ParsedEntries = [.. parsedEntries],
             Projection = Scan(extraction, metadataDirectory, metadata.SourceFileName, cancellationToken,
                 ActiveProgress.Value is null ? null : FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.VerifyingFiles))
         };
-        VerifyCapturedContents(source, data, cancellationToken);
+        if (verifyContents)
+        {
+            VerifyCapturedContents(source, data, cancellationToken);
+        }
         var payload = JsonSerializer.SerializeToNode(data,
             FileSystemPreservationJsonContext.Default.FileSystemPreservationData)!.AsObject();
         metadata.FileSystemPreservation = payload;

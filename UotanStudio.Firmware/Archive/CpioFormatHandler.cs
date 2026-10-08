@@ -18,13 +18,13 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
     {
         metadata.CanPackDirectory = true;
-        metadata.PackingNotes = " CPIO dialect, compression container and entry headers are retained; encoding-specific framing beyond the recorded options may change.";
+        metadata.PackingNotes = " CPIO dialect, compression container and entry headers are retained; the structured preservation payload in metadata.json carries per-entry ownership, group and permission bits and is the only attribute table a repack reads. Encoding-specific framing beyond the recorded options may change.";
     }
 
     Task IRepackMetadataProvider.CaptureRepackMetadataAsync(RepackMetadata metadata, string sourcePath,
         string outputDirectory, string metadataDirectory, CancellationToken cancellationToken)
     {
-        CaptureArchiveConfiguration(metadata, sourcePath, cancellationToken);
+        CaptureArchiveConfiguration(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken);
         return Task.CompletedTask;
     }
 
@@ -462,6 +462,8 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
             Metadata = new ArchiveEntryMetadata
             {
                 Mode = CpioFieldParser.ToMode(CpioFileType.Regular, permissions),
+                UserId = uid,
+                GroupId = gid,
                 LinkCount = 1,
                 ModificationTimeUnixSeconds = new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds(),
                 FileType = CpioFileType.Regular,

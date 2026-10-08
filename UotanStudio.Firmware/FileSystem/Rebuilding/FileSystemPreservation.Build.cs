@@ -14,7 +14,14 @@ namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 /// </summary>
 public static partial class FileSystemPreservation
 {
-    private static void BuildEdited(string inputDirectory, Stream output, string format,
+    /// <summary>
+    /// Builds one edited container and returns the EROFS rebuild search report when the bounded candidate
+    /// search ran, or <see langword="null"/> for every single-build outcome, so the caller can merge the
+    /// search keys into the equivalence report.
+    /// <para>构建一个编辑后的容器，并在有界候选搜索执行时返回 EROFS 重建搜索报告；所有单次构建的结果均返回
+    /// <see langword="null"/>，便于调用方把搜索键并入等价报告。</para>
+    /// </summary>
+    private static Dictionary<string, string>? BuildEdited(string inputDirectory, Stream output, string format,
         IReadOnlyDictionary<string, FsConfigEntry> fsConfig, IReadOnlyDictionary<string, string> fileContexts,
         RebuildParameters? rebuild, IReadOnlyDictionary<string, string> options, FileStream publicationOutput,
         string temporaryDirectory, CancellationToken token)
@@ -30,12 +37,12 @@ public static partial class FileSystemPreservation
             };
             var temporary = TempFileHelper.CreateScratchPathIn(temporaryDirectory, ".uotan-f2fs-raw");
             using var raw = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.DeleteOnClose);
-            BuildEdited(inputDirectory, raw, format, fsConfig, fileContexts, rebuild, nestedOptions, publicationOutput,
-                temporaryDirectory, token);
+            var nestedReport = BuildEdited(inputDirectory, raw, format, fsConfig, fileContexts, rebuild, nestedOptions,
+                publicationOutput, temporaryDirectory, token);
             raw.Flush(flushToDisk: true);
             raw.Position = 0;
             SparseContainerAccess.Resolve().ConvertRawToSparseValidated(raw, output, 4096, raw.Length, token, publicationOutput);
-            return;
+            return nestedReport;
         }
         if (format == "Android Sparse Image (simg)")
         {
@@ -43,13 +50,13 @@ public static partial class FileSystemPreservation
                 throw new FileSystemCorruptedException("Sparse image rebuild parameters are missing. Re-extract the source image before rebuilding it.");
             var temporary = TempFileHelper.CreateScratchPathIn(temporaryDirectory, ".uotan-edited-raw");
             using var raw = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.DeleteOnClose);
-            BuildEdited(inputDirectory, raw, inner, fsConfig, fileContexts, rebuild, options, publicationOutput,
-                temporaryDirectory, token);
+            var innerReport = BuildEdited(inputDirectory, raw, inner, fsConfig, fileContexts, rebuild, options,
+                publicationOutput, temporaryDirectory, token);
             raw.Flush(flushToDisk: true);
             raw.Position = 0;
             SparseContainerAccess.Resolve().ConvertRawToSparseValidated(raw, output, (uint)sparseBlock, raw.Length, token,
                 publicationOutput);
-            return;
+            return innerReport;
         }
         switch (format)
         {
@@ -90,7 +97,8 @@ public static partial class FileSystemPreservation
                 }
             case "EROFS":
                 {
-                    var erofsOptions = rebuild?.Erofs is { } profile
+                    var profile = rebuild?.Erofs;
+                    var erofsOptions = profile is not null
                         ? ErofsRebuildMetadata.Restore(profile)
                         : new ErofsOptions();
                     if (rebuild?.BlockSize is { } blockSize)
@@ -108,6 +116,14 @@ public static partial class FileSystemPreservation
                     erofsOptions.VolumeName = volumeName;
                     erofsOptions.FsConfig = fsConfig;
                     erofsOptions.FileContexts = fileContexts;
+                    if (ErofsBuildDefaults.RebuildOptimization
+                        && profile is not null
+                        && profile.CompressionEstimates.Count > 0
+                        && profile.SourceFilesystemBytes > 0)
+                    {
+                        return ErofsRebuildOptimizer.Build(inputDirectory, output, erofsOptions, profile, token);
+                    }
+
                     new ErofsBuilder().Build(inputDirectory, output, erofsOptions);
                     break;
                 }
@@ -133,6 +149,8 @@ public static partial class FileSystemPreservation
                 }
             default: throw new FileSystemUnsupportedFeatureException("Editing this filesystem container is not supported.");
         }
+
+        return null;
     }
 
     private static long? ParseTargetSize(IReadOnlyDictionary<string, string> options)

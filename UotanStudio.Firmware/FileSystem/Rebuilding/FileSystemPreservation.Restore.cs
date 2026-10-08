@@ -104,7 +104,7 @@ public static partial class FileSystemPreservation
             if (fullOutput.Equals(root, comparison) || fullOutput.StartsWith(root + Path.DirectorySeparatorChar, comparison))
                 throw new IOException("Rebuilt output must be outside the extracted tree and its preservation data.");
         }
-        var tables = FileSystemMetadataOverrides.LoadTables(metadata, metadataDirectory, requireStructured: true);
+        var tables = FileSystemMetadataOverrides.LoadTables(metadata);
         ValidateInodeFlags(manifest.ParsedEntries, tables.Rebuild?.InnerFormat ?? format);
         var plan = new FileSystemEditPlan(inputDirectory, manifest, projection, RepackMetadata.DetectPartitionName(metadata.SourceFileName));
         if ((format == "F2FS" || tables.Rebuild?.InnerFormat == "F2FS")
@@ -142,11 +142,12 @@ public static partial class FileSystemPreservation
             }
         }
         using var editScope = plan.Enter();
+        Dictionary<string, string>? optimizerReport = null;
         FileExtraction.WriteAtomic(fullOutput, output =>
         {
             using var bounded = maximumOutputBytes is { } capacity
                 ? new CapacityWriteStream(output, capacity, cancellationToken) : null;
-            BuildEdited(inputDirectory, (Stream?)bounded ?? output, format, effectiveFsConfig,
+            optimizerReport = BuildEdited(inputDirectory, (Stream?)bounded ?? output, format, effectiveFsConfig,
                 new Dictionary<string, string>(StringComparer.Ordinal), tables.Rebuild,
                 packingOptions, output, Path.GetDirectoryName(fullOutput)!, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
@@ -158,7 +159,8 @@ public static partial class FileSystemPreservation
                 throw new IOException("Filesystem content or attributes changed during rebuilding.");
         }, overwrite: true);
         if (rebuildReport is not null)
-            rebuildReport(BuildEquivalenceReport(format, manifest, tables.Rebuild, fullOutput, cancellationToken));
+            rebuildReport(BuildEquivalenceReport(format, manifest, tables.Rebuild, fullOutput, optimizerReport,
+                cancellationToken));
         return true;
     }
 
@@ -181,18 +183,39 @@ public static partial class FileSystemPreservation
         throw new FileSystemUnsupportedFeatureException("Filesystem configuration changed. The current writer cannot guarantee preservation of every source feature after this change.");
     }
 
+    /// <summary>Report keys that always describe the published file, so a rebuild search never overrides
+    /// them with its candidate-stream measurements.
+    /// <para>始终描述已发布文件的报告键，重建搜索绝不会用候选流的测量值覆盖它们。</para></summary>
+    private static readonly string[] PublishedSizeKeys =
+    [
+        "RebuiltSize",
+        "SourceFilesystemSize",
+        "FitsSourceFilesystemSize",
+        "SizeExcess",
+    ];
+
     /// <summary>
     /// Builds the post-publish equivalence report. Byte identity streams the produced image against the source
     /// digest and length recorded in the preservation payload; structure and content reflect the verification
     /// that already ran; capacity compares the produced extent against the source filesystem baseline,
     /// using the logical extent for sparse containers. The EROFS compression profile keys are inherited verbatim
-    /// so existing result consumers keep working.
+    /// so existing result consumers keep working. When the bounded rebuild search ran, its keys are overlaid
+    /// afterwards, except the keys that describe the published file (<c>RebuiltSize</c>,
+    /// <c>SourceFilesystemSize</c>, <c>FitsSourceFilesystemSize</c> and <c>SizeExcess</c>): those keep the
+    /// post-publish recomputation, because the search measured candidate streams in a temporary directory while
+    /// the report has to describe the image actually on disk. The search therefore overrides
+    /// <c>CompressionProfile</c>, <c>CompressionInference</c> and adds <c>CompressionAttempts</c>.
     /// <para>构建发布后的等价报告。字节一致性把产出镜像流式计入摘要并与保留负载记录的源摘要和长度比对；结构与
     /// 内容反映已经执行过的校验；容量把产出范围与源文件系统基线比较，稀疏容器使用逻辑范围。EROFS 压缩档案键
-    /// 保持原样继承，使既有结果消费方继续可用。</para>
+    /// 保持原样继承，使既有结果消费方继续可用。有界重建搜索执行过后，其键会在最后叠加，但描述已发布文件的键
+    /// （<c>RebuiltSize</c>、<c>SourceFilesystemSize</c>、<c>FitsSourceFilesystemSize</c> 与
+    /// <c>SizeExcess</c>）除外：这些值沿用发布后的重新计算，因为搜索测量的是临时目录里的候选流，而报告必须
+    /// 描述磁盘上真正产出的镜像。因此搜索会覆盖 <c>CompressionProfile</c>、<c>CompressionInference</c>，
+    /// 并新增 <c>CompressionAttempts</c>。</para>
     /// </summary>
     private static Dictionary<string, string> BuildEquivalenceReport(string format, FileSystemPreservationData manifest,
-        RebuildParameters? rebuild, string publishedPath, CancellationToken token)
+        RebuildParameters? rebuild, string publishedPath, IReadOnlyDictionary<string, string>? optimizerReport,
+        CancellationToken token)
     {
         var rebuiltLength = new FileInfo(publishedPath).Length;
         var producedHash = HashFile(publishedPath, token);
@@ -236,6 +259,14 @@ public static partial class FileSystemPreservation
             if (paddedFallback)
             {
                 report["SourceFilesystemSizeBasis"] = "padded image length (re-extract the source to record the filesystem block count)";
+            }
+        }
+
+        if (optimizerReport is not null)
+        {
+            foreach (var (key, value) in optimizerReport)
+            {
+                if (!PublishedSizeKeys.Contains(key)) report[key] = value;
             }
         }
 

@@ -10,11 +10,11 @@ internal sealed class SelinuxFileLabelInference
 {
     private readonly Dictionary<string, PreservedInodeEntry> originals;
     private readonly Dictionary<(string Parent, int Kind), PreservedInodeEntry[]> siblings;
-    private readonly List<Rule[]> policies = [];
+    private readonly List<PolicyIndex> policies = [];
     private readonly string? mount;
     private readonly bool systemAsRoot;
     private readonly bool labeled;
-    private sealed record Rule(Regex Pattern, bool Literal, int Kind, string Label);
+    private sealed record Rule(Regex Pattern, bool Literal, int Kind, string Label, int Order, string Prefix, string? Exact);
 
     internal SelinuxFileLabelInference(string root, Dictionary<string, PreservedInodeEntry> originals,
         Dictionary<string, string> projection, string? partition, Dictionary<string, string>? imagePaths = null)
@@ -80,16 +80,18 @@ internal sealed class SelinuxFileLabelInference
                 var literal = !Regex.IsMatch(translated, @"(?<!\\)[.\^$?*+|\[({]", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
                 try
                 {
-                    var bytes = Encoding.Latin1.GetString(Encoding.UTF8.GetBytes(translated));
+                    var (prefix, exact) = AnalyzeLiteral(translated);
+                    var bytes = AsByteText(translated);
                     rules.Add(new(new Regex("\\A(?:" + bytes + ")\\z", RegexOptions.NonBacktracking | RegexOptions.Singleline
-                        | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)), literal, kind, label));
+                        | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)), literal, kind, label, rules.Count,
+                        AsByteText(prefix), exact is null ? null : AsByteText(exact)));
                 }
                 catch (Exception error) when (error is ArgumentException or NotSupportedException)
                 {
                     throw new FileSystemUnsupportedFeatureException($"Unsupported SELinux regex in {path}: {pattern}", error);
                 }
             }
-            policies.Add([.. rules]);
+            policies.Add(BuildIndex(rules));
         }
     }
 
@@ -97,20 +99,28 @@ internal sealed class SelinuxFileLabelInference
     {
         var kind = directory ? 0x4000 : 0x8000;
         var runtimePath = (systemAsRoot ? "" : mount) + "/" + path;
-        var key = Encoding.Latin1.GetString(Encoding.UTF8.GetBytes(runtimePath));
-        var matches = new HashSet<string>(StringComparer.Ordinal);
+        var key = AsByteText(runtimePath);
+        string? policyLabel = null;
         foreach (var policy in policies)
         {
-            var match = policy.LastOrDefault(r => r.Literal && (r.Kind == 0 || r.Kind == kind) && r.Pattern.IsMatch(key))
-                ?? policy.LastOrDefault(r => !r.Literal && (r.Kind == 0 || r.Kind == kind) && r.Pattern.IsMatch(key));
-            if (match is not null) matches.Add(match.Label);
+            var match = policy.Match(key, kind);
+            if (match is null)
+            {
+                continue;
+            }
+            if (policyLabel is null)
+            {
+                policyLabel = match.Label;
+            }
+            else if (!string.Equals(policyLabel, match.Label, StringComparison.Ordinal))
+            {
+                throw new FileSystemCorruptedException($"Conflicting SELinux policy sources for {runtimePath}.");
+            }
         }
-        if (matches.Count > 1) throw new FileSystemCorruptedException($"Conflicting SELinux policy sources for {runtimePath}.");
-        if (matches.Count == 1)
+        if (policyLabel is not null)
         {
-            var label = matches.Single();
-            if (label == "<<none>>") throw new InvalidDataException($"SELinux policy explicitly excludes labeling {runtimePath}.");
-            return Encode(label);
+            if (policyLabel == "<<none>>") throw new InvalidDataException($"SELinux policy explicitly excludes labeling {runtimePath}.");
+            return Encode(policyLabel);
         }
         var parent = Parent(path);
         if (siblings.TryGetValue((parent, kind), out var donors))
@@ -149,4 +159,156 @@ internal sealed class SelinuxFileLabelInference
         RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     private static byte[] Encode(string label) => Encoding.UTF8.GetBytes(label + '\0');
     private static string Parent(string path) => path.LastIndexOf('/') is var i && i >= 0 ? path[..i] : "";
+
+    /// <summary>
+    /// Maps a runtime path onto the single-byte alphabet the compiled patterns use, keeping pure ASCII paths
+    /// identity-mapped so lookups allocate nothing.
+    /// <para>把运行时路径映射到已编译模式使用的单字节字符表；纯 ASCII 路径保持原样，使查找不产生分配。</para>
+    /// </summary>
+    private static string AsByteText(string value)
+    {
+        foreach (var c in value)
+        {
+            if (c > 0x7F)
+            {
+                return Encoding.Latin1.GetString(Encoding.UTF8.GetBytes(value));
+            }
+        }
+        return value;
+    }
+
+    /// <summary>
+    /// Builds the per-policy lookup used by <see cref="Infer"/>: exact patterns indexed by their literal text and
+    /// every remaining pattern kept in descending file order so the first acceptance is also the last match.
+    /// <para>构建 <see cref="Infer"/> 使用的按策略索引：字面量模式按其文本建索引，其余模式按文件顺序倒序保留，
+    /// 使第一个被接受的模式恰好就是最后一个匹配项。</para>
+    /// </summary>
+    private static PolicyIndex BuildIndex(List<Rule> rules)
+    {
+        Dictionary<string, List<Rule>>? exact = null;
+        List<Rule> literalScan = [];
+        List<Rule> regexScan = [];
+        for (var index = rules.Count - 1; index >= 0; index--)
+        {
+            var rule = rules[index];
+            if (rule.Exact is not null)
+            {
+                exact ??= new(StringComparer.Ordinal);
+                if (!exact.TryGetValue(rule.Exact, out var bucket))
+                {
+                    bucket = [];
+                    exact[rule.Exact] = bucket;
+                }
+                bucket.Add(rule);
+            }
+            else if (rule.Literal)
+            {
+                literalScan.Add(rule);
+            }
+            else
+            {
+                regexScan.Add(rule);
+            }
+        }
+        return new PolicyIndex
+        {
+            Exact = exact,
+            LiteralScan = [.. literalScan],
+            RegexScan = [.. regexScan],
+        };
+    }
+
+    /// <summary>
+    /// Splits a translated pattern into the literal text every match must start with and, when the whole pattern is
+    /// literal, that same text as the only string it accepts. Quantified tail characters are dropped because they may
+    /// be absent; escaped letters, digits and whitespace are treated as unknown and end the prefix.
+    /// <para>把已翻译模式拆成每个匹配都必须具备的字面量前缀，以及模式整体为字面量时唯一可匹配的文本。量词修饰的末尾字符
+    /// 会被丢弃，因为它可能不出现；转义的字母、数字与空白按未知处理并终止前缀。</para>
+    /// </summary>
+    private static (string Prefix, string? Exact) AnalyzeLiteral(string pattern)
+    {
+        StringBuilder prefix = new(pattern.Length);
+        var index = 0;
+        while (index < pattern.Length)
+        {
+            var c = pattern[index];
+            if (c == '\\')
+            {
+                if (index + 1 >= pattern.Length || !IsQuotedLiteral(pattern[index + 1]))
+                {
+                    break;
+                }
+                prefix.Append(pattern[index + 1]);
+                index += 2;
+                continue;
+            }
+            if (IsMetacharacter(c))
+            {
+                if (c is '*' or '?' or '{' && prefix.Length > 0)
+                {
+                    prefix.Length--;
+                }
+                break;
+            }
+            prefix.Append(c);
+            index++;
+        }
+        return (prefix.ToString(), index == pattern.Length ? prefix.ToString() : null);
+    }
+    private static bool IsMetacharacter(char c) => c is '.' or '$' or '^' or '?' or '*' or '+' or '|' or '[' or ']'
+        or '(' or ')' or '{' or '}' or '<' or '>';
+    private static bool IsQuotedLiteral(char c) => c == '\\' || c >= '!' && c <= '~' && !char.IsAsciiLetterOrDigit(c);
+
+    /// <summary>
+    /// Resolves the rule a policy contributes for one runtime path, keeping the original precedence: the last literal
+    /// rule wins, and regular rules are consulted only when no literal rule matches.
+    /// <para>解析某策略对一个运行时路径贡献的规则，保持原有优先级：最后一个字面量规则生效，只有在没有任何字面量规则
+    /// 匹配时才查阅正则规则。</para>
+    /// </summary>
+    private sealed class PolicyIndex
+    {
+        internal required Dictionary<string, List<Rule>>? Exact { get; init; }
+        internal required Rule[] LiteralScan { get; init; }
+        internal required Rule[] RegexScan { get; init; }
+
+        internal Rule? Match(string key, int kind) => BestLiteral(key, kind) ?? BestScan(RegexScan, key, kind);
+
+        private Rule? BestLiteral(string key, int kind)
+        {
+            Rule? best = null;
+            if (Exact is not null && Exact.TryGetValue(key, out var bucket))
+            {
+                foreach (var rule in bucket)
+                {
+                    if (rule.Kind == 0 || rule.Kind == kind)
+                    {
+                        best = rule;
+                        break;
+                    }
+                }
+            }
+            var scanned = BestScan(LiteralScan, key, kind);
+            if (scanned is not null && (best is null || scanned.Order > best.Order))
+            {
+                best = scanned;
+            }
+            return best;
+        }
+
+        private static Rule? BestScan(Rule[] rules, string key, int kind)
+        {
+            foreach (var rule in rules)
+            {
+                if (rule.Kind != 0 && rule.Kind != kind)
+                {
+                    continue;
+                }
+                if (key.StartsWith(rule.Prefix, StringComparison.Ordinal) && rule.Pattern.IsMatch(key))
+                {
+                    return rule;
+                }
+            }
+            return null;
+        }
+    }
 }

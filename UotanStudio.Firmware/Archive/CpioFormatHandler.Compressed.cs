@@ -15,6 +15,7 @@ using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Metadata;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
 using SharpCompressCompressionMode = SharpCompress.Compressors.CompressionMode;
 
 namespace UotanStudio.Firmware.Archive;
@@ -169,7 +170,8 @@ public sealed partial class CpioFormatHandler
         source.Position = 0;
     }
 
-    private void CaptureArchiveConfiguration(RepackMetadata metadata, string sourcePath, CancellationToken cancellationToken)
+    private void CaptureArchiveConfiguration(RepackMetadata metadata, string sourcePath, string outputDirectory,
+        string metadataDirectory, CancellationToken cancellationToken)
     {
         using var source = OpenArchiveForRead(sourcePath, cancellationToken);
         var format = _archive.DetectFormat(source);
@@ -187,6 +189,7 @@ public sealed partial class CpioFormatHandler
         }
 
         var entries = new JsonArray();
+        Dictionary<string, PreservedInodeEntry> preserved = new(StringComparer.Ordinal);
         foreach (var entry in new CpioArchiveReader().ReadEntriesStreaming(source, format, MaximumArchiveBytes, cancellationToken))
         {
             if (entries.Count >= MaximumEntries || entry.Name.Length > MaximumNameLength)
@@ -211,6 +214,15 @@ public sealed partial class CpioFormatHandler
                 ["rdevMinor"] = header.RDeviceMinor,
                 ["type"] = (int)header.FileType,
             });
+            preserved[PathPatternMatcher.NormalizeArchivePath(entry.Name)] = new PreservedInodeEntry
+            {
+                Path = PathPatternMatcher.NormalizeArchivePath(entry.Name),
+                Size = entry.DataLength,
+                Inode = header.Inode,
+                Mode = (ushort)(header.Mode & 0xFFFF),
+                Uid = header.UserId,
+                Gid = header.GroupId,
+            };
         }
 
         metadata.Configuration["cpio"] = new JsonObject
@@ -219,6 +231,8 @@ public sealed partial class CpioFormatHandler
             ["compression"] = compression.ToString(),
             ["entries"] = entries,
         };
+        FileSystemPreservation.CaptureArchivePayload(sourcePath, outputDirectory, metadataDirectory, metadata,
+            [.. preserved.Values], cancellationToken);
         if (compression == CompressionFormat.Gzip)
         {
             using var compressed = File.OpenRead(sourcePath);
@@ -339,8 +353,7 @@ public sealed partial class CpioFormatHandler
     private static List<ArchiveEntry> BuildRepackEntries(string inputPath, RepackMetadata? metadata,
         CancellationToken cancellationToken)
     {
-        var fsConfig = FileSystemMetadataOverrides.LoadFsConfig(
-            RepackMetadata.DiscoverMetadataFile(inputPath, "_fs_config"));
+        var fsConfig = ResolveFsConfig(inputPath, metadata);
         var files = EnumerateDirectoryEntries(inputPath, fsConfig, cancellationToken);
         if (files.Count > MaximumEntries || files.Any(entry => entry.Name.Length > MaximumNameLength))
         {
@@ -470,6 +483,28 @@ public sealed partial class CpioFormatHandler
         }
         return result;
     }
+
+    /// <summary>
+    /// Resolves the POSIX attribute table a CPIO repack applies to host paths the recorded entry headers do not
+    /// cover. The structured preservation payload inside <c>metadata.json</c> is authoritative and is the only
+    /// table used for an extraction this handler performed; an external <c>_fs_config</c> is consulted solely when
+    /// the metadata document carries no payload, which a CPIO extraction never produces because this handler
+    /// writes no flat sidecar at all.
+    /// <para>解析 CPIO 重打包在记录的条目头未覆盖的宿主路径上使用的 POSIX 属性表。结构化保留负载位于
+    /// <c>metadata.json</c> 内并具有权威性，是本处理器完成解包后唯一使用的表；只有当元数据文档不携带负载时才会
+    /// 参考外部 <c>_fs_config</c>，而 CPIO 解包永远不会出现这种情况，因为本处理器不写出任何扁平附属文件。</para>
+    /// </summary>
+    /// <param name="inputPath">Directory being packed. <para>正在打包的目录。</para></param>
+    /// <param name="metadata">Metadata read for that directory, or <see langword="null"/> for a directory build.
+    /// <para>为该目录读取到的元数据；目录构建时为 <see langword="null"/>。</para></param>
+    /// <returns>Ordinal path-keyed entries taken from the payload, or from an external sidecar when no payload
+    /// exists; empty when neither is available.
+    /// <para>按序号比较路径的条目表：取自负载；无负载时取自外部附属文件；两者都不存在时为空。</para></returns>
+    private static IReadOnlyDictionary<string, FsConfigEntry> ResolveFsConfig(string inputPath, RepackMetadata? metadata)
+        => FileSystemMetadataOverrides.TryLoadDocument(metadata) is { } document
+            ? document.FsConfig
+            : FileSystemMetadataOverrides.LoadFsConfig(
+                RepackMetadata.DiscoverMetadataFile(inputPath, "_fs_config", metadata?.SourceFileName));
 
     private byte[] WriteArchive(Stream destination, List<ArchiveEntry> entries, ArchiveFormat format,
         CompressionFormat compression, RepackMetadata? metadata, CancellationToken cancellationToken)

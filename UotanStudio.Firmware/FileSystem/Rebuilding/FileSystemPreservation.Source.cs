@@ -14,13 +14,13 @@ namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 /// </summary>
 public static partial class FileSystemPreservation
 {
-    private static RebuildParameters? BuildRebuildParameters(string source, string format)
+    private static RebuildParameters? BuildRebuildParameters(string source, string format, CancellationToken token)
     {
         if (format == "Android Sparse Image (simg)")
         {
             using var container = SparseContainerAccess.Resolve().OpenLogicalView(source);
             var logical = container.Logical;
-            var inner = BuildRebuildParameters(logical, DetectFilesystem(logical));
+            var inner = BuildRebuildParameters(logical, DetectFilesystem(logical), token);
             if (inner is null) return null;
             inner.InnerFormat = inner.Format;
             inner.Format = "Android Sparse Image (simg)";
@@ -29,13 +29,13 @@ public static partial class FileSystemPreservation
         }
 
         using var stream = File.OpenRead(source);
-        return BuildRebuildParameters(stream, format);
+        return BuildRebuildParameters(stream, format, token);
     }
 
-    private static RebuildParameters? BuildRebuildParameters(Stream source, string format) => format switch
+    private static RebuildParameters? BuildRebuildParameters(Stream source, string format, CancellationToken token) => format switch
     {
         "EXT4" => ReadExt4Rebuild(source),
-        "EROFS" => ReadErofsRebuild(source),
+        "EROFS" => ReadErofsRebuild(source, token),
         "F2FS" => ReadF2fsRebuild(source),
         _ => null
     };
@@ -59,10 +59,11 @@ public static partial class FileSystemPreservation
         };
     }
 
-    private static RebuildParameters ReadErofsRebuild(Stream source)
+    private static RebuildParameters ReadErofsRebuild(Stream source, CancellationToken token)
     {
         using var parser = OpenErofsParser(source, requireCompleteMetadata: true);
         var options = parser.ReadRebuildOptions();
+        var extent = checked((long)parser.Superblock.BlockCount64 * options.BlockSize);
         return new RebuildParameters
         {
             Format = "EROFS",
@@ -70,8 +71,8 @@ public static partial class FileSystemPreservation
             Uuid = options.Uuid,
             VolumeName = options.VolumeName,
             SourceLength = source.CanSeek ? source.Length : null,
-            SourceFilesystemBytes = checked((long)parser.Superblock.BlockCount64 * options.BlockSize),
-            Erofs = ErofsRebuildMetadata.Capture(options)
+            SourceFilesystemBytes = extent,
+            Erofs = ErofsRebuildMetadata.Capture(options, parser, extent, token)
         };
     }
 
