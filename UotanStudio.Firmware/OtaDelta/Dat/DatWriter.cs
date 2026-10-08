@@ -77,7 +77,9 @@ public static class DatWriter
     /// </param>
     /// <param name="progress">
     /// Optional byte progress, fed with (processed bytes read from the raw image, total raw bytes); <c>null</c> to
-    /// disable reporting. <para>可选的按字节进度回调（读入原始镜像的字节数、原始镜像总字节数）；<c>null</c> 表示不报告。</para>
+    /// disable reporting. Reports are coalesced to one notification per 100 millisecond window and always end with a
+    /// notification carrying the total. <para>可选的按字节进度回调（读入原始镜像的字节数、原始镜像总字节数）；<c>null</c> 表示不报告。
+    /// 上报按 100 毫秒窗口合并，并必定以一条携带总量的通知结束。</para>
     /// </param>
     /// <param name="cancellationToken">
     /// Cancels between blocks and before self-verification; a cancelled write may leave partial output files and
@@ -105,6 +107,7 @@ public static class DatWriter
 
         var newRanges = new List<BlockRange>();
         var zeroRanges = new List<BlockRange>();
+        var meter = new Core.ProgressThrottle(totalBytes, progress, cancellationToken);
 
         using (var input = new FileStream(inputImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.SequentialScan))
         using (var output = new FileStream(outputDatPath, FileMode.Create, FileAccess.Write, FileShare.None, StreamBufferSize))
@@ -146,9 +149,9 @@ public static class DatWriter
                 }
 
                 block++;
-                progress?.Report((Math.Min(checked(block * BlockSize), totalBytes), totalBytes));
+                meter.Report((Math.Min(checked(block * BlockSize), totalBytes), totalBytes));
             }
-            progress?.Report((totalBytes, totalBytes));
+            meter.Complete();
 
             if (newStart is not null)
             {
@@ -224,7 +227,9 @@ public static class DatWriter
     /// Compression and per-command block cap settings applied to the emitted data; ownership stays with the caller.
     /// <para>应用于所写出数据的压缩与单条命令块数上限设置；所有权归调用方。</para>
     /// </param>
-    /// <param name="progress">Optional byte progress over the target image. <para>可选的按目标镜像字节进度。</para></param>
+    /// <param name="progress">Optional byte progress over the target image, coalesced to one notification per 100
+    /// millisecond window and ended by a notification carrying the total. <para>可选的按目标镜像字节进度，按 100
+    /// 毫秒窗口合并，并以一条携带总量的通知结束。</para></param>
     /// <param name="cancellationToken">
     /// Cancels between blocks, patch computations and the self-verification pass. <para>在块间、补丁计算与自校验趟之间响应取消。</para>
     /// </param>
@@ -256,6 +261,7 @@ public static class DatWriter
         var totalBlocks = (totalBytes + BlockSize - 1) / BlockSize;
 
         var runs = new List<(long Start, long End, bool Imgdiff)>();
+        var meter = new Core.ProgressThrottle(totalBytes, progress, cancellationToken);
         using (var source = new FileStream(sourceImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.RandomAccess))
         using (var target = new FileStream(targetImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.RandomAccess))
         {
@@ -301,8 +307,9 @@ public static class DatWriter
                 }
 
                 block++;
-                progress?.Report((Math.Min(checked(block * BlockSize), totalBytes), totalBytes));
+                meter.Report((Math.Min(checked(block * BlockSize), totalBytes), totalBytes));
             }
+            meter.Complete();
         }
 
         if (!runs.Any(run => run.Imgdiff))

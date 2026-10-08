@@ -598,8 +598,9 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>接收目录树的宿主目录；缺失时自动创建。</para></param>
     /// <param name="overwrite">When <see langword="false"/>, files already present on the host are skipped.
     /// <para>为 <see langword="false"/> 时跳过宿主上已存在的文件。</para></param>
-    /// <param name="progress">Receives processed/total entry counts; may be null.
-    /// <para>接收已处理/总条目数；可为 null。</para></param>
+    /// <param name="progress">Receives processed/total entry counts, coalesced to one notification per 100 millisecond
+    /// window and ended by a notification carrying the total; may be null.
+    /// <para>接收已处理/总条目数，按 100 毫秒窗口合并，并以一条携带总量的通知结束；可为 null。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="outputDirectory"/> is null.
     /// <para><paramref name="outputDirectory"/> 为 null。</para></exception>
     public void ExtractToDirectory(string outputDirectory, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
@@ -616,8 +617,9 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>中止剩余条目，并打断进行中的计量写入。</para></param>
     /// <param name="overwrite">When <see langword="false"/>, files already present on the host are skipped.
     /// <para>为 <see langword="false"/> 时跳过宿主上已存在的文件。</para></param>
-    /// <param name="progress">Receives processed/total entry counts; may be null.
-    /// <para>接收已处理/总条目数；可为 null。</para></param>
+    /// <param name="progress">Receives processed/total entry counts, coalesced to one notification per 100 millisecond
+    /// window and ended by a notification carrying the total; may be null.
+    /// <para>接收已处理/总条目数，按 100 毫秒窗口合并，并以一条携带总量的通知结束；可为 null。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="outputDirectory"/> is null.
     /// <para><paramref name="outputDirectory"/> 为 null。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
@@ -641,6 +643,8 @@ public sealed partial class ErofsParser : IDisposable
         var totalCount = entries.Count;
         var processedCount = 0;
         var progressGate = new object();
+        IProgress<(long Processed, long Total)>? entrySink = progress is null ? null : new Core.EntryCountProgress(progress);
+        var entryProgress = new Core.ProgressThrottle(totalCount, entrySink, cancellationToken);
         var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var groups = entries.GroupBy(entry => hostPaths.Resolve(entry.Path), comparer).ToArray();
         Core.FirmwareParallelism.ForEach(groups, group =>
@@ -661,14 +665,18 @@ public sealed partial class ErofsParser : IDisposable
                     else if (entry.IsSpecialFile) Core.FileExtraction.WriteAtomic(target, _ => { }, overwrite);
                     else ExtractFileAtomic(target, firstNids[entry.Path], overwrite, bytes);
                 }
+                int completed;
                 lock (progressGate)
                 {
                     processedCount++;
-                    progress?.Report((processedCount, totalCount));
+                    completed = processedCount;
                 }
+
+                entryProgress.Report((completed, totalCount));
             }
         });
         bytes.Complete();
+        entryProgress.Complete();
     }
     /// <summary>
     /// Disposes the source held by the parser (only when the parser opened the file itself).
@@ -815,11 +823,7 @@ public sealed partial class ErofsParser : IDisposable
             while (length > 0)
             {
                 var count = (int)Math.Min(CopyBufferSize, length);
-                lock (_streamLock)
-                {
-                    device.Position = offset;
-                    device.ReadExactly(buffer, 0, count);
-                }
+                ReadPositioned(device, offset, buffer, count);
                 output.Write(buffer, 0, count);
                 offset += count;
                 length -= count;
@@ -840,13 +844,46 @@ public sealed partial class ErofsParser : IDisposable
         }
 
         var buffer = new byte[length];
-        lock (_streamLock)
+        ReadPositioned(_stream, checked(_baseOffset + offset), buffer, length);
+        return buffer;
+    }
+
+    /// <summary>
+    /// Reads an absolute source range without moving a shared cursor: a real <see cref="FileStream"/> is read
+    /// positionally so concurrent extraction workers overlap, while every other source keeps the parser-wide
+    /// lock because it shares one mutable position.
+    /// <para>按绝对区间读取数据源而不移动共享游标：真正的 <see cref="FileStream"/> 走定位读取，使并行解包工作者可以重叠；
+    /// 其他数据源因共用一个可变位置，仍使用解析器范围的锁。</para>
+    /// </summary>
+    /// <param name="source">Stream backing the image or one device region. <para>承载镜像或单个设备区域的数据流。</para></param>
+    /// <param name="position">Absolute offset to read from. <para>读取的绝对偏移。</para></param>
+    /// <param name="buffer">Destination, filled completely or the read fails. <para>目标缓冲，要么填满要么读取失败。</para></param>
+    /// <param name="count">Bytes to read from the start of <paramref name="buffer"/>. <para>从 <paramref name="buffer"/> 起始读取的字节数。</para></param>
+    /// <exception cref="EndOfStreamException">The source ended before <paramref name="count"/> bytes were read.
+    /// <para>数据源在读满 <paramref name="count"/> 字节前结束。</para></exception>
+    private void ReadPositioned(Stream source, long position, byte[] buffer, int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(position);
+        if (source.GetType() == typeof(FileStream))
         {
-            _stream.Position = checked(_baseOffset + offset);
-            _stream.ReadExactly(buffer);
+            var handle = ((FileStream)source).SafeFileHandle;
+            var read = 0;
+            while (read < count)
+            {
+                _readCancellation.ThrowIfCancellationRequested();
+                var step = RandomAccess.Read(handle, buffer.AsSpan(read, count - read), position + read);
+                if (step == 0) throw new EndOfStreamException();
+                read += step;
+            }
+
+            return;
         }
 
-        return buffer;
+        lock (_streamLock)
+        {
+            source.Position = position;
+            source.ReadExactly(buffer, 0, count);
+        }
     }
 
     /// <summary>
@@ -861,11 +898,7 @@ public sealed partial class ErofsParser : IDisposable
             while (length > 0)
             {
                 var count = (int)Math.Min(CopyBufferSize, length);
-                lock (_streamLock)
-                {
-                    _stream.Position = checked(_baseOffset + offset);
-                    _stream.ReadExactly(buffer, 0, count);
-                }
+                ReadPositioned(_stream, checked(_baseOffset + offset), buffer, count);
                 output.Write(buffer, 0, count);
                 offset += count;
                 length -= count;
