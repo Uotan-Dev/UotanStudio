@@ -714,7 +714,7 @@ public sealed class F2fsParser : IDisposable
         if (inode.InlineXattrAddrs > 0)
         {
             var node = ReadInodeNode(nid);
-            attributes.Write(node.AsSpan(F2fsNode.AddrArrayOffset + (F2fsNode.DefAddrsPerInode - inode.InlineXattrAddrs) * 4, inode.InlineXattrAddrs * 4));
+            attributes.Write(node.AsSpan(inode.InlineXattrOffset, inode.InlineXattrAddrs * 4));
         }
         if (inode.XattrNid != 0)
         {

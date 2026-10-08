@@ -5,6 +5,27 @@ namespace UotanStudio.Firmware.FileSystem.F2fs.Models;
 
 internal sealed record F2fsInode
 {
+    /// <summary>
+    /// Extra attribute words the kernel reserves at the head of <c>i_addr</c>: <c>i_extra_isize</c> through <c>i_padding</c>, matching <c>F2FS_TOTAL_EXTRA_ATTR_SIZE</c>.
+    /// <para>内核在 <c>i_addr</c> 开头预留的扩展属性字数：从 <c>i_extra_isize</c> 到 <c>i_padding</c>，与 <c>F2FS_TOTAL_EXTRA_ATTR_SIZE</c> 相同。</para>
+    /// </summary>
+    public const int TotalExtraAttrWords = 9;
+
+    /// <summary>
+    /// Words the kernel keeps clear of the inline xattr region so a directory can still hold its dot entries, matching <c>MIN_INLINE_DENTRY_SIZE</c>.
+    /// <para>内核为避免内联 xattr 区占用而留给目录点条目的字数，与 <c>MIN_INLINE_DENTRY_SIZE</c> 相同。</para>
+    /// </summary>
+    public const int MinInlineDentryWords = 10;
+
+    /// <summary>
+    /// Largest inline xattr region expressible in <c>i_inline_xattr_size</c>, matching the kernel's <c>MAX_INLINE_XATTR_SIZE</c>.
+    /// <para><c>i_inline_xattr_size</c> 可表示的最大内联 xattr 区，与内核的 <c>MAX_INLINE_XATTR_SIZE</c> 相同。</para>
+    /// <para>The cap already subtracts <see cref="TotalExtraAttrWords"/>, the reserved word and the dot-entry floor, so an inode claiming it still leaves eleven address slots; xattr reservation can never empty the address array.</para>
+    /// <para>该上限已扣除 <see cref="TotalExtraAttrWords"/>、保留字与点条目下限，故按此预留仍余 11 个地址槽，xattr 预留不可能清空地址数组。</para>
+    /// </summary>
+    public const int MaxInlineXattrWords = F2fsNode.DefAddrsPerInode - TotalExtraAttrWords
+        - F2fsNode.DefInlineReservedSize - MinInlineDentryWords;
+
     public const byte InlineXattrFlag = 0x01;
 
     public const byte InlineDataFlag = 0x02;
@@ -139,7 +160,23 @@ internal sealed record F2fsInode
 
     public int MaxInlineData => (F2fsNode.DefAddrsPerInode - ExtraIsizeWords - InlineXattrAddrs - F2fsNode.DefInlineReservedSize) * 4;
 
+    /// <summary>
+    /// Byte offset of the inline data area inside the inode node page: the kernel anchors it right after the extra attributes and one reserved word, so it starts at the head of the usable <c>i_addr</c> range.
+    /// <para>inode 节点页内联数据区的字节偏移：内核把它锚定在扩展属性之后并跳过一个保留字，因此它位于可用 <c>i_addr</c> 区间的开头。</para>
+    /// </summary>
+    /// <value>Offset of <c>i_addr[i_extra_isize / 4 + 1]</c>, matching the kernel's <c>inline_data_addr()</c>; block addresses for a non-inline inode share the same base, so word <c>i_extra_isize / 4</c> is the first file block.
+    /// <para><c>i_addr[i_extra_isize / 4 + 1]</c> 的偏移，与内核 <c>inline_data_addr()</c> 一致；非内联 inode 的块地址使用同一基准，因此字 <c>i_extra_isize / 4</c> 即首个文件块。</para></value>
     public int InlineDataOffset => F2fsNode.AddrArrayOffset + (ExtraIsizeWords + F2fsNode.DefInlineReservedSize) * 4;
+
+    /// <summary>
+    /// Byte offset of the inline xattr payload inside the inode node page: the kernel anchors it at the tail of <c>i_addr</c>, not next to the inline data, so reserving xattr space never moves block addresses.
+    /// <para>inode 节点页内联 xattr 载荷的字节偏移：内核把它锚定在 <c>i_addr</c> 的末尾，而非紧贴内联数据，因此预留 xattr 空间不会移动块地址。</para>
+    /// </summary>
+    /// <value>Offset of <c>i_addr[923 - i_inline_xattr_size]</c>, matching the kernel's <c>inline_xattr_addr()</c>, or the node size when the inode carries no inline xattr region.
+    /// <para><c>i_addr[923 - i_inline_xattr_size]</c> 的偏移，与内核 <c>inline_xattr_addr()</c> 一致；inode 没有内联 xattr 区时返回节点大小。</para></value>
+    public int InlineXattrOffset => InlineXattrAddrs == 0
+        ? F2fsNode.NodeSize
+        : F2fsNode.AddrArrayOffset + (F2fsNode.DefAddrsPerInode - InlineXattrAddrs) * 4;
 
     /// <summary>
     /// Parses the inode from a node page (the footer must be validated separately: nid == ino marks an inode node).

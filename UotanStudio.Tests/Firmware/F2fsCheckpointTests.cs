@@ -40,7 +40,9 @@ public class F2fsCheckpointTests
         var oldNode = Read32(image, (int)sb.NatBlkaddr * 4096 + 4 * 9 + 5);
         var newNode = (uint)(image.Length / 4096 - 1);
         image.AsSpan((int)oldNode * 4096, 4096).CopyTo(image.AsSpan((int)newNode * 4096));
-        "new-data"u8.CopyTo(image.AsSpan((int)newNode * 4096 + 364));
+        var bodyOffset = image.AsSpan((int)newNode * 4096).IndexOf("old-data"u8);
+        Assert.True(bodyOffset >= 0, "The inode node no longer carries the file body inline.");
+        "new-data"u8.CopyTo(image.AsSpan((int)newNode * 4096 + bodyOffset));
         var cp = checked((int)(sb.CpBlkaddr + 512) * 4096);
         Write64(image, cp, 2);
         if (journal)

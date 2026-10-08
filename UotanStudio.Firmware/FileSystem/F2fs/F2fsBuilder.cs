@@ -43,6 +43,18 @@ public sealed partial class F2fsBuilder
 
     private const uint FeatureCompression = 0x0000_2000;
 
+    private const uint FeatureExtraAttr = 0x0000_0008;
+
+    private const uint FeatureProjectQuota = 0x0000_0010;
+
+    private const uint FeatureFlexibleInlineXattr = 0x0000_0040;
+
+    private const uint FeatureInodeCrtime = 0x0001_0000;
+
+    private const int TotalExtraAttrWords = F2fsInode.TotalExtraAttrWords;
+
+    private const int MaxInlineXattrWords = F2fsInode.MaxInlineXattrWords;
+
     private const uint MaxDirHashDepth = 63;
 
     /// <summary>
@@ -414,11 +426,11 @@ public sealed partial class F2fsBuilder
         CollectNatEntries(ordered, nat);
 
         layout.ReservedCompressionBlocks = ordered.Where(static n => n.IsCompressedFile).Sum(static n => (long)n.DataBlockCount - n.AllocatedDataBlockCount);
-        var metadataFeatures = (ordered.Exists(static n => n.ExtraWords > 0) ? 0x8u : 0)
-                | (ordered.Exists(static n => n.SourceMetadata?.ProjectId is not null) ? 0x10u : 0)
-                | (ordered.Exists(static n => n.SourceMetadata?.BirthTime is not null) ? 0x100u : 0);
+        var metadataFeatures = FeatureExtraAttr | FeatureFlexibleInlineXattr
+                | (ordered.Exists(static n => n.SourceMetadata?.ProjectId is not null) ? FeatureProjectQuota : 0u)
+                | (ordered.Exists(static n => n.SourceMetadata?.BirthTime is not null) ? FeatureInodeCrtime : 0u);
         var superblock = CreateSuperblock(layout, effective, ordered.Exists(static n => n.IsCompressedFile),
-            ordered.Exists(static n => n.XattrWords > 0), metadataFeatures);
+            metadataFeatures);
         WriteSuperblock(output, baseOffset, superblock, blockSize);
         effective.CancellationToken.ThrowIfCancellationRequested();
         var inodeCount = (uint)ordered.Count;
@@ -1032,7 +1044,7 @@ public sealed partial class F2fsBuilder
         long count = 0;
         foreach (var node in ordered)
         {
-            count += node.XattrBytes.Length > 512 ? 2 : 1;
+            count += node.UsesExternalXattrNode ? 2 : 1;
             if (!node.IsDirectory && !node.InlineData)
             {
                 count += node.Dnodes.Count;
@@ -1058,7 +1070,7 @@ public sealed partial class F2fsBuilder
         foreach (var node in ordered)
         {
             maxNid = Math.Max(maxNid, node.Ino);
-            if (node.XattrBytes.Length > 512)
+            if (node.UsesExternalXattrNode)
             {
                 node.XattrNid = nextDnodeNid++;
                 maxNid = Math.Max(maxNid, node.XattrNid);
@@ -1077,7 +1089,7 @@ public sealed partial class F2fsBuilder
         long dataBlocks = 0;
         foreach (var node in ordered)
         {
-            nodeBlocks += node.XattrBytes.Length > 512 ? 2 : 1;
+            nodeBlocks += node.UsesExternalXattrNode ? 2 : 1;
             if (node.IsDirectory)
             {
                 dataBlocks += node.DirBlocks.Count;
@@ -1465,8 +1477,10 @@ public sealed partial class F2fsBuilder
         public Metadata.FileSystemInodeMetadata? SourceMetadata;
         public int ClusterPages = F2fsCompression.ClusterPages;
         public ushort CompressFlags;
-        public int ExtraWords => IsCompressedFile ? 9 : SourceMetadata?.BirthTime is not null ? 6 : SourceMetadata?.ProjectId is not null ? 2 : XattrBytes.Length > 0 ? 1 : 0;
-        public int XattrWords => XattrBytes.Length == 0 ? 0 : 128;
+        public int ExtraWords => TotalExtraAttrWords;
+        public int XattrWords => XattrBytes.Length == 0 ? 0 : Math.Min(checked((XattrBytes.Length + 3) / 4), MaxInlineXattrWords);
+        public int InlineXattrBytes => XattrWords * 4;
+        public bool UsesExternalXattrNode => XattrBytes.Length > InlineXattrBytes;
         public int InodeAddressCount => IsCompressedFile ? (F2fsNode.DefAddrsPerInode - ExtraWords - XattrWords) & ~(ClusterPages - 1) : F2fsNode.DefAddrsPerInode - ExtraWords - XattrWords;
         public int DataAddressesPerNode => IsCompressedFile ? F2fsNode.AddrsPerBlock & ~(ClusterPages - 1) : F2fsNode.AddrsPerBlock;
         public List<byte[]> DirBlocks = [];

@@ -12,7 +12,31 @@ namespace UotanStudio.Firmware.FileSystem.F2fs;
 /// </summary>
 public sealed partial class F2fsBuilder
 {
-    private static F2fsSuperblock CreateSuperblock(Layout layout, F2fsOptions options, bool hasCompressedFiles, bool hasXattrs, uint metadataFeatures)
+    /// <summary>
+    /// Builds the superblock image, always advertising the extra-attribute and flexible inline-xattr read-only features.
+    /// <para>构造超级块镜像，始终声明扩展属性与弹性内联 xattr 两个只读特性。</para>
+    /// </summary>
+    /// <param name="layout">Computed block layout for the image. <para>已算出的镜像块布局。</para></param>
+    /// <param name="options">Effective builder options supplying uuid and volume name. <para>提供 uuid 与卷名的生效构建选项。</para></param>
+    /// <param name="hasCompressedFiles">Whether any inode stores compressed clusters, which adds the compression feature bit. <para>是否存在按压缩簇存储的 inode，为真时追加压缩特性位。</para></param>
+    /// <param name="metadataFeatures">Feature bits already mandated by the tree contents, including the two always-on metadata features. <para>已由目录树内容决定的特性位，含两个恒定开启的元数据特性。</para></param>
+    /// <returns>The superblock model ready for <see cref="WriteSuperblock"/>.
+    /// <para>可直接交给 <see cref="WriteSuperblock"/> 的超级块模型。</para></returns>
+    /// <remarks>
+    /// A kernel that sees the flexible inline-xattr feature requires every inode to carry the
+    /// extra-attribute flag as well, because <c>i_inline_xattr_size</c> lives inside the extra
+    /// attribute block; without the flag it rejects the root inode with
+    /// <c>sanity_check_inode: corrupted inode ino=3</c>. Advertising the pair unconditionally keeps
+    /// <c>i_extra_isize</c>, and therefore the block-address base <c>i_addr[i_extra_isize / 4]</c>,
+    /// identical whether or not the tree carries SELinux labels, so adding an xattr cannot shift the
+    /// root directory's dentry block address.
+    /// <para>看到弹性内联 xattr 特性的内核会要求每个 inode 同时带扩展属性标志，因为
+    /// <c>i_inline_xattr_size</c> 位于扩展属性块内；缺少该标志时会以
+    /// <c>sanity_check_inode: corrupted inode ino=3</c> 拒绝根 inode。无条件声明这一对特性，可使
+    /// <c>i_extra_isize</c> 以及由此得出的块地址基准 <c>i_addr[i_extra_isize / 4]</c> 在目录树是否带
+    /// SELinux 标签时保持完全一致，因此新增 xattr 不会移动根目录的 dentry 块地址。</para>
+    /// </remarks>
+    private static F2fsSuperblock CreateSuperblock(Layout layout, F2fsOptions options, bool hasCompressedFiles, uint metadataFeatures)
     {
         return new F2fsSuperblock
         {
@@ -51,7 +75,7 @@ public sealed partial class F2fsBuilder
             Version = new byte[256],
 
 
-            Feature = (hasCompressedFiles ? FeatureCompression | 0x0008u : 0) | (hasXattrs ? 0x48u : 0) | metadataFeatures,
+            Feature = metadataFeatures | (hasCompressedFiles ? FeatureCompression : 0u),
         };
     }
 
@@ -281,7 +305,14 @@ public sealed partial class F2fsBuilder
             if (node.XattrNid != 0)
             {
                 var block = new byte[blockSize];
-                node.XattrBytes.AsSpan(512).CopyTo(block);
+                var externalCapacity = F2fsNode.NodeSize - F2fsNodeFooter.FooterSize;
+                if (node.XattrBytes.Length - node.InlineXattrBytes > externalCapacity)
+                {
+                    throw new InvalidOperationException(
+                        $"Xattrs of '{node.Name}' exceed the F2FS external xattr node capacity ({externalCapacity} bytes).");
+                }
+
+                node.XattrBytes.AsSpan(node.InlineXattrBytes).CopyTo(block);
                 F2fsNodeFooter.WriteTo(block, node.XattrNid, node.Ino, 0xFFFF_FFF8, 1, node.XattrBlock + 1);
                 WriteAt(output, baseOffset + node.XattrBlock * blockSize, block);
             }
@@ -411,7 +442,9 @@ public sealed partial class F2fsBuilder
         }
 
         if (node.XattrBytes.Length > 0)
-            node.XattrBytes.AsSpan(0, Math.Min(512, node.XattrBytes.Length)).CopyTo(block.AsSpan(F2fsNode.AddrArrayOffset + (F2fsNode.DefAddrsPerInode - node.XattrWords) * 4));
+        {
+            node.XattrBytes.AsSpan(0, node.InlineXattrBytes).CopyTo(block.AsSpan(inode.InlineXattrOffset));
+        }
         F2fsNodeFooter.WriteTo(block, node.Ino, node.Ino, 0, 1, node.InodeBlockAddr + 1);
         WriteAt(output, baseOffset + node.InodeBlockAddr * blockSize, block);
     }
