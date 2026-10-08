@@ -46,11 +46,8 @@ public sealed partial class ErofsParser
                 }
                 else
                 {
-                    lock (_parser._streamLock)
-                    {
-                        _parser._stream.Position = checked(_parser._baseOffset + _start + offset);
-                        _parser._stream.ReadExactly(_buffer, 0, _count);
-                    }
+                    _parser.ReadPositioned(_parser._stream,
+                        checked(_parser._baseOffset + _start + offset), _buffer, _count);
                 }
             }
             relative = checked((int)(offset - _offset));

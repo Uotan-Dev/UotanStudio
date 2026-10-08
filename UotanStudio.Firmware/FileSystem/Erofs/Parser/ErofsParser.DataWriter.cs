@@ -656,11 +656,7 @@ public sealed partial class ErofsParser
         else
         {
             CheckRange(pblkStart, compressedByteLen, "Compressed pcluster data");
-            lock (_streamLock)
-            {
-                _stream.Position = checked(_baseOffset + pblkStart);
-                _stream.ReadExactly(context.Compressed, 0, compressedByteLen);
-            }
+            ReadPositioned(_stream, checked(_baseOffset + pblkStart), context.Compressed, compressedByteLen);
         }
 
         var inputMargin = iteration.SemiRawLength;
@@ -1288,12 +1284,7 @@ public sealed partial class ErofsParser
         scratch.Ensure(compressedLength, (int)logicalLength);
         var compressed = scratch.Compressed;
         var decoded = scratch.Decoded;
-        lock (_streamLock)
-        {
-            _stream.Position = checked(_baseOffset + pstart);
-            _stream.ReadExactly(compressed, 0, compressedLength);
-        }
-
+        ReadPositioned(_stream, checked(_baseOffset + pstart), compressed, compressedLength);
         int decodedLength;
         try
         {
