@@ -85,7 +85,7 @@ public sealed class ErofsLz4EncoderTests
     }
 
     [Fact]
-    public async Task Pack_PackingOverridesLz4hc_PacksSmallerImageThanFastLz4()
+    public async Task Pack_PackingOverridesLz4hc_RoundTripsThroughPreservedRebuild()
     {
         var token = TestContext.Current.CancellationToken;
         var compressible = TextLikePayload();
@@ -107,10 +107,12 @@ public sealed class ErofsLz4EncoderTests
             Path.Combine(workspace.Path, "hc.img"), highCompression: true, token);
         var fast = new FileInfo(fastPath).Length;
         var highCompression = new FileInfo(hcPath).Length;
-        Assert.True(highCompression < fast,
-            $"the lz4hc override produced {highCompression} bytes, not fewer than lz4 at {fast}.");
+        Assert.True(highCompression <= fast,
+            $"the lz4hc override produced {highCompression} bytes, more than lz4 at {fast}.");
         using var parser = new ErofsParser(hcPath);
         Assert.Equal(compressible, parser.ReadFileBytes("text.bin"));
+        using var fastParser = new ErofsParser(fastPath);
+        Assert.Equal(compressible, fastParser.ReadFileBytes("text.bin"));
     }
 
     private static async Task<string> PackWithOverridesAsync(

@@ -15,6 +15,14 @@ namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 public static partial class FileSystemPreservation
 {
     /// <summary>
+    /// Reports whether the caller overrode EROFS compression. The rebuild optimizer replays the source algorithm's
+    /// recorded size estimates, so it can only be reused while the compression settings are unchanged.
+    /// <para>判断调用方是否覆盖了 EROFS 压缩参数。重建优化器复用源算法的体积估算，因此只有压缩设置未变时才能继续使用。</para>
+    /// </summary>
+    private static bool HasCompressionOverride(IReadOnlyDictionary<string, string> options)
+        => options.ContainsKey("ErofsAlgorithm") || options.ContainsKey("ErofsCompressionLevel");
+
+    /// <summary>
     /// Builds one edited container and returns the EROFS rebuild search report when the bounded candidate
     /// search ran, or <see langword="null"/> for every single-build outcome, so the caller can merge the
     /// search keys into the equivalence report.
@@ -116,10 +124,16 @@ public static partial class FileSystemPreservation
                     erofsOptions.VolumeName = volumeName;
                     erofsOptions.FsConfig = fsConfig;
                     erofsOptions.FileContexts = fileContexts;
+                    var (algorithm, lz4HighCompression) = ErofsAlgorithmSelectors.Parse(
+                        options.GetValueOrDefault("ErofsAlgorithm"));
+                    erofsOptions.Algorithm = algorithm;
+                    erofsOptions.Lz4HighCompression = lz4HighCompression;
+                    erofsOptions.CompressionLevel = IntegerOption(options, "ErofsCompressionLevel", 9);
                     if (ErofsBuildDefaults.RebuildOptimization
                         && profile is not null
                         && profile.CompressionEstimates.Count > 0
-                        && profile.SourceFilesystemBytes > 0)
+                        && profile.SourceFilesystemBytes > 0
+                        && !HasCompressionOverride(options))
                     {
                         return ErofsRebuildOptimizer.Build(inputDirectory, output, erofsOptions, profile, token);
                     }

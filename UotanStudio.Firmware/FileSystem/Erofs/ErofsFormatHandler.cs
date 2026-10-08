@@ -345,8 +345,7 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
             try
             {
                 IReadOnlyDictionary<string, string>? rebuildReport = null;
-                if (!RepackMetadata.HasPackingOverrides
-                    && Directory.Exists(inputPath)
+                if (Directory.Exists(inputPath)
                     && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName,
                     cancellationToken, report => rebuildReport = report))
                 {
