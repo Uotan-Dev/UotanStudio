@@ -86,13 +86,57 @@ internal static class FileExtraction
         }
     }
 
+    /// <summary>
+    /// Rejects reparse points between the deepest already existing ancestor of the target and the target itself.
+    /// The walk stops at that existing ancestor instead of continuing to the filesystem root, because ancestors above
+    /// an extraction root are chosen by the user or the operating system and are not archive-controlled. macOS
+    /// resolves <c>Path.GetTempPath()</c> through the <c>/var</c> to <c>/private/var</c> symbolic link, so an unbounded
+    /// walk rejects every legitimate extraction below the temporary directory.
+    /// </summary>
     private static void RejectLinks(string target)
     {
-        for (string? current = target; current is not null; current = Path.GetDirectoryName(current))
+        var boundary = DeepestExistingAncestor(target);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        for (var current = target;
+            current is not null && !string.Equals(current, boundary, comparison);
+            current = Path.GetDirectoryName(current))
+        {
+            if (IsReparsePoint(current))
+            {
+                throw new InvalidDataException($"Extraction through a symbolic link or reparse point is not allowed: '{current}'.");
+            }
+        }
+        if (!string.Equals(boundary, target, comparison) && IsReparsePoint(boundary))
+        {
+            throw new InvalidDataException($"Extraction through a symbolic link or reparse point is not allowed: '{boundary}'.");
+        }
+    }
+
+    /// <summary>
+    /// Returns the deepest ancestor that already exists as a directory or reparse point. Descendants of a dangling
+    /// symbolic link report no attributes at all, so the walk skips them and keeps descending until it reaches the
+    /// link itself, which <see cref="RejectLinks"/> then rejects. A path that does not exist anywhere stops the walk.
+    /// </summary>
+    private static string DeepestExistingAncestor(string target)
+    {
+        for (var current = Path.GetDirectoryName(target); current is not null; current = Path.GetDirectoryName(current))
         {
             var attributes = new FileInfo(current).Attributes;
-            if (attributes != (FileAttributes)(-1) && (attributes & FileAttributes.ReparsePoint) != 0)
-                throw new InvalidDataException($"Extraction through a symbolic link or reparse point is not allowed: '{current}'.");
+            if (attributes == (FileAttributes)(-1))
+            {
+                continue;
+            }
+            if ((attributes & FileAttributes.ReparsePoint) != 0 || !Directory.Exists(current))
+            {
+                return current;
+            }
         }
+        return Path.GetPathRoot(target) ?? target;
+    }
+
+    private static bool IsReparsePoint(string path)
+    {
+        var attributes = new FileInfo(path).Attributes;
+        return attributes != (FileAttributes)(-1) && (attributes & FileAttributes.ReparsePoint) != 0;
     }
 }

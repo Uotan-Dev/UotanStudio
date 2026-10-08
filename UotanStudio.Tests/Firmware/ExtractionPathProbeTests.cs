@@ -58,8 +58,24 @@ public sealed class ExtractionPathProbeTests : IDisposable
         }
         finally
         {
-            if (directoryLink) Directory.Delete(link);
+            if (directoryLink) DeleteLinkEntry(link);
             else File.Delete(link);
+        }
+    }
+
+    private static void DeleteLinkEntry(string link)
+    {
+        try
+        {
+            Directory.Delete(link);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            File.Delete(link);
+        }
+        catch (IOException)
+        {
+            File.Delete(link);
         }
     }
 
