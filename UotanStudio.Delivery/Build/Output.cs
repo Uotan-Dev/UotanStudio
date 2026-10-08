@@ -782,17 +782,59 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
-    /// <para>沿目录向上逐级检查：任一祖先被文件占用或为符号链接则抛错，保证输出目录可安全创建。</para>
-    /// Walks up the directory ancestors, throwing if any is blocked by a file or is a symlink, so the output directory can be created safely.
+    /// <para>沿目录向上逐级检查到已存在的最深祖先为止：任一祖先被文件占用或为符号链接则抛错，保证输出目录可安全创建。</para>
+    /// Walks up to the deepest already existing ancestor, throwing if any is blocked by a file or is a symlink, so the
+    /// output directory can be created safely. The walk stops at that existing ancestor because ancestors above it are
+    /// chosen by the user or the operating system, not by the delivery plan; macOS resolves <c>Path.GetTempPath()</c>
+    /// through the <c>/var</c> to <c>/private/var</c> symbolic link, so an unbounded walk rejects every legitimate
+    /// output directory.
     /// </summary>
     internal static void CheckDirectory(string path)
     {
-        for (var p = Path.GetFullPath(path); p is not null; p = Path.GetDirectoryName(p))
+        var full = Path.GetFullPath(path);
+        var boundary = DeepestExistingAncestor(full);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        for (var p = full;
+            p is not null && !string.Equals(p, boundary, comparison);
+            p = Path.GetDirectoryName(p))
         {
             if (File.Exists(p)) throw new IOException("A file blocks the output directory: " + p);
             if (Directory.Exists(p) && (File.GetAttributes(p) & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Linked output directories are not supported: " + p);
         }
+        if (File.Exists(boundary))
+        {
+            throw new IOException("A file blocks the output directory: " + boundary);
+        }
+        if (Directory.Exists(boundary) && (File.GetAttributes(boundary) & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new IOException("Linked output directories are not supported: " + boundary);
+        }
+    }
+
+    /// <summary>
+    /// <para>返回路径上已存在的最深目录或重解析点；悬空符号链接的后代不报告任何属性，因此会被跳过并继续下降直到链接本身。</para>
+    /// Returns the deepest ancestor that already exists as a directory or reparse point. Descendants of a dangling
+    /// symbolic link report no attributes at all, so the walk skips them and keeps descending until it reaches the
+    /// link itself, which <see cref="CheckDirectory"/> then rejects.
+    /// </summary>
+    private static string DeepestExistingAncestor(string full)
+    {
+        for (var current = Path.GetDirectoryName(full); current is not null; current = Path.GetDirectoryName(current))
+        {
+            FileAttributes attributes;
+            try
+            {
+                attributes = File.GetAttributes(current);
+            }
+            catch (FileNotFoundException) { return current; }
+            catch (DirectoryNotFoundException) { return current; }
+            if ((attributes & FileAttributes.ReparsePoint) != 0 || !Directory.Exists(current))
+            {
+                return current;
+            }
+        }
+        return Path.GetPathRoot(full) ?? full;
     }
 
     private static bool IsUnder(string path, string root) => Path.GetFullPath(path).StartsWith(
