@@ -164,6 +164,160 @@ public sealed class ZstdDictionaryTests
         Assert.Equal(image, rebuilt.ToArray());
     }
 
+    [Fact]
+    public void CompressZstdChunk_ReusedContext_MatchesFreshContextFrameBytes()
+    {
+        var dictionary = Pattern(64 * 1024);
+        var chunks = new[]
+        {
+            ChunkOf(dictionary, 4096, 1),
+            ChunkOf(dictionary, 256 * 1024, 2),
+            ChunkOf(dictionary, 4096, 1),
+            ChunkOf(dictionary, 64 * 1024, 3)
+        };
+        var destination = new byte[256 * 1024 * 2 + 65536];
+        using var reused = PayloadBuilder.CreateZstdFrameContext(dictionary);
+        for (var index = 0; index < chunks.Length; index++)
+        {
+            var written = PayloadBuilder.CompressZstdFrame(reused, chunks[index], destination);
+            using var fresh = new MemoryStream();
+            PayloadBuilder.CompressZstdChunk(new MemoryStream(chunks[index]), fresh, dictionary);
+            Assert.Equal(fresh.ToArray(), destination[..written]);
+        }
+    }
+
+    [Fact]
+    public async Task Build_ZstdReplaceMultiChunkMultiWorker_MatchesSingleWorkerBytes()
+    {
+        var dictionary = Pattern(64 * 1024);
+        const int chunkBytes = 1024 * 1024;
+        var chunks = new[]
+        {
+            ChunkOf(dictionary, chunkBytes, 11),
+            ChunkOf(dictionary, chunkBytes, 12),
+            ChunkOf(dictionary, chunkBytes, 13),
+            ChunkOf(dictionary, 64 * 1024, 14)
+        };
+        var image = Concatenated(chunks);
+        var singleWorker = await BuildZstdPayloadAsync(image, dictionary, workers: 1);
+        var multiWorker = await BuildZstdPayloadAsync(image, dictionary, workers: 4);
+        Assert.Equal(singleWorker, multiWorker);
+
+        var manifestLength = checked((int)BinaryPrimitives.ReadUInt64BigEndian(multiWorker.AsSpan(12)));
+        var metadataSignatureLength = (int)BinaryPrimitives.ReadUInt32BigEndian(multiWorker.AsSpan(20));
+        var blobStart = 24 + manifestLength + metadataSignatureLength;
+        var manifest = DeltaArchiveManifest.Parser.ParseFrom(multiWorker[24..(24 + manifestLength)]);
+        var partition = Assert.Single(manifest.Partitions);
+        Assert.Equal(4, partition.Operations.Count);
+
+        using var freshFrames = new MemoryStream();
+        var plaintextPosition = 0;
+        foreach (var operation in partition.Operations)
+        {
+            var length = checked((int)operation.DstLength);
+            var chunk = image[plaintextPosition..(plaintextPosition + length)];
+            PayloadBuilder.CompressZstdChunk(new MemoryStream(chunk), freshFrames, dictionary);
+            plaintextPosition += length;
+        }
+
+        Assert.Equal(freshFrames.ToArray(), multiWorker[blobStart..]);
+        using var rebuilt = new MemoryStream();
+        foreach (var operation in partition.Operations)
+        {
+            var start = blobStart + (int)operation.DataOffset;
+            var frame = multiWorker[start..(start + (int)operation.DataLength)];
+            Assert.Equal(SHA256.HashData(frame), operation.DataSha256Hash.ToByteArray());
+            ZstdReplaceDecoder.Decode(new MemoryStream(frame), rebuilt, dictionary, TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(image, rebuilt.ToArray());
+        Assert.NotNull(partition.NewPartitionInfo);
+        Assert.Equal(SHA256.HashData(image), partition.NewPartitionInfo.Hash.ToByteArray());
+    }
+
+    [Fact]
+    public async Task Build_NoneCompressionMultiWorker_MatchesSingleWorkerBytes()
+    {
+        const int chunkBytes = 1024 * 1024;
+        var image = new byte[3 * chunkBytes + 64 * 1024];
+        new Random(7152).NextBytes(image);
+        var singleWorker = await BuildPlainPayloadAsync(image, workers: 1);
+        var multiWorker = await BuildPlainPayloadAsync(image, workers: 4);
+        Assert.Equal(singleWorker, multiWorker);
+
+        var manifestLength = checked((int)BinaryPrimitives.ReadUInt64BigEndian(multiWorker.AsSpan(12)));
+        var blobStart = 24 + manifestLength + (int)BinaryPrimitives.ReadUInt32BigEndian(multiWorker.AsSpan(20));
+        var manifest = DeltaArchiveManifest.Parser.ParseFrom(multiWorker[24..(24 + manifestLength)]);
+        var partition = Assert.Single(manifest.Partitions);
+        Assert.Equal(4, partition.Operations.Count);
+        var plaintextPosition = 0;
+        foreach (var operation in partition.Operations)
+        {
+            var length = checked((int)operation.DstLength);
+            var stored = multiWorker[(blobStart + (int)operation.DataOffset)..(blobStart + (int)operation.DataOffset + length)];
+            Assert.Equal(image[plaintextPosition..(plaintextPosition + length)], stored);
+            Assert.Equal(SHA256.HashData(stored), operation.DataSha256Hash.ToByteArray());
+            plaintextPosition += length;
+        }
+
+        Assert.Equal(image.Length, plaintextPosition);
+        Assert.NotNull(partition.NewPartitionInfo);
+        Assert.Equal(SHA256.HashData(image), partition.NewPartitionInfo.Hash.ToByteArray());
+    }
+
+    private static async Task<byte[]> BuildZstdPayloadAsync(byte[] image, byte[] dictionary, int workers)
+    {
+        using var builder = new PayloadBuilder();
+        builder.WithCompressionWorkers(workers).AddPartitionZstd("system", new MemoryStream(image), dictionary);
+        using var output = new MemoryStream();
+        await builder.BuildAsync(output, TestContext.Current.CancellationToken);
+        return output.ToArray();
+    }
+
+    private static async Task<byte[]> BuildPlainPayloadAsync(byte[] image, int workers)
+    {
+        using var builder = new PayloadBuilder();
+        builder.WithCompressionWorkers(workers).AddPartitionCompressed("system", new MemoryStream(image), CompressionType.None);
+        using var output = new MemoryStream();
+        await builder.BuildAsync(output, TestContext.Current.CancellationToken);
+        return output.ToArray();
+    }
+
+    private static byte[] Concatenated(byte[][] parts)
+    {
+        var total = 0;
+        foreach (var part in parts)
+        {
+            total += part.Length;
+        }
+
+        var result = new byte[total];
+        var offset = 0;
+        foreach (var part in parts)
+        {
+            Array.Copy(part, 0, result, offset, part.Length);
+            offset += part.Length;
+        }
+
+        return result;
+    }
+
+    private static byte[] ChunkOf(byte[] dictionary, int length, int salt)
+    {
+        var chunk = new byte[length];
+        for (var offset = 0; offset < length; offset += dictionary.Length)
+        {
+            Array.Copy(dictionary, 0, chunk, offset, Math.Min(dictionary.Length, length - offset));
+        }
+
+        for (var index = 0; index < Math.Min(64, length); index++)
+        {
+            chunk[index] = (byte)(chunk[index] ^ (salt * 31 + index));
+        }
+
+        return chunk;
+    }
+
     private static byte[] Pattern(int length)
     {
         var data = new byte[length];
