@@ -10,6 +10,17 @@ namespace UotanStudio.Firmware.AndroidMeta.Apk;
 /// </summary>
 public sealed class ApkSignerKeyMaterial : IDisposable
 {
+    /// <summary>
+    /// <c>EphemeralKeySet</c> keeps private keys off disk, but AppleCrypto rejects it, so macOS falls back to
+    /// <c>DefaultKeySet</c>. Only the public key and the certificate bytes are consumed here, so the temporary key
+    /// material created by the fallback is never exported.
+    /// <para><c>EphemeralKeySet</c> 可以避免私钥落盘，但 AppleCrypto 不支持该标志，因此 macOS 回退到
+    /// <c>DefaultKeySet</c>。此处只消费公钥与证书字节，回退产生的临时密钥材料不会被导出。</para>
+    /// </summary>
+    internal static X509KeyStorageFlags PrivateKeyStorageFlags => OperatingSystem.IsWindows()
+        ? X509KeyStorageFlags.EphemeralKeySet
+        : X509KeyStorageFlags.DefaultKeySet;
+
     private readonly IDisposable? _disposableKey;
 
     private ApkSignerKeyMaterial(AsymmetricAlgorithm key, IDisposable? disposableKey, X509Certificate2 certificate, IReadOnlyList<X509Certificate2> chain)
@@ -190,7 +201,7 @@ public sealed class ApkSignerKeyMaterial : IDisposable
         var extension = Path.GetExtension(path).ToLowerInvariant();
         if (extension is ".pfx" or ".p12")
         {
-            using var pfx = X509CertificateLoader.LoadPkcs12FromFile(path, password, X509KeyStorageFlags.EphemeralKeySet);
+            using var pfx = X509CertificateLoader.LoadPkcs12FromFile(path, password, PrivateKeyStorageFlags);
             return X509CertificateLoader.LoadCertificate(pfx.RawData);
         }
 

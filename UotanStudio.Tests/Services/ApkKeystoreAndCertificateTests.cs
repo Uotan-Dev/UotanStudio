@@ -93,7 +93,7 @@ public class ApkKeystoreAndCertificateTests : IDisposable
         Assert.Equal("release-key", Assert.Single(entries).Alias);
 
         using var pfx = X509CertificateLoader.LoadPkcs12FromFile(
-            Path.Combine(output, "release-key.p12"), "store-pass", X509KeyStorageFlags.EphemeralKeySet);
+            Path.Combine(output, "release-key.p12"), "store-pass", ApkSignerKeyMaterial.PrivateKeyStorageFlags);
         Assert.True(pfx.HasPrivateKey);
         var libraryPublic = RSA.Create();
         try

@@ -98,7 +98,7 @@ public class ApkSigningKeyGenerationTests : IDisposable
         Assert.NotNull(files.PfxPath);
         Assert.True(File.Exists(files.PfxPath));
 
-        using var pfx = X509CertificateLoader.LoadPkcs12FromFile(files.PfxPath!, "pfx-pass", X509KeyStorageFlags.EphemeralKeySet);
+        using var pfx = X509CertificateLoader.LoadPkcs12FromFile(files.PfxPath!, "pfx-pass", ApkSignerKeyMaterial.PrivateKeyStorageFlags);
         Assert.True(pfx.HasPrivateKey);
         using var material = ApkSignerKeyMaterial.Load(files.PrivateKeyPath, "pfx-pass", files.PfxPath!, "pfx-pass");
         Assert.Equal(material.Key.ExportSubjectPublicKeyInfo(), pfx.PublicKey.ExportSubjectPublicKeyInfo());
