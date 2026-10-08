@@ -151,11 +151,18 @@ public static class ZstdCompressor
             return false;
         }
 
+        var level = options.Level ?? 3;
+        var frameBound = chunkSize + (chunkSize >> 3) + 65536 + 128;
         var buffers = new byte[degree][];
-        var compressed = new byte[degree][];
+        var frames = new byte[degree][];
+        var inputLengths = new int[degree];
+        var frameLengths = new int[degree];
+        var contexts = new Compressor[degree];
         for (var slot = 0; slot < degree; slot++)
         {
             buffers[slot] = ArrayPool<byte>.Shared.Rent(chunkSize);
+            frames[slot] = ArrayPool<byte>.Shared.Rent(frameBound);
+            contexts[slot] = new Compressor(level);
         }
         try
         {
@@ -165,24 +172,29 @@ public static class ZstdCompressor
                 for (var slot = 0; slot < batch; slot++)
                 {
                     var start = (chunk + slot) * (long)chunkSize;
-                    var count = (int)Math.Min(chunkSize, remaining - start);
-                    var buffer = buffers[slot];
-                    input.ReadExactly(buffer, 0, count);
-                    compressed[slot] = CompressChunk(buffer, 0, count, options);
+                    inputLengths[slot] = (int)Math.Min(chunkSize, remaining - start);
+                    input.ReadExactly(buffers[slot], 0, inputLengths[slot]);
                 }
+                Parallel.For(0, batch, new ParallelOptions { MaxDegreeOfParallelism = batch }, slot =>
+                {
+                    var written = contexts[slot].Wrap(buffers[slot].AsSpan(0, inputLengths[slot]), frames[slot]);
+                    ArgumentOutOfRangeException.ThrowIfGreaterThan(written, frameBound - 1);
+                    frameLengths[slot] = written;
+                });
                 for (var slot = 0; slot < batch; slot++)
                 {
-                    output.Write(compressed[slot], 0, compressed[slot].Length);
-                    compressed[slot] = null!;
+                    output.Write(frames[slot], 0, frameLengths[slot]);
                 }
             }
             return true;
         }
         finally
         {
-            for (var slot = 0; slot < buffers.Length; slot++)
+            for (var slot = 0; slot < degree; slot++)
             {
+                contexts[slot].Dispose();
                 ArrayPool<byte>.Shared.Return(buffers[slot]);
+                ArrayPool<byte>.Shared.Return(frames[slot]);
             }
         }
     }
