@@ -244,7 +244,6 @@ public sealed partial class Ext4Builder
         public int JournalBlocks { get; init; }
         public bool IncludeJournal { get; init; }
         public long TotalBlocks { get; set; }
-        public long UsedBlocks { get; set; }
         public long? RequestedBlocks { get; init; }
     }
 
@@ -503,7 +502,6 @@ public sealed partial class Ext4Builder
             BuildCore(sourceDirectory, output, options, baseOffset, freshDestination, excludedFiles, tree.Root, checked(geometry.GroupCount + 1));
             return;
         }
-        geometry.UsedBlocks = groups.Sum(group => group.FirstDataBlock - (long)group.GroupIndex * geometry.BlocksPerGroup + group.UsedBlocks);
         if (options.CapacityMode == Ext4CapacityMode.Minimize)
         {
             geometry.TotalBlocks = groups.Max(static group => group.FirstDataBlock + group.UsedBlocks);
@@ -661,8 +659,6 @@ public sealed partial class Ext4Builder
             throw new InvalidOperationException(
                 $"Requested EXT4 capacity {options.TargetSizeBytes} bytes is too small for filesystem metadata and content.");
         }
-        var usedBlocks = totalBlocksNeeded;
-
         return new GroupGeometry
         {
             InodesPerGroup = inodesPerGroup,
@@ -674,7 +670,6 @@ public sealed partial class Ext4Builder
             JournalBlocks = journalBlocks,
             IncludeJournal = includeJournal,
             TotalBlocks = totalBlocks,
-            UsedBlocks = usedBlocks,
             RequestedBlocks = requestedBlocks,
         };
     }
@@ -770,8 +765,6 @@ public sealed partial class Ext4Builder
             resizeDindirBlock = groups[0].FirstDataBlock;
             groups[0].ExtraUsedBlocks.Add(resizeDindirBlock);
             groups[0].FirstDataBlock++;
-
-            geometry.UsedBlocks++;
         }
 
         return (groups, backupGroups, resizeDindirBlock);
@@ -849,11 +842,11 @@ public sealed partial class Ext4Builder
         var journalBlocks = geometry.JournalBlocks;
         var includeJournal = geometry.IncludeJournal;
         var totalBlocks = geometry.TotalBlocks;
-        var usedBlocks = geometry.UsedBlocks;
 
         var bitmaps = new List<(byte[] Block, byte[] Inode)>(groupCount);
         var gdtBuffer = new byte[checked((int)(gdtBlocks * blockSize))];
         var totalFreeInodes = 0L;
+        var totalFreeBlocks = 0L;
         for (var g = 0; g < groupCount; g++)
         {
             var group = groups[g];
@@ -863,6 +856,7 @@ public sealed partial class Ext4Builder
             WriteInodeBitmapForGroup(inodeBitmap, group, blockSize, inodeSize, includeJournal ? JournalInodeNumber : 0u);
             bitmaps.Add((blockBitmap, inodeBitmap));
             totalFreeInodes += CountFreeInodes(inodeBitmap, group.InodesInGroup);
+            totalFreeBlocks += CountGroupFreeBlocks(group, gdtBlocks, reservedGdtBlocks, inodeTableBlocks, backupGroups);
 
             var desc = gdtBuffer.AsSpan(g * 64, 64);
             WriteGroupDescriptor(desc, group, g, uuid, blockBitmap, inodeBitmap, enableMetadataCsum, gdtBlocks, reservedGdtBlocks, inodeTableBlocks, blocksPerGroup, backupGroups);
@@ -880,7 +874,7 @@ public sealed partial class Ext4Builder
             WriteExtentEntry(journalIBlock, 12, (0u, (ulong)journalStart, (ushort)journalBlocks));
         }
 
-        WriteSuperblock(superblock, blockSize, inodeSize, (uint)inodesPerGroup, totalBlocks, usedBlocks,
+        WriteSuperblock(superblock, blockSize, inodeSize, (uint)inodesPerGroup, totalBlocks, totalFreeBlocks,
             (int)Math.Max(0, totalInodes - totalFreeInodes), uuid, blocksPerGroup, options.EnableMetadataCsum,
             includeJournal ? JournalInodeNumber : 0u, includeJournal, reservedGdtBlocks, journalIBlock, journalSize, options.VolumeName,
             options.ReadOnly, sharedBlocks, options.CasefoldEncoding, options.CasefoldEncodingFlags);
@@ -1533,7 +1527,7 @@ public sealed partial class Ext4Builder
         });
 
     private static void WriteSuperblock(
-        Span<byte> block, int blockSize, int inodeSize, uint inodesPerGroup, long totalBlocks, long usedBlocks, int usedInodes, byte[] uuid, int blocksPerGroup, bool enableMetadataCsum, uint journalInum, bool hasJournal,
+        Span<byte> block, int blockSize, int inodeSize, uint inodesPerGroup, long totalBlocks, long freeBlocks, int usedInodes, byte[] uuid, int blocksPerGroup, bool enableMetadataCsum, uint journalInum, bool hasJournal,
         int reservedGdtBlocks, ReadOnlySpan<byte> journalIBlock, long journalSize, string volumeName, bool readOnly,
         bool sharedBlocks, ushort? casefoldEncoding, ushort casefoldEncodingFlags)
     {
@@ -1542,9 +1536,9 @@ public sealed partial class Ext4Builder
         WriteU32(block, 0x00, (uint)Math.Min(totalInodes, uint.MaxValue));
         WriteU32(block, 0x04, (uint)totalBlocks);
 
-        var reservedBlocks = totalBlocks / 20;
+        var reservedBlocks = Math.Min(totalBlocks / 20, Math.Max(0L, freeBlocks - 1));
         WriteU32(block, 0x08, (uint)reservedBlocks);
-        WriteU32(block, 0x0C, (uint)(totalBlocks - usedBlocks));
+        WriteU32(block, 0x0C, (uint)freeBlocks);
         WriteU32(block, 0x10, (uint)Math.Max(0, totalInodes - usedInodes));
         WriteU32(block, 0x14, 0);
         WriteU32(block, 0x18, (uint)(Log2(blockSize) - 10));
@@ -1607,7 +1601,7 @@ public sealed partial class Ext4Builder
         WriteU32(block, 0x108, FixedTimestamp);
         WriteU32(block, 0x150, (uint)(totalBlocks >> 32));
         WriteU32(block, 0x154, (uint)(reservedBlocks >> 32));
-        WriteU32(block, 0x158, (uint)((totalBlocks - usedBlocks) >> 32));
+        WriteU32(block, 0x158, (uint)(freeBlocks >> 32));
         WriteU16(block, 0x15C, Ext4ExtraIsize);
         WriteU16(block, 0x15E, Ext4ExtraIsize);
         WriteU32(block, 0x160, 0);
@@ -1745,6 +1739,33 @@ public sealed partial class Ext4Builder
         WriteAt(output, baseOffset, inodeOffset, inode, inodeSize);
     }
 
+    /// <summary>
+    /// Counts the blocks a group leaves unwritten: its block count minus the group metadata (superblock and
+    /// group descriptor backups where they are stored, both bitmaps, the inode table), the blocks its nodes
+    /// occupy and the extra reserved blocks. This is the single source of truth for free space, shared by the
+    /// group descriptor, the group's block bitmap and the superblock free-block total, and it is the same
+    /// block-count-minus-metadata form the resize path uses when it recomputes free space after growth. The
+    /// superblock root-reservation field is clamped below this total so a read-write mount never reports more
+    /// reserved blocks than the image actually holds free.
+    /// <para>统计该块组未占用的块数：组内块总数减去组元数据（存在超级块与组描述符备份时的备份区、两个位图、
+    /// inode 表）、节点占用块数与额外预留块数。这是空闲空间的唯一数据源，组描述符、该组的块位图以及超级块
+    /// 空闲块总量都使用它，其形式与容量增长后重算空闲数的“块数减元数据”公式一致。超级块的 root 预留块字段
+    /// 会被压制在该总量之下，使读写挂载时不会出现预留数超过实际空闲数的镜像。</para>
+    /// </summary>
+    /// <param name="group">Group whose unwritten blocks are counted. <para>要统计未占用块数的块组。</para></param>
+    /// <param name="gdtBlocks">Primary group descriptor table block count. <para>主组描述符表块数。</para></param>
+    /// <param name="reservedGdtBlocks">Reserved growth group descriptor block count. <para>为扩容预留的组描述符块数。</para></param>
+    /// <param name="inodeTableBlocks">Inode table block count of the group. <para>该组 inode 表的块数。</para></param>
+    /// <param name="backupGroups">Backup superblock group set, or <see langword="null"/> when no group besides group zero stores backup metadata. <para>备份超级块所在组集合；除组 0 外不存在备份元数据组时为 <see langword="null"/>。</para></param>
+    /// <returns>Unwritten block count of the group. <para>该组未占用的块数。</para></returns>
+    private static long CountGroupFreeBlocks(GroupInfo group, long gdtBlocks, int reservedGdtBlocks, int inodeTableBlocks, HashSet<int>? backupGroups)
+    {
+        var hasBackupMeta = group.GroupIndex == 0 || backupGroups is not null && backupGroups.Contains(group.GroupIndex);
+        return group.BlocksInGroup
+            - ((hasBackupMeta ? 1L + gdtBlocks + reservedGdtBlocks : 0L) + 2L + inodeTableBlocks)
+            - group.UsedBlocks - group.ExtraUsedBlocks.Count;
+    }
+
     private static void WriteGroupDescriptor(
         Span<byte> desc, GroupInfo group, int groupIndex, byte[] uuid,
         byte[] blockBitmap, byte[] inodeBitmap, bool enableMetadataCsum, long gdtBlocks, int reservedGdtBlocks, int inodeTableBlocks,
@@ -1756,10 +1777,7 @@ public sealed partial class Ext4Builder
         WriteU32(desc, 4, (uint)group.InodeBitmapBlock);
         WriteU32(desc, 8, (uint)group.InodeTableBlock);
 
-        var hasBackupMeta = group.GroupIndex == 0 || backupGroups is not null && backupGroups.Contains(group.GroupIndex);
-        var freeBlocks = group.BlocksInGroup
-            - ((hasBackupMeta ? 1 + gdtBlocks + reservedGdtBlocks : 0) + 2L + inodeTableBlocks)
-            - group.UsedBlocks - group.ExtraUsedBlocks.Count;
+        var freeBlocks = CountGroupFreeBlocks(group, gdtBlocks, reservedGdtBlocks, inodeTableBlocks, backupGroups);
 
         var freeInodes = CountFreeInodes(inodeBitmap, group.InodesInGroup);
         WriteU16(desc, 12, (ushort)freeBlocks);

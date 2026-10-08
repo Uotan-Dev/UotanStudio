@@ -20,6 +20,23 @@ namespace UotanStudio.Firmware.FileSystem.Ext4;
 /// </summary>
 public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider, IStreamUnpackableFormatHandler
 {
+    /// <summary>Metadata key carrying the free-block count of a packed image that has too little room left for read-write use.
+    /// <para>当打包出的镜像剩余空间不足以支撑读写使用时，记录其空闲块数的元数据键。</para></summary>
+    private const string LowWriteHeadroomMetadataKey = "LowWriteHeadroomBlocks";
+
+    /// <summary>
+    /// Free-block floor below which a packed image is reported as short of write headroom. A freshly built image
+    /// reserves room for directory blocks, extent-tree growth and journal records before the first file lands, and
+    /// a default-capacity build routinely finishes with only a couple of dozen free blocks, where Linux already
+    /// fails the very first creation with ENOSPC; 256 blocks (1 MiB at the default 4 KiB block size, 64 KiB at the
+    /// 1 KiB minimum) is the smallest margin that still covers a directory split plus a few extents.
+    /// <para>低于该空闲块数时，打包结果会被标记为写余量不足。新建镜像在第一个文件落地之前还要为目录块、extent
+    /// 树增长和日志记录留空间，而默认容量构建常常只剩几十个空闲块，此时 Linux 挂载后第一次创建就会返回
+    /// ENOSPC；256 块（默认 4 KiB 块大小时为 1 MiB，1 KiB 最小块大小时为 64 KiB）是能覆盖一次目录分裂与若干
+    /// extent 的最小余量。</para>
+    /// </summary>
+    private const ulong LowWriteHeadroomThresholdBlocks = 256;
+
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
         => FileSystemRepackMetadata.Configure(metadata, sourcePath, outputDirectory);
 
@@ -240,9 +257,12 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
     /// <param name="outputPath">Target image path; a blank value fails the result. <para>目标镜像路径；为空白时结果失败。</para></param>
     /// <param name="cancellationToken">Cancellation propagates as an exception; other failures return <c>Fail</c>. <para>取消以异常传播；其他失败返回 <c>Fail</c>。</para></param>
     /// <returns>A completed task: <c>Ok</c> listing the written image path and carrying rebuild equivalence metadata
-    /// for a preserved restore, or <c>Fail</c> with the reason; explicit overrides on a preserved extraction are
-    /// refused as <c>Fail</c>.
-    /// <para>已完成任务：<c>Ok</c> 列出写出的镜像路径并附带受保留重建的等价元数据，或 <c>Fail</c> 给出原因；对已保留解包结果使用显式覆盖会按 <c>Fail</c> 拒绝。</para></returns>
+    /// for a preserved restore plus the <c>LowWriteHeadroomBlocks</c> key when the produced image leaves too few
+    /// free blocks for read-write use, or <c>Fail</c> with the reason; explicit overrides on a preserved extraction
+    /// are refused as <c>Fail</c>.
+    /// <para>已完成任务：<c>Ok</c> 列出写出的镜像路径、附带受保留重建的等价元数据，并在产出镜像的空闲块不足以
+    /// 读写使用时附加 <c>LowWriteHeadroomBlocks</c> 键，或 <c>Fail</c> 给出原因；对已保留解包结果使用显式覆盖会按
+    /// <c>Fail</c> 拒绝。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
         => PackCore(inputPath, outputPath, progress: null, cancellationToken);
 
@@ -255,8 +275,10 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
     /// <param name="progress">Byte-level build progress sink; <see langword="null"/> disables reporting. <para>字节级构建进度回调；<see langword="null"/> 表示不报告。</para></param>
     /// <param name="cancellationToken">Cancellation propagates as an exception; other failures return <c>Fail</c>. <para>取消以异常传播；其他失败返回 <c>Fail</c>。</para></param>
     /// <returns>A completed task: <c>Ok</c> listing the written image path and carrying rebuild equivalence metadata
-    /// for a preserved restore, or <c>Fail</c> with the reason.
-    /// <para>已完成任务：<c>Ok</c> 列出写出的镜像路径并附带受保留重建的等价元数据，或 <c>Fail</c> 给出原因。</para></returns>
+    /// for a preserved restore plus the <c>LowWriteHeadroomBlocks</c> key when the produced image leaves too few
+    /// free blocks for read-write use, or <c>Fail</c> with the reason.
+    /// <para>已完成任务：<c>Ok</c> 列出写出的镜像路径、附带受保留重建的等价元数据，并在产出镜像的空闲块不足以
+    /// 读写使用时附加 <c>LowWriteHeadroomBlocks</c> 键，或 <c>Fail</c> 给出原因。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken = default)
         => PackCore(inputPath, outputPath, progress, cancellationToken);
 
@@ -270,8 +292,9 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
                 && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken,
                     report => rebuildReport = report))
             {
-                return Task.FromResult(FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes.",
-                    metadata: rebuildReport));
+                return Task.FromResult(WithWriteHeadroomWarning(
+                    FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes.",
+                        metadata: rebuildReport), outputPath));
             }
             cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(outputPath))
@@ -320,9 +343,10 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
                 BlockSharingMode = ParseBlockSharingMode(options),
                 CancellationToken = cancellationToken,
             }, progressSink);
-            return Task.FromResult(FirmwareOpResult.Ok(
-                $"Packed EXT4 image '{inputPath}' -> '{outputPath}' ({new FileInfo(outputPath).Length} bytes).",
-                [outputPath]));
+            return Task.FromResult(WithWriteHeadroomWarning(
+                FirmwareOpResult.Ok(
+                    $"Packed EXT4 image '{inputPath}' -> '{outputPath}' ({new FileInfo(outputPath).Length} bytes).",
+                    [outputPath]), outputPath));
         }
         catch (OperationCanceledException)
         {
@@ -332,6 +356,58 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
         {
             return Task.FromResult(FirmwareOpResult.Fail($"Failed to pack EXT4 image '{inputPath}': {ex.Message}"));
         }
+    }
+
+    /// <summary>
+    /// Annotates a successful pack result with the <c>LowWriteHeadroomBlocks</c> key when the image that was just
+    /// written holds fewer free blocks than <see cref="LowWriteHeadroomThresholdBlocks"/>, because such an image
+    /// mounts read-write yet cannot survive even a first directory creation. The count is read back from the bytes
+    /// on disk rather than threaded out of the builder, so preserved restores and fresh builds are described by the
+    /// same measurement, and the produced image keeps its size because the warning never resizes or rewrites it.
+    /// An image that cannot be parsed stays unannotated: reporting headroom is advisory and must not turn a
+    /// completed pack into a failure.
+    /// <para>当刚刚写出的镜像空闲块数低于 <see cref="LowWriteHeadroomThresholdBlocks"/> 时，为成功的打包结果附加
+    /// <c>LowWriteHeadroomBlocks</c> 键：这类镜像虽能读写挂载，却连第一次创建目录都会失败。空闲块数从磁盘上
+    /// 真正写出的字节回读，而不是由构建器透传，因此保留重建与全新构建都用同一个度量描述，且警告不会改变
+    /// 镜像大小或重写镜像。无法解析的镜像保持不加标注：报告写余量只是提示，绝不能把已完成的打包变成失败。</para>
+    /// </summary>
+    /// <param name="result">Result of the pack operation; a failure is returned untouched. <para>打包操作的结果；失败结果原样返回。</para></param>
+    /// <param name="imagePath">Image the pack just published, read back for its superblock free-block count. <para>打包刚发布的镜像，为其超级块空闲块数而重新读取。</para></param>
+    /// <returns>The same result when no annotation applies, otherwise a result with the same summary, entries and components plus the headroom key.
+    /// <para>无需标注时返回同一结果；否则返回摘要、明细行与组件保持不变并附加写余量键的结果。</para></returns>
+    private static FirmwareOpResult WithWriteHeadroomWarning(FirmwareOpResult result, string imagePath)
+    {
+        if (!result.Success)
+        {
+            return result;
+        }
+
+        ulong freeBlocks;
+        try
+        {
+            using var parser = new Ext4Parser(imagePath);
+            freeBlocks = parser.Superblock.FreeBlocksCount;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or FileSystemCorruptedException)
+        {
+            return result;
+        }
+
+        if (freeBlocks >= LowWriteHeadroomThresholdBlocks)
+        {
+            return result;
+        }
+
+        var metadata = new Dictionary<string, string>(result.Metadata, StringComparer.Ordinal);
+        metadata[LowWriteHeadroomMetadataKey] = MetadataDisplay.Number(freeBlocks);
+        return new FirmwareOpResult
+        {
+            Success = true,
+            Summary = result.Summary,
+            Entries = result.Entries,
+            Metadata = metadata,
+            Components = result.Components,
+        };
     }
 
     /// <summary>Parses a boolean packing option, treating a missing value as <c>false</c>.

@@ -197,6 +197,7 @@ public sealed partial class Ext4Builder
         {
             var isBackup = newBackupGroups.Contains((int)g);
             var groupStart = g * blocksPerGroup;
+            var groupBlocks = Math.Min(blocksPerGroup, newTotal - groupStart);
             var group = new GroupInfo
             {
                 GroupIndex = (int)g,
@@ -204,11 +205,10 @@ public sealed partial class Ext4Builder
                 InodeBitmapBlock = (isBackup ? groupStart + metaHead : groupStart) + 1,
                 InodeTableBlock = (isBackup ? groupStart + metaHead : groupStart) + 2,
                 FirstDataBlock = (isBackup ? groupStart + metaHead : groupStart) + 2 + inodeTableBlocks,
-                BlocksInGroup = blocksPerGroup,
+                BlocksInGroup = groupBlocks,
                 InodesInGroup = (int)inodesPerGroup,
             };
 
-            var groupBlocks = Math.Min(blocksPerGroup, newTotal - groupStart);
             for (var b = 0L; b < groupBlocks; b++)
             {
                 WriteAt(output, 0, (groupStart + b) * blockSize, zeroBlock, zeroBlock.Length);
@@ -230,8 +230,7 @@ public sealed partial class Ext4Builder
             var desc = gdtBuffer.AsSpan((int)(g * descSize), (int)descSize);
             WriteGroupDescriptor(desc, group, (int)g, sb.Uuid, blockBitmap, inodeBitmap, metadataCsum, oldGdtBlocks, (int)reservedGdtBlocks, (int)inodeTableBlocks, (int)blocksPerGroup, newBackupGroups);
 
-            var freeBlocks = group.BlocksInGroup
-                - ((isBackup ? metaHead : 0) + 2L + inodeTableBlocks);
+            var freeBlocks = CountGroupFreeBlocks(group, oldGdtBlocks, (int)reservedGdtBlocks, (int)inodeTableBlocks, newBackupGroups);
             addedMetaBlocks += groupBlocks - freeBlocks;
         }
 
@@ -241,7 +240,7 @@ public sealed partial class Ext4Builder
         var newFree = newTotal - newUsed;
         var newInodes = newGroupCount * inodesPerGroup;
         var newFreeInodes = newInodes - oldUsedInodes;
-        var newReserved = newTotal / 20;
+        var newReserved = Math.Min(newTotal / 20, Math.Max(0L, newFree - 1));
 
         var primary = new byte[1024];
         block0.AsSpan(1024, 1024).CopyTo(primary);
