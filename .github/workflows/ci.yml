@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -17,8 +17,8 @@ env:
 
 jobs:
   build-format-test:
-    name: windows / net10
-    runs-on: windows-latest
+    name: macos-latest
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v5
@@ -41,7 +41,5 @@ jobs:
         run: dotnet format UotanStudio.slnx style --no-restore --verify-no-changes
 
       - name: Test
-        # Bound the full-suite run: the whole assembly set finishes in about two minutes, so a run that
-        # exceeds this cap is a hung collection rather than slow work, and it must not hold the runner.
         timeout-minutes: 5
         run: dotnet test --solution UotanStudio.slnx --no-restore -c Release --minimum-expected-tests 7000
