@@ -87,11 +87,16 @@ internal static class FileExtraction
     }
 
     /// <summary>
-    /// Rejects reparse points between the deepest already existing ancestor of the target and the target itself.
-    /// The walk stops at that existing ancestor instead of continuing to the filesystem root, because ancestors above
-    /// an extraction root are chosen by the user or the operating system and are not archive-controlled. macOS
-    /// resolves <c>Path.GetTempPath()</c> through the <c>/var</c> to <c>/private/var</c> symbolic link, so an unbounded
-    /// walk rejects every legitimate extraction below the temporary directory.
+    /// Rejects reparse points between the deepest existing non-link directory of the target and the target itself.
+    /// <para>
+    /// 沿目录向上检查到已存在的最深真实目录为止，中途遇到符号链接即拒绝。边界之上的祖先由调用方或操作系统选定，
+    /// 不受归档内容控制，因此不参与判定；macOS 上 <c>/var</c> 是指向 <c>/private/var</c> 的符号链接，
+    /// 临时目录必定经由它解析，把链接本身当作边界并拒绝会误伤所有合法的提取目标。
+    /// </para>
+    /// The walk stops at the deepest existing non-link directory because ancestors above an extraction root are
+    /// chosen by the caller or the operating system and are not archive-controlled. macOS resolves
+    /// <c>Path.GetTempPath()</c> through the <c>/var</c> to <c>/private/var</c> symbolic link, so treating that link
+    /// as the boundary rejects every legitimate extraction below the temporary directory.
     /// </summary>
     private static void RejectLinks(string target)
     {
@@ -106,30 +111,24 @@ internal static class FileExtraction
                 throw new InvalidDataException($"Extraction through a symbolic link or reparse point is not allowed: '{current}'.");
             }
         }
-        if (!string.Equals(boundary, target, comparison) && IsReparsePoint(boundary))
-        {
-            throw new InvalidDataException($"Extraction through a symbolic link or reparse point is not allowed: '{boundary}'.");
-        }
     }
 
     /// <summary>
-    /// Returns the deepest ancestor that already exists as a directory or reparse point. Descendants of a dangling
-    /// symbolic link report no attributes at all, so the walk skips them and keeps descending until it reaches the
-    /// link itself, which <see cref="RejectLinks"/> then rejects. A path that does not exist anywhere stops the walk.
+    /// Returns the deepest ancestor that already exists as a real directory. A component that does not exist, or that
+    /// is itself a symbolic link, is skipped so the search continues upwards for a real directory; <see cref="RejectLinks"/>
+    /// still inspects every skipped link while walking down to the target, so a link planted inside an extraction root
+    /// is rejected while an operating-system link above that root is not.
     /// </summary>
     private static string DeepestExistingAncestor(string target)
     {
         for (var current = Path.GetDirectoryName(target); current is not null; current = Path.GetDirectoryName(current))
         {
             var attributes = new FileInfo(current).Attributes;
-            if (attributes == (FileAttributes)(-1))
+            if (attributes == (FileAttributes)(-1) || (attributes & FileAttributes.ReparsePoint) != 0)
             {
                 continue;
             }
-            if ((attributes & FileAttributes.ReparsePoint) != 0 || !Directory.Exists(current))
-            {
-                return current;
-            }
+            return current;
         }
         return Path.GetPathRoot(target) ?? target;
     }

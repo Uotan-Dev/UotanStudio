@@ -72,12 +72,14 @@ public sealed class CpioExtractor
         var opts = options ?? new ExtractOptions();
         opts.CancellationToken.ThrowIfCancellationRequested();
         var destinationRoot = Path.GetFullPath(destinationDirectory);
-        var volumeRoot = Path.GetPathRoot(destinationRoot)
-            ?? throw new InvalidDataException($"Destination '{destinationDirectory}' has no filesystem root.");
+        if (Path.GetPathRoot(destinationRoot) is null)
+        {
+            throw new InvalidDataException($"Destination '{destinationDirectory}' has no filesystem root.");
+        }
 
-        EnsureNoLinkAncestors(volumeRoot, destinationRoot);
+        EnsureDestinationRootIsNotLinked(destinationRoot);
         Directory.CreateDirectory(destinationRoot);
-        EnsureNoLinkAncestors(volumeRoot, destinationRoot);
+        EnsureDestinationRootIsNotLinked(destinationRoot);
         var renameMap = NormalizeRenameMap(opts.RenameMap);
         var includePatterns = ResolveIncludePatterns(opts);
 
@@ -342,6 +344,36 @@ public sealed class CpioExtractor
         }
 
         Directory.CreateDirectory(parent);
+    }
+
+    /// <summary>
+    /// <para>
+    /// 校验目标根目录不是经由符号链接抵达的。检查从已存在的最深非链接目录开始，因此目标根之上的系统级链接
+    /// （macOS 上 <c>/var</c> 指向 <c>/private/var</c>）不会误伤，而目标根本身或其下方的链接仍会被拒绝。
+    /// </para>
+    /// Validates that the destination root is not reached through a symbolic link. The check starts at the deepest
+    /// existing non-link directory, so a system-level link above the destination root (macOS resolves <c>/var</c> to
+    /// <c>/private/var</c>) is not treated as a violation while a link at or below the destination root still is.
+    /// </summary>
+    private static void EnsureDestinationRootIsNotLinked(string destinationRoot)
+    {
+        EnsureNoLinkAncestors(DeepestExistingNonLinkDirectory(destinationRoot), destinationRoot);
+    }
+
+    /// <summary>
+    /// Returns the deepest directory that exists and is not itself a symbolic link, starting at <paramref name="path"/>.
+    /// </summary>
+    private static string DeepestExistingNonLinkDirectory(string path)
+    {
+        for (var current = path; current is not null; current = Path.GetDirectoryName(current))
+        {
+            if (!Directory.Exists(current) || NodeLooksLikeLink(current))
+            {
+                continue;
+            }
+            return current;
+        }
+        return Path.GetPathRoot(path) ?? path;
     }
 
     private static void EnsureNoLinkAncestors(string root, string target)
