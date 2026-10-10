@@ -1,4 +1,6 @@
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Metadata;
 
 namespace UotanStudio.Firmware.FileSystem.Rebuilding;
@@ -93,4 +95,115 @@ internal static class FileSystemPackingOptions
     /// <para>以可空路径形式获取选项：空值（附属文件不存在）转换为 <c>null</c>。</para></summary>
     internal static string? NullIfEmpty(IReadOnlyDictionary<string, string> options, string key)
         => options.TryGetValue(key, out var value) && value.Length > 0 ? value : null;
+
+    /// <summary>
+    /// Applies the <c>ErofsFeatures</c> and <c>ErofsDotOmitted</c> packing keys to builder options. The edit
+    /// script starts from <paramref name="inheritedWords"/> when the caller carries an inherited declaration and
+    /// from the writer's own implied words otherwise; a key that is absent leaves the declaration untouched, so a
+    /// build without these keys stays byte-identical to one that never had them. A token outside the upstream
+    /// feature table fails the build rather than dropping the edit silently.
+    /// <para>把 <c>ErofsFeatures</c> 与 <c>ErofsDotOmitted</c> 打包键应用到构建选项。调用方携带继承声明时以
+    /// <paramref name="inheritedWords"/> 作为编辑基线，否则以写入方自行推导的隐含字作为基线；缺失的键不会改动
+    /// 声明，因此未带这些键的构建与从未有过这些键时逐字节一致。超出上游特性表的记号会使构建失败，而不是静默
+    /// 丢弃该次编辑。</para>
+    /// </summary>
+    /// <param name="options">Merged packing option map. <para>已合并的打包选项映射。</para></param>
+    /// <param name="erofsOptions">Builder options receiving the declaration.
+    /// <para>接收该声明的构建选项。</para></param>
+    /// <param name="inheritedWords">Inherited superblock feature words, or <see langword="null"/> to edit from the
+    /// implied baseline. <para>继承的超级块特性字；为 <see langword="null"/> 时以隐含基线为编辑起点。</para></param>
+    /// <exception cref="FileSystemUnsupportedFeatureException">The edit script names a token the upstream feature
+    /// table does not carry, or the dot-omitted value is neither a tri-state name nor a boolean.
+    /// <para>编辑脚本包含上游特性表未收录的记号，或 dot-omitted 值既不是三态名也不是布尔值。</para></exception>
+    internal static void ApplyErofsFeatureKeys(IReadOnlyDictionary<string, string> options, ErofsOptions erofsOptions,
+        (uint Compat, uint Incompat)? inheritedWords)
+    {
+        if (options.TryGetValue("ErofsFeatures", out var edits))
+        {
+            var baseline = inheritedWords ?? ImpliedFeatureWords(erofsOptions);
+            if (!ErofsFeatureTable.TryApplyEdits(edits, baseline.Compat, baseline.Incompat, out var compat,
+                    out var incompat, out var error))
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"EROFS feature declaration rejected the unknown token '{error}'.");
+            }
+
+            erofsOptions.Features = ErofsFeatureSet.FromWords(compat, incompat);
+        }
+
+        if (options.TryGetValue("ErofsDotOmitted", out var dotOmitted))
+        {
+            erofsOptions.DotOmitted = ParseErofsDotOmitted(dotOmitted);
+        }
+    }
+
+    /// <summary>
+    /// Derives the declaration baseline the writer computes for these options when no words are inherited, so a
+    /// packing key edits the declaration the image would otherwise carry. Layout-implied bits stay out of the
+    /// baseline because the builder reconciles them against the planned layout and reports them instead.
+    /// <para>推导未继承特性字时写入方对本组选项算出的声明基线，使打包键是在镜像原本将携带的声明上做编辑。
+    /// 布局隐含位不进入基线：打包器会按实际规划的布局与声明对账并另行报告结果。</para>
+    /// </summary>
+    /// <param name="options">Builder options whose implied declaration is requested.
+    /// <para>需要其隐含声明的构建选项。</para></param>
+    /// <returns>The implied compat and incompat words. <para>推导出的 compat 与 incompat 字。</para></returns>
+    private static (uint Compat, uint Incompat) ImpliedFeatureWords(ErofsOptions options)
+    {
+        var compat = (options.SuperblockChecksum ? ErofsSuperblock.CompatSbChecksum : 0u)
+            | (options.SourceMtimeFeature ? ErofsSuperblock.CompatMtime : 0u)
+            | (options.SourceXattrFilterFeature ? ErofsSuperblock.CompatXattrFilter : 0u);
+        var incompat = options.Compress ? ErofsSuperblock.IncompatLz4_0Padding : 0u;
+        if (options.Compress && !options.LegacyCompatibility)
+        {
+            incompat |= ErofsSuperblock.IncompatBigPcluster;
+        }
+
+        return (compat, incompat);
+    }
+
+    /// <summary>
+    /// Reads a dot-omitted declaration: an empty or <c>auto</c> value keeps the derived behaviour, a tri-state name
+    /// is taken verbatim and a boolean-style value forces the feature off or on.
+    /// <para>读取 dot-omitted 声明：空值或 <c>auto</c> 保持推导行为，三态名称按字面采纳，布尔风格取值则强制
+    /// 关闭或开启该特性。</para>
+    /// </summary>
+    /// <param name="value">Raw option text. <para>原始选项文本。</para></param>
+    /// <returns>The tri-state selection. <para>三态选择结果。</para></returns>
+    private static ErofsTriStateFeature ParseErofsDotOmitted(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || string.Equals(value, "auto", StringComparison.OrdinalIgnoreCase))
+        {
+            return ErofsTriStateFeature.Auto;
+        }
+
+        if (Enum.TryParse<ErofsTriStateFeature>(value, ignoreCase: true, out var state) && Enum.IsDefined(state))
+        {
+            return state;
+        }
+
+        if (IsTrueOption(value))
+        {
+            return ErofsTriStateFeature.Enabled;
+        }
+
+        if (string.Equals(value, "0", StringComparison.Ordinal)
+            || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase))
+        {
+            return ErofsTriStateFeature.Disabled;
+        }
+
+        throw new FileSystemUnsupportedFeatureException(
+            $"Unsupported EROFS dot-omitted declaration '{value}'.");
+    }
+
+    /// <summary>
+    /// Matches the boolean option spellings the rebuilding pipeline already accepts for flags.
+    /// <para>与重建流水线已接受的布尔选项写法保持一致。</para>
+    /// </summary>
+    /// <param name="value">Raw option text. <para>原始选项文本。</para></param>
+    /// <returns><see langword="true"/> for <c>1</c> or a value <see cref="bool"/> parses as
+    /// <see langword="true"/>. <para>取值为 <c>1</c>，或 <see cref="bool"/> 能解析为 <see langword="true"/>
+    /// 时返回 <see langword="true"/>。</para></returns>
+    private static bool IsTrueOption(string? value)
+        => value is "1" || bool.TryParse(value, out var enabled) && enabled;
 }

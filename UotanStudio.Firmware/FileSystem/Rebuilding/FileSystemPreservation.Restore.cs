@@ -42,6 +42,13 @@ public static partial class FileSystemPreservation
     /// 可为 <see langword="null"/>。</para></param>
     /// <param name="xattrEdits">Optional user-namespace xattr edits applied before building. May be <see langword="null"/>.
     /// <para>可选的 user 命名空间扩展属性编辑，构建前应用。可为 <see langword="null"/>。</para></param>
+    /// <param name="progress">Optional staged reporter for the rebuild phases: the extracted-tree projection is
+    /// reported as <see cref="FileSystemWorkStage.VerifyingFiles"/>, the image build as
+    /// <see cref="FileSystemWorkStage.BuildingImage"/>, and the rebuilt-image re-read plus the published-image
+    /// digest as <see cref="FileSystemWorkStage.VerifyingImage"/>. May be <see langword="null"/>.
+    /// <para>可选的重建阶段回调：解包树投影上报为 <see cref="FileSystemWorkStage.VerifyingFiles"/>，镜像构建上报为
+    /// <see cref="FileSystemWorkStage.BuildingImage"/>，重建镜像的复读与已发布镜像的摘要上报为
+    /// <see cref="FileSystemWorkStage.VerifyingImage"/>。可为 <see langword="null"/>。</para></param>
     /// <returns><see langword="true"/> when the image was rebuilt and verified; <see langword="false"/> when no
     /// preservation metadata exists (or the sparse-container early return applies), leaving the caller to a fresh
     /// directory build.
@@ -60,14 +67,15 @@ public static partial class FileSystemPreservation
         Action<IReadOnlyDictionary<string, string>>? rebuildReport = null,
         long? maximumOutputBytes = null,
         IReadOnlyList<FileSystemAttributeEdit>? attributeEdits = null,
-        IReadOnlyList<FileSystemXattrEdit>? xattrEdits = null)
+        IReadOnlyList<FileSystemXattrEdit>? xattrEdits = null,
+        IProgress<FileSystemByteProgress>? progress = null)
         => TryRestoreCore(inputDirectory, outputPath, format, cancellationToken, rebuildReport,
-            maximumOutputBytes, attributeEdits, xattrEdits);
+            maximumOutputBytes, attributeEdits, xattrEdits, progress);
 
     private static bool TryRestoreCore(string inputDirectory, string outputPath, string format,
         CancellationToken cancellationToken, Action<IReadOnlyDictionary<string, string>>? rebuildReport,
         long? maximumOutputBytes, IReadOnlyList<FileSystemAttributeEdit>? attributeEdits,
-        IReadOnlyList<FileSystemXattrEdit>? xattrEdits)
+        IReadOnlyList<FileSystemXattrEdit>? xattrEdits, IProgress<FileSystemByteProgress>? progress)
     {
         if (maximumOutputBytes is <= 0)
         {
@@ -95,7 +103,8 @@ public static partial class FileSystemPreservation
             }
         }
         var metadataDirectory = Path.GetDirectoryName(RepackMetadata.ResolveActualMetadataPath(inputDirectory))!;
-        var projection = Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken);
+        var projection = Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken,
+            FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.VerifyingFiles));
         var fullOutput = Path.GetFullPath(outputPath);
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         foreach (var protectedRoot in new[] { inputDirectory, metadataDirectory })
@@ -149,18 +158,19 @@ public static partial class FileSystemPreservation
                 ? new CapacityWriteStream(output, capacity, cancellationToken) : null;
             optimizerReport = BuildEdited(inputDirectory, (Stream?)bounded ?? output, format, effectiveFsConfig,
                 new Dictionary<string, string>(StringComparer.Ordinal), tables.Rebuild,
-                packingOptions, output, Path.GetDirectoryName(fullOutput)!, cancellationToken);
+                packingOptions, output, Path.GetDirectoryName(fullOutput)!, cancellationToken, progress);
             cancellationToken.ThrowIfCancellationRequested();
             output.Flush(flushToDisk: true);
-            VerifyRebuilt(output, plan, cancellationToken);
+            VerifyRebuilt(output, plan, cancellationToken, progress);
             var current = RepackMetadata.Read(inputDirectory);
             if (current is null || HashConfiguration(current) != HashConfiguration(metadata)
-                || !Same(Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken), projection))
+                || !Same(Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken,
+                    FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.VerifyingFiles)), projection))
                 throw new IOException("Filesystem content or attributes changed during rebuilding.");
         }, overwrite: true);
         if (rebuildReport is not null)
             rebuildReport(BuildEquivalenceReport(format, manifest, tables.Rebuild, fullOutput, optimizerReport,
-                cancellationToken));
+                cancellationToken, progress));
         return true;
     }
 
@@ -213,12 +223,31 @@ public static partial class FileSystemPreservation
     /// 描述磁盘上真正产出的镜像。因此搜索会覆盖 <c>CompressionProfile</c>、<c>CompressionInference</c>，
     /// 并新增 <c>CompressionAttempts</c>。</para>
     /// </summary>
+    /// <param name="format">Published filesystem format name. <para>已发布的文件系统格式名。</para></param>
+    /// <param name="manifest">Preservation payload carrying the source digest and length.
+    /// <para>携带源摘要与长度的保留负载。</para></param>
+    /// <param name="rebuild">Recorded rebuild parameters; <see langword="null"/> when the snapshot stored none.
+    /// <para>记录的重建参数；快照未存储时为 <see langword="null"/>。</para></param>
+    /// <param name="publishedPath">Published image path the report describes.
+    /// <para>报告所描述的已发布镜像路径。</para></param>
+    /// <param name="optimizerReport">Search keys overlaid onto the report; may be <see langword="null"/>.
+    /// <para>叠加到报告上的搜索键；可为 <see langword="null"/>。</para></param>
+    /// <param name="token">Cancels the digest passes. <para>取消摘要计算。</para></param>
+    /// <param name="progress">Optional reporter receiving the digest pass as
+    /// <see cref="FileSystemWorkStage.VerifyingImage"/> over the published image length; may be <see langword="null"/>.
+    /// <para>可选回调，把摘要计算上报为按已发布镜像长度计量的
+    /// <see cref="FileSystemWorkStage.VerifyingImage"/>；可为 <see langword="null"/>。</para></param>
     private static Dictionary<string, string> BuildEquivalenceReport(string format, FileSystemPreservationData manifest,
         RebuildParameters? rebuild, string publishedPath, IReadOnlyDictionary<string, string>? optimizerReport,
-        CancellationToken token)
+        CancellationToken token, IProgress<FileSystemByteProgress>? progress = null)
     {
         var rebuiltLength = new FileInfo(publishedPath).Length;
-        var producedHash = HashFile(publishedPath, token);
+        var digest = progress is null ? null
+            : new ExtractionByteCounter(rebuiltLength == 0 ? 1 : rebuiltLength,
+                FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.VerifyingImage), token);
+        Action<int>? digestSink = digest is null ? null : digest.Add;
+        var producedHash = HashFile(publishedPath, token, digestSink);
+        digest?.Complete();
         var report = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["RebuiltSize"] = rebuiltLength.ToString(CultureInfo.InvariantCulture),

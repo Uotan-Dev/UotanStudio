@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
@@ -90,9 +91,13 @@ public sealed partial class ErofsBuilder
     /// <para>目标镜像路径；仅在临时文件完整写入并落盘后才替换目标，已存在的文件会被覆盖。</para></param>
     /// <param name="options">Build options; <see langword="null"/> uses validated defaults.
     /// <para>构建选项；为 <see langword="null"/> 时使用经校验的默认值。</para></param>
-    /// <param name="progress">Optional reporter receiving processed and total source bytes; the total is the
-    /// summed file size at start and is at least 1. <para>可选的进度回调，报告已处理与源文件总字节数；总数为开始时
-    /// 的文件大小之和，且至少为 1。</para></param>
+    /// <param name="progress">Optional reporter receiving <c>(processed, total)</c> payload bytes, where the total is
+    /// the summed size of the collected payload files and every payload is measured exactly once: a payload whose
+    /// compression plan was accepted is measured while it is hashed and compressed, and every other payload is
+    /// measured when its bytes are emitted. The measurement therefore reaches the total regardless of the
+    /// compression ratio. <para>可选的进度回调，报告 <c>(已处理, 总量)</c> 负载字节；总量为已收集负载文件大小之和，
+    /// 且每个负载只被计量一次：压缩规划被接受的负载在哈希与压缩时计量，其余负载在写出其字节时计量。因此无论压缩率
+    /// 如何，计量都会到达总量。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="outputPath"/> is <see langword="null"/>.
     /// <para><paramref name="outputPath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="DirectoryNotFoundException"><paramref name="directoryPath"/> does not exist.
@@ -113,14 +118,8 @@ public sealed partial class ErofsBuilder
                        temporaryPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1 << 16,
                        FileOptions.SequentialScan))
             {
-                var counter = progress is null ? null
-                    : new UotanStudio.Firmware.Core.ExtractionByteCounter(EstimateSourceBytes(directoryPath, effective.CancellationToken), progress);
-                Stream sink = temporary;
-                if (counter is not null) sink = counter.Wrap(temporary);
-                BuildImage(root, effective, sink, 0, freshDestination: true);
+                BuildImage(root, effective, temporary, 0, freshDestination: true, progress);
                 temporary.Flush(flushToDisk: true);
-                counter?.Complete();
-                sink.Dispose();
             }
 
             AtomicPublish.Publish(temporaryPath, fullOutputPath);
@@ -129,18 +128,6 @@ public sealed partial class ErofsBuilder
         {
             try { File.Delete(temporaryPath); } catch { }
         }
-    }
-
-    private static long EstimateSourceBytes(string directoryPath, CancellationToken token)
-    {
-        long total = 0;
-        foreach (var file in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories))
-        {
-            token.ThrowIfCancellationRequested();
-            try { total += new FileInfo(file).Length; }
-            catch (IOException) { }
-        }
-        return total == 0 ? 1 : total;
     }
 
     /// <summary>
@@ -164,6 +151,22 @@ public sealed partial class ErofsBuilder
     /// <exception cref="DirectoryNotFoundException"><paramref name="directoryPath"/> does not exist.
     /// <para><paramref name="directoryPath"/> 不存在。</para></exception>
     public void Build(string directoryPath, Stream output, ErofsOptions? options = null)
+        => Build(directoryPath, output, options, null);
+
+    /// <summary>
+    /// Streams an EROFS image into <paramref name="output"/> while reporting the same payload measurements as the
+    /// path overload, so the rebuild optimizer and the preserved-rebuild path can follow a stream-target build.
+    /// <para>把 EROFS 镜像流式写入 <paramref name="output"/>，并上报与路径重载相同的负载计量，使重建优化器与保留
+    /// 重建路径能够跟踪以流为目标的构建。</para>
+    /// </summary>
+    /// <param name="directoryPath">Source tree root. <para>源目录树根。</para></param>
+    /// <param name="output">Destination stream; written from its current position. <para>目标流；从其当前位置开始写入。</para></param>
+    /// <param name="options">Build options; <see langword="null"/> uses validated defaults.
+    /// <para>构建选项；为 <see langword="null"/> 时使用经校验的默认值。</para></param>
+    /// <param name="progress">Reporter receiving <c>(processed, total)</c> payload bytes; may be <see langword="null"/>.
+    /// <para>接收 <c>(已处理, 总量)</c> 负载字节的回调；可为 <see langword="null"/>。</para></param>
+    internal void Build(string directoryPath, Stream output, ErofsOptions? options,
+        IProgress<(long Processed, long Total)>? progress)
     {
         ArgumentNullException.ThrowIfNull(output);
         if (!output.CanWrite)
@@ -180,7 +183,7 @@ public sealed partial class ErofsBuilder
         if (output.CanSeek && StreamResize.SupportsResizeWithoutMutation(output))
         {
             var baseOffset = output.Position;
-            BuildImage(root, effective, output, baseOffset, freshDestination: false);
+            BuildImage(root, effective, output, baseOffset, freshDestination: false, progress);
             return;
         }
 
@@ -190,7 +193,7 @@ public sealed partial class ErofsBuilder
                        temporaryPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1 << 16,
                        FileOptions.SequentialScan))
             {
-                BuildImage(root, effective, staging, 0, freshDestination: true);
+                BuildImage(root, effective, staging, 0, freshDestination: true, progress);
                 staging.Position = 0;
                 staging.CopyTo(output);
             }
@@ -534,25 +537,138 @@ public sealed partial class ErofsBuilder
         public long StagedOffset = -1;
     }
 
-    /// <summary>Computes s_available_compr_algs: the LZ4 max distance in legacy (pre-5.13)
-    /// images, otherwise the algorithm bitmap.
-    /// <para>计算 s_available_compr_algs：legacy（pre-5.13）镜像承载 LZ4 最大匹配距离，
-    /// 否则为算法位图，均与 erofs-utils 上游一致。</para></summary>
+    /// <summary>
+    /// Reports whether the feature declaration permits per-node big pclusters. An authoritative
+    /// declaration is the authority, so a rebuilt image cannot advertise a layout its source lacked; a
+    /// derived declaration falls back to <see cref="ErofsOptions.LegacyCompatibility"/>, which is exactly
+    /// what keeps a fresh build's layout unchanged.
+    /// <para>判断特性声明是否允许逐节点 big pcluster。权威声明即为依据，因此重建镜像不会声明源镜像缺失的
+    /// 布局；推导式声明回退到 <see cref="ErofsOptions.LegacyCompatibility"/>，这正是新建构建布局保持不变的
+    /// 原因。</para>
+    /// </summary>
+    /// <param name="options">Validated build options carrying the declaration.
+    /// <para>携带声明的经校验构建选项。</para></param>
+    /// <returns><see langword="true"/> when pclusters may span more than one filesystem block.
+    /// <para>允许 pcluster 跨越多个文件系统块时为 <see langword="true"/>。</para></returns>
+    private static bool DeclaredBigPcluster(ErofsOptions options)
+        => options.FeaturesAuthoritative
+            ? options.Features.Contains(ErofsFeature.BigPcluster)
+            : !options.LegacyCompatibility;
+
+    /// <summary>
+    /// Reports whether the declaration advertises the compression configuration records that follow the
+    /// superblock. The records share incompat bit 0x00000002 with big pclusters, so an image without them
+    /// also carries no algorithm bitmap and keeps the legacy max-distance encoding in
+    /// <c>s_available_compr_algs</c>.
+    /// <para>判断声明是否 advertise 紧随超级块的压缩配置记录。该记录与 big pcluster 共用 incompat 位
+    /// 0x00000002，因此无该记录的镜像也不携带算法位图，<c>s_available_compr_algs</c> 沿用 legacy 的最大
+    /// 距离编码。</para>
+    /// </summary>
+    /// <param name="options">Validated build options carrying the declaration.
+    /// <para>携带声明的经校验构建选项。</para></param>
+    /// <returns><see langword="true"/> when configuration records may be written.
+    /// <para>允许写出压缩配置记录时为 <see langword="true"/>。</para></returns>
+    private static bool DeclaredCompressionConfigs(ErofsOptions options)
+        => options.FeaturesAuthoritative
+            ? options.Features.Contains(ErofsFeature.CompressionConfigs)
+            : !options.LegacyCompatibility;
+
+    /// <summary>
+    /// Reports whether the declaration advertises ztailpacking, the incompat bit licensing a final
+    /// compressed cluster stored inline beside its indexes.
+    /// <para>判断声明是否 advertise ztailpacking，即允许把最后一个压缩簇内联存放在其索引旁的 incompat
+    /// 位。</para>
+    /// </summary>
+    /// <param name="options">Validated build options carrying the declaration.
+    /// <para>携带声明的经校验构建选项。</para></param>
+    /// <returns><see langword="true"/> when an inline compressed tail may be written.
+    /// <para>允许写出内联压缩尾部时为 <see langword="true"/>。</para></returns>
+    private static bool DeclaredZtailpacking(ErofsOptions options)
+        => options.FeaturesAuthoritative
+            ? options.Features.Contains(ErofsFeature.Ztailpacking)
+            : !options.LegacyCompatibility;
+
+    /// <summary>
+    /// Resolves the inode advise bit shared by <c>EROFS_I_NLINK_1</c> and dot-omitted directories from
+    /// the tri-state declaration: an enabled declaration always allows it, a disabled one never does, and
+    /// <see cref="ErofsTriStateFeature.Auto"/> keeps the legacy-compatibility answer so derived builds are
+    /// byte-identical.
+    /// <para>由三态声明解析 inode advise 位（<c>EROFS_I_NLINK_1</c> 与省略点项目录共用）：启用声明一律允许，
+    /// 禁用声明一律不允许，<see cref="ErofsTriStateFeature.Auto"/> 沿用 legacy 兼容的结论，使推导式构建逐字节
+    /// 不变。</para>
+    /// </summary>
+    /// <param name="options">Validated build options whose <see cref="ErofsOptions.DotOmitted"/> is already
+    /// resolved. <para>其 <see cref="ErofsOptions.DotOmitted"/> 已完成解析的经校验构建选项。</para></param>
+    /// <returns><see langword="true"/> when the advise bit may be set on a compact inode.
+    /// <para>允许在紧凑 inode 上置该 advise 位时为 <see langword="true"/>。</para></returns>
+    private static bool DeclaredNlinkOneAdvice(ErofsOptions options)
+        => options.DotOmitted switch
+        {
+            ErofsTriStateFeature.Enabled => true,
+            ErofsTriStateFeature.Disabled => false,
+            _ => !options.LegacyCompatibility,
+        };
+
+    /// <summary>
+    /// Reports whether the declaration still allows the superblock checksum. A derived declaration keeps the
+    /// option's own answer; an authoritative one that omits the compat bit forbids the checksum field, so the
+    /// emitted superblock never carries a CRC the word does not advertise.
+    /// <para>判断声明是否仍允许超级块校验和。推导式声明沿用选项自身的结论；缺少该 compat 位的权威声明禁止写入校验和
+    /// 字段，因此写出的超级块绝不会携带其字未 advertise 的 CRC。</para>
+    /// </summary>
+    /// <param name="options">Validated build options carrying the declaration.
+    /// <para>携带声明的经校验构建选项。</para></param>
+    /// <returns><see langword="true"/> when the checksum field may be written.
+    /// <para>允许写出校验和字段时为 <see langword="true"/>。</para></returns>
+    private static bool DeclaredSuperblockChecksum(ErofsOptions options)
+        => !options.FeaturesAuthoritative || options.Features.Contains(ErofsFeature.SuperblockChecksum);
+
+    /// <summary>Computes s_available_compr_algs: the LZ4 max distance when the declaration carries no
+    /// compression configuration records, otherwise the bitmap of every algorithm the build can encode
+    /// with, so no node is written with an undeclared algorithm.
+    /// <para>计算 s_available_compr_algs：声明未携带压缩配置记录时承载 LZ4 最大匹配距离，否则为本次构建
+    /// 可能使用的全部算法位图，确保不会有节点以未声明的算法编码。</para></summary>
+    /// <param name="options">Validated build options carrying the declaration and the preserved source
+    /// records. <para>携带声明与保留源记录的经校验构建选项。</para></param>
+    /// <returns>The 16-bit superblock field value.
+    /// <para>超级块 16 位字段的取值。</para></returns>
     private static ushort CompressedAlgorithmsField(ErofsOptions options)
     {
-        if (!options.Compress) return 0;
-        if (options.LegacyCompatibility)
+        if (!options.Compress)
+        {
+            return 0;
+        }
+
+        if (!DeclaredCompressionConfigs(options))
         {
             return options.Lz4MaxDistance == 0 ? ErofsCompression.Lz4DistanceMax : options.Lz4MaxDistance;
         }
+
+        var mask = 1 << (int)options.Algorithm;
         if (options.SourceCompressionOptions is { } codecs)
         {
-            return (ushort)codecs.Keys.Aggregate(0, (mask, algorithm) => mask | (1 << (int)algorithm));
+            foreach (var algorithm in codecs.Keys)
+            {
+                mask |= 1 << (int)algorithm;
+            }
         }
-        return (ushort)(1 << (int)options.Algorithm);
+
+        if (options.SourceInodes is { } inodes)
+        {
+            foreach (var inode in inodes.Values)
+            {
+                if (inode.Compressed)
+                {
+                    mask |= 1 << (int)inode.Algorithm;
+                }
+            }
+        }
+
+        return (ushort)mask;
     }
 
-    private static void BuildImage(BuildNode root, ErofsOptions options, Stream destination, long baseOffset, bool freshDestination)
+    private static void BuildImage(BuildNode root, ErofsOptions options, Stream destination, long baseOffset,
+        bool freshDestination, IProgress<(long Processed, long Total)>? progress = null)
     {
         using var output = new OffsetStream(destination, baseOffset);
         var context = ImageBuildContext.Create(root, options, output);
@@ -560,7 +676,9 @@ public sealed partial class ErofsBuilder
         {
             context.CollectOrderedNodes();
             context.MergeHardlinks();
-            context.PlanNodePayloads();
+            var payloadBytes = progress is null ? null
+                : new ExtractionByteCounter(context.PayloadByteTotal(), progress, options.CancellationToken);
+            context.PlanNodePayloads(payloadBytes);
             context.PlanNodeLayouts();
             context.CreatePackedNode();
             context.PlanMetabox();
@@ -578,9 +696,10 @@ public sealed partial class ErofsBuilder
             var featureIncompat = context.ComputeFeatureIncompat();
             var superblock = context.BuildSuperblock(totalBlocks, featureIncompat);
             context.WriteSuperblockAndDevices(output, superblock, totalBlocks);
-            context.WriteNodeData(output);
+            context.WriteNodeData(output, payloadBytes);
             context.WriteInodes(output);
             context.WriteSuperblockChecksum(output);
+            payloadBytes?.Complete();
 
             output.Position = finalSize;
         }

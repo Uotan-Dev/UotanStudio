@@ -228,8 +228,8 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
                     ["XattrPrefixStart"] = MetadataDisplay.Number(sb.XattrPrefixStart),
                     ["PackedNid"] = MetadataDisplay.Number(sb.PackedNid),
                     ["MetaBoxNid"] = MetadataDisplay.Number(sb.MetaBoxNid),
-                    ["FeatureCompat"] = MetadataDisplay.Flags(sb.FeatureCompat, (1, "sb_checksum"), (2, "mtime"), (4, "xattr_filter"), (8, "shared_ea_in_metabox"), (16, "plain_xattr_pfx"), (32, "ishare_xattrs")),
-                    ["FeatureIncompat"] = MetadataDisplay.Flags(sb.FeatureIncompat, (1, "lz4_0padding"), (2, "compression_cfgs/big_pcluster"), (4, "chunked_file"), (8, "device_table/compress_head2"), (16, "ztailpacking"), (32, "fragments/dedupe"), (64, "xattr_prefixes"), (128, "48bit"), (256, "metabox")),
+                    ["FeatureCompat"] = ErofsSuperblock.DescribeCompat(sb.FeatureCompat),
+                    ["FeatureIncompat"] = ErofsSuperblock.DescribeIncompat(sb.FeatureIncompat),
                     ["AvailableCompressionAlgorithms"] = MetadataDisplay.Flags(sb.EffectiveComprAlgs, (1, "LZ4"), (2, "LZMA"), (4, "DEFLATE"), (8, "Zstandard")),
                 };
                 return FirmwareOpResult.Ok("EROFS filesystem metadata.", metadata: metadata);
@@ -347,7 +347,7 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
                 IReadOnlyDictionary<string, string>? rebuildReport = null;
                 if (Directory.Exists(inputPath)
                     && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName,
-                    cancellationToken, report => rebuildReport = report))
+                    cancellationToken, report => rebuildReport = report, progress: progress))
                 {
                     var summary = "Packed the filesystem using preserved source attributes.";
                     if (rebuildReport is not null && rebuildReport.TryGetValue("FitsSourceFilesystemSize", out var fits))
@@ -389,6 +389,8 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
                     erofsOptions.FsConfigPath = FileSystemPackingOptions.NullIfEmpty(options, "FsConfigPath");
                     erofsOptions.FileContextsPath = FileSystemPackingOptions.NullIfEmpty(options, "FileContextsPath");
                 }
+
+                FileSystemPackingOptions.ApplyErofsFeatureKeys(options, erofsOptions, inheritedWords: null);
 
                 builder.Build(inputPath, outputPath, erofsOptions, progressSink);
 

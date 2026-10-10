@@ -79,12 +79,21 @@ internal sealed class ExtractionByteCounter
     internal Stream Wrap(Stream output) => new CountingWriteStream(output, long.MaxValue, leaveOpen: true,
         cancellationToken: token, bytesWritten: Add);
 
-    internal void Add(int count)
+    internal void Add(int count) => Add((long)count);
+
+    /// <summary>
+    /// Adds processed bytes and notifies at most once per throttle window. The reported value never exceeds the
+    /// expected total, because a writer may rewrite metadata regions or padding that the total does not model.
+    /// <para>累加已处理字节，且每个节流窗口最多通知一次。上报值不会超过预期总量，因为写出方可能重写总量未计入的
+    /// 元数据区域或填充区。</para>
+    /// </summary>
+    /// <param name="count">Bytes to add. <para>要累加的字节数。</para></param>
+    internal void Add(long count)
     {
         token.ThrowIfCancellationRequested();
         lock (gate)
         {
-            processed = checked(processed + count);
+            processed = Math.Min(checked(processed + count), total);
             if (Stopwatch.GetElapsedTime(lastReport).TotalMilliseconds < 100) return;
             lastReport = Stopwatch.GetTimestamp();
             progress?.Report((processed, total));

@@ -278,12 +278,53 @@ public sealed partial class ErofsBuilder
         }
 
         /// <summary>
-        /// Hashes and plans compression for every regular payload in parallel, filling each node's
-        /// content hash, compression options, logical cluster size, and pcluster plan.
-        /// <para>并行地对所有常规负载做哈希与压缩规划，填充每个节点的内容哈希、压缩选项、逻辑簇大小
-        /// 与 pcluster 计划。</para>
+        /// Summed size of the payload files collected for this build, used as the denominator of the build progress.
+        /// It applies the same predicate as the two places that measure payloads, and it is evaluated before
+        /// <see cref="CreatePackedNode"/> and <see cref="PlanMetabox"/> append their synthetic nodes, so every
+        /// measured payload belongs to the returned total exactly once.
+        /// <para>本次构建收集到的负载文件大小之和，用作构建进度的分母。它与两处负载计量使用同一判定条件，并在
+        /// <see cref="CreatePackedNode"/> 与 <see cref="PlanMetabox"/> 追加合成节点之前求值，因此每个被计量的负载
+        /// 都恰好属于该总量一次。</para>
         /// </summary>
-        internal void PlanNodePayloads()
+        /// <returns>The summed payload byte count; zero for a tree without payload files.
+        /// <para>负载字节总数；不含负载文件的目录树为零。</para></returns>
+        internal long PayloadByteTotal()
+        {
+            long total = 0;
+            foreach (var node in Ordered)
+            {
+                if (!IsMeasuredPayload(node)) continue;
+                total = checked(total + node.Size);
+            }
+
+            return total;
+        }
+
+        /// <summary>
+        /// Reports whether a node's source payload is measured by the build progress: regular files with content,
+        /// excluding the synthetic packed and metabox nodes that carry other nodes' bytes.
+        /// <para>判断节点的源负载是否纳入构建进度计量：有内容的常规文件，排除承载其他节点字节的合成打包节点与
+        /// metabox 节点。</para>
+        /// </summary>
+        /// <param name="node">Node to classify. <para>待判定的节点。</para></param>
+        /// <returns><see langword="true"/> when the node's own bytes are measured.
+        /// <para>该节点自身的字节纳入计量时为 <see langword="true"/>。</para></returns>
+        private static bool IsMeasuredPayload(BuildNode node)
+            => !node.IsDirectory && !node.IsSymlink && !node.IsDevice && !node.IsPacked
+                && !node.IsMetaboxContainer && node.Size > 0;
+
+        /// <summary>
+        /// Hashes and plans compression for every regular payload in parallel, filling each node's
+        /// content hash, compression options, logical cluster size, and pcluster plan. A payload whose compression
+        /// plan was accepted is measured here, because this pass has already read its source bytes; the remaining
+        /// payloads are measured when they are emitted.
+        /// <para>并行地对所有常规负载做哈希与压缩规划，填充每个节点的内容哈希、压缩选项、逻辑簇大小
+        /// 与 pcluster 计划。压缩规划被接受的负载在此计量，因为本遍历已经读取了它的源字节；其余负载在写出时计量。</para>
+        /// </summary>
+        /// <param name="progress">Optional counter receiving each compressed payload's size, so a UI bar follows the
+        /// dominant cost of a compressed build instead of the smaller image bytes.
+        /// <para>可选计数器，接收每个已压缩规划负载的大小，使界面进度条跟随压缩构建的主要开销而不是较小的镜像字节。</para></param>
+        internal void PlanNodePayloads(Core.ExtractionByteCounter? progress = null)
         {
             var staging = EnsureStagedCompression();
             Core.FirmwareParallelism.ForEach(Ordered, node =>
@@ -297,6 +338,7 @@ public sealed partial class ErofsBuilder
                 node.LogicalClusterSize = node.SourceInode?.LogicalClusterSize ?? BlockSize;
                 if (node.SourceInode?.Compressed ?? Options.Compress)
                     node.Pclusters = TryPlanCompressed(node, BlockSize, node.CompressionOptions, staging);
+                if (node.Pclusters is not null) progress?.Add(node.Size);
             });
         }
 
@@ -379,16 +421,18 @@ public sealed partial class ErofsBuilder
                     node.ClusterCount = (uint)CeilDiv(node.Size, node.LogicalClusterSize);
                     node.CompactedIndexes = node.SourceInode?.CompactIndexes ?? Options.UseCompactedIndexes;
 
-                    node.BigPcluster = !Options.LegacyCompatibility
+                    node.BigPcluster = DeclaredBigPcluster(Options)
                         && (node.CompressionOptions!.Algorithm != ErofsCompressionAlgorithm.Lz4
                             || node.Pclusters.Any(p => p.CompressedLength > BlockSize));
                     var tailLength = node.Pclusters[^1].CompressedLength;
-                    if (Options.CompressedTailPacking && !node.Pclusters[^1].Plain && tailLength < BlockSize
+                    if (Options.CompressedTailPacking && DeclaredZtailpacking(Options)
+                        && !node.Pclusters[^1].Plain && tailLength < BlockSize
                         && GetInodeRecordSize(node, BlockSize) % BlockSize + tailLength <= BlockSize)
                     {
                         node.InlineCompressedTail = true;
                         node.CompressedBlocks--;
                     }
+                    KeepTerminalPclusterResolvable(node, BlockSize);
                     return;
                 }
             }
@@ -455,6 +499,95 @@ public sealed partial class ErofsBuilder
                     DedupFlat[hashKey] = node;
                 }
             }
+        }
+
+        /// <summary>
+        /// Rewrites the payload's terminal pcluster as an uncompressed cluster when it would otherwise put a
+        /// compressed head row on the file's last logical cluster while the inode declares big pclusters.
+        /// A kernel derives a head row's physical length from the index row that follows the head
+        /// (<c>z_erofs_get_extent_compressedlen</c> in <c>fs/erofs/zmap.c</c>: for a
+        /// <c>Z_EROFS_LCLUSTER_TYPE_HEAD1</c> head it skips the <c>1ULL &lt;&lt; lclusterbits</c> shortcut
+        /// whenever <c>Z_EROFS_ADVISE_BIG_PCLUSTER_1</c> is declared and then loads <c>m-&gt;lcn + 1</c>), and
+        /// that probe is performed even for a pcluster of a single logical cluster whose frame already fills
+        /// exactly one block. When the head sits on the last index row there is no following row: the compacted
+        /// loader answers <c>-EINVAL</c> because its bound is <c>erofs_iblks(inode)</c>
+        /// (<c>compacted_load_cluster_from_disk</c>: <c>if (lcn &gt;= totalidx) return -EINVAL;</c>, and Linux
+        /// 5.10 bounds the same probe with <c>DIV_ROUND_UP(inode-&gt;i_size, EROFS_BLKSIZ)</c>), while the full
+        /// loader (<c>legacy_load_cluster_from_disk</c>) has no bound at all and decodes the bytes after the
+        /// index as a row. Either way the last page fails in <c>z_erofs_read_folio</c> with
+        /// <c>failed to read, err [-22]</c>. Only kernels carrying the upstream commit "erofs: refine
+        /// z_erofs_get_extent_compressedlen" guard the probe with <c>(lcn &lt;&lt; lclusterbits) &gt;=
+        /// i_size</c>; erofs-utils hides the shape with the same guard in <c>lib/zmap.c</c>, so an image that
+        /// <c>fsck.erofs</c> extracts byte-exactly can still be unreadable on the 5.10 and 6.1 GKI kernels.
+        /// </summary>
+        /// <remarks>
+        /// An uncompressed head row needs no probe at all: the plain branch fixes the physical length to one
+        /// logical cluster (<c>map-&gt;m_plen = 1ULL &lt;&lt; lclusterbits</c>) and
+        /// <c>z_erofs_transform_plain</c> in <c>fs/erofs/decompressor.c</c> then copies it verbatim, which is
+        /// valid because the tail spans at most one logical cluster. Upstream <c>mkfs.erofs</c> makes exactly
+        /// this choice for a final chunk of at most one block regardless of the logical cluster size
+        /// (<c>if (!may_inline &amp;&amp; len &lt;= blksz) goto nocompression;</c> in
+        /// <c>__z_erofs_compress_one</c>, whose <c>e-&gt;raw</c> extent is then written as
+        /// <c>Z_EROFS_LCLUSTER_TYPE_PLAIN</c> with <c>e-&gt;plen = blksz</c>). Where the logical cluster is
+        /// larger than one block, that plain window covers the whole logical cluster while the tail itself
+        /// occupies one block, which is the same window upstream's own raw tail gets. Because both plans of the
+        /// rewrite occupy one block, the row count, the cluster count and the reserved block count stay
+        /// identical, so no image size changes. A pcluster whose frame exceeds one block always spans at least
+        /// reject it otherwise), so declaring big pclusters for the remaining pclusters stays valid. An inline
+        /// compressed tail is left alone because the kernel takes the physical length from
+        /// <c>vi-&gt;z_idata_size</c> for it and never reaches the probe.
+        /// <para>当尾部 pcluster 会让已声明 big pcluster 的 inode 在文件的最后一个逻辑簇上落下一个压缩头行时，
+        /// 把它改写为不压缩的簇。内核的 <c>z_erofs_get_extent_compressedlen</c> 依赖头行之后的索引行推导物理长度：
+        /// 只要声明了 <c>Z_EROFS_ADVISE_BIG_PCLUSTER_1</c>，<c>Z_EROFS_LCLUSTER_TYPE_HEAD1</c> 头行就不会走
+        /// <c>1ULL &lt;&lt; lclusterbits</c> 捷径，而是加载 <c>m-&gt;lcn + 1</c> 行，哪怕该 pcluster 只占一个逻辑簇、
+        /// 其帧恰好占满一个块。头行位于最后一行时其后并没有行：紧凑索引加载器的上界是 <c>erofs_iblks(inode)</c>，
+        /// 即 <c>if (lcn &gt;= totalidx) return -EINVAL;</c>（Linux 5.10 用
+        /// <c>DIV_ROUND_UP(inode-&gt;i_size, EROFS_BLKSIZ)</c> 设同样的上界）；完整索引加载器
+        /// <c>legacy_load_cluster_from_disk</c> 根本没有上界，会把索引之后的字节当作行解码。两种结果都是尾页在
+        /// <c>z_erofs_read_folio</c> 里报 <c>failed to read, err [-22]</c>。只有带上游提交 “erofs: refine
+        /// z_erofs_get_extent_compressedlen” 的内核才有 <c>(lcn &lt;&lt; lclusterbits) &gt;= i_size</c> 守卫；
+        /// erofs-utils 在其 <c>lib/zmap.c</c> 中用同一守卫掩盖了该布局，因此 <c>fsck.erofs</c> 能逐字节解出的镜像
+        /// 在 5.10 与 6.1 GKI 内核上仍可能读不出来。</para>
+        /// <para>不压缩的头行根本不需要探测：内核对 plain 分支把物理长度钉在一个逻辑簇
+        /// （<c>map-&gt;m_plen = 1ULL &lt;&lt; lclusterbits</c>），随后
+        /// <c>fs/erofs/decompressor.c</c> 的 <c>z_erofs_transform_plain</c> 原样复制，而尾部至多占一个逻辑簇正好成立。
+        /// 上游 <c>mkfs.erofs</c> 对至多一个块的尾部片段正是这样处理，且与逻辑簇大小无关
+        /// （<c>__z_erofs_compress_one</c> 里的 <c>if (!may_inline &amp;&amp; len &lt;= blksz) goto nocompression;</c>，
+        /// 其 <c>e-&gt;raw</c> extent 随后以 <c>Z_EROFS_LCLUSTER_TYPE_PLAIN</c> 与 <c>e-&gt;plen = blksz</c> 写入）。
+        /// 逻辑簇大于一块时，这个 plain 窗口会覆盖整个逻辑簇而尾部本身只占一块，与上游给自己的原样尾部所开的窗口
+        /// 一致。改写前后两个规划都只占一个块，
+        /// 索引行数、簇数与预留块数都不变，因此镜像大小不变。帧超过一个块的 pcluster 必然跨越至少两个逻辑簇
+        /// （两个规划器都会拒绝其他情况），所以其余 pcluster 继续声明 big pcluster 仍然有效。内联压缩尾部保持不变，
+        /// 因为内核对它从 <c>vi-&gt;z_idata_size</c> 取得物理长度，不会走到探测。</para>
+        /// </remarks>
+        /// <param name="node">Compressed file node whose plans are already planned and measured.
+        /// <para>已完成 pcluster 规划与计量的压缩文件节点。</para></param>
+        /// <param name="blockSize">Filesystem block size.
+        /// <para>文件系统块大小。</para></param>
+        private static void KeepTerminalPclusterResolvable(BuildNode node, int blockSize)
+        {
+            var plans = node.Pclusters!;
+            var last = plans[^1];
+            if (!node.BigPcluster || node.InlineCompressedTail || last.Plain ||
+                last.SourceLength > blockSize)
+            {
+                return;
+            }
+
+            var headCluster = last.SourceOffset / node.LogicalClusterSize;
+            if (PlanEndCluster(node, plans.Length - 1) != node.ClusterCount ||
+                headCluster != node.ClusterCount - 1)
+            {
+                return;
+            }
+
+            plans[^1] = new PclusterPlan
+            {
+                SourceOffset = last.SourceOffset,
+                SourceLength = last.SourceLength,
+                CompressedLength = last.SourceLength,
+                Plain = true
+            };
         }
 
         /// <summary>
@@ -608,12 +741,20 @@ public sealed partial class ErofsBuilder
         }
 
         /// <summary>
-        /// Computes the superblock's incompat feature bits, rejecting fragment/metabox nodes under
-        /// legacy compatibility.
-        /// <para>计算超级块的 incompat 特性位，并在 legacy 兼容模式下拒绝 fragment/metabox 节点。</para>
+        /// Computes the superblock's incompat feature word. The layout-implied bits stay derived from the
+        /// planned layout, so a non-authoritative declaration yields today's word byte for byte; an
+        /// authoritative one takes the algorithm baseline from the declaration instead, rejects any layout
+        /// the declaration forbids, and keeps every other declared bit so a rebuild neither gains nor loses
+        /// a feature silently.
+        /// <para>计算超级块的 incompat 特性字。布局隐含位仍由已规划的布局推导，因此非权威声明得到的字与此前
+        /// 逐字节一致；权威声明则改从声明读取算法基线，拒绝声明所不允许的布局，并保留其余全部已声明位，使重建
+        /// 既不会静默获得也不会静默丢失特性。</para>
         /// </summary>
         /// <returns>The incompat feature mask for the superblock.
         /// <para>超级块使用的 incompat 特性掩码。</para></returns>
+        /// <exception cref="NotSupportedException">The planned layout needs a feature the declaration
+        /// forbids, or the declaration names a feature the writer cannot re-emit.
+        /// <para>已规划布局需要声明不允许的特性，或声明列出了写入方无法重新输出的特性。</para></exception>
         internal uint ComputeFeatureIncompat()
         {
             var featureIncompat = Options.Compress
@@ -646,12 +787,128 @@ public sealed partial class ErofsBuilder
                 featureIncompat |= ErofsSuperblock.IncompatMetabox;
             }
 
-            return featureIncompat;
+            return Options.FeaturesAuthoritative ? ApplyDeclaredIncompat(featureIncompat) : featureIncompat;
         }
 
         /// <summary>
-        /// Fills the superblock structure from the planned layout and options.
-        /// <para>根据规划完成的布局与选项填充超级块结构。</para>
+        /// Replaces the derived algorithm baseline with the declared incompat word and validates the
+        /// layout-implied bits against it. The writer always right-aligns a compressed frame with leading
+        /// zero padding, so <c>lz4_0padding</c> is the single documented bit it may add and the addition is
+        /// recorded in <see cref="ErofsOptions.AddedIncompatBits"/> for the caller to report.
+        /// <para>用声明的 incompat 字替换推导出的算法基线，并据此校验布局隐含位。写入方总会用前导零填充把压缩帧
+        /// 右对齐，因此 <c>lz4_0padding</c> 是唯一允许新增的位，且该新增会记录到
+        /// <see cref="ErofsOptions.AddedIncompatBits"/> 供调用方上报。</para>
+        /// </summary>
+        /// <param name="layoutIncompat">Bits the planned layout requires.
+        /// <para>已规划布局所需的位。</para></param>
+        /// <returns>The declared word, forced to carry <c>lz4_0padding</c> for compressed output.
+        /// <para>声明字，并在压缩输出时强制携带 <c>lz4_0padding</c>。</para></returns>
+        private uint ApplyDeclaredIncompat(uint layoutIncompat)
+        {
+            var declared = Options.Features.IncompatBits;
+            var readOnlyNames = ErofsFeatureTable.ReadOnlyIncompatNames(declared);
+            if (readOnlyNames.Length > 0)
+            {
+                throw new NotSupportedException(
+                    $"EROFS feature declaration [{ErofsSuperblock.DescribeIncompat(declared)}] names read-only " +
+                    $"features '{readOnlyNames}' that the managed writer cannot re-emit.");
+            }
+
+            RequireDeclaredBit(layoutIncompat, ErofsSuperblock.IncompatDeviceTable, ErofsFeature.DeviceTable,
+                nameof(ErofsOptions.ExtraDeviceCount));
+            RequireDeclaredBit(layoutIncompat, ErofsSuperblock.IncompatFragments, ErofsFeature.Fragments,
+                nameof(ErofsOptions.Fragments));
+            RequireDeclaredBit(layoutIncompat, ErofsSuperblock.IncompatZtailpacking, ErofsFeature.Ztailpacking,
+                nameof(ErofsOptions.CompressedTailPacking));
+            RequireDeclaredBit(layoutIncompat, ErofsSuperblock.IncompatMetabox, ErofsFeature.Metabox,
+                nameof(ErofsOptions.Metabox));
+
+            if (!DeclaredBigPcluster(Options) && RequiresBigPclusterLayout())
+            {
+                throw new NotSupportedException(
+                    $"EROFS feature declaration [{ErofsSuperblock.DescribeIncompat(declared)}] omits " +
+                    $"{ErofsFeatureTable.NameOf(ErofsFeature.BigPcluster)} while a planned pcluster spans more than " +
+                    $"one block; declare the feature or pin {nameof(ErofsOptions.MaxPclusterSize)} to the block size.");
+            }
+
+            var incompat = declared;
+            if (Options.Compress && (incompat & ErofsSuperblock.IncompatLz4_0Padding) == 0)
+            {
+                incompat |= ErofsSuperblock.IncompatLz4_0Padding;
+                Options.AddedIncompatBits |= ErofsSuperblock.IncompatLz4_0Padding;
+            }
+
+            return incompat;
+        }
+
+        /// <summary>
+        /// Rejects a layout-implied incompat bit the declaration does not carry, naming the upstream feature
+        /// and the layout option that would have to be cleared.
+        /// <para>拒绝声明未携带的布局隐含 incompat 位，并指名上游特性以及需要清除的布局选项。</para>
+        /// </summary>
+        /// <param name="layoutIncompat">Bits the planned layout requires.
+        /// <para>已规划布局所需的位。</para></param>
+        /// <param name="bit">The layout-implied physical bit.
+        /// <para>布局隐含的物理位。</para></param>
+        /// <param name="feature">Logical feature used to name the bit in the message.
+        /// <para>消息中为该位命名的逻辑特性。</para></param>
+        /// <param name="optionName">Layout option whose removal drops the bit.
+        /// <para>清除后即可移除该位的布局选项名。</para></param>
+        private void RequireDeclaredBit(uint layoutIncompat, uint bit, ErofsFeature feature, string optionName)
+        {
+            if ((layoutIncompat & bit) == 0 || (Options.Features.IncompatBits & bit) != 0)
+            {
+                return;
+            }
+
+            throw new NotSupportedException(
+                $"EROFS layout requires {ErofsFeatureTable.NameOf(feature)} but the declared feature set " +
+                $"[{ErofsSuperblock.DescribeIncompat(Options.Features.IncompatBits)}] does not advertise it; " +
+                $"clear the {optionName} option or declare the feature.");
+        }
+
+        /// <summary>
+        /// Reports whether any planned payload would need a pcluster spanning more than one filesystem
+        /// block, which is precisely the layout the big-pcluster incompat bit licenses.
+        /// <para>判断是否存在需要跨越多个文件系统块的 pcluster 的已规划负载，而这正是 big-pcluster incompat
+        /// 位所允许的布局。</para>
+        /// </summary>
+        /// <returns><see langword="true"/> when a planned frame exceeds one block or its codec is not LZ4.
+        /// <para>任一已规划帧超过一个块，或其编解码器不是 LZ4 时为 <see langword="true"/>。</para></returns>
+        private bool RequiresBigPclusterLayout()
+        {
+            foreach (var node in Ordered)
+            {
+                if (node.Pclusters is null)
+                {
+                    continue;
+                }
+
+                if (node.CompressionOptions!.Algorithm != ErofsCompressionAlgorithm.Lz4)
+                {
+                    return true;
+                }
+
+                foreach (var plan in node.Pclusters)
+                {
+                    if (plan.CompressedLength > BlockSize)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Fills the superblock structure from the planned layout and options. The compat word is the
+        /// derived one constrained by an authoritative declaration, and every derived bit the declaration
+        /// omits is recorded in <see cref="ErofsOptions.DroppedCompatBits"/> so the writer never advertises
+        /// a compat feature the source lacked.
+        /// <para>根据规划完成的布局与选项填充超级块结构。compat 字为受权威声明约束的推导字，声明缺失的每个推导位
+        /// 都会记录到 <see cref="ErofsOptions.DroppedCompatBits"/>，使写入方不会 advertise 源镜像缺失的 compat
+        /// 特性。</para>
         /// </summary>
         /// <param name="totalBlocks">Total image block count.
         /// <para>镜像总块数。</para></param>
@@ -661,6 +918,15 @@ public sealed partial class ErofsBuilder
         /// <para>填充完成的超级块。</para></returns>
         internal ErofsSuperblock BuildSuperblock(long totalBlocks, uint featureIncompat)
         {
+            var featureCompat = (Options.SuperblockChecksum ? ErofsSuperblock.CompatSbChecksum : 0u)
+                | (Options.SourceMtimeFeature ? ErofsSuperblock.CompatMtime : 0u)
+                | (Options.SourceXattrFilterFeature ? ErofsSuperblock.CompatXattrFilter : 0u);
+            if (Options.FeaturesAuthoritative)
+            {
+                Options.DroppedCompatBits = featureCompat & ~Options.Features.CompatBits;
+                featureCompat &= Options.Features.CompatBits;
+            }
+
             return new ErofsSuperblock
             {
                 MagicValue = ErofsSuperblock.Magic,
@@ -673,9 +939,7 @@ public sealed partial class ErofsBuilder
                 Blocks = (uint)totalBlocks,
                 MetaBlkAddr = 0,
                 AvailableComprAlgs = CompressedAlgorithmsField(Options),
-                FeatureCompat = (Options.SuperblockChecksum ? ErofsSuperblock.CompatSbChecksum : 0u)
-                    | (Options.SourceMtimeFeature ? ErofsSuperblock.CompatMtime : 0u)
-                    | (Options.SourceXattrFilterFeature ? ErofsSuperblock.CompatXattrFilter : 0u),
+                FeatureCompat = featureCompat,
                 FeatureIncompat = featureIncompat,
                 ExtraDevices = (ushort)ExtraDevices,
                 DevtSlotoff = DeviceTableSlotOffset,
@@ -743,7 +1007,10 @@ public sealed partial class ErofsBuilder
         /// </summary>
         /// <param name="output">Destination stream in image coordinates.
         /// <para>镜像坐标下的目标流。</para></param>
-        internal void WriteNodeData(Stream output)
+        /// <param name="progress">Optional counter receiving the size of every collected payload that was not
+        /// measured by the compression pass, so each payload byte is measured exactly once across the build.
+        /// <para>可选计数器，接收未被压缩遍历计量的每个已收集负载的大小，使每个负载字节在整个构建中恰好计量一次。</para></param>
+        internal void WriteNodeData(Stream output, Core.ExtractionByteCounter? progress = null)
         {
             foreach (var node in Ordered)
             {
@@ -765,12 +1032,17 @@ public sealed partial class ErofsBuilder
                 }
                 else if (node.IsMetaboxContainer)
                 {
-                    WriteMetaboxContainer(output, node, BlockSize, Now, MetaboxResident!, Options.LegacyCompatibility);
+                    WriteMetaboxContainer(output, node, BlockSize, Now, MetaboxResident!, Options);
                 }
                 else if (node.FlatBlockAddr >= 0 && node.FlatBlocks > 0 && node.DedupSource is null)
                 {
                     var copyLen = Math.Min(node.FlatBlocks * BlockSize, node.Size);
                     CopyFileRange(output, node, 0, copyLen, node.FlatBlockAddr * BlockSize, Options.CancellationToken);
+                }
+
+                if (IsMeasuredPayload(node) && node.Pclusters is null)
+                {
+                    progress?.Add(node.Size);
                 }
             }
         }
@@ -793,7 +1065,7 @@ public sealed partial class ErofsBuilder
                     continue;
                 }
 
-                var inode = BuildInode(node, BlockSize, Now, Options.LegacyCompatibility);
+                var inode = BuildInode(node, BlockSize, Now, Options);
                 var inodeBuffer = new byte[inode.OnDiskSize];
                 inode.WriteTo(inodeBuffer);
                 WriteAt(output, node.MetaOffset, inodeBuffer, inodeBuffer.Length);
@@ -829,14 +1101,16 @@ public sealed partial class ErofsBuilder
 
         /// <summary>
         /// Writes the CRC32c superblock checksum into the captured superblock window region when
-        /// superblock checksums are enabled.
-        /// <para>启用超级块校验和时，把 CRC32c 超级块校验值写入捕获的超级块窗口区域。</para>
+        /// superblock checksums are enabled. A declaration that omits the compat bit keeps the field zeroed,
+        /// so the emitted bytes never carry a checksum the superblock word does not advertise.
+        /// <para>启用超级块校验和时，把 CRC32c 超级块校验值写入捕获的超级块窗口区域。声明缺少该 compat 位时该字段
+        /// 保持为零，因此写出的字节绝不会带有超级块字未 advertise 的校验和。</para>
         /// </summary>
         /// <param name="output">Destination stream whose captured window holds the superblock bytes.
         /// <para>捕获窗口保存超级块字节的目标流。</para></param>
         internal void WriteSuperblockChecksum(OffsetStream output)
         {
-            if (!Options.SuperblockChecksum)
+            if (!Options.SuperblockChecksum || !DeclaredSuperblockChecksum(Options))
             {
                 return;
             }

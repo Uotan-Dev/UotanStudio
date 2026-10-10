@@ -290,7 +290,7 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
             if (Directory.Exists(inputPath)
                 && RepackMetadata.Read(inputPath)?.FormatName == FormatName
                 && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken,
-                    report => rebuildReport = report))
+                    report => rebuildReport = report, progress: progress))
             {
                 return Task.FromResult(WithWriteHeadroomWarning(
                     FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes.",

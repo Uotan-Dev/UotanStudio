@@ -80,6 +80,46 @@ public sealed class FileSystemByteProgressTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData("EXT4")]
+    [InlineData("EROFS")]
+    [InlineData("F2FS")]
+    public async Task PreservedRebuildReportsByteProgressInsteadOfOnlyCompletion(string format)
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        using var context = RepackMetadata.UseContext(RepackMetadataContext.LocalDirectory);
+        var source = Path.Combine(root, "preserved-" + format);
+        Directory.CreateDirectory(Path.Combine(source, "nested"));
+        using (var file = File.Create(Path.Combine(source, "payload.bin"))) file.SetLength(2 * 1024 * 1024);
+        File.WriteAllText(Path.Combine(source, "nested", "note.txt"), "preserved");
+        var image = Path.Combine(root, format + "-preserved.img");
+        IFormatHandler handler;
+        switch (format)
+        {
+            case "EXT4": Ext4Builder.Build(source, image, new()); handler = new Ext4FormatHandler(); break;
+            case "EROFS": new ErofsBuilder().Build(source, image, new()); handler = new ErofsFormatHandler(); break;
+            default: F2fsBuilder.Build(source, image, new()); handler = new F2fsFormatHandler(); break;
+        }
+        var extracted = Path.Combine(root, format + "-preserved-tree");
+        Assert.True((await handler.UnpackAsync(image, extracted, cancellationToken: Token)).Success);
+        var events = new List<FileSystemByteProgress>();
+        var rebuilt = Path.Combine(root, format + "-rebuilt.img");
+        var result = await ((IWritableFormatHandler)handler)
+            .PackAsync(extracted, rebuilt, new InlineProgress<FileSystemByteProgress>(events.Add), Token);
+        Assert.True(result.Success, result.Summary);
+        Assert.NotEmpty(events);
+        Assert.Contains(events, sample => sample.Stage == FileSystemWorkStage.BuildingImage);
+        Assert.Contains(events, sample => sample.Stage == FileSystemWorkStage.VerifyingImage);
+        Assert.Contains(events, sample => sample.Stage == FileSystemWorkStage.VerifyingFiles);
+        foreach (var group in events.GroupBy(sample => sample.Stage))
+        {
+            var samples = group.ToArray();
+            Assert.Equal(0, samples[0].Processed);
+            Assert.True(samples[^1].Processed >= samples[0].Processed, group.Key.ToString());
+            Assert.All(samples, sample => Assert.InRange(sample.Processed, 0, sample.Total));
+        }
+    }
+
     [Fact]
     public async Task CounterMeasuresSyncAndAsyncWritesAndLeavesDestinationOpen()
     {

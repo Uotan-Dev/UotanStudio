@@ -9,26 +9,40 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
 /// </summary>
 public sealed partial class ErofsBuilder
 {
-    /// <summary>Fills bounded physical clusters with byte-granular input, as permitted by upstream di_clusterofs. Every accepted probe copies its frame over one pooled buffer of at least <c>MaxPclusterSize</c> bytes, so the staging file receives exactly the frame the emitted compressed plan points at and the write pass copies it instead of compressing the same bytes again.
+    /// <summary>Fills bounded physical clusters with byte-granular input, as permitted by upstream di_clusterofs. Every accepted probe copies its frame over one pooled buffer, so the staging file receives exactly the frame the emitted compressed plan points at and the write pass copies it instead of compressing the same bytes again.
     /// <para>按上游 di_clusterofs 允许的方式以字节粒度填满有界物理簇：每次被接受的探测都把自己的编码帧
-    /// 复制到同一块不少于 <c>MaxPclusterSize</c> 字节的池化缓冲上，因此暂存文件只收到已发出压缩规划实际
-    /// 指向的那一帧，写出阶段直接复制而不会把同样的字节再压缩一次。</para></summary>
+    /// 复制到同一块池化缓冲上，因此暂存文件只收到已发出压缩规划实际指向的那一帧，写出阶段直接复制而
+    /// 不会把同样的字节再压缩一次。</para>
+    /// <para>The two bounds a pcluster has to satisfy are separate because a reader derives them from
+    /// different index fields. The physical bound is the number of blocks the index can name: without the
+    /// big-pcluster advise <c>z_erofs_get_extent_compressedlen</c> pins it to exactly one filesystem
+    /// block, so a frame larger than one block is unnameable, while with the advise the count is carried by
+    /// the first non-head row, which only exists once the pcluster covers a second logical cluster. The
+    /// logical bound is the span the head and non-head rows credit to the frame, and it is capped by the
+    /// declared pcluster size when that size is a statement about logical spans (big pclusters) and by the
+    /// format ceiling otherwise, since <see cref="ErofsOptions.MaxPclusterSize"/> is the declared physical
+    /// pcluster size of the image.</para>
+    /// <para>这两个边界必须分开，因为读取方是从不同索引字段推导它们的。物理边界是索引能够表明的块数：
+    /// 未声明 big pcluster 时 <c>z_erofs_get_extent_compressedlen</c> 把它钉死为一个文件系统块，超过一块的帧
+    /// 根本无法表达；声明时块数由首个非头簇行携带，而行只有当 pcluster 覆盖第二个逻辑簇时才存在。逻辑边界
+    /// 是头簇与非头簇行记给该帧的跨度：声明 big pcluster 时该跨度受已声明 pcluster 大小约束，否则受格式
+    /// 上限约束，因为 <see cref="ErofsOptions.MaxPclusterSize"/> 描述的是镜像的物理 pcluster 大小。</para></summary>
     private static PclusterPlan[]? TryPlanDenseCompressed(BuildNode node, int blockSize, ErofsOptions options,
         Core.CompressionPayloadStaging staging)
     {
         var clusterSize = node.LogicalClusterSize;
-        var inputLimit = 1 << 20;
+        var bigPcluster = DeclaredBigPcluster(options);
+        var declaredPclusterSize = Math.Min(options.MaxPclusterSize, ErofsCompression.MaxPclusterSize);
+        var frameLimit = bigPcluster ? declaredPclusterSize : blockSize;
+        var inputLimit = bigPcluster ? declaredPclusterSize : ErofsCompression.MaxPclusterSize;
         if (options.Algorithm == ErofsCompressionAlgorithm.Lz4 && options.Lz4MaxDistance is > 0 and < ErofsCompression.Lz4DistanceMax)
             inputLimit = Math.Min(inputLimit, options.Lz4MaxDistance);
-        if (options.LegacyCompatibility)
-            inputLimit = Math.Min(inputLimit,
-                options.Lz4MaxDistance == 0 ? ErofsCompression.Lz4DistanceMax : options.Lz4MaxDistance);
         if (inputLimit < clusterSize) return null;
         using var input = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read,
             65536, FileOptions.SequentialScan);
         var raw = new byte[(int)Math.Min(node.Size, inputLimit)];
         var encoded = new byte[ErofsCompression.MaximumOutputSize((ErofsAlgorithm)options.Algorithm, raw.Length)];
-        var accepted = ArrayPool<byte>.Shared.Rent(Math.Max(1, options.MaxPclusterSize));
+        var accepted = ArrayPool<byte>.Shared.Rent(Math.Max(1, frameLimit));
         try
         {
             var plans = new List<PclusterPlan>();
@@ -51,7 +65,8 @@ public sealed partial class ErofsBuilder
                     }
                     var size = ErofsCompression.AlgorithmCompress(options,
                         raw, 0, length, encoded, 0, encoded.Length);
-                    if (size <= 0 || size > options.MaxPclusterSize) return false;
+                    if (size <= 0 || size > frameLimit) return false;
+                    if (size > blockSize && (int)(position % clusterSize) + length < 2 * clusterSize) return false;
                     bestLength = length;
                     bestEncoded = size;
                     encoded.AsSpan(0, size).CopyTo(accepted);
@@ -72,11 +87,9 @@ public sealed partial class ErofsBuilder
                     else high = mid;
                 }
                 var nextBoundary = clusterSize - position % clusterSize;
-                var covered = (position + bestLength) / clusterSize - position / clusterSize;
                 var sharesHeadPage = position + bestLength >= node.Size && position % clusterSize != 0
                     && node.Size % clusterSize != 0;
-                if (bestLength <= bestEncoded || bestLength < nextBoundary
-                    || bestEncoded > blockSize && covered < 2 || sharesHeadPage)
+                if (bestLength <= bestEncoded || bestLength < nextBoundary || sharesHeadPage)
                 {
                     if (clusterSize != blockSize) return null;
                     var length = Math.Min(available, blockSize);

@@ -7,6 +7,7 @@ using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
@@ -167,6 +168,48 @@ public sealed class MetadataJsonTests : IDisposable
         Assert.Equal(0x1A0, data.Mode & 0x0FFF);
         var label = Assert.Single(data.Xattrs!, xattr => xattr.Name == "security.selinux");
         Assert.Equal("u:object_r:system_file:s0", Encoding.UTF8.GetString(label.Value).TrimEnd('\0'));
+    }
+
+    [Fact]
+    public async Task ErofsMetadataJson_RoundTripsFeatureWordsAndDotOmittedIntoRebuiltSuperblock()
+    {
+        var source = Path.Combine(_root, "feature-source");
+        Directory.CreateDirectory(source);
+        File.WriteAllText(Path.Combine(source, "data"), "feature-word-content");
+        var image = Path.Combine(_root, "feature.img");
+        new ErofsBuilder().Build(source, image, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            LegacyCompatibility = true,
+            Features = ErofsFeatureSet.FromWords(ErofsSuperblock.CompatSbChecksum,
+                ErofsSuperblock.IncompatLz4_0Padding),
+        });
+        var sourceSuperblock = ErofsSuperblock.FromImage(File.ReadAllBytes(image));
+        Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, sourceSuperblock.FeatureIncompat);
+
+        var extracted = await UnpackAsync(new ErofsFormatHandler(), image);
+        var document = JsonNode.Parse(
+            File.ReadAllText(Path.Combine(extracted, RepackMetadata.FileName)))!.AsObject();
+        var erofs = document["fileSystemPreservation"]!.AsObject()["rebuild"]!.AsObject()["erofs"]!.AsObject();
+        Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, erofs["featureIncompat"]!.GetValue<uint>());
+        Assert.Equal(ErofsSuperblock.CompatSbChecksum, erofs["featureCompat"]!.GetValue<uint>());
+        Assert.Equal(ErofsTriStateFeature.Disabled.ToString(), erofs["dotOmitted"]!.GetValue<string>());
+        Assert.True(erofs.ContainsKey("droppedIncompatBits"));
+
+        var profile = FileSystemMetadataOverrides.TryLoadDocument(RepackMetadata.Read(extracted)!)!.Rebuild!.Erofs!;
+        uint? replayedIncompat = profile.FeatureIncompat;
+        Assert.Equal(sourceSuperblock.FeatureIncompat, replayedIncompat);
+        Assert.Equal(ErofsTriStateFeature.Disabled, ErofsRebuildMetadata.Restore(profile).DotOmitted);
+
+        File.Delete(image);
+        var output = Path.Combine(_root, "feature-rebuilt.img");
+        var result = await new ErofsFormatHandler().PackAsync(extracted, output, Token);
+        Assert.True(result.Success, result.Summary);
+
+        var rebuilt = ErofsSuperblock.FromImage(File.ReadAllBytes(output));
+        Assert.Equal(sourceSuperblock.FeatureIncompat, rebuilt.FeatureIncompat);
+        Assert.Equal(sourceSuperblock.FeatureCompat, rebuilt.FeatureCompat);
+        Assert.Equal("feature-word-content", ReadImageFile("EROFS", output, "data"));
     }
 
     [Fact]

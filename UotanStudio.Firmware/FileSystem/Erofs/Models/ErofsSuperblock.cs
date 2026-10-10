@@ -218,6 +218,32 @@ internal sealed class ErofsSuperblock
     }
 
     /// <summary>
+    /// Names the upstream features carried by an incompat word. The list delegates to
+    /// <see cref="ErofsFeatureTable"/> so a decoded superblock, a declared feature set and a rejected layout
+    /// can never drift apart in wording.
+    /// <para>命名 incompat 字所携带的上游特性。名单委托给 <see cref="ErofsFeatureTable"/>，使解码出的超级块、
+    /// 声明的特性集与被拒绝的布局在措辞上不会彼此偏离。</para>
+    /// </summary>
+    /// <param name="bits">The raw <c>s_feature_incompat</c> mask.
+    /// <para>原始 <c>s_feature_incompat</c> 掩码。</para></param>
+    /// <returns>Comma-joined upstream names, or <c>"none"</c> when the word is empty.
+    /// <para>以逗号连接的上游名；该字为空时返回 <c>"none"</c>。</para></returns>
+    internal static string DescribeIncompat(uint bits)
+        => ErofsFeatureTable.Describe(0, bits);
+
+    /// <summary>
+    /// Names the upstream features carried by a compat word, with the same single source of truth as
+    /// <see cref="DescribeIncompat"/>.
+    /// <para>命名 compat 字所携带的上游特性，与 <see cref="DescribeIncompat"/> 共用同一唯一真值来源。</para>
+    /// </summary>
+    /// <param name="bits">The raw <c>s_feature_compat</c> mask.
+    /// <para>原始 <c>s_feature_compat</c> 掩码。</para></param>
+    /// <returns>Comma-joined upstream names, or <c>"none"</c> when the word is empty.
+    /// <para>以逗号连接的上游名；该字为空时返回 <c>"none"</c>。</para></returns>
+    internal static string DescribeCompat(uint bits)
+        => ErofsFeatureTable.Describe(bits, 0);
+
+    /// <summary>
     /// Guards that a computed total block count still fits the 32-bit <see cref="Blocks"/> superblock field before the builder truncating-casts it.
     /// <para>在构建器以截断方式转换之前，确保计算得到的总块数仍适合 32 位的 <see cref="Blocks"/> 超级块字段。</para>
     /// </summary>

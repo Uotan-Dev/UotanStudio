@@ -1,4 +1,5 @@
 using System.Globalization;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Metadata;
@@ -29,13 +30,17 @@ internal static class ErofsRebuildOptimizer
     /// <param name="captured">Persisted profile carrying the sampled estimates and the authoritative extent.
     /// <para>携带采样估算与权威范围的持久化档案。</para></param>
     /// <param name="token">Cancels every build, copy and search step. <para>取消每次构建、拷贝与搜索步骤。</para></param>
+    /// <param name="progress">Optional reporter forwarded to every candidate build, so each search attempt restarts
+    /// the payload measurement instead of leaving the search silent. May be <see langword="null"/>.
+    /// <para>可选的进度回调，转发给每次候选构建，使每次搜索尝试都重新开始负载计量，而不是让搜索静默。
+    /// 可为 <see langword="null"/>。</para></param>
     /// <returns>The search keys (<c>CompressionAttempts</c>, <c>CompressionProfile</c>,
     /// <c>CompressionInference</c> and the size keys); an empty dictionary when the search could not run and
     /// exactly one build was published.
     /// <para>返回搜索键（<c>CompressionAttempts</c>、<c>CompressionProfile</c>、<c>CompressionInference</c>
     /// 与各体积键）；搜索无法执行而只发布一次构建时返回空字典。</para></returns>
     internal static Dictionary<string, string> Build(string directory, Stream output, ErofsOptions options,
-        ErofsRebuildParameters captured, CancellationToken token)
+        ErofsRebuildParameters captured, CancellationToken token, IProgress<(long Processed, long Total)>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(captured);
         options.CancellationToken = token;
@@ -44,7 +49,7 @@ internal static class ErofsRebuildOptimizer
         var estimates = Rebuild(options, captured);
         if (estimates.Count == 0 || targetSize <= 0)
         {
-            new ErofsBuilder().Build(directory, output, options);
+            new ErofsBuilder().Build(directory, output, options, progress);
             return [];
         }
 
@@ -83,7 +88,7 @@ internal static class ErofsRebuildOptimizer
             if (!tried.Add(encoderProfile)) continue;
             candidate.SetLength(0);
             candidate.Position = 0;
-            new ErofsBuilder().Build(directory, candidate, options);
+            new ErofsBuilder().Build(directory, candidate, options, progress);
             token.ThrowIfCancellationRequested();
             attempts.Add($"{encoderProfile} = {candidate.Length.ToString(CultureInfo.InvariantCulture)}");
             if (candidate.Length < bestSize)

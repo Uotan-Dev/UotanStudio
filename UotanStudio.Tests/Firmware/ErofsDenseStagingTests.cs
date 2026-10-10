@@ -9,15 +9,15 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// Guards the byte-granular (dense) EROFS planner's staging hand-off: a pcluster accepted by the binary
-/// search must reach the image as the very frame the planner encoded, a plain fallback cluster must stay
-/// unstaged so the image carries the source bytes verbatim, and the whole build must repeat byte-for-byte
-/// once the superblock timestamp and UUID are pinned. Both branches are pinned by exact
-/// (SourceOffset, SourceLength, CompressedLength) triples read back from the image index, not by a parse
-/// that merely succeeds.
+/// search must reach the image as the very frame the planner encoded, beginning at the block address the
+/// index points to, a plain fallback cluster must stay unstaged so the image carries the source bytes
+/// verbatim, and the whole build must repeat byte-for-byte once the superblock timestamp and UUID are
+/// pinned. All branches are pinned by exact (SourceOffset, SourceLength, CompressedLength) triples read
+/// back from the image index, not by a parse that merely succeeds.
 /// <para>守护按字节粒度（dense）规划器与暂存文件的交接：二分查找接受的 pcluster 必须以规划器编码出的
-/// 同一帧写入镜像；原样回退簇不得进入暂存，镜像里原样存放源字节；固定超级块时间戳与 UUID 后，整个
-/// 构建必须逐字节可复现。两条分支都按镜像索引反推出的精确三元组（源偏移、源长度、压缩长度）锁定，
-/// 而不满足于镜像能被解析。</para>
+/// 同一帧写入镜像，并且从索引指向的块地址开始；原样回退簇不得进入暂存，镜像里原样存放源字节；固定超级块
+/// 时间戳与 UUID 后，整个构建必须逐字节可复现。各分支都按镜像索引反推出的精确三元组（源偏移、源长度、
+/// 压缩长度）锁定，而不满足于镜像能被解析。</para>
 /// </summary>
 public sealed class ErofsDenseStagingTests
 {
@@ -118,9 +118,9 @@ public sealed class ErofsDenseStagingTests
             var blockBytes = ((frameLength + blockSize - 1) / blockSize) * blockSize;
             Assert.True(start + blockBytes <= image.Length,
                 $"the {frameLength}-byte oracle frame does not fit the blocks starting at {start}.");
-            Assert.Equal(oracle.AsSpan(0, frameLength),
-                image.AsSpan((int)(start + blockBytes - frameLength), frameLength));
             AssertZeroFilled(image, start, blockBytes - frameLength);
+            Assert.Equal(oracle.AsSpan(0, frameLength),
+                image.AsSpan((int)start + blockBytes - frameLength, frameLength));
             if (i + 1 < heads.Count)
             {
                 Assert.Equal(head.Pblk + blockBytes / blockSize, heads[i + 1].Pblk);

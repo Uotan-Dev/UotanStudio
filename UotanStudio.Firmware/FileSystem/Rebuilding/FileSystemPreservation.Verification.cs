@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
@@ -37,8 +38,12 @@ public static partial class FileSystemPreservation
         }
     }
 
-    private static void VerifyRebuilt(Stream output, FileSystemEditPlan plan, CancellationToken token)
+    private static void VerifyRebuilt(Stream output, FileSystemEditPlan plan, CancellationToken token,
+        IProgress<FileSystemByteProgress>? progress = null)
     {
+        var contentBytes = progress is null ? null
+            : new ExtractionByteCounter(PlannedContentBytes(plan),
+                FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.VerifyingImage), token);
         using var container = new BoundedReadStream(output, 0, output.Length, leaveOpen: true);
         Span<byte> magic = stackalloc byte[4];
         container.ReadExactly(magic);
@@ -46,15 +51,42 @@ public static partial class FileSystemPreservation
         if (BinaryPrimitives.ReadUInt32LittleEndian(magic) == 0xED26FF3A)
         {
             using var sparse = SparseContainerAccess.Resolve().OpenLogicalView(container);
-            VerifyRebuiltFilesystem(sparse.Logical, plan, token);
+            VerifyRebuiltFilesystem(sparse.Logical, plan, token, contentBytes);
         }
         else
         {
-            VerifyRebuiltFilesystem(container, plan, token);
+            VerifyRebuiltFilesystem(container, plan, token, contentBytes);
         }
+
+        contentBytes?.Complete();
     }
 
-    private static void VerifyRebuiltFilesystem(Stream image, FileSystemEditPlan plan, CancellationToken token)
+    /// <summary>
+    /// Summed host size of the regular files the rebuilt-image verification reads back, used as the denominator of
+    /// the verification stage so the reported fraction reaches exactly one.
+    /// <para>重建镜像校验要读回的常规文件宿主大小之和，用作校验阶段的分母，使上报比例恰好到达 1。</para>
+    /// </summary>
+    /// <param name="plan">Edit plan whose regular files are measured.
+    /// <para>待度量的编辑计划，取其常规文件。</para></param>
+    /// <returns>The summed content byte count. <para>内容字节总数。</para></returns>
+    private static long PlannedContentBytes(FileSystemEditPlan plan)
+    {
+        long total = 0;
+        foreach (var (host, entry) in plan.Files)
+        {
+            if ((entry.Mode & 0xF000) != 0x8000)
+            {
+                continue;
+            }
+
+            total = checked(total + new FileInfo(plan.ContentSource(host)).Length);
+        }
+
+        return total;
+    }
+
+    private static void VerifyRebuiltFilesystem(Stream image, FileSystemEditPlan plan, CancellationToken token,
+        ExtractionByteCounter? progress = null)
     {
         var format = DetectFilesystem(image);
         Dictionary<string, PreservedInodeEntry> actual;
@@ -104,7 +136,8 @@ public static partial class FileSystemPreservation
                 outputLinks[found.Inode] = expected.Inode;
             }
         }
-        WithContentReader(image, format, read => VerifyContents(plan, read, token), token);
+        Action<int>? processed = progress is null ? null : progress.Add;
+        WithContentReader(image, format, read => VerifyContents(plan, read, token, processed), token);
     }
 
     private static void WithContentReader(Stream image, string format, Action<Action<string, Stream>> verify, CancellationToken token)
@@ -200,7 +233,8 @@ public static partial class FileSystemPreservation
         }
     }
 
-    private static void VerifyContents(FileSystemEditPlan plan, Action<string, Stream> read, CancellationToken token)
+    private static void VerifyContents(FileSystemEditPlan plan, Action<string, Stream> read, CancellationToken token,
+        Action<int>? processed = null)
     {
         foreach (var (host, entry) in plan.Files)
         {
@@ -211,7 +245,8 @@ public static partial class FileSystemPreservation
             }
             var source = plan.ContentSource(host);
             using var hash = new HashingWriteStream(Stream.Null, leaveOpen: true);
-            using var bounded = new CountingWriteStream(hash, new FileInfo(source).Length, leaveOpen: true, cancellationToken: token);
+            using var bounded = new CountingWriteStream(hash, new FileInfo(source).Length, leaveOpen: true,
+                cancellationToken: token, bytesWritten: processed);
             read(entry.Path, bounded);
             if (!string.Equals(hash.GetHashHex(), HashFile(source, token), StringComparison.OrdinalIgnoreCase))
             {

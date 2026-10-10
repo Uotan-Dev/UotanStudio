@@ -251,7 +251,7 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider,
                 if (Directory.Exists(inputPath)
                     && RepackMetadata.Read(inputPath)?.FormatName == FormatName
                     && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken,
-                        report => rebuildReport = report))
+                        report => rebuildReport = report, progress: progress))
                     return FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes.",
                         metadata: rebuildReport);
                 if (!Directory.Exists(inputPath))

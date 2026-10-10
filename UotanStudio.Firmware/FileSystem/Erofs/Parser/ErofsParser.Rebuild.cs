@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
+using System.Text;
 using System.Text.Json.Nodes;
+using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Parser;
@@ -35,7 +37,8 @@ public sealed partial class ErofsParser
         };
     }
 
-    /// <summary>Reads the source compression contracts and inode timestamps for an edited rebuild.</summary>
+    /// <summary>Reads the source compression contracts, inode timestamps, declared superblock feature words,
+    /// dot-omitted advise dimension and device table for an edited rebuild.</summary>
     internal ErofsOptions ReadRebuildOptions()
     {
         var codecs = ReadCompressionOptions();
@@ -50,6 +53,7 @@ public sealed partial class ErofsParser
             (entry, _) => ReadRebuildInodeRecord(entry, codecs, defaultAlgorithm));
         var inodes = new Dictionary<ulong, ErofsSourceInode>(entries.Count);
         var compressed = false;
+        var adviseObserved = false;
         for (var i = 0; i < entries.Count; i++)
         {
             var record = records[i];
@@ -57,6 +61,10 @@ public sealed partial class ErofsParser
             {
                 compressed = true;
                 defaultAlgorithm = record.Algorithm;
+            }
+            if (!adviseObserved && record.NlinkOneOrDotOmitted)
+            {
+                adviseObserved = true;
             }
             inodes.Add(entries[i].Nid, record);
         }
@@ -89,9 +97,11 @@ public sealed partial class ErofsParser
         selected.TailPacking = inodes.Values.Any(i => i.InlineData);
         selected.SourceInodes = inodes;
         selected.SourceCompressionOptions = codecs;
-        selected.LegacyCompatibility = !_superblock.HasBigPcluster
-            && !_superblock.HasZtailpacking
-            && !_superblock.HasMetabox
+        selected.Features = ErofsFeatureSet.FromWords(_superblock.FeatureCompat, _superblock.FeatureIncompat);
+        selected.FeaturesAuthoritative = true;
+        selected.LegacyCompatibility = !selected.Features.Contains(ErofsFeature.BigPcluster)
+            && !selected.Features.Contains(ErofsFeature.Ztailpacking)
+            && !selected.Features.Contains(ErofsFeature.Metabox)
             && _superblock.PackedNid == 0;
         if (selected.LegacyCompatibility)
         {
@@ -100,7 +110,96 @@ public sealed partial class ErofsParser
             selected.Metabox = false;
             selected.Dedup = false;
         }
+
+        var droppedIncompatBits = 0u;
+        if (selected.CompressedTailPacking && !selected.Features.Contains(ErofsFeature.Ztailpacking))
+        {
+            selected.CompressedTailPacking = false;
+            droppedIncompatBits |= ErofsSuperblock.IncompatZtailpacking;
+        }
+
+        if ((selected.Fragments || selected.Dedup) && !selected.Features.Contains(ErofsFeature.Fragments))
+        {
+            selected.Fragments = false;
+            selected.Dedup = false;
+            droppedIncompatBits |= ErofsSuperblock.IncompatFragments;
+        }
+
+        if (selected.Metabox && !selected.Features.Contains(ErofsFeature.Metabox))
+        {
+            selected.Metabox = false;
+            droppedIncompatBits |= ErofsSuperblock.IncompatMetabox;
+        }
+
+        selected.DotOmitted = !selected.LegacyCompatibility && adviseObserved
+            ? ErofsTriStateFeature.Enabled
+            : ErofsTriStateFeature.Disabled;
+        if (TryReadExtraDeviceDescriptors(out var extraDevices))
+        {
+            selected.ExtraDeviceCount = extraDevices.Length;
+            selected.ExtraDeviceImages = extraDevices;
+        }
+        else
+        {
+            selected.ExtraDeviceCount = 0;
+            selected.ExtraDeviceImages = null;
+            if (selected.Features.Contains(ErofsFeature.DeviceTable))
+            {
+                selected.Features = selected.Features.Without(ErofsFeature.DeviceTable);
+                droppedIncompatBits |= ErofsSuperblock.IncompatDeviceTable;
+            }
+        }
+
+        selected.DroppedIncompatBits = droppedIncompatBits;
         return selected;
+    }
+
+    /// <summary>
+    /// Replays the source device table as builder descriptors. A declared <c>device_table</c> bit is only
+    /// honoured when every extra slot yields a descriptor that passes <see cref="ErofsOptions.Validate"/>'s
+    /// device rules, because the writer would otherwise advertise a table it cannot emit; note the shared
+    /// incompat bit also names <c>compr_head2</c>, so dropping the table drops that alias too.
+    /// <para>把源设备表重放为打包器描述符。已声明的 <c>device_table</c> 位只有在每个额外槽位都能通过
+    /// <see cref="ErofsOptions.Validate"/> 设备规则时才被兑现，否则写入方会宣称一个无法写出的设备表；注意该
+    /// incompat 位与 <c>compr_head2</c> 共用，移除设备表也会一并移除该别名。</para>
+    /// </summary>
+    /// <param name="devices">One descriptor per extra slot, sized in bytes; empty when the source declares no
+    /// extra devices. <para>每个额外槽位一个描述符，以字节表示大小；源未声明额外设备时为空。</para></param>
+    /// <returns><see langword="true"/> when the declared table can be re-emitted verbatim.
+    /// <para>已声明的设备表可以逐字重新输出时为 <see langword="true"/>。</para></returns>
+    private bool TryReadExtraDeviceDescriptors(out ErofsDeviceSpec[] devices)
+    {
+        devices = [];
+        var count = _superblock.ExtraDevices;
+        if (count == 0)
+        {
+            return !_superblock.HasDeviceTable;
+        }
+
+        var slots = _deviceSlots;
+        if (slots is null || slots.Length <= count)
+        {
+            return false;
+        }
+
+        var synthesized = new ErofsDeviceSpec[count];
+        for (var i = 0; i < count; i++)
+        {
+            var slot = slots[i + 1];
+            var tag = Encoding.UTF8.GetStringTrimNul(slot.Tag);
+            if (tag.Length == 0
+                || Encoding.UTF8.GetByteCount(tag) >= ErofsDeviceSlot.TagSize
+                || slot.Blocks == 0
+                || slot.Blocks > (ulong)(long.MaxValue / _blockSize))
+            {
+                return false;
+            }
+
+            synthesized[i] = new ErofsDeviceSpec(tag, checked((long)slot.Blocks * _blockSize));
+        }
+
+        devices = synthesized;
+        return true;
     }
 
     /// <summary>Decodes one inode's storage strategy; thread-safe because all source reads take the stream lock.</summary>
@@ -172,7 +271,8 @@ public sealed partial class ErofsParser
         return new(inode.CTime, inode.CTimeNsec, inode.IsExtended, isCompressed,
             algorithm, inode.DataLayout == ErofsInode.DataLayoutCompactIndexes,
             inode.DataLayout == ErofsInode.DataLayoutInline, logicalClusterSize, entry.Path,
-            sourceExtentClusterSize, sourceExtentRecordSize);
+            sourceExtentClusterSize, sourceExtentRecordSize,
+            (inode.Advise & ErofsInode.AdviseBitNlinkOneOrDotOmitted) != 0);
     }
 
     private Dictionary<ErofsCompressionAlgorithm, ErofsOptions> ReadCompressionOptions()

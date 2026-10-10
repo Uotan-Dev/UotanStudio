@@ -1,5 +1,6 @@
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -40,6 +41,63 @@ public sealed class ErofsBigPclusterTests
         var maxBytes = parser.MaxCompressedPclusterBytes();
         Assert.True(maxBytes > BlockSize,
             $"expected a pcluster spanning multiple {BlockSize}-byte blocks (compacted={compacted}); maxBytes={maxBytes} clusterOfs={parser.MaxCompressedClusterOfs()} len={image.Length}.");
+        Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
+    }
+
+    [Fact]
+    public void Build_DeclaredBigPclusterFeature_WritesMultiBlockPclusterAndSharedIncompatBit()
+    {
+        var payload = BigPclusterPayload();
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", payload);
+        var options = new ErofsOptions
+        {
+            BlockSize = BlockSize,
+            Compress = true,
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            Features = ErofsFeatureSet.FromWords(ErofsSuperblock.CompatSbChecksum, ErofsSuperblock.IncompatLz4_0Padding)
+                .With(ErofsFeature.CompressionConfigs),
+        };
+
+        var image = new ErofsBuilder().Build(source.Path, options);
+        var superblock = ErofsSuperblock.FromImage(image);
+
+        Assert.Equal(0x00000003u, superblock.FeatureIncompat);
+        Assert.True(options.FeaturesAuthoritative);
+        Assert.Equal(0u, options.AddedIncompatBits);
+        Assert.True(options.Features.Contains(ErofsFeature.BigPcluster));
+        using var parser = new ErofsParser(image);
+        Assert.True(parser.MaxCompressedPclusterBytes() > BlockSize,
+            $"the declared feature must still license a multi-block pcluster; maxBytes={parser.MaxCompressedPclusterBytes()} len={image.Length}.");
+        Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
+    }
+
+    [Fact]
+    public void Build_UndeclaredBigPclusterWithPinnedPcluster_KeepsEveryFrameInOneBlock()
+    {
+        var payload = BigPclusterPayload();
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", payload);
+        var options = new ErofsOptions
+        {
+            BlockSize = BlockSize,
+            Compress = true,
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            MaxPclusterSize = BlockSize,
+            UseCompactedIndexes = false,
+            Features = ErofsFeatureSet.FromWords(ErofsSuperblock.CompatSbChecksum, ErofsSuperblock.IncompatLz4_0Padding)
+                .With(ErofsFeature.Lz4ZeroPadding),
+        };
+
+        var image = new ErofsBuilder().Build(source.Path, options);
+        var superblock = ErofsSuperblock.FromImage(image);
+
+        Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, superblock.FeatureIncompat);
+        Assert.Equal(0u, superblock.FeatureIncompat & ErofsSuperblock.IncompatBigPcluster);
+        Assert.Equal(ErofsCompression.Lz4DistanceMax, superblock.AvailableComprAlgs);
+        using var parser = new ErofsParser(image);
+        Assert.True(parser.MaxCompressedPclusterBytes() <= BlockSize,
+            $"an undeclared big_pcluster must keep every frame inside one block; maxBytes={parser.MaxCompressedPclusterBytes()}.");
         Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
     }
 

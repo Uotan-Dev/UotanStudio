@@ -1,3 +1,5 @@
+using System.Text;
+using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
@@ -14,7 +16,10 @@ namespace UotanStudio.Firmware.FileSystem.Erofs;
 /// </summary>
 internal static class ErofsRebuildMetadata
 {
-    /// <summary>Projects parsed rebuild options into their persisted form.<para>将解析得到的重建选项投影为持久化形式。</para></summary>
+    /// <summary>Projects parsed rebuild options into their persisted form. The raw superblock feature words and
+    /// the dot-omitted dimension are stored only when the options carry a declaration, so a profile without one
+    /// keeps both fields absent.<para>将解析得到的重建选项投影为持久化形式。仅在选项携带声明时才保存原始超级块
+    /// 特性字与 dot-omitted 维度，未携带声明的档案会让两个字段保持缺失。</para></summary>
     internal static ErofsRebuildParameters Capture(ErofsOptions options)
     {
         var parameters = new ErofsRebuildParameters
@@ -44,7 +49,19 @@ internal static class ErofsRebuildMetadata
             Lz4MaxDistance = options.Lz4MaxDistance,
             MaxPclusterSize = options.MaxPclusterSize,
             LegacyCompatibility = options.LegacyCompatibility,
+            DroppedIncompatBits = options.DroppedIncompatBits,
         };
+        if (!options.Features.IsAuto)
+        {
+            parameters.FeatureCompat = options.Features.CompatBits;
+            parameters.FeatureIncompat = options.Features.IncompatBits;
+        }
+
+        if (options.DotOmitted != ErofsTriStateFeature.Auto)
+        {
+            parameters.DotOmitted = options.DotOmitted.ToString();
+        }
+
         if (options.SourceCompressionOptions is { } codecs)
         {
             foreach (var codec in codecs.OrderBy(pair => pair.Key))
@@ -150,7 +167,23 @@ internal static class ErofsRebuildMetadata
         return parameters;
     }
 
-    /// <summary>Rebuilds the EROFS options from the persisted profile; the profile is untrusted input and is validated.<para>根据持久化档案重建 EROFS 选项；该档案属于不可信输入并会校验。</para></summary>
+    /// <summary>
+    /// Rebuilds the EROFS options from the persisted profile; the profile is untrusted input and is validated.
+    /// A profile carrying the recorded feature words makes them the authoritative declaration together with the
+    /// stored dot-omitted dimension; a snapshot predating those fields keeps the declaration derived, so such a
+    /// rebuild is byte-identical to the profile-less path.
+    /// <para>根据持久化档案重建 EROFS 选项；该档案属于不可信输入并会校验。记录了特性字的档案会让这两个字连同
+    /// 保存的 dot-omitted 维度成为权威声明；早于这些字段的快照仍按推导式声明，使该重建与无档案路径逐字节一致。</para>
+    /// </summary>
+    /// <param name="parameters">Persisted profile read from the metadata document.
+    /// <para>从元数据文档读出的持久化档案。</para></param>
+    /// <returns>The options a rebuild consumes, with the inherited declaration replayed when the profile carries
+    /// one. <para>重建所消费的选项；档案携带声明时一并重放。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The document holds an unknown algorithm or dot-omitted
+    /// name, an out-of-range field, or a device table that cannot be re-emitted.
+    /// <para>文档含未知的算法名或 dot-omitted 名称、超出范围字段，或无法重新输出的设备表。</para></exception>
+    /// <exception cref="FileSystemUnsupportedFeatureException">The inherited incompat word declares a feature the
+    /// managed writer can only parse. <para>继承的 incompat 字声明了写入方仅能解析的特性。</para></exception>
     internal static ErofsOptions Restore(ErofsRebuildParameters parameters)
     {
         ArgumentNullException.ThrowIfNull(parameters);
@@ -185,6 +218,14 @@ internal static class ErofsRebuildMetadata
             OptimizeCompression = true,
         };
 
+        if (parameters.FeatureCompat is { } featureCompat && parameters.FeatureIncompat is { } featureIncompat)
+        {
+            RejectUnemittableIncompat(featureIncompat);
+            options.Features = ErofsFeatureSet.FromWords(featureCompat, featureIncompat);
+            options.FeaturesAuthoritative = true;
+            options.DotOmitted = ParseDotOmitted(parameters.DotOmitted);
+        }
+
         if (parameters.SourceDevices is { Count: > 0 } devices)
         {
             if (devices.Count > ushort.MaxValue)
@@ -196,6 +237,11 @@ internal static class ErofsRebuildMetadata
                     throw new FileSystemCorruptedException("Invalid EROFS source device descriptor.");
                 return new ErofsSourceDevice([.. device.Tag], device.Blocks, device.UniAddr);
             })];
+        }
+
+        if (parameters.ExtraDeviceCount > 0)
+        {
+            options.ExtraDeviceImages = ReadExtraDeviceDescriptors(parameters, options.BlockSize);
         }
 
         if (parameters.Codecs.Count > 0)
@@ -256,6 +302,100 @@ internal static class ErofsRebuildMetadata
         }
 
         return options;
+    }
+
+    /// <summary>
+    /// Rejects an inherited incompat word naming a structure the managed writer can only parse, so a
+    /// preserved rebuild never declares a feature it cannot lay out on disk.
+    /// <para>拒绝继承的 incompat 字中写入方仅能解析、无法重新输出的结构位，使保留式重建不会声明无法落盘的
+    /// 特性。</para>
+    /// </summary>
+    /// <param name="incompatBits">Incompat word recorded by the extraction.
+    /// <para>解包阶段记录的 incompat 字。</para></param>
+    /// <exception cref="FileSystemUnsupportedFeatureException">The declaration names at least one read-only
+    /// incompat feature. <para>声明至少涉及一个只读 incompat 特性。</para></exception>
+    private static void RejectUnemittableIncompat(uint incompatBits)
+    {
+        var names = ErofsFeatureTable.ReadOnlyIncompatNames(incompatBits);
+        if (names.Length == 0)
+        {
+            return;
+        }
+
+        var guidance = string.Join("; ", ErofsFeatureTable.Entries
+            .Where(row => !row.IsCompat && row.Capability == ErofsFeatureCapability.ReadOnlyForEmit
+                && (incompatBits & row.Bit) != 0)
+            .Select(row => $"{ErofsFeatureTable.NameOf(row.Feature)} requires at least Linux "
+                + $"{ErofsFeatureTable.DescribeKernel(row.Feature)} and cannot be re-emitted; clear it with "
+                + $"ErofsFeatures=!{ErofsFeatureTable.NameOf(row.Feature)}"));
+        throw new FileSystemUnsupportedFeatureException(
+            $"EROFS source image declares read-only incompatible features {names}. {guidance}.");
+    }
+
+    /// <summary>
+    /// Reads the stored <c>ErofsTriStateFeature</c> member name for the dot-omitted advise dimension, which
+    /// the extraction recorded as text so the document stays locale-free.
+    /// <para>读取为 dot-omitted advise 维度保存的 <c>ErofsTriStateFeature</c> 成员名；解包阶段以文本记录，
+    /// 使文档不依赖语言环境。</para>
+    /// </summary>
+    /// <param name="name">Stored member name, or <see langword="null"/> when the snapshot predates the field.
+    /// <para>保存的成员名；快照早于该字段时为 <see langword="null"/>。</para></param>
+    /// <returns>The declared dimension; <see cref="ErofsTriStateFeature.Auto"/> when nothing was stored.
+    /// <para>声明的维度；未记录时返回 <see cref="ErofsTriStateFeature.Auto"/>。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The stored text is not a member name.
+    /// <para>保存的文本不是成员名。</para></exception>
+    private static ErofsTriStateFeature ParseDotOmitted(string? name)
+    {
+        if (name is null)
+        {
+            return ErofsTriStateFeature.Auto;
+        }
+
+        if (Enum.TryParse<ErofsTriStateFeature>(name, ignoreCase: false, out var resolved) && Enum.IsDefined(resolved))
+        {
+            return resolved;
+        }
+
+        throw new FileSystemCorruptedException(
+            $"Unknown EROFS dot-omitted declaration '{name}' in preserved metadata.");
+    }
+
+    /// <summary>
+    /// Replays the preserved device table as the descriptors the writer needs, so a declared
+    /// <c>device_table</c> bit always comes with the on-disk slots behind it.
+    /// <para>把保留的设备表重放为写入方需要的描述符，使已声明的 <c>device_table</c> 位总是带着其背后真正落盘
+    /// 的槽位。</para>
+    /// </summary>
+    /// <param name="parameters">Untrusted preserved profile. <para>不可信的保留档案。</para></param>
+    /// <param name="blockSize">Block size of the rebuild, used to turn slot blocks into bytes.
+    /// <para>重建的块大小，用于把槽位块数换算为字节数。</para></param>
+    /// <returns>One descriptor per declared extra device.
+    /// <para>每个已声明的额外设备一个描述符。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The declared count has no recorded slot, or a slot
+    /// cannot be named and sized on disk. <para>声明的数量缺少记录的槽位，或某槽位无法在磁盘上命名与定长。</para></exception>
+    private static ErofsDeviceSpec[] ReadExtraDeviceDescriptors(ErofsRebuildParameters parameters, int blockSize)
+    {
+        if (parameters.ExtraDeviceCount > parameters.SourceDevices.Count)
+        {
+            throw new FileSystemCorruptedException(
+                "EROFS preserved metadata declares extra devices it never recorded a slot for.");
+        }
+
+        var descriptors = new ErofsDeviceSpec[parameters.ExtraDeviceCount];
+        for (var i = 0; i < descriptors.Length; i++)
+        {
+            var device = parameters.SourceDevices[i];
+            var tag = Encoding.UTF8.GetStringTrimNul(device.Tag);
+            if (device.Blocks == 0 || device.Blocks > (ulong)(long.MaxValue / blockSize)
+                || tag.Length == 0 || Encoding.UTF8.GetByteCount(tag) >= ErofsDeviceSlot.TagSize)
+            {
+                throw new FileSystemCorruptedException("EROFS preserved device table cannot be re-emitted.");
+            }
+
+            descriptors[i] = new ErofsDeviceSpec(tag, checked((long)device.Blocks * blockSize));
+        }
+
+        return descriptors;
     }
 
     private static ErofsCompressionAlgorithm ParseAlgorithm(string? name)

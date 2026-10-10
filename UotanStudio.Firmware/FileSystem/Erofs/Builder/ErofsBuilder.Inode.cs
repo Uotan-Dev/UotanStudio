@@ -300,9 +300,16 @@ public sealed partial class ErofsBuilder
         return node.Size > uint.MaxValue ? ErofsInode.ExtendedSize : ErofsInode.CompactSize;
     }
 
-    private static ErofsInode BuildInode(BuildNode node, int blockSize, ulong now, bool legacyCompatibility)
+    /// <summary>
+    /// Builds one inode record. The advise bit shared by <c>EROFS_I_NLINK_1</c> and dot-omitted directories
+    /// follows the resolved declaration, so a compact inode never carries a bit the declared feature set
+    /// forbids while the superblock word and the per-node layout stay in agreement.
+    /// <para>构造单条 inode 记录。<c>EROFS_I_NLINK_1</c> 与省略点项目录共用的 advise 位跟随已解析的声明，
+    /// 因此紧凑 inode 不会携带声明特性集禁止的位，超级块字与逐节点布局也始终一致。</para>
+    /// </summary>
+    private static ErofsInode BuildInode(BuildNode node, int blockSize, ulong now, ErofsOptions options)
     {
-        var inode = new ErofsInode { AllowNlinkOneBit = !legacyCompatibility };
+        var inode = new ErofsInode { AllowNlinkOneBit = DeclaredNlinkOneAdvice(options) };
         if (GetInodeHeaderSize(node) == ErofsInode.ExtendedSize)
         {
             inode.Advise |= ErofsInode.FlagExtended;

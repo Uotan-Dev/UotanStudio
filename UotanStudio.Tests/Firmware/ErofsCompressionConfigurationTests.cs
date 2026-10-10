@@ -182,6 +182,16 @@ public class ErofsCompressionConfigurationTests
         Assert.True(codec.LegacyCompatibility);
         Assert.Equal(codec.BlockSize, codec.MaxPclusterSize);
         Assert.False(codec.UseCompactedIndexes);
+        Assert.True(restored.FeaturesAuthoritative);
+        Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, restored.Features.IncompatBits);
+        Assert.Equal(ErofsSuperblock.CompatSbChecksum, restored.Features.CompatBits);
+        Assert.False(restored.Features.Contains(ErofsFeature.BigPcluster));
+        Assert.False(restored.Features.Contains(ErofsFeature.CompressionConfigs));
+        Assert.Equal(ErofsTriStateFeature.Disabled, restored.DotOmitted);
+        Assert.True(codec.FeaturesAuthoritative);
+        Assert.Equal(restored.Features.IncompatBits, codec.Features.IncompatBits);
+        Assert.Equal(restored.Features.CompatBits, codec.Features.CompatBits);
+        Assert.Equal(restored.DotOmitted, codec.DotOmitted);
     }
 
     [Fact]

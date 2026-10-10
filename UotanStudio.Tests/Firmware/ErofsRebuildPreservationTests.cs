@@ -1,5 +1,6 @@
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -87,6 +88,7 @@ public class ErofsRebuildPreservationTests
         });
 
         var extracted = Path.Combine(source.Path, "extracted");
+        var originalSuperblock = ErofsSuperblock.FromImage(original);
         using (var parser = new ErofsParser(original))
         {
             parser.ExtractToDirectory(extracted);
@@ -95,9 +97,14 @@ public class ErofsRebuildPreservationTests
         {
             var options = parser.ReadRebuildOptions();
             var repacked = new ErofsBuilder().Build(extracted, options);
-            var superblock = UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsSuperblock.FromImage(repacked);
-            Assert.Equal(UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsSuperblock.IncompatLz4_0Padding,
-                superblock.FeatureIncompat);
+            var repackedSuperblock = ErofsSuperblock.FromImage(repacked);
+            Assert.Equal(originalSuperblock.FeatureIncompat, repackedSuperblock.FeatureIncompat);
+            Assert.Equal(originalSuperblock.FeatureCompat, repackedSuperblock.FeatureCompat);
+            Assert.False(options.Features.IsAuto);
+            Assert.True(options.FeaturesAuthoritative);
+            Assert.Equal(originalSuperblock.FeatureIncompat, options.Features.IncompatBits);
+            Assert.Equal(0u, options.AddedIncompatBits);
+            Assert.Equal(0u, options.DroppedCompatBits);
 
             using var verify = new ErofsParser(repacked);
             Assert.Equal(payload, verify.ReadFileBytes("data.bin"));
