@@ -7,6 +7,8 @@ namespace UotanStudio.Tests.Firmware;
 
 public class Crc32cTests
 {
+    private static readonly int[] Crc32Lengths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 23, 24, 31, 32, 33, 63, 64, 65, 127, 128, 255, 256, 257, 511, 512, 513, 1023, 4095];
+
     [Fact]
     public void Compute_KnownVector_MatchesCrc32cRegisterSemantics()
     {
@@ -27,10 +29,77 @@ public class Crc32cTests
     {
         Assert.Equal(0x5045B54Au, Crc32c.Compute(ReadOnlySpan<byte>.Empty, 0x5045B54Au));
     }
+
+    [Fact]
+    public void Compute_RandomLengthsAndSeeds_MatchesBitwiseReference()
+    {
+        var random = new Random(0x5EED1234);
+        var seeds = new uint[] { 0x00000000u, 0x1CF96D7Cu, 0x5045B54Au, 0x82F63B78u, 0xF2F52010u, 0xFFFFFFFFu };
+
+        foreach (var length in Crc32Lengths)
+        {
+            var data = new byte[length];
+            random.NextBytes(data);
+
+            foreach (var seed in seeds)
+            {
+                Assert.Equal(Crc32cBitwise(data, seed), Crc32c.Compute(data, seed));
+            }
+        }
+    }
+
+    [Fact]
+    public void Compute_RandomSplitPoints_ContinuationMatchesSinglePass()
+    {
+        var random = new Random(unchecked((int)0xC0FFEE01u));
+        var data = new byte[517];
+        random.NextBytes(data);
+
+        foreach (var seed in new uint[] { 0x00000000u, 0x1CF96D7Cu, 0xFFFFFFFFu })
+        {
+            foreach (var split in new[] { 0, 1, 3, 7, 8, 9, 255, 256, 257, 516, 517 })
+            {
+                var single = Crc32c.Compute(data, seed);
+                var continued = Crc32c.Compute(data.AsSpan(split), Crc32c.Compute(data.AsSpan(0, split), seed));
+
+                Assert.Equal(single, continued);
+            }
+        }
+    }
+
+    [Fact]
+    public void Compute_SingleByte_MatchesBitwiseReference()
+    {
+        var seed = 0xDEADBEEFu;
+
+        for (var b = 0; b < 256; b++)
+        {
+            byte[] data = [(byte)b];
+
+            Assert.Equal(Crc32cBitwise(data, seed), Crc32c.Compute(data, seed));
+        }
+    }
+
+    private static uint Crc32cBitwise(ReadOnlySpan<byte> data, uint seed)
+    {
+        var crc = seed;
+        foreach (var b in data)
+        {
+            crc ^= b;
+            for (var j = 0; j < 8; j++)
+            {
+                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0x82F63B78u : crc >> 1;
+            }
+        }
+
+        return crc;
+    }
 }
 
 public class Crc32Tests
 {
+    private static readonly int[] Crc32Lengths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 23, 24, 31, 32, 33, 63, 64, 65, 127, 128, 255, 256, 257, 511, 512, 513, 1023, 4095];
+
     [Fact]
     public void Compute_KnownVector_MatchesCrc32RegisterSemantics()
     {
@@ -55,6 +124,77 @@ public class Crc32Tests
         }
 
         Assert.Equal(bitwise, tabled);
+    }
+
+    [Fact]
+    public void Compute_RandomLengthsAndSeeds_MatchesBitwiseReference()
+    {
+        var random = new Random(0x5EED4321);
+        var seeds = new uint[] { 0x00000000u, 0x340BC6D9u, 0xEDB88320u, 0xF2F52010u, 0xFFFFFFFFu };
+
+        foreach (var length in Crc32Lengths)
+        {
+            var data = new byte[length];
+            random.NextBytes(data);
+
+            foreach (var seed in seeds)
+            {
+                Assert.Equal(Crc32Bitwise(data, seed), Crc32.Compute(data, seed));
+            }
+        }
+    }
+
+    [Fact]
+    public void Compute_RandomSplitPoints_ContinuationMatchesSinglePass()
+    {
+        var random = new Random(unchecked((int)0xC0FFEE02u));
+        var data = new byte[517];
+        random.NextBytes(data);
+
+        foreach (var seed in new uint[] { 0x00000000u, 0xF2F52010u, 0xFFFFFFFFu })
+        {
+            foreach (var split in new[] { 0, 1, 3, 7, 8, 9, 255, 256, 257, 516, 517 })
+            {
+                var single = Crc32.Compute(data, seed);
+                var continued = Crc32.Compute(data.AsSpan(split), Crc32.Compute(data.AsSpan(0, split), seed));
+
+                Assert.Equal(single, continued);
+            }
+        }
+    }
+
+    [Fact]
+    public void Compute_SingleByte_MatchesBitwiseReference()
+    {
+        var seed = 0xF2F52010u;
+
+        for (var b = 0; b < 256; b++)
+        {
+            byte[] data = [(byte)b];
+
+            Assert.Equal(Crc32Bitwise(data, seed), Crc32.Compute(data, seed));
+        }
+    }
+
+    [Fact]
+    public void Compute_EmptySpan_ReturnsSeedUnchanged()
+    {
+        Assert.Equal(0xF2F52010u, Crc32.Compute(ReadOnlySpan<byte>.Empty, 0xF2F52010u));
+    }
+
+    private static uint Crc32Bitwise(ReadOnlySpan<byte> data, uint seed)
+    {
+        var crc = seed;
+        foreach (var b in data)
+        {
+            crc ^= b;
+            for (var j = 0; j < 8; j++)
+            {
+                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+            }
+        }
+
+        return crc;
     }
 }
 
