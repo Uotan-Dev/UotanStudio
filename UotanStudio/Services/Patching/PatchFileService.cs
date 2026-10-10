@@ -181,11 +181,16 @@ public static class PatchFileService
     };
 
     /// <summary>
-    /// Rejects reparse points between the deepest already existing ancestor of the path and the path itself. The walk
-    /// stops at that existing ancestor instead of continuing to the filesystem root, because ancestors above a
-    /// workspace root are chosen by the user or the operating system and are not archive-controlled. macOS resolves
-    /// <c>Path.GetTempPath()</c> through the <c>/var</c> to <c>/private/var</c> symbolic link, so an unbounded walk
-    /// rejects every legitimate workspace.
+    /// Rejects reparse points between the deepest existing non-link directory of the path and the path itself.
+    /// <para>
+    /// 沿目录向上检查到已存在的最深真实目录为止，中途遇到符号链接即拒绝。边界之上的祖先由调用方或操作系统选定，
+    /// 不受补丁内容控制，因此不参与判定；macOS 上 <c>/var</c> 是指向 <c>/private/var</c> 的符号链接，
+    /// 临时目录必定经由它解析，把链接本身当作边界并拒绝会误伤所有合法的工作区。
+    /// </para>
+    /// The walk stops at the deepest existing non-link directory because ancestors above a workspace root are chosen
+    /// by the caller or the operating system and are not patch-controlled. macOS resolves <c>Path.GetTempPath()</c>
+    /// through the <c>/var</c> to <c>/private/var</c> symbolic link, so treating that link as the boundary rejects
+    /// every legitimate workspace.
     /// </summary>
     private static void RejectLinks(string path)
     {
@@ -202,17 +207,13 @@ public static class PatchFileService
                 throw new IOException("Patch paths must not traverse symbolic links or junctions.");
             }
         }
-        if ((File.Exists(boundary) || Directory.Exists(boundary))
-            && (File.GetAttributes(boundary) & FileAttributes.ReparsePoint) != 0)
-        {
-            throw new IOException("Patch paths must not traverse symbolic links or junctions.");
-        }
     }
 
     /// <summary>
-    /// Returns the deepest ancestor that already exists as a directory or reparse point. Descendants of a dangling
-    /// symbolic link report no attributes at all, so the walk skips them and keeps descending until it reaches the
-    /// link itself, which <see cref="RejectLinks"/> then rejects.
+    /// Returns the deepest ancestor that already exists as a real directory. A component that does not exist, or that
+    /// is itself a symbolic link, is skipped so the search continues upwards for a real directory; <see cref="RejectLinks"/>
+    /// still inspects every skipped link while walking down to the target, so a link planted inside a workspace is
+    /// rejected while an operating-system link above it is not.
     /// </summary>
     private static string DeepestExistingAncestor(string full)
     {
@@ -220,12 +221,13 @@ public static class PatchFileService
         {
             if (!Directory.Exists(current))
             {
-                return current;
+                continue;
             }
             if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
             {
-                return current;
+                continue;
             }
+            return current;
         }
         return Path.GetPathRoot(full) ?? full;
     }
