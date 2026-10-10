@@ -186,7 +186,7 @@ public sealed partial class PayloadBuilder
         var sourceBuffer = new byte[chunkSize];
         using var newHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var oldHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        using var sourceIndex = new IncrementalSourceIndex(blockBytes);
+        using var sourceIndex = new IncrementalSourceIndex(source, blockBytes);
         long indexedBlock = 0;
         var sourceRemaining = sourceLength;
         while (sourceRemaining > 0)

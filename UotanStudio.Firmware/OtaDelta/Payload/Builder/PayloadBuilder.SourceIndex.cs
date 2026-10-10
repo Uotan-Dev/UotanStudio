@@ -9,14 +9,18 @@ public sealed partial class PayloadBuilder
     private sealed class IncrementalSourceIndex : IDisposable
     {
         private readonly FileStream _records = BinaryDeltaPatch.CreateTemporaryStream();
-        private readonly FileStream _snapshot = BinaryDeltaPatch.CreateTemporaryStream();
+        private readonly Stream _source;
+        private readonly long _sourceOrigin;
         private readonly long[] _heads = new long[65536];
         private readonly int _blockSize;
         private readonly byte[] _comparison;
         private readonly byte[] _record = new byte[48];
+        private long _indexedBlocks;
 
-        public IncrementalSourceIndex(int blockSize)
+        public IncrementalSourceIndex(Stream source, int blockSize)
         {
+            _source = source;
+            _sourceOrigin = source.Position;
             _blockSize = blockSize;
             _comparison = new byte[blockSize];
             Array.Fill(_heads, -1);
@@ -34,14 +38,16 @@ public sealed partial class PayloadBuilder
             _records.Position = _records.Length;
             _heads[bucket] = _records.Position;
             _records.Write(_record);
-            _snapshot.Position = checked(block * _blockSize);
-            _snapshot.Write(bytes);
+            if (block >= _indexedBlocks)
+            {
+                _indexedBlocks = block + 1;
+            }
         }
 
         [System.Runtime.CompilerServices.SkipLocalsInit]
         public long Find(ReadOnlySpan<byte> bytes, long preferred, CancellationToken token)
         {
-            if (preferred >= 0 && preferred < _snapshot.Length / _blockSize)
+            if (preferred >= 0 && preferred < _indexedBlocks)
             {
                 Read(preferred, _comparison, token);
                 if (bytes.SequenceEqual(_comparison))
@@ -73,14 +79,19 @@ public sealed partial class PayloadBuilder
 
         public void Read(long block, Span<byte> bytes, CancellationToken token)
         {
-            _snapshot.Position = checked(block * _blockSize);
-            ReadIncrementalChunk(_snapshot, bytes, token);
+            ArgumentOutOfRangeException.ThrowIfNegative(block);
+            if (block >= _indexedBlocks)
+            {
+                throw new PayloadGenerationException("Incremental source index cannot read an unindexed block.");
+            }
+
+            _source.Position = _sourceOrigin + checked(block * _blockSize);
+            ReadIncrementalChunk(_source, bytes, token);
         }
 
         public void Dispose()
         {
             _records.Dispose();
-            _snapshot.Dispose();
         }
     }
 }
