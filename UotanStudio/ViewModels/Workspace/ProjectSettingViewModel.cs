@@ -41,6 +41,8 @@ internal partial class ProjectSettingViewModel : Tool
     [ObservableProperty]
     private int eROFSComGrade = 8, bRComGrade = 3;
     [ObservableProperty]
+    private string erofsFeatureOverrides = "";
+    [ObservableProperty]
     private bool f2fsCompressionEnabled;
     [ObservableProperty]
     private string selectedF2fsCompressionAlgorithm = nameof(CompressionAlgorithm.Lz4);
@@ -76,6 +78,9 @@ internal partial class ProjectSettingViewModel : Tool
 
     /// <summary>Whether EXT4 policy values should override preserved source parameters.</summary>
     internal bool HasExt4PolicyOverride { get; private set; }
+
+    /// <summary>Whether the panel declares EROFS feature bits; an empty override string inherits the source image.</summary>
+    internal bool HasErofsFeatureOverride => !string.IsNullOrWhiteSpace(ErofsFeatureOverrides);
 
     /// <summary>Whether RAW/Android Sparse output was explicitly selected.</summary>
     internal bool HasImageFormatOverride { get; private set; }
@@ -141,6 +146,7 @@ internal partial class ProjectSettingViewModel : Tool
         SparseOutput = HasImageFormatOverride ? FormatSPARSE : null,
         ErofsAlgorithm = SelectedErofsAlgorithm,
         ErofsCompLevel = EROFSComGrade,
+        ErofsFeatureOverrides = ErofsFeatureOverrides,
         F2fsCompressionEnabled = HasF2fsCompressionOverride ? F2fsCompressionEnabled : null,
         F2fsCompressionAlgorithm = HasF2fsCompressionOverride ? SelectedF2fsCompressionAlgorithm : null,
         F2fsCompressionLevel = HasF2fsCompressionOverride ? F2fsCompressionLevel : null,
@@ -224,6 +230,7 @@ internal partial class ProjectSettingViewModel : Tool
             ? ErofsAlgorithmSelectors.Lz4HighCompression
             : ErofsAlgorithmSelectors.Normalize(dto.ErofsAlgorithm);
         EROFSComGrade = dto.ErofsCompLevel;
+        ErofsFeatureOverrides = dto.ErofsFeatureOverrides;
         F2fsCompressionEnabled = dto.F2fsCompressionEnabled ?? false;
         SelectedF2fsCompressionAlgorithm = NormalizeF2fsCompressionAlgorithm(dto.F2fsCompressionAlgorithm);
         F2fsCompressionLevel = dto.F2fsCompressionLevel ?? 0;
@@ -245,6 +252,8 @@ internal partial class ProjectSettingViewModel : Tool
         DATSeg = dto.DatSegments;
         _applyingDto = false;
     }
+
+    partial void OnErofsFeatureOverridesChanged(string value) => OnPropertyChanged(nameof(HasErofsFeatureOverride));
 
     partial void OnF2fsCompressionEnabledChanged(bool value) => MarkF2fsCompressionOverride();
 

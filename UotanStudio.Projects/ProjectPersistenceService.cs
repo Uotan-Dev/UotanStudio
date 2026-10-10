@@ -184,6 +184,18 @@ public sealed class ProjectSettingsDto
     public int ErofsCompLevel { get; set; } = 8;
 
     /// <summary>
+    /// EROFS superblock feature-bit overrides named after the upstream erofs-utils feature list. An empty
+    /// value keeps the source image's feature words; a leading <c>!</c> clears one feature.
+    /// <para>以上游 erofs-utils 特性名单命名的 EROFS 超级块特性位覆盖。空值表示沿用源镜像的特性字，
+    /// 前缀 <c>!</c> 表示清除该特性。</para>
+    /// </summary>
+    /// <value>
+    /// Comma-separated upstream feature names; <c>string.Empty</c> stores no override.
+    /// <para>逗号分隔的上游特性名；<c>string.Empty</c> 表示未存储覆盖。</para>
+    /// </value>
+    public string ErofsFeatureOverrides { get; set; } = string.Empty;
+
+    /// <summary>
     /// Explicit F2FS compression selection. A missing value inherits source metadata when rebuilding,
     /// or the format default for a new directory.
     /// <para>显式的 F2FS 压缩选择。缺失值在重建时继承源元数据，新建目录时使用格式默认。</para>

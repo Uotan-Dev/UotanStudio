@@ -161,6 +161,20 @@
             <TextBlock VerticalAlignment="Center"
                        FontSize="13"
                        TextWrapping="Wrap"
+                       ToolTip.Tip="{DynamicResource Dock_EROFSFeaturesHint}"
+                       Text="{DynamicResource Dock_EROFSFeatures}" />
+            <TextBox MinWidth="155" MaxWidth="240"
+                     HorizontalAlignment="Stretch" Padding="5"
+                     ToolTip.Tip="{DynamicResource Dock_EROFSFeaturesHint}"
+                     Text="{Binding ErofsFeatureOverrides}" FontSize="13"
+                     PlaceholderText="lz4_0padding,!ztailpacking" />
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,10,5,0"
+                                    MinLabelWidth="90" MaxLabelWidth="90"
+                                    ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center"
+                       FontSize="13"
+                       TextWrapping="Wrap"
                        Text="{DynamicResource Dock_BRCompLevel}" />
             <ComboBox MinWidth="155" MaxWidth="240"
                       HorizontalAlignment="Stretch" Padding="5"

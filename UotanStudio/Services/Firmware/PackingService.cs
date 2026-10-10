@@ -51,6 +51,12 @@ internal static class PackingService
                 // Let the packing-settings panel override the unpacked metadata for filesystem images.
                 var estimated = EstimateSourceBytes(sourceDirectory);
                 imageProgress.Report((0, estimated));
+                // EXT4、EROFS 与 F2FS 的打包器在保留元数据重建期间自行上报真实字节，收尾时再补一条估算样本
+                // 会以另一个分母重算速度，并把已完成校验的阶段标签拉回构建阶段。
+                // The EXT4, EROFS and F2FS packers report real bytes during a preserved-metadata rebuild; a
+                // closing estimate sample would rescale the speed against a different total and pull the
+                // completed verification stage label back to the build stage.
+                var reportsOwnBytes = metadata.FormatName is "EXT4" or "EROFS" or "F2FS";
                 var focused = hasExplicitSettings
                     && metadata.FormatName is "EXT4" or "EROFS" or "F2FS" or "Android Sparse Image (simg)";
                 if (focused)
@@ -67,24 +73,24 @@ internal static class PackingService
                         && !(targetFormat == "F2FS" && settings.HasF2fsCompressionOverride)
                         && !(targetFormat == "F2FS" && settings.HasF2fsAndroidProfileOverride)
                         && !(targetFormat == "EXT4" && settings.HasExt4PolicyOverride)
+                        && !(targetFormat == "EROFS" && settings.HasErofsFeatureOverride)
                         && !settings.HasImageFormatOverride)
                     {
                         var preserved = RegisteredFirmwareFormats.PackDirectoryAsync(metadata.FormatName, sourceDirectory, outputPath, progress: progress)
                             .GetAwaiter().GetResult();
-                        imageProgress.Report((estimated, estimated));
+                        if (!reportsOwnBytes) imageProgress.Report((estimated, estimated));
                         return preserved;
                     }
 
                     using var overrides = RepackMetadata.UsePackingOverrides(BuildOverrideOptions(settings, targetFormat));
                     var overridden = RegisteredFirmwareFormats.PackDirectoryAsync(targetFormat, sourceDirectory, outputPath, progress: progress)
                         .GetAwaiter().GetResult();
-                    imageProgress.Report((estimated, estimated));
                     return overridden;
                 }
 
                 var result = RegisteredFirmwareFormats.PackDirectoryAsync(metadata.FormatName, sourceDirectory, outputPath, progress: progress)
                     .GetAwaiter().GetResult();
-                imageProgress.Report((estimated, estimated));
+                if (!reportsOwnBytes) imageProgress.Report((estimated, estimated));
                 return result;
             }
 
@@ -131,7 +137,7 @@ internal static class PackingService
     /// </summary>
     private static IReadOnlyDictionary<string, string> BuildOverrideOptions(ProjectSettingViewModel settings, string format)
     {
-        return format switch
+        var options = format switch
         {
             "EXT4" => new Dictionary<string, string>
             {
@@ -158,6 +164,16 @@ internal static class PackingService
                 ["ErofsCompressionLevel"] = settings.EROFSComGrade.ToString(System.Globalization.CultureInfo.InvariantCulture),
             },
         };
+
+        // 特性位覆盖只在用户填写时下发，空值时该键保持缺席，写入方继续按源镜像继承特性位。
+        // The feature-bit override is forwarded only when the user typed one; with an empty value the key
+        // stays absent so the writer keeps inheriting the source image's feature bits.
+        if (format is not "EXT4" and not "F2FS" && settings.HasErofsFeatureOverride)
+        {
+            options["ErofsFeatures"] = settings.ErofsFeatureOverrides;
+        }
+
+        return options;
     }
 
     private static FirmwareOpResult BuildExt4(

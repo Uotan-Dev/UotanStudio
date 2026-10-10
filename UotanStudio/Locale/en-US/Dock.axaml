@@ -67,6 +67,8 @@
     <x:String x:Key="Dock_EROFSAlgorithmHint">lz4 packs faster; lz4hc spends more time searching for a smaller image (EROFS records the same LZ4 codec either way). lzma, deflate and zstd choose a different on-disk codec. The compression level only affects the searching encoders.</x:String>
     <x:String x:Key="Dock_EROFSCompLevel">EROFS Level</x:String>
     <x:String x:Key="Dock_EROFSCompLevelHint">Higher values search harder for a smaller image: it drives the lz4hc search depth and the fast lz4 density/speed trade-off.</x:String>
+    <x:String x:Key="Dock_EROFSFeatures">EROFS Features</x:String>
+    <x:String x:Key="Dock_EROFSFeaturesHint">Leave it empty to inherit the source image's feature bits. Tokens are comma-separated upstream feature names: lz4_0padding, compr_cfgs, big_pcluster, device_table, ztailpacking, fragments, dedupe, metabox. Prefix one with an exclamation mark to clear it, for example !ztailpacking.</x:String>
     <x:String x:Key="Dock_F2FSCompression">F2FS Compression</x:String>
     <x:String x:Key="Dock_F2FSAlgorithm">F2FS Codec</x:String>
     <x:String x:Key="Dock_F2FSCompLevel">F2FS Level</x:String>
