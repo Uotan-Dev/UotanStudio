@@ -137,16 +137,16 @@ dotnet test --solution UotanStudio.slnx --no-restore
 
 ## 当前验证基线
 
-实测工作区验证状态（2026-10-07，.NET 10/C# 14）：
+实测工作区验证状态（2026-10-10，.NET 10/C# 14）：
 
 - `dotnet build UotanStudio.slnx --no-restore --no-incremental -c Debug`：0 错误、0 警告（含 `UotanStudio.Tests`，异步测试一律用 `TestContext.Current.CancellationToken`，无 `xUnit1051`）。
 - `dotnet build UotanStudio.Firmware/UotanStudio.Firmware.csproj --no-restore --nologo --no-incremental -v:n`：0 错误、0 警告。警告清点必须带 `--no-incremental`：增量构建不重跑分析器，会显示"0 个警告"。
 - `TreatWarningsAsErrors=true` 在 `UotanStudio.Comm`、`UotanStudio.Media` 与 `UotanStudio.Firmware` 生效；`UotanStudio.Tests` 另有 `NoWarn CS0618`。在 Firmware 中新增无 XML 注释的公共类型会使构建以 `CS1591`/`RS0016` 失败。
 - whitespace/style `dotnet format --verify-no-changes`：通过。
-- 完整测试集：9795 总数 / 9765 通过 / 28 跳过 / 2 失败，单轮 1m27s（2026-10-07 在仓库内 `UotanStudio.Tests/bin/Debug/net10.0` 测试宿主实测）。两条失败的归属：`FileSystemFieldCapacityTests.ErofsBuilder_SymlinkTargetBeyondInlineBlockCapacity_ThrowsWithTargetAndBlockNumbers` 断言的 EROFS 内联符号链接容量守卫在产品侧还不存在（并行会话在途改动，测试与 `ErofsBuilder.Inode.cs` 同批出现）；`ProjectOperationsBoundaryTests.CreateAndOpen_RestoresDataInOrder_ExcludesMissingImages` 整轮失败、单跑两次全绿，属顺序状态耦合的偶发项。工作区含并行会话的未提交改动，因此该数字是工作区状态而不是某个提交的属性。把测试宿主输出重定向到仓库外目录会让 `FirmwareContextDependencyScannerTests.TryFindRepositoryRoot_CurrentTestHostOutput_FindsCheckedOutSolution` 因找不到 `UotanStudio.slnx` 而失败，并额外产生环境跳过，因此该用例只在仓库内运行时结果有效。
+- 完整测试集：10021 总数 / 9993 通过 / 28 跳过 / 0 失败，单轮约 1m30s（2026-10-10 在仓库内 `UotanStudio.Tests/bin/Debug/net10.0` 测试宿主实测）。工作区含并行会话的未提交改动，因此该数字是工作区状态而不是某个提交的属性。把测试宿主输出重定向到仓库外目录会让 `FirmwareContextDependencyScannerTests.TryFindRepositoryRoot_CurrentTestHostOutput_FindsCheckedOutSolution` 因找不到 `UotanStudio.slnx` 而失败，并额外产生环境跳过，因此该用例只在仓库内运行时结果有效。
 - 28 条跳过全部来自环境门控：`UOTAN_NATIVE_TOOLS`、`UOTAN_LARGE_DATA`、`UOTAN_SMALI_CLASSPATH`、`UOTAN_HOS_UPDATE_APP_SAMPLE`，以及缺失的 `UotanStudio.Comm/Assets/Mtk/Payloads` vendored 载荷目录与无 debug bridge server 的设备用例；缺少门控时按 `Skip = "…"` 明确跳过。
 - JAR/DEX、LP、流式构建、异常日志、Delivery 和镜像输入的定向测试均通过；`UotanStudio.Tests.Comm.Protocols.Adb` 命名空间 48 条全部通过（sync RECV 由测试假件模拟后才可完成）。
 - NativeAOT：`dotnet publish UotanStudio.Desktop -c Release -r win-x64 --self-contained -p:PublishAot=true` 成功，0 错误，仅剩既有的第三方 `IL2026`/`IL2104`/`IL3053` trampoline 警告。发布产物实测通过无头 MCP stdio 冒烟：`initialize`、`tools/list`（40 个工具）以及 zstd、gzip、deflate、zlib、brotli、lz4、xz 六种算法的 `compress_file`/`decompress_file` 往返逐字节一致；GUI 启动后工作区、烧录、节点、交付四页均正常渲染，中文本地化与 Dock 布局完好。brotli 压缩长度在 AOT 与 JIT 产物之间相差约 2.7 KB（两者都能逐字节还原），属代码生成路径差异而非缺陷。
-- 未验证边界：win-arm64、linux-x64、linux-arm64、osx-x64、osx-arm64 四个 RID 未在本机执行；真实 USB 设备、物理手机、macOS/Linux 平台路径、WSL/QEMU 原生挂载与原生工具互操作均未验证。无 server 的 TCP ADB 与 scrcpy 投屏结论来自模拟器回环端口（同一实例的 5555 与 16384）实测：直接握手、shell、`localabstract` 多流、h264 首帧与关键帧、SET_CLIPBOARD 回包均通过；该 ROM 不回应 GET_CLIPBOARD，设备→客户端剪贴板主动推送仍未在硬件上观察到，且本次运行时切换未在模拟器或设备上复跑。
+- 未验证边界：win-arm64、linux-x64、linux-arm64、osx-x64、osx-arm64 四个 RID 未在本机执行；真实 USB 设备、物理手机、macOS/Linux 平台路径未验证；WSL/QEMU 原生挂载与原生工具互操作不在仓库门禁内（`UOTAN_NATIVE_TOOLS` 门控自跳），文件系统写入方的 GKI 5.10/6.1 挂载、fsck 与整树读回取证在仓库外的 `D:\GkiErofsRun`、`E:\GkiFsLab` 工装完成，不随 CI 运行。无 server 的 TCP ADB 与 scrcpy 投屏结论来自模拟器回环端口（同一实例的 5555 与 16384）实测：直接握手、shell、`localabstract` 多流、h264 首帧与关键帧、SET_CLIPBOARD 回包均通过；该 ROM 不回应 GET_CLIPBOARD，设备→客户端剪贴板主动推送仍未在硬件上观察到，且本次运行时切换未在模拟器或设备上复跑。
 - CI 门禁见 `.github/workflows/ci.yml`（`setup-dotnet` 取 `10.0.x` 正式版 + 构建 + whitespace/style 双 `dotnet format` + `dotnet test --solution`，Test 步骤 `timeout-minutes: 5`，不设置 `UOTAN_*`，因此门控套件自跳）；`.github/workflows/release.yml` 只负责 NativeAOT 发布，同样取 `10.0.x` 正式版。`global.json` 显式 pin `10.0.401` 并 `rollForward: latestMinor`，因此本机与 CI 不再各自挑 SDK。只用 nuget.org 单源即可还原 net10 依赖并成功 `PublishAot` 发布 win-x64。zstd 由 `ZstdSharp.Port` 提供，net10 参考包不含内置 Zstandard 类型。
 - 公开 API 注释：9 个受管库项目的公共方法已具备双语 `<summary>`、逐参数 `<param>` 与 `<returns>`（编译器 `CS1591` 为 0，度量脚本按公共可见性过滤后无残留方法缺口）；公共属性/索引器的 `<value>` 仍有约 257 处缺口（实测），属尚未闭合的后续项，不影响构建门。
