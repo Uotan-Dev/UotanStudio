@@ -3,63 +3,56 @@ using UotanStudio.Firmware.Application.Equivalence;
 namespace UotanStudio.Services.Firmware;
 
 /// <summary>
-/// <para>把四维度等价报告呈现为“维度名 + 状态”的本地化行。每行都由资源字典模板与两个本地化标签
-/// 格式化而来，绝不在界面里拼接中英文；维度未被评估时如实使用“未评估”文案，绝不伪造等价。</para>
-/// Presents the four-dimension equivalence report as localized "dimension: state" lines. Every line comes from a
-/// resource-dictionary template plus two localized labels, so no view concatenates Chinese with English, and an
-/// unevaluated dimension keeps the "not evaluated" wording instead of a fabricated equivalence claim.
+/// <para>把四维度等价报告渲染成一行固定英文的统一日志文本。统一日志是诊断产物，不随界面语言切换，因此标题与
+/// 四个维度用 <c> | </c> 连成单行，既不出现换行也不出现中文；库未评估的维度如实写作 not evaluated，
+/// 绝不伪造等价。</para>
+/// Renders the four-dimension equivalence report as a single fixed-English unified-log line. The unified log is a
+/// diagnostic artifact that does not follow the interface language, so the heading and the four dimensions are
+/// joined by <c> | </c> on one line with no line break and no Chinese wording, and a dimension the library never
+/// evaluated reads "not evaluated" instead of a fabricated equivalence claim.
 /// </summary>
 internal static class FirmwareEquivalencePresenter
 {
-    /// <summary>Resource key of the "{0}: {1}" line template. <para>行模板 <c>{0}: {1}</c> 的资源键。</para></summary>
-    internal const string LineKey = "Image_EquivalenceLine";
-
-    /// <summary>Resource key of the report heading carrying the entry name. <para>带条目名的报告标题资源键。</para></summary>
-    internal const string HeaderKey = "Image_EquivalenceReportHeader";
+    private const string Heading = "Equivalence of the built image";
+    private const string Separator = " | ";
 
     /// <summary>
-    /// <para>返回等价报告标题（含条目名）。</para>
-    /// Returns the equivalence report heading for one image entry.
+    /// <para>返回一行英文等价报告：标题、条目名，以及按字节、结构、内容、容量固定顺序排列的四个维度。</para>
+    /// Returns the one-line English equivalence report: the heading, the entry name and the four dimensions in the
+    /// fixed byte, structure, content and capacity order.
     /// </summary>
-    /// <param name="getString"><para>本地化取值委托。</para>The localized string lookup.</param>
     /// <param name="entryName"><para>镜像条目显示名。</para>The display name of the image entry.</param>
-    /// <returns><para>标题文本。</para>The heading text.</returns>
-    internal static string FormatHeader(Func<string, string> getString, string entryName)
-        => string.Format(getString(HeaderKey), entryName);
-
-    /// <summary>
-    /// <para>按字节、结构、内容、容量的固定顺序返回四行本地化文本；维度之间永不折叠。</para>
-    /// Returns four localized lines in the fixed byte, structure, content and capacity order; dimensions are never collapsed.
-    /// </summary>
     /// <param name="report"><para>待呈现的等价报告。</para>The equivalence report to present.</param>
-    /// <param name="getString"><para>本地化取值委托。</para>The localized string lookup.</param>
-    /// <returns><para>四行维度文本。</para>The four dimension lines.</returns>
-    internal static IReadOnlyList<string> FormatLines(FilesystemEquivalenceReport report, Func<string, string> getString)
+    /// <returns><para>不含换行的单行日志文本。</para>The single log line, which carries no line break.</returns>
+    /// <exception cref="ArgumentNullException"><para><paramref name="entryName"/> 或 <paramref name="report"/> 为
+    /// <see langword="null"/>。</para><paramref name="entryName"/> or <paramref name="report"/> is
+    /// <see langword="null"/>.</exception>
+    internal static string FormatLogLine(string entryName, FilesystemEquivalenceReport report)
     {
+        ArgumentNullException.ThrowIfNull(entryName);
         ArgumentNullException.ThrowIfNull(report);
-        ArgumentNullException.ThrowIfNull(getString);
-        return
-        [
-            FormatLine(getString, "Image_EquivalenceDimensionByte", report.ByteEquivalence),
-            FormatLine(getString, "Image_EquivalenceDimensionStructure", report.StructureEquivalence),
-            FormatLine(getString, "Image_EquivalenceDimensionContent", report.ContentEquivalence),
-            FormatLine(getString, "Image_EquivalenceDimensionCapacity", report.CapacityEquivalence),
-        ];
+        return string.Join(Separator,
+            $"{Heading}: {entryName}",
+            FormatDimension("Byte identity", report.ByteEquivalence),
+            FormatDimension("Inode structure", report.StructureEquivalence),
+            FormatDimension("File content", report.ContentEquivalence),
+            FormatDimension("Capacity", report.CapacityEquivalence));
     }
 
     /// <summary>
-    /// <para>返回某一状态对应的本地化资源键；未被评估的状态使用“未评估”文案。</para>
-    /// Returns the resource key for one equivalence state; an unevaluated dimension gets the "not evaluated" wording.
+    /// <para>返回某一状态的英文文案；未被评估的状态写作 not evaluated by the library，绝不写成等价。</para>
+    /// Returns the English wording of one equivalence state; an unevaluated dimension reads
+    /// "not evaluated by the library" and is never written as equivalent.
     /// </summary>
     /// <param name="state"><para>待映射的状态。</para>The state to map.</param>
-    /// <returns><para>状态文本的资源键。</para>The resource key of the state wording.</returns>
-    internal static string StateResourceKey(FirmwareEquivalenceState state) => state switch
+    /// <returns><para>状态文案。</para>The state wording.</returns>
+    internal static string StateWording(FirmwareEquivalenceState state) => state switch
     {
-        FirmwareEquivalenceState.Equivalent => "Image_EquivalenceStateEquivalent",
-        FirmwareEquivalenceState.NotEquivalent => "Image_EquivalenceStateNotEquivalent",
-        _ => "Image_EquivalenceStateNotEvaluated",
+        FirmwareEquivalenceState.Equivalent => "Equivalent",
+        FirmwareEquivalenceState.NotEquivalent => "Not equivalent",
+        _ => "Not evaluated by the library",
     };
 
-    private static string FormatLine(Func<string, string> getString, string dimensionKey, FirmwareEquivalenceState state)
-        => string.Format(getString(LineKey), getString(dimensionKey), getString(StateResourceKey(state)));
+    private static string FormatDimension(string dimension, FirmwareEquivalenceState state)
+        => $"{dimension}: {StateWording(state)}";
 }

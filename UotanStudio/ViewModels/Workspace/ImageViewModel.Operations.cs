@@ -135,11 +135,11 @@ internal partial class ImageViewModel
                         LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);
                         if (operation == "img" && result.Success)
                         {
-                            // 四维度等价报告整体写入统一日志：可见状态区与解包页保持同一形状，不再堆叠报告文本。
-                            // The equivalence block goes to the unified log as one entry, keeping the visible
-                            // status area shaped like the unpack page instead of stacking report text.
+                            // 四维度等价报告以一行英文写入统一日志：可见状态区与解包页保持同一形状，日志保持单行可检索。
+                            // The equivalence report goes to the unified log as one English line, keeping the
+                            // visible status area shaped like the unpack page and the log greppable.
                             LogService.Instance.Write(LogLevel.Info, "Images",
-                                string.Join(Environment.NewLine, FormatEquivalenceLines(entry.DisplayName, result)));
+                                FirmwareEquivalencePresenter.FormatLogLine(entry.DisplayName, result.Equivalence));
                         }
                         if (result.Success && conflicts.Length == 0)
                         {
@@ -176,26 +176,6 @@ internal partial class ImageViewModel
             StatusText = string.Format(LanguageService.Instance.GetString("Image_OperationSummary"), succeeded, failed, skipped);
         }
         finally { IsOperating = false; }
-    }
-
-    /// <summary>
-    /// <para>把一个构建结果的四维度等价报告展开为标题加四行本地化文本，整块写入统一日志。只有文件系统镜像的
-    /// 构建结果才会进入这里：dat/br 产出的是 DAT 与压缩流而非镜像，报告其等价性只会误述产物；未被库评估的维度
-    /// 保持“未评估”。可见状态区不显示等价报告，与解包页保持同一形状。</para>
-    /// Expands one build result's four-dimension equivalence report into the heading plus four localized lines and
-    /// writes them to the unified log as a single entry. Only a filesystem image build reaches this helper, because
-    /// DAT and Brotli outputs are streams rather than images and reporting equivalence for them would misdescribe the
-    /// artifact, and a dimension the library never evaluated stays "not evaluated". The visible status area shows no
-    /// equivalence report, keeping the same shape as the unpack page.
-    /// </summary>
-    private static IEnumerable<string> FormatEquivalenceLines(string entryName, FirmwareOpResult result)
-    {
-        var language = LanguageService.Instance;
-        yield return FirmwareEquivalencePresenter.FormatHeader(language.GetString, entryName);
-        foreach (var line in FirmwareEquivalencePresenter.FormatLines(result.Equivalence, language.GetString))
-        {
-            yield return line;
-        }
     }
 
     /// <summary>Maps item progress into a batch slice, preserving the dynamic queue's completion cap.</summary>

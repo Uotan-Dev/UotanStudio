@@ -511,15 +511,6 @@
     <x:String x:Key="Dialog_SaveIncomplete">仍有未保存的修改，请检查文档后重试。</x:String>
     <x:String x:Key="ImageView_UnpackMode">解包</x:String>
     <x:String x:Key="Image_OperationSummary">成功 {0} 项，失败 {1} 项，跳过 {2} 项。详情见日志。</x:String>
-    <x:String x:Key="Image_EquivalenceReportHeader">产出镜像的等价性：{0}</x:String>
-    <x:String x:Key="Image_EquivalenceLine">{0}：{1}</x:String>
-    <x:String x:Key="Image_EquivalenceDimensionByte">字节一致</x:String>
-    <x:String x:Key="Image_EquivalenceDimensionStructure">结构</x:String>
-    <x:String x:Key="Image_EquivalenceDimensionContent">文件内容</x:String>
-    <x:String x:Key="Image_EquivalenceDimensionCapacity">容量</x:String>
-    <x:String x:Key="Image_EquivalenceStateEquivalent">等价</x:String>
-    <x:String x:Key="Image_EquivalenceStateNotEquivalent">不等价</x:String>
-    <x:String x:Key="Image_EquivalenceStateNotEvaluated">库未执行评估</x:String>
     <x:String x:Key="ImageView_PackMode">打包</x:String>
     <x:String x:Key="ImageView_OutputMode">输出</x:String>
     <x:String x:Key="ImageView_Processing">正在处理…</x:String>

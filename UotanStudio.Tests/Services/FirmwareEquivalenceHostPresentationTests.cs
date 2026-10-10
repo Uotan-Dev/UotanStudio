@@ -58,48 +58,30 @@ public sealed class FirmwareEquivalenceHostPresentationTests : IDisposable
     }
 
     [Fact]
-    public async Task FormatLines_EditedFilesystemResult_SeparatesByteVerdictFromEquivalentDimensions()
+    public async Task FormatLogLine_EditedFilesystemResult_SeparatesByteVerdictFromEquivalentDimensions()
     {
         var extracted = await ExtractEditedExt4Async("rendered");
         var host = await RegisteredFirmwareFormats.PackDirectoryAsync("EXT4", extracted,
             Path.Combine(_root, "rendered.img"), Token);
 
-        var lines = FirmwareEquivalencePresenter.FormatLines(host.Equivalence, key => key switch
-        {
-            FirmwareEquivalencePresenter.LineKey => "{0}: {1}",
-            "Image_EquivalenceDimensionByte" => "Byte identity",
-            "Image_EquivalenceDimensionStructure" => "Inode structure",
-            "Image_EquivalenceDimensionContent" => "File content",
-            "Image_EquivalenceDimensionCapacity" => "Capacity",
-            "Image_EquivalenceStateEquivalent" => "Equivalent",
-            "Image_EquivalenceStateNotEquivalent" => "Not equivalent",
-            _ => "Not evaluated by the library",
-        });
+        var line = FirmwareEquivalencePresenter.FormatLogLine("rendered.img", host.Equivalence);
 
-        Assert.Equal(
-        [
-            "Byte identity: Not equivalent",
-            "Inode structure: Equivalent",
-            "File content: Equivalent",
-            "Capacity: Equivalent",
-        ], lines);
+        Assert.StartsWith(
+            "Equivalence of the built image: rendered.img | Byte identity: Not equivalent | " +
+            "Inode structure: Equivalent | File content: Equivalent | Capacity: ",
+            line,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain('\n', line);
     }
 
     [Fact]
-    public void FormatLines_HostResultWithoutMetadata_RendersEveryDimensionAsNotEvaluated()
-    {
-        var lines = FirmwareEquivalencePresenter.FormatLines(
-            new FirmwareOpResult { Success = true }.Equivalence,
-            key => key == FirmwareEquivalencePresenter.LineKey ? "{0}|{1}" : key);
-
-        Assert.Equal(
-        [
-            "Image_EquivalenceDimensionByte|Image_EquivalenceStateNotEvaluated",
-            "Image_EquivalenceDimensionStructure|Image_EquivalenceStateNotEvaluated",
-            "Image_EquivalenceDimensionContent|Image_EquivalenceStateNotEvaluated",
-            "Image_EquivalenceDimensionCapacity|Image_EquivalenceStateNotEvaluated",
-        ], lines);
-    }
+    public void FormatLogLine_HostResultWithoutMetadata_RendersEveryDimensionAsNotEvaluated()
+        => Assert.Equal(
+            "Equivalence of the built image: system.img | Byte identity: Not evaluated by the library | " +
+            "Inode structure: Not evaluated by the library | File content: Not evaluated by the library | " +
+            "Capacity: Not evaluated by the library",
+            FirmwareEquivalencePresenter.FormatLogLine("system.img",
+                new FirmwareOpResult { Success = true }.Equivalence));
 
     private async Task<string> ExtractEditedExt4Async(string name)
     {
