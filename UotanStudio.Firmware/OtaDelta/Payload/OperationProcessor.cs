@@ -174,7 +174,7 @@ internal static class OperationProcessor
         object streamLock,
         CancellationToken cancellationToken = default,
         PartitionByteProgress? byteProgress = null,
-        ReadOnlyMemory<byte> zstdDictionary = default)
+        ZstdReplaceDecoder.ZstdDecodeContext? zstdContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         long dataPos;
@@ -210,7 +210,7 @@ internal static class OperationProcessor
             using var bounded = new BoundedReadStream(cursor, dataPos, dataLength, leaveOpen: true);
             using var hashing = new VerifyingReadStream(bounded, op.DataSha256Hash?.ToByteArray());
             cancellationToken.ThrowIfCancellationRequested();
-            ProcessReplaceStream(op, hashing, outFile, blockSize, writeLock, cancellationToken, byteProgress, zstdDictionary);
+            ProcessReplaceStream(op, hashing, outFile, blockSize, writeLock, cancellationToken, byteProgress, zstdContext);
             hashing.Complete();
             return;
         }
@@ -228,7 +228,7 @@ internal static class OperationProcessor
             throw new PayloadUnsupportedOperationException($"Unsupported parallel operation type: {op.Type}", op.Type.ToString());
     }
 
-    private static void ProcessReplaceStream(InstallOperation op, Stream input, FileStream outFile, uint blockSize, object writeLock, CancellationToken cancellationToken, PartitionByteProgress? byteProgress = null, ReadOnlyMemory<byte> zstdDictionary = default)
+    private static void ProcessReplaceStream(InstallOperation op, Stream input, FileStream outFile, uint blockSize, object writeLock, CancellationToken cancellationToken, PartitionByteProgress? byteProgress = null, ZstdReplaceDecoder.ZstdDecodeContext? zstdContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var output = new ExtentWriteStream(outFile, op.DstExtents, blockSize, requireExactLength: true, syncRoot: writeLock, byteProgress: byteProgress);
@@ -259,7 +259,15 @@ internal static class OperationProcessor
                 CompressionService.Decompress(input, output, CompressionFormat.Xz, output.Length, cancellationToken);
                 break;
             case InstallOperation.Types.Type.ReplaceZstd:
-                ZstdReplaceDecoder.Decode(input, output, zstdDictionary, cancellationToken);
+                if (zstdContext is null)
+                {
+                    ZstdReplaceDecoder.Decode(input, output, ReadOnlyMemory<byte>.Empty, cancellationToken);
+                }
+                else
+                {
+                    ZstdReplaceDecoder.Decode(input, output, zstdContext, cancellationToken);
+                }
+
                 break;
             default:
                 throw new PayloadUnsupportedOperationException($"Unsupported replace operation type: {op.Type}", op.Type.ToString());

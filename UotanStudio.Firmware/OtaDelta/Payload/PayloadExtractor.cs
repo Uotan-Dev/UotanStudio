@@ -317,6 +317,11 @@ internal class PayloadExtractor
                 }
 
                 object writeLock = new();
+                var parallelZstd = parallelOps.Any(op => op.Type == InstallOperation.Types.Type.ReplaceZstd);
+
+                ZstdReplaceDecoder.ZstdDecodeContext? CreateZstdContext() => parallelZstd
+                    ? new ZstdReplaceDecoder.ZstdDecodeContext(ZstdDictionaryFor(partition.PartitionName))
+                    : null;
 
                 if (ownPayload)
                 {
@@ -330,7 +335,13 @@ internal class PayloadExtractor
                             MaxDegreeOfParallelism = workers,
                             CancellationToken = cancellationToken
                         },
-                        op => OperationProcessor.ProcessOperation(op, outFile, opStream, baseOffset, blockSize, writeLock, streamLock, cancellationToken, progressTracker, ZstdDictionaryFor(partition.PartitionName)));
+                        CreateZstdContext,
+                        (op, _, zstdContext) =>
+                        {
+                            OperationProcessor.ProcessOperation(op, outFile, opStream, baseOffset, blockSize, writeLock, streamLock, cancellationToken, progressTracker, zstdContext);
+                            return zstdContext;
+                        },
+                        zstdContext => zstdContext?.Dispose());
 
                     foreach (var op in sequentialOps)
                     {
@@ -347,7 +358,13 @@ internal class PayloadExtractor
                             MaxDegreeOfParallelism = workers,
                             CancellationToken = cancellationToken
                         },
-                        op => OperationProcessor.ProcessOperation(op, outFile, stream!, baseOffset, blockSize, writeLock, streamLock, cancellationToken, progressTracker, ZstdDictionaryFor(partition.PartitionName)));
+                        CreateZstdContext,
+                        (op, _, zstdContext) =>
+                        {
+                            OperationProcessor.ProcessOperation(op, outFile, stream!, baseOffset, blockSize, writeLock, streamLock, cancellationToken, progressTracker, zstdContext);
+                            return zstdContext;
+                        },
+                        zstdContext => zstdContext?.Dispose());
 
                     using var deltaPayload = new IndependentReadStream(stream!, streamLock);
                     foreach (var op in sequentialOps)
