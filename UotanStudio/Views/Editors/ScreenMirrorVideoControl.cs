@@ -5,22 +5,20 @@ using UotanStudio.ViewModels.Editors;
 
 namespace UotanStudio.Views.Editors;
 
-/// <summary>Renders YUV planes through Skia's active GPU backend, with the existing bitmap fallback.</summary>
-/// <summary>经 Skia 当前 GPU 后端渲染 YUV 平面，并保留既有位图回退。</summary>
-/// <remarks>
-/// <para>
-/// While composition-owned frames cover the control (GPU zero-copy export), the registered draw
-/// operation stays in the scene so the render-thread recycle queue keeps draining, but it draws nothing;
-/// the picture itself is the hosted composition surface visual.
-/// </para>
-/// <para>
-/// 当合成器持有的帧覆盖控件时（GPU 零拷贝导出），已注册的绘制操作仍留在场景中以持续排空渲染线程回收队列，
-/// 但不再绘制任何内容；画面本身由托管的合成表面视觉呈现。
-/// </para>
-/// </remarks>
+/// <summary>
+/// Renders YUV planes through Skia's active GPU backend, with the existing bitmap fallback.
+/// <para>经 Skia 当前 GPU 后端渲染 YUV 平面，并保留既有位图回退。</para>
+/// </summary>
 public sealed class ScreenMirrorVideoControl : Control
 {
-    /// <inheritdoc />
+    /// <summary>
+    /// Attaches the hosted composition surface for the bound presenter when this control enters the visual tree.
+    /// <para>当该控件进入可视树时，为绑定的呈现器挂载托管的合成表面。</para>
+    /// </summary>
+    /// <param name="e">
+    /// The visual-tree attachment event data.
+    /// <para>可视树挂载事件数据。</para>
+    /// </param>
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
@@ -28,14 +26,28 @@ public sealed class ScreenMirrorVideoControl : Control
         InvalidateVisual();
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Detaches the hosted composition surface for the bound presenter when this control leaves the visual tree.
+    /// <para>当该控件离开可视树时，为绑定的呈现器分离托管的合成表面。</para>
+    /// </summary>
+    /// <param name="e">
+    /// The visual-tree detachment event data.
+    /// <para>可视树分离事件数据。</para>
+    /// </param>
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         if (DataContext is ScreenMirrorViewModel model) model.GpuPresenter.DetachCompositionVisual();
         base.OnDetachedFromVisualTree(e);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Re-letterboxes the composition surface when the bounds of this control change.
+    /// <para>当该控件的边界变化时重新按信箱模式布局合成表面。</para>
+    /// </summary>
+    /// <param name="change">
+    /// The property-change event data.
+    /// <para>属性变更事件数据。</para>
+    /// </param>
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -43,7 +55,14 @@ public sealed class ScreenMirrorVideoControl : Control
             model.GpuPresenter.UpdateCompositionLayout();
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Draws the latest bitmap frame when no GPU path is active and registers the custom video draw operation.
+    /// <para>无 GPU 路径激活时绘制最新位图帧，并注册自定义视频绘制操作。</para>
+    /// </summary>
+    /// <param name="context">
+    /// The drawing context receiving the frame.
+    /// <para>接收该帧的绘制上下文。</para>
+    /// </param>
     public override void Render(DrawingContext context)
     {
         base.Render(context);

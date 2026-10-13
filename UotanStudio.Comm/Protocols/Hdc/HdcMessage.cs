@@ -10,11 +10,20 @@ internal readonly struct HdcUsbHead
     public byte Flag0 { get; init; }
     /// <summary>USB flag byte 1 ('B'). USB 标识字节 1（'B'）。</summary>
     public byte Flag1 { get; init; }
-    /// <summary>Option byte (1 = header, 2 = reset). 选项字节（1 = 头部，2 = 重置）。</summary>
+    /// <summary>
+    /// Option byte (1 = header, 2 = reset).
+    /// <para>选项字节（1 = 头部，2 = 重置）。</para>
+    /// </summary>
     public byte Option { get; init; }
-    /// <summary>Session identifier. 会话标识。</summary>
+    /// <summary>
+    /// Session identifier.
+    /// <para>会话标识。</para>
+    /// </summary>
     public uint SessionId { get; init; }
-    /// <summary>Data size in bytes following this header. 跟随此头部的数据字节数。</summary>
+    /// <summary>
+    /// Data size in bytes following this header.
+    /// <para>跟随此头部的数据字节数。</para>
+    /// </summary>
     public uint DataSize { get; init; }
 
     /// <summary>
@@ -85,10 +94,10 @@ public sealed record HdcMessage(
 /// <summary>Device message helpers. Host-channel framing belongs to HdcServerClient.</summary>
 internal static class HdcMessaging
 {
-    /// <summary>Serializes an upstream daemon packet; session identity is carried by USBHead.</summary>
+    /// <summary>Serializes an upstream daemon packet; the session identity is carried by the USB head. <para>序列化上行守护进程数据包；会话身份由 USB 头部承载。</para></summary>
     public static byte[] Serialize(HdcMessage message, uint sessionId) => HdcDaemonCodec.Encode(message);
 
-    /// <summary>Constructs a native command.</summary>
+    /// <summary>Constructs a native command. <para>构造原生命令。</para></summary>
     public static HdcMessage BuildCommand(HdcCommand command, uint channelId, byte[]? payload)
         => new(command, channelId, 0, payload);
 }

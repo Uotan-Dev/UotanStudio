@@ -8,7 +8,10 @@ using UotanStudio.ViewModels.Nodes;
 
 namespace UotanStudio.Services.VisualPlugins;
 
-/// <summary>Installs and activates host-rendered JSON workflow and composite-node packages.</summary>
+/// <summary>
+/// Installs and activates JSON workflow and composite-node packages rendered as visual plugins.
+/// <para>安装并激活以可视化插件形式呈现的 JSON 工作流与复合节点包。</para>
+/// </summary>
 public sealed class VisualPluginManager
 {
     private const long MaximumStateFileSize = 256 * 1024;
@@ -19,16 +22,44 @@ public sealed class VisualPluginManager
     private readonly HashSet<string> _registeredTypeKeys = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> _disabledIds = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Application-wide visual-plugin manager.</summary>
+    /// <summary>
+    /// Application-wide visual-plugin manager.
+    /// <para>应用范围的可视化插件管理器。</para>
+    /// </summary>
+    /// <value>
+    /// The shared manager instance.
+    /// <para>共享的管理器实例。</para>
+    /// </value>
     public static VisualPluginManager Instance { get; } = new();
 
-    /// <summary>Current installed package registrations and diagnostics.</summary>
+    /// <summary>
+    /// Current installed package registrations and diagnostics.
+    /// <para>当前的已安装包注册信息与诊断。</para>
+    /// </summary>
+    /// <value>
+    /// One registration per installed package file.
+    /// <para>每个已安装包文件对应一条注册信息。</para>
+    /// </value>
     public ObservableCollection<VisualPluginRegistration> Registrations { get; } = [];
 
-    /// <summary>Raised after installed packages or activation state changes.</summary>
+    /// <summary>
+    /// Raised after installed packages or activation state change.
+    /// <para>在已安装包或激活状态发生变化后引发。</para>
+    /// </summary>
     public event EventHandler? Changed;
 
-    /// <summary>Creates a manager. A custom directory or registry is supported for isolated tests.</summary>
+    /// <summary>
+    /// Creates a manager over an installation directory and node registry.
+    /// <para>基于安装目录与节点注册表创建管理器。</para>
+    /// </summary>
+    /// <param name="directory">
+    /// Installation directory, defaulting to per-user application data.
+    /// <para>安装目录；缺省时使用按用户的应用数据目录。</para>
+    /// </param>
+    /// <param name="registry">
+    /// Node registry receiving activated packages.
+    /// <para>接收已激活节点的注册表。</para>
+    /// </param>
     public VisualPluginManager(string? directory = null, IPluginRegistry? registry = null)
     {
         _directory = directory ?? Path.Combine(
@@ -39,7 +70,10 @@ public sealed class VisualPluginManager
         Refresh();
     }
 
-    /// <summary>Re-scans installed packages, validates dependencies, and refreshes toolbox registrations.</summary>
+    /// <summary>
+    /// Re-scans installed packages, validates dependencies, and refreshes the node registrations.
+    /// <para>重新扫描已安装包、校验依赖，并刷新节点注册信息。</para>
+    /// </summary>
     public void Refresh()
     {
         Directory.CreateDirectory(_directory);
@@ -147,7 +181,22 @@ public sealed class VisualPluginManager
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Installs or replaces a package after bounded parsing and structural validation.</summary>
+    /// <summary>
+    /// Installs or replaces a package after bounded parsing and structural validation.
+    /// <para>在有界解析与结构校验之后安装或替换一个包。</para>
+    /// </summary>
+    /// <param name="sourcePath">
+    /// Path of the package file to install.
+    /// <para>要安装的包文件路径。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token cancelling the pending installation.
+    /// <para>取消待执行安装的令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The registration describing the installed package.
+    /// <para>描述已安装包的注册信息。</para>
+    /// </returns>
     public async Task<VisualPluginRegistration> InstallAsync(string sourcePath,
         CancellationToken cancellationToken = default)
     {
@@ -175,9 +224,22 @@ public sealed class VisualPluginManager
         }
     }
 
-    /// <summary>Installs or replaces an already-built package after structural validation.</summary>
-    /// <param name="package">The package to install; it must already pass <see cref="VisualPluginValidation.Validate"/>.</param>
-    /// <param name="cancellationToken">Cancels the publication while preserving the previous target.</param>
+    /// <summary>
+    /// Installs or replaces an already-built package after structural validation.
+    /// <para>在结构校验之后安装或替换一个已构建的包。</para>
+    /// </summary>
+    /// <param name="package">
+    /// The package to install; it must already pass <see cref="VisualPluginValidation.Validate"/>.
+    /// <para>要安装的包；它必须已经通过 <see cref="VisualPluginValidation.Validate"/>。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels the publication while preserving the previous target.
+    /// <para>取消发布过程，同时保留原有目标。</para>
+    /// </param>
+    /// <returns>
+    /// The registration describing the installed package.
+    /// <para>描述已安装包的注册信息。</para>
+    /// </returns>
     public async Task<VisualPluginRegistration> InstallPackageAsync(VisualPluginPackage package,
         CancellationToken cancellationToken = default)
     {
@@ -209,11 +271,30 @@ public sealed class VisualPluginManager
         }
     }
 
-    /// <summary>Builds and installs one script-node package from a <c>.lua</c> source file.</summary>
-    /// <param name="luaPath">Path to the Lua source file.</param>
-    /// <param name="cancellationToken">Cancels the read and installation.</param>
-    /// <exception cref="ArgumentException"><paramref name="luaPath"/> is null, empty, or whitespace.</exception>
-    /// <exception cref="InvalidDataException">The script is empty, exceeds the package bound, or fails validation.</exception>
+    /// <summary>
+    /// Builds and installs one script-node package from a <c>.lua</c> source file.
+    /// <para>由 <c>.lua</c> 源文件构建并安装一个脚本节点包。</para>
+    /// </summary>
+    /// <param name="luaPath">
+    /// Path to the Lua source file.
+    /// <para>Lua 源文件的路径。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels the read and installation.
+    /// <para>取消读取与安装过程。</para>
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="luaPath"/> is null, empty, or whitespace.
+    /// <para><paramref name="luaPath"/> 为 null、空或仅空白。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The script is empty, exceeds the package bound, or fails validation.
+    /// <para>脚本为空、超出包大小上限或未通过校验。</para>
+    /// </exception>
+    /// <returns>
+    /// The registration describing the installed package.
+    /// <para>描述已安装包的注册信息。</para>
+    /// </returns>
     public async Task<VisualPluginRegistration> InstallScriptAsync(string luaPath,
         CancellationToken cancellationToken = default)
     {
@@ -226,8 +307,22 @@ public sealed class VisualPluginManager
         return await InstallPackageAsync(package, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Enables or disables an installed node package (composite or script) without modifying its
-    /// portable package. <para>启用或禁用一个已安装的节点类包（复合或脚本），不修改其可移植包内容。</para></summary>
+    /// <summary>
+    /// Enables or disables an installed node package without modifying its portable content.
+    /// <para>启用或禁用一个已安装的节点包，不修改其可移植内容。</para>
+    /// </summary>
+    /// <param name="pluginId">
+    /// Identifier of the installed package.
+    /// <para>已安装包的标识。</para>
+    /// </param>
+    /// <param name="enabled">
+    /// Whether the package becomes active.
+    /// <para>该包是否转为活动。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token cancelling the pending state write.
+    /// <para>取消待执行状态写入的令牌。</para>
+    /// </param>
     public async Task SetEnabledAsync(string pluginId, bool enabled,
         CancellationToken cancellationToken = default)
     {
@@ -246,7 +341,26 @@ public sealed class VisualPluginManager
         }
     }
 
-    /// <summary>Atomically replaces an installed package without changing its activation state.</summary>
+    /// <summary>
+    /// Atomically replaces an installed package without changing its activation state.
+    /// <para>原子地替换已安装的包，不改变其激活状态。</para>
+    /// </summary>
+    /// <param name="registration">
+    /// Registration of the package being replaced.
+    /// <para>被替换包的注册信息。</para>
+    /// </param>
+    /// <param name="package">
+    /// Replacement package content.
+    /// <para>替换后的包内容。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token cancelling the pending publication.
+    /// <para>取消待执行发布的令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The refreshed registration for the replacement.
+    /// <para>替换后刷新得到的注册信息。</para>
+    /// </returns>
     public async Task<VisualPluginRegistration> UpdateAsync(VisualPluginRegistration registration,
         VisualPluginPackage package, CancellationToken cancellationToken = default)
     {
@@ -277,7 +391,18 @@ public sealed class VisualPluginManager
         }
     }
 
-    /// <summary>Removes one installed package and its activation state.</summary>
+    /// <summary>
+    /// Removes one installed package and its activation state.
+    /// <para>移除一个已安装的包及其激活状态。</para>
+    /// </summary>
+    /// <param name="pluginId">
+    /// Identifier of the package to remove.
+    /// <para>要移除的包的标识。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token cancelling the pending removal.
+    /// <para>取消待执行移除的令牌。</para>
+    /// </param>
     public Task RemoveAsync(string pluginId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(pluginId);
@@ -290,7 +415,18 @@ public sealed class VisualPluginManager
         return RemoveAsync(matches[0], cancellationToken);
     }
 
-    /// <summary>Deletes the selected managed file, including invalid or duplicate-id packages.</summary>
+    /// <summary>
+    /// Deletes the selected managed file, including invalid or duplicate-id packages.
+    /// <para>删除选中的受管文件，包含无效或标识重复的包。</para>
+    /// </summary>
+    /// <param name="registration">
+    /// Registration naming the file to delete.
+    /// <para>指明待删除文件的注册信息。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token cancelling the pending deletion.
+    /// <para>取消待执行删除的令牌。</para>
+    /// </param>
     public async Task RemoveAsync(VisualPluginRegistration registration, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(registration);
@@ -511,7 +647,18 @@ public sealed class VisualPluginManager
         return result;
     }
 
-    /// <summary>Checks an edited package against currently available installations without applying prerequisite patches.</summary>
+    /// <summary>
+    /// Checks an edited package against the currently available installations.
+    /// <para>依据当前可用的安装情况检查一个已编辑的包。</para>
+    /// </summary>
+    /// <param name="package">
+    /// Package to check.
+    /// <para>要检查的包。</para>
+    /// </param>
+    /// <returns>
+    /// Messages describing unmet requirements, empty when all are met.
+    /// <para>描述未满足要求的消息；全部满足时为空。</para>
+    /// </returns>
     public IReadOnlyList<string> ValidateRequirements(VisualPluginPackage package)
     {
         var structural = VisualPluginValidation.Validate(package);
@@ -574,7 +721,10 @@ public sealed class VisualPluginManager
     }
 }
 
-/// <summary>Installed visual-plugin metadata and current host compatibility state.</summary>
+/// <summary>
+/// Installed visual-plugin metadata and current compatibility state.
+/// <para>已安装可视化插件的元数据与当前兼容性状态。</para>
+/// </summary>
 public sealed class VisualPluginRegistration
 {
     internal VisualPluginRegistration(string filePath, VisualPluginPackage package, bool enabled,
@@ -597,37 +747,202 @@ public sealed class VisualPluginRegistration
             }
         }, false, [error]);
 
+    /// <summary>
+    /// Managed file holding this package.
+    /// <para>存放该包的受管文件。</para>
+    /// </summary>
+    /// <value>
+    /// Full path of the installed package file.
+    /// <para>已安装包文件的完整路径。</para>
+    /// </value>
     public string FilePath { get; }
+    /// <summary>
+    /// Parsed package content.
+    /// <para>解析后的包内容。</para>
+    /// </summary>
+    /// <value>
+    /// The package this registration describes.
+    /// <para>该注册信息所描述的包。</para>
+    /// </value>
     public VisualPluginPackage Package { get; }
+    /// <summary>
+    /// Identifier declared by the package manifest.
+    /// <para>包清单声明的标识。</para>
+    /// </summary>
+    /// <value>
+    /// The package identifier.
+    /// <para>包的标识。</para>
+    /// </value>
     public string Id => Package.Manifest.Id;
+    /// <summary>
+    /// Display name declared by the package manifest.
+    /// <para>包清单声明的显示名称。</para>
+    /// </summary>
+    /// <value>
+    /// The package name.
+    /// <para>包的名称。</para>
+    /// </value>
     public string Name => Package.Manifest.Name;
+    /// <summary>
+    /// Version declared by the package manifest.
+    /// <para>包清单声明的版本。</para>
+    /// </summary>
+    /// <value>
+    /// The package version text.
+    /// <para>包的版本文本。</para>
+    /// </value>
     public string Version => Package.Manifest.Version;
+    /// <summary>
+    /// Author declared by the package manifest.
+    /// <para>包清单声明的作者。</para>
+    /// </summary>
+    /// <value>
+    /// The package author text.
+    /// <para>包作者文本。</para>
+    /// </value>
     public string Author => Package.Manifest.Author;
+    /// <summary>
+    /// Description declared by the package manifest.
+    /// <para>包清单声明的说明。</para>
+    /// </summary>
+    /// <value>
+    /// The package description text.
+    /// <para>包的说明文本。</para>
+    /// </value>
     public string Description => Package.Manifest.Description;
+    /// <summary>
+    /// Package kind controlling how the entry is activated.
+    /// <para>决定该条目如何激活的包类型。</para>
+    /// </summary>
+    /// <value>
+    /// The declared package kind.
+    /// <para>声明的包类型。</para>
+    /// </value>
     public VisualPluginKind Kind => Package.Kind;
+    /// <summary>
+    /// Whether the package is currently enabled.
+    /// <para>该包当前是否已启用。</para>
+    /// </summary>
+    /// <value>
+    /// True when enabled, otherwise false.
+    /// <para>已启用时为 true，否则为 false。</para>
+    /// </value>
     public bool IsEnabled { get; }
+    /// <summary>
+    /// Whether the package is a workflow template.
+    /// <para>该包是否为工作流模板。</para>
+    /// </summary>
+    /// <value>
+    /// True for template packages, otherwise false.
+    /// <para>模板包为 true，否则为 false。</para>
+    /// </value>
     public bool IsTemplate => Kind == VisualPluginKind.WorkflowTemplate;
+    /// <summary>
+    /// Whether a disabled node package can be enabled.
+    /// <para>已禁用的节点包是否可以启用。</para>
+    /// </summary>
+    /// <value>
+    /// True when an enable action applies, otherwise false.
+    /// <para>需要启用操作时为 true，否则为 false。</para>
+    /// </value>
     public bool ShowEnableAction => Kind is VisualPluginKind.CompositeNode or VisualPluginKind.ScriptNode && !IsEnabled;
+    /// <summary>
+    /// Whether an enabled node package can be disabled.
+    /// <para>已启用的节点包是否可以禁用。</para>
+    /// </summary>
+    /// <value>
+    /// True when a disable action applies, otherwise false.
+    /// <para>需要禁用操作时为 true，否则为 false。</para>
+    /// </value>
     public bool ShowDisableAction => Kind is VisualPluginKind.CompositeNode or VisualPluginKind.ScriptNode && IsEnabled;
-    /// <summary>Localized label for the edit action, matching the selected package kind.</summary>
+    /// <summary>
+    /// Localized label for the edit action, matching the package kind.
+    /// <para>编辑操作的本地化标签，与包类型相匹配。</para>
+    /// </summary>
+    /// <value>
+    /// The localized edit label.
+    /// <para>本地化的编辑标签。</para>
+    /// </value>
     public string EditActionText => LanguageService.Instance.GetString(
         Kind == VisualPluginKind.ScriptNode ? "Plugin_EditScript" : "Plugin_EditGraph");
-    /// <summary>Localized label describing the package kind.</summary>
+    /// <summary>
+    /// Localized label describing the package kind.
+    /// <para>描述包类型的本地化标签。</para>
+    /// </summary>
+    /// <value>
+    /// The localized kind label.
+    /// <para>本地化的类型标签。</para>
+    /// </value>
     public string KindText => LanguageService.Instance.GetString(Kind switch
     {
         VisualPluginKind.WorkflowTemplate => "Plugin_Template",
         VisualPluginKind.ScriptNode => "Plugin_Script",
         _ => "Plugin_Composite"
     });
+    /// <summary>
+    /// Validation and dependency problems found for this package.
+    /// <para>为该包发现的校验与依赖问题。</para>
+    /// </summary>
+    /// <value>
+    /// The collected problem messages.
+    /// <para>收集到的问题消息。</para>
+    /// </value>
     public IReadOnlyList<string> Errors { get; }
+    /// <summary>
+    /// Whether the package passed every check.
+    /// <para>该包是否通过了全部检查。</para>
+    /// </summary>
+    /// <value>
+    /// True when no problem was found, otherwise false.
+    /// <para>未发现问题时为 true，否则为 false。</para>
+    /// </value>
     public bool IsAvailable => Errors.Count == 0;
+    /// <summary>
+    /// Node types the package requires in order to run.
+    /// <para>该包运行所依赖的节点类型。</para>
+    /// </summary>
+    /// <value>
+    /// The required node types joined for display.
+    /// <para>拼接以便显示的必需节点类型。</para>
+    /// </value>
     public string RequiredNodes => string.Join(", ", Package.Manifest.RequiredNodeTypes);
+    /// <summary>
+    /// Capabilities declared by the package manifest.
+    /// <para>包清单声明的能力。</para>
+    /// </summary>
+    /// <value>
+    /// The declared capabilities joined for display.
+    /// <para>拼接以便显示的声明能力。</para>
+    /// </value>
     public string Capabilities => string.Join(", ", Package.Manifest.Capabilities);
+    /// <summary>
+    /// Platforms the package declares support for.
+    /// <para>该包声明支持的平台。</para>
+    /// </summary>
+    /// <value>
+    /// The declared platform names, or the full platform set when none were declared.
+    /// <para>声明的平台名；未声明时列出全部平台。</para>
+    /// </value>
     public string Platforms => Package.Manifest.Platforms.Count == 0
         ? "Windows / Linux / macOS"
         : string.Join(", ", Package.Manifest.Platforms);
+    /// <summary>
+    /// Raw validation and dependency messages.
+    /// <para>原始校验与依赖消息。</para>
+    /// </summary>
+    /// <value>
+    /// The problem messages joined by line breaks.
+    /// <para>以换行拼接的问题消息。</para>
+    /// </value>
     public string ErrorText => string.Join(Environment.NewLine, Errors);
-    /// <summary>Localized compatibility explanation for the plugin manager, retaining raw validation details.</summary>
+    /// <summary>
+    /// Localized compatibility explanation retaining the raw validation details.
+    /// <para>本地化的兼容性说明，并保留原始校验细节。</para>
+    /// </summary>
+    /// <value>
+    /// The formatted explanation, empty when the package is available.
+    /// <para>格式化后的说明；包可用时为空。</para>
+    /// </value>
     public string DisplayErrorText => IsAvailable ? string.Empty : UserError.WithDetails(ErrorText, "UserError_PluginUnavailable");
 }
 

@@ -66,8 +66,8 @@ internal sealed record Ext4Inode
     public bool IsSymlink => (Mode & InodeTypeBits.FormatMask) == InodeTypeBits.SymbolicLink;
 
     /// <summary>
-    /// Parses an inode from raw bytes. inodeSize must match the filesystem inode size; i_size_high is read unconditionally (offset 108 lies within every inode size of at least 128 bytes, matching the kernel's ext4_isize()).
-    /// <para>从原始字节解析 inode。</para>
+    /// Parses an inode from raw bytes at the filesystem inode size.
+    /// <para>按文件系统的 inode 大小从原始字节解析 inode。</para>
     /// </summary>
     /// <param name="data">Inode record bytes read little-endian, holding the mode at 0, size at 4, flags at 32, the fifteen block pointers at 40 to 100 and the extra fields from 128 onward.
     /// <para>按小端读取的 inode 记录字节：0 处是模式，4 处是大小，32 处是标志，40 至 100 是十五个块指针，128 之后是扩展字段。</para></param>
@@ -184,8 +184,8 @@ internal sealed record Ext4Inode
     }
 
     /// <summary>
-    /// Reads the extended attribute block number per the upstream layout: low 32 bits at offset 104 (i_file_acl_lo) plus the 16-bit high word at offset 118 (l_i_file_acl_high), both inside the base 128-byte inode.
-    /// <para>按上游布局读取扩展属性块号：偏移 104 处低 32 位（i_file_acl_lo）加偏移 118 处 16 位高字（l_i_file_acl_high），两者都在基础 128 字节 inode 内。</para>
+    /// Reads the extended attribute block number: low 32 bits at offset 104 (i_file_acl_lo) plus the 16-bit high word at offset 118 (l_i_file_acl_high), both inside the base 128-byte inode.
+    /// <para>读取扩展属性块号：偏移 104 处低 32 位（i_file_acl_lo）加偏移 118 处 16 位高字（l_i_file_acl_high），两者都在基础 128 字节 inode 内。</para>
     /// </summary>
     private static ulong ReadFileAcl(ReadOnlySpan<byte> data, int inodeSize)
     {

@@ -3,139 +3,147 @@ using System.Security.Cryptography;
 namespace UotanStudio.Services.Compare;
 
 /// <summary>
-/// <para>文件夹比对条目状态。</para>
 /// Folder comparison item status.
+/// <para>文件夹比对条目状态。</para>
 /// </summary>
 public enum FolderItemStatus
 {
     /// <summary>
-    /// <para>两侧均存在且内容相同（目录为存在性相同）。</para>
     /// Exists on both sides with identical content (directories: identical existence).
+    /// <para>两侧均存在且内容相同（目录为存在性相同）。</para>
     /// </summary>
     Equal,
 
     /// <summary>
-    /// <para>两侧均存在但内容不同，或一侧为文件一侧为目录。</para>
     /// Exists on both sides with differing content, or a file on one side and a directory on the other.
+    /// <para>两侧均存在但内容不同，或一侧为文件一侧为目录。</para>
     /// </summary>
     Different,
 
     /// <summary>
-    /// <para>仅左侧存在。</para>
     /// Exists on the left side only.
+    /// <para>仅左侧存在。</para>
     /// </summary>
     LeftOnly,
 
     /// <summary>
-    /// <para>仅右侧存在。</para>
     /// Exists on the right side only.
+    /// <para>仅右侧存在。</para>
     /// </summary>
     RightOnly,
 }
 
 /// <summary>
-/// <para>文件夹比对结果中的单个条目。</para>
 /// A single item in a folder comparison result.
+/// <para>文件夹比对结果中的单个条目。</para>
 /// </summary>
 public sealed class FolderCompareItem
 {
     /// <summary>
-    /// <para>相对于比对根目录的路径，统一使用 '/' 分隔。</para>
     /// Path relative to the comparison root, always separated by '/'.
+    /// <para>相对于比对根目录的路径，统一使用 '/' 分隔。</para>
     /// </summary>
+    /// <value>The '/'-separated relative path of the item. <para>条目的 '/' 分隔相对路径。</para></value>
     public required string RelativePath { get; init; }
 
     /// <summary>
-    /// <para>条目状态。</para>
     /// Item status.
+    /// <para>条目状态。</para>
     /// </summary>
+    /// <value>The comparison status of the item. <para>条目的比对状态。</para></value>
     public required FolderItemStatus Status { get; init; }
 
     /// <summary>
-    /// <para>是否为目录。</para>
     /// Whether the item is a directory.
+    /// <para>是否为目录。</para>
     /// </summary>
+    /// <value>True when the item is a directory. <para>条目为目录时为 true。</para></value>
     public bool IsDirectory { get; init; }
 
     /// <summary>
-    /// <para>左侧条目大小（字节）；目录或缺失时为 -1。</para>
     /// Size of the left item in bytes; -1 for directories or when absent.
+    /// <para>左侧条目大小（字节）；目录或缺失时为 -1。</para>
     /// </summary>
+    /// <value>Left item size in bytes, or -1 for directories and missing items. <para>左侧条目字节大小；目录或缺失时为 -1。</para></value>
     public long LeftSize { get; init; }
 
     /// <summary>
-    /// <para>右侧条目大小（字节）；目录或缺失时为 -1。</para>
     /// Size of the right item in bytes; -1 for directories or when absent.
+    /// <para>右侧条目大小（字节）；目录或缺失时为 -1。</para>
     /// </summary>
+    /// <value>Right item size in bytes, or -1 for directories and missing items. <para>右侧条目字节大小；目录或缺失时为 -1。</para></value>
     public long RightSize { get; init; }
 }
 
 /// <summary>
-/// <para>文件夹比对结果，包含条目列表与各状态计数。</para>
 /// Folder comparison result containing the item list and per-status counts.
+/// <para>文件夹比对结果，包含条目列表与各状态计数。</para>
 /// </summary>
 public sealed class FolderCompareResult
 {
     /// <summary>
-    /// <para>全部比对条目（深度优先，同级按名称排序）。</para>
     /// All comparison items (depth-first, siblings sorted by name).
+    /// <para>全部比对条目（深度优先，同级按名称排序）。</para>
     /// </summary>
+    /// <value>The compared items, depth-first with siblings sorted by name. <para>比对条目列表，深度优先且同级按名称排序。</para></value>
     public List<FolderCompareItem> Items { get; } = [];
 
     /// <summary>
-    /// <para>相同条目数。</para>
     /// Count of equal items.
+    /// <para>相同条目数。</para>
     /// </summary>
+    /// <value>Number of items equal on both sides. <para>两侧相同的条目数。</para></value>
     public int EqualCount { get; set; }
 
     /// <summary>
-    /// <para>不同条目数。</para>
     /// Count of different items.
+    /// <para>不同条目数。</para>
     /// </summary>
+    /// <value>Number of items that differ between the sides. <para>两侧存在差异的条目数。</para></value>
     public int DifferentCount { get; set; }
 
     /// <summary>
-    /// <para>仅左侧条目数。</para>
     /// Count of left-only items.
+    /// <para>仅左侧条目数。</para>
     /// </summary>
+    /// <value>Number of items present only on the left. <para>仅左侧存在的条目数。</para></value>
     public int LeftOnlyCount { get; set; }
 
     /// <summary>
-    /// <para>仅右侧条目数。</para>
     /// Count of right-only items.
+    /// <para>仅右侧条目数。</para>
     /// </summary>
+    /// <value>Number of items present only on the right. <para>仅右侧存在的条目数。</para></value>
     public int RightOnlyCount { get; set; }
 }
 
 /// <summary>
-/// <para>文件夹比对服务：递归比较两个目录的结构与内容（文件按长度与流式 SHA256 比对），并支持按相对路径复制或删除文件。</para>
 /// Folder comparison service: recursively compares two directories by structure and content
 /// (files compared by length then streamed SHA256), and supports per-relative-path copy and delete.
+/// <para>文件夹比对服务：递归比较两个目录的结构与内容（文件按长度与流式 SHA256 比对），并支持按相对路径复制或删除文件。</para>
 /// </summary>
 public sealed class FolderCompareService
 {
     private static readonly Lazy<FolderCompareService> LazyInstance = new(() => new FolderCompareService());
 
     /// <summary>
-    /// <para>获取 FolderCompareService 单例。</para>
-    /// Gets the FolderCompareService singleton instance.
+    /// Gets the shared instance created on first access.
+    /// <para>获取首次访问时创建的共享实例。</para>
     /// </summary>
+    /// <value>The shared service instance. <para>共享的服务实例。</para></value>
     public static FolderCompareService Instance => LazyInstance.Value;
 
     internal FolderCompareService() { }
 
     /// <summary>
-    /// <para>递归比较两个目录。目录项只比较存在性（状态为 Equal/LeftOnly/RightOnly，尺寸为 -1，不比较目录内容）；
-    /// 文件先比较长度，长度相同再流式比较 SHA256，相同为 Equal，否则为 Different。任一根目录不存在时按空目录处理。</para>
-    /// Recursively compares two directories. Directory items are compared by existence only
-    /// (status Equal/LeftOnly/RightOnly, sizes -1, directory contents not compared); files are compared
-    /// by length first, then streamed SHA256 when lengths match — Equal when hashes match, otherwise
-    /// Different. A missing root directory is treated as empty.
+    /// Recursively compares two directories: files by length then streamed SHA256, directory items by
+    /// existence only. A missing root directory is treated as empty.
+    /// <para>递归比较两个目录：文件先比长度再流式比较 SHA256，目录项只比较存在性。缺失的根目录按空目录处理。</para>
     /// </summary>
-    /// <param name="leftDirectory">左目录路径。<para>Left directory path.</para></param>
-    /// <param name="rightDirectory">右目录路径。<para>Right directory path.</para></param>
-    /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
-    /// <returns><para>比对结果。</para> The comparison result.</returns>
+    /// <param name="leftDirectory">Left directory path. <para>左目录路径。</para></param>
+    /// <param name="rightDirectory">Right directory path. <para>右目录路径。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The comparison result. <para>比对结果。</para></returns>
     public async Task<FolderCompareResult> CompareAsync(string leftDirectory, string rightDirectory, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(leftDirectory);
@@ -155,17 +163,15 @@ public sealed class FolderCompareService
     }
 
     /// <summary>
-    /// <para>把 sourceDirectory 下的相对文件复制到 targetDirectory 的相同相对位置
-    /// （自动创建父目录，目标存在则覆盖，FileStream 流式复制）。相对路径经规范化后必须仍位于源目录内，否则抛 <see cref="ArgumentException"/>。</para>
-    /// Copies the file at the given relative path under sourceDirectory to the same relative location under
-    /// targetDirectory (parent directories are created, existing files are overwritten, streamed via FileStream).
-    /// The normalized relative path must stay inside the source directory or an <see cref="ArgumentException"/> is thrown.
+    /// Copies the file at a relative path under one directory to the same relative location under
+    /// another, creating parent directories and overwriting existing files.
+    /// <para>把一个目录下相对路径处的文件复制到另一个目录的相同相对位置，自动创建父目录并覆盖已有文件。</para>
     /// </summary>
-    /// <param name="sourceDirectory">源目录路径。<para>Source directory path.</para></param>
-    /// <param name="targetDirectory">目标目录路径。<para>Target directory path.</para></param>
-    /// <param name="relativePath">源目录下的相对文件路径。<para>Relative file path under the source directory.</para></param>
-    /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
-    /// <returns><para>复制完成时返回。</para> Completes when the copy is finished.</returns>
+    /// <param name="sourceDirectory">Source directory path. <para>源目录路径。</para></param>
+    /// <param name="targetDirectory">Target directory path. <para>目标目录路径。</para></param>
+    /// <param name="relativePath">Relative file path under the source directory. <para>源目录下的相对文件路径。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <exception cref="ArgumentException">The normalized relative path leaves the source directory. <para>规范化后的相对路径超出源目录范围。</para></exception>
     public async Task CopyAsync(string sourceDirectory, string targetDirectory, string relativePath, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(sourceDirectory);
@@ -202,14 +208,13 @@ public sealed class FolderCompareService
     }
 
     /// <summary>
-    /// <para>删除 directory 下指定相对路径的文件。相对路径经规范化后必须仍位于目录内，否则抛 <see cref="ArgumentException"/>。</para>
     /// Deletes the file at the given relative path under directory. The normalized relative path must stay
     /// inside the directory or an <see cref="ArgumentException"/> is thrown.
+    /// <para>删除 directory 下指定相对路径的文件。相对路径经规范化后必须仍位于目录内，否则抛 <see cref="ArgumentException"/>。</para>
     /// </summary>
-    /// <param name="directory">目录路径。<para>Directory path.</para></param>
-    /// <param name="relativePath">目录下的相对文件路径。<para>Relative file path under the directory.</para></param>
-    /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
-    /// <returns><para>删除完成时返回。</para> Completes when the deletion is finished.</returns>
+    /// <param name="directory">Directory path. <para>目录路径。</para></param>
+    /// <param name="relativePath">Relative file path under the directory. <para>目录下的相对文件路径。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     public Task DeleteAsync(string directory, string relativePath, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(directory);

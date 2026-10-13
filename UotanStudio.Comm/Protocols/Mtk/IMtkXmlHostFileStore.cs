@@ -1,23 +1,8 @@
 namespace UotanStudio.Comm.Protocols.Mtk;
 
 /// <summary>
-/// Host-side file callbacks for XML download agents. When a store is attached to
-/// <see cref="MtkSession.HostFileStore"/> before hardware initialization, the session
-/// advertises <c>CMD:DOWNLOAD-FILE</c>/<c>CMD:UPLOAD-FILE</c>/<c>CMD:FILE-SYS-OPERATION</c>
-/// and services device-initiated requests strictly through this store; without a store the
-/// capabilities are not advertised and unexpected requests keep faulting the session
-/// (fail-closed).
-/// <para>XML 下载代理的主机侧文件回调。在硬件初始化前向 <see cref="MtkSession.HostFileStore"/>
-/// 附加存储时，会话声明 <c>CMD:DOWNLOAD-FILE</c>/<c>CMD:UPLOAD-FILE</c>/<c>CMD:FILE-SYS-OPERATION</c>
-/// 能力并严格经此存储服务设备发起的请求；未附加时不声明能力，意外请求仍使会话 fault（fail-closed）。</para>
-/// Tokens are opaque agent-provided identifiers. The session first rejects rooted or absolute
-/// paths, drive letters, scheme-like colons, back slashes, <c>..</c> segments, control characters
-/// and over-long names, so a store only ever receives a bounded relative name; it must still treat
-/// that name as untrusted, resolve it inside its own containment root, bound every transfer and
-/// honour cancellation.
-/// <para>令牌是代理提供的不透明标识。会话会先拒绝根路径或绝对路径、盘符、冒号式协议写法、反斜杠、
-/// <c>..</c> 片段、控制字符与超长名称，因此存储只会收到有界的相对文件名；它仍须把该名称视为不可信输入，
-/// 在自己的包含根目录内解析它，约束每次传输并响应取消。</para>
+/// Host-side file callbacks for XML download agents. When attached before hardware initialization the session advertises download, upload and file-system commands and services device-initiated requests strictly through this store; without a store the capabilities are not advertised and unexpected requests fault the session.
+/// <para>XML 下载代理的宿主侧文件回调。在硬件初始化之前附加时，会话会通告下载、上传与文件系统命令，并严格经此存储处理设备发起的请求；未附加时不通告这些能力，意外请求将使会话故障。</para>
 /// </summary>
 public interface IMtkXmlHostFileStore
 {

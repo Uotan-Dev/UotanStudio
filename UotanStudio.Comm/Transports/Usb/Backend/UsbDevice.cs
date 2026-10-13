@@ -27,14 +27,14 @@ internal abstract partial class UsbDevice : IDisposable
     /// </summary>
     public string? SerialNumber { get; set; }
 
-    /// <summary>OS-provided identity shared by interfaces of one physical device, when available.</summary>
+    /// <summary>OS-provided identity shared by the interfaces of one physical device, when available. <para>操作系统提供的、同一物理设备各接口共享的身份（如可用）。</para></summary>
     public Guid? ContainerId { get; set; }
 
     /// <summary>Gets or sets the observed bus and physical port chain, not a device identity.
     /// <para>获取或设置观测到的总线与物理端口链，而非设备身份。</para></summary>
     public string? PhysicalPortPath { get; set; }
 
-    /// <summary>OS device-instance identity for this USB interface, when available.</summary>
+    /// <summary>OS device-instance identity for this USB interface, when available. <para>该 USB 接口的操作系统设备实例身份（如可用）。</para></summary>
     public string? DeviceInstanceId { get; set; }
 
     /// <summary>

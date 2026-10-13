@@ -4,21 +4,10 @@ using ShellResult = UotanStudio.Comm.Protocols.Hdc.ShellResult;
 namespace UotanStudio.Comm.Contracts;
 
 /// <summary>
-/// Host-facing HDC protocol session. The concrete protocol implementation is an internal
-/// detail of the communication layer; callers only ever hold this façade.
-/// <para>面向宿主的 HDC 协议会话。具体协议实现是通信层的内部细节，调用方只持有此门面。</para>
+/// Contract façade for one HDC protocol session; concrete protocol implementations stay behind
+/// this interface.
+/// <para>单个 HDC 协议会话的契约门面；具体协议实现隐藏在该接口之后。</para>
 /// </summary>
-/// <remarks>
-/// The result carrier this façade returns (<see cref="ShellResult"/>) and the shell-quoting helper
-/// behind <see cref="QuoteShellArgument"/> still live in the protocol layer, so they are named here by
-/// explicit type alias. A namespace-wide import of <c>UotanStudio.Comm.Protocols.Hdc</c> is
-/// deliberately absent: it would let any later protocol-layer type resolve silently inside the contract
-/// surface and widen the façade without a reviewable change.
-/// <para>本门面返回的结果类型（<see cref="ShellResult"/>）以及 <see cref="QuoteShellArgument"/>
-/// 背后的 shell 引用包裹助手仍位于协议层，因此在此以显式类型别名引用。这里刻意不导入
-/// <c>UotanStudio.Comm.Protocols.Hdc</c> 整个命名空间：一旦导入，后续任何协议层类型都可能在门面契约中
-/// 悄然被解析出来，使门面在无可见改动的情况下被扩大。</para>
-/// </remarks>
 public interface IHdcDeviceSession : IDisposable
 {
     /// <summary>Gets the protocol name. <para>获取协议名称。</para></summary>
@@ -41,8 +30,6 @@ public interface IHdcDeviceSession : IDisposable
     /// Cancels the connect and the RSA authentication exchange.
     /// <para>取消连接与 RSA 认证交互。</para>
     /// </param>
-    /// <returns>A task that completes once the session is connected and authenticated.
-    /// <para>在会话完成连接与认证后结束的任务。</para></returns>
     Task ConnectAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Executes a shell command and returns the result. <para>执行 shell 命令并返回结果。</para></summary>
@@ -55,9 +42,9 @@ public interface IHdcDeviceSession : IDisposable
     /// <para>总体响应时限（毫秒）；直连路由在时限耗尽后抛出异常。</para>
     /// </param>
     /// <returns>
-    /// The captured stdout, stderr and exit code. On a server route the output arrives merged, so
-    /// stderr is empty and the exit code is <c>-1</c>.
-    /// <para>捕获的 stdout、stderr 与退出码。经由 server 路由时输出合并返回，因此 stderr 为空且退出码为
+    /// Captured stdout, stderr and exit code; a server route merges output, so stderr is empty
+    /// and the code is <c>-1</c>.
+    /// <para>捕获的 stdout、stderr 与退出码；经由 server 路由时输出合并返回，stderr 为空且退出码为
     /// <c>-1</c>。</para>
     /// </returns>
     ShellResult ExecuteCommand(string command, int timeoutMs = 30000);
@@ -98,9 +85,9 @@ public interface IHdcDeviceSession : IDisposable
 
     /// <summary>Gets the port-forwarding manager over the direct connection.
     /// <para>获取直连通道上的端口转发管理器。</para></summary>
-    /// <value>The manager owning the mappings registered on this session's direct connection; it is
-    /// shared, so later calls return the same instance.
-    /// <para>管理本会话直连上已登记映射的管理器；该实例是共享的，后续调用返回同一个对象。</para></value>
+    /// <value>The manager of mappings registered on this session's direct connection; shared
+    /// across calls.
+    /// <para>管理本会话直连上已登记映射的共享实例，后续调用返回同一对象。</para></value>
     /// <exception cref="NotSupportedException">
     /// The session runs over an HDC server channel, which exposes no daemon connection.
     /// <para>会话经由 HDC server 通道运行，不存在暴露的守护进程连接。</para>
@@ -122,7 +109,7 @@ public interface IHdcDeviceSession : IDisposable
     static string QuoteShellArgument(string value) => HdcDeviceServices.QuoteShellArgument(value);
 }
 
-/// <summary>Host-facing HDC shell client. <para>面向宿主的 HDC shell 客户端。</para></summary>
+/// <summary>HDC shell client bound to one session route. <para>绑定到单个会话路由的 HDC shell 客户端。</para></summary>
 public interface IHdcShellClient
 {
     /// <summary>Executes the shell command and returns the captured result.
@@ -132,9 +119,9 @@ public interface IHdcShellClient
     /// <para>总体响应时限（毫秒）；直连路由在时限耗尽后抛出异常。</para>
     /// </param>
     /// <returns>
-    /// The captured stdout, stderr and exit code. On a server route the output arrives merged, so
-    /// stderr is empty and the exit code is <c>-1</c>.
-    /// <para>捕获的 stdout、stderr 与退出码。经由 server 路由时输出合并返回，因此 stderr 为空且退出码为
+    /// Captured stdout, stderr and exit code; a server route merges output, so stderr is empty
+    /// and the code is <c>-1</c>.
+    /// <para>捕获的 stdout、stderr 与退出码；经由 server 路由时输出合并返回，stderr 为空且退出码为
     /// <c>-1</c>。</para>
     /// </returns>
     ShellResult Execute(int timeoutMs = 30000);
@@ -147,7 +134,7 @@ public interface IHdcShellClient
     /// </param>
     /// <param name="onStderr">
     /// Callback reserved for stderr; HDC multiplexes both streams into one, so it is never invoked.
-    /// <para>为 stderr 保留的回调；HDC 将两路输出复用到同一路，因此不会被调用。</para>
+    /// <para>为 stderr 保留的回调；HDC 将两路输出复用到同一路，因此它不会收到数据。</para>
     /// </param>
     /// <param name="cancellationToken">
     /// Cancels between chunks; the call checks the token before opening the channel.
@@ -161,7 +148,7 @@ public interface IHdcShellClient
     int ExecuteStreaming(Action<byte[]>? onStdout, Action<byte[]>? onStderr, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Host-facing HDC sync (file transfer) client. <para>面向宿主的 HDC sync（文件传输）客户端。</para></summary>
+/// <summary>HDC sync (file transfer) client over a direct connection. <para>经由直连通道的 HDC sync（文件传输）客户端。</para></summary>
 public interface IHdcSyncClient : IDisposable
 {
     /// <summary>Sends a local file to the device. <para>发送本地文件到设备。</para></summary>
@@ -199,7 +186,7 @@ public interface IHdcSyncClient : IDisposable
     void Recv(string remotePath, string localPath, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Host-facing HDC app install/uninstall client. <para>面向宿主的 HDC 应用安装/卸载客户端。</para></summary>
+/// <summary>HDC app install/uninstall client over a direct connection. <para>经由直连通道的 HDC 应用安装/卸载客户端。</para></summary>
 public interface IHdcAppClient
 {
     /// <summary>Installs an application package. <para>安装应用包。</para></summary>
@@ -217,8 +204,8 @@ public interface IHdcAppClient
 
     /// <summary>Uninstalls an application bundle. <para>卸载应用包。</para></summary>
     /// <param name="bundle">
-    /// Bundle name; only ASCII letters, digits, <c>.</c> and <c>_</c> are accepted.
-    /// <para>bundle 名称；仅接受 ASCII 字母、数字、<c>.</c> 与 <c>_</c>。</para>
+    /// Bundle name restricted to ASCII letters, digits, dots and underscores.
+    /// <para>bundle 名称，仅限 ASCII 字母、数字、点号与下划线。</para>
     /// </param>
     /// <param name="cancellationToken">
     /// Cancels before the uninstall task is opened.
@@ -231,13 +218,13 @@ public interface IHdcAppClient
     string Uninstall(string bundle, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Host-facing HDC port-forwarding manager. <para>面向宿主的 HDC 端口转发管理器。</para></summary>
+/// <summary>HDC port-forwarding manager over a direct connection. <para>经由直连通道的 HDC 端口转发管理器。</para></summary>
 public interface IHdcForwardManager
 {
     /// <summary>Adds a forward rule. <para>添加转发规则。</para></summary>
     /// <param name="localPort">
-    /// Host loopback port to listen on, in 1..65535.
-    /// <para>主机回环监听端口，取值 1..65535。</para>
+    /// Host loopback listening port between 1 and 65535.
+    /// <para>主机回环监听端口，范围从 1 到 65535。</para>
     /// </param>
     /// <param name="remotePort">
     /// Upstream TCP port, sent as <c>tcp:</c> plus the port number.
@@ -252,8 +239,8 @@ public interface IHdcForwardManager
     /// Cancels the synchronous endpoint handshake before the mapping is registered.
     /// <para>在映射登记前取消同步的端点握手。</para>
     /// </param>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="localPort"/> is outside
-    /// 1..65535. <para><paramref name="localPort"/> 不在 1..65535 范围内。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="localPort"/> is outside the
+    /// 1 to 65535 range. <para><paramref name="localPort"/> 不在 1 至 65535 范围内。</para></exception>
     /// <exception cref="System.IO.IOException">The listen key already has a different open mapping.
     /// <para>该监听键已存在另一个不同的打开映射。</para></exception>
     void Add(int localPort, int remotePort, bool reverse = false, CancellationToken cancellationToken = default);
@@ -279,7 +266,7 @@ public interface IHdcForwardManager
     bool Remove(string listenEndpoint, bool reverse = false);
 }
 
-/// <summary>Host-facing one-shot HDC device services. <para>面向宿主的一次性 HDC 设备服务。</para></summary>
+/// <summary>One-shot HDC device services for debug processes, reboot and remount. <para>用于调试进程列表、重启与重新挂载的一次性 HDC 设备服务。</para></summary>
 public interface IHdcDeviceServices
 {
     /// <summary>Lists debug (JDWP) processes. <para>列出调试（JDWP）进程。</para></summary>
@@ -289,9 +276,9 @@ public interface IHdcDeviceServices
 
     /// <summary>Reboots to system, bootloader or recovery. <para>重启至系统、bootloader 或 recovery。</para></summary>
     /// <param name="mode">
-    /// UI reboot mode: <see langword="null"/>, empty, <c>"system"</c>, <c>"bootloader"</c> or
+    /// Reboot mode: <see langword="null"/>, empty, <c>"system"</c>, <c>"bootloader"</c> or
     /// <c>"recovery"</c>.
-    /// <para>界面重启模式：<see langword="null"/>、空串、<c>"system"</c>、<c>"bootloader"</c> 或
+    /// <para>重启模式：<see langword="null"/>、空串、<c>"system"</c>、<c>"bootloader"</c> 或
     /// <c>"recovery"</c>。</para>
     /// </param>
     /// <exception cref="NotSupportedException"><paramref name="mode"/> is not a supported reboot mode.

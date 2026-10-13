@@ -20,31 +20,30 @@ public static class AXmlWriter
     private const uint NoIndex = 0xFFFFFFFF;
 
     /// <summary>
-    /// Serializes the model into AXML bytes. The string pool is rebuilt with the source pool entries kept at the head in their original order (later duplicates collapse onto the first ordinal match), followed by any namespace, element, attribute and text strings not already present; pool flags are always written as UTF-8 sorted and the source style offsets and style data are copied verbatim.
-    /// <para>把模型序列化为 AXML 字节。字符串池重建时保留源池条目在头部及其原有顺序（后出现的重复项按序数相等合并到首次出现的位置），其后追加命名空间、元素、属性与文本中尚未出现的字符串；池标志始终写为 UTF-8 排序，源样式偏移与样式数据原样复制。</para>
+    /// Serializes the model into AXML bytes. The string pool is rebuilt with source entries kept at the head in their original order, followed by strings not already present.
+    /// <para>把模型序列化为 AXML 字节。字符串池重建时保留源条目在头部及其原有顺序，其后追加尚未出现的字符串。</para>
     /// </summary>
     /// <param name="doc">
     /// Document model to serialize; its <c>Root</c> must be a parsed or hand-built element tree.
     /// <para>要序列化的文档模型；其 <c>Root</c> 必须是已解析或手工构建的元素树。</para>
     /// </param>
     /// <returns>
-    /// The complete little-endian AXML image, starting with the 8-byte root header. Chunk line numbers reuse each element's source line when positive, otherwise the tree depth.
-    /// <para>完整的 little-endian AXML 镜像，以 8 字节根头部开始。块行号在元素源行号为正时复用源行号，否则使用树深度。</para>
+    /// The complete little-endian AXML image, starting with the 8-byte root header.
+    /// <para>完整的 little-endian AXML 镜像，以 8 字节根头部开始。</para>
     /// </returns>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="doc"/> is <see langword="null"/>.
     /// <para><paramref name="doc"/> 为 <see langword="null"/>。</para>
     /// </exception>
     /// <exception cref="AXmlException">
-    /// The document has no root element, or a string referenced by the tree is absent from the rebuilt pool. Resource ids are preserved instead of being renumbered: the resource-map chunk and each attribute's raw value payload are copied byte-for-byte from the model, and a parsed attribute keeps its original name-pool index when that index still holds an equal name in the rebuilt pool. Only modeled constructs are emitted — text becomes a CDATA chunk solely on childless elements, so an element carrying both text and children emits its children and drops the text, and chunk types the parser did not model (they were skipped when reading) cannot be re-emitted.
-    /// <para>文档没有根元素，或元素树引用的字符串在重建后的池中缺失。资源 id 通过原样保留而非重新编号：资源映射块与每个属性的原始值载荷都按字节从模型复制；已解析的属性在其原名池索引在重建池中仍保存相等名称时保留该索引。只发射已建模的结构——文本仅在无子元素的元素上成为 CDATA 块，因此同时带有文本和子元素的元素会发射子元素并丢弃文本；解析器未建模的块类型（读取时已被跳过）无法再次发射。</para>
+    /// The document has no root element, or a string referenced by the tree is absent from the rebuilt pool.
+    /// <para>文档没有根元素，或元素树引用的字符串在重建后的池中缺失。</para>
     /// </exception>
     /// <example>
     /// <code language="csharp">
-    /// byte[] source = File.ReadAllBytes("AndroidManifest.xml");
-    /// var doc = AXmlParser.Parse(source);
-    /// byte[] rebuilt = AXmlWriter.Write(doc);
+    /// byte[] bytes = AXmlWriter.Write(doc);
     /// </code>
+    /// <para>把模型写出为 AXML 字节。</para>
     /// </example>
     public static byte[] Write(AXmlDocument doc)
     {
@@ -291,6 +290,8 @@ public static class AXmlWriter
     /// Encodes one UTF-8 pool string (variable-length length header + UTF-8 bytes + NUL, 4-byte aligned).
     /// <para>编码一个 UTF-8 池字符串（变长长度头 + UTF-8 字节 + 终止 NUL，4 字节对齐）。</para>
     /// </summary>
+    /// <param name="value">The pool string to encode. <para>待编码的池字符串。</para></param>
+    /// <returns>The padded payload and its total byte count. <para>补齐后的载荷及其总字节数。</para></returns>
     private static (byte[] Payload, int Total) EncodeUtf8String(string value)
     {
         var utf16Len = value.Length;

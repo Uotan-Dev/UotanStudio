@@ -113,7 +113,8 @@ public sealed partial class MtkSession
     /// <summary>
     /// Denies XML read, write and erase against regions the unified storage snapshot marks as
     /// authenticated-only or replay-protected, before any wire byte of the operation is sent.
-    /// 在 XML 读、写、擦除发送任何线上字节之前，拒绝统一存储快照标记为需认证或重放保护的区域。
+    /// <para>在 XML 读、写、擦除发送任何线上字节之前，拒绝统一存储快照标记为需认证或重放保护的区域。
+    /// </para>
     /// </summary>
     /// <param name="regionName">The exact XML region token. 精确的 XML 区域标记。</param>
     private void RequireXmlOrdinaryRegionSnapshot(string regionName)
@@ -139,10 +140,11 @@ public sealed partial class MtkSession
     /// hexadecimal value within the selected binary frame limit, and the direction must match the
     /// destination the host declared in the control command. The target file must equal that
     /// exact host-selected destination identifier.
-    /// 校验设备发起的 XML 上传回调是否符合协商出的有界目标。以下检查为刻意保留项：校验和参数必须是精确的
+    /// <para>校验设备发起的 XML 上传回调是否符合协商出的有界目标。以下检查为刻意保留项：校验和参数必须是精确的
     /// <c>CHK_NO</c> 标记（文件传输不携带密码学完整性声明，设备不得升级已协商的模式）、包长必须是有界
     /// 十六进制值且不超过选定的二进制帧上限、方向必须与宿主在控制命令中声明的目标一致；目标文件必须与
     /// 宿主选定的目标标识完全相同。
+    /// </para>
     /// </summary>
     /// <param name="request">The parsed device command message. 已解析的设备命令消息。</param>
     /// <param name="destination">The host-declared destination identifier. 宿主声明的目标标识。</param>

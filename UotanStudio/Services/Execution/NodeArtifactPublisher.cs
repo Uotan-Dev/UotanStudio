@@ -3,10 +3,14 @@ using UotanStudio.Services.Projects;
 
 namespace UotanStudio.Services.Execution;
 
-/// <summary>Publishes one node artifact through a same-directory temporary file without buffering an input file.</summary>
+/// <summary>Publishes one node artifact through a same-directory temporary file without buffering an input file.<para>通过同目录临时文件发布单个节点产物，不缓冲输入文件。</para></summary>
 internal static class NodeArtifactPublisher
 {
-    /// <summary>Copies supported input data, preserving the previous destination if copying or cancellation fails.</summary>
+    /// <summary>Copies supported input data, preserving the previous destination if copying or cancellation fails.<para>复制受支持的输入数据，复制或取消失败时保留原有目标。</para></summary>
+    /// <param name="data">Supported input data to publish.<para>待发布的受支持输入数据。</para></param>
+    /// <param name="path">Destination file path.<para>目标文件路径。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The published byte length.<para>已发布的字节长度。</para></returns>
     internal static async Task<long> PublishAsync(object? data, string path, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);

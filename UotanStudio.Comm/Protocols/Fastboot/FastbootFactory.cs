@@ -70,7 +70,10 @@ internal sealed class FastbootFactory : IProtocolFactory
     /// </summary>
     public IReadOnlyList<FastbootDeviceProfile> KnownDeviceProfiles { get; set; } = FastbootDeviceProfiles.Default;
 
-    /// <summary>Gets the protocol name. 获取协议名称。</summary>
+    /// <summary>
+    /// Gets the protocol name.
+    /// <para>获取协议名称。</para>
+    /// </summary>
     public string ProtocolName => "fastboot";
 
     /// <summary>

@@ -6,7 +6,7 @@ using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Mcp;
 
-/// <summary>Routes embedded MCP device tools through the desktop device manager.</summary>
+/// <summary>Routes embedded MCP device tools through the desktop device manager.<para>把内嵌 MCP 设备工具路由到桌面设备管理器。</para></summary>
 public sealed class DesktopDeviceManagerGateway : IDeviceManagerGateway
 {
     private readonly DeviceMonitorService _monitor = App.DeviceMonitor;
@@ -103,15 +103,15 @@ public sealed class DesktopDeviceManagerGateway : IDeviceManagerGateway
     private const int MaxPairingWaitSeconds = 1800;
 
     /// <summary>
-    /// <para>在桌面宿主的已扫描目标中定位唯一的 ADB 设备，标识匹配区分大小写。</para>
-    /// Locates the single ADB device matching the identity in the desktop host's scan result; matching
+    /// Locates the single ADB device whose serial matches the given identity; matching
     /// is case-sensitive.
+    /// <para>在已扫描目标中定位序列号与给定标识唯一匹配的 ADB 设备，匹配区分大小写。</para>
     /// </summary>
-    /// <param name="serial"><para>由 <see cref="ListAdbTargets"/> 报出的确切目标标识。</para>
-    /// The exact target identity as reported by <see cref="ListAdbTargets"/>.</param>
-    /// <returns><para>选中的 ADB 设备。</para>The selected ADB device.</returns>
-    /// <exception cref="IOException"><para>没有唯一目标与该标识匹配。</para>
-    /// No unique scanned target matches the identity.</exception>
+    /// <param name="serial">The exact target identity to match.
+    /// <para>要匹配的确切目标标识。</para></param>
+    /// <returns>The selected ADB device.<para>选中的 ADB 设备。</para></returns>
+    /// <exception cref="IOException">No unique scanned target matches the identity.
+    /// <para>没有唯一目标与该标识匹配。</para></exception>
     private DetectedDevice RequireUniqueAdbTarget(string serial)
     {
         var matches = _monitor.Scan().Where(device => device.Protocol == DeviceProtocolKind.Adb &&

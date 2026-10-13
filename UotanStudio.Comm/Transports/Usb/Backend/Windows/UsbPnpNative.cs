@@ -6,14 +6,14 @@ using UotanStudio.Comm.Text;
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
 /// <summary>
-/// <para>cfgmgr32 与设备属性读取的原生边界。这里集中所有 P/Invoke、<c>CR_*</c> 与
-/// <c>DEVPROP_TYPE_*</c> 常量，以及从 <c>DEVINST</c> 解码单个属性的逻辑；任何单个属性读取失败都只会
-/// 让对应字段降级为 <see langword="null"/>，绝不抛出，以保证拓扑枚举是只读且零干扰的。</para>
 /// The native boundary for cfgmgr32 and device-property reads. All P/Invoke declarations, the
 /// <c>CR_*</c> and <c>DEVPROP_TYPE_*</c> constants, and the decoding of one property from a
 /// <c>DEVINST</c> live here; a failure on any single property only degrades that field to
 /// <see langword="null"/> and never throws, keeping the topology enumeration read-only and
 /// zero-interference.
+/// <para>cfgmgr32 与设备属性读取的原生边界。这里集中所有 P/Invoke、<c>CR_*</c> 与
+/// <c>DEVPROP_TYPE_*</c> 常量，以及从 <c>DEVINST</c> 解码单个属性的逻辑；任何单个属性读取失败都只会
+/// 让对应字段降级为 <see langword="null"/>，绝不抛出，以保证拓扑枚举是只读且零干扰的。</para>
 /// </summary>
 internal static partial class UsbPnpNative
 {
@@ -77,9 +77,9 @@ internal static partial class UsbPnpNative
         out uint propertyType, byte[]? propertyBuffer, ref uint propertyBufferSize, uint flags);
 
     /// <summary>
-    /// <para>报告当前机器能否读到 USB 设备实例清单，作为只探测大小、不分配缓冲区的轻量可用性检查。</para>
     /// Reports whether this machine can read the USB device-instance list, as a lightweight
     /// availability probe that only queries the size and allocates no buffer.
+    /// <para>报告当前机器能否读到 USB 设备实例清单，作为只探测大小、不分配缓冲区的轻量可用性检查。</para>
     /// </summary>
     /// <returns>
     /// <see langword="true"/> when the present-device id list size can be read.
@@ -89,13 +89,13 @@ internal static partial class UsbPnpNative
         => CM_Get_Device_ID_List_SizeW(out _, "USB\\*", CmGetIdListFilterPresent) == CrSuccess;
 
     /// <summary>
-    /// <para>枚举当前在位、实例标识以 <c>USB\</c> 或 <c>USB4\</c> 开头的设备标识，作为种子集合；主机控制器等
-    /// 非 <c>USB\</c> 祖先由调用方经父链补齐。原生 <c>USB\*</c> 查询串在本机实测会放行非 USB 标识，因此这里
-    /// 再以托管前缀判定为准。</para>
     /// Enumerates the present device instance ids that start with <c>USB\</c> or <c>USB4\</c> as the seed
     /// set; non-<c>USB\</c> ancestors such as host controllers are added by the caller through the parent
     /// chain. The native <c>USB\*</c> query string demonstrably admits non-USB ids on real machines, so the
     /// managed prefix test is the authoritative filter.
+    /// <para>枚举当前在位、实例标识以 <c>USB\</c> 或 <c>USB4\</c> 开头的设备标识，作为种子集合；主机控制器等
+    /// 非 <c>USB\</c> 祖先由调用方经父链补齐。原生 <c>USB\*</c> 查询串在本机实测会放行非 USB 标识，因此这里
+    /// 再以托管前缀判定为准。</para>
     /// </summary>
     /// <returns>
     /// The matching instance ids, or an empty list when the list cannot be read.
@@ -146,9 +146,9 @@ internal static partial class UsbPnpNative
     }
 
     /// <summary>
-    /// <para>把设备实例标识解析为 <c>DEVINST</c> 句柄，供属性读取与父链上溯使用。</para>
     /// Resolves a device instance id into a <c>DEVINST</c> handle used for property reads and parent
     /// climbing.
+    /// <para>把设备实例标识解析为 <c>DEVINST</c> 句柄，供属性读取与父链上溯使用。</para>
     /// </summary>
     /// <param name="deviceId">
     /// The device instance id. <para>设备实例标识。</para>
@@ -163,10 +163,10 @@ internal static partial class UsbPnpNative
         => CM_Locate_DevNodeW(out devInst, deviceId, 0) == CrSuccess;
 
     /// <summary>
-    /// <para>读取一个 <c>DEVINST</c> 的设备实例标识，按需倍增缓冲区，失败时返回
-    /// <see langword="null"/>。</para>
     /// Reads the device instance id of a <c>DEVINST</c>, doubling the buffer as needed and returning
     /// <see langword="null"/> on failure.
+    /// <para>读取一个 <c>DEVINST</c> 的设备实例标识，按需倍增缓冲区，失败时返回
+    /// <see langword="null"/>。</para>
     /// </summary>
     /// <param name="devInst">
     /// The devnode handle. <para>设备节点句柄。</para>
@@ -206,10 +206,10 @@ internal static partial class UsbPnpNative
     }
 
     /// <summary>
-    /// <para>取一个 <c>DEVINST</c> 的直接父节点；到达根或查询失败时返回
-    /// <see langword="false"/>。</para>
     /// Takes the direct parent of a <c>DEVINST</c>; returns <see langword="false"/> at the root or when
     /// the lookup fails.
+    /// <para>取一个 <c>DEVINST</c> 的直接父节点；到达根或查询失败时返回
+    /// <see langword="false"/>。</para>
     /// </summary>
     /// <param name="devInst">
     /// The child devnode handle. <para>子设备节点句柄。</para>
@@ -224,10 +224,10 @@ internal static partial class UsbPnpNative
         => CM_Get_Parent(out parentDevInst, devInst, 0) == CrSuccess;
 
     /// <summary>
-    /// <para>取一个 <c>DEVINST</c> 的第一个直接子节点；无子节点或查询失败时返回
-    /// <see langword="false"/>。</para>
     /// Takes the first direct child of a <c>DEVINST</c>; returns <see langword="false"/> when the
     /// node has no children or the lookup fails.
+    /// <para>取一个 <c>DEVINST</c> 的第一个直接子节点；无子节点或查询失败时返回
+    /// <see langword="false"/>。</para>
     /// </summary>
     /// <param name="devInst">
     /// The parent devnode handle. <para>父设备节点句柄。</para>
@@ -242,10 +242,10 @@ internal static partial class UsbPnpNative
         => CM_Get_Child(out childDevInst, devInst, 0) == CrSuccess;
 
     /// <summary>
-    /// <para>取同父节点下某 <c>DEVINST</c> 的下一个兄弟节点；没有更多兄弟或查询失败时返回
-    /// <see langword="false"/>。</para>
     /// Takes the next sibling of a <c>DEVINST</c> under the same parent; returns
     /// <see langword="false"/> when no sibling remains or the lookup fails.
+    /// <para>取同父节点下某 <c>DEVINST</c> 的下一个兄弟节点；没有更多兄弟或查询失败时返回
+    /// <see langword="false"/>。</para>
     /// </summary>
     /// <param name="devInst">
     /// The current sibling devnode handle. <para>当前兄弟设备节点句柄。</para>
@@ -260,11 +260,11 @@ internal static partial class UsbPnpNative
         => CM_Get_Sibling(out siblingDevInst, devInst, 0) == CrSuccess;
 
     /// <summary>
-    /// <para>读取一个设备节点的全部已定义属性，把无法读取的字段降级为
-    /// <see langword="null"/> 或空集合，返回尚未包含父标识与设备接口 GUID 的原始记录。</para>
     /// Reads every defined property of a devnode, degrading unreadable fields to <see langword="null"/>
     /// or empty collections, and returns the raw record before the parent id and device-interface GUIDs
     /// are attached.
+    /// <para>读取一个设备节点的全部已定义属性，把无法读取的字段降级为
+    /// <see langword="null"/> 或空集合，返回尚未包含父标识与设备接口 GUID 的原始记录。</para>
     /// </summary>
     /// <param name="devInst">
     /// The devnode handle. <para>设备节点句柄。</para>
@@ -376,10 +376,10 @@ internal static partial class UsbPnpNative
     }
 
     /// <summary>
-    /// <para>原生 <c>DEVPROPKEY</c>：一个格式 GUID 加一个属性编号，与 <c>devpropdef.h</c> 的
-    /// <c>DEVPROPKEY</c> 逐字节对齐。</para>
     /// The native <c>DEVPROPKEY</c>: a format GUID plus a property id, byte-for-byte matching the
     /// <c>DEVPROPKEY</c> in <c>devpropdef.h</c>.
+    /// <para>原生 <c>DEVPROPKEY</c>：一个格式 GUID 加一个属性编号，与 <c>devpropdef.h</c> 的
+    /// <c>DEVPROPKEY</c> 逐字节对齐。</para>
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct DEVPROPKEY

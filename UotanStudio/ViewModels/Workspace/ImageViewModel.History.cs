@@ -77,8 +77,8 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>从持久化操作描述符重建撤销/重做动作（供操作历史跨会话恢复）。</para>
     /// Reconstructs undo/redo actions from a persisted operation descriptor (for cross-session history restore).
+    /// <para>从持久化操作描述符重建撤销/重做动作（供操作历史跨会话恢复）。</para>
     /// </summary>
     private static (Action Undo, Action Redo) ReconstructOperation(HistoryOperationDto operation)
     {

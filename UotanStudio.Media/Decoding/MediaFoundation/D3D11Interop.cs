@@ -22,116 +22,172 @@ internal static unsafe partial class D3D11Interop
 {
     private const string D3D11 = "d3d11.dll";
 
-    /// <summary>IID_ID3D11VideoDevice.</summary>
-    /// <summary>IID_ID3D11VideoDevice。</summary>
+    /// <summary>
+    /// IID_ID3D11VideoDevice.
+    /// <para>IID_ID3D11VideoDevice。</para>
+    /// </summary>
     public static readonly Guid IidVideoDevice = new("10EC4D5B-975A-4689-B9E4-D0AAC30FE333");
 
-    /// <summary>IID_ID3D11VideoContext.</summary>
-    /// <summary>IID_ID3D11VideoContext。</summary>
+    /// <summary>
+    /// IID_ID3D11VideoContext.
+    /// <para>IID_ID3D11VideoContext。</para>
+    /// </summary>
     public static readonly Guid IidVideoContext = new("61F21C45-3C0E-4A74-9CEA-67100D9AD5E4");
 
-    /// <summary>IID_ID3D11Texture2D.</summary>
-    /// <summary>IID_ID3D11Texture2D。</summary>
+    /// <summary>
+    /// IID_ID3D11Texture2D.
+    /// <para>IID_ID3D11Texture2D。</para>
+    /// </summary>
     public static readonly Guid IidTexture2D = new("6F15AAF2-D208-4E89-9AB4-489535D34F9C");
 
-    /// <summary>IID_ID3D11Multithread (d3d11_4.h).</summary>
-    /// <summary>IID_ID3D11Multithread（d3d11_4.h）。</summary>
+    /// <summary>
+    /// IID_ID3D11Multithread (d3d11_4.h).
+    /// <para>IID_ID3D11Multithread（d3d11_4.h）。</para>
+    /// </summary>
     public static readonly Guid IidMultithread = new("9B7E4E00-342C-4106-A19F-4F2704F689F0");
 
-    /// <summary>IID_IMFDXGIBuffer.</summary>
-    /// <summary>IID_IMFDXGIBuffer。</summary>
+    /// <summary>
+    /// IID_IMFDXGIBuffer.
+    /// <para>IID_IMFDXGIBuffer。</para>
+    /// </summary>
     public static readonly Guid IidDxgiBuffer = new("E7174CFA-1C9E-48B1-8866-626226BFC258");
 
-    /// <summary>D3D11_CREATE_DEVICE_VIDEO_SUPPORT.</summary>
-    /// <summary>D3D11_CREATE_DEVICE_VIDEO_SUPPORT。</summary>
+    /// <summary>
+    /// D3D11_CREATE_DEVICE_VIDEO_SUPPORT.
+    /// <para>D3D11_CREATE_DEVICE_VIDEO_SUPPORT。</para>
+    /// </summary>
     public const uint CreateDeviceVideoSupport = 0x800;
 
-    /// <summary>D3D11_CREATE_DEVICE_BGRA_SUPPORT.</summary>
-    /// <summary>D3D11_CREATE_DEVICE_BGRA_SUPPORT。</summary>
+    /// <summary>
+    /// D3D11_CREATE_DEVICE_BGRA_SUPPORT.
+    /// <para>D3D11_CREATE_DEVICE_BGRA_SUPPORT。</para>
+    /// </summary>
     public const uint CreateDeviceBgraSupport = 0x20;
 
-    /// <summary>D3D_DRIVER_TYPE_HARDWARE (d3dcommon.h: UNKNOWN + 1).</summary>
-    /// <summary>D3D_DRIVER_TYPE_HARDWARE（d3dcommon.h：UNKNOWN + 1）。</summary>
+    /// <summary>
+    /// D3D_DRIVER_TYPE_HARDWARE (d3dcommon.h: UNKNOWN + 1).
+    /// <para>D3D_DRIVER_TYPE_HARDWARE（d3dcommon.h：UNKNOWN + 1）。</para>
+    /// </summary>
     public const uint DriverTypeHardware = 1;
 
-    /// <summary>D3D_DRIVER_TYPE_UNKNOWN; required when a device is created on an explicit adapter.</summary>
-    /// <summary>D3D_DRIVER_TYPE_UNKNOWN；在显式指定的适配器上创建设备时必须使用。</summary>
+    /// <summary>
+    /// D3D_DRIVER_TYPE_UNKNOWN; required when a device is created on an explicit adapter.
+    /// <para>D3D_DRIVER_TYPE_UNKNOWN；在显式指定的适配器上创建设备时必须使用。</para>
+    /// </summary>
     public const uint DriverTypeUnknown = 0;
 
-    /// <summary>D3D11_SDK_VERSION.</summary>
-    /// <summary>D3D11_SDK_VERSION。</summary>
+    /// <summary>
+    /// D3D11_SDK_VERSION.
+    /// <para>D3D11_SDK_VERSION。</para>
+    /// </summary>
     public const uint SdkVersion = 7;
 
-    /// <summary>D3D11_USAGE_DEFAULT.</summary>
-    /// <summary>D3D11_USAGE_DEFAULT。</summary>
+    /// <summary>
+    /// D3D11_USAGE_DEFAULT.
+    /// <para>D3D11_USAGE_DEFAULT。</para>
+    /// </summary>
     public const uint UsageDefault = 0;
 
-    /// <summary>D3D11_USAGE_STAGING.</summary>
-    /// <summary>D3D11_USAGE_STAGING。</summary>
+    /// <summary>
+    /// D3D11_USAGE_STAGING.
+    /// <para>D3D11_USAGE_STAGING。</para>
+    /// </summary>
     public const uint UsageStaging = 3;
 
-    /// <summary>D3D11_BIND_DECODER.</summary>
-    /// <summary>D3D11_BIND_DECODER。</summary>
+    /// <summary>
+    /// D3D11_BIND_DECODER.
+    /// <para>D3D11_BIND_DECODER。</para>
+    /// </summary>
     public const uint BindDecoder = 0x200;
 
-    /// <summary>D3D11_BIND_RENDER_TARGET.</summary>
-    /// <summary>D3D11_BIND_RENDER_TARGET。</summary>
+    /// <summary>
+    /// D3D11_BIND_RENDER_TARGET.
+    /// <para>D3D11_BIND_RENDER_TARGET。</para>
+    /// </summary>
     public const uint BindRenderTarget = 0x20;
 
-    /// <summary>D3D11_BIND_SHADER_RESOURCE.</summary>
-    /// <summary>D3D11_BIND_SHADER_RESOURCE。</summary>
+    /// <summary>
+    /// D3D11_BIND_SHADER_RESOURCE.
+    /// <para>D3D11_BIND_SHADER_RESOURCE。</para>
+    /// </summary>
     public const uint BindShaderResource = 0x8;
 
-    /// <summary>D3D11_CPU_ACCESS_READ.</summary>
-    /// <summary>D3D11_CPU_ACCESS_READ。</summary>
+    /// <summary>
+    /// D3D11_CPU_ACCESS_READ.
+    /// <para>D3D11_CPU_ACCESS_READ。</para>
+    /// </summary>
     public const uint CpuAccessRead = 0x20000;
 
-    /// <summary>D3D11_CPU_ACCESS_WRITE.</summary>
-    /// <summary>D3D11_CPU_ACCESS_WRITE。</summary>
+    /// <summary>
+    /// D3D11_CPU_ACCESS_WRITE.
+    /// <para>D3D11_CPU_ACCESS_WRITE。</para>
+    /// </summary>
     public const uint CpuAccessWrite = 0x10000;
 
-    /// <summary>D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE (staging combination).</summary>
-    /// <summary>D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE（staging 组合）。</summary>
+    /// <summary>
+    /// D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE (staging combination).
+    /// <para>D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE（staging 组合）。</para>
+    /// </summary>
     public const uint CpuAccessReadWrite = 0x30000;
 
-    /// <summary>D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE.</summary>
-    /// <summary>D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE。</summary>
+    /// <summary>
+    /// D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE.
+    /// <para>D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE。</para>
+    /// </summary>
     public const uint VideoFrameFormatProgressive = 0;
 
-    /// <summary>D3D11_VPIV_DIMENSION_TEXTURE2D.</summary>
-    /// <summary>D3D11_VPIV_DIMENSION_TEXTURE2D。</summary>
+    /// <summary>
+    /// D3D11_VPIV_DIMENSION_TEXTURE2D.
+    /// <para>D3D11_VPIV_DIMENSION_TEXTURE2D。</para>
+    /// </summary>
     public const uint VpivDimensionTexture2D = 1;
 
-    /// <summary>D3D11_VPOV_DIMENSION_TEXTURE2D.</summary>
-    /// <summary>D3D11_VPOV_DIMENSION_TEXTURE2D。</summary>
+    /// <summary>
+    /// D3D11_VPOV_DIMENSION_TEXTURE2D.
+    /// <para>D3D11_VPOV_DIMENSION_TEXTURE2D。</para>
+    /// </summary>
     public const uint VpovDimensionTexture2D = 1;
 
-    /// <summary>DXGI_FORMAT_NV12.</summary>
-    /// <summary>DXGI_FORMAT_NV12。</summary>
+    /// <summary>
+    /// DXGI_FORMAT_NV12.
+    /// <para>DXGI_FORMAT_NV12。</para>
+    /// </summary>
     public const uint DxgiFormatNv12 = 103;
 
-    /// <summary>DXGI_FORMAT_B8G8R8A8_UNORM.</summary>
-    /// <summary>DXGI_FORMAT_B8G8R8A8_UNORM。</summary>
+    /// <summary>
+    /// DXGI_FORMAT_B8G8R8A8_UNORM.
+    /// <para>DXGI_FORMAT_B8G8R8A8_UNORM。</para>
+    /// </summary>
     public const uint DxgiFormatB8G8R8A8 = 87;
 
-    /// <summary>DXGI_FORMAT_R8_UNORM.</summary>
-    /// <summary>DXGI_FORMAT_R8_UNORM。</summary>
+    /// <summary>
+    /// DXGI_FORMAT_R8_UNORM.
+    /// <para>DXGI_FORMAT_R8_UNORM。</para>
+    /// </summary>
     public const uint DxgiFormatR8 = 61;
 
-    /// <summary>MF_E_NO_EVENTS_AVAILABLE (mferror.h).</summary>
-    /// <summary>MF_E_NO_EVENTS_AVAILABLE（mferror.h）。</summary>
+    /// <summary>
+    /// MF_E_NO_EVENTS_AVAILABLE (mferror.h).
+    /// <para>MF_E_NO_EVENTS_AVAILABLE（mferror.h）。</para>
+    /// </summary>
     public const int MfENoEventsAvailable = unchecked((int)0xC00D3E80);
 
-    /// <summary>METransformNeedInput (mfobjects.h: 600 + 1).</summary>
-    /// <summary>METransformNeedInput（mfobjects.h：600 + 1）。</summary>
+    /// <summary>
+    /// METransformNeedInput (mfobjects.h: 600 + 1).
+    /// <para>METransformNeedInput（mfobjects.h：600 + 1）。</para>
+    /// </summary>
     public const uint MeTransformNeedInput = 601;
 
-    /// <summary>METransformHaveOutput.</summary>
-    /// <summary>METransformHaveOutput。</summary>
+    /// <summary>
+    /// METransformHaveOutput.
+    /// <para>METransformHaveOutput。</para>
+    /// </summary>
     public const uint MeTransformHaveOutput = 602;
 
-    /// <summary>METransformDrainComplete.</summary>
-    /// <summary>METransformDrainComplete。</summary>
+    /// <summary>
+    /// METransformDrainComplete.
+    /// <para>METransformDrainComplete。</para>
+    /// </summary>
     public const uint MeTransformDrainComplete = 603;
 
     [LibraryImport(D3D11)]

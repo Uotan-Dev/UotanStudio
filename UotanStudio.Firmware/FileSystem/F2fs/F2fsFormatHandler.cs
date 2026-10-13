@@ -370,14 +370,8 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider,
     }
 
     /// <summary>
-    /// Unpacks an F2FS image carried by an already-resolved logical stream into the output directory, the
-    /// container-facing counterpart of <see cref="UnpackAsync"/>. Parse, extraction and cancellation errors
-    /// propagate so the container caller reports them through its own failure channel; the result carries the
-    /// extracted entry paths plus the <c>InnerFormat</c>, <c>FilesystemBlockSize</c> and <c>VolumeName</c>
-    /// metadata the sparse container cascade expects.
-    /// <para>把已解析逻辑流承载的 F2FS 镜像解包到输出目录，是 <see cref="UnpackAsync"/> 的面向容器版本。解析、
-    /// 提取与取消错误向上传播，由容器调用方经其自身的失败通道报告；结果携带解出的条目路径，以及稀疏容器级联解包
-    /// 所期望的 <c>InnerFormat</c>、<c>FilesystemBlockSize</c> 与 <c>VolumeName</c> 元数据。</para>
+    /// Unpacks an F2FS image carried by an already-resolved logical stream into the output directory.
+    /// <para>把已解析逻辑流承载的 F2FS 镜像解包到输出目录。</para>
     /// </summary>
     /// <param name="logical">Seekable logical stream positioned at the start of the image; ownership stays with the
     /// caller. <para>定位到镜像起始处的可寻址逻辑流；所有权保留在调用方。</para></param>

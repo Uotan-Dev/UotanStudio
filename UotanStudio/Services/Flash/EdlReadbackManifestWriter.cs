@@ -5,71 +5,69 @@ using System.Xml.Linq;
 namespace UotanStudio.Services.Flash;
 
 /// <summary>
-/// <para>回读清单描述：一个已落盘分区镜像及其在目标存储上的几何信息。</para>
 /// Describes one read-back dump: a partition image on disk plus its geometry on the target storage.
+/// <para>回读清单描述：一个已落盘分区镜像及其在目标存储上的几何信息。</para>
 /// </summary>
 public sealed record EdlReadbackManifestEntry
 {
     /// <summary>
-    /// <para>分区标签名，与 GPT 分区名一致。</para>
     /// The partition label, matching the GPT partition name.
+    /// <para>分区标签名，与 GPT 分区名一致。</para>
     /// </summary>
+    /// <value>The GPT partition name carried as the label. <para>作为标签携带的 GPT 分区名。</para></value>
     public required string PartitionName { get; init; }
 
     /// <summary>
-    /// <para>起始扇区（分区在该 LUN 上的绝对扇区号）。</para>
     /// The start sector (absolute sector number on the LUN).
+    /// <para>起始扇区（分区在该 LUN 上的绝对扇区号）。</para>
     /// </summary>
+    /// <value>The absolute start sector number on the LUN. <para>分区在该 LUN 上的绝对起始扇区号。</para></value>
     public required long StartSector { get; init; }
 
     /// <summary>
-    /// <para>分区扇区数，与落盘镜像长度一致。</para>
     /// The partition sector count, matching the dumped image length.
+    /// <para>分区扇区数，与落盘镜像长度一致。</para>
     /// </summary>
+    /// <value>The sector count matching the dumped image length. <para>与落盘镜像长度一致的扇区数。</para></value>
     public required long SectorCount { get; init; }
 
     /// <summary>
-    /// <para>物理分区号（UFS 上即 LUN 编号）。</para>
     /// The physical partition number (the LUN on UFS).
+    /// <para>物理分区号（UFS 上即 LUN 编号）。</para>
     /// </summary>
+    /// <value>The physical partition number, the LUN on UFS. <para>物理分区号，即 UFS 上的 LUN 编号。</para></value>
     public required int PhysicalPartitionNumber { get; init; }
 
     /// <summary>
-    /// <para>落盘镜像的文件名（不含路径）。</para>
     /// The dumped image file name (without path).
+    /// <para>落盘镜像的文件名（不含路径）。</para>
     /// </summary>
+    /// <value>The dumped image file name without path. <para>不含路径的落盘镜像文件名。</para></value>
     public required string FileName { get; init; }
 }
 
 /// <summary>
-/// <para>EDL 回读清单生成器：把回读结果写成 rawprogram*.xml，供其他工具或再次刷写使用。
-/// 标准模式记录本机存储的精确扇区几何；通用化模式在与磁盘末尾相邻处改写为
-/// <c>NUM_DISK_SECTORS-</c> 相对起始扇区，使清单可适配不同容量的同代存储。</para>
-/// EDL read-back manifest writer: turns read-back results into a rawprogram*.xml for other
-/// tools or re-flashing. Standard mode records the exact sector geometry of this device;
-/// generalized mode rewrites start sectors that abut the end of the disk as relative
-/// <c>NUM_DISK_SECTORS-</c> expressions so the manifest adapts to same-generation storage
-/// of different capacities.
+/// Writes EDL read-back results into a rawprogram XML manifest. Generalized mode rewrites
+/// start sectors that abut the end of the disk as relative <c>NUM_DISK_SECTORS-</c>
+/// expressions.
+/// <para>把 EDL 回读结果写成 rawprogram XML 清单。通用化模式将与磁盘末尾相邻的起始扇区
+/// 改写为 <c>NUM_DISK_SECTORS-</c> 相对表达式。</para>
 /// </summary>
 public static class EdlReadbackManifestWriter
 {
     /// <summary>
-    /// <para>生成 rawprogram XML 文本。输出条目顺序与 <paramref name="entries"/> 一致；
-    /// 通用化模式只重写确实与磁盘末尾相邻的条目，其余起始扇区保持原值。</para>
     /// Generates the rawprogram XML text. Output entries keep the order of
     /// <paramref name="entries"/>; generalized mode rewrites only entries that truly abut the
     /// end of the disk, leaving all other start sectors untouched.
+    /// <para>生成 rawprogram XML 文本。输出条目顺序与 <paramref name="entries"/> 一致；
+    /// 通用化模式只重写确实与磁盘末尾相邻的条目，其余起始扇区保持原值。</para>
     /// </summary>
-    /// <param name="entries"><para>回读条目，每条对应一个已落盘镜像。</para>
-    /// The read-back entries, one per dumped image.</param>
-    /// <param name="sectorSizeInBytes"><para>目标存储扇区大小（字节），必须为正。</para>
-    /// The target storage sector size in bytes; must be positive.</param>
-    /// <param name="numDiskSectors"><para>所在 LUN 的总扇区数，通用化模式必需；标准模式可为 0。</para>
-    /// The total sector count of the LUN, required by generalized mode; 0 is allowed in standard mode.</param>
-    /// <param name="generalized"><para>是否生成通用化清单。</para>Whether to generate a generalized manifest.</param>
-    /// <returns><para>rawprogram XML 文本。</para>The rawprogram XML text.</returns>
-    /// <exception cref="ArgumentException"><para>扇区大小非正，或条目几何非法时抛出。</para>
-    /// Thrown when the sector size is not positive or an entry has invalid geometry.</exception>
+    /// <param name="entries">The read-back entries, one per dumped image. <para>回读条目，每条对应一个已落盘镜像。</para></param>
+    /// <param name="sectorSizeInBytes">The target storage sector size in bytes; must be positive. <para>目标存储扇区大小（字节），必须为正。</para></param>
+    /// <param name="numDiskSectors">Total sector count of the LUN; required by generalized mode, 0 allowed in standard mode. <para>所在 LUN 的总扇区数，通用化模式必需，标准模式可为 0。</para></param>
+    /// <param name="generalized">Whether to generate a generalized manifest. <para>是否生成通用化清单。</para></param>
+    /// <returns>The rawprogram XML text. <para>rawprogram XML 文本。</para></returns>
+    /// <exception cref="ArgumentException">Thrown when the sector size is not positive or an entry has invalid geometry. <para>扇区大小非正，或条目几何非法时抛出。</para></exception>
     public static string Generate(
         IReadOnlyList<EdlReadbackManifestEntry> entries, long sectorSizeInBytes,
         long numDiskSectors, bool generalized)
@@ -109,20 +107,16 @@ public static class EdlReadbackManifestWriter
     }
 
     /// <summary>
-    /// <para>把清单写入目标文件；写入先落临时文件，完整成功后原子替换，失败时保留原文件。</para>
     /// Writes the manifest to the target file; the write goes to a temporary file first and is
     /// atomically replaced after the full content is flushed, preserving the original on failure.
+    /// <para>把清单写入目标文件；写入先落临时文件，完整成功后原子替换，失败时保留原文件。</para>
     /// </summary>
-    /// <param name="destinationPath"><para>目标 rawprogram XML 完整路径。</para>
-    /// The full destination path of the rawprogram XML.</param>
-    /// <param name="entries"><para>回读条目。</para>The read-back entries.</param>
-    /// <param name="sectorSizeInBytes"><para>目标存储扇区大小（字节）。</para>
-    /// The target storage sector size in bytes.</param>
-    /// <param name="numDiskSectors"><para>所在 LUN 的总扇区数。</para>
-    /// The total sector count of the LUN.</param>
-    /// <param name="generalized"><para>是否生成通用化清单。</para>Whether to generate a generalized manifest.</param>
-    /// <param name="cancellationToken"><para>取消令牌。</para>The cancellation token.</param>
-    /// <returns><para>完成写入的任务。</para>A task that completes when the file is written.</returns>
+    /// <param name="destinationPath">The full destination path of the rawprogram XML. <para>目标 rawprogram XML 完整路径。</para></param>
+    /// <param name="entries">The read-back entries. <para>回读条目。</para></param>
+    /// <param name="sectorSizeInBytes">The target storage sector size in bytes. <para>目标存储扇区大小（字节）。</para></param>
+    /// <param name="numDiskSectors">The total sector count of the LUN. <para>所在 LUN 的总扇区数。</para></param>
+    /// <param name="generalized">Whether to generate a generalized manifest. <para>是否生成通用化清单。</para></param>
+    /// <param name="cancellationToken">The cancellation token. <para>取消令牌。</para></param>
     public static async Task WriteAsync(string destinationPath,
         IReadOnlyList<EdlReadbackManifestEntry> entries, long sectorSizeInBytes,
         long numDiskSectors, bool generalized, CancellationToken cancellationToken = default)
@@ -146,10 +140,14 @@ public static class EdlReadbackManifestWriter
     }
 
     /// <summary>
-    /// <para>格式化起始扇区：通用化模式下与磁盘末尾相邻的条目改写为相对表达式。</para>
     /// Formats the start sector; generalized mode rewrites entries adjacent to the disk end
     /// into a relative expression.
+    /// <para>格式化起始扇区：通用化模式下与磁盘末尾相邻的条目改写为相对表达式。</para>
     /// </summary>
+    /// <param name="entry">The read-back entry to format. <para>待格式化的回读条目。</para></param>
+    /// <param name="numDiskSectors">The total sector count of the LUN. <para>所在 LUN 的总扇区数。</para></param>
+    /// <param name="generalized">Whether generalized rewriting is active. <para>通用化改写是否启用。</para></param>
+    /// <returns>The formatted start sector expression. <para>格式化后的起始扇区表达式。</para></returns>
     private static string FormatStartSector(EdlReadbackManifestEntry entry, long numDiskSectors, bool generalized)
         => generalized && numDiskSectors > 0 && entry.StartSector + entry.SectorCount == numDiskSectors
             ? string.Create(CultureInfo.InvariantCulture, $"NUM_DISK_SECTORS-{entry.SectorCount}.")

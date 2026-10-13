@@ -3,8 +3,10 @@ using UotanStudio.Firmware.BootSecurity.Avb;
 
 namespace UotanStudio.Benchmarks.Firmware;
 
-/// <summary>AVB dm-verity hash-tree build throughput by image size. Measured against a parallel-window level-0 attempt and
-/// showed no speedup (the run is dominated by sequential read + block copy, not SHA-256), so level-0 stays single-pass.</summary>
+/// <summary>
+/// AVB dm-verity hash-tree build throughput by image size.
+/// <para>按镜像大小度量 AVB dm-verity 哈希树的构建吞吐。</para>
+/// </summary>
 [MemoryDiagnoser]
 public class AvbHashtreeBenchmarks
 {

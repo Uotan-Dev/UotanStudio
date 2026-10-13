@@ -4,23 +4,13 @@ using UotanStudio.Comm.Protocols.Edl;
 namespace UotanStudio.Services.Devices;
 
 /// <summary>
-/// <para>Preserves probe handshakes until the next operation on the same physical endpoint. A
-/// parked lease is reusable only when it carries a typed EDL session whose connection is still
-/// live and, when a generation probe is wired, its transport generation still matches the
-/// controller's current generation for that physical identity; a different generation means the
-/// transport instantiation is gone, so the lease is retired and reopened instead of trusting
-/// <c>IsConnected</c> alone.</para>
-/// Preserves probe handshakes until the next operation on the same physical endpoint. A parked
-/// lease is reusable only when <c>TryGetSession</c> yields a typed EDL session reporting a live
-/// connection and the optional generation probe still matches the lease's transport generation;
-/// a generation mismatch retires the lease and reopens rather than relying on <c>IsConnected</c>
-/// alone.
+/// Preserves probe handshakes until the next operation on the same physical endpoint. A parked lease is reused
+/// only while its typed EDL session is live and its generation probe still matches.
+/// <para>在同一物理端点的下一次操作之前保留探测握手。仅当类型化 EDL 会话仍在线且代际探针仍然匹配时，才会复用暂存的租约。</para>
 /// </summary>
-/// <param name="open">Opens a fresh lease for the endpoint.</param>
-/// <param name="changed">Notifies the owner of publishable state changes.</param>
-/// <param name="leaseIsCurrent">Reports whether a parked lease's transport generation still matches
-/// the controller's current generation for the same physical identity; without contrary evidence
-/// the lease is kept.</param>
+/// <param name="open">Opens a fresh lease for the endpoint.<para>为该端点打开一个新的租约。</para></param>
+/// <param name="changed">Notifies about publishable state changes.<para>通知可发布的状态变化。</para></param>
+/// <param name="leaseIsCurrent">Reports whether a parked lease's transport generation is still current.<para>报告暂存租约的传输代际是否仍然有效。</para></param>
 internal sealed class EdlConnectionCache(
     Func<DetectedDevice, CancellationToken, Task<DeviceLease>> open,
     Action changed,
@@ -31,14 +21,11 @@ internal sealed class EdlConnectionCache(
     private bool _disposed;
 
     /// <summary>
-    /// <para>可选的代际判活探针，由宿主在服务构造后惰性接线（构造点位于监视器主文件时无法在
-    /// 其它文件传参）；与构造参数同时存在时构造参数优先。探针缺失时仅按类型化会话与连接状态
-    /// 判活。</para>
-    /// Optional generation-liveness probe wired lazily by the host after construction (the
-    /// construction site may live in a file the wiring cannot touch); the constructor delegate
-    /// wins when both are present. Without any probe liveness falls back to the typed session and
-    /// its connection state only.
+    /// Optional generation-liveness probe supplied after construction; the constructor delegate wins when both are
+    /// present. Without a probe, liveness relies on the session's own connection state.
+    /// <para>构造之后提供的可选代际判活探针；与构造参数同时存在时构造参数优先。没有探针时仅按会话自身的连接状态判活。</para>
     /// </summary>
+    /// <value>The generation-liveness probe, or <c>null</c> when generation is not checked.<para>代际判活探针；不检查代际时为 <c>null</c>。</para></value>
     internal Func<DeviceLease, bool>? LeaseCurrentProbe { get; set; }
 
     private sealed class Entry
@@ -70,9 +57,11 @@ internal sealed class EdlConnectionCache(
     }
 
     /// <summary>
-    /// <para>返回该端点最近一次探测附加采集到的只读详情快照。</para>
     /// Returns the read-only detail snapshot collected alongside the endpoint's latest probe.
+    /// <para>返回该端点最近一次探测附加采集到的只读详情快照。</para>
     /// </summary>
+    /// <param name="key">The endpoint cache key.<para>端点缓存键。</para></param>
+    /// <returns>The collected detail snapshot, or <c>null</c> when none exists.<para>已采集的详情快照；不存在时为 <c>null</c>。</para></returns>
     internal EdlDetailsSnapshot? GetDetails(string key)
     {
         lock (_gate)
@@ -209,14 +198,14 @@ internal sealed class EdlConnectionCache(
     }
 
     /// <summary>
-    /// <para>探测之后尽力附加采集只读设备详情：Sahara 模式取被动捕获的 HELLO 信息；Firehose 模式
-    /// 复用已运行的编程器执行 configure 与 getstorageinfo（均为只读命令）。任何失败都只降级为
-    /// "无详情"，绝不改变探测状态，也不让探测失败。</para>
-    /// Best-effort read-only detail collection after the probe: Sahara mode uses the passively
-    /// captured HELLO; Firehose mode reuses the already-running programmer for configure and
-    /// getstorageinfo (both read-only). Any failure degrades to "no details" without changing the
-    /// probed state or failing the probe.
+    /// Collects read-only device details after a probe from the captured HELLO or the running programmer.
+    /// Failures degrade to no details without changing the probed state.
+    /// <para>在探测之后，从已捕获的 HELLO 或正在运行的编程器采集只读设备详情。采集失败只会降级为无详情，不改变探测得到的状态。</para>
     /// </summary>
+    /// <param name="entry">The endpoint entry that stores the snapshot.<para>保存快照的端点条目。</para></param>
+    /// <param name="session">The session the probe produced.<para>探测得到的会话。</para></param>
+    /// <param name="state">The protocol state reported by the probe.<para>探测上报的协议状态。</para></param>
+    /// <param name="cancellationToken">Cancels the detail reads.<para>用于取消详情读取。</para></param>
     private static async Task CollectDetailsAsync(Entry entry, EdlSession session, EdlProtocolState state,
         CancellationToken cancellationToken)
     {
@@ -227,8 +216,6 @@ internal sealed class EdlConnectionCache(
             {
                 EdlProtocolState.Sahara when session.SaharaHandshake is { } handshake
                     => new EdlDetailsSnapshot { Sahara = handshake, SerialPortName = portName },
-                // The Streaming DLOAD backend has no Firehose configure or capability snapshot; a stream-mode
-                // endpoint is described by its serial identity only, so nothing here dereferences session.Firehose.
                 EdlProtocolState.Streaming => portName is null ? null : new EdlDetailsSnapshot { SerialPortName = portName },
                 EdlProtocolState.Firehose => await CollectFirehoseDetailsAsync(session, portName, cancellationToken)
                     .ConfigureAwait(false),
@@ -241,8 +228,6 @@ internal sealed class EdlConnectionCache(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // 详情采集失败不影响探测结果；保留旧快照或保持 null。
-            // Detail collection failures never affect the probe result; keep the old snapshot or null.
             LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
                 $"EDL detail collection failed: {ex.Message}");
         }
@@ -252,8 +237,6 @@ internal sealed class EdlConnectionCache(
         string? serialPortName, CancellationToken cancellationToken)
     {
         await session.InitializeAsync(null, cancellationToken).ConfigureAwait(false);
-        // A command-mode endpoint that switched to the Streaming DLOAD backend reports no Firehose instance; the
-        // capability snapshot stays null instead of dereferencing a programmer that was never configured.
         if (session.Backend == EdlDownloadBackend.StreamDload || session.Firehose is not { } firehose)
         {
             return new EdlDetailsSnapshot
@@ -270,7 +253,6 @@ internal sealed class EdlConnectionCache(
         }
         catch (Exception ex) when (ex is IOException or TimeoutException or InvalidOperationException)
         {
-            // The storage query is optional enrichment; the configure capability snapshot is enough.
         }
         return new EdlDetailsSnapshot
         {

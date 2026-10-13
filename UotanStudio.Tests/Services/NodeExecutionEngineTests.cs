@@ -30,8 +30,8 @@ public sealed class NodeExecutionEngineTests
         Assert.Null(observed);
     }
     /// <summary>
-    /// <para>测试用节点，允许注入自定义执行逻辑。</para>
     /// Test node allowing injection of custom execution logic.
+    /// <para>测试用节点，允许注入自定义执行逻辑。</para>
     /// </summary>
     private sealed class TestNodeViewModel : FlowNodeViewModel
     {
@@ -41,8 +41,8 @@ public sealed class NodeExecutionEngineTests
     }
 
     /// <summary>
-    /// <para>内存日志，用于构造执行引擎。</para>
     /// In-memory log used to construct the execution engine.
+    /// <para>内存日志，用于构造执行引擎。</para>
     /// </summary>
     private sealed class MemoryLog : IUnifiedLog
     {
@@ -144,8 +144,8 @@ public sealed class NodeExecutionEngineTests
     }
 
     /// <summary>
-    /// <para>构造带 Flow 端口的测试节点。</para>
     /// Creates a test node with Flow ports.
+    /// <para>构造带 Flow 端口的测试节点。</para>
     /// </summary>
     private static TestNodeViewModel FlowNode(string title, string typeKey, string[] inputs, string[] outputs, Func<INodeExecutionContext, Task>? action = null)
     {
@@ -637,8 +637,8 @@ public sealed class NodeExecutionEngineTests
     }
 
     /// <summary>
-    /// <para>构造测试连接。</para>
     /// Builds a test connection.
+    /// <para>构造测试连接。</para>
     /// </summary>
     private sealed class SupportedInteractionHost : IWorkflowInteractionService
     {

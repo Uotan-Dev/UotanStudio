@@ -71,14 +71,8 @@ public static class DebugBridgeNetworkAddress
     }
 
     /// <summary>
-    /// Wraps an IPv6 literal in brackets so it can be embedded in the <c>host:port</c> grammar the ADB and
-    /// HDC servers parse; a bare IPv6 address has interior colons, which the servers reject as an invalid
-    /// port. Host names and IPv4 literals contain no colon and are returned unchanged. The rule is grammar
-    /// driven rather than <see cref="IPAddress"/> based so a scoped link-local literal, which carries a
-    /// zone suffix, is bracketed too.
-    /// <para>将 IPv6 字面量包上方括号，使其能嵌入 ADB/HDC server 解析的 <c>host:port</c> 语法；裸 IPv6
-    /// 含有内部冒号，会被 server 判为端口非法。主机名与 IPv4 字面量不含冒号，原样返回。该规则按语法判定
-    /// 而非依赖 <see cref="IPAddress"/>，因此带 zone 后缀的链路本地字面量同样会被加括号。</para>
+    /// Wraps an IPv6 literal in brackets so it can be embedded in the host:port grammar the ADB and HDC servers parse. Host names and IPv4 literals are returned unchanged; a scoped link-local literal is bracketed too.
+    /// <para>为 IPv6 字面量加方括号，使其可嵌入 ADB 与 HDC server 所解析的 host:port 语法。主机名与 IPv4 字面量原样返回；带作用域的链路本地地址同样加括号。</para>
     /// </summary>
     /// <param name="host">Host name or IP literal, with or without existing brackets.
     /// <para>主机名或 IP 字面量，可已带方括号。</para></param>

@@ -5,10 +5,24 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.VisualPlugins;
 
-/// <summary>Builds portable workflow-template and composite-node packages from a canvas graph.</summary>
+/// <summary>
+/// Builds portable workflow-template and composite-node packages from a canvas graph.
+/// <para>从画布图构建可移植的工作流模板与复合节点包。</para>
+/// </summary>
 public static class VisualPluginPackageBuilder
 {
-    /// <summary>Creates a package from the current graph and derives dependencies and public ports.</summary>
+    /// <summary>
+    /// Creates a package from the current graph and derives dependencies and public ports.
+    /// <para>从当前图创建包，并推导依赖与对外端口。</para>
+    /// </summary>
+    /// <param name="name">The package display name. <para>包的显示名称。</para></param>
+    /// <param name="id">The raw package id, normalized through <see cref="NormalizeId"/>. <para>原始包标识，会经 <see cref="NormalizeId"/> 归一化。</para></param>
+    /// <param name="kind">The kind of package to build. <para>要构建的包类型。</para></param>
+    /// <param name="nodes">The graph nodes to package. <para>待打包的图节点。</para></param>
+    /// <param name="connections">The graph connections to package. <para>待打包的图连接。</para></param>
+    /// <param name="author">The author attribution written to the manifest. <para>写入清单的作者署名。</para></param>
+    /// <param name="portable">True to strip machine-specific path defaults. <para>为真时移除机器相关的路径默认值。</para></param>
+    /// <returns>The built package that passed validation. <para>构建完成并通过校验的包。</para></returns>
     public static VisualPluginPackage Create(string name, string id, VisualPluginKind kind,
         IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnectionViewModel> connections,
         string author = "", bool portable = true)
@@ -79,12 +93,12 @@ public static class VisualPluginPackageBuilder
     /// Builds a script-node package from inline Lua source, without an internal graph or public ports.
     /// <para>从内联 Lua 源码构建脚本节点包，不含内部图或对外端口。</para>
     /// </summary>
-    /// <param name="name"><para>用户可见的包名称。</para>The user-visible package name.</param>
-    /// <param name="id"><para>包标识；会经 <see cref="NormalizeId"/> 归一化。</para>The package id; normalized through <see cref="NormalizeId"/>.</param>
-    /// <param name="script"><para>要在宿主沙箱中执行的 Lua 源码。</para>The Lua source executed in the host sandbox.</param>
-    /// <param name="author"><para>包的作者署名。</para>The package author attribution.</param>
-    /// <param name="version"><para>包版本。</para>The package version.</param>
-    /// <returns><para>通过校验的脚本节点包。</para>The validated script-node package.</returns>
+    /// <param name="name">The user-visible package name. <para>用户可见的包名称。</para></param>
+    /// <param name="id">The package id; normalized through <see cref="NormalizeId"/>. <para>包标识；会经 <see cref="NormalizeId"/> 归一化。</para></param>
+    /// <param name="script">The Lua source stored in the package. <para>包内保存的 Lua 源码。</para></param>
+    /// <param name="author">The package author attribution. <para>包的作者署名。</para></param>
+    /// <param name="version">The package version. <para>包版本。</para></param>
+    /// <returns>The validated script-node package. <para>通过校验的脚本节点包。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="name"/> or <paramref name="script"/> is empty.
     /// <para><paramref name="name"/> 或 <paramref name="script"/> 为空。</para></exception>
     /// <exception cref="InvalidDataException">Validation reports errors, such as an over-long script.
@@ -116,7 +130,13 @@ public static class VisualPluginPackageBuilder
 
     /// <summary>
     /// Rebuilds an installed package while retaining its manifest contract and stable public port identities.
+    /// <para>重建已安装的包，同时保留其清单契约与稳定的对外端口标识。</para>
     /// </summary>
+    /// <param name="existing">The installed package supplying the retained metadata. <para>提供需保留元数据的已安装包。</para></param>
+    /// <param name="nodes">The graph nodes to package. <para>待打包的图节点。</para></param>
+    /// <param name="connections">The graph connections to package. <para>待打包的图连接。</para></param>
+    /// <param name="portable">True to strip machine-specific path defaults. <para>为真时移除机器相关的路径默认值。</para></param>
+    /// <returns>The rebuilt package that passed validation. <para>重建完成并通过校验的包。</para></returns>
     public static VisualPluginPackage CreateUpdated(VisualPluginPackage existing,
         IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnectionViewModel> connections, bool portable = true)
     {
@@ -150,7 +170,12 @@ public static class VisualPluginPackageBuilder
         return updated;
     }
 
-    /// <summary>Creates a reverse-domain-compatible package id from arbitrary user-visible text.</summary>
+    /// <summary>
+    /// Creates a reverse-domain-compatible package id from arbitrary text.
+    /// <para>由任意文本生成兼容反向域名风格的包标识。</para>
+    /// </summary>
+    /// <param name="value">The text to slugify. <para>待转换为 slug 的文本。</para></param>
+    /// <returns>The normalized package id. <para>归一化后的包标识。</para></returns>
     public static string NormalizeId(string value)
     {
         var builder = new StringBuilder();

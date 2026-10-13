@@ -5,13 +5,8 @@ using UotanStudio.Firmware.Core.Repacking;
 namespace UotanStudio.Firmware.BlockImage.Sparse;
 
 /// <summary>
-/// Format handler for the Android sparse image (simg) container: recognizes the sparse header magic, reports chunk
-/// and block geometry, unpacks either the inner filesystem (ext4, erofs, f2fs) or the full raw image, and converts
-/// raw images back to sparse. Sparse structures from untrusted files are validated by the reader; operation errors
-/// surface as failure results.
-/// <para>Android 稀疏镜像（simg）容器的格式处理器：识别稀疏头魔数、报告块与 chunk 几何信息、解包内部文件系统
-/// （ext4、erofs、f2fs）或完整 raw 镜像，并把 raw 镜像转回稀疏格式。来自不可信文件的稀疏结构由读取器校验；
-/// 操作错误以失败结果呈现。</para>
+/// Format handler for the Android sparse image (simg) container: recognizes the sparse header magic, reports chunk and block geometry, unpacks either the inner filesystem or the full raw image, and converts raw images back to sparse. Sparse structures from untrusted files are validated by the reader; operation errors surface as failure results.
+/// <para>Android 稀疏镜像（simg）容器格式处理器：识别稀疏头魔数、上报分块与块几何，解包内部文件系统或完整原始镜像，并把原始镜像转回稀疏。来自不可信文件的稀疏结构由读取器校验；操作错误以失败结果返回。</para>
 /// </summary>
 public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataProvider, Core.Bridges.ISparseContainerBridge
 {

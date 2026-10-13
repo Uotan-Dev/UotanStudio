@@ -4,16 +4,8 @@ using UotanStudio.Firmware.VendorFirmware.Nb0.Models;
 namespace UotanStudio.Firmware.VendorFirmware.Nb0;
 
 /// <summary>
-/// Parses NB0 firmware packages: a little-endian 4-byte entry count, a fixed-size entry header
-/// table and a data section. Entry types are inferred from magic-number signatures, an optional
-/// trailing <c>.md5</c> entry is decoded into verification records, and structural problems are
-/// reported through <see cref="Nb0Metadata.Warnings"/> instead of throwing. Input files are
-/// untrusted: the declared entry count is bounded and, on seekable streams, checked against the
-/// file size before any per-entry allocation.
-/// <para>解析 NB0 固件包：4 字节小端条目数、固定大小的条目头表以及数据区。条目类型通过魔数签名推断；
-/// 末尾可选的 <c>.md5</c> 条目会被解码为校验记录；结构性问题通过 <see cref="Nb0Metadata.Warnings"/>
-/// 报告而非抛出异常。输入文件视为不可信：声明的条目数设有上限，且在可寻址流上会在逐条分配前先与
-/// 文件大小核对。</para>
+/// Parses NB0 firmware packages: a little-endian entry count, a fixed-size entry header table and a data section. Entry types are inferred from magic signatures, an optional trailing .md5 entry becomes verification records, and structural problems are reported rather than thrown.
+/// <para>解析 NB0 固件包：小端条目计数、定长条目头表与数据区。条目类型按魔数签名推断，可选的尾部 .md5 条目解码为校验记录，结构问题以结果回报而非抛出异常。</para>
 /// </summary>
 public static class Nb0Parser
 {

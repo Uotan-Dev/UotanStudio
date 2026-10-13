@@ -3,12 +3,15 @@ using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Services.Flash;
 
-/// <summary>Stages a compressed image outside the source directory for Fastboot.</summary>
+/// <summary>Stages a compressed image outside the source directory for Fastboot.<para>在源目录之外暂存解压后的镜像，用于 Fastboot 写入。</para></summary>
 public static class FlashCompressedImage
 {
     private const long MaximumImageBytes = 128L * 1024 * 1024 * 1024;
 
-    /// <summary>Streams and bounds decompression; caller owns the returned temporary file.</summary>
+    /// <summary>Streams decompression under a size limit into a temporary file the receiver owns.<para>按大小上限流式解压，写入由接收方持有的临时文件。</para></summary>
+    /// <param name="source">Compressed image file to stage.<para>要暂存的压缩镜像文件。</para></param>
+    /// <param name="ct">Token cancelling the staging.<para>用于取消暂存的令牌。</para></param>
+    /// <returns>Path of the decompressed temporary image.<para>解压后临时镜像的路径。</para></returns>
     public static Task<string> PrepareAsync(string source, CancellationToken ct)
         => Task.Run(() =>
         {

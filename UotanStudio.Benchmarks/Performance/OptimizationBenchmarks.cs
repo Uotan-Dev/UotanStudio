@@ -12,7 +12,8 @@ using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Benchmarks.Performance;
 
-/// <summary>Production-path text search and atomic JSON save cost across input sizes.</summary>
+/// <summary>Production-path text search and atomic JSON save cost across input sizes.
+/// <para>在不同输入规模下的文本搜索与原子 JSON 保存开销。</para></summary>
 [MemoryDiagnoser]
 public class TextSearchBenchmarks
 {
@@ -55,7 +56,8 @@ public class TextSearchBenchmarks
         !await AtomicJsonFile.WriteIfChangedAsync(_path, _text, MeasurementJsonContext.Default.String, CancellationToken.None);
 }
 
-/// <summary>AdbSync push cost over a simulated transport (no real device).</summary>
+/// <summary>AdbSync push cost over a simulated transport (no real device).
+/// <para>在模拟传输（非真实设备）上的 AdbSync 推送开销。</para></summary>
 [MemoryDiagnoser]
 public class AdbPushBenchmarks
 {
@@ -92,7 +94,8 @@ public class AdbPushBenchmarks
     }
 }
 
-/// <summary>Workspace log burst enqueue plus first flush cost on the headless UI dispatcher.</summary>
+/// <summary>Workspace log burst enqueue plus first flush cost on the headless UI dispatcher.
+/// <para>在无头 UI 调度器上工作区日志突发入队与首次刷写的开销。</para></summary>
 [MemoryDiagnoser]
 public class LogBurstBenchmarks
 {

@@ -3,13 +3,8 @@ using System.Text;
 namespace UotanStudio.Firmware.VendorFirmware.NTPi.Models;
 
 /// <summary>
-/// Decoded <c>NTDECOMP</c> header that precedes an LZMA payload inside an NTPI encoded block. The serialized
-/// form is a fixed 112-byte record with little-endian integers: magic (offset 0, 8 bytes), primary type (8, 4),
-/// decompress subtype (12, 4), padding (16, 8), processed size (24, 8), original size (32, 8) and a trailing
-/// pad (40, 72 bytes).
-/// <para>解码后的 <c>NTDECOMP</c> 头部，位于 NTPI 编码块中 LZMA 载荷之前。其序列化形式是固定 112 字节的记录，
-/// 整数均为小端序：魔数（偏移 0，8 字节）、主类型（8，4）、解压子类型（12，4）、填充（16，8）、
-/// 处理后长度（24，8）、原始长度（32，8）以及尾部填充（40，72 字节）。</para>
+/// Decoded NTDECOMP header preceding an LZMA payload inside an NTPI encoded block. The serialized form is a fixed 112-byte little-endian record: magic, primary type, decompress subtype, padding, processed size, original size and a trailing pad.
+/// <para>NTPI 编码块内 LZMA 载荷之前的 NTDECOMP 头部解码结果。序列化形式为定长 112 字节小端记录：魔数、主类型、解压子类型、填充、已处理大小、原始大小与尾部填充。</para>
 /// </summary>
 public struct NtDecompressHeader
 {

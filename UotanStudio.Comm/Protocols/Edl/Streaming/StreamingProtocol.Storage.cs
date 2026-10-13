@@ -3,26 +3,16 @@ using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Edl.Streaming;
 
-/// <summary>
-/// Flash-mode entry, raw partition-table transfer, section programming, and stream close for the
-/// streaming protocol, transcribed from <c>edlclient/Library/streaming.py</c> (enter_flash_mode
-/// at streaming.py:177-187, send_ptable at streaming.py:243-257, send_section_header at
-/// streaming.py:169-175, write_flash at streaming.py:189-215, qclose at streaming.py:160-167).
-/// <para>流式协议的进入闪存模式、原始分区表传输、段编程与关闭流，转写自
-/// <c>edlclient/Library/streaming.py</c>（enter_flash_mode 见 streaming.py:177-187，send_ptable
-/// 见 streaming.py:243-257，send_section_header 见 streaming.py:169-175，write_flash 见
-/// streaming.py:189-215，qclose 见 streaming.py:160-167）。</para>
-/// </summary>
+/// <summary>Flash-mode entry, raw partition-table transfer, section programming and stream close for the streaming protocol. <para>流式协议的进入刷写模式、原始分区表传输、分节编程与流关闭。</para></summary>
 public sealed partial class StreamingProtocol
 {
     /// <summary>
     /// Runs the secure-mode negotiation followed by the qclose exchange that puts the target into
-    /// flash mode. Like the reference <c>enter_flash_mode</c>, the qclose outcome is logged but
-    /// does not abort the entry; the returned value reports whether the target acknowledged the
-    /// secure-mode negotiation (streaming.py:177-187).
-    /// <para>执行安全模式协商，随后执行让目标进入闪存模式的 qclose 交换。与参考
-    /// <c>enter_flash_mode</c> 相同，qclose 结果只记录而不中断进入；返回值报告目标是否确认了
-    /// 安全模式协商（streaming.py:177-187）。</para>
+    /// flash mode.
+    /// <para>执行安全模式协商，随后执行让目标进入闪存模式的 qclose 交换。</para>
+    /// The qclose outcome is logged but does not abort the entry; the returned value reports whether
+    /// the target acknowledged the secure-mode negotiation.
+    /// <para>qclose 结果只记录而不中断进入；返回值报告目标是否确认了安全模式协商。</para>
     /// </summary>
     /// <param name="confirm">Pass <see langword="true"/> to confirm the flash-mode transition.
     /// <para>传 <see langword="true"/> 以确认切换到闪存模式。</para></param>
@@ -56,19 +46,18 @@ public sealed partial class StreamingProtocol
     }
 
     /// <summary>
-    /// Sends the raw on-device partition table with DIAG command 0x19. The table length is bound
-    /// to <see cref="StreamingConstants.PartitionTableBytes"/> before any byte is written, and
-    /// the response status byte is interpreted with the reference meanings: 0 accepted, 1 differs
-    /// but override accepted, 2 format unrecognized, 3 erase failed (streaming.py:243-257). The
-    /// reference combines its failure test with <c>and</c> instead of <c>or</c>
-    /// (streaming.py:247); this decoder requires the response identifier and reports acceptance
-    /// for status 0 or 1.
-    /// <para>用 DIAG 命令 0x19 发送原始设备分区表。表长在任一字节的写出之前已按
-    /// <see cref="StreamingConstants.PartitionTableBytes"/> 限制，并按参考含义解析响应状态字节：
-    /// 0 接受、1 不同但允许覆盖、2 格式无法识别、3 擦除失败（streaming.py:243-257）。参考把失败
-    /// 判断写成了 <c>and</c> 而不是 <c>or</c>（streaming.py:247）；这里要求响应号匹配，并在状态为
-    /// 0 或 1 时报告接受。</para>
+    /// Sends the raw on-device partition table with DIAG command 0x19.
+    /// <para>用 DIAG 命令 0x19 发送原始设备分区表。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>The table length is bound to <see cref="StreamingConstants.PartitionTableBytes"/> before any
+    /// byte is written, and the response status byte is interpreted as 0 accepted, 1 differs but override
+    /// accepted, 2 format unrecognized, 3 erase failed. This decoder requires the response identifier and
+    /// reports acceptance for status 0 or 1.</para>
+    /// <para>表长在任一字节的写出之前已按 <see cref="StreamingConstants.PartitionTableBytes"/> 限制，
+    /// 并按含义解析响应状态字节：0 接受、1 不同但允许覆盖、2 格式无法识别、3 擦除失败。这里要求响应号
+    /// 匹配，并在状态为 0 或 1 时报告接受。</para>
+    /// </remarks>
     /// <param name="partitionTable">The raw partition table bytes, at most
     /// <see cref="StreamingConstants.PartitionTableBytes"/> long.
     /// <para>原始分区表字节，至多 <see cref="StreamingConstants.PartitionTableBytes"/> 字节。</para></param>
@@ -132,23 +121,24 @@ public sealed partial class StreamingProtocol
     }
 
     /// <summary>
-    /// Programs one partition section: the DIAG 0x1B/0x0E section header naming the partition,
-    /// then ceil(<paramref name="length"/>, 1024) program frames, each 0x07 with a little-endian
-    /// byte address and a 1024-byte chunk whose tail is padded with 0xFF, every chunk requiring
-    /// the 0x08 acknowledgement, and a final qclose (streaming.py:169-215). The address window is
-    /// validated with checked 64-bit arithmetic against the 32-bit DIAG wire address space before
-    /// the operation lease or any transport write, and the source is consumed chunk by chunk with
-    /// no whole-image buffering.
-    /// <para>编程一个分区段：先以 DIAG 0x1B/0x0E 段头指明分区，随后发送
-    /// ceil(<paramref name="length"/>, 1024) 个编程帧，每帧为 0x07 加小端字节地址与 1024 字节块，
-    /// 块尾以 0xFF 补齐，每块都要求 0x08 确认，最后 qclose（streaming.py:169-215）。地址窗口在
-    /// 取得操作租约与任何传输写出之前，用 checked 64 位运算对照 32 位 DIAG 线路地址空间校验；
-    /// 数据源逐块消费，绝不整镜像缓冲。</para>
+    /// Programs one partition section.
+    /// <para>编程一个分区段。</para>
     /// </summary>
-    /// <param name="lba">The byte-address window start the target's program command expects;
-    /// the reference passes the partition start (streaming.py:189, 197-208).
-    /// <para>目标的编程命令所使用的字节地址窗口起点；参考实现传入分区起始地址
-    /// （streaming.py:189、197-208）。</para></param>
+    /// <remarks>
+    /// <para>The DIAG 0x1B/0x0E section header names the partition, then
+    /// ceil(<paramref name="length"/>, 1024) program frames follow, each 0x07 with a little-endian byte
+    /// address and a 1024-byte chunk whose tail is padded with 0xFF, every chunk requiring the 0x08
+    /// acknowledgement, and a final qclose. The address window is validated with checked 64-bit
+    /// arithmetic against the 32-bit DIAG wire address space before the operation lease or any transport
+    /// write, and the source is consumed chunk by chunk with no whole-image buffering.</para>
+    /// <para>先以 DIAG 0x1B/0x0E 段头指明分区，随后发送 ceil(<paramref name="length"/>, 1024) 个编程帧，
+    /// 每帧为 0x07 加小端字节地址与 1024 字节块，块尾以 0xFF 补齐，每块都要求 0x08 确认，最后 qclose。
+    /// 地址窗口在取得操作租约与任何传输写出之前，用 checked 64 位运算对照 32 位 DIAG 线路地址空间校验；
+    /// 数据源逐块消费，绝不整镜像缓冲。</para>
+    /// </remarks>
+    /// <param name="lba">The byte-address window start the target's program command expects; the
+    /// partition start is the usual value.
+    /// <para>目标的编程命令所使用的字节地址窗口起点；通常取分区起始地址。</para></param>
     /// <param name="partition">The partition section name sent inside the section header.
     /// <para>段头中发送的分区段名。</para></param>
     /// <param name="source">The image source stream, read chunk by chunk.
@@ -272,9 +262,9 @@ public sealed partial class StreamingProtocol
 
     /// <summary>
     /// Finalizes the current stream section with qclose, mirroring the closing call the reference
-    /// <c>write_flash</c> performs after the last chunk (streaming.py:211-215).
+    /// <c>write_flash</c> performs after the last chunk.
     /// <para>用 qclose 结束当前流式段，对应参考 <c>write_flash</c> 在最后一块之后的收尾调用
-    /// （streaming.py:211-215）。</para>
+    /// 。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns><see langword="true"/> when the target answered with the close response

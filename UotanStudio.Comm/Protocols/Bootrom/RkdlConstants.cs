@@ -13,30 +13,26 @@ public static class RkdlConstants
     public const ushort RockchipVid = 0x2207;
 
     /// <summary>
-    /// RKDL download boot vendor request (BRequest = 0x0C). It is used together with
-    /// WIndex = 0x0471 / 0x0472 to download the first/second stage loader (see
-    /// rkdeveloptool RKU_DeviceRequest, BmRequestType = 0x40, WValue = 0).
-    /// <para>RKDL 下载启动 vendor 请求（BRequest = 0x0C）。配合 WIndex = 0x0471 / 0x0472
-    /// 用于下载第一/第二阶段 loader（参见 rkdeveloptool 的 RKU_DeviceRequest，
-    /// BmRequestType = 0x40，WValue = 0）。</para>
+    /// RKDL download boot vendor request (BRequest = 0x0C), paired with WIndex 0x0471 or
+    /// 0x0472 to download the first- or second-stage loader (BmRequestType 0x40, WValue 0).
+    /// <para>RKDL 下载启动 vendor 请求（BRequest = 0x0C），与 WIndex 0x0471 或 0x0472
+    /// 配合以下载第一或第二阶段 loader（BmRequestType 0x40，WValue 0）。</para>
     /// </summary>
     public const byte RkdlRequestDownloadBoot = 0x0C;
 
     /// <summary>
-    /// RKDL vendor request: download 471 (first stage loader). Alias of
-    /// <see cref="RkdlRequestDownloadBoot"/>. The 471/472 distinction lives in the
-    /// WIndex field (see <see cref="RkdlWIndex471"/>).
-    /// <para>RKDL 供应商请求：下载 471（第一阶段加载程序）。<see cref="RkdlRequestDownloadBoot"/>
-    /// 的别名。471/472 的区别体现在 WIndex 字段（见 <see cref="RkdlWIndex471"/>）。</para>
+    /// RKDL vendor request that downloads the 471 (first-stage) loader, an alias of
+    /// <see cref="RkdlRequestDownloadBoot"/> whose stage is chosen by the WIndex field.
+    /// <para>下载 471（第一阶段）loader 的 RKDL 供应商请求，是
+    /// <see cref="RkdlRequestDownloadBoot"/> 的别名，阶段由 WIndex 字段决定。</para>
     /// </summary>
     public const byte RkdlRequest471 = RkdlRequestDownloadBoot;
 
     /// <summary>
-    /// RKDL vendor request: download 472 (second stage loader). Alias of
-    /// <see cref="RkdlRequestDownloadBoot"/>. The 471/472 distinction lives in the
-    /// WIndex field (see <see cref="RkdlWIndex472"/>).
-    /// <para>RKDL 供应商请求：下载 472（第二阶段加载程序）。<see cref="RkdlRequestDownloadBoot"/>
-    /// 的别名。471/472 的区别体现在 WIndex 字段（见 <see cref="RkdlWIndex472"/>）。</para>
+    /// RKDL vendor request that downloads the 472 (second-stage) loader, an alias of
+    /// <see cref="RkdlRequestDownloadBoot"/> whose stage is chosen by the WIndex field.
+    /// <para>下载 472（第二阶段）loader 的 RKDL 供应商请求，是
+    /// <see cref="RkdlRequestDownloadBoot"/> 的别名，阶段由 WIndex 字段决定。</para>
     /// </summary>
     public const byte RkdlRequest472 = RkdlRequestDownloadBoot;
 
@@ -71,17 +67,10 @@ public static class RkdlConstants
     public const int DefaultTimeoutMs = 30000;
 
     /// <summary>
-    /// Sector size in bytes the rockusb LBA protocol addresses by. This is a protocol constant, not
-    /// a device-reported value: <c>READ_LBA</c>/<c>WRITE_LBA</c>/<c>ERASE_LBA</c> carry a
-    /// <c>cbwcb.dwAddress</c> logical block address and a 16-bit <c>cbwcb.usLength</c> sector count
-    /// that upstream rkdeveloptool also computes in 512-byte units. The erase/write granularity a
-    /// device reports (upstream <c>usBlockSize</c>/<c>usPageSize</c>) is a property of the media, not
-    /// of LBA addressing, so no LBA arithmetic in this protocol may be scaled by it.
-    /// <para>rockusb LBA 协议据以寻址的扇区大小（字节）。这是协议常量而非设备报告值：
-    /// <c>READ_LBA</c>/<c>WRITE_LBA</c>/<c>ERASE_LBA</c> 携带 <c>cbwcb.dwAddress</c> 逻辑块地址与
-    /// 16 位 <c>cbwcb.usLength</c> 扇区计数，上游 rkdeveloptool 同样按 512 字节单位计算。设备报告的
-    /// 擦写粒度（上游 <c>usBlockSize</c>/<c>usPageSize</c>）属于介质属性而非 LBA 寻址属性，
-    /// 因此本协议的任何 LBA 算术都不得按它缩放。</para>
+    /// Sector size in bytes that the rockusb LBA protocol addresses by, so the logical
+    /// block addresses and sector counts of the LBA commands are counted in these units.
+    /// <para>rockusb LBA 协议据以寻址的扇区大小（字节），LBA 命令的逻辑块地址与扇区
+    /// 计数都按该单位计算。</para>
     /// </summary>
     public const int SectorSize = 512;
 
@@ -98,46 +87,36 @@ public static class RkdlConstants
     public const int MaxEraseBlocksPerCommand = 16;
 
     /// <summary>
-    /// Upper bound, in milliseconds, accepted for the <c>dwDataDelay</c> field of an RKBOOT loader
-    /// entry. The field is read from a loader file, which is untrusted input, and upstream entry
-    /// tables use it as a short settle window between loader stages; the bound exists so a crafted
-    /// file cannot pin the download path for days (a raw <c>uint</c> would allow roughly 24.8 days)
-    /// and cannot wrap negative when converted to a signed wait.
-    /// <para>RKBOOT loader 条目 <c>dwDataDelay</c> 字段可接受的毫秒上界。该字段读自 loader 文件，
-    /// 属于不受信输入；上游条目表把它用作 loader 阶段之间的短暂稳定窗口。设置上界是为了让伪造文件
-    /// 既无法把下载路径挂住数天（裸 <c>uint</c> 允许约 24.8 天），也无法在转换为有符号等待值时回绕为负。</para>
+    /// Upper bound, in milliseconds, accepted for the <c>dwDataDelay</c> field of an
+    /// RKBOOT loader entry, so a crafted file cannot stall the download or wrap negative
+    /// as a signed wait.
+    /// <para>RKBOOT loader 条目 <c>dwDataDelay</c> 字段可接受的毫秒上界，避免伪造文件
+    /// 让下载停滞或转成有符号等待时回绕为负。</para>
     /// </summary>
     public const int MaxLoaderDataDelayMs = 60000;
 
     /// <summary>
-    /// The settle window, in milliseconds, waited after the last loader entry was transferred. The
-    /// device re-enumerates on a different USB product ID during this window; the wait is a settle
-    /// delay only and its completion is not evidence that the device reached loader mode, because
-    /// <see cref="RkdlSession.IsRockusbMode"/> is derived from a device-info snapshot taken when the
-    /// session was opened and can never observe the change.
-    /// <para>传出最后一个 loader 条目后等待的稳定窗口（毫秒）。设备在该窗口内会以不同的 USB 产品 ID
-    /// 重新枚举；这段等待仅是稳定延时，其结束并不能证明设备已进入 loader 模式，因为
-    /// <see cref="RkdlSession.IsRockusbMode"/> 派生自会话打开时的设备信息快照，永远观测不到该变化。</para>
+    /// Settle window, in milliseconds, waited after the last loader entry is transferred.
+    /// The device re-enumerates on a different USB product ID during this window.
+    /// <para>传出最后一个 loader 条目后等待的稳定窗口（毫秒）。设备在该窗口内会以不同的
+    /// USB 产品 ID 重新枚举。</para>
     /// </summary>
     public const int LoaderReenumerationSettleMs = 1000;
 
     /// <summary>
-    /// Default budget, in milliseconds, a caller should grant the device layer to observe the
-    /// replacement endpoint after a loader download. It is the default
-    /// <c>Timeout</c> of <see cref="RkdlLoaderTransitionOffer"/> and matches the controller bound of
-    /// 1 millisecond through 24 hours.
-    /// <para>调用方应授予设备层去观测 loader 下载后替代端点的默认预算（毫秒）。它是
-    /// <see cref="RkdlLoaderTransitionOffer"/> 的默认 <c>Timeout</c>，并符合控制器 1 毫秒至 24 小时的
-    /// 约束。</para>
+    /// Default budget, in milliseconds, granted for observing the replacement endpoint
+    /// after a loader download. It is the default <c>Timeout</c> value of the offer type.
+    /// <para>观测 loader 下载后替代端点的默认毫秒预算，即该 offer 类型的默认
+    /// <c>Timeout</c> 取值。</para>
     /// </summary>
     public const int LoaderRelinkTimeoutMs = 30000;
 
     /// <summary>
-    /// Product IDs of devices already in rockusb (loader) mode, from the upstream
-    /// 99-rk-rockusb.rules. Devices with other PIDs under the Rockchip VID that satisfy the
-    /// generic rule (pid >> 8 != 0) are treated as maskrom/bootrom devices.
-    /// <para>已处于 rockusb（loader）模式的设备产品 ID，来自上游 99-rk-rockusb.rules。
-    /// Rockchip VID 下满足通用规则（pid >> 8 != 0）的其他 PID 设备按 maskrom/bootrom 处理。</para>
+    /// Product IDs of devices already in rockusb (loader) mode. Other PIDs under the
+    /// Rockchip VID that satisfy the generic bootrom rule are treated as maskrom or
+    /// bootrom devices.
+    /// <para>已处于 rockusb（loader）模式的设备产品 ID。Rockchip VID 下满足通用
+    /// bootrom 规则的其他 PID 按 maskrom 或 bootrom 设备处理。</para>
     /// </summary>
     public static readonly ushort[] KnownLoaderProductIds =
     [
@@ -153,8 +132,8 @@ public static class RkdlConstants
 }
 
 /// <summary>
-/// TEST_UNIT_READY sub codes (used in CBWCB.ucReserved, see rkdeveloptool RKComm.h).
-/// <para>TEST_UNIT_READY 子码（存于 CBWCB.ucReserved，见 rkdeveloptool 的 RKComm.h）。</para>
+/// TEST_UNIT_READY sub codes carried in the CBWCB.ucReserved field.
+/// <para>存于 CBWCB.ucReserved 字段的 TEST_UNIT_READY 子码。</para>
 /// </summary>
 internal static class RkdlTestUnitSubCode
 {
@@ -169,8 +148,8 @@ internal static class RkdlTestUnitSubCode
 }
 
 /// <summary>
-/// READ_LBA/WRITE_LBA access method sub codes (RWMETHOD, see rkdeveloptool RKComm.h).
-/// <para>READ_LBA/WRITE_LBA 访问方式子码（RWMETHOD，见 rkdeveloptool 的 RKComm.h）。</para>
+/// READ_LBA and WRITE_LBA access method sub codes (RWMETHOD).
+/// <para>READ_LBA 与 WRITE_LBA 的访问方式子码（RWMETHOD）。</para>
 /// </summary>
 internal static class RkdlRwMethod
 {
@@ -182,8 +161,8 @@ internal static class RkdlRwMethod
 }
 
 /// <summary>
-/// Rockchip rockusb operation codes (USB_OPERATION_CODE, see rkdeveloptool RKComm.h).
-/// <para>Rockchip rockusb 操作码（USB_OPERATION_CODE，见 rkdeveloptool RKComm.h）。</para>
+/// Rockchip rockusb operation codes (USB_OPERATION_CODE).
+/// <para>Rockchip rockusb 的操作码（USB_OPERATION_CODE）。</para>
 /// </summary>
 internal enum RkdlCommand : byte
 {
@@ -336,25 +315,29 @@ internal class RkChipInfo
     /// Gets or sets the chip ID.
     /// <para>获取或设置芯片 ID。</para>
     /// </summary>
+    /// <value>The chip ID. <para>芯片 ID。</para></value>
     public uint ChipId { get; set; }
 
     /// <summary>
     /// Gets or sets the chip revision.
     /// <para>获取或设置芯片版本。</para>
     /// </summary>
+    /// <value>The chip revision. <para>芯片版本。</para></value>
     public uint Revision { get; set; }
 
     /// <summary>
     /// Gets the human-readable chip name.
     /// <para>获取人类可读的芯片名称。</para>
     /// </summary>
+    /// <value>The name derived from <see cref="ChipId"/>. <para>由 <see cref="ChipId"/> 得出的名称。</para></value>
     public string ChipName => GetChipName(ChipId);
 
     /// <summary>
-    /// Gets the ASCII chip tag returned by READ_CHIP_INFO (first four bytes of the
-    /// 16-byte response, e.g. "320A").
-    /// <para>获取 READ_CHIP_INFO 返回的 ASCII 芯片标签（16 字节响应的前 4 字节，如 "320A"）。</para>
+    /// Gets the ASCII chip tag returned by READ_CHIP_INFO: the first four bytes of the
+    /// 16-byte response, such as "320A".
+    /// <para>获取 READ_CHIP_INFO 返回的 ASCII 芯片标签：16 字节响应的前 4 字节，如 "320A"。</para>
     /// </summary>
+    /// <value>The four-character ASCII tag. <para>四字符 ASCII 标签。</para></value>
     public string Tag { get; set; } = string.Empty;
 
     /// <summary>
@@ -362,8 +345,8 @@ internal class RkChipInfo
     /// value read directly from the chip-info response).
     /// <para>返回给定芯片 ID 的芯片名称（USB 风格数字 ID，或直接从芯片信息响应读取的 ASCII 标签值）。</para>
     /// </summary>
-    /// <param name="chipId">The chip ID. 芯片 ID。</param>
-    /// <returns>The chip name. 芯片名称。</returns>
+    /// <param name="chipId">The chip ID. <para>芯片 ID。</para></param>
+    /// <returns>The chip name. <para>芯片名称。</para></returns>
     public static string GetChipName(uint chipId)
     {
         return chipId switch
@@ -388,14 +371,11 @@ internal class RkChipInfo
 }
 
 /// <summary>
-/// RKDL flash info as reported by READ_FLASH_INFO. Only the leading DWORD of the response is
-/// parsed, because it is the only field whose offset this repository can verify; the remaining
-/// bytes of the packed upstream <c>STRUCT_FLASHINFO_CMD</c> (media geometry such as block and page
-/// size) are kept verbatim in <see cref="RawResponse"/> instead of being decoded from guessed
-/// offsets.
-/// <para>READ_FLASH_INFO 报告的 RKDL 闪存信息。只解析响应的首个 DWORD，因为它是本仓库唯一能核对偏移
-/// 的字段；上游紧凑 <c>STRUCT_FLASHINFO_CMD</c> 的其余字节（块大小、页大小等介质几何）原样保留在
-/// <see cref="RawResponse"/> 中，而不按猜测的偏移解码。</para>
+/// RKDL flash info as reported by READ_FLASH_INFO. Only the leading DWORD of the
+/// response is parsed, and the remaining bytes stay verbatim in
+/// <see cref="RawResponse"/>.
+/// <para>READ_FLASH_INFO 报告的 RKDL 闪存信息。只解析响应的首个 DWORD，其余字节原样
+/// 保留在 <see cref="RawResponse"/> 中。</para>
 /// </summary>
 internal sealed class RkFlashInfo
 {
@@ -422,12 +402,9 @@ internal sealed class RkFlashInfo
     /// Gets the sector size the rockusb LBA protocol addresses by.
     /// <para>获取 rockusb LBA 协议据以寻址的扇区大小。</para>
     /// </summary>
-    /// <value>Always <see cref="RkdlConstants.SectorSize"/> (512). This is the protocol-defined LBA
-    /// granularity and not a device-reported value: the media block or page size a device may report
-    /// in the unparsed tail of the response describes erase/write granularity, so it must never be
-    /// substituted for LBA addressing.
-    /// <para>恒为 <see cref="RkdlConstants.SectorSize"/>（512）。这是协议规定的 LBA 粒度而非设备报告值：
-    /// 设备可能在响应未解析尾部报告的介质块大小或页大小描述的是擦写粒度，因此绝不能用它替代 LBA 寻址。</para></value>
+    /// <value>Always <see cref="RkdlConstants.SectorSize"/> (512), the protocol-defined
+    /// LBA granularity. <para>恒为 <see cref="RkdlConstants.SectorSize"/>（512），即协议
+    /// 规定的 LBA 粒度。</para></value>
     public int SectorSize => RkdlConstants.SectorSize;
 
     /// <summary>
@@ -529,14 +506,15 @@ internal class RkdlException : Exception
     /// Gets the RKDL error code.
     /// <para>获取 RKDL 错误码。</para>
     /// </summary>
+    /// <value>The error code that describes the failure. <para>描述该失败的错误码。</para></value>
     public RkdlError ErrorCode { get; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RkdlException"/> class.
     /// <para>初始化 <see cref="RkdlException"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="errorCode">The RKDL error code. RKDL 错误码。</param>
-    /// <param name="message">The error message. 错误信息。</param>
+    /// <param name="errorCode">The RKDL error code. <para>RKDL 错误码。</para></param>
+    /// <param name="message">The error message. <para>错误信息。</para></param>
     public RkdlException(RkdlError errorCode, string message)
         : base(message)
     {
@@ -547,9 +525,9 @@ internal class RkdlException : Exception
     /// Initializes a new instance of the <see cref="RkdlException"/> class.
     /// <para>初始化 <see cref="RkdlException"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="errorCode">The RKDL error code. RKDL 错误码。</param>
-    /// <param name="message">The error message. 错误信息。</param>
-    /// <param name="innerException">The inner exception. 内部异常。</param>
+    /// <param name="errorCode">The RKDL error code. <para>RKDL 错误码。</para></param>
+    /// <param name="message">The error message. <para>错误信息。</para></param>
+    /// <param name="innerException">The inner exception. <para>内部异常。</para></param>
     public RkdlException(RkdlError errorCode, string message, Exception innerException)
         : base(message, innerException)
     {

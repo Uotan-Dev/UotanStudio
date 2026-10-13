@@ -47,8 +47,8 @@ public partial class BootPatchWindow : Window
         UpdateStartEnabled();
     }
     /// <summary>
-    /// <para>补丁包与 boot 镜像都有路径时才允许开始，否则禁用「开始」按钮。</para>
     /// Enables start only when both the patch package and the boot image paths are present.
+    /// <para>补丁包与 boot 镜像都有路径时才允许开始，否则禁用「开始」按钮。</para>
     /// </summary>
     private void UpdateStartEnabled() => StartButton.IsEnabled =
         !_isPatching

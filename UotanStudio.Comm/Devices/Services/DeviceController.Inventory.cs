@@ -9,12 +9,12 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 namespace UotanStudio.Comm.Devices.Services;
 
 /// <summary>
-/// <para>L4 原始 USB 承载：向服务层暴露枚举、热插拔监视与按键重开，使宿主无需直接命名
-/// <c>CommKit</c>。这些方法只是对控制器所用同一通信套件的行为等价转发，不改变任何路由或
-/// 物理关联规则。</para>
 /// L4 raw-USB surface: exposes enumeration, hotplug monitoring and reopen-by-key so hosts need not
 /// name <c>CommKit</c>. Each method is a behavior-identical forward to the same communication kit the
 /// controller already uses; it changes no routing or physical-association rule.
+/// <para>L4 原始 USB 承载：向服务层暴露枚举、热插拔监视与按键重开，使宿主无需直接命名
+/// <c>CommKit</c>。这些方法只是对控制器所用同一通信套件的行为等价转发，不改变任何路由或
+/// 物理关联规则。</para>
 /// </summary>
 public sealed partial class DeviceController
 {
@@ -77,12 +77,15 @@ public sealed partial class DeviceController
         return RequiredKit.MonitorUsbDevices(onChanged, apiKind, filter, pollInterval, fireInitialSnapshot, onError);
     }
 
-    /// <summary>Reopens the physical device session matching the stable key. 按稳定设备键重开物理设备会话。</summary>
+    /// <summary>
+    /// Reopens the physical device session matching the stable key.
+    /// <para>按稳定设备键重开物理设备会话。</para>
+    /// </summary>
     internal IUsbDeviceSession? OpenUsbSessionByKey(string deviceKey) => RequiredKit.OpenUsbDeviceSessionByKey(deviceKey);
 
     /// <summary>
-    /// <para>创建一条经本机 adb server 交互的 ADB 会话门面。</para>
     /// Creates an ADB session façade routed through the local adb server.
+    /// <para>创建一条经本机 adb server 交互的 ADB 会话门面。</para>
     /// </summary>
     /// <param name="serial">
     /// Exact server target serial to serve. <para>要服务的精确 server 目标序列号。</para>
@@ -115,14 +118,8 @@ public sealed partial class DeviceController
         => new AdbSession(new AdbTcpTransport(host, port), authentication ?? AdbAuthentication.LoadOrCreate());
 
     /// <summary>
-    /// Opens a direct session to adbd's secure service (Android 11+ TLS) at <c>host:port</c>: the
-    /// client presents the certificate from the pairing keystore (a prior direct QR pairing is
-    /// required) and the server certificate is accepted as any self-signed certificate, matching
-    /// AOSP trust-on-first-use semantics. The caller must <c>Connect()</c> the session and dispose
-    /// it on failure.
-    /// <para>打开到 <c>host:port</c> 上 adbd 安全服务（Android 11+ TLS）的直接会话：客户端出示
-    /// 配对密钥库中的证书（须先完成扫码直连配对），服务端证书按 AOSP 语义接受任意自签证书。
-    /// 调用方需自行 <c>Connect()</c> 并在失败时释放。</para>
+    /// Opens a direct session to adbd's secure service (Android 11+ TLS) at host:port. The client presents the certificate from the pairing keystore and the server certificate is accepted as any self-signed certificate, matching trust-on-first-use semantics. The caller must connect and dispose on failure.
+    /// <para>在 host:port 上直接打开到 adbd 安全服务（Android 11+ TLS）的会话。客户端出示配对密钥库中的证书，服务器证书按首次使用即信任的方式接受任意自签证书。调用方须自行连接，并在失败时释放。</para>
     /// </summary>
     /// <param name="host">Device hostname or IP literal. <para>设备主机名或 IP 字面量。</para></param>
     /// <param name="port">Secure daemon port. <para>adbd 安全服务监听端口。</para></param>
@@ -164,11 +161,11 @@ public sealed partial class DeviceController
     }
 
     /// <summary>
-    /// <para>创建一条经本机 HDC server 交互的 server 客户端门面，供需要 server 级操作
-    /// （而非单设备会话）的调用方使用；设备级会话应优先经租约获得。</para>
     /// Creates an HDC server-client façade for callers that need server-level operations
     /// rather than a single device session; device-level sessions should preferably be
     /// obtained through leases.
+    /// <para>创建一条经本机 HDC server 交互的 server 客户端门面，供需要 server 级操作
+    /// （而非单设备会话）的调用方使用；设备级会话应优先经租约获得。</para>
     /// </summary>
     /// <param name="host">
     /// HDC server host. <para>HDC server 主机。</para>
@@ -181,10 +178,10 @@ public sealed partial class DeviceController
     public HdcServerClient OpenServerHdcClient(string host, int port) => new(host, port);
 
     /// <summary>
-    /// <para>Best-effort 读取 Fastboot <c>getvar serialno</c>，用于把 server 目标关联到物理 USB 设备；
-    /// 认领/getvar 机制在 Comm 发现层，宿主只消费结果。</para>
     /// Best-effort Fastboot <c>getvar serialno</c> read for associating a server target with a physical USB
     /// device; the claim/getvar mechanism lives in the discovery layer and the host only consumes the result.
+    /// <para>Best-effort 读取 Fastboot <c>getvar serialno</c>，用于把 server 目标关联到物理 USB 设备；
+    /// 认领/getvar 机制在 Comm 发现层，宿主只消费结果。</para>
     /// </summary>
     /// <param name="info">
     /// Fastboot-mode USB node to query. <para>待查询的 fastboot 模式 USB 节点。</para>

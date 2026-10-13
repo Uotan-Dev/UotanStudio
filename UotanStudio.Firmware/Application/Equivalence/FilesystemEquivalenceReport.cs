@@ -4,26 +4,8 @@ using UotanStudio.Firmware.Core.Streams;
 namespace UotanStudio.Firmware.Application.Equivalence;
 
 /// <summary>
-/// Read-only façade that reports the four equivalence dimensions of a rebuilt or edited firmware image
-/// separately: byte identity against the recorded source digest, inode structure, file content, and
-/// capacity against the source filesystem size. Each dimension carries its own
-/// <see cref="FirmwareEquivalenceState"/>, and the façade never collapses them into one boolean: an
-/// image that was edited is normally byte-different yet structure- and content-equivalent, and a
-/// byte-identical image is a distinct, stronger statement. Dimensions are parsed from the equivalence
-/// metadata emitted by the preserved filesystem rebuild for the EXT4, EROFS, F2FS and Android sparse
-/// container formats; a missing flag means the corresponding check never ran and is reported as
-/// <see cref="FirmwareEquivalenceState.NotEvaluated"/>, never as equivalent. Formats without preserved
-/// rebuild machinery — LP metadata partitions, AVB-signed partitions, boot images, plain raw-to-sparse
-/// conversion and fresh directory builds — have no equivalence computation to surface, so their reports
-/// legitimately carry four <see cref="FirmwareEquivalenceState.NotEvaluated"/> dimensions instead of a
-/// fabricated pass.
-/// <para>只读门面，独立报告重建或编辑后固件镜像的四个等价维度：与记录的源摘要比对的字节一致性、inode 结构、
-/// 文件内容、以及相对源文件系统容量的容量。每个维度各自携带一个 <see cref="FirmwareEquivalenceState"/>，
-/// 门面绝不把它们折叠成单个布尔值：编辑过的镜像通常字节不同但结构与内容等价，而字节完全一致是另一层更强的
-/// 断言。各维度从受保留的文件系统重建为 EXT4、EROFS、F2FS 与 Android 稀疏容器格式发出的等价元数据中解析；
-/// 标记缺失意味着对应检查从未执行，报告为不评估而非等价。没有受保留重建机制的格式——LP 元数据分区、
-/// AVB 签名分区、启动镜像、纯 raw 转稀疏以及全新目录构建——不存在可呈现的等价计算，因此其四个维度如实报告
-/// 为不评估，而不是伪造通过。</para>
+/// Read-only façade reporting the four equivalence dimensions of a rebuilt or edited firmware image separately: byte identity, inode structure, file content and capacity. Each dimension keeps its own <see cref="FirmwareEquivalenceState"/> and is never collapsed into one boolean.
+/// <para>重建或编辑后镜像四个等价维度的只读门面：字节一致、inode 结构、文件内容与容量各自独立上报，不合并为单一布尔值。</para>
 /// </summary>
 public sealed class FilesystemEquivalenceReport
 {
@@ -95,11 +77,8 @@ public sealed class FilesystemEquivalenceReport
     public static FilesystemEquivalenceReport AllNotEvaluated => new();
 
     /// <summary>
-    /// Parses the four equivalence dimensions out of a rebuild metadata dictionary; the flag names are the
-    /// documented keys of this type. A value that is neither <c>True</c> nor <c>False</c> is treated as an
-    /// absent check rather than guessed, and a missing flag is never interpreted as equivalent.
-    /// <para>从重建元数据字典解析四个等价维度；标记名即本类型已记录的键。既非 <c>True</c> 也非 <c>False</c>
-    /// 的值按“检查缺失”处理而不做猜测，缺失的标记绝不会被当作等价。</para>
+    /// Parses the four equivalence dimensions out of a rebuild metadata dictionary.
+    /// <para>从重建元数据字典解析四个等价维度。</para>
     /// </summary>
     /// <param name="metadata">Rebuild metadata as surfaced by the format handler, or <see langword="null"/>
     /// for an all-unevaluated report. <para>格式处理器呈现的重建元数据；传 <see langword="null"/> 时得到全不评估报告。</para></param>
@@ -131,11 +110,8 @@ public sealed class FilesystemEquivalenceReport
         => FromMetadata(result?.Metadata);
 
     /// <summary>
-    /// Streams the produced image through a SHA-256 digest and compares it against the recorded source
-    /// identity, evaluating only the byte dimension. The length is checked before the digest is trusted, the
-    /// read buffer stays bounded, and the token is observed after every block.
-    /// <para>将产出镜像流式计入 SHA-256 摘要并与记录的源身份比对，仅评估字节维度。长度先于摘要被检查，
-    /// 读取缓冲保持有界，且每个数据块之后都会观察取消令牌。</para>
+    /// Streams the produced image through SHA-256 and evaluates only the byte dimension.
+    /// <para>将产出镜像流式计入 SHA-256，仅评估字节维度。</para>
     /// </summary>
     /// <param name="producedImage">Readable stream positioned at the start of the produced image; the caller
     /// keeps ownership. <para>定位在产出镜像起始处的可读流；所有权仍归调用方。</para></param>

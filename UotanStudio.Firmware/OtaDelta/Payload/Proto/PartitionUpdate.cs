@@ -89,29 +89,29 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
         set => _partitionName = value ?? string.Empty;
     }
 
-    /// <summary>Gets or sets the optional update_engine RunPostinstall field, preserving protobuf presence.
-    /// <para>获取或设置可选的 update_engine RunPostinstall 字段，并保留 protobuf 存在性。</para></summary>
+    /// <summary>Gets or sets the optional RunPostinstall field, preserving protobuf presence.
+    /// <para>获取或设置可选的 RunPostinstall 字段，并保留 protobuf 存在性。</para></summary>
     /// <value>Tri-state flag serialized as field 16 when present; <see langword="null"/> means the
     /// field is absent from the message and is not written.
     /// <para>存在时作为字段 16 序列化的三态标志；<see langword="null"/> 表示消息中缺少该字段且不写入。</para></value>
     public bool? RunPostinstall { get; set; }
 
-    /// <summary>Gets or sets the optional update_engine PostinstallPath field, preserving protobuf presence.
-    /// <para>获取或设置可选的 update_engine PostinstallPath 字段，并保留 protobuf 存在性。</para></summary>
+    /// <summary>Gets or sets the optional PostinstallPath field, preserving protobuf presence.
+    /// <para>获取或设置可选的 PostinstallPath 字段，并保留 protobuf 存在性。</para></summary>
     /// <value>Optional path string serialized as field 26 when present; <see langword="null"/> means
     /// the field is absent from the message and is not written.
     /// <para>存在时作为字段 26 序列化的可选路径串；<see langword="null"/> 表示消息中缺少该字段且不写入。</para></value>
     public string? PostinstallPath { get; set; }
 
-    /// <summary>Gets or sets the optional update_engine FilesystemType field, preserving protobuf presence.
-    /// <para>获取或设置可选的 update_engine FilesystemType 字段，并保留 protobuf 存在性。</para></summary>
+    /// <summary>Gets or sets the optional FilesystemType field, preserving protobuf presence.
+    /// <para>获取或设置可选的 FilesystemType 字段，并保留 protobuf 存在性。</para></summary>
     /// <value>Optional filesystem type string serialized as field 34 when present;
     /// <see langword="null"/> means the field is absent from the message and is not written.
     /// <para>存在时作为字段 34 序列化的可选文件系统类型串；<see langword="null"/> 表示消息中缺少该字段且不写入。</para></value>
     public string? FilesystemType { get; set; }
 
-    /// <summary>Gets or sets the optional update_engine PostinstallOptional field, preserving protobuf presence.
-    /// <para>获取或设置可选的 update_engine PostinstallOptional 字段，并保留 protobuf 存在性。</para></summary>
+    /// <summary>Gets or sets the optional PostinstallOptional field, preserving protobuf presence.
+    /// <para>获取或设置可选的 PostinstallOptional 字段，并保留 protobuf 存在性。</para></summary>
     /// <value>Tri-state flag serialized as field 72 when present; <see langword="null"/> means the
     /// field is absent from the message and is not written.
     /// <para>存在时作为字段 72 序列化的三态标志；<see langword="null"/> 表示消息中缺少该字段且不写入。</para></value>

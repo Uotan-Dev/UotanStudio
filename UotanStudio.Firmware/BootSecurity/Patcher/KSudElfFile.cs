@@ -129,13 +129,8 @@ public sealed class ElfFile
     }
 
     /// <summary>
-    /// Restores a reference address computed by disassembly to a file offset. Some builds link data
-    /// references as absolute addresses of the form &quot;load base + file offset&quot; (for example
-    /// 0x100000000 + offset, where the base falls outside every segment); when the direct mapping fails,
-    /// the bases 0x100000000, 0x40000000 and 0x20000000 are subtracted in turn and re-looked-up.
-    /// <para>把反汇编算出的引用地址还原为文件偏移。某些构建把数据引用链接成“加载基址 + 文件偏移”的绝对地址
-    /// （如 0x100000000 + offset，基址不落在任何段内），直接换算失败时依次减去 0x100000000、0x40000000、
-    /// 0x20000000 三个基址再查。</para>
+    /// Restores a reference address computed by disassembly to a file offset.
+    /// <para>把反汇编算出的引用地址还原为文件偏移。</para>
     /// </summary>
     /// <param name="reference">Reference address produced by instruction scanning.
     /// <para>由指令扫描得到的引用地址。</para></param>
@@ -233,14 +228,8 @@ public sealed class ElfFile
     internal static readonly Encoding EncodingLatin1 = Encoding.GetEncoding("ISO-8859-1");
 
     /// <summary>
-    /// Rebuilds load-time pointer values from the relocation table and returns a patched byte copy. In
-    /// some Android .so files, pointers into rodata/text sit in writable segments with an on-disk value
-    /// of 0 and are written at load time by R_AARCH64_RELATIVE-style entries in .rela.dyn. Only SHT_RELA
-    /// entries for the machine's relative, absolute, GLOB_DAT and JUMP_SLOT types are applied; the
-    /// original <see cref="Data"/> is never modified.
-    /// <para>某些 Android .so 中，指向 rodata/text 的指针存放在可写段，文件内值为 0，
-    /// 靠 .rela.dyn 的 R_AARCH64_RELATIVE 等重定位在加载时写入。这里按重定位表重建指针值，返回修补后的字节副本。
-    /// 只应用与当前机器匹配的相对、绝对、GLOB_DAT 与 JUMP_SLOT 类型的 SHT_RELA 条目；原始 <see cref="Data"/> 不会被修改。</para>
+    /// Rebuilds load-time pointer values from the relocation table and returns a patched byte copy.
+    /// <para>按重定位表重建加载时指针值，返回修补后的字节副本。</para>
     /// </summary>
     /// <returns>A patched clone of <see cref="Data"/>, or <see langword="null"/> when the image has no
     /// applicable RELA section or no relocation was written.

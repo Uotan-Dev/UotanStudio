@@ -179,13 +179,13 @@ internal static class CompressionToolHandlers
         }, cancellationToken).ConfigureAwait(false);
 
     /// <summary>
-    /// <para>把协议进度目标转为压缩文件的字节计数接收端；没有进度令牌时返回 <see langword="null"/>，
-    /// 底层实现因此不会消耗上报开销。</para>
     /// Converts the protocol progress sink into the compression file API's byte-count sink; without a
     /// progress token this returns <see langword="null"/> so the compressor skips reporting overhead.
+    /// <para>把协议进度目标转为压缩文件的字节计数接收端；没有进度令牌时返回 <see langword="null"/>，
+    /// 底层实现因此不会消耗上报开销。</para>
     /// </summary>
-    /// <param name="progress"><para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para>The MCP-bound progress instance, possibly <see langword="null"/>.</param>
-    /// <returns><para>供压缩文件 API 上报已处理/总字节数的接收端。</para>A processed/total byte sink for the compression file API.</returns>
+    /// <param name="progress">The MCP-bound progress instance, possibly <see langword="null"/>. <para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para></param>
+    /// <returns>A processed/total byte sink for the compression file API. <para>供压缩文件 API 上报已处理/总字节数的接收端。</para></returns>
     internal static IProgress<(long Processed, long Total)>? ToTupleProgress(IProgress<ProgressNotificationValue>? progress) =>
         progress is null
             ? null

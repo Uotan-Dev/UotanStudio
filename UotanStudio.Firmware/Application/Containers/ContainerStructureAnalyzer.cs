@@ -5,11 +5,11 @@ using UotanStudio.Firmware.Core;
 namespace UotanStudio.Firmware.Application.Containers;
 
 /// <summary>
-/// <para>容器结构分析器：识别 super / payload.bin / ZIP 并枚举内部可勾选条目。
-/// 全部为有界只读解析（元数据/清单级别），不提取数据，AOT 安全（无反射）。</para>
 /// Container structure analyzer: recognizes super / payload.bin / ZIP and enumerates selectable
 /// inner entries. All bounded read-only parsing (metadata/manifest level), no data extraction,
 /// AOT-safe (no reflection).
+/// <para>容器结构分析器：识别 super / payload.bin / ZIP 并枚举内部可勾选条目。
+/// 全部为有界只读解析（元数据/清单级别），不提取数据，AOT 安全（无反射）。</para>
 /// </summary>
 public static class ContainerStructureAnalyzer
 {
@@ -18,16 +18,16 @@ public static class ContainerStructureAnalyzer
         ".img", ".raw", ".ext4", ".erofs", ".f2fs", ".simg", ".sparse"
     ];
 
-    /// <summary><para>ZIP 内 payload 条目的标准名称。</para>Standard payload entry name inside a ZIP.</summary>
+    /// <summary>Standard payload entry name inside a ZIP. <para>ZIP 内 payload 条目的标准名称。</para></summary>
     private const string PayloadMarker = "payload.bin";
 
     /// <summary>
-    /// <para>按魔数识别容器类型并枚举内部条目；失败（IO/格式错误）返回 <see cref="ContainerStructure.Empty"/>。</para>
     /// Detects the container kind by magic and enumerates inner entries; failures (IO/format) return
     /// <see cref="ContainerStructure.Empty"/>.
+    /// <para>按魔数识别容器类型并枚举内部条目；失败（IO/格式错误）返回 <see cref="ContainerStructure.Empty"/>。</para>
     /// </summary>
-    /// <param name="filePath"><para>容器文件路径。</para>The container file path.</param>
-    /// <returns><para>结构分析结果。</para>The structure analysis result.</returns>
+    /// <param name="filePath">The container file path. <para>容器文件路径。</para></param>
+    /// <returns>The structure analysis result. <para>结构分析结果。</para></returns>
     public static ContainerStructure Analyze(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -62,8 +62,8 @@ public static class ContainerStructureAnalyzer
     }
 
     /// <summary>
-    /// <para>分析 payload（含 ZIP 包裹）：列出 manifest 中的分区名与目标大小。</para>
     /// Analyzes a payload (ZIP-wrapped included): lists manifest partition names and target sizes.
+    /// <para>分析 payload（含 ZIP 包裹）：列出 manifest 中的分区名与目标大小。</para>
     /// </summary>
     private static ContainerStructure AnalyzePayload(string filePath)
     {
@@ -74,8 +74,8 @@ public static class ContainerStructureAnalyzer
     }
 
     /// <summary>
-    /// <para>分析 super 镜像：读取槽 0 LP 元数据，按 extent 计算每个逻辑分区大小。</para>
     /// Analyzes a super image: reads slot-0 LP metadata and sizes each logical partition by extents.
+    /// <para>分析 super 镜像：读取槽 0 LP 元数据，按 extent 计算每个逻辑分区大小。</para>
     /// </summary>
     private static ContainerStructure AnalyzeSuper(string filePath)
     {
@@ -97,10 +97,10 @@ public static class ContainerStructureAnalyzer
     }
 
     /// <summary>
-    /// <para>分析 ZIP：内含 payload.bin 时在 ZIP 镜像条目之外追加 payload 分区；
-    /// 否则仅枚举 ZIP 内的镜像文件。</para>
     /// Analyzes a ZIP: when a payload.bin exists, appends payload partitions after the ZIP image
     /// entries; otherwise enumerates only the image files inside the ZIP.
+    /// <para>分析 ZIP：内含 payload.bin 时在 ZIP 镜像条目之外追加 payload 分区；
+    /// 否则仅枚举 ZIP 内的镜像文件。</para>
     /// </summary>
     private static ContainerStructure AnalyzeZip(string filePath)
     {

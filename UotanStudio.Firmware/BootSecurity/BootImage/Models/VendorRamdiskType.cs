@@ -1,11 +1,10 @@
 namespace UotanStudio.Firmware.BootSecurity.BootImage.Models;
 
 /// <summary>
-/// Semantic values of the <c>ramdisk_type</c> field in a version 4 vendor boot ramdisk table entry, matching the
-/// <c>VENDOR_RAMDISK_TYPE_*</c> constants of the AOSP <c>boot_image.h</c> header (system/tools/mkbootimg,
-/// <c>include/bootimg/bootimg.h</c>, values verified 2026-09).
-/// <para>版本 4 Vendor Boot RAMDisk 表条目中 <c>ramdisk_type</c> 字段的语义取值，与 AOSP <c>boot_image.h</c>
-/// （system/tools/mkbootimg，<c>include/bootimg/bootimg.h</c>）的 <c>VENDOR_RAMDISK_TYPE_*</c> 常量一致（取值已于 2026-09 核实）。</para>
+/// Semantic values of the <c>ramdisk_type</c> field in a version 4 vendor boot ramdisk table entry:
+/// 0 <c>NONE</c>, 1 <c>PLATFORM</c>, 2 <c>RECOVERY</c> and 3 <c>DLKM</c>.
+/// <para>版本 4 Vendor Boot RAMDisk 表条目中 <c>ramdisk_type</c> 字段的语义取值：
+/// 0 <c>NONE</c>、1 <c>PLATFORM</c>、2 <c>RECOVERY</c> 与 3 <c>DLKM</c>。</para>
 /// </summary>
 /// <remarks>
 /// The field classifies ramdisk purpose, not compression: the vendor ramdisk section stores each sub-ramdisk in the

@@ -7,20 +7,23 @@ public sealed partial class FastbootSession
 {
     /// <summary>
     /// Negotiates and caches the maximum download size supported by the device.
-    /// Queries <c>max-download-size</c> via getvar and clamps against the wire-level ceiling
-    /// (<see cref="FastbootConstants.SparseMaxDownloadSize"/>). Only a usable, device-confirmed number
-    /// is cached: a FAIL reply, a timeout, a transport error or an unparsable/zero answer yields
+    /// <para>协商并缓存设备支持的最大下载大小。</para>
+    /// </summary>
+    /// <remarks>
+    /// <para>Queries <c>max-download-size</c> via getvar and clamps against the wire-level ceiling
+    /// (<see cref="FastbootConstants.SparseMaxDownloadSize"/>). Only a usable, device-confirmed number is
+    /// cached: a FAIL reply, a timeout, a transport error or an unparsable/zero answer yields
     /// <see cref="FastbootConstants.FallbackMaxDownloadSize"/> without caching it, and any such answer is
     /// evicted from the session getvar cache, so the next call re-negotiates instead of pinning a device
     /// whose real limit is far smaller to the fallback for the rest of the session. A value already
-    /// collected by <see cref="GetAllVariables"/> is reused from that cache.
-    /// <para>协商并缓存设备支持的最大下载大小。通过 getvar 查询 <c>max-download-size</c>，并按线协议上限
+    /// collected by <see cref="GetAllVariables"/> is reused from that cache.</para>
+    /// <para>通过 getvar 查询 <c>max-download-size</c>，并按线协议上限
     /// （<see cref="FastbootConstants.SparseMaxDownloadSize"/>）钳制。只有设备确认且可用的数值才会缓存：
     /// FAIL 应答、超时、传输错误或无法解析/为零的应答会返回
-    /// <see cref="FastbootConstants.FallbackMaxDownloadSize"/> 但不写入缓存，且此类应答会从会话 getvar 缓存
-    /// 中逐出，因此下一次调用会重新协商，而不会把真实上限远小于兜底值的设备在整个会话内钉死在兜底值上。
+    /// <see cref="FastbootConstants.FallbackMaxDownloadSize"/> 但不写入缓存，且此类应答会从会话 getvar
+    /// 缓存中逐出，因此下一次调用会重新协商，而不会把真实上限远小于兜底值的设备在整个会话内钉死在兜底值上。
     /// <see cref="GetAllVariables"/> 已采集到的值会从该缓存中复用。</para>
-    /// </summary>
+    /// </remarks>
     /// <returns>The negotiated maximum in bytes, clamped to the wire ceiling and <see cref="uint.MaxValue"/>.
     /// A device-confirmed usable answer is cached; anything else returns the fallback and is re-queried next time.
     /// <para>字节计价的协商上限，按线协议上限与 <see cref="uint.MaxValue"/> 钳制。设备确认的可用应答会被缓存；

@@ -9,16 +9,16 @@ using UotanStudio.Services.Logging;
 namespace UotanStudio.ViewModels.Workspace;
 
 /// <summary>
-/// <para>工作区输出面板视图模型，仅订阅显示固件（Firmware）与烧录（Flash）通道的日志条目。
-/// 专用于固件处理与设备烧录日志的实时展示。</para>
 /// Workspace log panel view model, subscribing to the unified log service and filtering for
 /// Firmware and Flash channel log entries for firmware processing and device flashing.
+/// <para>工作区输出面板视图模型，仅订阅显示固件（Firmware）与烧录（Flash）通道的日志条目。
+/// 专用于固件处理与设备烧录日志的实时展示。</para>
 /// </summary>
 internal partial class WorkspaceLogViewModel : Tool, IDisposable
 {
     /// <summary>
-    /// <para>日志条目视图模型。</para>
     /// Log entry view model.
+    /// <para>日志条目视图模型。</para>
     /// </summary>
     public sealed partial class LogEntryViewModel : ObservableObject
     {
@@ -34,7 +34,10 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
         /// <summary><para>日志文本。Log text.</para></summary>
         [ObservableProperty] private string _message = string.Empty;
 
-        /// <summary>Complete displayed and searchable text. 用于显示和搜索的完整日志行。</summary>
+        /// <summary>
+        /// Complete displayed and searchable text.
+        /// <para>用于显示和搜索的完整日志行。</para>
+        /// </summary>
         public string Text { get; }
 
         public LogEntryViewModel(string timestamp, LogLevel level, string source, string message)
@@ -60,13 +63,13 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
     private Action? _unsubscribe;
     private bool _disposed;
 
-    /// <summary><para>待刷新日志队列锁。</para>Gate for the pending log backlog.</para></summary>
+    /// <summary><para>待刷新日志队列锁。</para>Gate for the pending log backlog.</summary>
     private readonly Lock _pendingGate = new();
     private readonly Queue<LogEntry> _pendingEntries = new();
     private long _pendingCharacters;
     private readonly Dictionary<string, int> _sourceCounts = new(StringComparer.Ordinal);
 
-    /// <summary><para>100ms 批量刷新定时器，与全局日志面板共用同一批量约定。</para>100 ms flush timer, sharing the batched convention with the global log panel.</para></summary>
+    /// <summary><para>100ms 批量刷新定时器，与全局日志面板共用同一批量约定。</para>100 ms flush timer, sharing the batched convention with the global log panel.</summary>
     private readonly DispatcherTimer _flushTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private UiDebounce? _searchDebounce;
 
@@ -79,7 +82,7 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
     /// <summary><para>来源筛选。空字符串表示全部。Source filter; empty means all.</para></summary>
     [ObservableProperty] private string _sourceFilter = string.Empty;
 
-    /// <summary><para>忽略大小写的完整日志行搜索，空字符串表示全部。</para>Case-insensitive full-line search; empty means all.</summary>
+    /// <summary>Case-insensitive full-line search; empty means all. <para>忽略大小写的完整日志行搜索，空字符串表示全部。</para></summary>
     [ObservableProperty] private string _searchText = string.Empty;
 
     partial void OnSearchTextChanged(string value)
@@ -117,11 +120,11 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
     }
 
     /// <summary>
-    /// <para>日志条目入队回调：仅加锁追加到待刷新队列，由 <see cref="_flushTimer"/> 每 100ms
-    /// 在 UI 线程批量消费，避免日志风暴时每条一次 Dispatcher.Post。</para>
     /// Log entry enqueue callback: only lock-appends to the pending backlog; the flush
     /// timer drains it on the UI thread every 100 ms, avoiding one Dispatcher.Post per
     /// entry during log storms.
+    /// <para>日志条目入队回调：仅加锁追加到待刷新队列，由 <see cref="_flushTimer"/> 每 100ms
+    /// 在 UI 线程批量消费，避免日志风暴时每条一次 Dispatcher.Post。</para>
     /// </summary>
     private void OnLogEnqueued(object? sender, LogEntry entry)
         => Enqueue(entry);
@@ -152,8 +155,8 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
     }
 
     /// <summary>
-    /// <para>按条数与字符预算分批刷新，只淘汰筛选视图中实际过期的条目。</para>
     /// Flushes a bounded batch and removes only expired entries actually present in the filtered view.
+    /// <para>按条数与字符预算分批刷新，只淘汰筛选视图中实际过期的条目。</para>
     /// </summary>
     internal void FlushPending()
     {
@@ -227,8 +230,8 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
     }
 
     /// <summary>
-    /// <para>登记一条日志到原始缓冲与组件名集合，不触碰展示集合。</para>
     /// Tracks a log entry in the raw buffer and source names without touching the display collection.
+    /// <para>登记一条日志到原始缓冲与组件名集合，不触碰展示集合。</para>
     /// </summary>
     private LogEntryViewModel TrackEntry(LogEntry entry)
     {

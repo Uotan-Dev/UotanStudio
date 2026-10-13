@@ -5,8 +5,8 @@ internal static class ParallelCompression
     public const int DefaultChunkSize = 1 << 20;
 
     /// <summary>
-    /// When parallelism is applicable (degree &gt; 1 and at least two chunks), compresses the chunks in parallel and returns the concatenated result in chunk order; otherwise returns null and the caller should use its existing sequential path (byte-identical to the previous implementation).
-    /// <para>若并行可用（并行度 &gt; 1 且至少两个块），并行压缩各块并返回按序拼接结果； 否则返回 null，调用方应走原有串行路径（输出与既有实现逐字节一致）。</para>
+    /// Compresses the chunks in parallel when parallelism applies, and otherwise returns null.
+    /// <para>并行可用时并行压缩各块，否则返回 null 交由调用方走原串行路径。</para>
     /// </summary>
     /// <param name="data">Complete uncompressed input, split into <see cref="DefaultChunkSize"/>-byte
     /// chunks with a shorter final chunk; an empty array always takes the sequential path and yields

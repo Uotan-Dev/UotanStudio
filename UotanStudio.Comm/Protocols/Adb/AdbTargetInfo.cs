@@ -11,11 +11,9 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// <para>权威标识该目标的 server 序列号。</para></param>
 /// <param name="State">Authorization and readiness state text of the target.
 /// <para>目标的授权与就绪状态文本。</para></param>
-/// <param name="Transport">Link class reported by the listing: <c>USB</c> when the line carries the
-/// server's <c>usb:</c> transport descriptor, <c>TCP</c> when the serial is a network endpoint or an
-/// emulator console key, and an empty string when the listing carries no link evidence at all.
-/// <para>列表报告的链路类别：行内带有 server 的 <c>usb:</c> 传输描述符时为 <c>USB</c>；序列号是网络端点
-/// 或模拟器控制台标识时为 <c>TCP</c>；列表完全没有提供链路证据时为空字符串。</para></param>
+/// <param name="Transport">Link class reported by the listing: <c>USB</c>, <c>TCP</c>, or an empty string
+/// without link evidence.
+/// <para>列表报告的链路类别：<c>USB</c>、<c>TCP</c>，或没有链路证据时的空字符串。</para></param>
 public sealed record AdbTargetInfo(string Serial, string State, string Transport)
 {
     /// <summary>ADB's local emulator transport always serializes as this prefix plus the console port.

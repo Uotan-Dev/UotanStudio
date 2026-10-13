@@ -3,7 +3,7 @@ using Ursa.Controls;
 
 namespace UotanStudio.Services.Projects;
 
-/// <summary>Shared explorer and File-menu creation dialogs. 资源管理器与文件菜单共用的新建对话框。</summary>
+/// <summary>Shared explorer and File-menu creation dialogs.<para>资源管理器与文件菜单共用的新建对话框。</para></summary>
 internal static class ExplorerItemCreationService
 {
     internal static async Task<string?> CreateAsync(Window owner, string directory, bool isDirectory)

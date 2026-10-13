@@ -157,13 +157,8 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
         => Decode(accessUnit, checked(_sequence++ * 166667));
 
     /// <summary>
-    /// Decodes one Annex-B access unit with an explicit timestamp: VPS/SPS/PPS NAL units are cached (a change
-    /// rebuilds the hardware session), picture NAL units are converted to length-prefixed form, and every
-    /// resulting NV12 frame is delivered through the callback on the calling thread before this call returns.
-    /// Access units holding only parameter sets decode nothing.
-    /// <para>解码一个带显式时间戳的 Annex-B 访问单元：缓存 VPS/SPS/PPS NAL 单元（内容变化会重建硬件会话），
-    /// 将图像 NAL 单元转为长度前缀形式，并在本调用返回前于调用线程上经回调交付全部 NV12 帧。
-    /// 仅含参数集的访问单元不产生解码。</para>
+    /// Decodes one Annex-B access unit with an explicit timestamp.
+    /// <para>解码一个带显式时间戳的 Annex-B 访问单元。</para>
     /// </summary>
     /// <param name="accessUnit">
     /// One Annex-B access unit; parameter sets may share it with picture data.
@@ -246,11 +241,8 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     }
 
     /// <summary>
-    /// Flushes delayed frames from the hardware session, waits for asynchronous completion, and delivers every
-    /// outstanding NV12 frame through the callback on the calling thread. Does nothing before a session exists;
-    /// call <see cref="Initialize"/> or <see cref="Reset"/> before decoding a new stream.
-    /// <para>导出硬件会话中滞留的帧并等待异步完成，在调用线程上经回调交付全部未交付的 NV12 帧。
-    /// 会话建立前不做任何事；解码新码流前须调用 <see cref="Initialize"/> 或 <see cref="Reset"/>。</para>
+    /// Flushes delayed frames from the hardware session and delivers every outstanding NV12 frame.
+    /// <para>导出硬件会话中滞留的帧并交付全部未交付的 NV12 帧。</para>
     /// </summary>
     /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
     /// <exception cref="InvalidOperationException">

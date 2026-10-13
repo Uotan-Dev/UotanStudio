@@ -7,7 +7,7 @@ using UotanStudio.Services.Workspace;
 
 namespace UotanStudio.Views.Controls;
 
-/// <summary>Find/replace controls connected to workspace search. 接入工作区搜索的查找替换控件。</summary>
+/// <summary>Find/replace controls connected to workspace search.<para>接入工作区搜索的查找替换控件。</para></summary>
 public partial class FindReplacePanel : UserControl
 {
     public event EventHandler? CloseRequested;

@@ -6,14 +6,14 @@ using UotanStudio.ViewModels.NodeViewModels;
 namespace UotanStudio.Services.Execution;
 
 /// <summary>
-/// <para>节点工作流执行引擎。基于拓扑排序（Kahn 算法）调度节点，支持异步执行、取消、状态机。</para>
 /// Node workflow execution engine. Schedules nodes via topological sort (Kahn's algorithm); supports async execution, cancellation, and a state machine.
+/// <para>节点工作流执行引擎。基于拓扑排序（Kahn 算法）调度节点，支持异步执行、取消、状态机。</para>
 /// </summary>
 public sealed class NodeExecutionEngine
 {
     /// <summary>
-    /// <para>循环节点单次执行的最大迭代数上限，防止错误配置的死循环工作流无限执行。</para>
     /// Maximum iterations per Loop node execution, guarding misconfigured looping workflows from running forever.
+    /// <para>循环节点单次执行的最大迭代数上限，防止错误配置的死循环工作流无限执行。</para>
     /// </summary>
     public const int MaxLoopIterations = 10_000;
 
@@ -27,12 +27,12 @@ public sealed class NodeExecutionEngine
     private readonly System.Collections.Concurrent.ConcurrentStack<IAsyncDisposable> _resources = new();
 
     /// <summary>
-    /// <para>创建执行引擎。</para>
     /// Creates the execution engine.
+    /// <para>创建执行引擎。</para>
     /// </summary>
     /// <param name="log">
-    /// <para>统一日志服务。</para>
     /// Unified log service.
+    /// <para>统一日志服务。</para>
     /// </param>
     public NodeExecutionEngine(IUnifiedLog log)
     {
@@ -40,48 +40,53 @@ public sealed class NodeExecutionEngine
     }
 
     /// <summary>
-    /// <para>当前是否正在执行。</para>
     /// Whether execution is in progress.
+    /// <para>当前是否正在执行。</para>
     /// </summary>
+    /// <value><c>true</c> while a workflow run is in progress.<para>工作流运行期间为 <c>true</c>。</para></value>
     public bool IsRunning => _isRunning;
 
     /// <summary>
-    /// <para>执行进度变更事件（0.0 ~ 1.0）。</para>
-    /// Progress change event (0.0 ~ 1.0).
+    /// Progress change event carrying the fraction of the run completed.
+    /// <para>执行进度变更事件，携带整次运行已完成的占比。</para>
     /// </summary>
     public event EventHandler<double>? ProgressChanged;
 
     /// <summary>
-    /// <para>节点状态变更事件。</para>
     /// Node status change event.
+    /// <para>节点状态变更事件。</para>
     /// </summary>
     public event EventHandler<NodeStatusChangedEventArgs>? NodeStatusChanged;
 
     /// <summary>
-    /// <para>执行完成事件（成功或失败）。</para>
     /// Execution completed event (success or failure).
+    /// <para>执行完成事件（成功或失败）。</para>
     /// </summary>
     public event EventHandler<ExecutionCompletedEventArgs>? ExecutionCompleted;
 
     /// <summary>
-    /// <para>异步执行给定节点和连接构成的工作流。</para>
     /// Asynchronously executes the workflow formed by the given nodes and connections.
+    /// <para>异步执行给定节点和连接构成的工作流。</para>
     /// </summary>
     /// <param name="nodes">
-    /// <para>节点视图模型列表。</para>
-    /// List of node view models.
+    /// The nodes of the workflow.
+    /// <para>工作流包含的节点。</para>
     /// </param>
     /// <param name="connections">
+    /// List of connections (source → target), determining execution order and data flow.
     /// <para>连接列表（源→目标），用于确定执行顺序与数据流。</para>
-    /// List of connections (source → target), used to determine execution order and data flow.
     /// </param>
     /// <param name="cancellationToken">
-    /// <para>取消令牌。</para>
     /// Cancellation token.
+    /// <para>取消令牌。</para>
+    /// </param>
+    /// <param name="options">
+    /// Shared staging, resource scope and interaction options for the run.
+    /// <para>本次运行的共享暂存、资源作用域与交互选项。</para>
     /// </param>
     /// <returns>
-    /// <para>执行结果。</para>
     /// Execution result.
+    /// <para>执行结果。</para>
     /// </returns>
     public async Task<ExecutionResult> ExecuteAsync(
         IReadOnlyList<FlowNodeViewModel> nodes,
@@ -107,7 +112,6 @@ public sealed class NodeExecutionEngine
 
         try
         {
-            // Execution data belongs to one run; edited preconditions must not reuse an earlier result.
             foreach (var node in nodes)
             {
                 node.ExecutionStatus = NodeExecutionStatus.Idle;
@@ -161,7 +165,6 @@ public sealed class NodeExecutionEngine
             }
             _log.Write(LogLevel.Info, "Engine", $"Starting execution with {nodes.Count} nodes, {connections?.Count ?? 0} connections");
 
-            // 拓扑排序
             var order = TopologicalSort(nodes, connections);
             if (order == null)
             {
@@ -184,9 +187,6 @@ public sealed class NodeExecutionEngine
                 return RejectPreflight(nodes, gateError);
             }
 
-            // 已被 Loop / Parallel 子图调度执行过的节点（主循环跳过），与 Branch 未选中分支涉及的节点（标记 Skipped）。
-            // Nodes already executed by Loop / Parallel sub-graph scheduling (skipped by the main loop),
-            // and nodes belonging to the untaken Branch sub-graph (marked Skipped).
             HashSet<string> handledByFlow = [];
             var skippedByBranch = GetInactiveEntryNodes(options.EntryActivation, connections);
             HashSet<string> skippedByFailure = [];
@@ -343,10 +343,13 @@ public sealed class NodeExecutionEngine
     }
 
     /// <summary>
-    /// <para>提取控制流边：源连接器端口类型为 <see cref="NodePortType.Flow"/> 的连接。返回节点实例 ID 到 (输出端口标题， 目标节点) 列表的映射。</para>
-    /// Extracts control-flow edges: connections whose source connector port type is <see cref="NodePortType.Flow"/>.
-    /// Returns a mapping from node instance ID to the list of (output connector title, target node).
+    /// Extracts the control-flow edges whose source connector port type is flow, mapping a node instance ID to its
+    /// output connector titles and target nodes.
+    /// <para>提取源连接器端口类型为控制流的边，把节点实例 ID 映射到输出端口标题与目标节点。</para>
     /// </summary>
+    /// <param name="nodes">Nodes used to resolve the endpoints of each connection.<para>用于解析每条连接两端的节点。</para></param>
+    /// <param name="connections">Connections to filter for flow ports.<para>需要按控制流端口筛选的连接。</para></param>
+    /// <returns>A mapping from source instance ID to its flow edges.<para>源实例 ID 到其控制流边的映射。</para></returns>
     private static Dictionary<string, List<(string Connector, FlowNodeViewModel Target)>> BuildFlowEdges(
         IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnection>? connections)
     {
@@ -373,9 +376,15 @@ public sealed class NodeExecutionEngine
     }
 
     /// <summary>
-    /// <para>执行单个节点：注入数据流、更新状态机并记录失败原因。返回是否执行成功。</para>
-    /// Executes a single node: injects data flow, updates the state machine, and records failures. Returns success.
+    /// Executes a single node: injects data flow, updates the state machine, and records failures.
+    /// <para>执行单个节点：注入数据流、更新状态机并记录失败原因。</para>
     /// </summary>
+    /// <param name="node">The node to execute.<para>要执行的节点。</para></param>
+    /// <param name="byId">Nodes indexed by instance ID for flow lookup.<para>按实例 ID 索引、用于查找数据流的节点。</para></param>
+    /// <param name="connections">Connections supplying the node's input data.<para>为节点提供输入数据的连接。</para></param>
+    /// <param name="token">Cancellation token for the run.<para>本次运行的取消令牌。</para></param>
+    /// <param name="progress">Receives the node's local progress reports.<para>接收该节点上报的局部进度。</para></param>
+    /// <returns><c>true</c> when the node completed without an error.<para>节点无错误完成时为 <c>true</c>。</para></returns>
     private async Task<bool> ExecuteSingleNodeAsync(
         FlowNodeViewModel node,
         IReadOnlyDictionary<string, FlowNodeViewModel> byId,
@@ -446,12 +455,23 @@ public sealed class NodeExecutionEngine
     }
 
     /// <summary>
-    /// <para>按节点类型键应用真实控制流语义：Flow.Branch 把未选中分支的下游控制流子图标记为 Skipped，
-    /// Flow.Loop 迭代执行 Body 子图（上限 <see cref="MaxLoopIterations"/>），Flow.Parallel 并发执行各分支子图。</para>
-    /// Applies real flow-control semantics by node type key: Flow.Branch marks the untaken branch's downstream
-    /// control-flow sub-graph as Skipped, Flow.Loop iterates the Body sub-graph (bounded by
-    /// <see cref="MaxLoopIterations"/>), and Flow.Parallel runs the branch sub-graphs concurrently.
+    /// Applies control-flow semantics for branch, gate, loop and parallel nodes, skipping untaken sub-graphs and
+    /// running the rest. Other nodes only mark disabled output ports as skipped.
+    /// <para>按分支、门控、循环与并行节点应用控制流语义：未选中的子图标记为跳过，其余子图继续执行。其他节点仅把被关闭的输出端口标记为跳过。</para>
     /// </summary>
+    /// <param name="node">The node whose control flow is applied.<para>需要应用控制流语义的节点。</para></param>
+    /// <param name="byId">Nodes indexed by instance ID.<para>按实例 ID 索引的节点。</para></param>
+    /// <param name="connections">Connections defining the workflow graph.<para>定义工作流图的连接。</para></param>
+    /// <param name="topologicalOrder">Execution order used to build each sub-graph scope.<para>用于构造各子图执行顺序的拓扑序。</para></param>
+    /// <param name="flowOut">Control-flow edges keyed by source instance ID.<para>以源实例 ID 为键的控制流边。</para></param>
+    /// <param name="token">Cancellation token for the run.<para>本次运行的取消令牌。</para></param>
+    /// <param name="handledByFlow">Receives instance IDs covered by a flow sub-graph.<para>接收被子图覆盖的实例 ID。</para></param>
+    /// <param name="skippedByBranch">Receives instance IDs skipped as untaken branches.<para>接收因分支未选中而跳过的实例 ID。</para></param>
+    /// <param name="skippedByFailure">Receives instance IDs skipped after a failure.<para>接收失败后跳过的实例 ID。</para></param>
+    /// <param name="failedNodes">Receives instance IDs of nodes that failed.<para>接收失败节点的实例 ID。</para></param>
+    /// <param name="failLock">Serialises writes to the failure collections.<para>为失败集合的写入加锁。</para></param>
+    /// <param name="options">Options shared by the scopes this node executes.<para>本节点执行的各作用域共用的选项。</para></param>
+    /// <returns><c>true</c> when the downstream scopes were executed here.<para>下游作用域在本方法内执行完毕时为 <c>true</c>。</para></returns>
     private async Task<bool> ApplyFlowControlAsync(
         FlowNodeViewModel node,
         IReadOnlyDictionary<string, FlowNodeViewModel> byId,
@@ -502,8 +522,6 @@ public sealed class NodeExecutionEngine
                     var untaken = CollectFlowReachable(node, untakenTitle, flowOut);
                     var takenTitle = condition ? trueTitle : falseTitle;
                     var taken = CollectFlowReachable(node, takenTitle, flowOut);
-                    // A branch join is reachable from both sides. It must remain executable
-                    // when the untaken side is skipped, so only the untaken-only set is marked.
                     untaken.ExceptWith(taken);
                     foreach (var target in untaken) skippedByBranch.Add(target.InstanceId);
                     if (untaken.Count > 0)
@@ -578,7 +596,6 @@ public sealed class NodeExecutionEngine
                     var stop = 0;
                     foreach (var (connectorTitle, allBranchNodes) in branches)
                     {
-                        // Shared merge points remain in the parent scope and execute once.
                         var branch = allBranchNodes.Where(branchNode => ownership[branchNode.InstanceId] == 1).ToHashSet();
                         var branchOrder = topologicalOrder.Where(branch.Contains).ToList();
                         foreach (var branchNode in branch)
@@ -753,10 +770,14 @@ public sealed class NodeExecutionEngine
     }
 
     /// <summary>
-    /// <para>从指定节点的某个 Flow 输出端口出发，沿控制流边广度优先收集可达的下游节点集合（不含起始节点本身）。</para>
     /// Collects the downstream nodes reachable via control-flow edges from the given Flow output port of the start
     /// node (breadth-first, excluding the start node itself).
+    /// <para>从指定节点的某个 Flow 输出端口出发，沿控制流边广度优先收集可达的下游节点集合（不含起始节点本身）。</para>
     /// </summary>
+    /// <param name="start">The node the traversal begins from.<para>遍历的起始节点。</para></param>
+    /// <param name="outputConnector">Title of the output port the edges start at.<para>边所出自的输出端口标题。</para></param>
+    /// <param name="flowOut">Control-flow edges keyed by source instance ID.<para>以源实例 ID 为键的控制流边。</para></param>
+    /// <returns>The reachable downstream nodes.<para>可达的下游节点集合。</para></returns>
     private static HashSet<FlowNodeViewModel> CollectFlowReachable(
         FlowNodeViewModel start, string outputConnector,
         Dictionary<string, List<(string Connector, FlowNodeViewModel Target)>> flowOut)
@@ -812,8 +833,8 @@ public sealed class NodeExecutionEngine
     }
 
     /// <summary>
-    /// <para>请求停止执行。</para>
     /// Requests execution stop.
+    /// <para>请求停止执行。</para>
     /// </summary>
     public void Stop()
     {
@@ -822,26 +843,15 @@ public sealed class NodeExecutionEngine
     }
 
     /// <summary>
-    /// <para>把连接到 <paramref name="target"/> 节点输入端口的上游输出端口值复制到对应输入端口，建立节点间数据流。</para>
     /// Copies the upstream output port values connected to the target node's inputs into the corresponding input ports,
     /// establishing data flow between nodes.
+    /// <para>把连接到 <paramref name="target"/> 节点输入端口的上游输出端口值复制到对应输入端口，建立节点间数据流。</para>
     /// </summary>
-    /// <param name="target">
-    /// <para>将要执行的目标节点。</para>
-    /// The target node about to execute.
-    /// </param>
-    /// <param name="byId">
-    /// <para>节点实例 ID 到节点视图模型的映射。</para>
-    /// Mapping from node instance ID to node view model.
-    /// </param>
-    /// <param name="connections">
-    /// <para>连接列表（源→目标）。</para>
-    /// Connection list (source → target).
-    /// </param>
+    /// <param name="target">The target node about to execute.<para>将要执行的目标节点。</para></param>
+    /// <param name="byId">Mapping from node instance ID to the node it identifies.<para>节点实例 ID 到对应节点的映射。</para></param>
+    /// <param name="connections">Connection list (source → target).<para>连接列表（源→目标）。</para></param>
     private static void FlowInputs(FlowNodeViewModel target, IReadOnlyDictionary<string, FlowNodeViewModel> byId, IReadOnlyList<NodeConnection>? connections)
     {
-        // 先把用户为未连接输入端口填写的初始值注入 Data，再让上游连接值覆盖之（若有）。
-        // First inject user-set initial values for unconnected inputs, then let connected upstream values override them (when present).
         foreach (var input in target.Input)
         {
             input.HasRuntimeSource = false;
@@ -859,8 +869,6 @@ public sealed class NodeExecutionEngine
             if (!byId.TryGetValue(conn.SourceInstanceId, out var sourceNode)) continue;
             var sourceConnector = WorkflowGraphValidation.ResolvePort(sourceNode.Output, conn.SourcePortId, conn.SourceConnector);
             var targetConnector = WorkflowGraphValidation.ResolvePort(target.Input, conn.TargetPortId, conn.TargetConnector);
-            // A connected data output is authoritative even when absent (cancelled or hidden form fields).
-            // Flow signals may intentionally have no payload.
             if (sourceConnector != null && targetConnector != null
                 && (sourceConnector.Data is not null || targetConnector.PortType != NodePortType.Flow))
             {
@@ -872,21 +880,26 @@ public sealed class NodeExecutionEngine
     }
 
     /// <summary>
-    /// <para>把节点上报的局部进度换算为整体进度并安全触发 <see cref="ProgressChanged"/>。</para>
     /// Converts the node-reported local progress into overall progress and safely raises <see cref="ProgressChanged"/>.
+    /// <para>把节点上报的局部进度换算为整体进度并安全触发 <see cref="ProgressChanged"/>。</para>
     /// </summary>
+    /// <param name="completedBefore">Nodes already finished before the current one.<para>当前节点之前已完成的节点数。</para></param>
+    /// <param name="total">Total nodes in the run.<para>本次运行的节点总数。</para></param>
+    /// <param name="localProgress">Fraction of the current node completed.<para>当前节点已完成的占比。</para></param>
     private void SafeReportProgress(int completedBefore, int total, double localProgress)
     {
         var clamped = Math.Clamp(localProgress, 0.0, 1.0);
-        // 本节点进度占 1/total，之前已完成节点占 completedBefore/total
         var overall = (completedBefore + clamped) / Math.Max(1, total);
         ProgressChanged?.Invoke(this, Math.Clamp(overall, 0.0, 1.0));
     }
 
     /// <summary>
-    /// <para>Kahn 拓扑排序。返回 <c>null</c> 表示存在环。</para>
-    /// Kahn's topological sort. Returns <c>null</c> if a cycle exists.
+    /// Kahn's topological sort of the workflow graph.
+    /// <para>对工作流图做 Kahn 拓扑排序。</para>
     /// </summary>
+    /// <param name="nodes">The nodes to order.<para>需要排序的节点。</para></param>
+    /// <param name="connections">Edges contributing to each node's in-degree.<para>计入各节点入度的连接。</para></param>
+    /// <returns>The execution order, or <c>null</c> when the graph contains a cycle.<para>执行顺序；图中存在环时为 <c>null</c>。</para></returns>
     private static List<FlowNodeViewModel>? TopologicalSort(IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnection>? connections)
     {
         var inDegree = nodes.ToDictionary(n => n.InstanceId, _ => 0);
@@ -928,93 +941,130 @@ public sealed class NodeExecutionEngine
 }
 
 /// <summary>
-/// <para>节点连接表示（源实例+端口 → 目标实例+端口）。</para>
 /// Node connection representation (source instance+port → target instance+port).
+/// <para>节点连接表示（源实例+端口 → 目标实例+端口）。</para>
 /// </summary>
 public sealed class NodeConnection
 {
     /// <summary>
-    /// <para>源节点实例 ID。</para>
     /// Source node instance ID.
+    /// <para>源节点实例 ID。</para>
     /// </summary>
+    /// <value>The instance ID of the connecting source node.<para>发起连接的源节点实例 ID。</para></value>
     public required string SourceInstanceId { get; init; }
 
     /// <summary>
-    /// <para>源连接器标题。</para>
     /// Source connector title.
+    /// <para>源连接器标题。</para>
     /// </summary>
+    /// <value>The title of the source connector.<para>源连接器的标题。</para></value>
     public required string SourceConnector { get; init; }
 
-    /// <summary>Stable source port identity; title resolution is used only when absent.</summary>
+    /// <summary>
+    /// Stable source port identity; title resolution applies only when it is absent.
+    /// <para>稳定的源端口标识；缺失时才按标题解析。</para>
+    /// </summary>
+    /// <value>The source port identity, or <c>null</c> when only a title is known.<para>源端口标识；仅知道标题时为 <c>null</c>。</para></value>
     public string? SourcePortId { get; init; }
 
     /// <summary>
-    /// <para>目标节点实例 ID。</para>
     /// Target node instance ID.
+    /// <para>目标节点实例 ID。</para>
     /// </summary>
+    /// <value>The instance ID of the connecting target node.<para>被连接的目标节点实例 ID。</para></value>
     public required string TargetInstanceId { get; init; }
 
     /// <summary>
-    /// <para>目标连接器标题。</para>
     /// Target connector title.
+    /// <para>目标连接器标题。</para>
     /// </summary>
+    /// <value>The title of the target connector.<para>目标连接器的标题。</para></value>
     public required string TargetConnector { get; init; }
 
-    /// <summary>Stable target port identity; title resolution is used only when absent.</summary>
+    /// <summary>
+    /// Stable target port identity; title resolution applies only when it is absent.
+    /// <para>稳定的目标端口标识；缺失时才按标题解析。</para>
+    /// </summary>
+    /// <value>The target port identity, or <c>null</c> when only a title is known.<para>目标端口标识；仅知道标题时为 <c>null</c>。</para></value>
     public string? TargetPortId { get; init; }
 }
 
 /// <summary>
-/// <para>执行结果。</para>
 /// Execution result.
+/// <para>执行结果。</para>
 /// </summary>
 public sealed class ExecutionResult
 {
-    /// <summary>Composite invocation evidence; success here does not imply file publication.</summary>
+    /// <summary>
+    /// Composite invocation evidence; recorded success does not imply file publication.
+    /// <para>组合节点调用记录；其中记录的成功并不表示文件已经发布。</para>
+    /// </summary>
+    /// <value>One entry per composite invocation of the run.<para>本次运行中每次组合节点调用的一条记录。</para></value>
     public IReadOnlyList<PatchCompositeExecution> CompositeExecutions { get; internal set; } = [];
 
-    /// <summary>Whether skipped composite rows were omitted due to the report capacity.</summary>
+    /// <summary>
+    /// Whether skipped composite rows were left out because of the report capacity.
+    /// <para>是否因报告容量上限而省略了被跳过的组合记录行。</para>
+    /// </summary>
+    /// <value><c>true</c> when composite rows were left out.<para>存在被省略的组合记录行时为 <c>true</c>。</para></value>
     public bool CompositeReportTruncated { get; internal set; }
 
-    /// <summary>Patch-owned file effects, including previewed or discarded changes.</summary>
+    /// <summary>
+    /// Patch-owned file effects, including previewed or discarded changes.
+    /// <para>由补丁持有的文件影响，包含仅预览或已丢弃的改动。</para>
+    /// </summary>
+    /// <value>The file effects attributed to the patch run.<para>归属本次补丁运行的文件影响。</para></value>
     public IReadOnlyList<PatchChange> PatchChanges { get; internal set; } = [];
 
-    /// <summary>Publication outcome, independent of non-patch workflow effects.</summary>
+    /// <summary>
+    /// Publication outcome, independent of the effects made outside the patch run.
+    /// <para>发布结果，与补丁运行之外的影响相互独立。</para>
+    /// </summary>
+    /// <value>The outcome of the publication step.<para>发布步骤的结果。</para></value>
     public PatchRunOutcome PatchOutcome { get; internal set; }
     /// <summary>
-    /// <para>执行状态。</para>
     /// Execution status.
+    /// <para>执行状态。</para>
     /// </summary>
+    /// <value>The terminal status of the run.<para>整次运行的最终状态。</para></value>
     public ExecutionStatus Status { get; init; }
 
     /// <summary>
-    /// <para>执行节点数。</para>
     /// Number of executed nodes.
+    /// <para>执行节点数。</para>
     /// </summary>
+    /// <value>How many nodes were executed.<para>已执行的节点数量。</para></value>
     public int ExecutedCount { get; init; }
 
     /// <summary>
-    /// <para>失败节点实例 ID 列表。</para>
     /// List of failed node instance IDs.
+    /// <para>失败节点实例 ID 列表。</para>
     /// </summary>
+    /// <value>The instance IDs of the nodes that failed.<para>执行失败节点的实例 ID。</para></value>
     public IReadOnlyList<string> FailedNodes { get; init; } = [];
 
     /// <summary>
-    /// <para>错误信息。</para>
     /// Error message.
+    /// <para>错误信息。</para>
     /// </summary>
+    /// <value>The failure reason, or <c>null</c> when the run did not fail.<para>失败原因；运行未失败时为 <c>null</c>。</para></value>
     public string? ErrorMessage { get; init; }
 
     /// <summary>
-    /// <para>创建成功结果。</para>
     /// Creates a succeeded result.
+    /// <para>创建成功结果。</para>
     /// </summary>
+    /// <param name="count">Number of nodes that were executed.<para>已执行的节点数量。</para></param>
+    /// <returns>A result carrying the succeeded status and the executed count.<para>带有成功状态与已执行数量的结果。</para></returns>
     public static ExecutionResult Succeeded(int count) => new() { Status = ExecutionStatus.Succeeded, ExecutedCount = count };
 
     /// <summary>
-    /// <para>创建失败结果。</para>
     /// Creates a failed result.
+    /// <para>创建失败结果。</para>
     /// </summary>
+    /// <param name="error">The failure reason.<para>失败原因。</para></param>
+    /// <param name="failed">Instance IDs of the nodes that failed.<para>执行失败节点的实例 ID。</para></param>
+    /// <returns>A result carrying the failed status and the supplied details.<para>带有失败状态与所给详情的结果。</para></returns>
     public static ExecutionResult Failed(string error, IReadOnlyList<string>? failed = null) => new()
     {
         Status = ExecutionStatus.Failed,
@@ -1023,73 +1073,78 @@ public sealed class ExecutionResult
     };
 
     /// <summary>
-    /// <para>创建部分成功结果。</para>
     /// Creates a partially-succeeded result.
+    /// <para>创建部分成功结果。</para>
     /// </summary>
+    /// <param name="failed">Instance IDs of the nodes that failed.<para>执行失败节点的实例 ID。</para></param>
+    /// <returns>A result carrying the partially-succeeded status.<para>带有部分成功状态的结果。</para></returns>
     public static ExecutionResult PartiallySucceeded(IReadOnlyList<string> failed) => new() { Status = ExecutionStatus.PartiallySucceeded, FailedNodes = failed };
 
     /// <summary>
-    /// <para>创建取消结果。</para>
     /// Creates a cancelled result.
+    /// <para>创建取消结果。</para>
     /// </summary>
+    /// <returns>A result carrying the cancelled status.<para>带有取消状态的结果。</para></returns>
     public static ExecutionResult Cancelled() => new() { Status = ExecutionStatus.Cancelled };
 }
 
 /// <summary>
-/// <para>执行状态枚举。</para>
 /// Execution status enum.
+/// <para>执行状态枚举。</para>
 /// </summary>
 public enum ExecutionStatus
 {
-    /// <summary><para>未执行。</para>Not executed.</summary>
+    /// <summary>Not executed. <para>未执行。</para></summary>
     Idle,
 
-    /// <summary><para>成功。</para>Succeeded.</summary>
+    /// <summary>Succeeded. <para>成功。</para></summary>
     Succeeded,
 
-    /// <summary><para>部分成功。</para>Partially succeeded.</summary>
+    /// <summary>Partially succeeded. <para>部分成功。</para></summary>
     PartiallySucceeded,
 
-    /// <summary><para>失败。</para>Failed.</summary>
+    /// <summary>Failed. <para>失败。</para></summary>
     Failed,
 
-    /// <summary><para>取消。</para>Cancelled.</summary>
+    /// <summary>Cancelled. <para>取消。</para></summary>
     Cancelled
 }
 
 /// <summary>
-/// <para>节点状态变更事件参数。</para>
 /// Node status change event args.
+/// <para>节点状态变更事件参数。</para>
 /// </summary>
 public sealed class NodeStatusChangedEventArgs : EventArgs
 {
     /// <summary>
-    /// <para>状态变更的节点。</para>
     /// Node whose status changed.
+    /// <para>状态变更的节点。</para>
     /// </summary>
+    /// <value>The node the status change refers to.<para>状态变化所指的节点。</para></value>
     public FlowNodeViewModel Node { get; }
 
     public NodeStatusChangedEventArgs(FlowNodeViewModel node) => Node = node;
 }
 
 /// <summary>
-/// <para>执行完成事件参数。</para>
 /// Execution completed event args.
+/// <para>执行完成事件参数。</para>
 /// </summary>
 public sealed class ExecutionCompletedEventArgs : EventArgs
 {
     /// <summary>
-    /// <para>执行结果。</para>
     /// Execution result.
+    /// <para>执行结果。</para>
     /// </summary>
+    /// <value>The result of the completed run.<para>已完成运行的结果。</para></value>
     public ExecutionResult Result { get; }
 
     public ExecutionCompletedEventArgs(ExecutionResult result) => Result = result;
 }
 
 /// <summary>
-/// <para>执行上下文实现。</para>
 /// Execution context implementation.
+/// <para>执行上下文实现。</para>
 /// </summary>
 internal sealed class ExecutionContextImpl : INodeExecutionContext
 {

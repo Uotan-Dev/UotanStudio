@@ -4,8 +4,8 @@ using Avalonia.Controls;
 namespace UotanStudio.Views.Controls;
 
 /// <summary>
-/// <para>按子项的最小宽度和实际内容宽度自动换行，并让每一行填满可用宽度。</para>
 /// Wraps children according to both their minimum and content widths, then justifies every line.
+/// <para>按子项的最小宽度和实际内容宽度自动换行，并让每一行填满可用宽度。</para>
 /// </summary>
 public sealed class JustifiedWrapPanel : Panel
 {
@@ -28,8 +28,8 @@ public sealed class JustifiedWrapPanel : Panel
     }
 
     /// <summary>
-    /// <para>获取或设置每个子项的基础最小宽度；内容需要更宽时以内容宽度为准。</para>
     /// Gets or sets the base minimum width; wider content raises the effective minimum.
+    /// <para>获取或设置每个子项的基础最小宽度；内容需要更宽时以内容宽度为准。</para>
     /// </summary>
     public double MinItemWidth
     {
@@ -38,8 +38,8 @@ public sealed class JustifiedWrapPanel : Panel
     }
 
     /// <summary>
-    /// <para>获取或设置同一行子项之间的距离。</para>
     /// Gets or sets the spacing between children on the same line.
+    /// <para>获取或设置同一行子项之间的距离。</para>
     /// </summary>
     public double ItemSpacing
     {
@@ -48,8 +48,8 @@ public sealed class JustifiedWrapPanel : Panel
     }
 
     /// <summary>
-    /// <para>获取或设置相邻行之间的距离。</para>
     /// Gets or sets the spacing between adjacent lines.
+    /// <para>获取或设置相邻行之间的距离。</para>
     /// </summary>
     public double LineSpacing
     {

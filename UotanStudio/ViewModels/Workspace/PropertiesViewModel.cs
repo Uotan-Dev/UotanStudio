@@ -13,14 +13,17 @@ using UotanStudio.Views.Controls;
 namespace UotanStudio.ViewModels.Workspace;
 
 /// <summary>
-/// <para>属性视图模型，动态显示当前选中节点的属性或选中镜像的详细参数，
-/// 订阅节点编辑器选中变更消息与镜像选中变更消息。</para>
 /// Properties view model, dynamically displaying the currently selected node's properties or the
 /// selected image's detailed parameters, subscribed to node-editor and image selection changes.
+/// <para>属性视图模型，动态显示当前选中节点的属性或选中镜像的详细参数，
+/// 订阅节点编辑器选中变更消息与镜像选中变更消息。</para>
 /// </summary>
 internal partial class PropertiesViewModel : Tool
 {
-    /// <summary>Stable setting value with a localized label. 稳定设置值与本地化标签。</summary>
+    /// <summary>
+    /// Stable setting value with a localized label.
+    /// <para>稳定设置值与本地化标签。</para>
+    /// </summary>
     public sealed class PropertyChoice : ObservableObject
     {
         public string Value { get; }
@@ -66,39 +69,48 @@ internal partial class PropertiesViewModel : Tool
         }
     }
     /// <summary>
-    /// <para>单个属性行视图模型，承载名称-值对。</para>
     /// Single property row view model, carrying a name-value pair.
+    /// <para>单个属性行视图模型，承载名称-值对。</para>
     /// </summary>
     public sealed partial class PropertyRow : ObservableObject
     {
         /// <summary>
-        /// <para>属性名称。</para>
         /// Property name.
+        /// <para>属性名称。</para>
         /// </summary>
         [ObservableProperty] private string _name = string.Empty;
 
         /// <summary>
-        /// <para>属性值文本。</para>
         /// Property value text.
+        /// <para>属性值文本。</para>
         /// </summary>
         [ObservableProperty] private string _value = string.Empty;
 
         /// <summary>
-        /// <para>此行是否使用语法语言下拉选择器。</para>
         /// Whether this row uses the syntax-language dropdown.
+        /// <para>此行是否使用语法语言下拉选择器。</para>
         /// </summary>
         public bool IsLanguageSelector { get; init; }
 
         /// <summary>
-        /// <para>此行是否使用文本编码下拉选择器。</para>
         /// Whether this row uses the text-encoding dropdown.
+        /// <para>此行是否使用文本编码下拉选择器。</para>
         /// </summary>
         public bool IsEncodingSelector { get; init; }
-        /// <summary>Choices for editable session settings. 会话设置下拉选项。</summary>
+        /// <summary>
+        /// Choices for editable session settings.
+        /// <para>会话设置下拉选项。</para>
+        /// </summary>
         public IReadOnlyList<PropertyChoice> Choices { get; init; } = [];
-        /// <summary>Stable identifier for session setting controls. 会话设置控件稳定标识。</summary>
+        /// <summary>
+        /// Stable identifier for session setting controls.
+        /// <para>会话设置控件稳定标识。</para>
+        /// </summary>
         public string SettingKey { get; init; } = string.Empty;
-        /// <summary>Whether the row contains a session setting selector. 是否显示会话下拉框。</summary>
+        /// <summary>
+        /// Whether the row contains a session setting selector.
+        /// <para>是否显示会话下拉框。</para>
+        /// </summary>
         public bool IsChoiceSelector => Choices.Count > 0;
         [ObservableProperty] private PropertyChoice? _selectedChoice;
         internal Action<string>? ChoiceChanged { get; set; }
@@ -108,14 +120,14 @@ internal partial class PropertiesViewModel : Tool
         }
 
         /// <summary>
-        /// <para>此行是否以纯文本显示属性值（非任何选择器行）。</para>
         /// Whether this row displays the value as plain text (not any selector row).
+        /// <para>此行是否以纯文本显示属性值（非任何选择器行）。</para>
         /// </summary>
         public bool IsPlainValue => !IsLanguageSelector && !IsEncodingSelector && !IsChoiceSelector;
 
         /// <summary>
-        /// <para>创建属性行。</para>
         /// Creates a property row.
+        /// <para>创建属性行。</para>
         /// </summary>
         public PropertyRow(string name, string value)
         {
@@ -125,94 +137,94 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>当前显示的属性行集合，UI 绑定此项。</para>
     /// Collection of property rows currently displayed, bound by the UI.
+    /// <para>当前显示的属性行集合，UI 绑定此项。</para>
     /// </summary>
     public ObservableCollection<PropertyRow> Properties { get; } = [];
 
     /// <summary>
-    /// <para>当前选中的节点标题，用于显示。</para>
     /// Title of the currently selected node, for display.
+    /// <para>当前选中的节点标题，用于显示。</para>
     /// </summary>
     [ObservableProperty] private string _selectedNodeTitle = string.Empty;
 
     /// <summary>
-    /// <para>是否已选中节点。</para>
     /// Whether a node is selected.
+    /// <para>是否已选中节点。</para>
     /// </summary>
     [ObservableProperty] private bool _hasSelection;
 
     /// <summary>
-    /// <para>当前展示的内容类型（节点或镜像）。</para>
     /// The type of content currently displayed (node or image).
+    /// <para>当前展示的内容类型（节点或镜像）。</para>
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ContentTypeDisplay))]
     private PropertiesContentType _contentType = PropertiesContentType.None;
 
     /// <summary>
-    /// <para>当前活动的文本文档引用（语言选择器回写目标）；非文本文档时为 <c>null</c>。</para>
     /// Reference to the current text document (target for language-selector write-back);
     /// <c>null</c> when the active document is not a text document.
+    /// <para>当前活动的文本文档引用（语言选择器回写目标）；非文本文档时为 <c>null</c>。</para>
     /// </summary>
     private FileViewModel? _currentTextDocument;
 
     /// <summary>
-    /// <para>当前活动的 Hex 文档引用（编码选择器回写目标）；非 Hex 文档时为 <c>null</c>。</para>
     /// Reference to the current Hex document (target for encoding-selector write-back);
     /// <c>null</c> when the active document is not a Hex document.
+    /// <para>当前活动的 Hex 文档引用（编码选择器回写目标）；非 Hex 文档时为 <c>null</c>。</para>
     /// </summary>
     private HexEditorViewModel? _currentHexDocument;
 
     private long _imageDetailsGeneration;
 
     /// <summary>
-    /// <para>语言选择器是否可见（仅文本文档类型显示）。</para>
     /// Whether the language selector is visible (shown only for text document types).
+    /// <para>语言选择器是否可见（仅文本文档类型显示）。</para>
     /// </summary>
     [ObservableProperty]
     private bool _hasLanguageSelector;
 
     /// <summary>
-    /// <para>可用语法语言列表（显示名称），供 ComboBox 绑定。</para>
     /// Available syntax language list (display names) for ComboBox binding.
+    /// <para>可用语法语言列表（显示名称），供 ComboBox 绑定。</para>
     /// </summary>
     public ObservableCollection<string> AvailableLanguages { get; } = [];
 
     /// <summary>
-    /// <para>编码选择器可选项；由 <see cref="FileViewModel.SupportedEncodings"/> 提供与编辑器一致的集合。</para>
     /// Encoding dropdown options; sourced from <see cref="FileViewModel.SupportedEncodings"/> so the
     /// editor and the properties panel share one set.
+    /// <para>编码选择器可选项；由 <see cref="FileViewModel.SupportedEncodings"/> 提供与编辑器一致的集合。</para>
     /// </summary>
     public ObservableCollection<string> AvailableEncodings { get; } = [];
 
     /// <summary>
-    /// <para>当前选中的语法语言显示名称；用户在下拉栏切换时触发 <see cref="OnSelectedLanguageChanged"/>。</para>
     /// Currently selected syntax language display name; triggers <see cref="OnSelectedLanguageChanged"/>
     /// when the user switches it in the dropdown.
+    /// <para>当前选中的语法语言显示名称；用户在下拉栏切换时触发 <see cref="OnSelectedLanguageChanged"/>。</para>
     /// </summary>
     [ObservableProperty]
     private string _selectedLanguage = string.Empty;
 
     /// <summary>
-    /// <para>当前选中的文本编码名称；用户在下拉栏切换时回写到文档并触发重新保存。</para>
     /// Currently selected text-encoding name; written back to the document (marking it dirty for
     /// the next save) when the user switches it in the dropdown.
+    /// <para>当前选中的文本编码名称；用户在下拉栏切换时回写到文档并触发重新保存。</para>
     /// </summary>
     [ObservableProperty]
     private string _selectedEncoding = string.Empty;
 
     /// <summary>
-    /// <para>编码选择器变更抑制标志（程序化设置 <see cref="SelectedEncoding"/> 时避免触发回写）。</para>
     /// Encoding-selector change suppression flag (prevents write-back when programmatically
     /// setting <see cref="SelectedEncoding"/>).
+    /// <para>编码选择器变更抑制标志（程序化设置 <see cref="SelectedEncoding"/> 时避免触发回写）。</para>
     /// </summary>
     private bool _suppressEncodingChange;
 
     /// <summary>
-    /// <para>当用户在语言下拉栏中选择新语言时，将对应的语言标识写回当前文本文档。</para>
     /// When the user selects a new language in the dropdown, writes the corresponding language id back
     /// to the current text document.
+    /// <para>当用户在语言下拉栏中选择新语言时，将对应的语言标识写回当前文本文档。</para>
     /// </summary>
     partial void OnSelectedLanguageChanged(string value)
     {
@@ -235,8 +247,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>本地化后的内容类型属性值。</para>
     /// Localized content-type property value.
+    /// <para>本地化后的内容类型属性值。</para>
     /// </summary>
     public string ContentTypeDisplay
     {
@@ -267,9 +279,9 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>构造属性视图模型，订阅节点选中变更消息与镜像选中变更消息并显示无选择占位。</para>
     /// Creates the properties view model, subscribing to node-selection-changed and image-selection-changed
     /// messages and showing the no-selection placeholder.
+    /// <para>构造属性视图模型，订阅节点选中变更消息与镜像选中变更消息并显示无选择占位。</para>
     /// </summary>
     public PropertiesViewModel()
     {
@@ -286,42 +298,42 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>响应镜像选中变更消息，刷新属性行。</para>
     /// Responds to image-selection-changed messages by refreshing the property rows.
+    /// <para>响应镜像选中变更消息，刷新属性行。</para>
     /// </summary>
     private void OnImageSelectionChanged(object recipient, ImageSelectionChangedMessage message) => RefreshForImage(message.Image);
 
     /// <summary>
-    /// <para>响应文件管理器条目选中变更消息，刷新属性行。</para>
     /// Responds to file-manager entry selection changed messages by refreshing the property rows.
+    /// <para>响应文件管理器条目选中变更消息，刷新属性行。</para>
     /// </summary>
     private void OnFileManagerSelectionChanged(object recipient, FileManagerSelectionChangedMessage message) => RefreshForFileManagerEntry(message.Entry, message.Document);
 
     /// <summary>
-    /// <para>响应对比视图行选中变更消息，刷新属性行展示选中条目详情。</para>
     /// Responds to compare-view row selection changed messages by refreshing property rows with the selected entry.
+    /// <para>响应对比视图行选中变更消息，刷新属性行展示选中条目详情。</para>
     /// </summary>
     private void OnCompareSelectionChanged(object recipient, CompareSelectionChangedMessage message) => RefreshForCompareEntry(message.Path, message.IsDirectory);
 
     /// <summary>
-    /// <para>响应文件分析完成消息，刷新属性行展示分析结果。</para>
     /// Responds to file-analysis-completed messages by refreshing property rows with analysis results.
+    /// <para>响应文件分析完成消息，刷新属性行展示分析结果。</para>
     /// </summary>
     private void OnFileAnalysisCompleted(object recipient, FileAnalysisCompletedMessage message) => RefreshForFileAnalysis(message);
 
     /// <summary>
-    /// <para>响应活动文档切换消息，根据新选中文档的分析结果刷新属性行；
-    /// 文档为 <c>null</c> 或非二进制（无分析结果）时清空面板。</para>
     /// Responds to active-document-changed messages by refreshing property rows with the newly
     /// active document's analysis results; clears the panel when the document is <c>null</c> or has
     /// no analysis (non-binary).
+    /// <para>响应活动文档切换消息，根据新选中文档的分析结果刷新属性行；
+    /// 文档为 <c>null</c> 或非二进制（无分析结果）时清空面板。</para>
     /// </summary>
     /// <summary>
-    /// <para>响应活动文档切换消息，按文档类型（固件分析/文本/设备树）刷新属性行；
-    /// 文档为 <c>null</c> 时清空面板。</para>
     /// Responds to active-document-changed messages by refreshing property rows according to the
     /// document type (firmware analysis / text / device tree); clears the panel when the document is
     /// <c>null</c>.
+    /// <para>响应活动文档切换消息，按文档类型（固件分析/文本/设备树）刷新属性行；
+    /// 文档为 <c>null</c> 时清空面板。</para>
     /// </summary>
     private void OnActiveDocumentChanged(object recipient, ActiveDocumentChangedMessage message)
     {
@@ -396,8 +408,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>响应设备树节点选中变更消息，刷新选中节点详情。</para>
     /// Responds to DTB node-selection-changed messages by refreshing the selected node details.
+    /// <para>响应设备树节点选中变更消息，刷新选中节点详情。</para>
     /// </summary>
     private void OnDtbNodeSelectionChanged(object recipient, DtbNodeSelectionChangedMessage message)
     {
@@ -416,8 +428,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新指定镜像的详细参数。镜像为 <c>null</c> 时显示占位。</para>
     /// Refreshes detailed parameters for the specified image. Shows a placeholder when the image is <c>null</c>.
+    /// <para>刷新指定镜像的详细参数。镜像为 <c>null</c> 时显示占位。</para>
     /// </summary>
     public void RefreshForImage(ImageEntryViewModel? image)
     {
@@ -443,9 +455,9 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新文本文档的属性行（文件名、路径、大小、编码、行数、字符数、语法语言）。</para>
     /// Refreshes property rows for a text document (file name, path, size, encoding, line count,
     /// character count, syntax language).
+    /// <para>刷新文本文档的属性行（文件名、路径、大小、编码、行数、字符数、语法语言）。</para>
     /// </summary>
     public void RefreshForTextDocument(FileViewModel doc)
     {
@@ -478,9 +490,9 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>当用户在编码下拉栏中选择新编码时，回写到当前文本文档（保存时按新编码写盘）。</para>
     /// When the user selects a new encoding in the dropdown, writes it back to the current text
     /// document (the next save writes the file with the chosen encoding).
+    /// <para>当用户在编码下拉栏中选择新编码时，回写到当前文本文档（保存时按新编码写盘）。</para>
     /// </summary>
     partial void OnSelectedEncodingChanged(string value)
     {
@@ -507,8 +519,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>填充语言下拉栏并根据当前语言标识选中对应项。</para>
     /// Populates the language dropdown and selects the item matching the current language id.
+    /// <para>填充语言下拉栏并根据当前语言标识选中对应项。</para>
     /// </summary>
     private void PopulateLanguageSelector(string? currentLanguageId)
     {
@@ -539,9 +551,9 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>填充编码下拉栏（复用 <see cref="FileViewModel.SupportedEncodings"/>）并按文档当前编码选中对应项。</para>
     /// Populates the encoding dropdown (reusing <see cref="FileViewModel.SupportedEncodings"/>) and
     /// selects the entry matching the document's current encoding.
+    /// <para>填充编码下拉栏（复用 <see cref="FileViewModel.SupportedEncodings"/>）并按文档当前编码选中对应项。</para>
     /// </summary>
     private void PopulateEncodingSelector(FileViewModel doc)
     {
@@ -565,15 +577,15 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>语言选择器变更抑制标志（程序化设置 <see cref="SelectedLanguage"/> 时避免触发回写）。</para>
     /// Language-selector change suppression flag (prevents write-back when programmatically setting
     /// <see cref="SelectedLanguage"/>).
+    /// <para>语言选择器变更抑制标志（程序化设置 <see cref="SelectedLanguage"/> 时避免触发回写）。</para>
     /// </summary>
     private bool _suppressLanguageChange;
 
     /// <summary>
-    /// <para>清除语言选择器状态（隐藏下拉栏、清空引用与列表）。</para>
     /// Clears the language-selector state (hides the dropdown, clears reference and list).
+    /// <para>清除语言选择器状态（隐藏下拉栏、清空引用与列表）。</para>
     /// </summary>
     private void ClearLanguageSelector()
     {
@@ -612,8 +624,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>清空全部属性行并复位语言选择器。</para>
     /// Clears all property rows and resets the language selector.
+    /// <para>清空全部属性行并复位语言选择器。</para>
     /// </summary>
     private void ClearProperties()
     {
@@ -625,8 +637,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>设置当前属性内容类型并添加类型行。</para>
     /// Sets the current properties content type and adds the type row.
+    /// <para>设置当前属性内容类型并添加类型行。</para>
     /// </summary>
     private void ShowProperties(PropertiesContentType contentType)
     {
@@ -636,10 +648,10 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新设备树文档的属性行（文件名、路径、大小、节点总数、根节点 compatible、
-    /// #address-cells、#size-cells、内存保留条目数）。</para>
     /// Refreshes property rows for a device-tree document (file name, path, size, total node count,
     /// root compatible, #address-cells, #size-cells, memory-reservation count).
+    /// <para>刷新设备树文档的属性行（文件名、路径、大小、节点总数、根节点 compatible、
+    /// #address-cells、#size-cells、内存保留条目数）。</para>
     /// </summary>
     public void RefreshForDtbDocument(DtbEditorViewModel doc)
     {
@@ -668,9 +680,9 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新 Manifest 文档的属性行（文件名、路径、大小、元素/属性/字符串计数）。</para>
     /// Refreshes property rows for a Manifest document (file name, path, size, element/attribute/
     /// string counts).
+    /// <para>刷新 Manifest 文档的属性行（文件名、路径、大小、元素/属性/字符串计数）。</para>
     /// </summary>
     public void RefreshForManifestDocument(ManifestEditorViewModel doc)
     {
@@ -696,9 +708,9 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新 Manifest 选中元素的详情属性行（元素名、命名空间、属性数、子元素数、文本）。</para>
     /// Refreshes property rows for the selected Manifest element (name, namespace, attribute count,
     /// child count, text).
+    /// <para>刷新 Manifest 选中元素的详情属性行（元素名、命名空间、属性数、子元素数、文本）。</para>
     /// </summary>
     public void RefreshForManifestNode(ManifestEditorViewModel editor, ManifestTreeNodeViewModel? node)
     {
@@ -729,9 +741,9 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新 APK 文档的属性行（文件名、路径、大小、包名、版本、SDK、ABI、权限数）。</para>
     /// Refreshes property rows for an APK document (file name, path, size, package name, version,
     /// SDK, minimum system, ABIs, permission count).
+    /// <para>刷新 APK 文档的属性行（文件名、路径、大小、包名、版本、SDK、ABI、权限数）。</para>
     /// </summary>
     public void RefreshForApkDocument(ApkEditorViewModel doc)
     {
@@ -759,9 +771,9 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新固件信息文档的属性行（文件名、路径、格式名、摘要、元数据键值与组件/条目计数）。</para>
     /// Refreshes property rows for a firmware-info document (file name, path, format name, summary,
     /// metadata key-values and component/entry counts).
+    /// <para>刷新固件信息文档的属性行（文件名、路径、格式名、摘要、元数据键值与组件/条目计数）。</para>
     /// </summary>
     public void RefreshForFirmwareDocument(FirmwareInfoViewModel doc)
     {
@@ -799,8 +811,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新 Hex 文档的属性行（文件名、路径、文件大小、字节数）。</para>
     /// Refreshes property rows for a Hex document (file name, path, file size, byte count).
+    /// <para>刷新 Hex 文档的属性行（文件名、路径、文件大小、字节数）。</para>
     /// </summary>
     public void RefreshForHexDocument(HexEditorViewModel doc)
     {
@@ -829,8 +841,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>填充 Hex 文档的编码下拉栏并选中当前编码。</para>
     /// Populates the Hex document's encoding dropdown and selects the current encoding.
+    /// <para>填充 Hex 文档的编码下拉栏并选中当前编码。</para>
     /// </summary>
     private void PopulateHexEncodingSelector(string currentEncoding)
     {
@@ -854,8 +866,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新 ARSC 文档的属性行（文件名、路径、包/类型表/条目计数）。</para>
     /// Refreshes property rows for an ARSC document (file name, path, package/type-table/entry counts).
+    /// <para>刷新 ARSC 文档的属性行（文件名、路径、包/类型表/条目计数）。</para>
     /// </summary>
     public void RefreshForArscDocument(ArscEditorViewModel doc)
     {
@@ -881,8 +893,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新 ARSC 选中节点的详情属性行（按包/类型/条目层级展示）。</para>
     /// Refreshes property rows for the selected ARSC node (per package/type/entry level).
+    /// <para>刷新 ARSC 选中节点的详情属性行（按包/类型/条目层级展示）。</para>
     /// </summary>
     public void RefreshForArscNode(ArscEditorViewModel editor, ArscTreeNodeViewModel? node)
     {
@@ -922,8 +934,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>响应 ARSC 节点选中变更消息，刷新选中节点详情。</para>
     /// Responds to ARSC node-selection-changed messages by refreshing the selected node details.
+    /// <para>响应 ARSC 节点选中变更消息，刷新选中节点详情。</para>
     /// </summary>
     private void OnArscNodeSelectionChanged(object recipient, ArscNodeSelectionChangedMessage message)
     {
@@ -942,8 +954,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>响应 Manifest 节点选中变更消息，刷新选中元素详情。</para>
     /// Responds to Manifest node-selection-changed messages by refreshing the selected element details.
+    /// <para>响应 Manifest 节点选中变更消息，刷新选中元素详情。</para>
     /// </summary>
     private void OnManifestNodeSelectionChanged(object recipient, ManifestNodeSelectionChangedMessage message)
     {
@@ -962,8 +974,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新设备树选中节点的详情属性行（节点路径、属性数、子节点数）。</para>
     /// Refreshes property rows for the selected device-tree node (node path, property count, child count).
+    /// <para>刷新设备树选中节点的详情属性行（节点路径、属性数、子节点数）。</para>
     /// </summary>
     public void RefreshForDtbNode(DtbEditorViewModel editor, DtbNodeViewModel? node)
     {
@@ -986,9 +998,9 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新 DEX 文档的属性行（文件名、路径、大小、版本、类/方法/字段/字符串/类型计数）。</para>
     /// Refreshes property rows for a DEX document (file name, path, size, version, and class/method/
     /// field/string/type counts).
+    /// <para>刷新 DEX 文档的属性行（文件名、路径、大小、版本、类/方法/字段/字符串/类型计数）。</para>
     /// </summary>
     public void RefreshForDexDocument(DexEditorViewModel doc)
     {
@@ -1027,8 +1039,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新文件管理器文档的属性行（镜像路径、格式、大小、文件/目录数）。</para>
     /// Refreshes property rows for a file-manager document (image path, format, size, file/dir counts).
+    /// <para>刷新文件管理器文档的属性行（镜像路径、格式、大小、文件/目录数）。</para>
     /// </summary>
     public void RefreshForFileManagerDocument(FileManagerEditorViewModel doc)
     {
@@ -1050,8 +1062,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新文件管理器选中条目的属性行（名称、路径、大小、类型）。</para>
     /// Refreshes property rows for the selected file-manager entry (name, path, size, kind).
+    /// <para>刷新文件管理器选中条目的属性行（名称、路径、大小、类型）。</para>
     /// </summary>
     public void RefreshForFileManagerEntry(FileManagerEntryViewModel? entry, FileManagerEditorViewModel doc)
     {
@@ -1078,9 +1090,9 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新对比视图选中条目的属性行（名称、路径、类型、大小）；路径为 <c>null</c> 时清空面板。</para>
     /// Refreshes property rows for the selected compare-view entry (name, path, kind, size); clears the
     /// panel when the path is <c>null</c>.
+    /// <para>刷新对比视图选中条目的属性行（名称、路径、类型、大小）；路径为 <c>null</c> 时清空面板。</para>
     /// </summary>
     public void RefreshForCompareEntry(string? path, bool isDirectory)
     {
@@ -1110,8 +1122,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>刷新指定文件分析结果的属性行。分析为 <c>null</c> 时显示占位。</para>
     /// Refreshes property rows for the specified file analysis results. Shows a placeholder when analysis is <c>null</c>.
+    /// <para>刷新指定文件分析结果的属性行。分析为 <c>null</c> 时显示占位。</para>
     /// </summary>
     public void RefreshForFileAnalysis(FileAnalysisCompletedMessage? analysis)
     {
@@ -1157,8 +1169,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>异步读取固件详细参数并追加到属性行。</para>
     /// Asynchronously reads firmware detailed parameters and appends them to the property rows.
+    /// <para>异步读取固件详细参数并追加到属性行。</para>
     /// </summary>
     private async Task RefreshImageDetailsAsync(ImageEntryViewModel image, long generation)
     {
@@ -1208,92 +1220,92 @@ internal partial class PropertiesViewModel : Tool
 }
 
 /// <summary>
-/// <para>属性面板展示的内容类型。</para>
 /// The type of content displayed in the properties panel.
+/// <para>属性面板展示的内容类型。</para>
 /// </summary>
 public enum PropertiesContentType
 {
     /// <summary>
-    /// <para>无内容。</para>
     /// No content.
+    /// <para>无内容。</para>
     /// </summary>
     None,
 
     /// <summary>
-    /// <para>镜像参数。</para>
     /// Image parameters.
+    /// <para>镜像参数。</para>
     /// </summary>
     Image,
 
     /// <summary>
-    /// <para>文件分析结果。</para>
     /// File analysis results.
+    /// <para>文件分析结果。</para>
     /// </summary>
     FileAnalysis,
 
     /// <summary>
-    /// <para>文本文档信息。</para>
     /// Text document information.
+    /// <para>文本文档信息。</para>
     /// </summary>
     TextDocument,
 
     /// <summary>
-    /// <para>设备树文档信息。</para>
     /// Device-tree document information.
+    /// <para>设备树文档信息。</para>
     /// </summary>
     DtbDocument,
 
     /// <summary>
-    /// <para>DEX 文档信息。</para>
     /// DEX document information.
+    /// <para>DEX 文档信息。</para>
     /// </summary>
     DexDocument,
 
     /// <summary>
-    /// <para>Manifest 文档信息。</para>
     /// Manifest document information.
+    /// <para>Manifest 文档信息。</para>
     /// </summary>
     ManifestDocument,
 
     /// <summary>
-    /// <para>ARSC 文档信息。</para>
     /// ARSC document information.
+    /// <para>ARSC 文档信息。</para>
     /// </summary>
     ArscDocument,
 
     /// <summary>
-    /// <para>APK 文档信息。</para>
     /// APK document information.
+    /// <para>APK 文档信息。</para>
     /// </summary>
     ApkDocument,
 
     /// <summary>
-    /// <para>固件信息文档。</para>
     /// Firmware-info document.
+    /// <para>固件信息文档。</para>
     /// </summary>
     FirmwareDocument,
 
     /// <summary>
-    /// <para>Hex 十六进制文档信息。</para>
     /// Hex document information.
+    /// <para>Hex 十六进制文档信息。</para>
     /// </summary>
     HexDocument,
 
     /// <summary>
-    /// <para>文件管理器文档信息。</para>
     /// File-manager document information.
+    /// <para>文件管理器文档信息。</para>
     /// </summary>
     FileManagerDocument,
 
     /// <summary>
-    /// <para>文件管理器内部条目信息。</para>
     /// File-manager entry information.
+    /// <para>文件管理器内部条目信息。</para>
     /// </summary>
     FileManagerEntry,
 
     /// <summary>
-    /// <para>对比视图选中条目信息。</para>
     /// Compare-view selected entry information.
+    /// <para>对比视图选中条目信息。</para>
     /// </summary>
     CompareEntry,
 

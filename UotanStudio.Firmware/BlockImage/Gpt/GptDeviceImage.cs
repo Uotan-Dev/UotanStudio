@@ -27,14 +27,8 @@ public enum GptCopySelection
 }
 
 /// <summary>
-/// Serializes the protective MBR, headers and entry arrays into the two device ranges a flashing tool
-/// programs to repair or replace a disk's partition table: the primary range starting at LBA 0 and the
-/// backup range holding the secondary array plus the trailing header. Unlike
-/// <see cref="GptTableWriter"/> image output, the result never covers the usable partition area, so a
-/// caller can program both ranges without touching any partition payload.
-/// <para>将保护性 MBR、头部与条目数组序列化为刷写工具修复或替换磁盘分区表时编程的两个设备范围：
-/// 从 LBA 0 开始的主范围，以及携带次级条目数组与末尾头部的备份范围。与 <see cref="GptTableWriter"/>
-/// 的镜像输出不同，本结果绝不覆盖可用分区区域，因此调用方可以编程两个范围而不触碰任何分区数据。</para>
+/// Serializes the protective MBR, headers and entry arrays into the two device ranges a flashing tool programs: the primary range at LBA 0 and the backup range with the secondary array plus the trailing header. The result never covers the usable partition area.
+/// <para>把保护性 MBR、头部与条目数组序列化到刷写工具写入的两个设备区：LBA 0 起的主区，以及含次级数组与尾部头部的备区。结果绝不覆盖可用分区区域。</para>
 /// </summary>
 public static class GptDeviceImage
 {

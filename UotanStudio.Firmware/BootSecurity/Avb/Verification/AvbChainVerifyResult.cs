@@ -19,8 +19,8 @@ public sealed class AvbChainVerifyResult
     /// <para>未提供映射时为 null；仅在完整遍历且所有访问计数器均满足所提供下限后为真。</para></value>
     public bool? RollbackIndexesAreValid { get; init; }
 
-    /// <summary>Identifies chains that cannot be used directly under libavb's top-level-only rule.
-    /// <para>标识无法直接满足 libavb 仅顶层可声明链规则的链。</para></summary>
+    /// <summary>Identifies chains that cannot be used directly under the top-level-only rule.
+    /// <para>标识无法直接满足仅顶层可声明链规则的链。</para></summary>
     /// <value>True once a chained image contains a further chain descriptor. <para>链式镜像包含进一步链描述符时为真。</para></value>
     public bool ContainsNestedChains { get; init; }
 

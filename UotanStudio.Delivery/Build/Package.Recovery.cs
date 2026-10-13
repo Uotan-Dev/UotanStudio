@@ -181,10 +181,10 @@ internal static partial class DeliveryPackageBuilder
         """;
 
     /// <summary>
-    /// <para>生成使用真实 ZIP 成员名与解析后分区路径的原生 Edify 脚本：A/B 分区按
-    /// getprop("ro.boot.slot_suffix") 拼接，显式 _a/_b 分区不加后缀，DAT 分区用 block_image_update 写镜像。</para>
     /// Emits native Edify with actual ZIP member names and resolved partition paths: A/B partitions append
     /// getprop("ro.boot.slot_suffix"), explicit _a/_b partitions take none, and DAT partitions are written via block_image_update.
+    /// <para>生成使用真实 ZIP 成员名与解析后分区路径的原生 Edify 脚本：A/B 分区按
+    /// getprop("ro.boot.slot_suffix") 拼接，显式 _a/_b 分区不加后缀，DAT 分区用 block_image_update 写镜像。</para>
     /// </summary>
     internal static string RecoveryUpdaterScript(DeliveryPlan plan, Func<string, string>? localize = null)
     {

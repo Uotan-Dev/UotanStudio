@@ -40,8 +40,8 @@ internal sealed record F2fsDirectoryEntry
     public int SlotCount => (NameLen + SlotLength - 1) / SlotLength;
 
     /// <summary>
-    /// Tests whether bit index is set in a f2fs bitmap (LSB-first within each byte, matching the kernel's test_bit_le).
-    /// <para>判断位图中第 index 位是否置位（f2fs 位图为每字节 LSB-first， 对齐内核 test_bit_le）。</para>
+    /// Tests whether bit index is set in a f2fs bitmap (LSB-first within each byte).
+    /// <para>判断位图中第 index 位是否置位（f2fs 位图为每字节 LSB-first）。</para>
     /// </summary>
     /// <param name="bitmap">Bitmap bytes to inspect; the addressable width is eight times its length.
     /// <para>待检查的位图字节，可寻址宽度为其字节长度的 8 倍。</para></param>
@@ -99,8 +99,8 @@ internal sealed record F2fsDirectoryEntry
     }
 
     /// <summary>
-    /// Parses a directory data area (flat layout of bitmap + reserved + dentry + filename) using the kernel's slot-skip iteration: each bitmap bit maps to an 8-byte slot; a name may span several slots and the cursor advances by the slot count of name_len after each entry.
-    /// <para>解析一个目录数据区域（位图 + 保留 + dentry + filename 的扁平布局），按内核 f2fs_readdir 的槽位推进算法遍历：每位对应一个 8 字节槽；条目名可跨多个槽，读取后 前进 name_len 对应的槽数。</para>
+    /// Parses a flat F2FS directory data area into entries in slot order.
+    /// <para>把扁平的 F2FS 目录数据区域按槽顺序解析为条目。</para>
     /// </summary>
     /// <param name="area">Flat directory data area; the bitmap occupies its first <paramref name="bitmapSize"/> bytes, then <paramref name="reservedSize"/> bytes, then <paramref name="slotCount"/> 11-byte dentry records and finally <paramref name="slotCount"/> 8-byte name slots.
     /// <para>扁平的目录数据区域：前 <paramref name="bitmapSize"/> 字节是位图，随后 <paramref name="reservedSize"/> 字节保留，接着是 <paramref name="slotCount"/> 条 11 字节 dentry 记录，最后是 <paramref name="slotCount"/> 个 8 字节名称槽。</para></param>
@@ -182,8 +182,8 @@ internal sealed record F2fsDirectoryEntry
         => ParseArea(block, BitmapSize, ReservedSize, SlotsPerBlock, F2fsNode.NodeSize);
 
     /// <summary>
-    /// Builds a dentry block by appending entries like mkfs.f2fs add_dentry (the dentry struct is written at the first slot, the name spans slots, and every slot bit is set).
-    /// <para>构建一个目录块：仿 mkfs.f2fs add_dentry 逐项写入（首槽写 dentry 结构，名称跨槽存储， 每槽置位），生成哈希码与文件类型。</para>
+    /// Builds a dentry block by appending entries in order: the dentry struct is written at the first slot, the name spans slots, and every slot bit is set.
+    /// <para>按顺序逐项写入构建目录块：首槽写 dentry 结构，名称跨槽存储，每槽置位，并生成哈希码与文件类型。</para>
     /// </summary>
     /// <param name="block">Destination buffer with at least <paramref name="blockSize"/> writable bytes; the whole buffer is cleared before the first entry is written and a shorter buffer is rejected.
     /// <para>目标缓冲区，可写字节至少为 <paramref name="blockSize"/>；写入首条 entry 前会清空整个缓冲区，长度不足时被拒绝。</para></param>

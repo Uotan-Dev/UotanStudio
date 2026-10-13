@@ -4,11 +4,11 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 namespace UotanStudio.Comm.Transports.Usb.Backend.HarmonyOS;
 
 /// <summary>
-/// <para>HarmonyOS USB DDK 配置描述符里一个接口的纯数据形状：接口号与类/子类/协议三元组。端点不属于
-/// 拓扑契约的范围，因此这里不携带端点。</para>
 /// The plain data shape of one interface from a HarmonyOS USB DDK configuration descriptor: the interface
 /// number plus the class/subclass/protocol triple. Endpoints are outside the topology contract, so no
 /// endpoint data is carried here.
+/// <para>HarmonyOS USB DDK 配置描述符里一个接口的纯数据形状：接口号与类/子类/协议三元组。端点不属于
+/// 拓扑契约的范围，因此这里不携带端点。</para>
 /// </summary>
 internal sealed record HarmonyTopologyInterface
 {
@@ -30,15 +30,15 @@ internal sealed record HarmonyTopologyInterface
 }
 
 /// <summary>
-/// <para>DDK 对一个设备探测到的纯数据形状：设备 ID、设备描述符的 VID/PID/bcdDevice/bcdUSB/bDeviceClass、
-/// 序列号与接口列表。该 DDK 不暴露端口链，也没有不打开会话就能读出的字符串描述符，因此序列号通常来自
-/// 调用方已有的信息或保持 <see langword="null"/>。字段只承载原始值，补齐与协议分类由
-/// <see cref="UsbTopologyNodes.Create"/> 统一完成。</para>
 /// The plain data shape the DDK probed for one device: device id, the VID/PID/bcdDevice/bcdUSB/
 /// bDeviceClass fields of the device descriptor, the serial and the interface list. The DDK exposes no
 /// port chain and no string descriptor that is readable without opening a session, so the serial
 /// normally comes from caller-supplied information or stays <see langword="null"/>. Fields carry raw
 /// values only; completion and protocol classification are unified by <see cref="UsbTopologyNodes.Create"/>.
+/// <para>DDK 对一个设备探测到的纯数据形状：设备 ID、设备描述符的 VID/PID/bcdDevice/bcdUSB/bDeviceClass、
+/// 序列号与接口列表。该 DDK 不暴露端口链，也没有不打开会话就能读出的字符串描述符，因此序列号通常来自
+/// 调用方已有的信息或保持 <see langword="null"/>。字段只承载原始值，补齐与协议分类由
+/// <see cref="UsbTopologyNodes.Create"/> 统一完成。</para>
 /// </summary>
 internal sealed record HarmonyTopologyDescriptor
 {
@@ -76,13 +76,6 @@ internal sealed record HarmonyTopologyDescriptor
 }
 
 /// <summary>
-/// <para>HarmonyOS USB DDK 的纯塑形层：把设备描述符记录列表转换成扁平拓扑节点。该 DDK 只提供设备 ID
-/// 探测、设备描述符与配置描述符，完全不暴露父子链，因此每个节点都显式保持
-/// <c>ParentInstanceId = null</c>——共享的 <see cref="UsbTopologyTree"/> 会因此把设备与接口节点在该平台
-/// 上全部呈现为根。角色一律显式标注：<c>bDeviceClass == 0x09</c> 的设备为
-/// <see cref="UsbTopologyNodeKind.Hub"/>，其余设备为 <see cref="UsbTopologyNodeKind.Device"/>，接口为
-/// <see cref="UsbTopologyNodeKind.Function"/>；协议分类仍由 <see cref="UsbTopologyNodes.Create"/> 完成。
-/// 重复的设备 ID 折叠到首次出现。本层不引用任何 DDK 类型，可在没有原生库的机器上完整测试。</para>
 /// The pure shaping layer of the HarmonyOS USB DDK: turns descriptor records into flat topology nodes.
 /// The DDK exposes only device-id probing, the device descriptor and the configuration descriptor, and
 /// never a parent chain, so every node keeps <c>ParentInstanceId = null</c> explicitly — the shared
@@ -92,6 +85,13 @@ internal sealed record HarmonyTopologyDescriptor
 /// and interfaces become <see cref="UsbTopologyNodeKind.Function"/>; protocol classification stays with
 /// <see cref="UsbTopologyNodes.Create"/>. Duplicate device ids collapse to the first occurrence. This
 /// layer references no DDK type and is fully testable without the native library.
+/// <para>HarmonyOS USB DDK 的纯塑形层：把设备描述符记录列表转换成扁平拓扑节点。该 DDK 只提供设备 ID
+/// 探测、设备描述符与配置描述符，完全不暴露父子链，因此每个节点都显式保持
+/// <c>ParentInstanceId = null</c>——共享的 <see cref="UsbTopologyTree"/> 会因此把设备与接口节点在该平台
+/// 上全部呈现为根。角色一律显式标注：<c>bDeviceClass == 0x09</c> 的设备为
+/// <see cref="UsbTopologyNodeKind.Hub"/>，其余设备为 <see cref="UsbTopologyNodeKind.Device"/>，接口为
+/// <see cref="UsbTopologyNodeKind.Function"/>；协议分类仍由 <see cref="UsbTopologyNodes.Create"/> 完成。
+/// 重复的设备 ID 折叠到首次出现。本层不引用任何 DDK 类型，可在没有原生库的机器上完整测试。</para>
 /// </summary>
 internal static class HarmonyTopologyGraph
 {

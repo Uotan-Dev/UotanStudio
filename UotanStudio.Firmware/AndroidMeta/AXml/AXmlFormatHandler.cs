@@ -49,8 +49,8 @@ public sealed class AXmlFormatHandler : IFormatHandler
     /// <para>在解析开始前取消；解析本身为同步执行。</para>
     /// </param>
     /// <returns>
-    /// A completed task whose result is <c>Ok</c> with a one-line description (root element, element/attribute/string-pool counts, namespace count when present), or <c>Fail</c> prefixed <c>AXML parse failed:</c> when the file cannot be read or parsed.
-    /// <para>已完成的 Task，其结果为 <c>Ok</c> 且携带单行描述（根元素、元素/属性/字符串池计数，存在命名空间时含其计数），或在文件无法读取或解析时返回以 <c>AXML parse failed:</c> 为前缀的 <c>Fail</c>。</para>
+    /// A task whose result is <c>Ok</c> with a one-line description, or <c>Fail</c> when parsing or reading fails.
+    /// <para>任务结果：成功为 <c>Ok</c> 并携带单行描述，读取或解析失败为 <c>Fail</c>。</para>
     /// </returns>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken"/> was signalled.
@@ -83,20 +83,20 @@ public sealed class AXmlFormatHandler : IFormatHandler
     /// <para>将被解析并以解码后的 XML 文本写出的二进制 XML 源文件。</para>
     /// </param>
     /// <param name="outputDirectory">
-    /// Destination directory, created on demand; the output file is named after the source with a <c>.xml</c> extension in UTF-8.
-    /// <para>目标目录，按需创建；输出文件以源文件同名加 <c>.xml</c> 扩展名保存，编码为 UTF-8。</para>
+    /// Destination directory, created on demand; output reuses the source name with an XML extension.
+    /// <para>目标目录，按需创建；输出沿用源文件名并改用 XML 扩展名。</para>
     /// </param>
     /// <param name="options">
-    /// Extraction options; <see langword="null"/> uses the defaults. Only <c>Overwrite</c> is consulted — an existing output with overwriting disabled fails the operation.
-    /// <para>解包选项；<see langword="null"/> 表示使用默认值。此处仅读取 <c>Overwrite</c>——输出已存在且禁用覆盖时操作失败。</para>
+    /// Extraction options; only <c>Overwrite</c> is consulted and <see langword="null"/> uses its defaults.
+    /// <para>解包选项；仅读取 <c>Overwrite</c>，为 <see langword="null"/> 时使用默认值。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// Cancels before parsing and during the output write; cancellation is rethrown rather than converted to a failed result.
-    /// <para>在解析前与写入输出期间取消；取消异常会重新抛出，而不是转换为失败结果。</para>
+    /// Cancels before parsing and during the output write; cancellation is rethrown.
+    /// <para>在解析前与写入输出期间取消；取消异常会重新抛出。</para>
     /// </param>
     /// <returns>
-    /// A task whose result is <c>Ok</c> naming the written <c>.xml</c> file (listed first in <c>Entries</c>) after unified repack metadata has been written, or <c>Fail</c> prefixed <c>AXML unpack failed:</c> on read, parse or output conflicts; the shared wrapper turns an unusable pre-existing repack metadata file into a failure before any extraction runs.
-    /// <para>任务结果：成功写入统一重打包元数据后为 <c>Ok</c> 并指明写出的 <c>.xml</c> 文件（列在 <c>Entries</c> 首位）；读取、解析或输出冲突时返回以 <c>AXML unpack failed:</c> 为前缀的 <c>Fail</c>；共享包装器会在解包运行前把不可用的既有重打包元数据文件直接判为失败。</para>
+    /// A task naming the written XML file, or reporting a failure prefixed <c>AXML unpack failed:</c>.
+    /// <para>任务指明写出的 XML 文件，或以 <c>AXML unpack failed:</c> 前缀报告失败。</para>
     /// </returns>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken"/> was signalled; extraction errors are reported as failed results instead.
@@ -148,20 +148,20 @@ public sealed class AXmlFormatHandler : IFormatHandler
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
     /// <param name="inputPath">
-    /// Path of the binary XML source; it is parsed in full before rebuilding, so plain-text XML is not accepted and yields a failed result.
-    /// <para>二进制 XML 源路径；重建前会完整解析，因此不接受纯文本 XML，只会得到失败结果。</para>
+    /// Path of the binary XML source; plain-text XML is rejected with a failed result.
+    /// <para>二进制 XML 源路径；纯文本 XML 会以失败结果被拒绝。</para>
     /// </param>
     /// <param name="outputPath">
-    /// Destination file; its parent directory is created on demand and the rebuilt bytes are committed atomically via a temporary file that replaces any existing output only after the full write.
-    /// <para>目标文件；按需创建其父目录，重建字节通过临时文件原子提交，仅在完整写入完成后替换已有输出。</para>
+    /// Destination file, committed atomically through a temporary file after a full write.
+    /// <para>目标文件；完整写入后经临时文件原子提交。</para>
     /// </param>
     /// <param name="cancellationToken">
     /// Cancels before the rebuild starts; writing itself is synchronous.
     /// <para>在重建开始前取消；写入本身为同步执行。</para>
     /// </param>
     /// <returns>
-    /// A task whose result is <c>Ok</c> naming the written file, or <c>Fail</c> prefixed <c>AXML rebuild failed:</c> when the source cannot be parsed, the rebuilt model needs a string absent from the pool, or the output cannot be written.
-    /// <para>任务结果为 <c>Ok</c> 并指明写出的文件；当源无法解析、重建模型引用了池中缺失的字符串或输出无法写入时，返回以 <c>AXML rebuild failed:</c> 为前缀的 <c>Fail</c>。</para>
+    /// A task naming the written file, or reporting a failure prefixed <c>AXML rebuild failed:</c>.
+    /// <para>任务指明写出的文件，或以 <c>AXML rebuild failed:</c> 前缀报告失败。</para>
     /// </returns>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken"/> was signalled.

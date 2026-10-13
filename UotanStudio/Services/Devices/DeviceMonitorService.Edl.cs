@@ -8,7 +8,13 @@ public sealed partial class DeviceMonitorService
 {
     private readonly EdlConnectionCache _edlConnections;
 
-    /// <summary>Observes the EDL protocol while preserving the handshake for the next device operation.</summary>
+    /// <summary>
+    /// Observes the EDL protocol while preserving the handshake for the next device operation.
+    /// <para>观测 EDL 协议状态，同时为后续设备操作保留握手信息。</para>
+    /// </summary>
+    /// <param name="device">The EDL endpoint to probe. <para>要探测的 EDL 端点。</para></param>
+    /// <param name="cancellationToken">Token observing the probe. <para>观测探测过程的取消令牌。</para></param>
+    /// <returns>The observed protocol state. <para>观测到的协议状态。</para></returns>
     public Task<EdlProtocolState> ProbeEdlProtocolAsync(DetectedDevice device,
         CancellationToken cancellationToken = default)
     {
@@ -17,9 +23,9 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>返回该 EDL 端点最近一次探测附加采集到的只读详情快照；探测尚未运行或采集失败时为 null。</para>
     /// Returns the read-only detail snapshot collected alongside the EDL endpoint's latest probe;
     /// null when the probe has not run yet or collection failed.
+    /// <para>返回该 EDL 端点最近一次探测附加采集到的只读详情快照；探测尚未运行或采集失败时为 null。</para>
     /// </summary>
     /// <param name="device">The EDL endpoint to query. <para>要查询的 EDL 端点。</para></param>
     /// <returns>The latest detail snapshot, or <see langword="null"/>.
@@ -27,14 +33,9 @@ public sealed partial class DeviceMonitorService
     public EdlDetailsSnapshot? GetEdlDetails(DetectedDevice device) => _edlConnections.GetDetails(device.Key);
 
     /// <summary>
-    /// <para>惰性接线 EDL 租约代际判活探针：parked 租约只有在携带类型化 EdlSession、会话连接
-    /// 仍存活，且其传输代际与控制器当前代际不矛盾时才可复用；代际不同即作废重开。探针缺失
-    /// 身份信息或从未观测到代际时保留租约，交由会话自身的故障路径退休。</para>
-    /// Lazily wires the EDL lease-generation liveness probe: a parked lease is reusable only when it
-    /// carries a typed <c>EdlSession</c> whose connection is live and its transport generation does
-    /// not contradict the controller's current generation; a different generation retires the lease
-    /// and reopens. When identity evidence or an observed generation is absent the lease is kept and
-    /// the session's own fault paths retire it.
+    /// Installs the lease-generation liveness probe on first use, so a stored lease is reused only
+    /// while its transport generation still matches the current one.
+    /// <para>首次使用时安装租约代际判活探针，使已存放的租约仅在其传输代际与当前代际一致时复用。</para>
     /// </summary>
     private void EnsureEdlLivenessProbe() => _edlConnections.LeaseCurrentProbe ??= IsEdlLeaseGenerationCurrent;
 

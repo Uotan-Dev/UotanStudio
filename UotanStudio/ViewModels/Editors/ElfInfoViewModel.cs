@@ -10,50 +10,52 @@ using UotanStudio.Views.Controls;
 
 namespace UotanStudio.ViewModels.Editors;
 
-/// <summary>Read-only ELF document, with cancellable metadata loading and localized presentation.</summary>
+/// <summary>Read-only ELF document, with cancellable metadata loading and localized presentation.<para>只读 ELF 文档，支持可取消的元数据加载与本地化呈现。</para></summary>
 public partial class ElfInfoViewModel : Document
 {
     private CancellationTokenSource? _loadCancellation;
     private ElfInfo? _info;
     private bool _closed;
 
-    /// <summary>Creates a document that refreshes its labels when the application language changes.</summary>
+    /// <summary>Creates a document that refreshes its labels when the application language changes.<para>创建应用语言变更时刷新标签的文档。</para></summary>
     public ElfInfoViewModel()
     {
         LanguageService.Instance.LanguageChanged += OnLanguageChanged;
     }
 
-    /// <summary>Source path used by opening, navigation and session persistence.</summary>
+    /// <summary>Source path of the opened document.<para>已打开文档的源文件路径。</para></summary>
     [ObservableProperty] private string? _filePath;
 
-    /// <summary>Whether metadata is loading.</summary>
+    /// <summary>Whether metadata is loading.<para>元数据是否正在加载。</para></summary>
     [ObservableProperty] private bool _isBusy;
 
-    /// <summary>Whether validated metadata is available.</summary>
+    /// <summary>Whether validated metadata is available.<para>是否已有经过校验的元数据。</para></summary>
     [ObservableProperty] private bool _isRecognized;
 
-    /// <summary>Localized load failure; detailed diagnostics are written to the application log.</summary>
+    /// <summary>Localized load failure message.<para>本地化的加载失败信息。</para></summary>
     [ObservableProperty] private string _errorMessage = string.Empty;
 
-    /// <summary>Localized file-header fields.</summary>
+    /// <summary>Localized file-header fields.<para>本地化的文件头字段。</para></summary>
     [ObservableProperty] private IReadOnlyList<ElfFieldRow> _fields = [];
 
-    /// <summary>Program-header rows, formatted without loading segment contents.</summary>
+    /// <summary>Program-header rows, formatted without loading segment contents.<para>程序头行，格式化时不加载段内容。</para></summary>
     [ObservableProperty] private IReadOnlyList<ElfSegmentRow> _segments = [];
 
-    /// <summary>Section-header rows, including named NOBITS sections.</summary>
+    /// <summary>Section-header rows, including named NOBITS sections.<para>节头行，包含具名 NOBITS 节。</para></summary>
     [ObservableProperty] private IReadOnlyList<ElfSectionRow> _sections = [];
 
-    /// <summary>Selected program header, synchronized with the properties pane.</summary>
+    /// <summary>Selected program-header row.<para>当前选中的程序头行。</para></summary>
     [ObservableProperty] private ElfSegmentRow? _selectedSegment;
 
-    /// <summary>Selected section header, synchronized with the properties pane.</summary>
+    /// <summary>Selected section-header row.<para>当前选中的节头行。</para></summary>
     [ObservableProperty] private ElfSectionRow? _selectedSection;
 
-    /// <summary>Header, segment or section page currently visible.</summary>
+    /// <summary>Header, segment or section page currently visible.<para>当前显示的文件头、段或节页面。</para></summary>
     [ObservableProperty] private int _selectedPageIndex;
 
-    /// <summary>Loads only ELF metadata; replaced or closed loads cannot publish stale results.</summary>
+    /// <summary>Loads only ELF metadata; replaced or closed loads cannot publish stale results.<para>仅加载 ELF 元数据；被替换或已关闭的加载不会发布过期结果。</para></summary>
+    /// <param name="path">Path of the ELF file to read.<para>要读取的 ELF 文件路径。</para></param>
+    /// <param name="cancellationToken">Token cancelling the pending load.<para>用于取消待完成加载的令牌。</para></param>
     public async Task LoadAsync(string path, CancellationToken cancellationToken = default)
     {
         if (_closed)
@@ -118,7 +120,7 @@ public partial class ElfInfoViewModel : Document
         }
     }
 
-    /// <summary>Cancels pending reads and releases the language subscription on document close.</summary>
+    /// <summary>Cancels pending reads and releases the language subscription on document close.<para>在文档关闭时取消待完成的读取并释放语言订阅。</para></summary>
     public void Cleanup()
     {
         _closed = true;
@@ -258,13 +260,35 @@ public partial class ElfInfoViewModel : Document
         $"{((flags & 4) != 0 ? 'R' : '-')}{((flags & 2) != 0 ? 'W' : '-')}{((flags & 1) != 0 ? 'X' : '-')} ({Hex(flags)})";
 }
 
-/// <summary>A localized header field and its selectable value.</summary>
+/// <summary>A localized header field and its selectable value.<para>本地化的头部字段及其可选取的值。</para></summary>
+/// <param name="Name">Localized field label.<para>本地化的字段名称。</para></param>
+/// <param name="Value">Selectable field value.<para>可选取的字段值。</para></param>
 public sealed record ElfFieldRow(string Name, string Value);
 
-/// <summary>Formatted segment metadata for the virtualized table.</summary>
+/// <summary>Formatted segment metadata for the virtualized table.<para>供虚拟化表格展示的格式化段元数据。</para></summary>
+/// <param name="Index">Zero-based segment index.<para>从零开始的段序号。</para></param>
+/// <param name="Type">Formatted segment type name.<para>格式化后的段类型名称。</para></param>
+/// <param name="Flags">Formatted segment flags.<para>格式化后的段标志。</para></param>
+/// <param name="Offset">Formatted file offset.<para>格式化后的文件偏移。</para></param>
+/// <param name="VirtualAddress">Formatted virtual address.<para>格式化后的虚拟地址。</para></param>
+/// <param name="PhysicalAddress">Formatted physical address.<para>格式化后的物理地址。</para></param>
+/// <param name="FileSize">Formatted file size of the segment.<para>格式化后的段文件大小。</para></param>
+/// <param name="MemorySize">Formatted memory size of the segment.<para>格式化后的段内存大小。</para></param>
+/// <param name="Alignment">Formatted segment alignment.<para>格式化后的段对齐值。</para></param>
 public sealed record ElfSegmentRow(int Index, string Type, string Flags, string Offset, string VirtualAddress,
     string PhysicalAddress, string FileSize, string MemorySize, string Alignment);
 
-/// <summary>Formatted section metadata for the virtualized table.</summary>
+/// <summary>Formatted section metadata for the virtualized table.<para>供虚拟化表格展示的格式化节元数据。</para></summary>
+/// <param name="Index">Zero-based section index.<para>从零开始的节序号。</para></param>
+/// <param name="Name">Section name from the string table.<para>来自字符串表的节名称。</para></param>
+/// <param name="Type">Formatted section type name.<para>格式化后的节类型名称。</para></param>
+/// <param name="Flags">Formatted section flags.<para>格式化后的节标志。</para></param>
+/// <param name="Address">Formatted section address.<para>格式化后的节地址。</para></param>
+/// <param name="Offset">Formatted file offset.<para>格式化后的文件偏移。</para></param>
+/// <param name="Size">Formatted section size.<para>格式化后的节大小。</para></param>
+/// <param name="Link">Raw section link field.<para>原始的节关联字段。</para></param>
+/// <param name="Info">Raw section info field.<para>原始的节信息字段。</para></param>
+/// <param name="Alignment">Formatted section alignment.<para>格式化后的节对齐值。</para></param>
+/// <param name="EntrySize">Formatted section entry size.<para>格式化后的节条目大小。</para></param>
 public sealed record ElfSectionRow(int Index, string Name, string Type, string Flags, string Address, string Offset,
     string Size, uint Link, uint Info, string Alignment, string EntrySize);

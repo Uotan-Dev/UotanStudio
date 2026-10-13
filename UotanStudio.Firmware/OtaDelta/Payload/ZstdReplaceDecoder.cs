@@ -25,13 +25,13 @@ internal static class ZstdReplaceDecoder
     /// </param>
     /// <param name="cancellationToken">Cancels between buffer refills. <para>在缓冲区重填之间响应取消。</para></param>
     /// <remarks>
-    /// AOSP gates external dictionaries with the payload properties <c>max_zstd_dict_raw_size</c> (byte ceiling
+    /// External dictionaries are gated by the payload properties <c>max_zstd_dict_raw_size</c> (byte ceiling
     /// for the dictionary a frame may use) and <c>max_zstd_dict_trust</c>; those keys live in
     /// <c>payload_properties.txt</c> and are parsed into <see cref="Payload.Models.PayloadProperties"/>.
     /// <see cref="PayloadExtractor"/> resolves a per-partition dictionary, rejects one above its configured ceiling
     /// and threads it into REPLACE_ZSTD decoding; callers without a manifest ceiling keep the 64 MiB bound here.
-    /// <para>AOSP 通过载荷属性 <c>max_zstd_dict_raw_size</c>（一帧可用字典的字节上限）与 <c>max_zstd_dict_trust</c>
-    /// 管控外部字典；这些键位于 <c>payload_properties.txt</c>，由 <see cref="Payload.Models.PayloadProperties"/> 解析。
+    /// <para>外部字典由载荷属性 <c>max_zstd_dict_raw_size</c>（一帧可用字典的字节上限）与 <c>max_zstd_dict_trust</c>
+    /// 管控；这些键位于 <c>payload_properties.txt</c>，由 <see cref="Payload.Models.PayloadProperties"/> 解析。
     /// <see cref="PayloadExtractor"/> 按分区解析字典、拒绝超出所配置上限的字典，并把字典贯穿到 REPLACE_ZSTD 解码；
     /// 未声明清单上限的调用方沿用本解码器的 64 MiB 上界。</para>
     /// </remarks>

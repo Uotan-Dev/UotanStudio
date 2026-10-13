@@ -32,30 +32,31 @@ public sealed class FlashPartitionOptions
 
     /// <summary>
     /// Gets the policy for a caller that already resolved the A/B slot, queried <c>is-logical</c> and
-    /// resized a logical partition (as the host flash path does before transferring), so re-asking the
-    /// device those two questions would only add a round trip. The download-limit check stays on — the
-    /// negotiated limit is cached in the session — and so does the capacity check, which compares the
-    /// payload against <c>partition-size</c>, a query that caller never made for a physical partition.
-    /// <para>获取供“已自行完成 A/B 槽位解析、查询过 <c>is-logical</c> 并调整过逻辑分区大小”（宿主刷写路径
-    /// 在传输前正是如此）的调用方使用的策略，因此再问设备同样两个问题只会多一次往返。下载上限检查保持
-    /// 开启——协商上限已在会话内缓存；容量检查也保持开启，它把负载与 <c>partition-size</c> 对照，而这是
-    /// 该调用方对物理分区从未做过的查询。</para>
+    /// resized a logical partition before transferring.
+    /// <para>获取供已自行完成 A/B 槽位解析、查询过 <c>is-logical</c> 并调整过逻辑分区大小的调用方使用的策略。</para>
+    /// Re-asking the device those two questions would only add a round trip. The download-limit check stays
+    /// on — the negotiated limit is cached in the session — and so does the capacity check, which compares
+    /// the payload against <c>partition-size</c>, a query that caller never made for a physical partition.
+    /// <para>再问设备同样两个问题只会多一次往返。下载上限检查保持开启——协商上限已在会话内缓存；
+    /// 容量检查也保持开启，它把负载与 <c>partition-size</c> 对照，而这是该调用方对物理分区从未做过的
+    /// 查询。</para>
     /// </summary>
     /// <value>A shared instance with <see cref="VerifyLogicalTarget"/> cleared and the other checks set.
     /// <para><see cref="VerifyLogicalTarget"/> 未置位、其余检查均置位的共享实例。</para></value>
     public static FlashPartitionOptions PreparedTarget { get; } = new() { VerifyLogicalTarget = false };
 
     /// <summary>
-    /// Gets the policy for one sparse chunk of an already-prepared target. The mode check is off for the
-    /// same reason as <see cref="PreparedTarget"/>, and the capacity check is off too: what is transferred
-    /// here is a sparse file whose length says nothing about the expanded bytes it will occupy, so
-    /// comparing it against <c>partition-size</c> would repeat the query per chunk without any evidence to
-    /// act on. The download-limit check stays on because the negotiated limit is cached in the session and
-    /// re-checking it costs nothing.
-    /// <para>获取“已准备好的目标”的单个稀疏分片所使用的策略。模式检查关闭的理由与
-    /// <see cref="PreparedTarget"/> 相同；容量检查同样关闭：此处传输的是稀疏文件，其长度完全不能说明它将
-    /// 占用的展开字节数，因此拿它与 <c>partition-size</c> 对照只会在每个分片上重复查询却得不到任何可用
-    /// 证据。下载上限检查保持开启，因为协商上限已在会话内缓存，重复检查不产生开销。</para>
+    /// Gets the policy for one sparse chunk of an already-prepared target.
+    /// <para>获取“已准备好的目标”的单个稀疏分片所使用的策略。</para>
+    /// The mode check is off for the same reason as <see cref="PreparedTarget"/>, and the capacity check is
+    /// off too: what is transferred here is a sparse file whose length says nothing about the expanded bytes
+    /// it will occupy, so comparing it against <c>partition-size</c> would repeat the query per chunk without
+    /// any evidence to act on. The download-limit check stays on because the negotiated limit is cached in the
+    /// session and re-checking it costs nothing.
+    /// <para>模式检查关闭的理由与 <see cref="PreparedTarget"/> 相同；容量检查同样关闭：此处传输的是稀疏
+    /// 文件，其长度完全不能说明它将占用的展开字节数，因此拿它与 <c>partition-size</c> 对照只会在每个分片
+    /// 上重复查询却得不到任何可用证据。下载上限检查保持开启，因为协商上限已在会话内缓存，重复检查不产生
+    /// 开销。</para>
     /// </summary>
     /// <value>A shared instance with only <see cref="VerifyDownloadLimit"/> set.
     /// <para>只有 <see cref="VerifyDownloadLimit"/> 置位的共享实例。</para></value>
@@ -88,29 +89,16 @@ public sealed class FlashPartitionOptions
     public bool VerifyDownloadLimit { get; init; } = true;
 
     /// <summary>
-    /// Gets or sets whether a logical target is checked against the current fastboot mode. Logical
-    /// partitions live inside super, which the bootloader cannot address, so flashing one outside
-    /// fastbootd always fails — and it fails only after the whole image has been transferred. The
-    /// <c>is-logical</c> query is issued only when <c>is-userspace</c> already answered no, so a
-    /// fastbootd session pays one round trip for this check.
-    /// <para>获取或设置是否把逻辑分区目标与当前 fastboot 模式对照。逻辑分区位于 super 内部，bootloader
-    /// 无法寻址，因此在 fastbootd 之外刷写逻辑分区必然失败——而且要等整镜像传完才失败。<c>is-logical</c>
-    /// 查询只在 <c>is-userspace</c> 已应答 no 时才发出，因此 fastbootd 会话为此检查只付一次往返。</para>
+    /// Gets or sets whether a logical target is checked against the current fastboot mode. Logical partitions live inside super and the bootloader cannot address them, so flashing one outside fastbootd fails only after the whole image has been transferred.
+    /// <para>获取或设置是否把逻辑目标与当前 fastboot 模式比对。逻辑分区位于 super 内部、bootloader 无法寻址，因此在 fastbootd 之外刷写会在整份镜像传输完毕后才失败。</para>
     /// </summary>
     /// <value><see langword="true"/> to reject a logical target while the device is not in userspace fastboot; <see langword="false"/> to skip the mode query.
     /// <para>为 <see langword="true"/> 时，设备不处于用户空间 fastboot 就拒绝逻辑分区目标；为 <see langword="false"/> 时跳过模式查询。</para></value>
     public bool VerifyLogicalTarget { get; init; } = true;
 
     /// <summary>
-    /// Gets or sets whether the image length is checked against the reported <c>partition-size</c>.
-    /// Only an affirmatively reported size counts as evidence: a FAIL, a timeout, an empty answer or an
-    /// unparsable one means "unknown" and never rejects, because plenty of bootloaders omit
-    /// <c>partition-size</c> for partitions that do exist. The comparison uses the transferred byte
-    /// count, so a sparse image is measured by its file length rather than its expanded size.
-    /// <para>获取或设置是否把镜像长度与设备上报的 <c>partition-size</c> 对照。只有设备明确上报的尺寸才算
-    /// 证据：FAIL、超时、空应答或无法解析的应答一律视为“未知”且绝不拒绝，因为很多 bootloader 对确实存在
-    /// 的分区也不上报 <c>partition-size</c>。比较使用实际传输的字节数，因此稀疏镜像按文件长度而非展开
-    /// 尺寸计量。</para>
+    /// Gets or sets whether the image length is checked against the reported partition size. Only an affirmatively reported size counts as evidence; a timeout, an empty answer or an unparsable one means unknown and never rejects.
+    /// <para>获取或设置是否把镜像长度与上报的分区大小比对。只有明确上报的大小才算证据；超时、空应答或无法解析均视为未知，不会拒绝。</para>
     /// </summary>
     /// <value><see langword="true"/> to reject an image larger than the reported partition; <see langword="false"/> to skip the size query.
     /// <para>为 <see langword="true"/> 时拒绝大于所上报分区的镜像；为 <see langword="false"/> 时跳过尺寸查询。</para></value>

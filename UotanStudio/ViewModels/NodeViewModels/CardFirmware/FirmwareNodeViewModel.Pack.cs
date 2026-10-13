@@ -9,8 +9,8 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 public partial class FirmwareNodeViewModel
 {
     /// <summary>
-    /// <para>创建默认的固件打包节点。</para>
     /// Creates a default firmware pack node.
+    /// <para>创建默认的固件打包节点。</para>
     /// </summary>
     public static FirmwareNodeViewModel CreatePackNode()
     {

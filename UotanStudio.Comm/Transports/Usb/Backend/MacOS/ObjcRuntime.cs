@@ -76,7 +76,7 @@ internal static partial class ObjcRuntime
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial void MsgSendVoid(IntPtr receiver, IntPtr sel);
 
-    /// <summary>-(id / void *)method — object or raw pointer getters.</summary>
+    /// <summary>-(id / void *)method — object or raw pointer getters. <para>-(id / void *) 方法——对象或原始指针的取值。</para></summary>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]
     public static partial IntPtr MsgSendObject(IntPtr receiver, IntPtr sel);
 

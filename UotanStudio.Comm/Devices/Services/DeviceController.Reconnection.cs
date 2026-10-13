@@ -218,16 +218,16 @@ public sealed partial class DeviceController
         path is { Length: > 0 and <= 1024 } && path.All(value => !char.IsWhiteSpace(value) && !char.IsControl(value));
 
     /// <summary>
-    /// <para>判定是否仍有活动租约阻挡以该端点为旧端的 USB 重连等待：同一端点身份仍被占用即阻挡；
-    /// 否则按 <see cref="PhysicalDeviceIdentity.CorrelatesWith"/> 检查每个活动租约的端点，容器 ID 优先、
-    /// 物理端口链次之，防止同一物理设备在另一后端或另一端点身份下的租约形成双句柄；
-    /// 关联不确定时回退到 OS 设备路径相等（路径会被回收，仅作弱证据兜底）。</para>
     /// Decides whether an open lease still blocks a USB reconnection wait for this previous endpoint:
     /// the same endpoint identity being reserved blocks; otherwise every open lease's endpoint is
     /// correlated through <see cref="PhysicalDeviceIdentity.CorrelatesWith"/> (container id first,
     /// physical-port path second) so a lease on another backend or another endpoint id of the same
     /// physical device cannot leave two handles alive; when correlation is indeterminate the check
     /// falls back to equal OS device paths, weak evidence because paths are recycled.
+    /// <para>判定是否仍有活动租约阻挡以该端点为旧端的 USB 重连等待：同一端点身份仍被占用即阻挡；
+    /// 否则按 <see cref="PhysicalDeviceIdentity.CorrelatesWith"/> 检查每个活动租约的端点，容器 ID 优先、
+    /// 物理端口链次之，防止同一物理设备在另一后端或另一端点身份下的租约形成双句柄；
+    /// 关联不确定时回退到 OS 设备路径相等（路径会被回收，仅作弱证据兜底）。</para>
     /// </summary>
     private bool HasBlockingLeaseForLocked(DeviceEndpoint previous)
     {

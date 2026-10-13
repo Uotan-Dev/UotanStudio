@@ -3,11 +3,9 @@ using UotanStudio.Firmware.Core.Repacking;
 namespace UotanStudio.Services.Firmware;
 
 /// <summary>
-/// Shared planning logic for the new-project my-partition merge option: derives partition names from
-/// selected entries, decides whether the option can be offered, and locates the extracted system and
-/// my_* trees plus their image files inside a sub-project layout.
-/// <para>新建项目 my 分区合并选项的共用规划逻辑：从勾选条目推导分区名、判断选项是否可提供，
-/// 并在子项目布局中定位解包出的 system 与 my_* 树及其镜像文件。</para>
+/// Planning logic for a new project's my-partition merge: partition-name derivation, merge applicability
+/// and discovery of the extracted system and my_* trees.
+/// <para>新建项目 my 分区合并的规划逻辑：分区名推导、合并适用性判断，以及解包出的 system 与 my_* 树的发现。</para>
 /// </summary>
 internal static class MyPartitionMergePlanner
 {
@@ -15,16 +13,12 @@ internal static class MyPartitionMergePlanner
     private const string MyPartitionPrefix = "my_";
 
     /// <summary>
-    /// Derives a partition name from a new-project entry name. Container partition entries
-    /// (super logical partitions and payload partitions) use the name verbatim; file entries strip the
-    /// archive path and extension. Names with characters outside <c>[A-Za-z0-9_-]</c> yield <see langword="null"/>.
-    /// <para>从新建项目条目名推导分区名。容器分区条目（super 逻辑分区与 payload 分区）直接使用名称；
-    /// 文件条目去除归档路径与扩展名。含 <c>[A-Za-z0-9_-]</c> 之外字符的名称返回 <see langword="null"/>。</para>
+    /// Derives a partition name from a new-project entry name, using container partition entries verbatim
+    /// and stripping the archive path and extension from file entries.
+    /// <para>从新建项目条目名推导分区名：容器分区条目直接沿用，文件条目去除归档路径与扩展名。</para>
     /// </summary>
-    /// <param name="entryName"><para>条目标识：分区名、ZIP 内部路径或文件名。</para>Entry identity: partition name, ZIP inner path, or file name.</param>
-    /// <param name="containerPartitionEntry">
-    /// <para><see langword="true"/> 表示该条目本身是容器分区名。</para>
-    /// <see langword="true"/> when the entry itself is a container partition name.</param>
+    /// <param name="entryName">Entry identity: partition name, ZIP inner path, or file name. <para>条目标识：分区名、ZIP 内部路径或文件名。</para></param>
+    /// <param name="containerPartitionEntry"><see langword="true"/> when the entry itself is a container partition name. <para>该条目本身是容器分区名时为 <see langword="true"/>。</para></param>
     /// <returns>
     /// The derived partition name, or <see langword="null"/> when the name is unusable.
     /// <para>推导出的分区名；名称不可用时返回 <see langword="null"/>。</para>
@@ -45,19 +39,14 @@ internal static class MyPartitionMergePlanner
     }
 
     /// <summary>
-    /// Indicates whether the merge option can be offered: both unpack options are checked and the selected
-    /// partition names pair one <c>system</c> partition with at least one <c>my_</c> prefixed partition of the
-    /// same slot (case-insensitive). A slot suffix is a partition-table artifact, so <c>system_a</c> names the
-    /// system partition and merges only with <c>my_*_a</c> or an unsuffixed <c>my_*</c>; a name carrying a
-    /// suffix the system partition does not have stays out of the merge.
-    /// <para>指示是否可以提供合并选项：两个解包选项都勾选，且勾选的分区名能把 <c>system</c> 分区与至少一个
-    /// 同槽位的 <c>my_</c> 前缀分配对（不区分大小写）。槽位后缀只是分区表的产物，因此 <c>system_a</c> 仍是
-    /// system 分区，且只与 <c>my_*_a</c> 或无后缀的 <c>my_*</c> 配对合并；带其它槽位后缀的名称不参与合并。</para>
+    /// Decides whether the my-partition merge applies: both unpack options are enabled and the selected
+    /// partition names pair a <c>system</c> partition with a same-slot <c>my_</c> partition.
+    /// <para>判断 my 分区合并是否适用：两个解包选项都已启用，且勾选的分区名能把 <c>system</c> 分区与同槽位的 <c>my_</c> 分区配对。</para>
     /// </summary>
-    /// <param name="unpackImages"><para>是否解包为镜像。</para>Whether images are unpacked.</param>
-    /// <param name="unpackFully"><para>是否完全解包为目录树。</para>Whether images are unpacked into trees.</param>
-    /// <param name="partitionNames"><para>勾选条目推导出的分区名。</para>Partition names derived from selected entries.</param>
-    /// <returns><see langword="true"/> when the option may be shown. <para>可以显示选项时为 <see langword="true"/>。</para></returns>
+    /// <param name="unpackImages">Whether images are unpacked. <para>是否解包为镜像。</para></param>
+    /// <param name="unpackFully">Whether images are unpacked into trees. <para>是否完全解包为目录树。</para></param>
+    /// <param name="partitionNames">Partition names derived from selected entries. <para>勾选条目推导出的分区名。</para></param>
+    /// <returns><see langword="true"/> when the merge applies. <para>合并适用时为 <see langword="true"/>。</para></returns>
     public static bool ShouldOffer(bool unpackImages, bool unpackFully, IEnumerable<string> partitionNames)
     {
         if (!unpackImages || !unpackFully) return false;
@@ -75,18 +64,11 @@ internal static class MyPartitionMergePlanner
     }
 
     /// <summary>
-    /// Discovers the extracted system tree and the extracted <c>my_*</c> trees among the direct child
-    /// directories of a sub-project root. The trees live beside <c>images/</c> because files under
-    /// <c>images/</c> unpack to the sub-project root. A slot-suffixed <c>system_a</c> directory is the system
-    /// tree, and only <c>my_*</c> trees sharing that slot — or carrying no slot at all — are returned; trees of
-    /// another slot belong to another OS instance and stay untouched. With several system trees unpacked,
-    /// the one sorting first by name is the merge target.
-    /// <para>在子项目根的直接子目录中发现解包出的 system 树与 <c>my_*</c> 树。由于 <c>images/</c> 下的
-    /// 文件解包到子项目根目录，这些树与 <c>images/</c> 同级。带槽位后缀的 <c>system_a</c> 目录就是 system 树，
-    /// 返回的 <c>my_*</c> 树只限同槽位或本身不带槽位后缀者；其它槽位的树属于另一套系统实例，保持原样。
-    /// 解包出多个 system 树时，按名称排序最先者作为合并目标。</para>
+    /// Discovers the extracted system tree and the same-slot <c>my_*</c> trees among the direct child
+    /// directories of a sub-project root, taking the first system tree by name when several exist.
+    /// <para>在子项目根的直接子目录中发现解包出的 system 树与同槽位的 <c>my_*</c> 树；存在多个 system 树时按名称取最先者。</para>
     /// </summary>
-    /// <param name="projectRoot"><para>子项目根目录。</para>Sub-project root directory.</param>
+    /// <param name="projectRoot">Sub-project root directory. <para>子项目根目录。</para></param>
     /// <returns>
     /// The system tree path (<see langword="null"/> when absent) and the my-partition trees sorted by name.
     /// <para>system 树路径（缺失时为 <see langword="null"/>）与按名称排序的 my 分区树列表。</para>
@@ -117,18 +99,22 @@ internal static class MyPartitionMergePlanner
     }
 
     /// <summary>
-    /// Decides whether a my-partition slot merges into a system slot; an absent slot on either side matches
-    /// every slot, because a single-slot layout and a shared my_* partition both carry no suffix.
-    /// <para>判定 my 分区槽位能否合并进 system 槽位；任一侧没有槽位时与所有槽位匹配，
-    /// 因为单槽布局与共用的 <c>my_*</c> 分区都不带后缀。</para>
+    /// Decides whether a my-partition slot merges into a system slot, matching every slot when either side
+    /// carries none.
+    /// <para>判定 my 分区槽位能否合并进 system 槽位；任一侧没有槽位时与所有槽位匹配。</para>
     /// </summary>
+    /// <param name="mySlot">Slot letter of the my-partition name, null when unsuffixed. <para>my 分区名的槽位字母，无后缀时为 null。</para></param>
+    /// <param name="systemSlot">Slot letter of the system name, null when unsuffixed. <para>system 名的槽位字母，无后缀时为 null。</para></param>
+    /// <returns><see langword="true"/> when the two slots may merge. <para>两个槽位可以合并时为 <see langword="true"/>。</para></returns>
     private static bool SlotsMerge(char? mySlot, char? systemSlot)
         => mySlot is null || systemSlot is null || mySlot == systemSlot;
 
     /// <summary>
-    /// Reads the trailing slot letter, or <see langword="null"/> when the name carries no slot suffix.
-    /// <para>读取结尾的槽位字母；名称没有槽位后缀时返回 <see langword="null"/>。</para>
+    /// Reads the trailing slot letter of a partition name.
+    /// <para>读取分区名结尾的槽位字母。</para>
     /// </summary>
+    /// <param name="name">The partition name to inspect. <para>待检查的分区名。</para></param>
+    /// <returns>The lowercased slot letter, or <see langword="null"/> when the name has no suffix. <para>小写槽位字母，名称无后缀时为 <see langword="null"/>。</para></returns>
     private static char? SlotSuffix(string name)
     {
         var stripped = RepackMetadata.StripSlotSuffix(name);
@@ -136,13 +122,12 @@ internal static class MyPartitionMergePlanner
     }
 
     /// <summary>
-    /// Lists the image files of one partition inside <c>images/</c>: every file whose name without
-    /// extension equals the partition name, e.g. <c>my_product.img</c> or <c>my_product.br</c>.
-    /// <para>列出 <c>images/</c> 内属于某个分区的镜像文件：去扩展名后与分区名相等的每个文件，
-    /// 例如 <c>my_product.img</c> 或 <c>my_product.br</c>。</para>
+    /// Lists the image files of one partition inside <c>images/</c>, matching every file whose name without
+    /// extension equals the partition name.
+    /// <para>列出 <c>images/</c> 内属于某个分区的镜像文件：去扩展名后与分区名相等的每个文件。</para>
     /// </summary>
-    /// <param name="imagesRoot"><para>子项目 <c>images/</c> 目录。</para>The sub-project <c>images/</c> directory.</param>
-    /// <param name="partition"><para>分区名。</para>Partition name.</param>
+    /// <param name="imagesRoot">The sub-project <c>images/</c> directory. <para>子项目 <c>images/</c> 目录。</para></param>
+    /// <param name="partition">Partition name. <para>分区名。</para></param>
     /// <returns>
     /// The matching file paths; empty when the directory is missing.
     /// <para>匹配的文件路径；目录缺失时为空。</para>

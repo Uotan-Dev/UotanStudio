@@ -1,8 +1,8 @@
 namespace UotanStudio.Firmware.Core.Magic;
 
 /// <summary>
-/// <para>编译型 magic 库的规则负载类别。</para>
 /// Payload class of a compiled magic rule.
+/// <para>编译型 magic 库的规则负载类别。</para>
 /// </summary>
 public enum MagicKind : byte
 {
@@ -62,8 +62,8 @@ public enum MagicKind : byte
 }
 
 /// <summary>
-/// <para>数值类型的宽度、符号、字节序与日期编码，对应上游 file 的 in_type。</para>
-/// Numeric width / signedness / endianness / date encoding, mirroring upstream file's in_type.
+/// Numeric width / signedness / endianness / date encoding.
+/// <para>数值类型的宽度、符号、字节序与日期编码。</para>
 /// </summary>
 public enum MagicNumberType : byte
 {
@@ -165,8 +165,8 @@ public enum MagicNumberType : byte
 }
 
 /// <summary>
-/// <para>规则标志位（对齐上游 FILE_* 语义子集）。</para>
-/// Rule flag bits (subset of upstream FILE_* semantics).
+/// Rule flag bits (subset of FILE_* semantics).
+/// <para>规则标志位（FILE_* 语义子集）。</para>
 /// </summary>
 [System.Flags]
 public enum MagicFlags : uint
@@ -202,8 +202,8 @@ public enum MagicFlags : uint
     NoSpace = 1 << 5,
 
     /// <summary>
-    /// Flag bit defined for parity with the upstream dialect; neither the rule generator nor the matcher tests it.
-    /// <para>为与上游方言对齐而定义的标志位；规则生成与匹配流程均不读取。</para>
+    /// Flag bit kept for dialect parity; neither the rule generator nor the matcher tests it.
+    /// <para>为方言对齐而定义的标志位；规则生成与匹配流程均不读取。</para>
     /// </summary>
     IndirectOffset = 1 << 6,
 
@@ -211,21 +211,21 @@ public enum MagicFlags : uint
     Consume = 1 << 7,
 
     /// <summary>
-    /// Flag bit recording an upstream force-text request; the compiled matcher does not act on it.
-    /// <para>记录上游强制文本意图的标志位；编译后的匹配器不据此改变行为。</para>
+    /// Flag bit recording a force-text request; the compiled matcher does not act on it.
+    /// <para>记录强制文本意图的标志位；编译后的匹配器不据此改变行为。</para>
     /// </summary>
     Text = 1 << 8,
 
     /// <summary>
-    /// Flag bit recording an upstream !:encoding=binary request; the compiled matcher does not act on it.
-    /// <para>记录上游 !:encoding=binary 请求的标志位；编译后的匹配器不据此改变行为。</para>
+    /// Flag bit recording a !:encoding=binary request; the compiled matcher does not act on it.
+    /// <para>记录 !:encoding=binary 请求的标志位；编译后的匹配器不据此改变行为。</para>
     /// </summary>
     Binary = 1 << 9,
 }
 
 /// <summary>
-/// <para>字符串匹配修饰（/c /W /w /f /T）。</para>
 /// String match modifiers (/c /W /w /f /T).
+/// <para>字符串匹配修饰（/c /W /w /f /T）。</para>
 /// </summary>
 [System.Flags]
 public enum MagicStringFlags : uint
@@ -259,8 +259,8 @@ public enum MagicStringFlags : uint
 }
 
 /// <summary>
-/// <para>正则修饰（/i /s /m /x）。</para>
 /// Regex modifiers (/i /s /m /x).
+/// <para>正则修饰（/i /s /m /x）。</para>
 /// </summary>
 [System.Flags]
 public enum MagicRegexFlags : uint
@@ -288,8 +288,8 @@ public enum MagicRegexFlags : uint
 }
 
 /// <summary>
-/// <para>掩码运算（类型 token 上的 &amp; | ^ + - * / %）。</para>
 /// Mask operator on a type token (&amp; | ^ + - * / %).
+/// <para>掩码运算（类型 token 上的 &amp; | ^ + - * / %）。</para>
 /// </summary>
 public enum MagicMaskOp : byte
 {
@@ -320,8 +320,8 @@ public enum MagicMaskOp : byte
 }
 
 /// <summary>
-/// <para>数值比较关系。</para>
 /// Numeric / value comparison relation.
+/// <para>数值比较关系。</para>
 /// </summary>
 public enum MagicRelation : byte
 {

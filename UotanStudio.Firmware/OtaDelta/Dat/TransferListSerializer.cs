@@ -4,9 +4,9 @@ using System.Text;
 namespace UotanStudio.Firmware.OtaDelta.Dat;
 
 /// <summary>
-/// Serializes a <see cref="TransferList"/> back to recovery transfer-list text (versions 1 through 4).
+/// Serializes a <see cref="TransferList"/> back to transfer-list text (versions 1 through 4).
 /// This is the exact inverse of <see cref="TransferListParser"/> and is validated by round-tripping through it.
-/// <para>将 <see cref="TransferList"/> 序列化回 recovery 传输列表文本（版本 1 至 4）。
+/// <para>将 <see cref="TransferList"/> 序列化回传输列表文本（版本 1 至 4）。
 /// 这是 <see cref="TransferListParser"/> 的精确逆运算，通过往返解析进行验证。</para>
 /// </summary>
 internal static class TransferListSerializer
@@ -38,7 +38,7 @@ internal static class TransferListSerializer
         File.WriteAllText(path, Serialize(list));
     }
 
-    /// <summary>Renders a transfer list as recovery transfer-list text. <para>将传输列表渲染为 recovery 传输列表文本。</para></summary>
+    /// <summary>Renders a transfer list as transfer-list text. <para>将传输列表渲染为传输列表文本。</para></summary>
     /// <param name="list">
     /// The list to render, including its version and the commands in output order.
     /// <para>待渲染的列表，包含版本号与按输出顺序排列的命令。</para>

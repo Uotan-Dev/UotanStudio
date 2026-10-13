@@ -92,11 +92,8 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
     }
 
     /// <summary>
-    /// Determines whether a logical stream carries an EROFS image by probing only the layout-defined
-    /// superblock magic: the four little-endian bytes at logical offset 1024 must equal <c>0xE0F5E1E2</c>
-    /// within a stream of at least 1028 bytes. The stream position is restored before returning.
-    /// <para>仅按布局定义的超级块魔数判断逻辑流是否承载 EROFS 镜像：长度至少 1028 字节的流中，逻辑偏移 1024
-    /// 处的四个小端字节必须等于 <c>0xE0F5E1E2</c>。返回前会恢复流位置。</para>
+    /// Determines whether a logical stream carries an EROFS image by probing the superblock magic.
+    /// <para>通过探测超级块魔数判断逻辑流是否承载 EROFS 镜像。</para>
     /// </summary>
     /// <param name="logical">Seekable logical stream positioned by the container caller; read errors are
     /// swallowed and reported as a non-match. <para>由容器调用方定位好的可寻址逻辑流；读取错误被吞掉并按不匹配处理。</para></param>
@@ -137,16 +134,8 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
     }
 
     /// <summary>
-    /// Unpacks an EROFS image carried by an already-resolved logical stream into the output directory,
-    /// the container-facing counterpart of <see cref="UnpackAsync"/> over the primary device stream alone;
-    /// external device images are bound only by the file-path unpacking route. Parse, extraction and cancellation
-    /// errors propagate so the container caller reports them through its own failure channel; the result
-    /// carries the extracted file paths plus the <c>InnerFormat</c>, <c>FilesystemBlockSize</c> and
-    /// <c>VolumeName</c> metadata the sparse container cascade expects.
-    /// <para>把已解析逻辑流承载的 EROFS 镜像解包到输出目录，是 <see cref="UnpackAsync"/> 面向容器的版本，
-    /// 仅基于主流设备；外部设备镜像只由文件路径解包流程绑定。解析、提取与取消错误向上传播，由容器调用方经其
-    /// 自身的失败通道报告；结果携带解出的文件路径，以及稀疏容器级联解包所期望的 <c>InnerFormat</c>、
-    /// <c>FilesystemBlockSize</c> 与 <c>VolumeName</c> 元数据。</para>
+    /// Unpacks an EROFS image carried by an already-resolved logical stream into the output directory.
+    /// <para>把已解析逻辑流承载的 EROFS 镜像解包到输出目录。</para>
     /// </summary>
     /// <param name="logical">Seekable logical stream positioned at the start of the primary device image;
     /// ownership stays with the caller, which disposes it after the returned task completes.

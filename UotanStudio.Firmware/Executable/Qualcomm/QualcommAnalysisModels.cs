@@ -157,12 +157,10 @@ public sealed record QualcommAuthorityResult
     public string? RootCertificateSha384 { get; init; }
 }
 
-/// <summary>Reports authentication evidence for one ELF component discovered in a multi-component container.
-/// A nested component is not analyzed separately because its bytes lie inside a range an earlier component
-/// already hashed successfully, so the enclosing component's evidence covers it. These results say nothing
-/// about whether an OEM or a device accepts the container.
-/// <para>报告多组件容器中发现的单个 ELF 组件的认证证据。嵌套组件不再单独分析，因为其字节位于更早组件
-/// 已成功摘要的范围内，由外层组件的证据覆盖。这些结果不说明 OEM 或设备是否接受该容器。</para></summary>
+/// <summary>
+/// Authentication evidence for one ELF component discovered in a multi-component container. A nested component is not analyzed separately because its bytes lie inside a range an earlier component already hashed, so the enclosing component's evidence covers it.
+/// <para>多组件容器中单个 ELF 组件的认证证据。嵌套组件不再单独分析，因为其字节位于先前某个组件已成功哈希的范围内，由外层组件的证据覆盖。</para>
+/// </summary>
 public sealed record QualcommComponentAuthenticationResult
 {
     /// <summary>Gets the zero-based index of this entry within the reported component list.

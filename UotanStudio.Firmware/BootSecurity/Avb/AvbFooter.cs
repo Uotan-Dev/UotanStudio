@@ -106,11 +106,8 @@ public readonly struct AvbFooter
     }
 
     /// <summary>
-    /// Reads only the trailing footer-sized window from a file, so an AVB-signed image is
-    /// detected without loading it whole into memory. Returns <see langword="null"/> when the
-    /// file is smaller than a footer or its tail carries no valid footer.
-    /// <para>仅读取文件尾部与 footer 等长的窗口来检测 AVB 签名镜像，避免整镜像载入内存。
-    /// 文件小于 footer 或尾部无有效 footer 时返回 <see langword="null"/>。</para>
+    /// Reads only the trailing footer-sized window to detect an AVB-signed image.
+    /// <para>仅读取尾部与 footer 等长的窗口来检测 AVB 签名镜像。</para>
     /// </summary>
     /// <param name="path">File system path of the candidate image; the file is opened for reading,
     /// shared for concurrent readers, and closed before this method returns.

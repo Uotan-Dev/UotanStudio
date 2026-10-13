@@ -9,10 +9,10 @@ using DeliveryImageItem = UotanStudio.ViewModels.Shell.DeliveryImage;
 
 namespace UotanStudio.Views.Controls;
 
-/// <summary><para>交付镜像编排，通过现有按钮连接交付服务。</para>Delivery composition wired to application services through the existing controls.</summary>
+/// <summary>Delivery composition wired to application services through the existing controls. <para>交付镜像编排，通过现有按钮连接交付服务。</para></summary>
 public partial class DeliveryCompositionView : UserControl
 {
-    /// <summary><para>是否显示 Payload 编排。</para>Whether to display Payload composition.</summary>
+    /// <summary>Whether to display Payload composition. <para>是否显示 Payload 编排。</para></summary>
     public static readonly StyledProperty<bool> IsPayloadProperty =
         AvaloniaProperty.Register<DeliveryCompositionView, bool>(nameof(IsPayload));
 
@@ -61,10 +61,10 @@ public partial class DeliveryCompositionView : UserControl
     private ObservableCollection<DeliveryImageItem> ActiveImages => Model.Container;
     private static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
-    /// <summary><para>在 Super 与 Payload 镜像编排之间切换。</para>Switches between Super and Payload composition.</summary>
+    /// <summary>Switches between Super and Payload composition. <para>在 Super 与 Payload 镜像编排之间切换。</para></summary>
     public bool IsPayload { get => GetValue(IsPayloadProperty); set => SetValue(IsPayloadProperty, value); }
 
-    /// <summary><para>初始化本地镜像列表和文档编辑器。</para>Initializes local image lists and the document editor.</summary>
+    /// <summary>Initializes local image lists and the document editor. <para>初始化本地镜像列表和文档编辑器。</para></summary>
     public DeliveryCompositionView()
     {
         InitializeComponent();

@@ -110,10 +110,12 @@ internal partial class PropertiesViewModel
         };
 
     /// <summary>
-    /// Resolves a stable metadata/analysis key to the current UI language. Unknown keys are
-    /// deliberately preserved because they may be format-specific data that the application does
-    /// not know how to translate.
+    /// Resolves a stable metadata or analysis key to the active locale; unknown keys are
+    /// deliberately preserved as-is.
+    /// <para>将稳定的元数据或分析键解析到当前语言；未知键按原样保留。</para>
     /// </summary>
+    /// <param name="name">The metadata or analysis key to resolve.<para>要解析的元数据或分析键。</para></param>
+    /// <returns>The localized label, or the original key when it is unknown.<para>本地化后的标签；未知键返回原值。</para></returns>
     internal static string LocalizePropertyName(string? name)
     {
         if (string.IsNullOrEmpty(name) || !PropertyNameResourceKeys.TryGetValue(name, out var resourceKey))
@@ -166,9 +168,12 @@ internal partial class PropertiesViewModel
     }
 
     /// <summary>
-    /// Resolves a fixed property label in the active locale, falling back to the built-in English
-    /// Dock dictionary when the active locale does not provide the key.
+    /// Resolves a fixed property label in the active locale, falling back to the built-in
+    /// English dictionary when the active locale does not provide the key.
+    /// <para>在当前语言解析固定属性标签；当前语言缺少该键时回退到内置英文词典。</para>
     /// </summary>
+    /// <param name="resourceKey">Resource key of the fixed label.<para>固定标签的资源键。</para></param>
+    /// <returns>The localized label or its English fallback.<para>本地化标签或其英文回退值。</para></returns>
     internal static string LocalizeFixedPropertyName(string resourceKey)
     {
         return LocalizeFixedPropertyName(resourceKey, GetEnglishPropertyName(resourceKey));
@@ -262,13 +267,16 @@ internal partial class PropertiesViewModel
 
     public sealed partial class PropertyRow
     {
-        /// <summary>Resource key used to render this fixed property label.</summary>
+        /// <summary>Resource key used to render this fixed property label.<para>渲染此固定属性标签所用的资源键。</para></summary>
+        /// <value>The label's resource key, or null for dynamic labels.<para>标签的资源键；动态标签为 null。</para></value>
         internal string? NameResourceKey { get; init; }
 
-        /// <summary>Original format-handler/analysis key for a dynamic property label.</summary>
+        /// <summary>Original format-handler or analysis key for a dynamic property label.<para>动态属性标签的原始格式处理或分析键。</para></summary>
+        /// <value>The source key, or null for fixed labels.<para>源键；固定标签为 null。</para></value>
         internal string? SourceName { get; init; }
 
-        /// <summary>Readable fallback used when a custom locale omits the resource key.</summary>
+        /// <summary>Readable fallback used when a custom locale omits the resource key.<para>自定义语言缺少资源键时使用的可读回退值。</para></summary>
+        /// <value>The fallback display name.<para>回退显示名称。</para></value>
         internal string? FallbackName { get; init; }
 
         internal void RefreshLocalizedName()

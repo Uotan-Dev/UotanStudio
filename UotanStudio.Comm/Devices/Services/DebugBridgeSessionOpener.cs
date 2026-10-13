@@ -6,25 +6,17 @@ using UotanStudio.Comm.Routing;
 namespace UotanStudio.Comm.Devices.Services;
 
 /// <summary>
-/// Server-ownership decisions and routed session openers for the debug bridges. It combines the
-/// TCP liveness probes from <see cref="Routing.DebugBridgeRoute"/> with the server clients, so
-/// callers get one place that answers "who owns this target and which session serves it".
-/// <para>调试桥的 server 归属判定与路由开启器。它把 <see cref="Routing.DebugBridgeRoute"/> 的 TCP
-/// 存活探测与 server 客户端组合起来，调用方由此得到「目标归谁、由哪条会话服务」的统一答案。</para>
-/// Ownership errors never grant raw USB access: a present server keeps serving its targets even
-/// when they are missing or unauthorized.
-/// <para>归属判定失败绝不放行裸 USB：server 存在时其目标即使缺失或未授权也继续由 server 服务。</para>
+/// Server-ownership decisions and routed session openers for the debug bridges. A present server
+/// keeps serving its targets even when they are missing or unauthorized.
+/// <para>调试桥的 server 归属判定与路由开启器。只要 server 存在，其目标即使缺失或未授权也继续由它服务。</para>
 /// </summary>
 public static class DebugBridgeSessionOpener
 {
     /// <summary>
-    /// Checks ADB ownership by exact serial; unknown identities remain protected when targets exist.
-    /// <para>按精确序列号检查 ADB 归属；存在目标时，未知身份仍受保护。</para>
-    /// Server presence comes from the global <see cref="DebugBridgeRoute.AdbServerAvailable"/>
-    /// parameter for the default endpoint; the serial must additionally appear in the server's
-    /// target list.
-    /// <para>默认端点的 server 存在性取全局参数 <see cref="DebugBridgeRoute.AdbServerAvailable"/>；
-    /// 序列号还必须出现在 server 的目标列表中。</para>
+    /// Checks ADB ownership by exact serial; unknown identities stay protected when targets exist.
+    /// Server presence comes from the global <see cref="DebugBridgeRoute.AdbServerAvailable"/> parameter.
+    /// <para>按精确序列号检查 ADB 归属；存在目标时未知身份仍受保护。server 存在性取全局参数
+    /// <see cref="DebugBridgeRoute.AdbServerAvailable"/>。</para>
     /// </summary>
     /// <param name="serial">
     /// Target serial to check; when null or blank, any nonempty target list counts as ownership.
@@ -50,10 +42,8 @@ public static class DebugBridgeSessionOpener
 
     /// <summary>
     /// Checks HDC ownership by exact connect key: a live server owns only the targets its list
-    /// actually contains, so a device whose daemon has not (re-)registered after a server
-    /// restart falls back to direct USB instead of disappearing.
-    /// <para>按连接键检查 HDC 归属：活着的 server 只拥有其列表中实际存在的目标，server 重启后
-    /// 尚未重新注册的设备回退直连 USB，而不是从清单中消失。</para>
+    /// actually contains, so an unregistered device falls back to direct USB.
+    /// <para>按连接键检查 HDC 归属：活着的 server 只拥有其列表中实际存在的目标，未注册的设备回退直连 USB。</para>
     /// </summary>
     /// <param name="serial">
     /// Connect key to check; when null or blank, any nonempty target list counts as ownership.

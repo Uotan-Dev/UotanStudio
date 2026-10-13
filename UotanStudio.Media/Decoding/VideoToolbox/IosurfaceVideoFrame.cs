@@ -63,11 +63,8 @@ public sealed class IosurfaceVideoFrame
     public long TimestampTicks { get; }
 
     /// <summary>
-    /// Reports that this frame left the presentation path (update completed, failed, or skipped); the
-    /// retained pixel buffer returns to the decoder pool and the call is idempotent and safe from any
-    /// thread. Presenters must call it exactly once per frame, in a finally clause.
-    /// <para>报告本帧已离开呈现路径（更新完成、失败或被跳过）；被保留的像素缓冲归还解码器池。调用幂等且可在
-    /// 任意线程执行。呈现器必须对每帧在 finally 中恰好调用一次。</para>
+    /// Reports that this frame left the presentation path (update completed, failed, or skipped).
+    /// <para>报告本帧已离开呈现路径（更新完成、失败或被跳过）。</para>
     /// </summary>
     public void MarkPresented()
     {

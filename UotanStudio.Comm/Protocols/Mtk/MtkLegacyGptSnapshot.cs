@@ -8,8 +8,18 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <para>It binds the table to the Legacy inventory and region it was read from, so a later plan cannot
 /// silently address a different storage observation. Like the XFlash snapshot, it does not authorize later
 /// writes and does not prove the table is still current.</para>
+/// <para>The write-back that consumes this snapshot is the Legacy <c>writeflash</c> exchange
+/// (Library/DA/legacy/dalegacy_lib.py:947) pointed at the region-relative metadata ranges, because the
+/// reference agent declares dedicated GPT opcodes (Library/DA/legacy/dalegacy_param.py:15-16 for
+/// <c>UFS_READ_GPT_CMD</c>/<c>UFS_WRITE_GPT_CMD</c> and Library/DA/legacy/dalegacy_param.py:54 for
+/// <c>SDMMC_WRITE_GPT_CMD</c>) that no upstream client ever sends, so their payload layout is not provable
+/// and is deliberately not implemented here.</para>
 /// <para>它把分区表绑定到读取时所用的 Legacy 存储清单与区域，后续计划因此不能悄悄指向另一份存储观测。与 XFlash
 /// 快照一样，它不授权后续写入，也不能证明该表仍然最新。</para>
+/// <para>消费本快照的写回是把 Legacy <c>writeflash</c> 交换（Library/DA/legacy/dalegacy_lib.py:947）指向区域内
+/// 的元数据范围；参考代理虽然声明了专用的 GPT 操作码（Library/DA/legacy/dalegacy_param.py:15-16 的
+/// <c>UFS_READ_GPT_CMD</c> 与 <c>UFS_WRITE_GPT_CMD</c>、Library/DA/legacy/dalegacy_param.py:54 的
+/// <c>SDMMC_WRITE_GPT_CMD</c>），但上游任何客户端都从未发送它们，其载荷布局无法证实，因此此处刻意不实现。</para>
 /// </remarks>
 public sealed class MtkLegacyGptSnapshot
 {

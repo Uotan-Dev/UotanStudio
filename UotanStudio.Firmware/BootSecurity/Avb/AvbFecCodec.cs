@@ -3,9 +3,9 @@ namespace UotanStudio.Firmware.BootSecurity.Avb;
 /// <summary>Generates and compares Android AVB Reed-Solomon FEC parity over a raw partition prefix.
 /// <para>对原始分区前缀生成并比较 Android AVB Reed-Solomon FEC 校验码。</para></summary>
 /// <remarks>Uses 4096-byte interleaving and RS(255, 255 - roots) over GF(256) with polynomial 0x11d.
-/// The output contains only parity, not the standalone fec tool's trailing footer block.
+/// The output contains only parity, without any trailing footer block.
 /// <para>使用 4096 字节交织与基于多项式 0x11d 的 GF(256) RS(255, 255 - roots)。
-/// 输出只包含校验码，不包含独立 fec 工具附加的末尾 footer 块。</para></remarks>
+/// 输出只包含校验码，不含末尾 footer 块。</para></remarks>
 internal static class AvbFecCodec
 {
     private const int BlockSize = 4096;
@@ -102,9 +102,9 @@ internal static class AvbFecCodec
     /// <para>借助完好的 FEC 校验码重建已知损坏的整块 4096 字节数据。</para></summary>
     /// <remarks>Applies Reed-Solomon erasure decoding: the block list is the set of erasure positions and the parity is trusted.
     /// A round can repair at most <c>roots</c> erased blocks; damaged parity or too many erasures in one round aborts the rebuild
-    /// and leaves every image byte untouched. The standalone <c>fec</c> tool's trailing footer block is not produced or consumed.
+    /// and leaves every image byte untouched. No trailing footer block is produced or consumed.
     /// <para>采用 Reed-Solomon 删除译码：坏块列表即删除位置集合，校验码视为可信。单轮最多重建 <c>roots</c> 个删除块；
-    /// 校验码本身损坏或某轮删除数超出上限时中止重建且不改动任何镜像字节。不生成也不消费独立 <c>fec</c> 工具的末尾 footer 块。</para></remarks>
+    /// 校验码本身损坏或某轮删除数超出上限时中止重建且不改动任何镜像字节。不生成也不消费末尾 footer 块。</para></remarks>
     /// <param name="image">Readable, writable, seekable image holding the data prefix and its trailing FEC parity; its position is restored.
     /// <para>可读、可写、可定位的镜像，包含数据前缀及其尾部 FEC 校验码；结束后恢复位置。</para></param>
     /// <param name="fecOffset">Start of FEC, also the protected source length. <para>FEC 起点，亦为受保护源长度。</para></param>

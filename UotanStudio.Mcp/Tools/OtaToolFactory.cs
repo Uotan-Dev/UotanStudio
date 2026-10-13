@@ -158,10 +158,10 @@ internal static class OtaToolHandlers
     private const int MaximumListedToolFiles = 512;
 
     /// <summary>
-    /// <para>工具下载共用的 HTTP 客户端；platform-tools 与 zstd 归档可达数百 MiB，因此不设请求超时，
-    /// 中止只由请求的取消令牌驱动。</para>
     /// Shared client for the tool downloads; platform-tools and zstd archives reach hundreds of MiB, so no
     /// request timeout applies and stopping is driven only by the request's cancellation token.
+    /// <para>工具下载共用的 HTTP 客户端；platform-tools 与 zstd 归档可达数百 MiB，因此不设请求超时，
+    /// 中止只由请求的取消令牌驱动。</para>
     /// </summary>
     private static readonly HttpClient ToolHttpClient = new() { Timeout = Timeout.InfiniteTimeSpan };
 
@@ -333,10 +333,10 @@ internal static class OtaToolHandlers
             : string.Join("; ", errors.Take(3)) + $"; and {errors.Count - 3} more.";
 
     /// <summary>
-    /// <para>解析并限制“ZIP 成员名到本地文件”的替换映射：值必须是沙箱内已存在的文件，键按正斜杠规范化。</para>
     /// Parses and confines the member-name to local-file replacement map: every value must be an existing file
     /// inside the sandbox and every key is normalized to forward slashes, which is how the backing service
     /// compares ZIP member names.
+    /// <para>解析并限制“ZIP 成员名到本地文件”的替换映射：值必须是沙箱内已存在的文件，键按正斜杠规范化。</para>
     /// </summary>
     private static Dictionary<string, string> ParseReplacements(PathSandbox sandbox, string? replacementsJson)
     {
@@ -402,16 +402,16 @@ internal static class OtaToolHandlers
     }
 
     /// <summary>
-    /// <para>把协议进度目标转为交付后端的文本进度接收端；没有进度令牌时返回 <see langword="null"/>，
-    /// 底层实现因此不会消耗上报开销。后端的上报形如「百分比% 消息」，此处把前导百分比还原为
-    /// <see cref="ProgressNotificationValue.Progress"/>。</para>
     /// Converts the protocol progress sink into the delivery backend's text-progress sink; without a progress
     /// token this returns <see langword="null"/> so the backing calls skip reporting overhead. The backend
     /// formats reports as "<c>percent% message</c>", so a leading percentage is lifted back onto
     /// <see cref="ProgressNotificationValue.Progress"/>.
+    /// <para>把协议进度目标转为交付后端的文本进度接收端；没有进度令牌时返回 <see langword="null"/>，
+    /// 底层实现因此不会消耗上报开销。后端的上报形如「百分比% 消息」，此处把前导百分比还原为
+    /// <see cref="ProgressNotificationValue.Progress"/>。</para>
     /// </summary>
-    /// <param name="progress"><para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para>The MCP-bound progress instance, possibly <see langword="null"/>.</param>
-    /// <returns><para>供交付后端上报进度文本的接收端。</para>A text sink for the delivery backend to report to.</returns>
+    /// <param name="progress">The MCP-bound progress instance, possibly <see langword="null"/>. <para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para></param>
+    /// <returns>A text sink for the delivery backend to report to. <para>供交付后端上报进度文本的接收端。</para></returns>
     internal static IProgress<string>? ToTextProgress(IProgress<ProgressNotificationValue>? progress) =>
         progress is null
             ? null

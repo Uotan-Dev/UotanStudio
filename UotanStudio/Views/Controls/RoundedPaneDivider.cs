@@ -4,7 +4,7 @@ using Avalonia.Media;
 
 namespace UotanStudio.Views.Controls;
 
-/// <summary><para>带圆角端部和单侧投影的面板分隔边缘。</para>A pane edge with rounded returns and a shadow on one side.</summary>
+/// <summary>A pane edge with rounded returns and a shadow on one side. <para>带圆角端部和单侧投影的面板分隔边缘。</para></summary>
 public sealed class RoundedPaneDivider : Control
 {
     private const double EdgeThickness = 0.5;
@@ -16,32 +16,32 @@ public sealed class RoundedPaneDivider : Control
         new(0x08000000u, ShadowStep), new(0x02000000u, ShadowStep)
     ];
 
-    /// <summary><para>分隔线画刷属性。</para>The divider brush property.</summary>
+    /// <summary>The divider brush property. <para>分隔线画刷属性。</para></summary>
     public static readonly StyledProperty<IBrush?> EdgeBrushProperty =
         AvaloniaProperty.Register<RoundedPaneDivider, IBrush?>(nameof(EdgeBrush));
-    /// <summary><para>是否为竖向边缘的属性。</para>The vertical-edge property.</summary>
+    /// <summary>The vertical-edge property. <para>是否为竖向边缘的属性。</para></summary>
     public static readonly StyledProperty<bool> IsVerticalProperty =
         AvaloniaProperty.Register<RoundedPaneDivider, bool>(nameof(IsVertical), true);
-    /// <summary><para>横向边缘是否向上投影的属性。</para>Whether a horizontal edge casts its shadow upward.</summary>
+    /// <summary>Whether a horizontal edge casts its shadow upward. <para>横向边缘是否向上投影的属性。</para></summary>
     public static readonly StyledProperty<bool> ShadowUpProperty =
         AvaloniaProperty.Register<RoundedPaneDivider, bool>(nameof(ShadowUp));
-    /// <summary><para>竖向边缘是否向左投影的属性。</para>Whether a vertical edge casts its shadow leftward.</summary>
+    /// <summary>Whether a vertical edge casts its shadow leftward. <para>竖向边缘是否向左投影的属性。</para></summary>
     public static readonly StyledProperty<bool> ShadowLeftProperty =
         AvaloniaProperty.Register<RoundedPaneDivider, bool>(nameof(ShadowLeft));
 
-    /// <summary><para>分隔线画刷。</para>The divider brush.</summary>
+    /// <summary>The divider brush. <para>分隔线画刷。</para></summary>
     public IBrush? EdgeBrush { get => GetValue(EdgeBrushProperty); set => SetValue(EdgeBrushProperty, value); }
-    /// <summary><para>是否绘制竖向边缘。</para>Whether to draw a vertical edge.</summary>
+    /// <summary>Whether to draw a vertical edge. <para>是否绘制竖向边缘。</para></summary>
     public bool IsVertical { get => GetValue(IsVerticalProperty); set => SetValue(IsVerticalProperty, value); }
-    /// <summary><para>横向边缘是否向上投影。</para>Whether the horizontal edge casts its shadow upward.</summary>
+    /// <summary>Whether the horizontal edge casts its shadow upward. <para>横向边缘是否向上投影。</para></summary>
     public bool ShadowUp { get => GetValue(ShadowUpProperty); set => SetValue(ShadowUpProperty, value); }
-    /// <summary><para>竖向边缘是否向左投影。</para>Whether the vertical edge casts its shadow leftward.</summary>
+    /// <summary>Whether the vertical edge casts its shadow leftward. <para>竖向边缘是否向左投影。</para></summary>
     public bool ShadowLeft { get => GetValue(ShadowLeftProperty); set => SetValue(ShadowLeftProperty, value); }
 
     static RoundedPaneDivider() =>
         AffectsRender<RoundedPaneDivider>(EdgeBrushProperty, IsVerticalProperty, ShadowUpProperty, ShadowLeftProperty);
 
-    /// <summary><para>绘制圆角边缘及其 3 DIP 单侧渐隐投影。</para>Draws the rounded edge and its 3 DIP fading shadow on one side.</summary>
+    /// <summary>Draws the rounded edge and its 3 DIP fading shadow on one side. <para>绘制圆角边缘及其 3 DIP 单侧渐隐投影。</para></summary>
     public override void Render(DrawingContext context)
     {
         var length = IsVertical ? Bounds.Height : Bounds.Width;

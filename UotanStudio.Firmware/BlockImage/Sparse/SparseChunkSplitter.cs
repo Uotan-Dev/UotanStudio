@@ -16,7 +16,7 @@ public enum SparseChunkVariant
 {
     /// <summary>Plain byte slices of one raw image; concatenation reproduces the original bytes. <para>单个原始镜像的纯字节切片；拼接即可还原原始字节。</para></summary>
     RawStream,
-    /// <summary>Each part is a self-contained sparse image that carries the full logical geometry, the AOSP absolute-address chunking shape produced by <c>ResparseImage</c>. <para>每个分片都是携带完整逻辑几何的自包含稀疏镜像，即 <c>ResparseImage</c> 生成的 AOSP 绝对寻址分片形态。</para></summary>
+    /// <summary>Each part is a self-contained sparse image that carries the full logical geometry with absolute-address chunking, as produced by <c>ResparseImage</c>. <para>每个分片都是携带完整逻辑几何、采用绝对寻址分块的自包含稀疏镜像，即 <c>ResparseImage</c> 生成的形态。</para></summary>
     SelfContainedSparse
 }
 

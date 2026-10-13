@@ -4,16 +4,16 @@ using UotanStudio.Services.FileManagement;
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
-/// <para>扁平路径列表 → 目录树构建器：按 '/' 分组成树，缺失的中间目录自动合成，
-/// 每个文件夹内目录优先、按名称排序。</para>
 /// Flat path-list → tree builder: groups by '/', synthesizes missing intermediate directories, and
 /// sorts each folder with directories first and names in ordinal order.
+/// <para>扁平路径列表 → 目录树构建器：按 '/' 分组成树，缺失的中间目录自动合成，
+/// 每个文件夹内目录优先、按名称排序。</para>
 /// </summary>
 internal static class FileManagerTreeBuilder
 {
     /// <summary>
-    /// <para>从扁平条目列表构建目录树，返回根层条目。</para>
     /// Builds the directory tree from the flat entry list, returning the root-level entries.
+    /// <para>从扁平条目列表构建目录树，返回根层条目。</para>
     /// </summary>
     public static List<FileManagerEntryViewModel> Build(IReadOnlyList<ImageBrowserEntry> entries)
     {
@@ -54,9 +54,9 @@ internal static class FileManagerTreeBuilder
     }
 
     /// <summary>
-    /// <para>确保条目父链存在并返回直接父节点；缺失的祖先目录按需合成到树中，根级父返回 <c>null</c>。</para>
     /// Ensures the entry's parent chain exists and returns the immediate parent; missing ancestor
     /// directories are synthesized into the tree, and a root-level parent returns <c>null</c>.
+    /// <para>确保条目父链存在并返回直接父节点；缺失的祖先目录按需合成到树中，根级父返回 <c>null</c>。</para>
     /// </summary>
     private static FileManagerEntryViewModel? EnsureParent(
         Dictionary<string, FileManagerEntryViewModel> byPath,
@@ -102,8 +102,8 @@ internal static class FileManagerTreeBuilder
     }
 
     /// <summary>
-    /// <para>对子集合排序：目录优先，其后按名称序。</para>
     /// Sorts a child collection: directories first, then by name.
+    /// <para>对子集合排序：目录优先，其后按名称序。</para>
     /// </summary>
     private static void SortChildren(ObservableCollection<FileManagerEntryViewModel> children)
     {
@@ -119,8 +119,8 @@ internal static class FileManagerTreeBuilder
     }
 
     /// <summary>
-    /// <para>对根层列表排序：目录优先，其后按名称序。</para>
     /// Sorts the root list: directories first, then by name.
+    /// <para>对根层列表排序：目录优先，其后按名称序。</para>
     /// </summary>
     private static void SortList(List<FileManagerEntryViewModel> list)
     {
@@ -132,8 +132,8 @@ internal static class FileManagerTreeBuilder
     }
 
     /// <summary>
-    /// <para>取路径最后一段作为名称。</para>
     /// Gets the last path segment as the name.
+    /// <para>取路径最后一段作为名称。</para>
     /// </summary>
     private static string GetName(string path)
     {

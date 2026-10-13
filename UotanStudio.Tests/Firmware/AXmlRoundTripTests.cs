@@ -93,8 +93,8 @@ public class AXmlRoundTripTests
     }
 
     /// <summary>
-    /// <para>构造用于往返测试的 AXML 模型：manifest 根 + application 子元素。</para>
     /// Builds the AXML model for round-trip tests: a manifest root plus an application child.
+    /// <para>构造用于往返测试的 AXML 模型：manifest 根 + application 子元素。</para>
     /// </summary>
     internal static AXmlDocument BuildDocument()
     {

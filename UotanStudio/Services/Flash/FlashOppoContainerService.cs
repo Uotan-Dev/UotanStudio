@@ -3,10 +3,13 @@ using UotanStudio.Firmware.VendorFirmware.Oppo.Models;
 
 namespace UotanStudio.Services.Flash;
 
-/// <summary>Lists and selectively extracts image entries from Oppo firmware archives.</summary>
+/// <summary>Lists and selectively extracts image entries from Oppo firmware archives.<para>列出 Oppo 固件包中的镜像条目并按选择解压。</para></summary>
 public static class FlashOppoContainerService
 {
-    /// <summary>Returns unambiguous image entries, preserving their original archive names.</summary>
+    /// <summary>Returns unambiguous image entries, preserving their original archive names.<para>返回不存在歧义的镜像条目，并保留其在包中的原名。</para></summary>
+    /// <param name="path">Archive file to inspect.<para>要检查的固件包文件。</para></param>
+    /// <param name="ct">Token cancelling the listing.<para>用于取消列举的令牌。</para></param>
+    /// <returns>The image name, archive entry, output name and size.<para>镜像名、包内条目、输出文件名与大小。</para></returns>
     public static async Task<IReadOnlyList<(string Name, string Entry, string OutputName, long Size)>> ListAsync(
         string path, CancellationToken ct)
     {
@@ -25,7 +28,12 @@ public static class FlashOppoContainerService
         return images;
     }
 
-    /// <summary>Publishes only selected images after verifying every extracted output.</summary>
+    /// <summary>Publishes only selected images after verifying every extracted output.<para>校验全部解压结果后才发布所选镜像。</para></summary>
+    /// <param name="path">Archive file to extract from.<para>要从中解压的固件包文件。</para></param>
+    /// <param name="entries">Archive entry names to extract.<para>要解压的包内条目名。</para></param>
+    /// <param name="parent">Existing directory that receives the new output directory.<para>接收新输出目录的既有目录。</para></param>
+    /// <param name="ct">Token cancelling the extraction.<para>用于取消解压的令牌。</para></param>
+    /// <returns>Path of the directory holding the published images.<para>存放已发布镜像的目录路径。</para></returns>
     public static async Task<string> ExtractAsync(string path, IReadOnlyList<string> entries, string parent, CancellationToken ct)
     {
         if (entries.Count == 0 || entries.Any(entry => !IsSafeEntry(entry)))

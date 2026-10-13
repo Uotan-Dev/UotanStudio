@@ -16,9 +16,7 @@ public sealed record DeviceEndpoint
     /// </summary>
     /// <value>
     /// A required source identifier, such as the USB enumerator or a debug-bridge server source.
-    /// A refresh rejects an endpoint whose source differs from the source that produced it.
-    /// <para>必填的来源标识，例如 USB 枚举器或调试桥 server 发现源。刷新时会拒绝来源与产出该端点的
-    /// 发现源不一致的端点。</para>
+    /// <para>必填的来源标识，例如 USB 枚举器或调试桥 server 发现源。</para>
     /// </value>
     public required string Source { get; init; }
     /// <summary>
@@ -44,7 +42,7 @@ public sealed record DeviceEndpoint
     public required string Address { get; init; }
     /// <summary>
     /// Label the source suggests for user-visible listings.
-    /// <para>发现源建议用于界面列表的显示名。</para>
+    /// <para>发现源建议用于可见列表的显示名。</para>
     /// </summary>
     /// <value>
     /// Free-form display text, or <see langword="null"/> when the source exposes none.
@@ -67,10 +65,9 @@ public sealed record DeviceEndpoint
     /// <para>server 归属还是直连 USB 归属；绝不依据相匹配的 serial 推断。</para>
     /// </summary>
     /// <value>
-    /// <c>server</c> when a debug-bridge server owns the target, <c>direct-usb</c> for a native USB
-    /// open, or <see langword="null"/> when the source reports no ownership.
-    /// <para>当调试桥 server 管理该目标时为 <c>server</c>，原生 USB 直连时为 <c>direct-usb</c>；
-    /// 发现源未报告归属时为 <see langword="null"/>。</para>
+    /// <c>server</c> when a debug-bridge server owns the target, <c>direct-usb</c> for a native
+    /// USB open, or <see langword="null"/> when unreported.
+    /// <para>调试桥 server 管理目标时为 <c>server</c>，原生 USB 直连时为 <c>direct-usb</c>，未报告归属时为 <see langword="null"/>。</para>
     /// </value>
     public string? Route { get; init; }
     /// <summary>
@@ -88,10 +85,9 @@ public sealed record DeviceEndpoint
     /// <para>由权威发现源原样上报的 serial 或 connect key。</para>
     /// </summary>
     /// <value>
-    /// The identity string used by server routing, or <see langword="null"/> when the endpoint exposes
-    /// no serial. It is never mapped to a USB device by list position or VID/PID.
-    /// <para>server 路由所使用的身份字符串；该端点未暴露 serial 时为 <see langword="null"/>。
-    /// 不会按列表位置或 VID/PID 将其映射到某个 USB 设备。</para>
+    /// The server routing identity string, or <see langword="null"/> when the endpoint exposes no
+    /// serial.
+    /// <para>server 路由所使用的身份字符串；该端点未暴露 serial 时为 <see langword="null"/>。</para>
     /// </value>
     public string? Serial { get; init; }
     /// <summary>
@@ -111,15 +107,8 @@ public sealed record DeviceEndpoint
     /// </summary>
     /// <value>
     /// A <c>host:port</c> address, or <see langword="null"/> when the server reported no such
-    /// resolution. adb keys a transport it auto-connected through mDNS by the DNS-SD instance name
-    /// instead of by the dial address, so the same physical device can appear as a second target
-    /// whose address is not a network endpoint; this field names the endpoint that transport really
-    /// reaches. It is correlation evidence only: routing still uses <see cref="Address"/>, because
-    /// rewriting the key would stop selecting a transport that exists under the instance name alone.
-    /// <para><c>host:port</c> 形式的地址；server 未给出解析结果时为 <see langword="null"/>。adb 会用
-    /// DNS-SD 实例名而不是可拨号地址为其经 mDNS 自动建立的传输命名，因此同一台物理设备可能作为第二个
-    /// 目标出现，而其地址并非网络端点；本字段指出该传输实际抵达的端点。它只是关联证据：路由仍使用
-    /// <see cref="Address"/>，因为改写键名会导致只有实例名键的传输无法被选中。</para>
+    /// resolution.
+    /// <para><c>host:port</c> 形式的地址；server 未给出解析结果时为 <see langword="null"/>。</para>
     /// </value>
     public string? AliasAddress { get; init; }
     /// <summary>
@@ -134,17 +123,12 @@ public sealed record DeviceEndpoint
     /// </value>
     public UsbEndpointDetails? Usb { get; init; }
     /// <summary>
-    /// A defensive copy for host projection; mutations never alter the snapshot.
-    /// <para>供宿主投射的防御性副本；修改它永远不会影响快照。</para>
+    /// A defensive copy of the observed USB identity; mutations never alter the snapshot.
+    /// <para>已观测 USB 身份的防御性副本；修改它永远不会影响快照。</para>
     /// </summary>
     /// <value>
-    /// A copy of the native USB device information, or <see langword="null"/>. Both reads and
-    /// inits copy, so the stored instance is never shared with the caller. The copies still compare
-    /// by content through <see cref="Equals(DeviceEndpoint?)"/>, so the defensive copy cannot make
-    /// two otherwise identical endpoints unequal to each other.
-    /// <para>原生 USB 设备信息的副本，或 <see langword="null"/>。读取与初始化都会复制，
-    /// 因此保存的实例不会与调用方共享。这些副本仍经 <see cref="Equals(DeviceEndpoint?)"/>
-    /// 按内容比较，因此防御性副本不会使两个本应相同的端点互不相等。</para>
+    /// A copy of the native USB device information, or <see langword="null"/>.
+    /// <para>原生 USB 设备信息的副本，或 <see langword="null"/>。</para>
     /// </value>
     public UsbDeviceInfo? UsbInfo
     {
@@ -168,16 +152,6 @@ public sealed record DeviceEndpoint
     /// Compares every recorded field by value, including the observed USB details.
     /// <para>按值比较全部已记录字段，其中包含已观测的 USB 详细信息。</para>
     /// </summary>
-    /// <remarks>
-    /// The compiler-generated record equality would compare <see cref="UsbInfo"/> by reference, and
-    /// because that property copies on both read and init two endpoints holding equal USB details
-    /// would never be equal. This implementation replaces it so that content, not object identity,
-    /// decides equivalence. Any new stored property must be added to this comparison and to
-    /// <see cref="GetHashCode"/>.
-    /// <para>编译器生成的 record 相等性会按引用比较 <see cref="UsbInfo"/>，而该属性在读取与初始化时
-    /// 都会复制，于是持有相同 USB 详细信息的两个端点永远不会相等。本实现取代了它，由内容而非对象标识
-    /// 决定等价性。任何新增的已存储字段都必须同时加入此比较以及 <see cref="GetHashCode"/>。</para>
-    /// </remarks>
     /// <param name="other">
     /// The endpoint to compare with this instance, or <see langword="null"/>.
     /// <para>与本实例比较的端点，或 <see langword="null"/>。</para>

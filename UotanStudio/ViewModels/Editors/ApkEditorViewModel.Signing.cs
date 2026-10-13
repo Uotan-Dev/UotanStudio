@@ -32,9 +32,9 @@ public partial class ApkEditorViewModel
     [ObservableProperty] private string _signingStatus = string.Empty;
 
     /// <summary>
-    /// <para>必要项齐备（APK、私钥、证书与输出路径）时才允许执行签名，未填写完整时按钮禁用。</para>
     /// Signing is allowed only when the APK, private key, certificate and output path are all set; the
     /// execute button stays disabled while the form is incomplete.
+    /// <para>必要项齐备（APK、私钥、证书与输出路径）时才允许执行签名，未填写完整时按钮禁用。</para>
     /// </summary>
     private bool CanSignApk() =>
         !string.IsNullOrWhiteSpace(FilePath)

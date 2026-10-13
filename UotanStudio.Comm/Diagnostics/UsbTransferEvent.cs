@@ -90,16 +90,16 @@ public sealed class UsbTransferEvent
     /// Gets or sets backend name.
     /// <para>获取或设置后端名称。</para>
     /// </summary>
-    /// <value>The USB backend that produced this event, e.g. a native LibUsb or WinUSB label; empty when the emitter did not record one.
-    /// <para>产生此事件的 USB 后端，例如原生 LibUsb 或 WinUSB 标识；发射方未记录时为空字符串。</para></value>
+    /// <value>The USB backend label that produced this event; empty when none was recorded.
+    /// <para>产生此事件的 USB 后端标签；未记录时为空字符串。</para></value>
     public string Backend { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets device path.
     /// <para>获取或设置设备路径。</para>
     /// </summary>
-    /// <value>The operating-system device path identifying the target device for this transfer; empty when the emitter did not know it.
-    /// <para>标识本次传输目标设备的操作系统设备路径；发射方未知时为空字符串。</para></value>
+    /// <value>The operating-system device path of the transfer target; empty when unknown.
+    /// <para>传输目标设备的操作系统设备路径；未知时为空字符串。</para></value>
     public string DevicePath { get; set; } = string.Empty;
 
     /// <summary>
@@ -114,8 +114,8 @@ public sealed class UsbTransferEvent
     /// Gets or sets requested bytes.
     /// <para>获取或设置请求字节数。</para>
     /// </summary>
-    /// <value>The byte count the caller asked the backend to move for this operation.
-    /// <para>本次传输调用方要求后端搬运的字节数。</para></value>
+    /// <value>The byte count requested from the backend for this operation.
+    /// <para>本次传输向后端请求搬运的字节数。</para></value>
     public int RequestedBytes { get; set; }
 
     /// <summary>

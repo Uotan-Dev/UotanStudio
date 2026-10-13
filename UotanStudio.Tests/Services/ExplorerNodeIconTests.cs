@@ -5,9 +5,9 @@ using Xunit;
 namespace UotanStudio.Tests.Services;
 
 /// <summary>
-/// <para>资源管理器节点图标的定向测试：空心图标优先的映射规则、家族配色，以及目录/项目文件夹的区分。</para>
 /// Targeted tests for explorer node icons: the outline-first mapping rule, the family colours, and the
 /// directory/project-folder split.
+/// <para>资源管理器节点图标的定向测试：空心图标优先的映射规则、家族配色，以及目录/项目文件夹的区分。</para>
 /// </summary>
 public sealed class ExplorerNodeIconTests
 {

@@ -7,16 +7,8 @@ using UotanStudio.Firmware.Core;
 namespace UotanStudio.Firmware.AndroidMeta.AXml;
 
 /// <summary>
-/// <para>AXML 的 XML 文本表示与模型之间的转换。文本由 <see cref="AXmlDocument.ToXml"/> 生成；
-/// 反向解析用于 Manifest 编辑器「文本替换 → 重编译保存」路径。反向解析以原模型为类型参照：
-/// 结构未变时逐元素/逐属性复用原始 <see cref="AXmlValueType"/>，文本变更后再按该类型重新编码，
-/// 从而在编辑字符串值的同时保留整数、引用、布尔等强类型属性的字节语义。</para>
-/// Conversion between the XML text representation of AXML and its model. The text is produced by
-/// <see cref="AXmlDocument.ToXml"/>; reverse parsing serves the Manifest editor's
-/// "text replacement → recompile-save" path. Reverse parsing treats the original model as a type
-/// reference: when the structure is unchanged it reuses each element's/attribute's original
-/// <see cref="AXmlValueType"/> and re-encodes the changed text per that type, preserving the byte
-/// semantics of typed attributes (ints, references, booleans) while string values are edited.
+/// Conversion between the XML text representation of AXML and its model, reusing the original attribute types and namespaces when a reference model is supplied.
+/// <para>AXML 的 XML 文本表示与模型之间的转换；提供参照模型时复用原属性类型与命名空间。</para>
 /// </summary>
 public static class AXmlTextFormat
 {
@@ -30,11 +22,8 @@ public static class AXmlTextFormat
     /// <para>XML 文本，通常来自 <see cref="AXmlDocument.ToXml"/>。</para>
     /// </param>
     /// <param name="reference">
-    /// The original model whose attribute types and namespaces are reused; when it is
-    /// <see langword="null"/>, types are inferred from the text and namespaces are collected from
-    /// the root element's declarations.
-    /// <para>原模型，其属性类型与命名空间会被复用；为 <see langword="null"/> 时按文本推断类型，
-    /// 并从根元素的命名空间声明收集命名空间。</para>
+    /// The original model whose attribute types and namespaces are reused; when absent, types are inferred from text.
+    /// <para>原模型，其属性类型与命名空间会被复用；缺失时按文本推断类型。</para>
     /// </param>
     /// <returns>
     /// The rebuilt AXML model, carrying the reference header size and resource map when a reference
@@ -221,10 +210,11 @@ public static class AXmlTextFormat
     }
 
     /// <summary>
-    /// <para>无参照模型时按文本形态推断类型（十六进制/颜色/引用/属性/布尔/整数/字符串）。</para>
-    /// Infers a type from the text shape when no reference model is available (hex/color/reference/
-    /// attribute/boolean/integer/string).
+    /// Infers a value type from the text shape when no reference model is available.
+    /// <para>无参照模型时按文本形态推断值类型。</para>
     /// </summary>
+    /// <param name="text">Attribute text to classify. <para>待归类的属性文本。</para></param>
+    /// <returns>The matching value type, defaulting to string. <para>匹配的值类型，默认按字符串处理。</para></returns>
     private static AXmlValueType InferType(string text)
     {
         if (text.StartsWith("?0x", StringComparison.OrdinalIgnoreCase))

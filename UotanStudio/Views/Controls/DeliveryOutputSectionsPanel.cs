@@ -7,11 +7,11 @@ namespace UotanStudio.Views.Controls;
 /// Arranges output images and script settings at their content heights, bounded by available space.</summary>
 public sealed class DeliveryOutputSectionsPanel : Panel
 {
-    /// <summary><para>两部分之间的间距。</para>Spacing between the two sections.</summary>
+    /// <summary>Spacing between the two sections. <para>两部分之间的间距。</para></summary>
     public static readonly StyledProperty<double> SpacingProperty =
         AvaloniaProperty.Register<DeliveryOutputSectionsPanel, double>(nameof(Spacing), 10);
 
-    /// <summary><para>获取或设置两部分的间距。</para>Gets or sets the spacing between sections.</summary>
+    /// <summary>Gets or sets the spacing between sections. <para>获取或设置两部分的间距。</para></summary>
     public double Spacing { get => GetValue(SpacingProperty); set => SetValue(SpacingProperty, value); }
 
     static DeliveryOutputSectionsPanel() => AffectsMeasure<DeliveryOutputSectionsPanel>(SpacingProperty);

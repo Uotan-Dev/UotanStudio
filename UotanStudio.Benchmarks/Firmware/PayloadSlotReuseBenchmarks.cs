@@ -8,9 +8,6 @@ namespace UotanStudio.Benchmarks.Firmware;
 /// chunk fan-out gain from the serial per-partition hash chain that bounds it.
 /// <para>以不同工作者数量与编解码选择构建单分区 REPLACE 载荷，用以把分块并发收益与限制它的分区级串行哈希链区分开。</para>
 /// </summary>
-/// <remarks>
-/// Run with <c>dotnet run -c Release --project UotanStudio.Benchmarks -- --filter "*PayloadSlotReuse*" --job short</c>.
-/// </remarks>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 1, iterationCount: 2)]
 public class PayloadSlotReuseBenchmarks

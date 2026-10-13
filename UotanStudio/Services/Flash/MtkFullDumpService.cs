@@ -5,21 +5,6 @@ namespace UotanStudio.Services.Flash;
 
 /// <summary>Reads one MediaTek download agent's whole user data area into a single contiguous image.
 /// <para>将联发科下载代理的整个用户数据区读取为一份连续镜像。</para></summary>
-/// <remarks>
-/// <para>This is the host counterpart of the reference DA handler's whole-user-area read: it walks the byte
-/// range the agent reported for that family's user region in chunks bounded by the family's own reported
-/// packet or block limits, appends every chunk to a staging file, and replaces the destination only after the
-/// staged byte count equals the requested length. The image is never buffered in memory, so a device capacity
-/// is treated strictly as an addressing bound and never as a buffer size.</para>
-/// <para>这是参考 DA 处理程序“整用户区读取”在宿主机侧的对应实现：按该家族用户区域上报的字节范围，以家族自报
-/// 的包长或块大小为上限分块追加到暂存文件，只有暂存字节数与请求长度相等时才替换目标。镜像绝不在内存中整体缓冲，
-/// 因此设备容量只是寻址界限，绝不是缓冲区大小。</para>
-/// <para>The path is read-only: no erase, write, padding, retry, session startup, geometry discovery or
-/// authorization is performed. The caller supplies a session whose storage geometry was already discovered by
-/// the matching agent family, and every refusal happens before the first device byte is requested.</para>
-/// <para>本路径为只读：不擦除、不写入、不填充、不重试，也不启动会话、发现几何信息或授予授权。调用方提供已由
-/// 对应代理家族发现存储几何信息的会话，所有拒绝都发生在请求第一个设备字节之前。</para>
-/// </remarks>
 internal static class MtkFullDumpService
 {
     private const int MaximumChunkBytes = 1024 * 1024;
@@ -234,8 +219,8 @@ internal static class MtkFullDumpService
 
     /// <summary>Bounds one chunk by the family's reported packet limit and its own transfer alignment.
     /// <para>以家族自报的包长度上限与其传输对齐约束单次分块。</para></summary>
-    /// <param name="reportedPacketBytes">The packet bound the agent reported, or the host bound when the agent
-    /// reports none. <para>代理上报的包上限；代理未上报时使用宿主机上限。</para></param>
+    /// <param name="reportedPacketBytes">The packet bound the agent reported, or the built-in bound when it
+    /// reports none. <para>代理上报的包上限；未上报时使用内置上限。</para></param>
     /// <param name="alignmentBytes">The alignment the family's read path enforces.
     /// <para>该家族读取路径所强制的对齐。</para></param>
     /// <returns>A positive, alignment-respecting chunk size. <para>正的、满足对齐的分块大小。</para></returns>
@@ -278,8 +263,8 @@ internal static class MtkFullDumpService
     /// <para>实际读取的可寻址字节数。</para></param>
     /// <param name="ChunkBytes">The chunk bound used for every chunk except a shorter tail.
     /// <para>除较短尾块外每块使用的上限。</para></param>
-    /// <param name="Read">The family's own range read into the caller-supplied stream.
-    /// <para>该家族自身的范围读取，写入调用方提供的流。</para></param>
+    /// <param name="Read">The family's own range read into the supplied stream.
+    /// <para>该家族自身写入传入流的范围读取。</para></param>
     private sealed record MtkDumpTarget(string RegionName, long ReportedCapacityBytes, long RequestedBytes,
         int ChunkBytes, Func<MtkSession, long, int, Stream, CancellationToken, Task> Read)
     {

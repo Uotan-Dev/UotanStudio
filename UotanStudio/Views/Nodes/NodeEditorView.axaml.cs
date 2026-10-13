@@ -17,7 +17,7 @@ namespace UotanStudio.Views.Nodes;
 
 public partial class NodeEditorView : UserControl
 {
-    /// <summary><para>三栏在正常宽度下的最小宽度（像素）。</para>Pane minimums in pixels at normal widths.</summary>
+    /// <summary>Pane minimums in pixels at normal widths. <para>三栏在正常宽度下的最小宽度（像素）。</para></summary>
     private const double LeftPaneMinimum = 200;
     private const double CenterPaneMinimum = 200;
     private const double RightPaneMinimum = 280;
@@ -76,13 +76,13 @@ public partial class NodeEditorView : UserControl
     }
 
     /// <summary>
-    /// <para>左分割线按下：记录起始指针位置与三栏当前宽度，并捕获指针以便拖出拖动条也能继续跟随。</para>
     /// Left splitter pressed: records the pointer origin and the current pane widths, and captures the pointer
     /// so the drag keeps following even outside the handle.
+    /// <para>左分割线按下：记录起始指针位置与三栏当前宽度，并捕获指针以便拖出拖动条也能继续跟随。</para>
     /// </summary>
     private void OnLeftSplitterPressed(object? sender, PointerPressedEventArgs e) => BeginDrag(sender, e, left: true);
 
-    /// <summary><para>右分割线按下。</para>Right splitter pressed.</summary>
+    /// <summary>Right splitter pressed. <para>右分割线按下。</para></summary>
     private void OnRightSplitterPressed(object? sender, PointerPressedEventArgs e) => BeginDrag(sender, e, left: false);
 
     private void BeginDrag(object? sender, PointerPressedEventArgs e, bool left)
@@ -102,7 +102,7 @@ public partial class NodeEditorView : UserControl
         e.Handled = true;
     }
 
-    /// <summary><para>拖动中：把指针位移换算成相邻两栏的宽度搬运。</para>While dragging: turns the pointer offset into a width trade between the two adjacent panes.</summary>
+    /// <summary>While dragging: turns the pointer offset into a width trade between the two adjacent panes. <para>拖动中：把指针位移换算成相邻两栏的宽度搬运。</para></summary>
     private void OnSplitterMoved(object? sender, PointerEventArgs e)
     {
         if (!_draggingLeft && !_draggingRight)
@@ -123,14 +123,14 @@ public partial class NodeEditorView : UserControl
         e.Handled = true;
     }
 
-    /// <summary><para>松开指针：结束拖动。</para>Pointer released: ends the drag.</summary>
+    /// <summary>Pointer released: ends the drag. <para>松开指针：结束拖动。</para></summary>
     private void OnSplitterReleased(object? sender, PointerReleasedEventArgs e)
     {
         EndDrag(e.Pointer);
         e.Handled = true;
     }
 
-    /// <summary><para>指针捕获丢失（例如窗口失活）：结束拖动，避免残留拖动状态。</para>Pointer capture lost (window deactivated and so on): ends the drag so no state is left behind.</summary>
+    /// <summary>Pointer capture lost (window deactivated and so on): ends the drag so no state is left behind. <para>指针捕获丢失（例如窗口失活）：结束拖动，避免残留拖动状态。</para></summary>
     private void OnSplitterCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
         EndDrag(e.Pointer);
@@ -150,10 +150,10 @@ public partial class NodeEditorView : UserControl
     }
 
     /// <summary>
-    /// <para>搬运宽度：被拖动的两栏共享的总宽保持不变，因此第三栏的宽度与比例完全不受影响；
-    /// 两栏各自不小于当前生效的最小宽度，所以拖到头就停。</para>
     /// Trades width: the pair being dragged keeps its combined width, so the third pane's width and share are
     /// untouched, and each pane is clamped to the effective minimum so the drag simply stops at the limit.
+    /// <para>搬运宽度：被拖动的两栏共享的总宽保持不变，因此第三栏的宽度与比例完全不受影响；
+    /// 两栏各自不小于当前生效的最小宽度，所以拖到头就停。</para>
     /// </summary>
     private void ApplyDrag(double delta, bool leftPair)
     {
@@ -181,9 +181,9 @@ public partial class NodeEditorView : UserControl
     }
 
     /// <summary>
-    /// <para>把三栏宽度写回列定义：写入的是与像素等值的星号权重，因此窗口后续变宽/变窄时三栏仍按同一比例缩放。</para>
     /// Writes the three pane widths back as star weights equal to those pixel values, so later window resizes
     /// keep scaling all three panes in the same proportion.
+    /// <para>把三栏宽度写回列定义：写入的是与像素等值的星号权重，因此窗口后续变宽/变窄时三栏仍按同一比例缩放。</para>
     /// </summary>
     private void SetPaneWidths(double left, double center, double right)
     {
@@ -204,10 +204,10 @@ public partial class NodeEditorView : UserControl
     }
 
     /// <summary>
-    /// <para>最小宽度随可用宽度等比缩放：可用宽度不足以放下三个最小宽度时一起缩小，
-    /// 这样任何尺寸下三栏都放得下，不会出现最后一栏被裁掉的情况。</para>
     /// Scales the minimums down when the available width cannot hold all three, so every size fits and the last
     /// pane is never clipped.
+    /// <para>最小宽度随可用宽度等比缩放：可用宽度不足以放下三个最小宽度时一起缩小，
+    /// 这样任何尺寸下三栏都放得下，不会出现最后一栏被裁掉的情况。</para>
     /// </summary>
     private (double Left, double Center, double Right) EffectiveMinimums(double available)
     {
@@ -221,7 +221,7 @@ public partial class NodeEditorView : UserControl
         return (LeftPaneMinimum * scale, CenterPaneMinimum * scale, RightPaneMinimum * scale);
     }
 
-    /// <summary><para>把当前生效的最小宽度应用到列定义（面板尺寸变化时调用）。</para>Applies the effective minimums to the column definitions (called when the pane size changes).</summary>
+    /// <summary>Applies the effective minimums to the column definitions (called when the pane size changes). <para>把当前生效的最小宽度应用到列定义（面板尺寸变化时调用）。</para></summary>
     private void ApplyPaneMinimums()
     {
         UpdateResponsivePanes();
@@ -242,11 +242,11 @@ public partial class NodeEditorView : UserControl
     }
 
     /// <summary>
-    /// <para>画布节点选中变更时，将新增选中中的第一个节点同步到 ViewModel，驱动右侧属性面板。</para>
     /// When the canvas node selection changes, sync the first added node to the ViewModel to drive the properties panel.
+    /// <para>画布节点选中变更时，将新增选中中的第一个节点同步到 ViewModel，驱动右侧属性面板。</para>
     /// </summary>
-    /// <param name="sender"><para>事件源。</para>Event source.</param>
-    /// <param name="e"><para>选中变更事件参数。</para>The selection changed args.</param>
+    /// <param name="sender">Event source. <para>事件源。</para></param>
+    /// <param name="e">The selection changed args. <para>选中变更事件参数。</para></param>
     private void OnEditorSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (DataContext is not NodeEditorViewModel vm) return;
@@ -702,8 +702,8 @@ public partial class NodeEditorView : UserControl
     }
 
     /// <summary>
-    /// <para>路径端口「浏览」按钮：通过存储提供程序弹出文件选择器，把所选路径写入该端口的初始值。</para>
     /// Path-port browse button: opens a storage-provider file picker and writes the chosen path into the port's initial value.
+    /// <para>路径端口「浏览」按钮：通过存储提供程序弹出文件选择器，把所选路径写入该端口的初始值。</para>
     /// </summary>
     /// <param name="sender">The browse button whose Tag carries the target connector.</param>
     /// <param name="e">Routed event args.</param>
@@ -868,8 +868,8 @@ public partial class NodeEditorView : UserControl
     };
 
     /// <summary>
-    /// <para>节点项目标签条：点击标签把同名节点项目设为活动画布。</para>
     /// Node project tab strip: clicking a tab makes that node project the active canvas.
+    /// <para>节点项目标签条：点击标签把同名节点项目设为活动画布。</para>
     /// </summary>
     private async void OnNodeTabSelected(object? sender, RoutedEventArgs e)
     {
@@ -878,9 +878,9 @@ public partial class NodeEditorView : UserControl
     }
 
     /// <summary>
-    /// <para>节点项目标签条：关闭按钮丢弃该画布文档，解决方案仍保留登记与磁盘文件。</para>
     /// Node project tab strip: the close button discards the canvas document while the solution keeps the
     /// registration and the file on disk.
+    /// <para>节点项目标签条：关闭按钮丢弃该画布文档，解决方案仍保留登记与磁盘文件。</para>
     /// </summary>
     private async void OnNodeTabClosed(object? sender, RoutedEventArgs e)
     {

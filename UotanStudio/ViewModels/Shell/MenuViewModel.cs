@@ -23,35 +23,35 @@ using UotanStudio.Views.Shell;
 namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
-/// <para>顶部菜单栏视图模型，提供文件、编辑、视图、工具与帮助菜单的所有命令实现。</para>
 /// Top menu bar view model, providing command implementations for File, Edit, View, Tools, and Help menus.
+/// <para>顶部菜单栏视图模型，提供文件、编辑、视图、工具与帮助菜单的所有命令实现。</para>
 /// </summary>
 public partial class MenuViewModel : ViewModelBase, IDisposable
 {
     private static TopLevel? TopLevel => TopLevelExtensions.GetTopLevel();
 
     /// <summary>
-    /// <para>当前激活的底栏主面板；影响视图菜单中节点编辑器相关命令（小地图/缩放）的可用性。</para>
     /// Currently active bottom main panel; gates availability of node-editor-related View menu commands (minimap/zoom).
+    /// <para>当前激活的底栏主面板；影响视图菜单中节点编辑器相关命令（小地图/缩放）的可用性。</para>
     /// </summary>
     /// <remarks>
-    /// <para>由 <c>MainView</c> 通过 <see cref="ActiveTabChangedMessage"/> 在面板切换时更新；初始为 <see cref="ActiveTab.Workspace"/>（与 MainView 启动时选中的工作区页对应）。</para>
     /// Updated by <c>MainView</c> via <see cref="ActiveTabChangedMessage"/> on tab switch; defaults to <see cref="ActiveTab.Workspace"/> (matching the workspace page MainView selects on startup).
+    /// <para>由 <c>MainView</c> 通过 <see cref="ActiveTabChangedMessage"/> 在面板切换时更新；初始为 <see cref="ActiveTab.Workspace"/>（与 MainView 启动时选中的工作区页对应）。</para>
     /// </remarks>
     private ActiveTab _currentTab = ActiveTab.Workspace;
 
     private readonly ProjectOperationsService _projectOps;
 
     /// <summary>
-    /// <para>缓存的集合变更事件处理器，用于在 <see cref="Dispose"/> 中取消订阅。</para>
     /// Cached collection-changed handler so it can be unsubscribed in <see cref="Dispose"/>.
+    /// <para>缓存的集合变更事件处理器，用于在 <see cref="Dispose"/> 中取消订阅。</para>
     /// </summary>
     private readonly NotifyCollectionChangedEventHandler _recentProjectsChangedHandler;
 
     /// <summary>
-    /// <para>创建菜单视图模型，订阅激活面板切换消息以维护 <see cref="_currentTab"/>，并加载最近打开项目列表。</para>
     /// Creates the menu view model, subscribing to active-tab-changed messages to maintain <see cref="_currentTab"/>
     /// and loading the recent projects list.
+    /// <para>创建菜单视图模型，订阅激活面板切换消息以维护 <see cref="_currentTab"/>，并加载最近打开项目列表。</para>
     /// </summary>
     public MenuViewModel() : this(ProjectOperationsService.Instance) { }
 
@@ -65,26 +65,26 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>最近打开的解决方案列表（最新在前），用于「最近打开」子菜单。</para>
     /// Recently opened solutions (most recent first), backing the "Open Recent" submenu.
+    /// <para>最近打开的解决方案列表（最新在前），用于「最近打开」子菜单。</para>
     /// </summary>
     public ObservableCollection<RecentProjectEntry> RecentProjects { get; } = [];
 
     /// <summary>
-    /// <para>是否存在最近打开记录，驱动「最近打开」菜单项是否可用。</para>
     /// Whether any recent projects exist, gating the "Open Recent" menu item's availability.
+    /// <para>是否存在最近打开记录，驱动「最近打开」菜单项是否可用。</para>
     /// </summary>
     public bool HasRecentProjects => RecentProjects.Count > 0;
 
     /// <summary>
-    /// <para>最多保留的最近打开项目数。</para>
     /// Maximum number of recent projects kept.
+    /// <para>最多保留的最近打开项目数。</para>
     /// </summary>
     private const int MaxRecentProjects = 10;
 
     /// <summary>
-    /// <para>从应用设置加载最近打开项目列表（仅保留实际存在的文件）。</para>
     /// Loads the recent projects list from application settings, keeping only entries whose files still exist.
+    /// <para>从应用设置加载最近打开项目列表（仅保留实际存在的文件）。</para>
     /// </summary>
     private void LoadRecentProjects()
     {
@@ -107,10 +107,10 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>记录一个最近打开的解决方案：去重置顶、裁剪数量并持久化。</para>
     /// Records a recently opened solution: deduplicates to the top, trims the list and persists it.
+    /// <para>记录一个最近打开的解决方案：去重置顶、裁剪数量并持久化。</para>
     /// </summary>
-    /// <param name="path"><para>解决方案文件完整路径。</para>The full solution file path.</param>
+    /// <param name="path">The full solution file path. <para>解决方案文件完整路径。</para></param>
     private void RecordRecentProject(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -135,8 +135,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>将最近打开项目列表持久化到应用设置（合并写入，不覆盖其他设置项）。</para>
     /// Persists the recent projects list to application settings (merged write, preserving other settings).
+    /// <para>将最近打开项目列表持久化到应用设置（合并写入，不覆盖其他设置项）。</para>
     /// </summary>
     private void PersistRecentProjects()
     {
@@ -144,12 +144,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>创建一个最近项目条目，其打开命令直接调用 <see cref="OpenProjectFromPathAsync"/>；
-    /// 打开失败（如文件已被删除）时自动移除该条目并持久化。</para>
     /// Creates a recent project entry whose open command invokes <see cref="OpenProjectFromPathAsync"/>;
     /// on failure (e.g. the file was deleted) the entry is removed and persisted automatically.
+    /// <para>创建一个最近项目条目，其打开命令直接调用 <see cref="OpenProjectFromPathAsync"/>；
+    /// 打开失败（如文件已被删除）时自动移除该条目并持久化。</para>
     /// </summary>
-    /// <param name="path"><para>解决方案文件完整路径。</para>The full solution file path.</param>
+    /// <param name="path">The full solution file path. <para>解决方案文件完整路径。</para></param>
     private RecentProjectEntry CreateRecentEntry(string path) =>
         new(path, new AsyncRelayCommand(async () =>
         {
@@ -165,11 +165,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         }));
 
     /// <summary>
-    /// <para>响应激活面板切换：更新 <see cref="_currentTab"/> 并通知节点编辑器相关命令重新计算可用性。</para>
     /// Responds to active-tab changes: updates <see cref="_currentTab"/> and notifies node-editor-related commands to re-evaluate their availability.
+    /// <para>响应激活面板切换：更新 <see cref="_currentTab"/> 并通知节点编辑器相关命令重新计算可用性。</para>
     /// </summary>
-    /// <param name="recipient"><para>消息接收者。</para>The message recipient.</param>
-    /// <param name="message"><para>包含新激活面板的消息。</para>The message carrying the newly active tab.</param>
+    /// <param name="recipient">The message recipient. <para>消息接收者。</para></param>
+    /// <param name="message">The message carrying the newly active tab. <para>包含新激活面板的消息。</para></param>
     private void OnActiveTabChanged(object recipient, ActiveTabChangedMessage message)
     {
         if (_currentTab == message.Tab) return;
@@ -182,19 +182,19 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>当前是否在节点编辑器面板；仅供 <c>CanExecute</c> 私有方法使用。</para>
     /// Whether the Node Editor panel is currently active; used solely by <c>CanExecute</c> helpers.
+    /// <para>当前是否在节点编辑器面板；仅供 <c>CanExecute</c> 私有方法使用。</para>
     /// </summary>
     private bool IsNodeEditorActive => _currentTab == ActiveTab.NodeEditor;
 
     /// <summary>
-    /// <para>打开新建项目配置窗口（新建解决方案语义）；点击创建后按组合路径创建解决方案、
-    /// 导入选中镜像；单文件容器（super / payload.bin / zip）按勾选条目在 images/ 内原地进行向提取，
-    /// 勾选完全解压时对提取出的受支持 img 继续递归解包为同名文件夹。</para>
     /// Opens the new-project form (new-solution semantics); on create, builds the solution from the
     /// combined path, imports selected images, extracts selected entries from a single super /
     /// payload.bin / zip container in place inside images/, and, with full unpack checked, recursively
     /// unpacks the extracted supported imgs into same-name folders.
+    /// <para>打开新建项目配置窗口（新建解决方案语义）；点击创建后按组合路径创建解决方案、
+    /// 导入选中镜像；单文件容器（super / payload.bin / zip）按勾选条目在 images/ 内原地进行向提取，
+    /// 勾选完全解压时对提取出的受支持 img 继续递归解包为同名文件夹。</para>
     /// </summary>
     [RelayCommand]
     private async Task NewProjectAsync()
@@ -311,10 +311,10 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>普通多选镜像的解包（新建解决方案与新增子项目共用）：只解包导入成功的镜像条目，
-    /// 勾选完全解压时递归解包嵌套镜像。</para>
     /// Unpacking for plain multi-selected images (shared by new solution and new sub-project): only
     /// imported entries are unpacked; with full unpack checked nested images are unpacked recursively.
+    /// <para>普通多选镜像的解包（新建解决方案与新增子项目共用）：只解包导入成功的镜像条目，
+    /// 勾选完全解压时递归解包嵌套镜像。</para>
     /// </summary>
     private async Task UnpackSelectedPlainImagesAsync(NewProjectFormResult form, ImageViewModel images, NewProjectWindow window, CancellationToken cancellationToken = default)
     {
@@ -330,12 +330,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>容器导入与定向提取（新建解决方案与新增子项目共用）：复制容器到 images/ 后按勾选
-    /// 原地提取；勾选完全解压时对提取产物执行递归解包。提取在后台线程执行并写入日志。</para>
     /// Container import plus targeted extraction (shared by new solution and new sub-project): the
     /// container is copied into images/ and the selected entries are extracted in place; with full
     /// unpack checked the extracted images are recursively unpacked. Extraction runs on a background
     /// thread and writes to the log.
+    /// <para>容器导入与定向提取（新建解决方案与新增子项目共用）：复制容器到 images/ 后按勾选
+    /// 原地提取；勾选完全解压时对提取产物执行递归解包。提取在后台线程执行并写入日志。</para>
     /// </summary>
     private static async Task UnpackWithCreationProgressAsync(ImageViewModel images,
         IReadOnlyList<ImageEntryViewModel> entries, bool fully, NewProjectWindow window, CancellationToken cancellationToken = default)
@@ -426,19 +426,19 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>创建流程的合并 my_ 分区步骤：发现子项目根下解包出的 system 与 my_* 目录树，逐个把
-    /// my_* 树并入 system 树并对分区自带的 file_contexts/fs_config 改基，全部成功后移除已合并的
-    /// my_* 树、images/ 内同名镜像与 .uotan/metadata 元数据。system 或 my_* 树缺失时记录日志并跳过；
-    /// 只并入与 system 树同槽位的 my_* 树，其它槽位的目录树保持原样。</para>
     /// Merge step of the creation flow: discovers the unpacked system and my_* trees under the
     /// sub-project root, merges each my_* tree into the system tree with its own file_contexts/fs_config
     /// rebased, and after all merges succeed removes the merged trees, their images/ files and the
     /// .uotan/metadata entries. A missing system or my_* tree is logged and skipped, and only my_* trees
     /// of the system tree's own slot are merged — a tree of another slot is left in place.
+    /// <para>创建流程的合并 my_ 分区步骤：发现子项目根下解包出的 system 与 my_* 目录树，逐个把
+    /// my_* 树并入 system 树并对分区自带的 file_contexts/fs_config 改基，全部成功后移除已合并的
+    /// my_* 树、images/ 内同名镜像与 .uotan/metadata 元数据。system 或 my_* 树缺失时记录日志并跳过；
+    /// 只并入与 system 树同槽位的 my_* 树，其它槽位的目录树保持原样。</para>
     /// </summary>
-    /// <param name="window"><para>显示进度的新建项目窗口。</para>The new-project window showing progress.</param>
-    /// <param name="cancellationToken"><para>取消合并；取消时不会删除任何文件。</para>Cancels the merge; no files are removed on cancellation.</param>
-    /// <exception cref="IOException"><para>子项目根目录缺失或某个分区合并失败。</para>The sub-project root is missing or a partition merge failed.</exception>
+    /// <param name="window">The new-project window showing progress. <para>显示进度的新建项目窗口。</para></param>
+    /// <param name="cancellationToken">Cancels the merge; no files are removed on cancellation. <para>取消合并；取消时不会删除任何文件。</para></param>
+    /// <exception cref="IOException">The sub-project root is missing or a partition merge failed. <para>子项目根目录缺失或某个分区合并失败。</para></exception>
     private async Task MergeMyPartitionsIntoSystemAsync(NewProjectWindow window, CancellationToken cancellationToken)
     {
         var project = ProjectContextService.Instance.ActiveSubProject;
@@ -506,11 +506,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             $"Removed {myTrees.Count} merged my-partition tree(s) with their images and metadata.");
     }
 
-    /// <summary><para>在资源管理器选定目录中新建文件夹。</para>Creates a folder in the explorer directory.</summary>
+    /// <summary>Creates a folder in the explorer directory. <para>在资源管理器选定目录中新建文件夹。</para></summary>
     [RelayCommand]
     private Task NewFolderAsync() => CreateExplorerItemAsync(isDirectory: true);
 
-    /// <summary><para>在资源管理器选定目录中新建文件。</para>Creates a file in the explorer directory.</summary>
+    /// <summary>Creates a file in the explorer directory. <para>在资源管理器选定目录中新建文件。</para></summary>
     [RelayCommand]
     private Task NewFileAsync() => CreateExplorerItemAsync(isDirectory: false);
 
@@ -539,7 +539,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary><para>选择普通文件夹并在资源管理器中浏览。</para>Browses a selected folder in the explorer.</summary>
+    /// <summary>Browses a selected folder in the explorer. <para>选择普通文件夹并在资源管理器中浏览。</para></summary>
     [RelayCommand]
     private async Task OpenFolderAsync()
     {
@@ -560,7 +560,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary><para>选择文件并使用现有编辑器打开。</para>Opens selected files in the existing editors.</summary>
+    /// <summary>Opens selected files in the existing editors. <para>选择文件并使用现有编辑器打开。</para></summary>
     [RelayCommand]
     private async Task OpenFileAsync()
     {
@@ -602,9 +602,9 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>打开现有解决方案，弹出文件打开对话框选择 <c>.uotan</c> 文件，恢复镜像清单、打包设置、画布与操作历史。</para>
     /// Opens an existing solution by showing a file-open dialog to pick a <c>.uotan</c> file, restoring the
     /// image list, packing settings, canvas and operation history.
+    /// <para>打开现有解决方案，弹出文件打开对话框选择 <c>.uotan</c> 文件，恢复镜像清单、打包设置、画布与操作历史。</para>
     /// </summary>
     [RelayCommand]
     private async Task OpenProjectAsync()
@@ -632,11 +632,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>从指定路径打开解决方案（供菜单与命令行共用）：加载固件项目与节点项目，重建镜像清单、打包设置、
-    /// 画布与操作历史。返回是否成功。</para>
     /// Opens the solution at the specified path (shared by the menu and file associations): loads the firmware
     /// and node projects, rebuilding the image list, packing settings, canvas and operation history. Returns
     /// whether the open succeeded.
+    /// <para>从指定路径打开解决方案（供菜单与命令行共用）：加载固件项目与节点项目，重建镜像清单、打包设置、
+    /// 画布与操作历史。返回是否成功。</para>
     /// </summary>
     public async Task<bool> OpenProjectFromPathAsync(string path)
     {
@@ -651,12 +651,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>把打开失败的会话原因转成显式错误弹窗：文件缺失、解决方案版本不可读、节点项目损坏各有独立文案，
-    /// 版本不匹配时附上磁盘上的格式版本以便判断是否需要用旧版工具迁移。无窗口宿主（测试）只写日志。</para>
     /// Turns the session's open-failure reason into an explicit error dialog: a missing file, an unreadable
     /// solution and a corrupt node project each get their own wording, and a version mismatch reports the stored
     /// format version so the user can tell whether an older build is needed for migration. Hosts without a
     /// window (tests) only log.
+    /// <para>把打开失败的会话原因转成显式错误弹窗：文件缺失、解决方案版本不可读、节点项目损坏各有独立文案，
+    /// 版本不匹配时附上磁盘上的格式版本以便判断是否需要用旧版工具迁移。无窗口宿主（测试）只写日志。</para>
     /// </summary>
     private async Task ReportOpenFailureAsync()
     {
@@ -684,10 +684,10 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>把解决方案登记的节点项目载入画布并切到节点编辑器选项卡（供资源管理器双击与标签条共用）。
-    /// 返回是否成功。</para>
     /// Loads a registered node project into the canvas and switches to the Node Editor tab (shared by the
     /// explorer double-click and the canvas tab strip). Returns whether the open succeeded.
+    /// <para>把解决方案登记的节点项目载入画布并切到节点编辑器选项卡（供资源管理器双击与标签条共用）。
+    /// 返回是否成功。</para>
     /// </summary>
     public async Task<bool> OpenNodeProjectAsync(string name)
     {
@@ -697,23 +697,23 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>切换活动节点项目画布。</para>
     /// Switches the active node project canvas.
+    /// <para>切换活动节点项目画布。</para>
     /// </summary>
     public Task<bool> SetActiveNodeProjectAsync(string name) => _projectOps.SetActiveNodeProjectAsync(name);
 
     /// <summary>
-    /// <para>关闭活动节点项目的画布文档，保留解决方案登记与磁盘文件。</para>
     /// Closes the canvas document of a node project, keeping its solution registration and file on disk.
+    /// <para>关闭活动节点项目的画布文档，保留解决方案登记与磁盘文件。</para>
     /// </summary>
     public Task<bool> CloseNodeProjectAsync(string name) => _projectOps.CloseNodeProjectAsync(name);
 
     /// <summary>
-    /// <para>在当前解决方案中新建一个空白节点项目：名称自动取下一个未占用的 <c>NodeN</c>，写入
-    /// <c>nodes/&lt;name&gt;.uotannode</c> 并成为活动画布。未打开解决方案时给出提示并跳过。</para>
     /// Creates an empty node project in the open solution: the name is the next unused <c>NodeN</c>, the file
     /// is written to <c>nodes/&lt;name&gt;.uotannode</c>, and it becomes the active canvas. Without an open
     /// solution it reports and skips.
+    /// <para>在当前解决方案中新建一个空白节点项目：名称自动取下一个未占用的 <c>NodeN</c>，写入
+    /// <c>nodes/&lt;name&gt;.uotannode</c> 并成为活动画布。未打开解决方案时给出提示并跳过。</para>
     /// </summary>
     [RelayCommand]
     private async Task CreateNodeProjectAsync()
@@ -751,8 +751,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>将若干文件导入当前解决方案的镜像清单（供命令行与菜单共用）。</para>
     /// Imports the given files into the current solution's image list (shared by file associations and the menu).
+    /// <para>将若干文件导入当前解决方案的镜像清单（供命令行与菜单共用）。</para>
     /// </summary>
     public async Task ImportFilesAsync(string[] paths)
     {
@@ -760,13 +760,13 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>向当前解决方案添加新子项目：打开新建表单（子项目模式，位置默认当前解决方案根目录、
-    /// 名称默认跳过现有子项目的 NewProjectN）；点击创建后写入 <c>.uotanfw</c> 与解决方案文件，
-    /// 随后按勾选导入镜像或从容器定向提取（与新建解决方案共用同一流程）。</para>
     /// Adds a new sub-project to the current solution: opens the new-project form (sub-project mode;
     /// the location defaults to the solution root and the name to the first NewProjectN that skips
     /// existing sub-projects); on create, writes the <c>.uotanfw</c> and solution files, then imports
     /// images or extracts from a container per the selection (shared with the new-solution flow).
+    /// <para>向当前解决方案添加新子项目：打开新建表单（子项目模式，位置默认当前解决方案根目录、
+    /// 名称默认跳过现有子项目的 NewProjectN）；点击创建后写入 <c>.uotanfw</c> 与解决方案文件，
+    /// 随后按勾选导入镜像或从容器定向提取（与新建解决方案共用同一流程）。</para>
     /// </summary>
     [RelayCommand]
     private async Task AddSubProjectAsync()
@@ -818,19 +818,19 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>拒绝把项目/子项目脚手架落到当前打开的解决方案树内部。新解决方案必须是外部独立目录；
-    /// 新增子项目必须是解决方案根的直接子级（独立平铺文件夹，禁止嵌套）。</para>
     /// Rejects scaffolding a new project or sub-project inside the currently open solution tree: a new
     /// solution must be an external, standalone directory; a new sub-project must be a direct child of
     /// the solution root (an independent flat folder, never nested).
+    /// <para>拒绝把项目/子项目脚手架落到当前打开的解决方案树内部。新解决方案必须是外部独立目录；
+    /// 新增子项目必须是解决方案根的直接子级（独立平铺文件夹，禁止嵌套）。</para>
     /// </summary>
-    /// <param name="location"><para>对话框选定的组合目录。</para>The combined directory chosen in the form.</param>
+    /// <param name="location">The combined directory chosen in the form. <para>对话框选定的组合目录。</para></param>
     /// <param name="requireDirectChild">
-    /// <para><c>true</c> 表示新增子项目（要求是解决方案根的直接子级）；<c>false</c> 表示新建解决方案（要求不位于现有项目树内）。</para>
     /// <c>true</c> for a new sub-project (must be a direct child of the solution root); <c>false</c> for a new
     /// solution (must not sit inside an existing project tree).
+    /// <para><c>true</c> 表示新增子项目（要求是解决方案根的直接子级）；<c>false</c> 表示新建解决方案（要求不位于现有项目树内）。</para>
     /// </param>
-    /// <exception cref="IOException"><para>位置会形成嵌套布局时。</para>Thrown when the location would nest.</exception>
+    /// <exception cref="IOException">Thrown when the location would nest. <para>位置会形成嵌套布局时。</para></exception>
     private static void GuardProjectLocationNotNested(string location, bool requireDirectChild)
     {
         var root = ProjectContextService.Instance.RootDirectory;
@@ -852,8 +852,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>当前工程文件路径，由保存/打开操作填充。</para>
     /// Current project file path, populated by save/open operations.
+    /// <para>当前工程文件路径，由保存/打开操作填充。</para>
     /// </summary>
     private string? _currentProjectPath
     {
@@ -862,8 +862,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>当前节点编辑器视图模型引用，由外部设置以便持久化访问画布。</para>
     /// Current node editor view model reference, set externally so persistence can access the canvas.
+    /// <para>当前节点编辑器视图模型引用，由外部设置以便持久化访问画布。</para>
     /// </summary>
     public NodeEditorViewModel? NodeEditorVM
     {
@@ -872,8 +872,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>当前工作区视图模型引用，由外部设置以便 Ctrl+S 保存活动文档。</para>
     /// Current workspace view model reference, set externally so Ctrl+S can save the active document.
+    /// <para>当前工作区视图模型引用，由外部设置以便 Ctrl+S 保存活动文档。</para>
     /// </summary>
     public WorkspaceViewModel? WorkspaceVM
     {
@@ -882,9 +882,9 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>保存当前项目，若无路径则触发另存流程。先尝试保存当前活动的文档编辑器。</para>
     /// Saves the current project (and the active document editor first, if applicable),
     /// triggering Save As if there is no project path yet.
+    /// <para>保存当前项目，若无路径则触发另存流程。先尝试保存当前活动的文档编辑器。</para>
     /// </summary>
     [RelayCommand]
     private async Task SaveAsync()
@@ -902,15 +902,15 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>若当前活动文档具有 SaveCommand 且 IsDirty，则执行保存。</para>
     /// If the active document has a SaveCommand and IsDirty, executes it.
+    /// <para>若当前活动文档具有 SaveCommand 且 IsDirty，则执行保存。</para>
     /// </summary>
     private async Task SaveActiveDocumentAsync() => await _projectOps.SaveActiveDocumentAsync();
 
     /// <summary>
-    /// <para>另存为，弹出文件保存对话框选择新解决方案路径，复制镜像目录到新根目录后持久化。</para>
     /// Saves the solution under a new path, showing a file-save dialog, copying the image directory to the
     /// new root, then persisting.
+    /// <para>另存为，弹出文件保存对话框选择新解决方案路径，复制镜像目录到新根目录后持久化。</para>
     /// </summary>
     [RelayCommand]
     private async Task SaveAsAsync()
@@ -922,18 +922,18 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>将当前工程完整快照写入指定路径。</para>
     /// Writes the complete project snapshot to the specified path.
+    /// <para>将当前工程完整快照写入指定路径。</para>
     /// </summary>
     private async Task PersistToAsync(string path) => await _projectOps.PersistToAsync(path);
 
     /// <summary>
-    /// <para>导出当前工作区内容，弹出文件保存对话框选择导出路径。</para>
     /// Exports the current workspace contents, showing a file-save dialog to pick the export path.
+    /// <para>导出当前工作区内容，弹出文件保存对话框选择导出路径。</para>
     /// </summary>
     /// <summary>
-    /// <para>打开文件比较：先后选择两个文件并发送文件比较请求消息。</para>
     /// Opens a file comparison: picks two files and sends the file-compare request message.
+    /// <para>打开文件比较：先后选择两个文件并发送文件比较请求消息。</para>
     /// </summary>
     [RelayCommand]
     private async Task CompareFilesAsync()
@@ -951,8 +951,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>打开文件夹比较：先后选择两个文件夹并发送文件夹比较请求消息。</para>
     /// Opens a folder comparison: picks two folders and sends the folder-compare request message.
+    /// <para>打开文件夹比较：先后选择两个文件夹并发送文件夹比较请求消息。</para>
     /// </summary>
     [RelayCommand]
     private async Task CompareFoldersAsync()
@@ -994,8 +994,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>导出当前解决方案为 ZIP 存档。</para>
     /// Exports the current solution as a ZIP archive.
+    /// <para>导出当前解决方案为 ZIP 存档。</para>
     /// </summary>
     [RelayCommand]
     private async Task ExportAsync()
@@ -1053,9 +1053,9 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>导入镜像，弹出文件多选对话框后复制所选文件到项目 <c>images/</c> 目录并加入镜像清单。</para>
     /// Imports images: shows a multi-select file dialog, then copies the chosen files into the project
     /// <c>images/</c> directory and adds them to the image list.
+    /// <para>导入镜像，弹出文件多选对话框后复制所选文件到项目 <c>images/</c> 目录并加入镜像清单。</para>
     /// </summary>
     [RelayCommand]
     private async Task ImportImageAsync()
@@ -1085,9 +1085,9 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>导出选中镜像，弹出文件保存对话框选择目标路径后从项目目录复制出去。</para>
     /// Exports the selected image: shows a save-file dialog to pick the target path, then copies the
     /// image out of the project directory.
+    /// <para>导出选中镜像，弹出文件保存对话框选择目标路径后从项目目录复制出去。</para>
     /// </summary>
     [RelayCommand]
     private async Task ExportImageAsync()
@@ -1124,8 +1124,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>退出应用程序，发送退出消息由 App 处理。</para>
     /// Exits the application by sending an exit message handled by App.
+    /// <para>退出应用程序，发送退出消息由 App 处理。</para>
     /// </summary>
     [RelayCommand]
     private void Exit()
@@ -1133,7 +1133,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         WeakReferenceMessenger.Default.Send(new ExitApplicationMessage());
     }
 
-    /// <summary><para>撤销当前页面内的编辑。</para>Undoes edits in the current page.</summary>
+    /// <summary>Undoes edits in the current page. <para>撤销当前页面内的编辑。</para></summary>
     [RelayCommand]
     private async Task Undo()
     {
@@ -1153,7 +1153,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             await _projectOps.UndoAsync();
     }
 
-    /// <summary><para>重做当前页面内的编辑。</para>Redoes edits in the current page.</summary>
+    /// <summary>Redoes edits in the current page. <para>重做当前页面内的编辑。</para></summary>
     [RelayCommand]
     private async Task Redo()
     {
@@ -1173,23 +1173,23 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             await _projectOps.RedoAsync();
     }
 
-    /// <summary><para>剪切选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Cut selection: delegates to the active document first, falling back to the node editor.</summary>
+    /// <summary>Cut selection: delegates to the active document first, falling back to the node editor. <para>剪切选中内容：优先委托给活动文档，否则转发到节点编辑器。</para></summary>
     [RelayCommand]
     private void Cut() => ExecuteEditAction(NodeEditorAction.Cut, static editable => editable.Cut());
 
-    /// <summary><para>复制选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Copy selection: delegates to the active document first, falling back to the node editor.</summary>
+    /// <summary>Copy selection: delegates to the active document first, falling back to the node editor. <para>复制选中内容：优先委托给活动文档，否则转发到节点编辑器。</para></summary>
     [RelayCommand]
     private void Copy() => ExecuteEditAction(NodeEditorAction.Copy, static editable => editable.Copy());
 
-    /// <summary><para>粘贴剪贴板内容：优先委托给活动文档，否则转发到节点编辑器。</para>Paste clipboard contents: delegates to the active document first, falling back to the node editor.</summary>
+    /// <summary>Paste clipboard contents: delegates to the active document first, falling back to the node editor. <para>粘贴剪贴板内容：优先委托给活动文档，否则转发到节点编辑器。</para></summary>
     [RelayCommand]
     private void Paste() => ExecuteEditAction(NodeEditorAction.Paste, static editable => editable.Paste());
 
-    /// <summary><para>删除选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Delete selection: delegates to the active document first, falling back to the node editor.</summary>
+    /// <summary>Delete selection: delegates to the active document first, falling back to the node editor. <para>删除选中内容：优先委托给活动文档，否则转发到节点编辑器。</para></summary>
     [RelayCommand]
     private void Delete() => ExecuteEditAction(NodeEditorAction.Delete, static editable => editable.Delete());
 
-    /// <summary><para>全选：优先委托给活动文档，否则转发到节点编辑器。</para>Select all: delegates to the active document first, falling back to the node editor.</summary>
+    /// <summary>Select all: delegates to the active document first, falling back to the node editor. <para>全选：优先委托给活动文档，否则转发到节点编辑器。</para></summary>
     [RelayCommand]
     private void SelectAll() => ExecuteEditAction(NodeEditorAction.SelectAll, static editable => editable.SelectAll());
 
@@ -1209,8 +1209,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>尝试获取当前活动文档的可编辑视图模型。</para>
     /// Attempts to get the editable view model of the currently active document.
+    /// <para>尝试获取当前活动文档的可编辑视图模型。</para>
     /// </summary>
     private IEditable? TryGetEditable() => _currentTab == ActiveTab.Workspace
         ? WorkspaceVM?.FindDocumentsPanePublic()?.ActiveDockable as IEditable : null;
@@ -1229,28 +1229,28 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void Replace() => WeakReferenceMessenger.Default.Send(new OpenDocumentSearchMessage(ShowReplace: true));
 
-    /// <summary><para>切换到工作区选项卡。</para>Switch to the Workspace tab.</summary>
+    /// <summary>Switch to the Workspace tab. <para>切换到工作区选项卡。</para></summary>
     [RelayCommand]
     private void GoToWorkspace()
     {
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
     }
 
-    /// <summary><para>切换到节点编辑器选项卡。</para>Switch to the Node Editor tab.</summary>
+    /// <summary>Switch to the Node Editor tab. <para>切换到节点编辑器选项卡。</para></summary>
     [RelayCommand]
     private void GoToNodeEditor()
     {
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.NodeEditor));
     }
 
-    /// <summary><para>切换到设置选项卡。</para>Switch to the Settings tab.</summary>
+    /// <summary>Switch to the Settings tab. <para>切换到设置选项卡。</para></summary>
     [RelayCommand]
     private void GoToSettings()
     {
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Settings));
     }
 
-    /// <summary><para>打开或聚焦工作区对比文档。</para>Open or focus the workspace compare document.</summary>
+    /// <summary>Open or focus the workspace compare document. <para>打开或聚焦工作区对比文档。</para></summary>
     [RelayCommand]
     private void GoToCompare()
     {
@@ -1259,17 +1259,17 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>工作区停靠面板服务；「窗口」菜单项通过其可见性属性绑定 IsChecked，并调用显示/隐藏命令。</para>
     /// Workspace dock panel service; the Window menu items bind IsChecked to its visibility
     /// properties and invoke its show/hide commands.
+    /// <para>工作区停靠面板服务；「窗口」菜单项通过其可见性属性绑定 IsChecked，并调用显示/隐藏命令。</para>
     /// </summary>
     public WorkspacePanelService WorkspacePanels => WorkspacePanelService.Instance;
 
-    /// <summary><para>显示或隐藏项目资源管理器面板。</para>Show or hide the Project Explorer panel.</summary>
+    /// <summary>Show or hide the Project Explorer panel. <para>显示或隐藏项目资源管理器面板。</para></summary>
     [RelayCommand]
     private void ToggleProjectExplorer() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.ProjectExplorer);
 
-    /// <summary><para>显示或隐藏打包设置面板。</para>Show or hide the packing settings panel.</summary>
+    /// <summary>Show or hide the packing settings panel. <para>显示或隐藏打包设置面板。</para></summary>
     [RelayCommand]
     private void ToggleProjectSetting() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.ProjectSetting);
 
@@ -1277,7 +1277,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void TogglePluginTool() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.PluginTool);
 
-    /// <summary><para>显示或隐藏镜像管理面板。</para>Show or hide the image manager panel.</summary>
+    /// <summary>Show or hide the image manager panel. <para>显示或隐藏镜像管理面板。</para></summary>
     [RelayCommand]
     private void ToggleImagesView() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.ImagesView);
 
@@ -1285,15 +1285,15 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void ToggleAiAssistant() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.AiAssistant);
 
-    /// <summary><para>显示或隐藏属性面板。</para>Show or hide the properties panel.</summary>
+    /// <summary>Show or hide the properties panel. <para>显示或隐藏属性面板。</para></summary>
     [RelayCommand]
     private void ToggleProperties() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.Properties);
 
-    /// <summary><para>显示或隐藏工作区日志面板。</para>Show or hide the workspace log panel.</summary>
+    /// <summary>Show or hide the workspace log panel. <para>显示或隐藏工作区日志面板。</para></summary>
     [RelayCommand]
     private void ToggleWorkspaceLog() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.WorkspaceLog);
 
-    /// <summary><para>显示或隐藏 ADB 日志面板。</para>Show or hide the ADB log panel.</summary>
+    /// <summary>Show or hide the ADB log panel. <para>显示或隐藏 ADB 日志面板。</para></summary>
     [RelayCommand]
     private void ToggleAdbLog() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.AdbLog);
 
@@ -1302,8 +1302,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private void ToggleTerminal() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.Terminal);
 
     /// <summary>
-    /// <para>打开设备管理器窗口；窗口已打开时前置聚焦。</para>
     /// Opens the device manager window, bringing it to the foreground if already open.
+    /// <para>打开设备管理器窗口；窗口已打开时前置聚焦。</para>
     /// </summary>
     [RelayCommand]
     private void OpenDevice()
@@ -1312,8 +1312,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>打开全局日志窗口；窗口已打开时前置聚焦。</para>
     /// Opens the global log window, bringing it to the foreground if already open.
+    /// <para>打开全局日志窗口；窗口已打开时前置聚焦。</para>
     /// </summary>
     [RelayCommand]
     private void OpenLogWindow()
@@ -1322,8 +1322,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>打开 USB 树视图窗口；窗口已打开时前置聚焦。</para>
     /// Opens the USB tree-view window, bringing it to the foreground if already open.
+    /// <para>打开 USB 树视图窗口；窗口已打开时前置聚焦。</para>
     /// </summary>
     [RelayCommand]
     private void OpenUsbTree()
@@ -1332,21 +1332,21 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>当前已打开的设备管理器窗口引用，用于单例前置与生命周期释放。</para>
     /// Reference to the currently open device manager window, used for singleton focusing and lifecycle release.
+    /// <para>当前已打开的设备管理器窗口引用，用于单例前置与生命周期释放。</para>
     /// </summary>
     private static Window? _deviceWindow;
 
     /// <summary>
-    /// <para>当前已打开的全局日志窗口引用，用于单例前置与生命周期释放。</para>
     /// Reference to the currently open global log window, used for singleton focusing and lifecycle release.
+    /// <para>当前已打开的全局日志窗口引用，用于单例前置与生命周期释放。</para>
     /// </summary>
     private static Window? _logWindow;
 
     /// <summary>
-    /// <para>当前已打开的 USB 树视图窗口引用，用于单例前置与生命周期释放。</para>
     /// Reference to the currently open USB tree-view window, used for singleton focusing and lifecycle
     /// release.
+    /// <para>当前已打开的 USB 树视图窗口引用，用于单例前置与生命周期释放。</para>
     /// </summary>
     private static Window? _usbTreeWindow;
 
@@ -1383,12 +1383,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private void OpenFileChecksum() => ShowFileChecksumWindow();
 
     /// <summary>
-    /// <para>打开或前置文件校验器窗口：传入路径时切换其目标文件（资源管理器右键复用同一窗口），
-    /// 不传路径（工具菜单入口）时保留窗口当前状态。</para>
     /// Opens or activates the checksum tool window: a given path switches its target file (the explorer
     /// context menu reuses one window); without a path (the Tools menu entry) its current state is kept.
+    /// <para>打开或前置文件校验器窗口：传入路径时切换其目标文件（资源管理器右键复用同一窗口），
+    /// 不传路径（工具菜单入口）时保留窗口当前状态。</para>
     /// </summary>
-    /// <param name="filePath"><para>可选的预选文件路径。</para>An optional pre-selected file path.</param>
+    /// <param name="filePath">An optional pre-selected file path. <para>可选的预选文件路径。</para></param>
     internal static void ShowFileChecksumWindow(string? filePath = null)
     {
         if (_checksumWindow is { IsVisible: true } existing)
@@ -1409,11 +1409,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>显示辅助工具窗口：若尚未打开则创建并显示，否则前置并恢复正常窗口状态。</para>
     /// Shows a helper tool window: creates and shows it if not open, otherwise brings it to the foreground and restores the normal window state.
+    /// <para>显示辅助工具窗口：若尚未打开则创建并显示，否则前置并恢复正常窗口状态。</para>
     /// </summary>
-    /// <param name="holder"><para>窗口引用字段。</para>The window reference field.</param>
-    /// <param name="factory"><para>窗口工厂，用于创建新窗口实例。</para>The factory creating a new window instance.</param>
+    /// <param name="holder">The window reference field. <para>窗口引用字段。</para></param>
+    /// <param name="factory">The factory creating a new window instance. <para>窗口工厂，用于创建新窗口实例。</para></param>
     private static void ShowWindow(ref Window? holder, Func<Window> factory)
     {
         if (holder == null || !holder.IsVisible)
@@ -1431,8 +1431,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>切换节点编辑器的小地图显示状态。仅在节点编辑器面板激活时可用。</para>
     /// Toggles the minimap display state of the node editor. Only available when the Node Editor panel is active.
+    /// <para>切换节点编辑器的小地图显示状态。仅在节点编辑器面板激活时可用。</para>
     /// </summary>
     [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void ToggleMinimap()
@@ -1440,49 +1440,49 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         SendNodeEditorAction(NodeEditorAction.ToggleMinimap);
     }
 
-    /// <summary><para>放大节点画布。仅在节点编辑器面板激活时可用。</para>Zoom in the node canvas. Only available when the Node Editor panel is active.</summary>
+    /// <summary>Zoom in the node canvas. Only available when the Node Editor panel is active. <para>放大节点画布。仅在节点编辑器面板激活时可用。</para></summary>
     [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void ZoomIn()
     {
         SendNodeEditorAction(NodeEditorAction.ZoomIn);
     }
 
-    /// <summary><para>缩小节点画布。仅在节点编辑器面板激活时可用。</para>Zoom out the node canvas. Only available when the Node Editor panel is active.</summary>
+    /// <summary>Zoom out the node canvas. Only available when the Node Editor panel is active. <para>缩小节点画布。仅在节点编辑器面板激活时可用。</para></summary>
     [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void ZoomOut()
     {
         SendNodeEditorAction(NodeEditorAction.ZoomOut);
     }
 
-    /// <summary><para>重置节点画布缩放。仅在节点编辑器面板激活时可用。</para>Reset the node canvas zoom. Only available when the Node Editor panel is active.</summary>
+    /// <summary>Reset the node canvas zoom. Only available when the Node Editor panel is active. <para>重置节点画布缩放。仅在节点编辑器面板激活时可用。</para></summary>
     [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void ResetZoom()
     {
         SendNodeEditorAction(NodeEditorAction.ResetZoom);
     }
 
-    /// <summary><para>运行当前节点工作流。仅在节点编辑器面板激活时可用。</para>Run the current node workflow. Only available when the Node Editor panel is active.</summary>
+    /// <summary>Run the current node workflow. Only available when the Node Editor panel is active. <para>运行当前节点工作流。仅在节点编辑器面板激活时可用。</para></summary>
     [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void RunWorkflow()
     {
         SendNodeEditorAction(NodeEditorAction.Run);
     }
 
-    /// <summary><para>停止正在执行的节点工作流。仅在节点编辑器面板激活时可用。</para>Stop the running node workflow. Only available when the Node Editor panel is active.</summary>
+    /// <summary>Stop the running node workflow. Only available when the Node Editor panel is active. <para>停止正在执行的节点工作流。仅在节点编辑器面板激活时可用。</para></summary>
     [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void StopWorkflow()
     {
         SendNodeEditorAction(NodeEditorAction.Stop);
     }
 
-    /// <summary><para>打开在线文档。</para>Open online documentation.</summary>
+    /// <summary>Open online documentation. <para>打开在线文档。</para></summary>
     [RelayCommand]
     private void Documentation()
     {
         Services.ExternalLinkService.TryOpen("https://github.com/UotanStudio/UotanStudio/wiki");
     }
 
-    /// <summary><para>打开问题反馈页面。</para>Open the issue reporting page.</summary>
+    /// <summary>Open the issue reporting page. <para>打开问题反馈页面。</para></summary>
     [RelayCommand]
     private void ReportIssue()
     {
@@ -1490,8 +1490,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>显示关于对话框，包含版本与简介信息。</para>
     /// Shows the About dialog with version and description info.
+    /// <para>显示关于对话框，包含版本与简介信息。</para>
     /// </summary>
     [RelayCommand]
     private void About()
@@ -1505,16 +1505,16 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>弹出文件选择/保存对话框选取项目文件路径，返回所选路径或 <c>null</c>。</para>
     /// Shows a file open/save dialog to pick a project file path, returning the chosen path or <c>null</c>.
+    /// <para>弹出文件选择/保存对话框选取项目文件路径，返回所选路径或 <c>null</c>。</para>
     /// </summary>
     /// <param name="isSave">
-    /// <para>是否为保存对话框；false 则为打开对话框。</para>
     /// Whether this is a save dialog; false means open dialog.
+    /// <para>是否为保存对话框；false 则为打开对话框。</para>
     /// </param>
     /// <returns>
-    /// <para>所选文件本地路径；取消时返回 <c>null</c>。</para>
     /// The chosen local file path; returns <c>null</c> when cancelled.
+    /// <para>所选文件本地路径；取消时返回 <c>null</c>。</para>
     /// </returns>
     private static async Task<string?> PickProjectFileAsync(bool isSave)
     {
@@ -1552,8 +1552,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>释放资源：取消订阅集合变更事件，注销消息处理器。</para>
     /// Releases resources: unsubscribes from collection-changed events and unregisters message handlers.
+    /// <para>释放资源：取消订阅集合变更事件，注销消息处理器。</para>
     /// </summary>
     public void Dispose()
     {
@@ -1564,136 +1564,136 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 }
 
 /// <summary>
-/// <para>主选项卡导航目标枚举，由顶部菜单触发。</para>
 /// Main tab navigation target enum, triggered by the top menu.
+/// <para>主选项卡导航目标枚举，由顶部菜单触发。</para>
 /// </summary>
 public enum NavigationTarget
 {
-    /// <summary><para>设备管理器。</para>Device manager.</summary>
+    /// <summary>Device manager. <para>设备管理器。</para></summary>
     Device,
-    /// <summary><para>工作区。</para>Workspace.</summary>
+    /// <summary>Workspace. <para>工作区。</para></summary>
     Workspace,
-    /// <summary><para>节点编辑器。</para>Node editor.</summary>
+    /// <summary>Node editor. <para>节点编辑器。</para></summary>
     NodeEditor,
-    /// <summary><para>全局日志面板。</para>Global log panel.</summary>
+    /// <summary>Global log panel. <para>全局日志面板。</para></summary>
     Log,
-    /// <summary><para>设置。</para>Settings.</summary>
+    /// <summary>Settings. <para>设置。</para></summary>
     Settings,
-    /// <summary><para>ROM 交付配置。</para>ROM delivery configuration.</summary>
+    /// <summary>ROM delivery configuration. <para>ROM 交付配置。</para></summary>
     Delivery
 }
 
 /// <summary>
-/// <para>导航到主选项卡的消息，由顶部菜单发送给 MainView。</para>
 /// Navigate-to-tab message, sent by the top menu to the MainView.
+/// <para>导航到主选项卡的消息，由顶部菜单发送给 MainView。</para>
 /// </summary>
 public class NavigateToTabMessage
 {
-    /// <summary><para>获取要导航到的目标。</para>Gets the navigation target.</summary>
+    /// <summary>Gets the navigation target. <para>获取要导航到的目标。</para></summary>
     public NavigationTarget Target { get; }
 
     /// <summary>
-    /// <para>创建导航消息。</para>
     /// Creates a navigation message.
+    /// <para>创建导航消息。</para>
     /// </summary>
-    /// <param name="target"><para>导航目标。</para>The navigation target.</param>
+    /// <param name="target">The navigation target. <para>导航目标。</para></param>
     public NavigateToTabMessage(NavigationTarget target) => Target = target;
 }
 
 /// <summary>
-/// <para>退出应用程序消息，由顶部菜单发送给 App。</para>
 /// Exit-application message, sent by the top menu to the App.
+/// <para>退出应用程序消息，由顶部菜单发送给 App。</para>
 /// </summary>
 public class ExitApplicationMessage;
 
 /// <summary>
-/// <para>当前激活的底栏主面板枚举，由 MainView 在 TabbedPage 切换时发送。</para>
 /// Currently active bottom main panel enum, sent by MainView when the TabbedPage switches.
+/// <para>当前激活的底栏主面板枚举，由 MainView 在 TabbedPage 切换时发送。</para>
 /// </summary>
 public enum ActiveTab
 {
-    /// <summary><para>设备管理器面板。</para>Device manager panel.</summary>
+    /// <summary>Device manager panel. <para>设备管理器面板。</para></summary>
     Device,
-    /// <summary><para>工作区面板。</para>Workspace panel.</summary>
+    /// <summary>Workspace panel. <para>工作区面板。</para></summary>
     Workspace,
-    /// <summary><para>节点编辑器面板。</para>Node editor panel.</summary>
+    /// <summary>Node editor panel. <para>节点编辑器面板。</para></summary>
     NodeEditor,
-    /// <summary><para>全局日志面板。</para>Global log panel.</summary>
+    /// <summary>Global log panel. <para>全局日志面板。</para></summary>
     Log,
-    /// <summary><para>设置面板。</para>Settings panel.</summary>
+    /// <summary>Settings panel. <para>设置面板。</para></summary>
     Settings,
-    /// <summary><para>ROM 交付配置面板。</para>ROM delivery configuration panel.</summary>
+    /// <summary>ROM delivery configuration panel. <para>ROM 交付配置面板。</para></summary>
     Delivery,
-    /// <summary><para>烧录面板。</para>Flash panel.</summary>
+    /// <summary>Flash panel. <para>烧录面板。</para></summary>
     Flash
 }
 
 /// <summary>
-/// <para>激活面板切换消息，由 MainView 发送给订阅者（如 MenuViewModel）以告知当前激活的底栏主面板。</para>
 /// Active-tab-changed message, sent by MainView to subscribers (e.g. MenuViewModel) to inform them of the currently active bottom main panel.
+/// <para>激活面板切换消息，由 MainView 发送给订阅者（如 MenuViewModel）以告知当前激活的底栏主面板。</para>
 /// </summary>
 public class ActiveTabChangedMessage
 {
-    /// <summary><para>获取新激活的面板。</para>Gets the newly active tab.</summary>
+    /// <summary>Gets the newly active tab. <para>获取新激活的面板。</para></summary>
     public ActiveTab Tab { get; }
 
     /// <summary>
-    /// <para>创建激活面板切换消息。</para>
     /// Creates an active-tab-changed message.
+    /// <para>创建激活面板切换消息。</para>
     /// </summary>
-    /// <param name="tab"><para>新激活的面板。</para>The newly active tab.</param>
+    /// <param name="tab">The newly active tab. <para>新激活的面板。</para></param>
     public ActiveTabChangedMessage(ActiveTab tab) => Tab = tab;
 }
 
 /// <summary>
-/// <para>节点编辑器动作枚举，由顶部视图菜单触发。</para>
 /// Node editor action enum, triggered by the top View menu.
+/// <para>节点编辑器动作枚举，由顶部视图菜单触发。</para>
 /// </summary>
 public enum NodeEditorAction
 {
-    /// <summary><para>切换小地图。</para>Toggle the minimap.</summary>
+    /// <summary>Toggle the minimap. <para>切换小地图。</para></summary>
     ToggleMinimap,
-    /// <summary><para>放大。</para>Zoom in.</summary>
+    /// <summary>Zoom in. <para>放大。</para></summary>
     ZoomIn,
-    /// <summary><para>缩小。</para>Zoom out.</summary>
+    /// <summary>Zoom out. <para>缩小。</para></summary>
     ZoomOut,
-    /// <summary><para>重置缩放。</para>Reset zoom.</summary>
+    /// <summary>Reset zoom. <para>重置缩放。</para></summary>
     ResetZoom,
-    /// <summary><para>撤销。</para>Undo.</summary>
+    /// <summary>Undo. <para>撤销。</para></summary>
     Undo,
-    /// <summary><para>重做。</para>Redo.</summary>
+    /// <summary>Redo. <para>重做。</para></summary>
     Redo,
-    /// <summary><para>剪切选中。</para>Cut selection.</summary>
+    /// <summary>Cut selection. <para>剪切选中。</para></summary>
     Cut,
-    /// <summary><para>复制选中。</para>Copy selection.</summary>
+    /// <summary>Copy selection. <para>复制选中。</para></summary>
     Copy,
-    /// <summary><para>粘贴。</para>Paste.</summary>
+    /// <summary>Paste. <para>粘贴。</para></summary>
     Paste,
-    /// <summary><para>删除选中。</para>Delete selection.</summary>
+    /// <summary>Delete selection. <para>删除选中。</para></summary>
     Delete,
-    /// <summary><para>全选。</para>Select all.</summary>
+    /// <summary>Select all. <para>全选。</para></summary>
     SelectAll,
-    /// <summary><para>运行工作流。</para>Run the workflow.</summary>
+    /// <summary>Run the workflow. <para>运行工作流。</para></summary>
     Run,
-    /// <summary><para>停止工作流。</para>Stop the workflow.</summary>
+    /// <summary>Stop the workflow. <para>停止工作流。</para></summary>
     Stop
 }
 
 /// <summary>
-/// <para>节点编辑器动作消息，由顶部视图菜单发送给 NodeEditorViewModel。</para>
 /// Node editor action message, sent by the top View menu to the NodeEditorViewModel.
+/// <para>节点编辑器动作消息，由顶部视图菜单发送给 NodeEditorViewModel。</para>
 /// </summary>
 public class NodeEditorActionMessage
 {
-    /// <summary><para>获取节点编辑器动作。</para>Gets the node editor action.</summary>
+    /// <summary>Gets the node editor action. <para>获取节点编辑器动作。</para></summary>
     public NodeEditorAction Action { get; }
     public Guid EditorId { get; }
 
     /// <summary>
-    /// <para>创建节点编辑器动作消息。</para>
     /// Creates a node editor action message.
+    /// <para>创建节点编辑器动作消息。</para>
     /// </summary>
-    /// <param name="action"><para>动作类型。</para>The action type.</param>
+    /// <param name="action">The action type. <para>动作类型。</para></param>
     public NodeEditorActionMessage(NodeEditorAction action, Guid editorId)
     {
         Action = action;

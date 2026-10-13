@@ -6,7 +6,7 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 /// <summary>Upstream transfer.h / serial_struct.h file and app metadata codecs.</summary>
 internal static class HdcTransferCodec
 {
-    /// <summary>Encodes a transfer configuration without reflection.</summary>
+    /// <summary>Encodes a transfer configuration without reflection. <para>不借助反射编码传输配置。</para></summary>
     public static byte[] EncodeConfig(TransferConfig config)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(config.FileSize);
@@ -23,7 +23,7 @@ internal static class HdcTransferCodec
         return output.ToArray();
     }
 
-    /// <summary>Decodes metadata and rejects out-of-range file sizes.</summary>
+    /// <summary>Decodes metadata and rejects out-of-range file sizes. <para>解码元数据并拒绝越界的文件大小。</para></summary>
     public static TransferConfig DecodeConfig(ReadOnlySpan<byte> data)
     {
         var fields = HdcDaemonCodec.ReadFields(data);
@@ -48,7 +48,7 @@ internal static class HdcTransferCodec
         };
     }
 
-    /// <summary>Encodes a raw chunk after the upstream 64-byte reserved metadata prefix.</summary>
+    /// <summary>Encodes a raw chunk after the upstream 64-byte reserved metadata prefix. <para>在上游 64 字节保留元数据前缀之后编码原始分块。</para></summary>
     public static byte[] EncodeChunk(long offset, ReadOnlySpan<byte> data, bool compress = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(offset);
@@ -71,7 +71,7 @@ internal static class HdcTransferCodec
         return result;
     }
 
-    /// <summary>Decodes bounded raw transfer data; unsupported compression is rejected.</summary>
+    /// <summary>Decodes bounded raw transfer data; unsupported compression is rejected. <para>解码有界的原始传输数据；不支持的压缩方式被拒绝。</para></summary>
     public static (long Offset, byte[] Data) DecodeChunk(ReadOnlySpan<byte> payload)
     {
         if (payload.Length < 64 || payload.Length > HdcConstants.MaxPayloadSize)

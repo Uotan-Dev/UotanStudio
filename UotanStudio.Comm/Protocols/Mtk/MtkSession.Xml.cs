@@ -30,7 +30,8 @@ public sealed partial class MtkSession
     /// <summary>
     /// Parses one device-authored message under the configured field policy and records warning
     /// evidence for every field the tolerant policy ignored.
-    /// 按已配置的字段策略解析一条设备侧消息，并为容忍策略忽略的每个字段记录 warning 证据。
+    /// <para>按已配置的字段策略解析一条设备侧消息，并为容忍策略忽略的每个字段记录 warning 证据。
+    /// </para>
     /// </summary>
     /// <param name="text">The received message text. 接收到的消息文本。</param>
     /// <returns>The parsed message. 解析后的消息。</returns>

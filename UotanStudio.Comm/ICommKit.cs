@@ -7,11 +7,9 @@ using UotanStudio.Comm.Transports.Usb.Core;
 namespace UotanStudio.Comm;
 
 /// <summary>
-/// Exposes the public UotanStudio.Comm entry points for device discovery, communication, and API registration.
-/// <para>暴露 UotanStudio.Comm 的公共入口，用于设备发现、通信与 API 注册。</para>
-/// Implementations provide both USB transport access and a dedicated protocol layer; consumers
-/// code against this interface to remain testable and swappable.
-/// <para>实现类同时提供 USB 传输层与专用协议层；消费者针对该接口编码，以保持可测试性与可替换性。</para>
+/// Exposes the entry points for device discovery, communication, and API registration.
+/// Implementations provide both USB transport access and a dedicated protocol layer.
+/// <para>暴露设备发现、通信与 API 注册的入口。实现类同时提供 USB 传输访问与专用协议层。</para>
 /// </summary>
 internal interface ICommKit
 {
@@ -86,12 +84,10 @@ internal interface ICommKit
     IUsbDeviceSession? OpenUsbDeviceSession(UsbApiKind apiKind = UsbApiKind.Auto, UsbDeviceFilter? filter = null);
 
     /// <summary>
-    /// Opens the first matching USB device session for direct read/write operations,
-    /// applying per-session tuning options.
-    /// <para>打开第一个匹配的 USB 设备会话，用于直接读写操作，并应用按会话生效的调优选项。</para>
-    /// Options (timeouts, RAW_IO) are forwarded to the backend before the session handle is
-    /// created; backends that cannot honour them ignore the options.
-    /// <para>选项（超时、RAW_IO）在会话句柄创建前透传给后端；无法兑现选项的后端会忽略它们。</para>
+    /// Opens the first matching USB device session for direct read/write operations, applying
+    /// per-session tuning options. Backends that cannot honour an option ignore it.
+    /// <para>打开第一个匹配的 USB 设备会话用于直接读写操作，并应用按会话生效的调优选项；
+    /// 无法兑现某选项的后端会忽略它。</para>
     /// </summary>
     /// <param name="apiKind">The USB API selection mode. <para>USB API 选择模式。</para></param>
     /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
@@ -101,11 +97,8 @@ internal interface ICommKit
 
     /// <summary>
     /// Opens the session whose <see cref="UsbDeviceInfo.DeviceKey"/> matches the specified key.
-    /// <para>打开 <see cref="UsbDeviceInfo.DeviceKey"/> 与指定键匹配的设备会话。</para>
-    /// Protocol layers that stash a device's key (e.g. after a mode switch like adb →
-    /// fastboot → EDL where VID/PID change) can reopen the same physical device by key.
-    /// <para>协议层保存设备键后（例如 adb → fastboot → EDL 模式切换导致 VID/PID 变化），
-    /// 可按键重开同一物理设备。</para>
+    /// A stashed key reopens the same physical device after a mode switch changes its VID/PID.
+    /// <para>打开设备键与指定键匹配的会话；保存的键可在模式切换改变 VID/PID 后重开同一物理设备。</para>
     /// </summary>
     /// <param name="deviceKey">The stable device key from <see cref="UsbDeviceInfo.DeviceKey"/>. <para>来自 <see cref="UsbDeviceInfo.DeviceKey"/> 的稳定设备键。</para></param>
     /// <param name="apiKind">The USB API selection mode. <para>USB API 选择模式。</para></param>
@@ -161,14 +154,13 @@ internal interface ICommKit
     /// Enumerates the serial ports currently available on the system.
     /// <para>枚举系统当前可用的串口。</para>
     /// </summary>
-    /// <returns>A read-only list of port names (e.g. "COM3", "/dev/ttyUSB0"). <para>端口名称只读列表（如 "COM3"、"/dev/ttyUSB0"）。</para></returns>
+    /// <returns>A read-only list of port names such as <c>COM3</c> or <c>/dev/ttyUSB0</c>. <para>端口名称只读列表，如 <c>COM3</c> 或 <c>/dev/ttyUSB0</c>。</para></returns>
     IReadOnlyList<string> GetAvailableSerialPorts();
 
     /// <summary>
-    /// Creates a serial-port transport (e.g. for EDL over UART, default 3 Mbaud with
-    /// RTS/CTS flow control mirroring QSaharaServer).
-    /// <para>创建串口传输（例如用于 UART 上的 EDL，默认 3 Mbaud 并镜像 QSaharaServer 的
-    /// RTS/CTS 流控）。</para>
+    /// Creates a serial-port transport such as for EDL over UART; the default is 3 Mbaud with
+    /// RTS/CTS flow control.
+    /// <para>创建串口传输，例如用于 UART 上的 EDL；默认 3 Mbaud 并采用 RTS/CTS 流控。</para>
     /// </summary>
     /// <param name="portName">The serial port name. <para>串口名称。</para></param>
     /// <param name="baudRate">The baud rate. <para>波特率。</para></param>

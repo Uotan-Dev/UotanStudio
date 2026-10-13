@@ -115,11 +115,8 @@ internal sealed class HarmonyUpdateAppPrimitives
     }
 
     /// <summary>
-    /// Stages every file of a provided init/libfs_mgr file set into an extracted system directory tree below the
-    /// given relative target, preserving relative layout and publishing each file atomically. This is host-side
-    /// directory staging only; no bootloader, device, or mount behaviour is claimed.
-    /// <para>将给定 init/libfs_mgr 文件集中的全部文件按相对布局注入已解包 system 目录树下的相对目标位置，并逐文件原子发布。
-    /// 仅为主机侧目录准备；不宣称任何引导、设备或挂载行为。</para>
+    /// Stages every file of an init file set into an extracted system directory tree.
+    /// <para>把 init 文件集中的全部文件按相对布局注入已解包 system 目录树。</para>
     /// </summary>
     /// <param name="targetSystemDirectory">
     /// Extracted system directory tree receiving the staged files; it must already exist.

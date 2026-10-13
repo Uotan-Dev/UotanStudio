@@ -3,15 +3,7 @@ using System.Text;
 
 namespace UotanStudio.Services;
 
-/// <summary>
-/// Registers/unregisters Windows file associations for the UotanStudio formats (<c>.uotan</c>,
-/// <c>.uotanfw</c>, <c>.uotannode</c>) in <c>HKCU\Software\Classes</c> (no admin required), wiring the
-/// default open command to the current executable and a per-format <c>DefaultIcon</c>. Uses P/Invoke to
-/// advapi32 (AOT-safe, no package dependency). No-op on non-Windows.
-/// <para>在 <c>HKCU\Software\Classes</c>（无需管理员权限）注册/注销 UotanStudio 格式（<c>.uotan</c>、
-/// <c>.uotanfw</c>、<c>.uotannode</c>）的 Windows 文件关联，将默认打开命令指向当前可执行文件并为每种格式
-/// 设置 <c>DefaultIcon</c>。通过 P/Invoke 调用 advapi32（AOT 安全，无包依赖）。非 Windows 平台无操作。</para>
-/// </summary>
+/// <summary>Registers and removes Windows file associations for the supported project formats.<para>为受支持的项目格式注册和移除 Windows 文件关联。</para></summary>
 public static partial class FileAssociationService
 {
     private const string ClassesRoot = @"Software\Classes";
@@ -20,8 +12,6 @@ public static partial class FileAssociationService
     private const int KeyWrite = 0x00020006;
     private const int KeyRead = 0x00020019;
 
-    // HKEY_CURRENT_USER 伪句柄（64 位下为 0x0000000080000001）。
-    // HKEY_CURRENT_USER pseudo-handle (0x0000000080000001 on 64-bit).
     private static readonly nint Hkcu = new(0x80000001L);
 
     private static readonly (string Extension, string ProgId, string IconFile, string Description)[] Formats =
@@ -51,8 +41,9 @@ public static partial class FileAssociationService
 
     /// <summary>
     /// Registers the file associations idempotently; returns whether the registration succeeded.
-    /// <para>幂等注册文件关联；返回注册是否成功。</para>
+    /// <para>幂等注册文件关联。</para>
     /// </summary>
+    /// <returns>True when the registration succeeded.<para>注册成功时为真。</para></returns>
     public static bool Register()
     {
         if (!OperatingSystem.IsWindows())
@@ -89,8 +80,9 @@ public static partial class FileAssociationService
 
     /// <summary>
     /// Removes the file associations; returns whether the unregistration succeeded.
-    /// <para>移除文件关联；返回注销是否成功。</para>
+    /// <para>移除文件关联。</para>
     /// </summary>
+    /// <returns>True when the unregistration succeeded.<para>注销成功时为真。</para></returns>
     public static bool Unregister()
     {
         if (!OperatingSystem.IsWindows())
@@ -104,9 +96,6 @@ public static partial class FileAssociationService
             {
                 RegDeleteTreeW(Hkcu, Path.Combine(ClassesRoot, progId));
 
-                // 仅当扩展名默认值指向本应用 ProgId 时才删除扩展名键，避免误删其他应用关联。
-                // Only delete the extension key when its default value points to our ProgId, to avoid
-                // clobbering another application's association.
                 if (GetStringValue(Path.Combine(ClassesRoot, extension), null) == progId)
                 {
                     RegDeleteTreeW(Hkcu, Path.Combine(ClassesRoot, extension));

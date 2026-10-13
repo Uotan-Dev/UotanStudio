@@ -8,11 +8,11 @@ using UotanStudio.Services.Devices;
 namespace UotanStudio.ViewModels.Devices;
 
 /// <summary>
-/// <para>设备视图模型，管理 ADB/Fastboot/EDL/RKDL 设备列表与连接状态。
-/// 枚举与协议交互完全基于 UotanStudio.Comm（DeviceMonitorService）。</para>
 /// Device view model, managing ADB/Fastboot/EDL/RKDL device lists and connection state.
 /// Enumeration and protocol interaction are fully based on UotanStudio.Comm
 /// (DeviceMonitorService).
+/// <para>设备视图模型，管理 ADB/Fastboot/EDL/RKDL 设备列表与连接状态。
+/// 枚举与协议交互完全基于 UotanStudio.Comm（DeviceMonitorService）。</para>
 /// </summary>
 public partial class DeviceViewModel : ViewModelBase, IDisposable
 {
@@ -21,27 +21,27 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     private Task? _refreshTask;
 
     /// <summary>
-    /// <para>获取当前激活的设备面板单例，供主窗口与工作区停靠面板共享同一实例
-    /// （避免双实例导致重复订阅设备变更）。</para>
     /// Gets the active device panel singleton, shared by the main window and the
     /// workspace dock so no duplicate instance subscribes to device changes twice.
+    /// <para>获取当前激活的设备面板单例，供主窗口与工作区停靠面板共享同一实例
+    /// （避免双实例导致重复订阅设备变更）。</para>
     /// </summary>
     public static DeviceViewModel? Instance { get; private set; }
 
     /// <summary>
-    /// <para>确保设备面板单例已创建并返回它；首次调用时构造并在构造函数中注册到
-    /// <see cref="Instance"/>，后续调用复用同一实例。</para>
     /// Ensures the device panel singleton exists and returns it; the first call constructs
     /// the instance (registered on <see cref="Instance"/> in the constructor) and later
     /// calls reuse the same instance.
+    /// <para>确保设备面板单例已创建并返回它；首次调用时构造并在构造函数中注册到
+    /// <see cref="Instance"/>，后续调用复用同一实例。</para>
     /// </summary>
     internal static DeviceViewModel EnsureInstance() => Instance ??= new();
 
     /// <summary>
-    /// <para>获取或设置已检测到的设备列表。集合增删时同步通知
-    /// <see cref="HasDevices"/> / <see cref="HasNoDevices"/>。</para>
     /// Gets or sets the list of detected devices. Collection changes also notify
     /// <see cref="HasDevices"/> / <see cref="HasNoDevices"/>.
+    /// <para>获取或设置已检测到的设备列表。集合增删时同步通知
+    /// <see cref="HasDevices"/> / <see cref="HasNoDevices"/>。</para>
     /// </summary>
     public ObservableCollection<DeviceInfo> Devices
     {
@@ -50,8 +50,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     } = [];
 
     /// <summary>
-    /// <para>获取或设置当前选中的设备。</para>
     /// Gets or sets the currently selected device.
+    /// <para>获取或设置当前选中的设备。</para>
     /// </summary>
     public DeviceInfo? SelectedDevice
     {
@@ -106,8 +106,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>获取或设置是否正在刷新设备列表。</para>
     /// Gets or sets whether the device list is currently refreshing.
+    /// <para>获取或设置是否正在刷新设备列表。</para>
     /// </summary>
     public bool IsRefreshing
     {
@@ -116,8 +116,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>获取或设置状态文本。</para>
     /// Gets or sets the status text.
+    /// <para>获取或设置状态文本。</para>
     /// </summary>
     public string StatusText
     {
@@ -126,66 +126,66 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     } = string.Empty;
 
     /// <summary>
-    /// <para>获取是否没有任何设备（用于显示空状态提示）。</para>
     /// Gets whether there are no devices (used to show the empty-state hint).
+    /// <para>获取是否没有任何设备（用于显示空状态提示）。</para>
     /// </summary>
     public bool HasNoDevices => !IsRefreshing && Devices.Count == 0;
 
     /// <summary>
-    /// <para>获取是否存在任何设备（用于顶栏选择器切换占位项与设备列表）。</para>
     /// Gets whether any device exists (the top-bar selector switches between the
     /// placeholder and the device list based on this).
+    /// <para>获取是否存在任何设备（用于顶栏选择器切换占位项与设备列表）。</para>
     /// </summary>
     public bool HasDevices => Devices.Count > 0;
 
     /// <summary>
-    /// <para>获取是否已选中设备（用于顶栏选择器切换显示设备名或占位文本）。</para>
     /// Gets whether a device is selected (the top-bar selector switches between the
     /// device name and the placeholder text based on this).
+    /// <para>获取是否已选中设备（用于顶栏选择器切换显示设备名或占位文本）。</para>
     /// </summary>
     public bool HasSelectedDevice => SelectedDevice is not null;
 
     /// <summary>
-    /// <para>获取是否显示「选择设备」占位文本（有设备但未选中时）。</para>
     /// Gets whether to show the "select device" placeholder (devices present but none selected).
+    /// <para>获取是否显示「选择设备」占位文本（有设备但未选中时）。</para>
     /// </summary>
     public bool ShowSelectPlaceholder => HasDevices && !HasSelectedDevice;
 
     /// <summary>
-    /// <para>获取当前选中设备的显示名称（未选中时为空，供顶栏头部绑定避免空路径）。</para>
     /// Gets the display name of the selected device (empty when none; keeps the top-bar
     /// header binding free of null-path errors).
+    /// <para>获取当前选中设备的显示名称（未选中时为空，供顶栏头部绑定避免空路径）。</para>
     /// </summary>
     public string SelectedDeviceName => SelectedDevice?.DisplayName ?? string.Empty;
 
     /// <summary>
-    /// <para>选中指定设备（顶栏选择器点选入口，与设备面板共享同一选择状态）。</para>
     /// Selects the specified device (top-bar selector entry point, sharing the same
     /// selection state with the device panel).
+    /// <para>选中指定设备（顶栏选择器点选入口，与设备面板共享同一选择状态）。</para>
     /// </summary>
     internal void SelectDevice(DeviceInfo? device) => SelectedDevice = device;
 
     /// <summary>
-    /// <para>获取选中设备的详情文本。</para>
     /// Gets the detail text of the selected device.
+    /// <para>获取选中设备的详情文本。</para>
     /// </summary>
     public string DeviceDetail => SelectedDevice is null
         ? string.Empty
         : $"Serial: {SelectedDevice.Serial}\nMode: {SelectedDevice.Mode}\nState: {SelectedDevice.State}\nTransport: {SelectedDevice.Transport}\nModel: {SelectedDevice.Model}\nAndroid: {SelectedDevice.AndroidVersion}";
 
     /// <summary>
-    /// <para>各分区最近一次转发到统一日志的备份/还原进度百分比，用于去重避免刷屏。</para>
     /// Last backup/restore progress percent forwarded to the unified log per partition,
     /// used to deduplicate repeated values and avoid flooding the log.
+    /// <para>各分区最近一次转发到统一日志的备份/还原进度百分比，用于去重避免刷屏。</para>
     /// </summary>
     private readonly Dictionary<string, int> _backupProgressByPartition = [];
 
     /// <summary>
-    /// <para>初始化设备视图模型：启动设备监视服务（含启动全量 USB 扫描与热插拔监听），
-    /// 订阅设备变更事件并执行首次刷新。</para>
     /// Initializes the device view model: starts the device monitor service (which performs
     /// the startup full USB scan and begins hotplug monitoring), subscribes to device
     /// changes and performs the first refresh.
+    /// <para>初始化设备视图模型：启动设备监视服务（含启动全量 USB 扫描与热插拔监听），
+    /// 订阅设备变更事件并执行首次刷新。</para>
     /// </summary>
     public DeviceViewModel() : this(monitorDevices: true)
     {
@@ -216,9 +216,9 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RefreshDevicesAsync());
 
     /// <summary>
-    /// <para>响应备份/还原进度消息，将进度转发到统一日志（按分区对百分比去重，避免刷屏）。</para>
     /// Responds to backup/restore progress messages, forwarding progress to the unified log
     /// (deduplicated by partition and percent to avoid flooding).
+    /// <para>响应备份/还原进度消息，将进度转发到统一日志（按分区对百分比去重，避免刷屏）。</para>
     /// </summary>
     private void OnBackupProgress(object recipient, BackupProgressMessage message)
     {
@@ -236,10 +236,10 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>刷新设备列表：调用设备监视服务执行全量扫描并按协议分组；
-    /// 随后并发拉取 ADB 设备属性丰富详情。</para>
     /// Refreshes the device list: invokes the monitor service for a full scan, groups by
     /// protocol, then concurrently pulls ADB device properties to enrich details.
+    /// <para>刷新设备列表：调用设备监视服务执行全量扫描并按协议分组；
+    /// 随后并发拉取 ADB 设备属性丰富详情。</para>
     /// </summary>
     private Task RefreshDevicesAsync() => _refreshTask is { IsCompleted: false }
         ? _refreshTask : _refreshTask = RefreshDevicesCoreAsync();
@@ -343,8 +343,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>手动强制刷新：强制重新扫描（绕过热插拔去抖）。</para>
     /// Manual force refresh: forces a rescan (bypassing the hotplug debounce).
+    /// <para>手动强制刷新：强制重新扫描（绕过热插拔去抖）。</para>
     /// </summary>
     [RelayCommand]
     private async Task ForceRefreshAsync()
@@ -354,8 +354,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>取消订阅设备变更事件。</para>
     /// Unsubscribes from device change events.
+    /// <para>取消订阅设备变更事件。</para>
     /// </summary>
     public void Dispose()
     {

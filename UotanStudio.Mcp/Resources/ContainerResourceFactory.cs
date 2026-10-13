@@ -217,13 +217,13 @@ internal static class ContainerResourceFactory
     }
 
     /// <summary>
-    /// <para>读取静态概览文档；内容完全来自沙箱配置，因此只在进入前检查一次取消。</para>
     /// Reads the static overview document; its content comes entirely from the sandbox configuration, so
     /// cancellation is observed once before the text is rendered.
+    /// <para>读取静态概览文档；内容完全来自沙箱配置，因此只在进入前检查一次取消。</para>
     /// </summary>
-    /// <param name="sandbox"><para>要描述的沙箱。</para>The sandbox to describe.</param>
-    /// <param name="cancellationToken"><para>本次读取的取消令牌。</para>Cancellation token for this read.</param>
-    /// <returns><para>已渲染的 JSON 文本。</para>The rendered JSON text.</returns>
+    /// <param name="sandbox">The sandbox to describe. <para>要描述的沙箱。</para></param>
+    /// <param name="cancellationToken">Cancellation token for this read. <para>本次读取的取消令牌。</para></param>
+    /// <returns>The rendered JSON text. <para>已渲染的 JSON 文本。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     internal static Task<string> ReadOverviewAsync(PathSandbox sandbox, CancellationToken cancellationToken)
@@ -417,12 +417,12 @@ internal static class ContainerResourceFactory
     /// Selects the filesystem parser through the shared format registry and returns the capped listing.
     /// <para>经共享格式注册表选择文件系统解析器，并返回有上限的清单。</para>
     /// </summary>
-    /// <param name="resolved"><para>已解析并确认存在的绝对镜像路径。</para>Resolved absolute image path already confined and checked.</param>
-    /// <param name="displayPath"><para>用于错误消息的沙箱相对展示路径。</para>Sandbox-relative path rendered in errors.</param>
+    /// <param name="resolved">Resolved absolute image path already confined and checked. <para>已解析并确认存在的绝对镜像路径。</para></param>
+    /// <param name="displayPath">Sandbox-relative path rendered in errors. <para>用于错误消息的沙箱相对展示路径。</para></param>
     /// <param name="cancellationToken"><para>本次读取的取消令牌；EXT4 与 EROFS 遍历会观察它，F2FS
     /// 解析器不接受令牌，因此其遍历只能在完成后报告取消。</para>Cancellation token for this read; the EXT4 and EROFS
     /// walks observe it, while the F2FS parser accepts no token, so its walk can only report cancellation after finishing.</param>
-    /// <returns><para>格式名、遍历得到的条目总数与截断后的清单。</para>The format name, the walked entry count and the capped listing.</returns>
+    /// <returns>The format name, the walked entry count and the capped listing. <para>格式名、遍历得到的条目总数与截断后的清单。</para></returns>
     private static (string Filesystem, int Total, IReadOnlyList<FilesystemEntryRecord> Entries) WalkFilesystem(
         string resolved, string displayPath, CancellationToken cancellationToken)
     {
@@ -525,12 +525,12 @@ internal static class ContainerResourceFactory
     }
 
     /// <summary>
-    /// <para>把 EROFS inode 模式位翻译为清单里的稳定类型名，避免枚举名出现在对外文档中。</para>
     /// Translates the EROFS inode mode bits into the stable kind names used by the listing, keeping
     /// enum spelling out of the published document.
+    /// <para>把 EROFS inode 模式位翻译为清单里的稳定类型名，避免枚举名出现在对外文档中。</para>
     /// </summary>
-    /// <param name="entry"><para>待分类的 EROFS 条目。</para>The EROFS entry to classify.</param>
-    /// <returns><para><c>dir</c>、<c>symlink</c>、<c>special</c> 或 <c>file</c>。</para>One of <c>dir</c>, <c>symlink</c>, <c>special</c> or <c>file</c>.</returns>
+    /// <param name="entry">The EROFS entry to classify. <para>待分类的 EROFS 条目。</para></param>
+    /// <returns>One of <c>dir</c>, <c>symlink</c>, <c>special</c> or <c>file</c>. <para><c>dir</c>、<c>symlink</c>、<c>special</c> 或 <c>file</c>。</para></returns>
     private static string ErofsKind(ErofsFileEntry entry)
     {
         if (entry.IsDirectory)
@@ -550,8 +550,8 @@ internal static class ContainerResourceFactory
     /// Opens an image file read-only and shared, matching what the format handlers use.
     /// <para>以只读共享方式打开镜像文件，与格式处理器的打开方式一致。</para>
     /// </summary>
-    /// <param name="resolved"><para>已解析的绝对路径。</para>The resolved absolute path.</param>
-    /// <returns><para>供解析器读取的文件流。</para>A stream for the parser to read.</returns>
+    /// <param name="resolved">The resolved absolute path. <para>已解析的绝对路径。</para></param>
+    /// <returns>A stream for the parser to read. <para>供解析器读取的文件流。</para></returns>
     private static FileStream OpenImage(string resolved) =>
         new(resolved, FileMode.Open, FileAccess.Read, FileShare.Read);
 
@@ -561,8 +561,8 @@ internal static class ContainerResourceFactory
     /// <para>在任何文件系统调用前限制并校验客户端在 URI 中给出的路径段；包含性检查本身交给
     /// <see cref="PathSandbox.Resolve"/>。</para>
     /// </summary>
-    /// <param name="path"><para>已由 MCP 服务器完成百分号解码的模板变量值。</para>The template variable value already percent-decoded by the MCP server.</param>
-    /// <returns><para>校验通过的路径原值。</para>The validated path unchanged.</returns>
+    /// <param name="path">The template variable value already percent-decoded by the MCP server. <para>已由 MCP 服务器完成百分号解码的模板变量值。</para></param>
+    /// <returns>The validated path unchanged. <para>校验通过的路径原值。</para></returns>
     private static string RequireCandidatePath(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -583,10 +583,10 @@ internal static class ContainerResourceFactory
     /// Builds the canonical, re-readable URI for a resolved path by escaping each segment.
     /// <para>通过逐段转义为已解析路径构造可再次读取的规范 URI。</para>
     /// </summary>
-    /// <param name="projection"><para>URI 首段：container、image 或 filesystem。</para>The URI's first segment: container, image or filesystem.</param>
-    /// <param name="displayPath"><para>以 '/' 分隔的沙箱相对路径。</para>The '/' separated sandbox-relative path.</param>
-    /// <param name="suffix"><para>URI 末尾的投影名。</para>The projection name closing the URI.</param>
-    /// <returns><para>可原样用于 <c>resources/read</c> 的 URI。</para>A URI usable verbatim for <c>resources/read</c>.</returns>
+    /// <param name="projection">The URI's first segment: container, image or filesystem. <para>URI 首段：container、image 或 filesystem。</para></param>
+    /// <param name="displayPath">The '/' separated sandbox-relative path. <para>以 '/' 分隔的沙箱相对路径。</para></param>
+    /// <param name="suffix">The projection name closing the URI. <para>URI 末尾的投影名。</para></param>
+    /// <returns>A URI usable verbatim for <c>resources/read</c>. <para>可原样用于 <c>resources/read</c> 的 URI。</para></returns>
     private static string BuildUri(string projection, string displayPath, string suffix)
     {
         var segments = displayPath.Split('/');
@@ -603,9 +603,9 @@ internal static class ContainerResourceFactory
     /// when the sandbox is unrestricted.
     /// <para>按客户端寻址方式渲染已解析路径：受限沙箱给出相对路径，不受限时给出完整路径。</para>
     /// </summary>
-    /// <param name="sandbox"><para>本次读取的沙箱。</para>The sandbox of this read.</param>
-    /// <param name="resolved"><para><see cref="PathSandbox"/> 返回的绝对路径。</para>The absolute path returned by <see cref="PathSandbox"/>.</param>
-    /// <returns><para>用于文档与错误消息的 '/' 分隔路径。</para>A '/' separated path for documents and error messages.</returns>
+    /// <param name="sandbox">The sandbox of this read. <para>本次读取的沙箱。</para></param>
+    /// <param name="resolved">The absolute path returned by <see cref="PathSandbox"/>. <para><see cref="PathSandbox"/> 返回的绝对路径。</para></param>
+    /// <returns>A '/' separated path for documents and error messages. <para>用于文档与错误消息的 '/' 分隔路径。</para></returns>
     private static string ToDisplayPath(PathSandbox sandbox, string resolved)
     {
         var root = sandbox.Root;
@@ -629,22 +629,22 @@ internal static class ContainerResourceFactory
     /// Copies a possibly over-long untrusted string into the bounded document form.
     /// <para>把可能过长的不可信字符串复制为有界文档形式。</para>
     /// </summary>
-    /// <param name="value"><para>来自镜像、归档或文件名的原始文本，可能为 <see langword="null"/>。</para>Raw text from an image, archive or file name, possibly <see langword="null"/>.</param>
-    /// <param name="maximumCharacters"><para>保留的最大字符数。</para>Maximum characters kept.</param>
-    /// <returns><para>截断后的文本；<paramref name="value"/> 为空时返回空字符串。</para>The truncated text; empty when <paramref name="value"/> is null or empty.</returns>
+    /// <param name="value">Raw text from an image, archive or file name, possibly <see langword="null"/>. <para>来自镜像、归档或文件名的原始文本，可能为 <see langword="null"/>。</para></param>
+    /// <param name="maximumCharacters">Maximum characters kept. <para>保留的最大字符数。</para></param>
+    /// <returns>The truncated text; empty when <paramref name="value"/> is null or empty. <para>截断后的文本；<paramref name="value"/> 为空时返回空字符串。</para></returns>
     private static string Truncate(string? value, int maximumCharacters) =>
         string.IsNullOrEmpty(value)
             ? string.Empty
             : value.Length <= maximumCharacters ? value : value[..maximumCharacters];
 
     /// <summary>
-    /// <para>按上限裁剪可选文本，并在没有内容时返回 <see langword="null"/>，让 JSON 省略该字段而不是写入空串。</para>
     /// Trims optional text to the cap and returns <see langword="null"/> when there is no content, so the
     /// JSON omits the field instead of publishing an empty string.
+    /// <para>按上限裁剪可选文本，并在没有内容时返回 <see langword="null"/>，让 JSON 省略该字段而不是写入空串。</para>
     /// </summary>
-    /// <param name="value"><para>待裁剪的可选文本。</para>The optional text to trim.</param>
-    /// <param name="maximumCharacters"><para>保留的最大字符数。</para>Maximum characters kept.</param>
-    /// <returns><para>裁剪后的文本，或 <see langword="null"/>。</para>The trimmed text, or <see langword="null"/>.</returns>
+    /// <param name="value">The optional text to trim. <para>待裁剪的可选文本。</para></param>
+    /// <param name="maximumCharacters">Maximum characters kept. <para>保留的最大字符数。</para></param>
+    /// <returns>The trimmed text, or <see langword="null"/>. <para>裁剪后的文本，或 <see langword="null"/>。</para></returns>
     private static string? TruncateToNull(string? value, int maximumCharacters) =>
         string.IsNullOrEmpty(value)
             ? null
@@ -653,11 +653,11 @@ internal static class ContainerResourceFactory
     private static McpProtocolException InvalidParams(string message) => new(message, McpErrorCode.InvalidParams);
 
     /// <summary>
-    /// <para>运行资源读取主体，并把沙箱与格式失败映射为携带原始消息的
-    /// <see cref="McpProtocolException"/>；SDK 会替换其他异常类型在线上的消息文本。</para>
     /// Runs one resource read and maps sandbox and format failures onto an
     /// <see cref="McpProtocolException"/> that keeps the original message, because the SDK replaces the
     /// wire message of any other exception type.
+    /// <para>运行资源读取主体，并把沙箱与格式失败映射为携带原始消息的
+    /// <see cref="McpProtocolException"/>；SDK 会替换其他异常类型在线上的消息文本。</para>
     /// </summary>
     /// <param name="body">Read implementation receiving the request's cancellation token.
     /// <para>接收本次请求取消令牌的读取实现。</para></param>

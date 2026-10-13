@@ -9,12 +9,14 @@ public sealed partial class FirehoseProtocol
     private bool _outboundPacketStarted;
 
     /// <summary>
-    /// Installs a qdl VIP table sequence before any Firehose packet is sent.
-    /// The signed table is sent and acknowledged immediately before the first outgoing packet.
-    /// Requires an explicit sector size; automatic storage probes are not inserted into the signed sequence.
-    /// <para>在发送任何 Firehose 包前安装 qdl VIP 表序列；首个出站包之前立即发送并确认签名表。
-    /// 必须显式指定扇区大小，不会向签名序列插入自动存储探测。</para>
+    /// Installs a VIP table sequence before any Firehose packet is sent.
+    /// <para>在发送任何 Firehose 包前安装 VIP 表序列。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>The signed table is sent and acknowledged immediately before the first outgoing packet. Requires
+    /// an explicit sector size; automatic storage probes are not inserted into the signed sequence.</para>
+    /// <para>首个出站包之前立即发送并确认签名表。必须显式指定扇区大小，不会向签名序列插入自动存储探测。</para>
+    /// </remarks>
     /// <param name="options">The immutable table and packet profile.
     /// <para>不可变的表与包配置。</para></param>
     /// <param name="cancellationToken">Cancellation while waiting for exclusive transport ownership.

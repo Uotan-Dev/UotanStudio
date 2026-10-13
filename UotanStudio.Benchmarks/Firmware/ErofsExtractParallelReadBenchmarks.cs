@@ -12,9 +12,6 @@ namespace UotanStudio.Benchmarks.Firmware;
 /// <para>度量以文件数据源在不同工作者数量下解包 EROFS 镜像，用以判断镜像读取是否仍把并行解包串行化，
 /// 还是已通过定位 I/O 重叠。</para>
 /// </summary>
-/// <remarks>
-/// Run with <c>dotnet run -c Release --project UotanStudio.Benchmarks -- --filter "*ErofsExtractParallelRead*" --job short</c>.
-/// </remarks>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 1, iterationCount: 2)]
 public class ErofsExtractParallelReadBenchmarks : IDisposable

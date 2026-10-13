@@ -4,66 +4,79 @@ using Avalonia.Markup.Xaml;
 namespace UotanStudio.Locale.EnUs;
 
 /// <summary>
-/// <para>英文（美国）通用模块资源字典（<c>Locale/en-US/Common.axaml</c> 的代码后置），
-/// AOT 安全的类型实例化。</para>
-/// English (US) common-module resource dictionary (code-behind of
-/// <c>Locale/en-US/Common.axaml</c>) with AOT-safe typed instantiation.
+/// English (US) common-module locale resource dictionary with AOT-safe typed instantiation.
+/// <para>英文（美国）通用模块语言资源字典，具备 AOT 安全的类型实例化。</para>
 /// </summary>
 public partial class Common : ResourceDictionary
 {
     /// <summary>
-    /// <para>创建该语言模块字典并从预编译 XAML 填充内容。</para>
     /// Creates the locale module dictionary, loading its content from the precompiled XAML.
+    /// <para>创建该语言模块字典，并从预编译 XAML 载入内容。</para>
     /// </summary>
     public Common() => AvaloniaXamlLoader.Load(this);
 }
 
 /// <summary>
-/// <para>英文（美国）菜单模块资源字典（<c>Locale/en-US/Menu.axaml</c> 的代码后置）。</para>
-/// English (US) menu-module resource dictionary (code-behind of <c>Locale/en-US/Menu.axaml</c>).
+/// English (US) menu-module locale resource dictionary with AOT-safe typed instantiation.
+/// <para>英文（美国）菜单模块语言资源字典，具备 AOT 安全的类型实例化。</para>
 /// </summary>
 public partial class Menu : ResourceDictionary
 {
-    /// <inheritdoc cref="Common()"/>
+    /// <summary>
+    /// Creates the locale module dictionary, loading its content from the precompiled XAML.
+    /// <para>创建该语言模块字典，并从预编译 XAML 载入内容。</para>
+    /// </summary>
     public Menu() => AvaloniaXamlLoader.Load(this);
 }
 
 /// <summary>
-/// <para>英文（美国）停靠模块资源字典（<c>Locale/en-US/Dock.axaml</c> 的代码后置）。</para>
-/// English (US) dock-module resource dictionary (code-behind of <c>Locale/en-US/Dock.axaml</c>).
+/// English (US) dock-module locale resource dictionary with AOT-safe typed instantiation.
+/// <para>英文（美国）停靠模块语言资源字典，具备 AOT 安全的类型实例化。</para>
 /// </summary>
 public partial class Dock : ResourceDictionary
 {
-    /// <inheritdoc cref="Common()"/>
+    /// <summary>
+    /// Creates the locale module dictionary, loading its content from the precompiled XAML.
+    /// <para>创建该语言模块字典，并从预编译 XAML 载入内容。</para>
+    /// </summary>
     public Dock() => AvaloniaXamlLoader.Load(this);
 }
 
 /// <summary>
-/// <para>英文（美国）节点模块资源字典（<c>Locale/en-US/Node.axaml</c> 的代码后置）。</para>
-/// English (US) node-module resource dictionary (code-behind of <c>Locale/en-US/Node.axaml</c>).
+/// English (US) node-module locale resource dictionary with AOT-safe typed instantiation.
+/// <para>英文（美国）节点模块语言资源字典，具备 AOT 安全的类型实例化。</para>
 /// </summary>
 public partial class Node : ResourceDictionary
 {
-    /// <inheritdoc cref="Common()"/>
+    /// <summary>
+    /// Creates the locale module dictionary, loading its content from the precompiled XAML.
+    /// <para>创建该语言模块字典，并从预编译 XAML 载入内容。</para>
+    /// </summary>
     public Node() => AvaloniaXamlLoader.Load(this);
 }
 
 /// <summary>
-/// <para>英文（美国）设置模块资源字典（<c>Locale/en-US/Settings.axaml</c> 的代码后置）。</para>
-/// English (US) settings-module resource dictionary (code-behind of <c>Locale/en-US/Settings.axaml</c>).
+/// English (US) preferences-module locale resource dictionary with AOT-safe typed instantiation.
+/// <para>英文（美国）偏好模块语言资源字典，具备 AOT 安全的类型实例化。</para>
 /// </summary>
 public partial class Settings : ResourceDictionary
 {
-    /// <inheritdoc cref="Common()"/>
+    /// <summary>
+    /// Creates the locale module dictionary, loading its content from the precompiled XAML.
+    /// <para>创建该语言模块字典，并从预编译 XAML 载入内容。</para>
+    /// </summary>
     public Settings() => AvaloniaXamlLoader.Load(this);
 }
 
 /// <summary>
-/// <para>英文（美国）设备模块资源字典（<c>Locale/en-US/Device.axaml</c> 的代码后置）。</para>
-/// English (US) device-module resource dictionary (code-behind of <c>Locale/en-US/Device.axaml</c>).
+/// English (US) device-module locale resource dictionary with AOT-safe typed instantiation.
+/// <para>英文（美国）设备模块语言资源字典，具备 AOT 安全的类型实例化。</para>
 /// </summary>
 public partial class Device : ResourceDictionary
 {
-    /// <inheritdoc cref="Common()"/>
+    /// <summary>
+    /// Creates the locale module dictionary, loading its content from the precompiled XAML.
+    /// <para>创建该语言模块字典，并从预编译 XAML 载入内容。</para>
+    /// </summary>
     public Device() => AvaloniaXamlLoader.Load(this);
 }

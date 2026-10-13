@@ -54,15 +54,14 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>把设备协议映射为 Comm 发现层使用的端点协议字符串；每个已定义的协议都必须有映射，
-    /// 否则在租约端点前就会失败。</para>
-    /// Maps a device protocol to the endpoint protocol string used by Comm's discovery layer; every
-    /// defined protocol must have a mapping, otherwise leasing the endpoint fails before any I/O.
+    /// Maps a device protocol to the endpoint protocol string produced during discovery. Every
+    /// defined protocol must have a mapping, otherwise leasing an endpoint fails before any I/O.
+    /// <para>把设备协议映射为发现阶段产生的端点协议字符串；每个已定义的协议都必须有映射，
+    /// 否则在发起任何 I/O 之前取得租约即会失败。</para>
     /// </summary>
-    /// <param name="protocol">The device protocol to map. <para>待映射的设备协议。</param>
-    /// <returns>The discovery-layer protocol string. <para>发现层协议字符串。</returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="protocol"/> is not a defined
-    /// protocol. <para><paramref name="protocol"/> 不是已定义的协议。</para></exception>
+    /// <param name="protocol">The device protocol to map. <para>待映射的设备协议。</para></param>
+    /// <returns>The endpoint protocol string. <para>端点协议字符串。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="protocol"/> is not a defined protocol. <para><paramref name="protocol"/> 不是已定义的协议。</para></exception>
     internal static string ExpectedEndpointProtocol(DeviceProtocolKind protocol) => protocol switch
     {
         DeviceProtocolKind.Adb => "adb",

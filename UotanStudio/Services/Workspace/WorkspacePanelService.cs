@@ -6,46 +6,46 @@ using UotanStudio.Services.Terminal;
 namespace UotanStudio.Services.Workspace;
 
 /// <summary>
-/// <para>工作区停靠面板注册表（单例）：登记 <c>WorkspaceDockFactory</c> 创建的各工具面板及其宿主停靠区，
-/// 供顶部「窗口」菜单执行显示/隐藏/聚焦。面板当前可见状态以可观察属性暴露，供菜单项 IsChecked 绑定。</para>
-/// Workspace dock panel registry (singleton): registers the tool panels created by
-/// <c>WorkspaceDockFactory</c> together with their host dock so the top-level "Window" menu can
-/// show/hide/focus them. The current visibility of each panel is exposed as observable properties
-/// for the menu items' IsChecked bindings.
+/// Singleton registry of workspace dock panels: each tool panel is recorded with its host dock
+/// so it can be shown, hidden and focused, and current visibility is exposed as observable
+/// properties.
+/// <para>工作区停靠项注册表（单例）：每个工具停靠项连同所属停靠区一起登记，可见性可显示、隐藏与聚焦；
+/// 当前可见状态以可观察属性暴露。</para>
 /// </summary>
 public sealed partial class WorkspacePanelService : ObservableObject
 {
-    /// <summary>项目资源管理器面板键。 Project Explorer panel key.</summary>
+    /// <summary>Project Explorer panel key.<para>项目资源管理器停靠项键。</para></summary>
     public const string ProjectExplorer = "ProjectExplorer";
 
-    /// <summary>打包设置面板键。 Packing settings panel key.</summary>
+    /// <summary>Packing settings panel key.<para>打包设置停靠项键。</para></summary>
     public const string ProjectSetting = "ProjectSetting";
 
-    /// <summary>Plugins panel key. The persisted value preserves visibility in existing workspace snapshots.</summary>
+    /// <summary>Plugins panel key. The persisted value preserves visibility in existing workspace snapshots.<para>插件停靠项键。持久化的取值可在既有工作区快照中保留可见状态。</para></summary>
     public const string PluginTool = "PatchTool";
 
-    /// <summary>镜像管理面板键。 Image manager panel key.</summary>
+    /// <summary>Image manager panel key.<para>镜像管理停靠项键。</para></summary>
     public const string ImagesView = "ImagesView";
 
-    /// <summary>AI 助手面板键。 AI assistant panel key.</summary>
+    /// <summary>AI assistant panel key.<para>AI 助手停靠项键。</para></summary>
     public const string AiAssistant = "AiAssistant";
 
-    /// <summary>属性面板键。 Properties panel key.</summary>
+    /// <summary>Properties panel key.<para>属性停靠项键。</para></summary>
     public const string Properties = "Properties";
 
-    /// <summary>工作区日志面板键。 Workspace log panel key.</summary>
+    /// <summary>Workspace log panel key.<para>工作区日志停靠项键。</para></summary>
     public const string WorkspaceLog = "WorkspaceLog";
 
-    /// <summary>ADB 日志面板键。 ADB log panel key.</summary>
+    /// <summary>ADB log panel key.<para>ADB 日志停靠项键。</para></summary>
     public const string AdbLog = "AdbLog";
 
-    /// <summary>终端面板键。 Terminal panel key.</summary>
+    /// <summary>Terminal panel key.<para>终端停靠项键。</para></summary>
     public const string Terminal = "Terminal";
 
     /// <summary>
-    /// <para>单例实例。</para>
     /// Singleton instance.
+    /// <para>单例实例。</para>
     /// </summary>
+    /// <value>The shared service instance. <para>共享的服务实例。</para></value>
     public static WorkspacePanelService Instance { get; } = new();
 
     private readonly Dictionary<string, PanelEntry> _panels = new(StringComparer.Ordinal);
@@ -111,70 +111,69 @@ public sealed partial class WorkspacePanelService : ObservableObject
     }
 
     /// <summary>
-    /// <para>项目资源管理器面板当前是否可见。</para>
     /// Whether the Project Explorer panel is currently visible.
+    /// <para>项目资源管理器停靠项当前是否可见。</para>
     /// </summary>
     [ObservableProperty]
     private bool _projectExplorerVisible = true;
 
     /// <summary>
-    /// <para>打包设置面板当前是否可见（启动时默认隐藏）。</para>
     /// Whether the packing settings panel is currently visible (hidden on startup by default).
+    /// <para>打包设置停靠项当前是否可见（启动时默认隐藏）。</para>
     /// </summary>
     [ObservableProperty]
     private bool _projectSettingVisible;
 
-    /// <summary>Whether the plugins panel is visible.</summary>
+    /// <summary>Whether the plugins panel is visible.<para>插件停靠项当前是否可见。</para></summary>
     [ObservableProperty]
     private bool _pluginToolVisible = true;
 
     /// <summary>
-    /// <para>镜像管理面板当前是否可见。</para>
     /// Whether the image manager panel is currently visible.
+    /// <para>镜像管理停靠项当前是否可见。</para>
     /// </summary>
     [ObservableProperty]
     private bool _imagesViewVisible = true;
 
-    /// <summary>AI 助手面板当前是否可见。 Whether the AI assistant panel is visible.</summary>
+    /// <summary>Whether the AI assistant panel is visible.<para>AI 助手停靠项当前是否可见。</para></summary>
     [ObservableProperty]
     private bool _aiAssistantVisible;
 
     /// <summary>
-    /// <para>属性面板当前是否可见。</para>
     /// Whether the properties panel is currently visible.
+    /// <para>属性停靠项当前是否可见。</para>
     /// </summary>
     [ObservableProperty]
     private bool _propertiesVisible = true;
 
     /// <summary>
-    /// <para>工作区日志面板当前是否可见。</para>
     /// Whether the workspace log panel is currently visible.
+    /// <para>工作区日志停靠项当前是否可见。</para>
     /// </summary>
     [ObservableProperty]
     private bool _workspaceLogVisible = true;
 
     /// <summary>
-    /// <para>ADB 日志面板当前是否可见。</para>
     /// Whether the ADB log panel is currently visible.
+    /// <para>ADB 日志停靠项当前是否可见。</para>
     /// </summary>
     [ObservableProperty]
     private bool _adbLogVisible = true;
 
-    /// <summary>终端面板当前是否可见。 Whether the terminal panel is visible.</summary>
+    /// <summary>Whether the terminal panel is visible.<para>终端停靠项当前是否可见。</para></summary>
     [ObservableProperty]
     private bool _terminalVisible = true;
 
     /// <summary>
-    /// <para>注册一个工作区面板及其宿主停靠区，并同步初始可见状态。
-    /// 相同键重复注册时覆盖旧条目（幂等，工厂重建布局时安全）。</para>
     /// Registers a workspace panel with its host dock and syncs the initial visibility.
     /// Re-registering the same key overwrites the previous entry (idempotent, safe when the
     /// factory rebuilds the layout).
+    /// <para>注册一个工作区停靠项及其所属停靠区，并同步初始可见状态；相同键重复注册时覆盖旧条目（幂等，工厂重建布局时安全）。</para>
     /// </summary>
-    /// <param name="key"><para>面板键。</para>The panel key.</param>
-    /// <param name="dockable"><para>停靠面板引用。</para>The dock panel reference.</param>
-    /// <param name="host"><para>宿主停靠区。</para>The host dock.</param>
-    /// <param name="visible"><para>初始是否可见。</para>Whether initially visible.</param>
+    /// <param name="key">Panel key. <para>停靠项键。</para></param>
+    /// <param name="dockable">The dockable reference. <para>停靠项引用。</para></param>
+    /// <param name="host">The dock that owns the entry. <para>所属停靠区。</para></param>
+    /// <param name="visible">Whether initially visible. <para>初始是否可见。</para></param>
     public void Register(string key, IDockable dockable, IDock host, bool visible)
     {
         if (key == AdbLog && GetEntry(key)?.Dockable is IDisposable previous &&
@@ -185,21 +184,20 @@ public sealed partial class WorkspacePanelService : ObservableObject
     }
 
     /// <summary>
-    /// <para>显示指定面板：加回宿主停靠区可见列表并设为激活面板。</para>
-    /// Shows the specified panel: adds it back to the host dock's visible list and makes it active.
+    /// Shows a specified panel: re-adds it to its host dock's visible list and makes it active.
+    /// <para>显示指定停靠项：加回所属停靠区的可见列表并设为激活项。</para>
     /// </summary>
-    /// <param name="key"><para>面板键。</para>The panel key.</param>
+    /// <param name="key">Panel key. <para>停靠项键。</para></param>
     public void Show(string key) => Show(key, activate: true);
 
     /// <summary>
-    /// <para>显示指定面板；<paramref name="activate"/> 为 false 时仅加回宿主停靠区可见列表，
-    /// 不改变当前激活面板（供会话恢复使用，避免把活动面板切到被恢复的面板上）。</para>
-    /// Shows the specified panel; with <paramref name="activate"/> false it only re-adds the panel
-    /// to the host dock's visible list without changing the active panel (used by session restore so
-    /// restoring visibility never switches the active panel to a restored panel).
+    /// Shows a specified panel; when activate is false the entry is only re-added to its host
+    /// dock's visible list without changing the active one, so restoring visibility keeps focus.
+    /// <para>显示指定停靠项；activate 为 false 时仅把它加回所属停靠区的可见列表而不改变激活项，
+    /// 恢复可见状态不会切换焦点。</para>
     /// </summary>
-    /// <param name="key"><para>面板键。</para>The panel key.</param>
-    /// <param name="activate"><para>是否同时设为激活面板。</para>Whether to also make it the active panel.</param>
+    /// <param name="key">Panel key. <para>停靠项键。</para></param>
+    /// <param name="activate">Whether to also make it the active panel. <para>是否同时设为激活项。</para></param>
     public void Show(string key, bool activate)
     {
         if (key == Terminal)
@@ -230,11 +228,11 @@ public sealed partial class WorkspacePanelService : ObservableObject
     }
 
     /// <summary>
-    /// <para>隐藏指定面板：从宿主停靠区可见列表移除；若它当前为激活面板则激活余下第一个。</para>
-    /// Hides the specified panel: removes it from the host dock's visible list; if it was the
+    /// Hides a specified panel: removes it from its host dock's visible list; when it was the
     /// active panel, the first remaining panel becomes active instead.
+    /// <para>隐藏指定停靠项：从所属停靠区的可见列表移除；若它当前为激活项，则改为激活余下的第一个。</para>
     /// </summary>
-    /// <param name="key"><para>面板键。</para>The panel key.</param>
+    /// <param name="key">Panel key. <para>停靠项键。</para></param>
     public void Hide(string key)
     {
         if (key == Terminal)
@@ -263,10 +261,10 @@ public sealed partial class WorkspacePanelService : ObservableObject
     }
 
     /// <summary>
-    /// <para>切换指定面板的显示/隐藏状态。</para>
     /// Toggles the specified panel's visible state.
+    /// <para>切换指定停靠项的显示与隐藏状态。</para>
     /// </summary>
-    /// <param name="key"><para>面板键。</para>The panel key.</param>
+    /// <param name="key">Panel key. <para>停靠项键。</para></param>
     public void Toggle(string key)
     {
         if (IsPanelVisible(key))
@@ -280,10 +278,11 @@ public sealed partial class WorkspacePanelService : ObservableObject
     }
 
     /// <summary>
-    /// <para>查询指定面板当前是否实际在宿主停靠区的可见列表中。</para>
-    /// Queries whether the specified panel is currently present in the host dock's visible list.
+    /// Queries whether a specified panel is currently present in its host dock's visible list.
+    /// <para>查询指定停靠项当前是否真实位于所属停靠区的可见列表中。</para>
     /// </summary>
-    /// <param name="key"><para>面板键。</para>The panel key.</param>
+    /// <param name="key">Panel key. <para>停靠项键。</para></param>
+    /// <returns>True when it is present in the visible list. <para>停靠项位于可见列表时返回 true。</para></returns>
     public bool IsPanelVisible(string key)
     {
         if (key == Terminal) return _terminals?.IsVisible == true;
@@ -298,13 +297,11 @@ public sealed partial class WorkspacePanelService : ObservableObject
     }
 
     /// <summary>
-    /// <para>宿主停靠区可见内容变化时（如用户经停靠区关闭按钮移除面板）由工厂回调，
-    /// 重新同步该停靠区内各面板的可见性可观察属性。</para>
-    /// Called by the factory when a host dock's visible contents change (e.g. a panel is removed
-    /// through the dock's close button), resyncing the visibility observables for the panels of
-    /// that dock.
+    /// Resyncs the visibility observables when a host dock's visible contents change, such as a
+    /// dockable removed through the dock's close button.
+    /// <para>所属停靠区的可见内容变化时（例如停靠项经关闭按钮被移除），重新同步该区内各停靠项的可见性可观察属性。</para>
     /// </summary>
-    /// <param name="dock"><para>内容变化的停靠区。</para>The dock whose contents changed.</param>
+    /// <param name="dock">The dock whose contents changed. <para>内容变化的停靠区。</para></param>
     public void OnDockContentsChanged(IDock dock)
     {
         foreach (var (key, entry) in _panels)

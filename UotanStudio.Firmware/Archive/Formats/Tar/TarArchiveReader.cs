@@ -5,8 +5,8 @@ using UotanStudio.Firmware.Archive.Models;
 namespace UotanStudio.Firmware.Archive.Formats.Tar;
 
 /// <summary>
-/// Reads TAR archives through <c>System.Formats.Tar</c>, mapping entry types and PAX or libarchive extended attributes.
-/// <para>通过 <c>System.Formats.Tar</c> 读取 TAR 归档，映射条目类型以及 PAX 或 libarchive 扩展属性。</para>
+/// Reads TAR archives through <c>System.Formats.Tar</c>, mapping entry types and PAX or vendor extended attributes.
+/// <para>通过 <c>System.Formats.Tar</c> 读取 TAR 归档，映射条目类型以及 PAX 或厂商扩展属性。</para>
 /// </summary>
 internal sealed class TarArchiveReader
 {

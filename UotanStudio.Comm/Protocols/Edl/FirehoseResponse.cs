@@ -126,7 +126,10 @@ public class FirehoseResponse
         return val == null ? null : int.TryParse(val, out var result) ? result : null;
     }
 
-    /// <summary>Returns a string representation of the response. 返回响应的字符串表示。</summary>
+    /// <summary>
+    /// Returns a string representation of the response.
+    /// <para>返回响应的字符串表示。</para>
+    /// </summary>
     public override string ToString() =>
         IsRawMode ? "FirehoseResponse(RAW_MODE)" :
         IsLog ? $"FirehoseResponse(LOG, Value={LogValue})" :
@@ -200,13 +203,16 @@ internal static class FirehoseResponseParser
 
     /// <summary>
     /// Parses a complete <c>&lt;data&gt;</c> block, extracting <c>&lt;log&gt;</c> nodes and the
-    /// <c>&lt;response&gt;</c> node. Some targets send log and response within the same block;
-    /// node-level parsing prevents a block containing a response from being discarded
-    /// wholesale as a log.
+    /// <c>&lt;response&gt;</c> node.
     /// <para>解析一个完整的 <c>&lt;data&gt;</c> 块，逐节点提取 <c>&lt;log&gt;</c> 与
-    /// <c>&lt;response&gt;</c>。某些设备会在同一块内同时发送 log 与 response；节点级解析
-    /// 可避免把含 response 的块整体当作 log 丢弃。</para>
+    /// <c>&lt;response&gt;</c>。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>Some targets send log and response within the same block; node-level parsing prevents a block
+    /// containing a response from being discarded wholesale as a log.</para>
+    /// <para>某些设备会在同一块内同时发送 log 与 response；节点级解析可避免把含 response 的块整体当作
+    /// log 丢弃。</para>
+    /// </remarks>
     /// <param name="xml">The complete <c>&lt;data&gt;</c> XML block. 完整的 <c>&lt;data&gt;</c> XML 块。</param>
     /// <param name="capturePayloads">Whether to retain and validate scalar vendor payload attributes.</param>
     /// <returns>A <see cref="FirehoseDataBlock"/> with any logs and/or the response found. 包含所提取 log 及/或 response 的 <see cref="FirehoseDataBlock"/>。</returns>
@@ -340,7 +346,7 @@ internal static class FirehoseResponseParser
 /// </summary>
 internal sealed class FirehoseDataBlock
 {
-    /// <summary>Gets explicitly requested bounded vendor payload attributes.</summary>
+    /// <summary>Gets explicitly requested bounded vendor payload attributes. <para>获取显式请求的、有界的厂商 payload 属性。</para></summary>
     public Dictionary<string, Dictionary<string, string>> PayloadElements { get; } = new(StringComparer.Ordinal);
 
     /// <summary>

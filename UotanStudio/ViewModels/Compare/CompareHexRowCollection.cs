@@ -6,30 +6,23 @@ using UotanStudio.Services.Compare;
 namespace UotanStudio.ViewModels.Compare;
 
 /// <summary>
-/// <para>十六进制对比行的懒加载集合：按行索引按需读取两个文件并构造
-/// <see cref="CompareRowViewModel"/>（偏移/十六进制串/ASCII 串），供虚拟化 <c>ListBox</c>
-/// 随机索引取行；内置小窗口缓存与统一的锁，支持 UI 与后台并发访问。
-/// 每行字节数常量独立定义，不引用 <c>Views/Controls/HexMetrics</c>，
-/// 保持 ViewModels 层不依赖 Views 层。</para>
-/// Lazily loaded hex-compare row collection: reads both files by row index on demand to build
-/// <see cref="CompareRowViewModel"/> rows (offset/hex string/ASCII string) for a virtualized
-/// <c>ListBox</c>; a small window cache and a single lock make random access fast and safe for
-/// concurrent UI/background use. The bytes-per-line constant is defined here independently and does
-/// not reference <c>Views/Controls/HexMetrics</c>, keeping the ViewModels layer free of Views
-/// dependencies.
+/// Lazily loaded hex-comparison row collection: reads both files by row index on demand to build
+/// offset/hex/ASCII rows for virtualized random access, with a small window cache and one lock.
+/// <para>十六进制对比行的懒加载集合：按行索引按需读取两个文件并构造偏移/十六进制串/ASCII 串，
+/// 支持虚拟化随机取行；内置小窗口缓存与统一的锁。</para>
 /// </summary>
 public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>, IList, IDisposable
 {
     /// <summary>
-    /// <para>每行字节数。</para>
     /// Bytes per row.
+    /// <para>每行字节数。</para>
     /// </summary>
     private const int BytesPerLine = 16;
 
     /// <summary>
-    /// <para>窗口缓存容量：保留最近访问的 256 行的字节，命中时避免重复 seek 与读取。</para>
     /// Window-cache capacity: keeps the bytes of the 256 most recently accessed rows so cache hits
     /// avoid repeated seeks and reads.
+    /// <para>窗口缓存容量：保留最近访问的 256 行的字节，命中时避免重复 seek 与读取。</para>
     /// </summary>
     private const int CacheCapacity = 256;
 
@@ -43,20 +36,14 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     private readonly CacheSlot[] _cache = new CacheSlot[CacheCapacity];
 
     /// <summary>
+    /// Creates the hex-comparison row collection: opens both file streams, captures the file lengths and
+    /// computes the total row count; row bytes are read lazily on first access.
     /// <para>创建十六进制对比行集合：立即打开两个文件流、捕获文件长度并计算总行数，
     /// 行字节在首次索引访问时懒加载读取。</para>
-    /// Creates the hex-compare row collection: opens both file streams immediately, captures the
-    /// file lengths and computes the total row count, while row bytes are lazily read on the first
-    /// access to each index.
     /// </summary>
-    /// <param name="leftPath">左文件路径。<para>Left file path.</para></param>
-    /// <param name="rightPath">右文件路径。<para>Right file path.</para></param>
-    /// <param name="rowDiffBitmap">行差异位图（每 16 字节行 1 bit，由
-    /// <see cref="BinaryDiffService.CompareStats(string, string, byte[], CancellationToken)"/> 生成）；
-    /// 长度必须不小于 <see cref="BinaryDiffService.RowBitmapLength"/> 的返回值。</param>
-    /// <param name="rowDiffBitmap">Row-diff bitmap (1 bit per 16-byte row, produced by
-    /// <see cref="BinaryDiffService.CompareStats(string, string, byte[], CancellationToken)"/>);
-    /// its length must be at least <see cref="BinaryDiffService.RowBitmapLength"/>'s return value.</param>
+    /// <param name="leftPath">Left file path. <para>左文件路径。</para></param>
+    /// <param name="rightPath">Right file path. <para>右文件路径。</para></param>
+    /// <param name="rowDiffBitmap">Row-diff bitmap, 1 bit per 16-byte row, sized by <see cref="BinaryDiffService.RowBitmapLength"/>. <para>行差异位图：每 16 字节行 1 位，长度按 <see cref="BinaryDiffService.RowBitmapLength"/> 计算。</para></param>
     public CompareHexRowCollection(string leftPath, string rightPath, byte[] rowDiffBitmap)
     {
         ArgumentNullException.ThrowIfNull(leftPath);
@@ -95,20 +82,19 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     }
 
     /// <summary>
-    /// <para>总行数：按两侧文件较长者以 16 字节一行向上取整。</para>
     /// Total row count: the longer of the two files rounded up to whole 16-byte rows.
+    /// <para>总行数：按两侧文件较长者以 16 字节一行向上取整。</para>
     /// </summary>
+    /// <value>The total number of comparison rows. <para>对比行的总数。</para></value>
     public int Count => _count;
 
     /// <summary>
-    /// <para>获取指定行的对比行视图模型；行数据按需从两个文件读取（带最近 256 行窗口缓存），
-    /// 索引器可能被 UI 与后台线程同时调用，统一由同一把锁保护。</para>
-    /// Gets the compare row for the given index; row data is read from both files on demand (with a
-    /// 256-row window cache), and the indexer is safe to call concurrently from the UI and
-    /// background threads as a single lock guards all access.
+    /// Gets the compare row for the given index; row data is read from both files on demand through a
+    /// 256-row window cache guarded by a single lock.
+    /// <para>获取指定索引的对比行；行数据按需从两个文件读取，经最近 256 行窗口缓存，由同一把锁保护。</para>
     /// </summary>
-    /// <param name="index">行索引（0 起）。<para>Row index (0-based).</para></param>
-    /// <returns><para>该行的对比行视图模型。</para> The compare row for the index.</returns>
+    /// <param name="index">Zero-based row index. <para>行索引（从零开始）。</para></param>
+    /// <value>The compare row at the given index. <para>给定索引处的对比行。</para></value>
     public CompareRowViewModel this[int index]
     {
         get
@@ -134,9 +120,10 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     }
 
     /// <summary>
-    /// <para>逐行懒加载地枚举全部对比行。</para>
     /// Enumerates every compare row, loading each row lazily.
+    /// <para>逐行懒加载地枚举全部对比行。</para>
     /// </summary>
+    /// <returns>The enumerator over every compare row. <para>遍历全部对比行的枚举器。</para></returns>
     public IEnumerator<CompareRowViewModel> GetEnumerator()
     {
         for (var i = 0; i < _count; i++)
@@ -146,9 +133,10 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     }
 
     /// <summary>
-    /// <para>非泛型枚举器实现，转发到 <see cref="GetEnumerator"/>。</para>
     /// Non-generic enumerator implementation forwarding to <see cref="GetEnumerator"/>.
+    /// <para>非泛型枚举器实现，转发到 <see cref="GetEnumerator"/>。</para>
     /// </summary>
+    /// <returns>The non-generic enumerator over every row. <para>遍历全部行的非泛型枚举器。</para></returns>
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     bool IList.IsReadOnly => true;
@@ -191,10 +179,12 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     }
 
     /// <summary>
-    /// <para>按引用查找行 VM 的索引（集合复用缓存实例，同一索引始终返回同一引用）。</para>
-    /// Finds a row VM's index by reference (the collection reuses cached instances, so the same
+    /// Finds a row's index by reference (the collection reuses cached instances, so the same
     /// index always returns the same reference).
+    /// <para>按引用查找行的索引（集合复用缓存实例，同一索引始终返回同一引用）。</para>
     /// </summary>
+    /// <param name="target">The row to locate by reference. <para>要按引用查找的行。</para></param>
+    /// <returns>The index of the row, or -1 when it is not present. <para>该行的索引；不存在时为 -1。</para></returns>
     private int IndexOfReference(CompareRowViewModel target)
     {
         for (var i = 0; i < _count; i++)
@@ -209,8 +199,8 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     }
 
     /// <summary>
-    /// <para>释放内部持有的两个文件流。</para>
     /// Releases the two file streams held internally.
+    /// <para>释放内部持有的两个文件流。</para>
     /// </summary>
     public void Dispose()
     {
@@ -219,12 +209,14 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     }
 
     /// <summary>
-    /// <para>按行索引与缓存槽中的数据构造对比行：偏移文本、十六进制字节串与 ASCII 串，
-    /// 缺失侧对应字段为空串；状态与高亮按 diffRanges 相交、仅左、仅右、相同的优先级判定。</para>
-    /// Builds a compare row from the row index and the cache slot: offset text, hex byte string and
-    /// ASCII string, with the missing side's fields empty; status and highlight follow the
-    /// diff-intersection, right-only, left-only, equal priority order.
+    /// Builds a compare row from the index and cache slot: offset, hex and ASCII texts; the missing side
+    /// stays empty and status follows the diff, right-only, left-only, equal priority.
+    /// <para>按行索引与缓存槽构造对比行：偏移、十六进制与 ASCII 文本，缺失侧字段为空；
+    /// 状态按相交差异、仅右、仅左、相同的优先级判定。</para>
     /// </summary>
+    /// <param name="index">The zero-based row index to build. <para>要构造的从零开始的行索引。</para></param>
+    /// <param name="slot">The cache slot holding the row's bytes and read counts. <para>存放该行字节与读取长度的缓存槽。</para></param>
+    /// <returns>The built compare row. <para>构造出的对比行。</para></returns>
     private CompareRowViewModel BuildRow(int index, CacheSlot slot)
     {
         var offset = (long)index * BytesPerLine;
@@ -277,12 +269,12 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     }
 
     /// <summary>
-    /// <para>判断给定行起始偏移所在的行是否含差异：行索引 = 起始偏移 / 16，位图字节 = 行 / 8，
-    /// 位 = 行 % 8；超出位图覆盖范围的行（两侧文件都缺失的尾部空行）返回 false。</para>
-    /// Determines whether the row at the given start offset contains a difference: row index =
-    /// start / 16, bitmap byte = row / 8, bit = row % 8; trailing rows beyond the bitmap's coverage
-    /// (rows past both files' ends) return false.
+    /// Determines whether the row at the given start offset contains a difference; rows beyond the
+    /// bitmap's coverage return false.
+    /// <para>判断给定行起始偏移所在的行是否含差异；超出位图覆盖范围的行返回 false。</para>
     /// </summary>
+    /// <param name="rowStart">The row's start offset in bytes. <para>该行在文件中的起始字节偏移。</para></param>
+    /// <returns>Whether the row intersects a reported difference. <para>该行是否与已记录的差异相交。</para></returns>
     private bool IntersectsDiff(long rowStart)
     {
         var row = (int)(rowStart / BytesPerLine);
@@ -295,12 +287,16 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     }
 
     /// <summary>
-    /// <para>从文件流读取一行的最多 16 字节到缓冲：先 seek 到行起始偏移，
-    /// 短文件读到多少算多少；该行完全超出文件长度时返回 0。</para>
-    /// Reads up to 16 bytes of one row from a stream into the buffer: seeks to the row start first
-    /// and reads as many bytes as the shorter file provides; returns 0 when the row lies entirely
-    /// beyond the end of the file.
+    /// Reads up to 16 bytes of one row from a stream into the buffer, seeking to the row start first;
+    /// returns 0 when the row lies entirely beyond the file end.
+    /// <para>从文件流读取一行的最多 16 字节到缓冲，先 seek 到行起始偏移；
+    /// 行完全超出文件长度时返回 0。</para>
     /// </summary>
+    /// <param name="stream">The file stream to read from. <para>要读取的文件流。</para></param>
+    /// <param name="offset">The row's start offset in the file. <para>该行在文件中的起始偏移。</para></param>
+    /// <param name="length">The file length bounding the read. <para>限定本次读取的文件长度。</para></param>
+    /// <param name="buffer">The buffer receiving the row's bytes. <para>接收该行字节的缓冲。</para></param>
+    /// <returns>The number of bytes actually read. <para>实际读取到的字节数。</para></returns>
     private static int ReadLine(FileStream stream, long offset, long length, byte[] buffer)
     {
         if (offset >= length)
@@ -326,9 +322,12 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     }
 
     /// <summary>
-    /// <para>把一行的字节格式化为两位大写的十六进制串，字节间以空格分隔（如 "0A FF 1B"）。</para>
-    /// Formats a row's bytes as two-digit uppercase hex digits separated by spaces (e.g. "0A FF 1B").
+    /// Formats a row's bytes as two-digit uppercase hex digits separated by spaces, for example 0A FF 1B.
+    /// <para>把一行的字节格式化为以空格分隔的两位大写十六进制串，例如 0A FF 1B。</para>
     /// </summary>
+    /// <param name="buffer">The buffer holding the row's bytes. <para>存放该行字节的缓冲。</para></param>
+    /// <param name="count">The number of valid bytes in the buffer. <para>缓冲内有效字节的数量。</para></param>
+    /// <returns>The formatted hex string. <para>格式化后的十六进制串。</para></returns>
     private static string FormatHex(byte[] buffer, int count)
     {
         if (count <= 0)
@@ -351,10 +350,13 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     }
 
     /// <summary>
-    /// <para>把一行的字节格式化为 ASCII 串：可打印字符（0x20-0x7E）原样显示，其余用 '.' 代替。</para>
     /// Formats a row's bytes as an ASCII string: printable characters (0x20-0x7E) are shown as-is,
     /// everything else is replaced with '.'.
+    /// <para>把一行的字节格式化为 ASCII 串：可打印字符（0x20-0x7E）原样显示，其余用 '.' 代替。</para>
     /// </summary>
+    /// <param name="buffer">The buffer holding the row's bytes. <para>存放该行字节的缓冲。</para></param>
+    /// <param name="count">The number of valid bytes in the buffer. <para>缓冲内有效字节的数量。</para></param>
+    /// <returns>The formatted ASCII string. <para>格式化后的 ASCII 串。</para></returns>
     private static string FormatAscii(byte[] buffer, int count)
     {
         if (count <= 0)
@@ -373,48 +375,47 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     }
 
     /// <summary>
-    /// <para>缓存槽：保存最近一次读取到的行字节数据与读取长度，命中时避免重复 seek/读取；
-    /// 槽内字节缓冲被复用，配合统一的锁保护并发访问。</para>
-    /// A cache slot holding the byte data and read counts of the last row read into it, so cache
-    /// hits avoid repeated seeks and reads; its byte buffers are reused and guarded by the single
-    /// lock for concurrent access.
+    /// A cache slot holding the byte data and read counts of the last row read into it; its byte buffers
+    /// are reused under the collection's single lock.
+    /// <para>缓存槽：保存最近一次读取到的行字节数据与读取长度；槽内字节缓冲被复用，
+    /// 配合统一的锁保护并发访问。</para>
     /// </summary>
     private sealed class CacheSlot
     {
         /// <summary>
-        /// <para>槽内缓存的行索引；-1 表示未填充。</para>
         /// Row index cached in this slot; -1 when not yet populated.
+        /// <para>槽内缓存的行索引；-1 表示未填充。</para>
         /// </summary>
         public long Index = -1;
 
         /// <summary>
-        /// <para>左侧实际读取到的字节数。</para>
         /// Number of bytes actually read on the left side.
+        /// <para>左侧实际读取到的字节数。</para>
         /// </summary>
         public int LeftCount;
 
         /// <summary>
-        /// <para>右侧实际读取到的字节数。</para>
         /// Number of bytes actually read on the right side.
+        /// <para>右侧实际读取到的字节数。</para>
         /// </summary>
         public int RightCount;
 
         /// <summary>
-        /// <para>左侧行字节缓冲。</para>
         /// Left row byte buffer.
+        /// <para>左侧行字节缓冲。</para>
         /// </summary>
         public byte[] Left = new byte[BytesPerLine];
 
         /// <summary>
-        /// <para>右侧行字节缓冲。</para>
         /// Right row byte buffer.
+        /// <para>右侧行字节缓冲。</para>
         /// </summary>
         public byte[] Right = new byte[BytesPerLine];
 
         /// <summary>
-        /// <para>由本槽字节构造的行 VM；随槽缓存复用，索引命中时直接返回，不再重新分配。</para>
         /// The row VM built from this slot's bytes; cached with the slot so a cache hit returns it
         /// directly without allocating again.
+        /// <para>由本槽字节构造的行 VM；随槽缓存复用，索引命中时直接返回，不再重新分配。</para>
         /// </summary>
         public CompareRowViewModel? Row;
     }

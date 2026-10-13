@@ -13,12 +13,8 @@ internal static class Leb128
     public const int MaxEncodedBytes = 5;
 
     /// <summary>
-    /// Reads an unsigned LEB128 integer, bounded to at most 5 bytes.
-    /// On malformed input (truncated, over-long, or trailing continuation) a
-    /// <see cref="FormatException"/> is thrown and <paramref name="offset"/> is left
-    /// unchanged so callers can distinguish "no data consumed" from partial consumption.
-    /// <para>读取一个无符号 LEB128 整数，最多消费 5 字节。遇到截断、超长或多余续位时抛出
-    /// <see cref="FormatException"/>，<paramref name="offset"/> 保持不变。</para>
+    /// Reads an unsigned LEB128 integer of at most five bytes.
+    /// <para>读取一个最多五字节的无符号 LEB128 整数。</para>
     /// </summary>
     /// <param name="data">
     /// Source bytes; <paramref name="offset"/> must point at the first byte of the encoding.

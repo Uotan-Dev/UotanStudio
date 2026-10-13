@@ -9,10 +9,10 @@ namespace UotanStudio.Comm.Protocols.Edl.Auth;
 /// <para>保存构造 Nothing <c>ntprojectverify</c> 令牌所需的逐项目常量。</para>
 /// </summary>
 /// <remarks>
-/// <para>The reference Nothing module keeps one verification digest per project identifier instead of deriving
+/// <para>Each project identifier keeps one verification digest instead of deriving
 /// it from the target, so a profile is only as correct as the catalog entry or operator input it came from.
 /// The digest is the constant the device re-computes with, not a per-device secret.</para>
-/// <para>参考 Nothing 模块按项目标识符保存一个校验摘要，而不是从目标推导，因此配置的正确性完全取决于它来自
+/// <para>每个项目标识符保存一个校验摘要，而不是从目标推导，因此配置的正确性完全取决于它来自
 /// 目录条目还是操作员输入。该摘要是设备重新计算时使用的常量，并非设备专属机密。</para>
 /// </remarks>
 public sealed record EdlNothingProjectProfile
@@ -55,18 +55,16 @@ public sealed record EdlNothingProjectProfile
 }
 
 /// <summary>
-/// Resolves Nothing verification constants for a project identifier from the reference tool's fixed table.
-/// <para>按项目标识符从参考工具的固定表解析 Nothing 校验常量。</para>
+/// Resolves Nothing verification constants for a project identifier from the built-in fixed table.
+/// <para>按项目标识符从内置固定表解析 Nothing 校验常量。</para>
 /// </summary>
 /// <remarks>
-/// <para>The reference Nothing module documents one project identifier and its verification digest
-/// (nothing.py, lines 16 to 21); identifiers absent from the table have no derivable profile here, because
+/// <para>Identifiers absent from the table have no derivable profile here, because
 /// their digests are not guessed.
 /// <see cref="EdlNothingProjectProfile.HashVerify"/> may alternatively be supplied by the operator when the
 /// digest has been authorized for a project outside this table.</para>
-/// <para>参考 Nothing 模块只记录了一个项目标识符及其校验摘要（nothing.py 第 16 至 21 行）；表内没有的标识符
-/// 在此没有可推导的配置，因为其摘要不被猜测。当摘要已针对表外项目获得授权时，也可以由操作员直接提供
-/// <see cref="EdlNothingProjectProfile.HashVerify"/>。</para>
+/// <para>表内没有的标识符在此没有可推导的配置，因为其摘要不被猜测。当摘要已针对表外项目获得授权时，
+/// 也可以由操作员直接提供 <see cref="EdlNothingProjectProfile.HashVerify"/>。</para>
 /// </remarks>
 public static class EdlNothingProjectCatalog
 {
@@ -76,14 +74,14 @@ public static class EdlNothingProjectCatalog
             "16386b4035411a770b12507b2e30297c0c5471230b213e6a1e1e701c6a425150"),
     ];
 
-    /// <summary>Gets the project identifiers that the reference table can resolve.
-    /// <para>获取参考表可解析的项目标识符。</para></summary>
+    /// <summary>Gets the project identifiers that the built-in table can resolve.
+    /// <para>获取内置表可解析的项目标识符。</para></summary>
     /// <value>The identifiers in sorted order. <para>按排序后的标识符。</para></value>
     public static IReadOnlyList<string> ProjectIds { get; } =
         [.. Entries.Select(entry => entry.Project).Order(StringComparer.Ordinal)];
 
-    /// <summary>Resolves one profile from the reference table without probing the device.
-    /// <para>按参考表解析一个配置，不探测设备。</para></summary>
+    /// <summary>Resolves one profile from the built-in table without probing the device.
+    /// <para>按内置表解析一个配置，不探测设备。</para></summary>
     /// <param name="projectId">The project identifier reported by the device.
     /// <para>设备上报的项目标识符。</para></param>
     /// <param name="profile">The resolved profile, or <see langword="null"/> when unknown.
@@ -112,8 +110,8 @@ public static class EdlNothingProjectCatalog
     /// <summary>Describes one catalogued project for user selection.
     /// <para>为界面选择描述一个目录内的项目。</para></summary>
     /// <param name="projectId">The project identifier to describe. <para>要描述的项目标识符。</para></param>
-    /// <returns>The reference description, or an empty string when the identifier is unknown.
-    /// <para>参考描述；标识符未知时为空字符串。</para></returns>
+    /// <returns>The catalogued description, or an empty string when the identifier is unknown.
+    /// <para>目录描述；标识符未知时为空字符串。</para></returns>
     public static string Describe(string projectId)
     {
         var entry = Array.Find(Entries, candidate =>
@@ -127,19 +125,19 @@ public static class EdlNothingProjectCatalog
 /// <para>由单个显式配置构造 Nothing <c>ntprojectverify</c> 凭据。</para>
 /// </summary>
 /// <remarks>
-/// <para>The reference module derives the three token attributes as
+/// <para>The three token attributes are derived as
 /// <c>token2 = lowercase hex of SHA-256 over the ASCII bytes of token1 + project id + serial as lowercase
 /// hexadecimal + token3</c> and <c>token3 = the project verification digest</c>, where the serial is formatted
-/// the way Python's <c>%x</c> formats it, without padding or prefix (nothing.py, lines 30 to 38). The token1
+/// as unprefixed lowercase hexadecimal without padding. The token1
 /// nonce carries no per-device secret; freshly generated exchanges emit 32 lowercase hexadecimal characters,
 /// which is the exact width the session credential gate accepts for <c>token1</c>
 /// (FirehoseProtocol.ProjectAuthentication.cs, lines 129 to 151), while the fixed-token1 constructor keeps any
-/// caller-supplied width so upstream reference vectors can be reproduced byte for byte.</para>
-/// <para>参考模块按下列方式推导三个令牌属性：<c>token2 = 对 ASCII 字节 token1 + 项目标识 + 小写十六进制序列号
-/// + token3 的 SHA-256 小写十六进制摘要</c>，<c>token3 = 项目校验摘要</c>；序列号按 Python <c>%x</c> 的格式书写，
-/// 无前导零也无前缀（nothing.py 第 30 至 38 行）。token1 随机数不含设备专属机密：新生成的令牌使用 32 个小写十六进制
+/// caller-supplied width so known test vectors can be reproduced byte for byte.</para>
+/// <para>三个令牌属性的推导方式：<c>token2 = 对 ASCII 字节 token1 + 项目标识 + 小写十六进制序列号
+/// + token3 的 SHA-256 小写十六进制摘要</c>，<c>token3 = 项目校验摘要</c>；序列号按无前导零也无前缀的
+/// 小写十六进制书写。token1 随机数不含设备专属机密：新生成的令牌使用 32 个小写十六进制
 /// 字符，正好等于会话凭据门对 <c>token1</c> 接受的宽度（FirehoseProtocol.ProjectAuthentication.cs 第 129 至 151 行）；
-/// 固定 token1 构造函数则保留调用方给定的宽度，以便逐字节复现上游参考向量。</para>
+/// 固定 token1 构造函数则保留调用方给定的宽度，以便逐字节复现已知测试向量。</para>
 /// </remarks>
 public sealed class EdlNothingProjectAuthProvider : IEdlProjectAuthenticationProvider
 {
@@ -160,9 +158,9 @@ public sealed class EdlNothingProjectAuthProvider : IEdlProjectAuthenticationPro
         Profile = profile;
     }
 
-    /// <summary>Creates a provider that reuses one explicit nonce, for reproducible exchanges and reference
-    /// vectors.
-    /// <para>创建固定复用某一随机数的提供方，用于可复现的交换与参考向量。</para></summary>
+    /// <summary>Creates a provider that reuses one explicit nonce, for reproducible exchanges and known
+    /// test vectors.
+    /// <para>创建固定复用某一随机数的提供方，用于可复现的交换与已知测试向量。</para></summary>
     /// <param name="profile">The resolved project constants. <para>已解析的项目常量。</para></param>
     /// <param name="fixedToken1">Between one and 128 lowercase ASCII hexadecimal characters, reused by every
     /// token of this instance. <para>1 至 128 个小写 ASCII 十六进制字符，本实例的每个令牌都复用该值。</para></param>

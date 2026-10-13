@@ -234,21 +234,8 @@ internal partial class LibUsbDevice : UsbDevice
     }
 
     /// <summary>
-    /// Releases the device after bounded ownership of both chunk gates.
-    /// A chunk transfer holds its gate across a blocking native call whose own timeout can be
-    /// longer than any fixed wait, so disposal waits with a finite timeout instead of blocking
-    /// forever and, when it cannot take a gate, proceeds best-effort rather than leaking the
-    /// handle. Gates that were taken are released and disposed so later operations surface a
-    /// deterministic failure instead of racing against the nulled reader, writer and buffers;
-    /// a gate still held by an in-flight transfer is left undisposed so that transfer's finally
-    /// path cannot throw <see cref="ObjectDisposedException"/> on release. Repeat disposal is
-    /// safe because waiting on an already disposed gate is treated as not acquired.
-    /// <para>在有限期内取得两个分块闸后释放设备。分块传输在可阻塞的原生调用期间持有闸，
-    /// 该调用自身的超时可能长于任何固定等待，因此释放流程使用有限超时等待而非无限阻塞；
-    /// 取不到闸时尽力继续而非泄漏句柄。已取得的闸会被释放并处置，使后续操作呈现确定性
-    /// 失败，而不是与被置空的读写器和缓冲区竞争；仍被在途传输持有的闸保持未处置，避免该
-    /// 传输的 finally 释放路径抛出 <see cref="ObjectDisposedException"/>。重复释放是安全的，
-    /// 因为对已处置闸的等待会被视为未取得。</para>
+    /// Releases the device after bounded ownership of both chunk gates, waiting a finite time for a gate still held by an in-flight transfer instead of blocking forever.
+    /// <para>在有限取得两个分块闸后释放设备；对仍被在途传输持有的闸只等待固定时长，不会永久阻塞。</para>
     /// </summary>
     public override void Dispose()
     {

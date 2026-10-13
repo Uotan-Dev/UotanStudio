@@ -4,15 +4,15 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 namespace UotanStudio.Comm.Transports.Usb.Backend.MacOS;
 
 /// <summary>
-/// <para>从单个 I/O Registry 条目读到的原始属性袋：键名沿用 IOKit 的属性名，取值在读取阶段就转成
-/// 托管可空类型，读不到的属性保持 <see langword="null"/> 而不伪造默认值。<see cref="IOClass"/>
-/// 决定节点角色与类名，其余为设备/接口描述符字段。本类型不涉及任何 IOKit 句柄，因此可在没有 IOKit
-/// 的环境下构造并测试。</para>
 /// The raw property bag read from a single I/O Registry entry. The keys follow the IOKit property names and
 /// each value is converted to a nullable managed type during the read, so an unreadable property stays
 /// <see langword="null"/> rather than being invented. <see cref="IOClass"/> drives the node role and class
 /// name; the rest are device and interface descriptor fields. The type holds no IOKit handle, so it can be
 /// built and tested without IOKit.
+/// <para>从单个 I/O Registry 条目读到的原始属性袋：键名沿用 IOKit 的属性名，取值在读取阶段就转成
+/// 托管可空类型，读不到的属性保持 <see langword="null"/> 而不伪造默认值。<see cref="IOClass"/>
+/// 决定节点角色与类名，其余为设备/接口描述符字段。本类型不涉及任何 IOKit 句柄，因此可在没有 IOKit
+/// 的环境下构造并测试。</para>
 /// </summary>
 internal sealed record MacIoRegistryEntry
 {
@@ -82,13 +82,6 @@ internal sealed record MacIoRegistryEntry
 }
 
 /// <summary>
-/// <para>把 I/O Registry 的原始属性袋塑形成统一拓扑节点的纯逻辑层，不触碰任何 IOKit 句柄，因此可用
-/// 合成属性袋在无 macOS 的环境中完整测试。角色一律从条目自身的 <c>IOClass</c>（辅以
-/// <c>bDeviceClass==0x09</c>）显式判定：接口类为功能节点、根集线器类为根集线器、控制器/PCI 类为主机
-/// 控制器、集线器设备类为集线器，其余为设备。<c>ClassName</c> 取条目自身的 <c>IOClass</c>（而非父驱动
-/// 的 <c>IOProviderClass</c>），因为 macOS 没有 Windows 风格的设备接口类 GUID 与 PnP 故障码，这些字段
-/// 保持 <see langword="null"/>。厂商/产品/版本/接口三元组的兜底与协议分类仍交给
-/// <see cref="UsbTopologyNodes.Create"/>，本层只写自己读到的原始值。</para>
 /// The pure layer that shapes an I/O Registry property bag into the shared topology node without touching
 /// any IOKit handle, so it is fully testable with a synthetic property bag on any host. The role is always
 /// stated explicitly from the entry's own <c>IOClass</c> (with <c>bDeviceClass==0x09</c>): an interface
@@ -99,6 +92,13 @@ internal sealed record MacIoRegistryEntry
 /// <see langword="null"/>. The vendor, product, release and interface triple fallbacks and protocol
 /// classification are still delegated to <see cref="UsbTopologyNodes.Create"/>; this layer writes only the
 /// values it read.
+/// <para>把 I/O Registry 的原始属性袋塑形成统一拓扑节点的纯逻辑层，不触碰任何 IOKit 句柄，因此可用
+/// 合成属性袋在无 macOS 的环境中完整测试。角色一律从条目自身的 <c>IOClass</c>（辅以
+/// <c>bDeviceClass==0x09</c>）显式判定：接口类为功能节点、根集线器类为根集线器、控制器/PCI 类为主机
+/// 控制器、集线器设备类为集线器，其余为设备。<c>ClassName</c> 取条目自身的 <c>IOClass</c>（而非父驱动
+/// 的 <c>IOProviderClass</c>），因为 macOS 没有 Windows 风格的设备接口类 GUID 与 PnP 故障码，这些字段
+/// 保持 <see langword="null"/>。厂商/产品/版本/接口三元组的兜底与协议分类仍交给
+/// <see cref="UsbTopologyNodes.Create"/>，本层只写自己读到的原始值。</para>
 /// </summary>
 internal static class MacIoRegistryTopology
 {

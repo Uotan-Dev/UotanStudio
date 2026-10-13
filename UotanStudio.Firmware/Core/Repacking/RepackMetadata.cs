@@ -94,11 +94,8 @@ public sealed class RepackMetadata
     public static bool HasPackingOverrides => CurrentPackingOverrides.Value is not null;
 
     /// <summary>
-    /// Applies the given options as packing overrides for the current packaging operation. The returned
-    /// scope restores the previous value on dispose; dispose it before leaving the packaging call so the
-    /// override never leaks into unrelated work. Passing <c>null</c> clears the override.
-    /// <para>将给定选项作为当前打包操作的打包覆盖应用。返回的作用域在释放时恢复先前值；
-    /// 应在打包调用结束前释放，避免覆盖泄漏到无关工作。传入 <c>null</c> 清除覆盖。</para>
+    /// Applies the given options as packing overrides for the current packaging operation.
+    /// <para>把给定选项作为当前打包操作的打包覆盖应用。</para>
     /// </summary>
     /// <param name="overrides">Override options merged over the on-disk packing options.
     /// <para>合并到磁盘打包选项之上的覆盖选项。</para></param>
@@ -226,11 +223,8 @@ public sealed class RepackMetadata
     }
 
     /// <summary>
-    /// Removes a trailing <c>_&lt;letter&gt;</c> A/B slot suffix from a partition name. Slot letters exist only in
-    /// the partition table, so <c>system_a</c> and <c>my_product_a</c> map to the same mount paths their
-    /// single-slot counterparts do.
-    /// <para>去除分区名结尾的 <c>_&lt;字母&gt;</c> A/B 槽位后缀。槽位字母只存在于分区表里，因此 <c>system_a</c> 与
-    /// <c>my_product_a</c> 的挂载路径和它们的单槽同名分区一致。</para>
+    /// Removes a trailing A/B slot suffix from a partition name.
+    /// <para>去除分区名结尾的 A/B 槽位后缀。</para>
     /// </summary>
     /// <param name="partitionName">
     /// Partition name, with or without a slot suffix. <para>分区名，可带或不带槽位后缀。</para>
@@ -270,11 +264,8 @@ public sealed class RepackMetadata
     }
 
     /// <summary>
-    /// Reads bounded, versioned metadata for an extraction directory. When an ambient metadata
-    /// root is set (project open), the metadata is read exclusively from the consolidated
-    /// location; otherwise it is read from the extraction directory itself. Returns null if absent.
-    /// <para>读取解包目录的有界且带版本的元数据。设置了环境元数据根（项目打开）时只从统一位置读取；
-    /// 否则只从解包目录读取。不存在时返回 null。</para>
+    /// Reads bounded, versioned metadata for an extraction directory.
+    /// <para>读取解包目录的有界且带版本的元数据。</para>
     /// </summary>
     /// <param name="directory">
     /// Extraction directory whose metadata is read. <para>要读取其元数据的解包目录。</para>
@@ -544,13 +535,8 @@ public sealed class RepackMetadata
             RepackMetadataContext.Unspecified, metadataRoot).ConfigureAwait(false);
 
     /// <summary>
-    /// Runs an extraction delegate and writes unified repack metadata afterwards using an explicit
-    /// context. The context is captured at call time: explicit project-root / local-directory
-    /// kinds never consult <see cref="DefaultMetadataRoot"/> after awaits, and the legacy
-    /// <paramref name="metadataRoot"/> parameter is ignored when the context is explicit.
-    /// <para>以显式上下文运行解包委托并随后写入统一打包元数据。上下文在调用时固定：
-    /// 显式工程根／本地目录在 await 之后绝不读取 <see cref="DefaultMetadataRoot"/>；
-    /// 上下文为显式状态时忽略旧 <paramref name="metadataRoot"/> 参数。</para>
+    /// Runs an extraction delegate and writes unified repack metadata afterwards.
+    /// <para>运行解包委托并随后写入统一打包元数据。</para>
     /// </summary>
     /// <param name="handler">
     /// Format handler whose name and source metadata are published with the record.
@@ -629,13 +615,8 @@ public sealed class RepackMetadata
     }
 
     /// <summary>
-    /// Writes source and packing metadata after a successful extraction through an application service.
-    /// When <paramref name="metadataRoot"/> is provided, metadata is stored under
-    /// <c>{metadataRoot}/{partitionName}/</c> and the extraction directory is left untouched.
-    /// Otherwise, metadata is written directly into <paramref name="outputDirectory"/> (no-project fallback).
-    /// <para>应用服务成功解包后写入来源和打包元数据。提供 <paramref name="metadataRoot"/> 时，
-    /// 元数据存放在 <c>{metadataRoot}/{partitionName}/</c>，解包目录不写入任何元数据文件；
-    /// 否则直接写入解包目录（无项目回退）。</para>
+    /// Writes source and packing metadata after a successful extraction.
+    /// <para>解包成功后写入来源和打包元数据。</para>
     /// </summary>
     /// <param name="handler">
     /// Format handler whose name and source metadata are published with the record.
@@ -683,15 +664,8 @@ public sealed class RepackMetadata
     }
 
     /// <summary>
-    /// Writes source and packing metadata using an explicit context. When the context is an
-    /// explicit project root, metadata is stored under <c>{root}/{partitionName}/</c> exclusively;
-    /// when it is an explicit local mode, metadata is written directly into
-    /// <paramref name="outputDirectory"/> even if an ambient root is set. The context is captured
-    /// at call time and never re-read <see cref="DefaultMetadataRoot"/> after awaits.
-    /// <para>以显式上下文写入来源和打包元数据。显式工程根时元数据只存放在
-    /// <c>{root}/{分区名}/</c>；显式本地模式时即使环境根已设置也直接写入
-    /// <paramref name="outputDirectory"/>。上下文在调用时固定，await 之后绝不重读
-    /// <see cref="DefaultMetadataRoot"/>。</para>
+    /// Writes source and packing metadata using an explicit context.
+    /// <para>以显式上下文写入来源和打包元数据。</para>
     /// </summary>
     /// <remarks>
     /// When <paramref name="context"/> is unspecified (default), <paramref name="metadataRoot"/>

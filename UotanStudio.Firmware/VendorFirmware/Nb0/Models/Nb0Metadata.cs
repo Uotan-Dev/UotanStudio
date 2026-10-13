@@ -93,12 +93,8 @@ public sealed class Nb0Metadata
     public bool HasMd5Records => Md5Records.Count > 0;
 
     /// <summary>
-    /// MD5 records keyed by <see cref="Nb0Md5Record.Offset"/> for offset lookup, where a record added with a duplicate
-    /// offset loses to the one already stored. The getter builds the index from <see cref="Md5Records"/> only while no
-    /// index object exists and <see cref="Md5Records"/> is non-empty, so reading it never stores an empty index; only an
-    /// explicit <see cref="BuildMd5RecordIndex"/> call does. A stored index does not track later changes to
-    /// <see cref="Md5Records"/> until <see cref="BuildMd5RecordIndex"/> runs again.
-    /// <para>按 <see cref="Nb0Md5Record.Offset"/> 索引的 MD5 记录，用于偏移查找；偏移重复时，后加入的记录让位于已在索引中的记录。getter 仅在尚未存在索引对象且 <see cref="Md5Records"/> 非空时才从中构建索引，因此读取本身不会存入空索引，只有显式调用 <see cref="BuildMd5RecordIndex"/> 才会；索引一旦建立便不会跟随 <see cref="Md5Records"/> 的后续变化，需再次调用 <see cref="BuildMd5RecordIndex"/>。</para>
+    /// MD5 records keyed by file offset for lookup; a duplicate offset loses to the one already stored. The index is built from the record list lazily and only when non-empty, so reading it never stores an empty index.
+    /// <para>按文件偏移索引的 MD5 记录，用于查找；重复偏移的记录让位给已存记录。索引在需要时从记录列表惰性构建，且仅在非空时建立，因此读取不会存入空索引。</para>
     /// </summary>
     /// <value>The offset-to-record index, or null until a non-empty <see cref="Md5Records"/> list or an explicit build supplies one. <para>偏移到记录的索引；在空的 <see cref="Md5Records"/> 列表或显式构建提供索引之前为 null。</para></value>
     public Dictionary<uint, Nb0Md5Record>? Md5RecordByOffset
@@ -118,10 +114,6 @@ public sealed class Nb0Metadata
     /// <summary>
     /// Builds the MD5 record dictionary indexed by offset.
     /// <para>构建按偏移量索引的 MD5 校验记录字典。</para>
-    /// The rebuild replaces the whole dictionary from the current <see cref="Md5Records"/> in list order, so a record
-    /// whose offset was already claimed by an earlier record is left out of the index; calling this while
-    /// <see cref="Md5Records"/> is empty stores an empty dictionary.
-    /// <para>重建会按列表顺序用当前 <see cref="Md5Records"/> 整体替换字典，因此偏移已被前面记录占用的条目不会进入索引；在 <see cref="Md5Records"/> 为空时调用会存入一个空字典。</para>
     /// </summary>
     public void BuildMd5RecordIndex()
     {

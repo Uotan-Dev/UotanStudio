@@ -2,10 +2,13 @@ using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
 
-/// <summary>Executes non-image steps from a validated plan on a selected Fastboot device.</summary>
+/// <summary>Executes non-image steps from a validated plan on a selected Fastboot device.<para>在所选 Fastboot 设备上执行已校验计划中的非镜像步骤。</para></summary>
 public static class FastbootStepService
 {
-    /// <summary>Deletes only device-reported logical COW partitions in Fastbootd.</summary>
+    /// <summary>Deletes only device-reported logical COW partitions in Fastbootd.<para>在 Fastbootd 中只删除设备上报的逻辑 COW 分区。</para></summary>
+    /// <param name="device">The Fastboot device to change.<para>要改动的 Fastboot 设备。</para></param>
+    /// <param name="ct">Token cancelling the removal.<para>用于取消删除的令牌。</para></param>
+    /// <returns>The number of logical partitions deleted.<para>被删除的逻辑分区数量。</para></returns>
     public static Task<int> DeleteCowAsync(DetectedDevice device, CancellationToken ct)
     {
         if (device.Protocol != DeviceProtocolKind.Fastboot)
@@ -33,7 +36,9 @@ public static class FastbootStepService
         }, ct);
     }
 
-    /// <summary>Filters getvar:all to specifically reported logical COW partitions.</summary>
+    /// <summary>Filters getvar:all to specifically reported logical COW partitions.<para>从 getvar:all 结果中筛出明确上报的逻辑 COW 分区。</para></summary>
+    /// <param name="variables">Reported device variables to filter.<para>要筛选的设备上报变量。</para></param>
+    /// <returns>The distinct logical COW partition names.<para>去重后的逻辑 COW 分区名。</para></returns>
     public static IReadOnlyList<string> ParseCowPartitions(IReadOnlyDictionary<string, string> variables)
     {
         const string prefix = "is-logical:";
@@ -47,7 +52,10 @@ public static class FastbootStepService
             .Order(StringComparer.OrdinalIgnoreCase)];
     }
 
-    /// <summary>Returns failure as an exception; no external process or shell is used.</summary>
+    /// <summary>Returns failure as an exception; no external process or shell is used.<para>失败以异常返回，不使用外部进程或 shell。</para></summary>
+    /// <param name="device">The Fastboot device to drive.<para>要驱动的 Fastboot 设备。</para></param>
+    /// <param name="step">The validated non-image step to run.<para>要执行的已校验非镜像步骤。</para></param>
+    /// <param name="ct">Token cancelling the step.<para>用于取消步骤的令牌。</para></param>
     public static Task ExecuteAsync(DetectedDevice device, FlashStep step, CancellationToken ct)
     {
         if (device.Protocol != DeviceProtocolKind.Fastboot)

@@ -1,9 +1,9 @@
 namespace UotanStudio.Firmware.BootSecurity.BootImage.Models;
 
 /// <summary>
-/// Partition role an Android boot image (<c>ANDROID!</c> magic) is intended to fulfill, per the AOSP Generic Kernel
-/// Image rules for <c>boot</c>, <c>init_boot</c> and <c>recovery</c>.
-/// <para>Android Boot 镜像（魔数 <c>ANDROID!</c>）按 AOSP GKI 规则承担的分区角色：<c>boot</c>、<c>init_boot</c> 或 <c>recovery</c>。</para>
+/// Partition role an Android boot image (<c>ANDROID!</c> magic) is intended to fulfill:
+/// <c>boot</c>, <c>init_boot</c> or <c>recovery</c>.
+/// <para>Android Boot 镜像（魔数 <c>ANDROID!</c>）承担的分区角色：<c>boot</c>、<c>init_boot</c> 或 <c>recovery</c>。</para>
 /// </summary>
 public enum BootImageRole
 {

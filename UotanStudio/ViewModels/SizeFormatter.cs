@@ -1,17 +1,15 @@
 namespace UotanStudio.ViewModels;
 
 /// <summary>
-/// Formats a byte count as a short human-readable size string for list and detail views:
-/// base-1024 units up to TB, two-decimal precision, zero or negative rendered as "0 B".
-/// Distinct from <see cref="Services.ProgressMeter.FormatSize"/>, which caps at TB with one decimal
-/// and shows an em-dash for invalid progress values.
-/// <para>为列表与详情视图把字节数格式化为简短的可读大小：以 1024 为底、单位至 TB、两位小数，
-/// 零或负值显示为 "0 B"。与 <see cref="Services.ProgressMeter.FormatSize"/> 不同——后者用于进度显示，
-/// 上限 TB、一位小数且无效值显示破折号。</para>
+/// Formats a byte count as a short human-readable size string: base-1024 units up to TB with
+/// two-decimal precision; zero or negative values render as "0 B".
+/// <para>把字节数格式化为简短的可读大小：以 1024 为底、单位至 TB、两位小数，零或负值显示为 "0 B"。</para>
 /// </summary>
 internal static class SizeFormatter
 {
-    /// <summary>Formats <paramref name="bytes"/> as a human-readable size. 将字节数格式化为可读大小。</summary>
+    /// <summary>Formats a byte count as a human-readable size.<para>将字节数格式化为可读大小。</para></summary>
+    /// <param name="bytes">The byte count to render.<para>要显示的字节数。</para></param>
+    /// <returns>The formatted size string.<para>格式化后的大小字符串。</para></returns>
     internal static string Format(long bytes)
     {
         if (bytes <= 0)

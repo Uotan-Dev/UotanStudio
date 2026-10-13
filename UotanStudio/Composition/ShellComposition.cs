@@ -9,19 +9,28 @@ using UotanStudio.Views.Workspace;
 
 namespace UotanStudio.Composition;
 
-/// <summary>Explicitly assembles one shell, reusing the existing application project service.</summary>
+/// <summary>
+/// Assembles one shell explicitly around a supplied project operations service.
+/// <para>围绕给定的工程操作服务显式装配一个 Shell。</para>
+/// </summary>
 internal static class ShellComposition
 {
     /// <summary>
-    /// <para>兼容入口：使用 <see cref="ProjectOperationsService.Instance"/> 单例组装默认 Shell。</para>
-    /// Compatibility entry: assembles the default shell around the
-    /// <see cref="ProjectOperationsService.Instance"/> singleton.
+    /// Compatibility entry: assembles the default shell around the shared project operations service.
+    /// <para>兼容入口：围绕共享的工程操作服务组装默认 Shell。</para>
     /// </summary>
+    /// <returns>The assembled shell components. <para>装配得到的 Shell 组件。</para></returns>
     internal static ShellComponents Create() => Create(ProjectOperationsService.Instance);
 
-    /// <summary>Builds UI-owned shell components in stages, yielding through the supplied progress callback.</summary>
-    /// <param name="report">Publishes each construction stage on the UI dispatcher.</param>
-    /// <param name="appliedCultureName">The persisted language preference already applied by startup, or null for independent construction.</param>
+    /// <summary>
+    /// Builds the shell components in stages, yielding through the supplied progress callback between
+    /// them and disposing every partially built component when construction fails.
+    /// <para>分阶段构建 Shell 组件，阶段之间经给定的进度回调让出，构建失败时释放已部分构建的全部组件。</para>
+    /// </summary>
+    /// <param name="report">Publishes each construction stage. <para>上报每个构建阶段。</para></param>
+    /// <param name="appliedCultureName">The language preference already applied at startup, or null for independent construction. <para>启动时已应用的语言偏好；独立构建时为 null。</para></param>
+    /// <returns>The assembled shell components. <para>装配得到的 Shell 组件。</para></returns>
+    /// <exception cref="InvalidOperationException">A workspace is already attached to the shared service. <para>共享服务上已经附加了工作区。</para></exception>
     internal static async Task<ShellComponents> CreateAsync(Func<SplashPhase, Task> report,
         string? appliedCultureName = null)
     {
@@ -59,14 +68,13 @@ internal static class ShellComposition
     }
 
     /// <summary>
-    /// <para>显式装配：接收工程操作服务（桌面单例身份与释放归属不变，仍由应用进程持有），
-    /// Shell 内对象由返回的 <see cref="ShellComponents"/> 持有并在 Dispose 时按
-    /// AutoSave → Modifications → Menu/Nodes → projectBinding → Settings → Workspace 顺序释放。</para>
-    /// Explicit assembly: receives the project operations service (its desktop singleton identity
-    /// and release ownership are unchanged — still held by the application process); shell-scoped
-    /// objects are owned by the returned <see cref="ShellComponents"/> and released on Dispose in
-    /// the order AutoSave → Modifications → Menu/Nodes → projectBinding → Settings → Workspace.
+    /// Explicit assembly: builds one shell around the given project operations service.
+    /// <para>显式装配：围绕给定的工程操作服务构建一个 Shell。</para>
     /// </summary>
+    /// <param name="projects">The project operations service the shell binds to. <para>Shell 所绑定的工程操作服务。</para></param>
+    /// <returns>The assembled shell components owning the shell-scoped objects. <para>持有 Shell 作用域对象的装配结果。</para></returns>
+    /// <exception cref="ArgumentNullException">The supplied service is null. <para>给定的服务为 null。</para></exception>
+    /// <exception cref="InvalidOperationException">The service already has an attached workspace. <para>该服务已经附加了工作区。</para></exception>
     internal static ShellComponents Create(ProjectOperationsService projects)
     {
         if (projects is null) throw new ArgumentNullException(nameof(projects));
@@ -80,11 +88,9 @@ internal static class ShellComposition
 }
 
 /// <summary>
-/// <para>持有 Shell 作用域对象；工程操作服务与应用级服务（设备监视、日志、语言）的生命周期长于
-/// Shell，不在此释放。装配来源见 <see cref="ShellComposition.Create(ProjectOperationsService)"/>。</para>
-/// Owns shell-scoped objects; the project operations service and application-scoped services
-/// (device monitoring, logging, language) outlive the shell and are not released here. Assembly
-/// source: <see cref="ShellComposition.Create(ProjectOperationsService)"/>.
+/// Owns the shell-scoped objects; the project operations service and the application-scoped
+/// services outlive the shell and are not released here.
+/// <para>持有 Shell 作用域对象；工程操作服务与应用级服务的生命周期长于 Shell，不在此释放。</para>
 /// </summary>
 internal sealed class ShellComponents : IDisposable
 {

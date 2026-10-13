@@ -10,8 +10,8 @@ using UotanStudio.Views.Controls;
 namespace UotanStudio.Views.Editors;
 
 /// <summary>
-/// <para>Manifest（AXML）编辑器视图：左栏元素结构树 + 右栏属性编辑与 XML 文本预览。</para>
 /// Manifest (AXML) editor view: a left element tree plus right attribute-editing and XML preview panes.
+/// <para>Manifest（AXML）编辑器视图：左栏元素结构树 + 右栏属性编辑与 XML 文本预览。</para>
 /// </summary>
 public partial class ManifestEditorView : UserControl
 {
@@ -25,8 +25,8 @@ public partial class ManifestEditorView : UserControl
     private double _sideSourceWeight = 1;
 
     /// <summary>
-    /// <para>创建 Manifest 编辑器视图并初始化组件。</para>
     /// Creates the Manifest editor view and initializes its components.
+    /// <para>创建 Manifest 编辑器视图并初始化组件。</para>
     /// </summary>
     public ManifestEditorView()
     {
@@ -40,8 +40,8 @@ public partial class ManifestEditorView : UserControl
         => _editorOwner.Update(!detach && IsLoaded ? DataContext as ManifestEditorViewModel : null, SourceEditor);
 
     /// <summary>
-    /// <para>在右侧上下布局和左右布局之间切换。</para>
     /// Switches the right pane between stacked and side-by-side layouts.
+    /// <para>在右侧上下布局和左右布局之间切换。</para>
     /// </summary>
     private void OnToggleRightViewClick(object? sender, RoutedEventArgs e)
     {
@@ -169,10 +169,10 @@ public partial class ManifestEditorView : UserControl
     }
 
     /// <summary>
-    /// <para>左栏结构树选中变更：同步 ViewModel 选中项，并广播节点选中消息
-    /// （供属性面板展示选中元素的详情）。</para>
     /// Left tree selection changed: syncs the ViewModel selection and broadcasts a node-selection
     /// message so the properties panel can show the selected element's details.
+    /// <para>左栏结构树选中变更：同步 ViewModel 选中项，并广播节点选中消息
+    /// （供属性面板展示选中元素的详情）。</para>
     /// </summary>
     private void OnTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {

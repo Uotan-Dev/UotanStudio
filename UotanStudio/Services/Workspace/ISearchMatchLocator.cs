@@ -1,25 +1,23 @@
 namespace UotanStudio.Services.Workspace;
 
 /// <summary>
-/// <para>无文本编辑器、但可按文本偏移定位到结构化节点的文档契约（如 ARSC 资源树）。
-/// 不支持编辑器内文本定位，而是选中左栏对应树节点。</para>
-/// The contract for documents without a text editor that can locate a structured node from a text
-/// offset (e.g. the ARSC resource tree). In-editor text location is unsupported; a match selects
-/// the corresponding left-pane tree node.
+/// Contract for documents that locate a structured node from a text offset instead of matching
+/// inside text, as the ARSC resource tree does.
+/// <para>以文本偏移定位结构化节点、而非文内命中的文档契约，如 ARSC 资源树。</para>
 /// </summary>
 internal interface ISearchMatchLocator
 {
     /// <summary>
-    /// <para>按文本偏移选中对应的结构化节点。</para>
     /// Selects the structured node matching a text offset.
+    /// <para>按文本偏移选中对应的结构化节点。</para>
     /// </summary>
     /// <param name="offset">
-    /// <para>匹配在搜索文本中的起始偏移。</para>
     /// The match start offset within the search text.
+    /// <para>匹配在搜索文本中的起始偏移。</para>
     /// </param>
     /// <param name="length">
-    /// <para>匹配长度（结构定位忽略该值）。</para>
     /// The match length (ignored by structural location).
+    /// <para>匹配长度（结构定位忽略该值）。</para>
     /// </param>
     void LocateSearchMatch(int offset, int length);
 }

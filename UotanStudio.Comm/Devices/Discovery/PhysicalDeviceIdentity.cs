@@ -3,39 +3,44 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 namespace UotanStudio.Comm.Devices.Discovery;
 
 /// <summary>
-/// The best-evidence physical identity of one USB device, stable across mode switches and
-/// interface renumbering where the backend supplies container or physical-port metadata.
-/// <para>单台 USB 设备当前可得证据下的最优物理标识；在后端提供容器或物理端口元数据时，
-/// 跨模式切换与接口重编号保持稳定。</para>
-/// Correlation never uses VID/PID, enumeration order, or list position; absent or conflicting
-/// evidence yields <see cref="DeviceCorrelationResult.Indeterminate"/> instead of a guess.
-/// <para>关联判定绝不使用 VID/PID、枚举顺序或列表位置；证据缺失或冲突时返回
-/// <see cref="DeviceCorrelationResult.Indeterminate"/>，绝不猜测。</para>
+/// The best-evidence physical identity of one USB device, stable across mode switches when
+/// container or port metadata exists.
+/// <para>单台 USB 设备当前可得证据下的最优物理标识；存在容器或端口元数据时跨模式切换保持稳定。</para>
+/// Correlation never uses VID/PID, enumeration order, or list position.
+/// <para>关联判定绝不使用 VID/PID、枚举顺序或列表位置。</para>
 /// </summary>
 public sealed record PhysicalDeviceIdentity
 {
     /// <summary>
-    /// Gets the strongest stable key: the container-id key when available, else the serial-based key.
-    /// <para>获取当前最强稳定键：优先为容器 ID 键，否则为基于序列号的键。</para>
+    /// The strongest stable key: the container-id key when available, else the serial-based key.
+    /// <para>当前最强稳定键：优先为容器 ID 键，否则为基于序列号的键。</para>
     /// </summary>
+    /// <value>The container-id key when a container id exists, otherwise the serial-based key.
+    /// <para>存在容器 ID 时为容器 ID 键，否则为基于序列号的键。</para></value>
     public required string Key { get; init; }
 
     /// <summary>
-    /// Gets the OS container id, when the backend reported one.
-    /// <para>获取后端报告的操作系统容器 ID（若有）。</para>
+    /// The OS container id, when the backend reported one.
+    /// <para>后端报告的操作系统容器 ID（若有）。</para>
     /// </summary>
+    /// <value>The reported OS container id, or <see langword="null"/> when unreported.
+    /// <para>后端上报的操作系统容器 ID；未上报时为空。</para></value>
     public Guid? ContainerId { get; init; }
 
     /// <summary>
-    /// Gets the bus-and-port chain the device was observed on, when the backend reported one.
-    /// <para>获取设备被观测到的总线与端口链路径（若后端有报告）。</para>
+    /// The bus-and-port chain the device was observed on, when the backend reported one.
+    /// <para>设备被观测到的总线与端口链路径（若后端有报告）。</para>
     /// </summary>
+    /// <value>The observed bus-and-port chain, or <see langword="null"/> when unreported.
+    /// <para>观测到的总线与端口链路径；未上报时为空。</para></value>
     public string? PhysicalPortPath { get; init; }
 
     /// <summary>
-    /// Gets the OS device instance id, when the backend reported one.
-    /// <para>获取操作系统设备实例 ID（若后端有报告）。</para>
+    /// The OS device instance id, when the backend reported one.
+    /// <para>后端报告的操作系统设备实例 ID（若有）。</para>
     /// </summary>
+    /// <value>The reported OS device instance id, or <see langword="null"/> when unreported.
+    /// <para>后端上报的操作系统设备实例 ID；未上报时为空。</para></value>
     public string? DeviceInstanceId { get; init; }
 
     /// <summary>
@@ -74,13 +79,10 @@ public sealed record PhysicalDeviceIdentity
     }
 
     /// <summary>
-    /// Correlates this identity with another observation of (possibly) the same hardware.
-    /// A container verdict wins over the port verdict; without a container verdict, equal usable
-    /// port paths correlate as <see cref="DeviceCorrelationResult.Same"/> and different ones as
-    /// <see cref="DeviceCorrelationResult.Different"/>; everything else is indeterminate.
-    /// <para>将本标识与（可能）同一硬件的另一观测关联。容器判定优先于端口判定；
-    /// 无法按容器判定时，可用端口路径相同为 <see cref="DeviceCorrelationResult.Same"/>、
-    /// 不同为 <see cref="DeviceCorrelationResult.Different"/>；其余情况一律不确定。</para>
+    /// Correlates this identity with another observation of possibly the same hardware.
+    /// Container evidence wins, else usable port paths decide; missing evidence is indeterminate.
+    /// <para>将本标识与（可能）同一硬件的另一观测关联。容器证据优先，否则由可用端口路径判定；
+    /// 证据缺失时不确定。</para>
     /// </summary>
     /// <param name="other">
     /// The other identity to correlate with; <see langword="null"/> never correlates.

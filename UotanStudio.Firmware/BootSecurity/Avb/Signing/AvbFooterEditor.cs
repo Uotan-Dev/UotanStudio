@@ -10,11 +10,8 @@ namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 internal static class AvbFooterEditor
 {
     /// <summary>
-    /// Publishes the original unsigned image bytes recorded by a valid trailing AVB footer. The footer must carry the
-    /// <c>AVBf</c> magic with major version 1 and its recorded ranges must fit inside the image; only the first
-    /// <c>OriginalImageSize</c> bytes are copied and published via an atomic temporary-file move.
-    /// <para>发布由镜像末尾合法 AVB 尾部记录的原始未签名镜像字节。尾部必须携带 <c>AVBf</c> 魔数且主版本为 1，
-    /// 其记录的范围必须落在镜像内；仅复制前 <c>OriginalImageSize</c> 字节并通过临时文件原子移动发布。</para>
+    /// Publishes the original unsigned image bytes recorded by a valid trailing AVB footer.
+    /// <para>发布由镜像末尾合法 AVB 尾部记录的原始未签名镜像字节。</para>
     /// </summary>
     /// <param name="imagePath">
     /// Existing signed partition image to read. <para>要读取的已签名分区镜像。</para>

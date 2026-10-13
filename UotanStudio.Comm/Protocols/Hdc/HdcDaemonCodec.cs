@@ -6,10 +6,10 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 /// <summary>Device-side framing and SerialStruct protobuf encoding, distinct from host channels.</summary>
 internal static class HdcDaemonCodec
 {
-    /// <summary>Maximum accepted serialized metadata length.</summary>
+    /// <summary>Maximum accepted serialized metadata length. <para>接受的最大序列化元数据长度。</para></summary>
     public const int MaximumMetadataSize = 1024;
 
-    /// <summary>Encodes session.h PayloadHead and serial_struct.h PayloadProtect.</summary>
+    /// <summary>Encodes the PayloadHead and PayloadProtect structures of the HDC daemon wire format. <para>编码 HDC 守护进程线上格式的 PayloadHead 与 PayloadProtect 结构。</para></summary>
     public static byte[] Encode(HdcMessage message)
     {
         var payload = message.Payload ?? [];
@@ -51,7 +51,7 @@ internal static class HdcDaemonCodec
         return offset;
     }
 
-    /// <summary>Validates a fixed daemon header before allocating its body.</summary>
+    /// <summary>Validates a fixed daemon header before allocating its body. <para>在分配报文体之前校验定长的守护进程头部。</para></summary>
     public static (int Metadata, int Payload) ReadHeader(ReadOnlySpan<byte> header)
     {
         if (header.Length != 11 || header[0] != 'H' || header[1] != 'W' || header[2] != 0 || header[3] != 0 || header[4] != 1)
@@ -63,7 +63,7 @@ internal static class HdcDaemonCodec
         return (metadata, (int)payload);
     }
 
-    /// <summary>Decodes a complete device packet and checks its verification code and optional checksum.</summary>
+    /// <summary>Decodes a complete device packet and checks its verification code and optional checksum. <para>解码完整的设备数据包，并校验其校验码与可选校验和。</para></summary>
     public static HdcMessage Decode(ReadOnlySpan<byte> packet) => packet.Length < 11
         ? throw new InvalidDataException("Truncated HDC packet.")
         : Decode(packet[..11], packet[11..]);
@@ -100,7 +100,7 @@ internal static class HdcDaemonCodec
         return sum & 255;
     }
 
-    /// <summary>Serializes a daemon authentication handshake. Auth state is not a signing algorithm.</summary>
+    /// <summary>Serializes a daemon authentication handshake. The auth state is not a signing algorithm. <para>序列化守护进程认证握手。认证状态不是签名算法。</para></summary>
     public static byte[] Handshake(byte authState, uint sessionId, string connectKey, ReadOnlySpan<byte> buffer, string version)
     {
         using var output = new MemoryStream();
@@ -111,7 +111,7 @@ internal static class HdcDaemonCodec
         return output.ToArray();
     }
 
-    /// <summary>Parses bounded protobuf handshake fields.</summary>
+    /// <summary>Parses bounded protobuf handshake fields. <para>解析有界的 protobuf 握手字段。</para></summary>
     public static (byte State, uint SessionId, byte[] Buffer, string Version) ReadHandshake(ReadOnlySpan<byte> payload)
     {
         var fields = ReadFields(payload);

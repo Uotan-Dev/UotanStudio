@@ -20,15 +20,15 @@ internal static partial class DeliveryScriptGenerator
     }
 
     /// <summary>
-    /// <para>输出安装前置条件行：解锁 bootloader 与 AVB 校验镜像需要配套 patched vbmeta；自带 update-binary 的
-    /// 卡刷包额外要求自定义 recovery，因为 stock recovery 会拒绝它无法验证的包。这些行只说明前提，不承诺可开机。</para>
     /// Emits the installer prerequisites: an unlocked bootloader, plus matching patched vbmeta for images AVB verifies;
     /// a package carrying its own update-binary additionally requires a custom recovery, because stock recovery rejects
     /// packages it cannot verify. These lines state prerequisites only and never promise a bootable result.
+    /// <para>输出安装前置条件行：解锁 bootloader 与 AVB 校验镜像需要配套 patched vbmeta；自带 update-binary 的
+    /// 卡刷包额外要求自定义 recovery，因为 stock recovery 会拒绝它无法验证的包。这些行只说明前提，不承诺可开机。</para>
     /// </summary>
-    /// <param name="localize"><para>本地化查询，可为 null。</para>The localization lookup, or null.</param>
-    /// <param name="recoveryInstaller"><para>输出是否为卡刷包自带的 update-binary。</para>Whether the output is the package's own update-binary.</param>
-    /// <returns><para>要打印的前置条件行。</para>The prerequisite lines to print.</returns>
+    /// <param name="localize">The localization lookup, or null. <para>本地化查询，可为 null。</para></param>
+    /// <param name="recoveryInstaller">Whether the output is the package's own update-binary. <para>输出是否为卡刷包自带的 update-binary。</para></param>
+    /// <returns>The prerequisite lines to print. <para>要打印的前置条件行。</para></returns>
     internal static IEnumerable<string> PrerequisiteLines(Func<string, string>? localize, bool recoveryInstaller)
     {
         yield return T(localize, "UnlockedRequired",

@@ -5,9 +5,15 @@ using UotanStudio.Firmware.Core;
 namespace UotanStudio.Services.Compare;
 
 /// <summary>
-/// Reads comparison inputs and runs existing algorithms off the UI thread. Instances hold
-/// dependencies only; cancellation, current paths, caches and publication belong to the caller.
+/// Reads comparison inputs and runs the diff algorithms over injected dependencies.
+/// <para>读取比对输入，基于注入的依赖运行差异比对算法。</para>
 /// </summary>
+/// <param name="binary">Single-pass binary comparison component. <para>单遍二进制比对组件。</para></param>
+/// <param name="text">Line-level text diff component. <para>行级文本差异组件。</para></param>
+/// <param name="folders">Directory tree comparison component. <para>目录树比对组件。</para></param>
+/// <param name="detectFormat">Resolver turning a path into its readonly format handler. <para>按路径解析只读格式处理器的委托。</para></param>
+/// <param name="registeredFormats">Provider of the registered readonly format handlers. <para>已注册只读格式处理器的提供者。</para></param>
+/// <param name="reportWarning">Sink receiving non-fatal warning text. <para>接收非致命警告文本的委托。</para></param>
 internal sealed class ComparisonService(
     BinaryDiffService binary,
     TextDiffService text,
@@ -19,7 +25,11 @@ internal sealed class ComparisonService(
     internal const int MaximumTextLines = 2_000_000;
     internal const long MaximumTextBytes = 256L * 1024 * 1024;
 
-    /// <summary>Wires desktop defaults at the service boundary, retaining the public legacy singletons.</summary>
+    /// <summary>
+    /// Creates an instance over the standalone comparison components and the firmware format registry.
+    /// <para>基于独立比对组件与固件格式注册表创建实例。</para>
+    /// </summary>
+    /// <returns>The configured service instance. <para>配置完成的服务实例。</para></returns>
     internal static ComparisonService CreateDefault() => new(
         new BinaryDiffService(), new TextDiffService(), new FolderCompareService(),
         path =>
@@ -34,7 +44,13 @@ internal sealed class ComparisonService(
         },
         warning => LogService.Instance.Write(LogLevel.Warn, "Compare", warning));
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Probes text content while keeping registered firmware extensions in binary mode.
+    /// <para>探测文本内容，已注册的固件扩展名始终按二进制处理。</para>
+    /// </summary>
+    /// <param name="path">File path to probe. <para>要探测的文件路径。</para></param>
+    /// <param name="cancellationToken">Token observing the probe. <para>观测探测过程的取消令牌。</para></param>
+    /// <returns>True when the file is text-like. <para>文件形似文本时为 true。</para></returns>
     public Task<bool> IsTextLikeFileAsync(string path, CancellationToken cancellationToken) => Task.Run(() =>
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -46,7 +62,13 @@ internal sealed class ComparisonService(
             candidate => string.Equals(candidate, extension, StringComparison.OrdinalIgnoreCase)));
     }, cancellationToken);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Enumerates every entry below a directory as left-only items in ordinal relative-path order.
+    /// <para>枚举目录下的全部条目，按相对路径序数顺序记为仅左侧条目。</para>
+    /// </summary>
+    /// <param name="path">Directory to enumerate. <para>要枚举的目录。</para></param>
+    /// <param name="cancellationToken">Token observing the enumeration. <para>观测枚举过程的取消令牌。</para></param>
+    /// <returns>The ordered directory items. <para>排序后的目录条目。</para></returns>
     public Task<IReadOnlyList<FolderCompareItem>> ReadDirectoryAsync(string path, CancellationToken cancellationToken) => Task.Run<IReadOnlyList<FolderCompareItem>>(() =>
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -69,7 +91,14 @@ internal sealed class ComparisonService(
         return entries;
     }, cancellationToken);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads BOM-aware text bounded by the two-million-line and 256 MiB limits.
+    /// <para>读取带 BOM 探测的文本，受两百万行与 256 MiB 上限约束。</para>
+    /// </summary>
+    /// <param name="path">Text file to read. <para>要读取的文本文件。</para></param>
+    /// <param name="cancellationToken">Token observing the read. <para>观测读取过程的取消令牌。</para></param>
+    /// <returns>The lines of the file. <para>文件的各行。</para></returns>
+    /// <exception cref="FormatException">The file exceeds the line or byte limit. <para>文件超出行数或字节上限。</para></exception>
     public Task<IReadOnlyList<string>> ReadTextAsync(string path, CancellationToken cancellationToken) => Task.Run<IReadOnlyList<string>>(() =>
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -92,7 +121,13 @@ internal sealed class ComparisonService(
         return lines;
     }, cancellationToken);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes text lines back with the detected encoding and line ending, swapping a staging file in.
+    /// <para>按探测到的编码与换行风格写回文本行，先写临时文件再原子替换到位。</para>
+    /// </summary>
+    /// <param name="path">Target file path. <para>目标文件路径。</para></param>
+    /// <param name="lines">Lines to write. <para>要写入的行。</para></param>
+    /// <param name="cancellationToken">Token observing the write. <para>观测写入过程的取消令牌。</para></param>
     public Task SaveTextAsync(string path, IReadOnlyList<string> lines, CancellationToken cancellationToken) => Task.Run(() =>
     {
         ArgumentNullException.ThrowIfNull(lines);
@@ -134,12 +169,12 @@ internal sealed class ComparisonService(
     }, cancellationToken);
 
     /// <summary>
-    /// <para>探测文本文件的编码、换行风格与末尾是否有换行：编码按 BOM 判定（无 BOM 视为 UTF-8），换行风格取
-    /// 文件前 64 KiB 中出现的第一个换行（默认 LF），末尾换行按最后一个字节判定。</para>
-    /// Detects a text file's encoding, line ending and trailing newline: the encoding comes from the BOM (UTF-8 without a
-    /// BOM otherwise), the line ending is the first one found in the first 64 KiB (LF by default) and the trailing
-    /// newline comes from the last bytes.
+    /// Detects a text encoding from its BOM, the first line ending in the leading 64 KiB, and whether
+    /// the file ends with a newline.
+    /// <para>按 BOM 探测文本编码，取前 64 KiB 中出现的第一个换行风格，并判断文件末尾是否有换行。</para>
     /// </summary>
+    /// <param name="path">Text file to inspect. <para>要检查的文本文件。</para></param>
+    /// <returns>The encoding, line ending and trailing-newline flag. <para>编码、换行风格与末尾换行标记。</para></returns>
     private static (Encoding Encoding, string LineEnding, bool EndsWithNewLine) DetectTextLayout(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -177,7 +212,13 @@ internal sealed class ComparisonService(
         return (encoding, lineEnding, endsWithNewLine);
     }
 
-    /// <summary>按 BOM 判定编码；无 BOM 时使用不带 BOM 的 UTF-8。</summary>
+    /// <summary>
+    /// Selects the encoding indicated by a byte-order mark, falling back to UTF-8 without one.
+    /// <para>按字节顺序标记选择编码，没有标记时回退为不带 BOM 的 UTF-8。</para>
+    /// </summary>
+    /// <param name="header">Leading bytes read from the file. <para>从文件读到的起始字节。</para></param>
+    /// <param name="length">Number of valid bytes in the header. <para>头部中有效字节的数量。</para></param>
+    /// <returns>The encoding matching the byte-order mark. <para>与字节顺序标记对应的编码。</para></returns>
     private static Encoding DetectEncoding(byte[] header, int length)
     {
         if (length >= 4 && header[0] == 0xFF && header[1] == 0xFE && header[2] == 0x00 && header[3] == 0x00)
@@ -203,7 +244,13 @@ internal sealed class ComparisonService(
         return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads firmware metadata through the readonly format handler detected for the file.
+    /// <para>经为该文件检测到的只读格式处理器读取固件元数据。</para>
+    /// </summary>
+    /// <param name="path">File to inspect. <para>要检查的文件。</para></param>
+    /// <param name="cancellationToken">Token observing the read. <para>观测读取过程的取消令牌。</para></param>
+    /// <returns>The metadata result, or an unrecognized result when no read succeeded. <para>元数据结果；读取未成功时为未识别结果。</para></returns>
     public Task<ComparisonMetadata> ReadMetadataAsync(string path, CancellationToken cancellationToken) => Task.Run(async () =>
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -222,7 +269,14 @@ internal sealed class ComparisonService(
             result.Metadata, result.Entries, result.Components);
     }, cancellationToken);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Compares two text files with the bounded line-diff algorithm over file streams.
+    /// <para>通过文件流以有上限的行级差异算法比较两个文本文件。</para>
+    /// </summary>
+    /// <param name="left">Left file path. <para>左文件路径。</para></param>
+    /// <param name="right">Right file path. <para>右文件路径。</para></param>
+    /// <param name="cancellationToken">Token observing the comparison. <para>观测比对过程的取消令牌。</para></param>
+    /// <returns>The aligned diff lines. <para>对齐后的差异行。</para></returns>
     public Task<IReadOnlyList<TextDiffLine>> CompareTextAsync(string left, string right, CancellationToken cancellationToken) => Task.Run<IReadOnlyList<TextDiffLine>>(() =>
     {
         using var leftStream = new FileStream(left, FileMode.Open, FileAccess.Read, FileShare.Read,
@@ -232,19 +286,47 @@ internal sealed class ComparisonService(
         return text.DiffLines(leftStream, rightStream, cancellationToken);
     }, cancellationToken);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Compares two directories with the recursive structure and content comparison.
+    /// <para>使用递归的结构与内容比较来比较两个目录。</para>
+    /// </summary>
+    /// <param name="left">Left directory path. <para>左目录路径。</para></param>
+    /// <param name="right">Right directory path. <para>右目录路径。</para></param>
+    /// <param name="cancellationToken">Token observing the comparison. <para>观测比对过程的取消令牌。</para></param>
+    /// <returns>The folder comparison result. <para>文件夹比对结果。</para></returns>
     public Task<FolderCompareResult> CompareDirectoriesAsync(string left, string right, CancellationToken cancellationToken) =>
         folders.CompareAsync(left, right, cancellationToken);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Scans binary differences between two files and marks the supplied row-diff bitmap.
+    /// <para>扫描两个文件之间的二进制差异，并在传入的行差异位图上标记。</para>
+    /// </summary>
+    /// <param name="left">Left file path. <para>左文件路径。</para></param>
+    /// <param name="right">Right file path. <para>右文件路径。</para></param>
+    /// <param name="rowBitmap">Row-diff bitmap to fill. <para>要写入的行差异位图。</para></param>
+    /// <param name="cancellationToken">Token observing the scan. <para>观测扫描过程的取消令牌。</para></param>
+    /// <returns>The binary diff statistics. <para>二进制差异统计信息。</para></returns>
     public Task<BinaryDiffStats> CompareBinaryAsync(string left, string right, byte[] rowBitmap, CancellationToken cancellationToken) =>
         Task.Run(() => binary.CompareStats(left, right, rowBitmap, cancellationToken), cancellationToken);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Copies one relative file from the source directory to the same relative position of the target.
+    /// <para>把源目录下的一个相对文件复制到目标目录的相同相对位置。</para>
+    /// </summary>
+    /// <param name="source">Source directory path. <para>源目录路径。</para></param>
+    /// <param name="target">Target directory path. <para>目标目录路径。</para></param>
+    /// <param name="relativePath">Relative file path inside the source directory. <para>源目录内的相对文件路径。</para></param>
+    /// <param name="cancellationToken">Token observing the copy. <para>观测复制过程的取消令牌。</para></param>
     public Task CopyAsync(string source, string target, string relativePath, CancellationToken cancellationToken) =>
         folders.CopyAsync(source, target, relativePath, cancellationToken);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Deletes one relative file inside the given directory through the safe relative-path resolver.
+    /// <para>经安全的相对路径解析器删除指定目录内的一个相对文件。</para>
+    /// </summary>
+    /// <param name="directory">Directory containing the file. <para>包含该文件的目录。</para></param>
+    /// <param name="relativePath">Relative file path inside the directory. <para>目录内的相对文件路径。</para></param>
+    /// <param name="cancellationToken">Token observing the deletion. <para>观测删除过程的取消令牌。</para></param>
     public Task DeleteAsync(string directory, string relativePath, CancellationToken cancellationToken) =>
         folders.DeleteAsync(directory, relativePath, cancellationToken);
 }

@@ -41,9 +41,6 @@ public sealed partial class SaharaProtocol
         ValidateCommand(ready.Command, SaharaCommand.CommandReady, ready.Length, 8);
         var serial = DecodeIdentityWord(await ExecuteIdentityCommandAsync(1, 8, token).ConfigureAwait(false));
 
-        // qdl sahara.c (sahara_command_info) and bkerler/edl cmd_info: pre-v3 targets answer
-        // MSM_HW_ID_READ (0x02), v3 targets no longer do and expose the same fields through
-        // READ_CHIP_ID_V3 (0x0A).
         ulong hardware;
         uint chipIdentifierV3;
         if (NegotiatedProtocolVersion >= 3)
@@ -56,8 +53,6 @@ public sealed partial class SaharaProtocol
             chipIdentifierV3 = 0;
         }
 
-        // bkerler/edl cmd_info: v3 targets may refuse the OEM PK hash and SBL version reads
-        // ("V3 restriction"), so on v3 they stay best-effort while pre-v3 remains strict.
         var hashBytes = await ExecuteOptionalIdentityCommandAsync(
             NegotiatedProtocolVersion >= 3, 3, 4096, token).ConfigureAwait(false);
         var version = await ExecuteOptionalIdentityCommandAsync(
@@ -86,11 +81,9 @@ public sealed partial class SaharaProtocol
     /// <para>读取版本 3 芯片标识（SAHARA_EXEC_CMD_READ_CHIP_ID_V3，0x0A），并由其组合传统格式的硬件字。</para>
     /// </summary>
     /// <remarks>
-    /// Layout transcribed from linux-msm/qdl sahara.c and bkerler/edl cmdexec_get_chip_id_v3:
-    /// bytes 36-39 carry the MSM_ID, 40-41 the OEM_ID, 42-43 the MODEL_ID, with an alternate
+    /// Layout: bytes 36-39 carry the MSM_ID, 40-41 the OEM_ID, 42-43 the MODEL_ID, with an alternate
     /// OEM_ID slot at 44-45 when the primary slot reads zero.
-    /// <para>布局转录自 linux-msm/qdl 的 sahara.c 与 bkerler/edl 的 cmdexec_get_chip_id_v3：
-    /// 第 36-39 字节为 MSM_ID，40-41 为 OEM_ID，42-43 为 MODEL_ID；主槽读到零时改用 44-45
+    /// <para>布局：第 36-39 字节为 MSM_ID，40-41 为 OEM_ID，42-43 为 MODEL_ID；主槽读到零时改用 44-45
     /// 的备用 OEM_ID 槽位。</para>
     /// </remarks>
     /// <param name="token">Cancellation token. <para>取消令牌。</para></param>
@@ -152,8 +145,6 @@ public sealed partial class SaharaProtocol
             throw new SaharaException("The Sahara identity response packet length is invalid.");
         }
 
-        // The full response packet is drained before the command is validated so that a
-        // refused request (best-effort v3 reads) leaves the stream aligned for recovery.
         var body = await ReadExactAsync((int)header.Length - 8, _timeoutMs, token).ConfigureAwait(false);
         ValidateCommand(header.Command, SaharaCommand.ExecuteResponse, header.Length, 16);
         var echoedCommand = BinaryPrimitives.ReadUInt32LittleEndian(body);

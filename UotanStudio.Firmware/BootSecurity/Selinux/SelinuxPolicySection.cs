@@ -4,11 +4,11 @@ namespace UotanStudio.Firmware.BootSecurity.Selinux;
 /// One absolute byte span reported by the bounded SELinux policy section cursor.
 /// <para>有界 SELinux 策略 section 游标报告的一个绝对字节区间。</para>
 /// </summary>
-/// <remarks>libsepol serializes the policy body as one sequential little-endian stream with no
+/// <remarks>The policy body is serialized as one sequential little-endian stream with no
 /// section index table, so spans are reported in that order and a
 /// <see cref="SelinuxSectionStatus.PhaseLimited"/> span only states that the remaining bytes were
 /// not inspected by this build.
-/// <para>libsepol 将策略主体序列化为单条顺序小端流且不含 section 索引表，因此区间按该顺序报告，
+/// <para>策略主体按单条顺序小端流序列化且不含 section 索引表，因此区间按该顺序报告，
 /// 而 <see cref="SelinuxSectionStatus.PhaseLimited"/> 区间仅表示其余字节未被当前构建检查。</para></remarks>
 public sealed record SelinuxPolicySection
 {

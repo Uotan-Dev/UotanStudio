@@ -7,7 +7,8 @@ using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Benchmarks.Firmware;
 
-/// <summary>Payload compression throughput across build concurrency and worker counts.</summary>
+/// <summary>Payload compression throughput across build concurrency and worker counts.
+/// <para>在不同构建并发与工作者数量下的载荷压缩吞吐。</para></summary>
 [MemoryDiagnoser]
 public class PayloadBuildBenchmarks
 {
@@ -63,7 +64,8 @@ public class PayloadBuildBenchmarks
     }
 }
 
-/// <summary>Raw-payload ODM extraction throughput across parallelism settings; requires UOTAN_PERF_RAW.</summary>
+/// <summary>Raw-payload ODM extraction throughput across parallelism settings; requires UOTAN_PERF_RAW.
+/// <para>不同并行设置下的原始载荷 ODM 解包吞吐；需要 UOTAN_PERF_RAW。</para></summary>
 [MemoryDiagnoser]
 public class PayloadExtractBenchmarks
 {
@@ -126,7 +128,8 @@ public class PayloadExtractBenchmarks
     }
 }
 
-/// <summary>ReplaceXz operation decoding across a sampled window; requires UOTAN_PERF_RAW.</summary>
+/// <summary>ReplaceXz operation decoding across a sampled window; requires UOTAN_PERF_RAW.
+/// <para>采样窗口内 ReplaceXz 操作的解码；需要 UOTAN_PERF_RAW。</para></summary>
 [MemoryDiagnoser]
 public class OperationProcessorBenchmarks
 {
@@ -187,7 +190,8 @@ public class OperationProcessorBenchmarks
     }
 }
 
-/// <summary>Whole-archive OTA zip extraction; requires UOTAN_PERF_ZIP.</summary>
+/// <summary>Whole-archive OTA zip extraction; requires UOTAN_PERF_ZIP.
+/// <para>整包 OTA zip 的解包；需要 UOTAN_PERF_ZIP。</para></summary>
 [MemoryDiagnoser]
 public class OtaZipExtractBenchmarks
 {

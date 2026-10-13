@@ -10,7 +10,10 @@ using Ursa.Controls;
 
 namespace UotanStudio.Views.Shell;
 
-/// <summary>Independent manager for portable JSON workflow templates, composite nodes and Lua script nodes.</summary>
+/// <summary>
+/// Independent manager for portable JSON workflow templates, composite nodes and Lua script nodes.
+/// <para>面向可移植 JSON 工作流模板、复合节点与 Lua 脚本节点的独立管理窗口。</para>
+/// </summary>
 public partial class VisualPluginManagerWindow : Window
 {
     private readonly VisualPluginManager _manager = VisualPluginManager.Instance;

@@ -7,7 +7,10 @@ using Ursa.Controls;
 
 namespace UotanStudio.Services.Workspace;
 
-/// <summary>Shares explicit document saving and close confirmation. 复用文档手动保存与关闭确认。</summary>
+/// <summary>
+/// Shares explicit document saving and close confirmation.
+/// <para>复用文档手动保存与关闭确认。</para>
+/// </summary>
 internal static class DocumentSaveService
 {
     private static readonly SemaphoreSlim SaveGate = new(1, 1);

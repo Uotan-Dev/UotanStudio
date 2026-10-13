@@ -144,7 +144,6 @@ public static partial class FirmwareParallelism
         if (length == 0) return 0;
 
         var buffer = new byte[length];
-        // Pointers inside a fixed block require an unsafe context before C# 15.
         unsafe
         {
             fixed (byte* pointer = buffer)

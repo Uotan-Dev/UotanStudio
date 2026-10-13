@@ -5,11 +5,11 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// <summary>
 /// On-target SHA256 digest queries (<c>&lt;getsha256digest&gt;</c>) used to verify or skip programming
 /// without reading the region back. Some programmers reject the command; a rejection or a missing
-/// digest is reported as <see langword="null"/> rather than as a session fault, mirroring the reference
-/// behaviour where the caller keeps programming normally.
+/// digest is reported as <see langword="null"/> rather than as a session fault, so the caller keeps
+/// programming normally.
 /// <para>目标侧 SHA256 摘要查询（<c>&lt;getsha256digest&gt;</c>），用于在不回读区域的情况下校验或跳过
 /// 编程。部分 programmer 会拒绝该命令；拒绝或缺少摘要时返回 <see langword="null"/> 而不是判定会话失效，
-/// 与参考实现中“调用方继续正常编程”的行为一致。</para>
+/// 调用方可继续正常编程。</para>
 /// </summary>
 public sealed partial class FirehoseProtocol
 {
@@ -161,8 +161,8 @@ public sealed partial class FirehoseProtocol
 
     /// <summary>
     /// Extracts a 64-character hexadecimal digest from free-form log text or an attribute value;
-    /// the reference target emits it as <c>Digest &lt;hex&gt;</c> inside a log node.
-    /// <para>从自由格式的日志文本或属性值中提取 64 字符的十六进制摘要；参考目标以日志节点内的
+    /// the target emits it as <c>Digest &lt;hex&gt;</c> inside a log node.
+    /// <para>从自由格式的日志文本或属性值中提取 64 字符的十六进制摘要；目标以日志节点内的
     /// <c>Digest &lt;hex&gt;</c> 形式输出。</para>
     /// </summary>
     private static string? TryExtractDigestHex(string? text)

@@ -4,51 +4,51 @@ using Avalonia.Controls;
 namespace UotanStudio.Views.Controls;
 
 /// <summary>
-/// <para>分区段几何契约：可视化分区段布局按各段的宽度占比顺序排布，间隙段允许收缩到更小的宽度。</para>
 /// Band segment geometry contract: the visual partition band lays children out sequentially by width
 /// ratio, with gap children allowed to shrink smaller than real segments.
+/// <para>分区段几何契约：可视化分区段布局按各段的宽度占比顺序排布，间隙段允许收缩到更小的宽度。</para>
 /// </summary>
 public interface IBandSegmentLayout
 {
     /// <summary>
-    /// <para>段宽度占可用总宽的比例（0..1）。</para>
     /// The fraction of the available width this segment occupies (0..1).
+    /// <para>段宽度占可用总宽的比例（0..1）。</para>
     /// </summary>
     double BandWidthRatio { get; }
 
     /// <summary>
-    /// <para>是否为未分配间隙段。</para>
     /// Whether this segment is an unallocated gap.
+    /// <para>是否为未分配间隙段。</para>
     /// </summary>
     bool BandIsGap { get; }
 }
 
 /// <summary>
-/// <para>GNOME Disks 风格的可视化分区段面板：子项按 <see cref="IBandSegmentLayout.BandWidthRatio"/>
-/// 顺序分配宽度；非间隙段保证最小宽度，空间不足时整体等比压缩并裁剪文本。</para>
 /// A GNOME Disks style visual partition-band panel: children receive widths in order of their
 /// <see cref="IBandSegmentLayout.BandWidthRatio"/>; real segments keep a minimum width and everything
 /// is scaled down proportionally (with clipped labels) when the space is insufficient.
+/// <para>GNOME Disks 风格的可视化分区段面板：子项按 <see cref="IBandSegmentLayout.BandWidthRatio"/>
+/// 顺序分配宽度；非间隙段保证最小宽度，空间不足时整体等比压缩并裁剪文本。</para>
 /// </summary>
 public sealed class PartitionBandPanel : Panel
 {
     /// <summary>
-    /// <para>相邻段之间的间距。</para>
     /// Spacing between adjacent segments.
+    /// <para>相邻段之间的间距。</para>
     /// </summary>
     public static readonly StyledProperty<double> SpacingProperty =
         AvaloniaProperty.Register<PartitionBandPanel, double>(nameof(Spacing), 2);
 
     /// <summary>
-    /// <para>非间隙段的最小宽度。</para>
     /// Minimum width of a real (non-gap) segment.
+    /// <para>非间隙段的最小宽度。</para>
     /// </summary>
     public static readonly StyledProperty<double> MinSegmentWidthProperty =
         AvaloniaProperty.Register<PartitionBandPanel, double>(nameof(MinSegmentWidth), 26);
 
     /// <summary>
-    /// <para>间隙段的最小宽度。</para>
     /// Minimum width of a gap segment.
+    /// <para>间隙段的最小宽度。</para>
     /// </summary>
     public static readonly StyledProperty<double> MinGapWidthProperty =
         AvaloniaProperty.Register<PartitionBandPanel, double>(nameof(MinGapWidth), 4);
@@ -61,20 +61,20 @@ public sealed class PartitionBandPanel : Panel
     }
 
     /// <summary>
-    /// <para>获取或设置相邻段之间的间距。</para>
     /// Gets or sets the spacing between adjacent segments.
+    /// <para>获取或设置相邻段之间的间距。</para>
     /// </summary>
     public double Spacing { get => GetValue(SpacingProperty); set => SetValue(SpacingProperty, value); }
 
     /// <summary>
-    /// <para>获取或设置非间隙段的最小宽度。</para>
     /// Gets or sets the minimum width of a real (non-gap) segment.
+    /// <para>获取或设置非间隙段的最小宽度。</para>
     /// </summary>
     public double MinSegmentWidth { get => GetValue(MinSegmentWidthProperty); set => SetValue(MinSegmentWidthProperty, value); }
 
     /// <summary>
-    /// <para>获取或设置间隙段的最小宽度。</para>
     /// Gets or sets the minimum width of a gap segment.
+    /// <para>获取或设置间隙段的最小宽度。</para>
     /// </summary>
     public double MinGapWidth { get => GetValue(MinGapWidthProperty); set => SetValue(MinGapWidthProperty, value); }
 

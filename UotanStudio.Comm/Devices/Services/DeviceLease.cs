@@ -5,15 +5,10 @@ using UotanStudio.Comm.Diagnostics;
 namespace UotanStudio.Comm.Devices.Services;
 
 /// <summary>
-/// Owns the opened transport (and the protocol session built on it) until disposed.
-/// <para>持有已打开的传输（及在其上构建的协议会话）直到被释放。</para>
-/// Directly opened streaming resources register through <see cref="RegisterStream"/> and are closed
-/// before the session and transport, so a lease force-released during streaming ends those streams
-/// in an orderly way instead of pulling the session out from under them.
-/// <para>直开的流式资源经 <see cref="RegisterStream"/> 登记，并先于会话与传输被关闭，
-/// 因此流式工作进行中被强制释放的租约会先有序终结这些流，而不是把会话从流底下抽走。</para>
-/// Disposal releases the endpoint reservation exactly once, after every owned resource has been released.
-/// <para>释放仅在全部所持有资源归还之后执行一次端点占用释放。</para>
+/// Owns the opened transport and its protocol session until disposed, closing registered streams
+/// first and releasing the endpoint reservation exactly once after every owned resource.
+/// <para>持有已打开的传输及其协议会话直到释放：先关闭登记的流，并在全部所持有资源归还后
+/// 恰好释放一次端点占用。</para>
 /// </summary>
 public sealed class DeviceLease : IAsyncDisposable, IDisposable
 {
@@ -93,13 +88,9 @@ public sealed class DeviceLease : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// Registers a directly opened streaming resource (logcat capture, screen mirroring) with this lease.
-    /// <para>把直开的流式资源（logcat 捕获、投屏）登记到本租约。</para>
-    /// Registered streams are disposed before the session and the transport when the lease tears down,
-    /// and registration after teardown has started fails, so a stream can never outlive the resources
-    /// it reads from.
-    /// <para>登记的流在租约清理时先于会话与传输被释放；清理已开始后登记会失败，
-    /// 因此流绝不会活得比它所读取的资源更久。</para>
+    /// Registers a directly opened streaming resource with this lease. Registered streams close
+    /// before the session and transport, and registration after teardown has started fails.
+    /// <para>把直开的流式资源登记到本租约。登记的流先于会话与传输关闭，清理开始后的登记会失败。</para>
     /// </summary>
     /// <param name="stream">
     /// The stream to close together with the lease. <para>随租约一同关闭的流。</para>
@@ -127,14 +118,12 @@ public sealed class DeviceLease : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// Tears the lease down once: closes registered streams, drains the command pool, disposes the
-    /// session (async first, then synchronous) and the transport, and finally returns the endpoint
-    /// reservation. Concurrent and later calls await the same teardown instead of starting a second one.
-    /// <para>仅执行一次清理：关闭已登记的流、排空指令池、释放会话（先按异步、再按同步方式）
-    /// 与传输，最后归还端点占用。并发与后续调用等待同一次清理，而不会开启第二次。</para>
+    /// Tears the lease down once: closes streams, drains the command pool, disposes the session
+    /// and transport, then returns the endpoint reservation; concurrent and later calls await the
+    /// same teardown.
+    /// <para>仅执行一次清理：关闭流、排空指令池、释放会话与传输，再归还端点占用；并发与后续
+    /// 调用等待同一次清理。</para>
     /// </summary>
-    /// <returns>A task that completes after the reservation has been returned.
-    /// <para>占用登记归还后完成的任务。</para></returns>
     public ValueTask DisposeAsync()
     {
         Task teardown;
@@ -196,7 +185,7 @@ public sealed class DeviceLease : IAsyncDisposable, IDisposable
 
     /// <summary>
     /// Synchronous disposal for sync scopes; the lease teardown itself is async.
-    /// <para>供同步作用域使用的同步释放；租约清理本身是异步的。</para>
+    /// <para>同步作用域的同步释放；租约清理本身是异步的。</para>
     /// </summary>
     public void Dispose()
         => DisposeAsync().AsTask().GetAwaiter().GetResult();

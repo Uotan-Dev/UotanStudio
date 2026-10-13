@@ -6,14 +6,14 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
 /// <summary>
-/// <para>Windows 设备节点原始属性的承载记录。字段保持后端逐项读到的独立值（描述来源、类、驱动、故障码、
-/// 容器、硬件/兼容/位置标识、接口 GUID），而塑形与派生集中在 <see cref="WindowsUsbTopologyProvider.ShapeNode"/>，
-/// 使纯形状逻辑可以被单元测试直接喂入合成值验证。</para>
 /// The record carrying a Windows devnode's raw properties. Fields keep the separate values the backend
 /// read per item (description sources, class, driver, problem code, container, hardware/compatible/location
 /// ids, interface GUIDs) while shaping and derivation are centralized in
 /// <see cref="WindowsUsbTopologyProvider.ShapeNode"/>, so the pure shaping logic can be fed synthetic values
 /// directly from unit tests.
+/// <para>Windows 设备节点原始属性的承载记录。字段保持后端逐项读到的独立值（描述来源、类、驱动、故障码、
+/// 容器、硬件/兼容/位置标识、接口 GUID），而塑形与派生集中在 <see cref="WindowsUsbTopologyProvider.ShapeNode"/>，
+/// 使纯形状逻辑可以被单元测试直接喂入合成值验证。</para>
 /// </summary>
 internal sealed record UsbDevNodeRawRecord
 {
@@ -80,9 +80,9 @@ internal sealed record UsbDevNodeRawRecord
 }
 
 /// <summary>
-/// <para>Windows 拓扑后端：读取 PnP 设备树，提供驱动绑定、安装类、故障码与设备接口类 GUID。</para>
 /// The Windows topology backend: reads the PnP device tree and reports driver binding, installer class,
 /// problem codes and registered device-interface class GUIDs.
+/// <para>Windows 拓扑后端：读取 PnP 设备树，提供驱动绑定、安装类、故障码与设备接口类 GUID。</para>
 /// </summary>
 internal sealed class WindowsUsbTopologyProvider : IUsbTopologyProvider
 {
@@ -180,16 +180,16 @@ internal sealed class WindowsUsbTopologyProvider : IUsbTopologyProvider
     }
 
     /// <summary>
-    /// <para>把一份原始属性记录映射成统一扁平节点。描述按友好名称、总线报告、设备描述回退；USB 标识
-    /// （厂商/产品/版本/接口号）、接口三元组、角色与协议在此显式给出，因为 Windows 的 PCI 祖先节点需要按
-    /// 枚举前缀判角色，而共享推导只按通用标记工作。共享的 <see cref="UsbTopologyNodes.Create"/> 会以
-    /// 「不覆盖后端已给值」的规则原样保留这些字段，并对未填的字段做同样的推导。</para>
     /// Maps a raw property record into the shared flat node. The description falls back through friendly
     /// name, bus-reported and device description; the USB identity (vendor, product, revision, interface
     /// number), the interface triple, the kind and the protocol are stated explicitly here because Windows
     /// PCI ancestors need enumerator-prefix role inference that the generic derivation does not apply.
     /// <see cref="UsbTopologyNodes.Create"/> keeps these values under its "never overwrite what the backend
     /// reported" rule and derives the same fields for anything left unset.
+    /// <para>把一份原始属性记录映射成统一扁平节点。描述按友好名称、总线报告、设备描述回退；USB 标识
+    /// （厂商/产品/版本/接口号）、接口三元组、角色与协议在此显式给出，因为 Windows 的 PCI 祖先节点需要按
+    /// 枚举前缀判角色，而共享推导只按通用标记工作。共享的 <see cref="UsbTopologyNodes.Create"/> 会以
+    /// 「不覆盖后端已给值」的规则原样保留这些字段，并对未填的字段做同样的推导。</para>
     /// </summary>
     /// <param name="raw">
     /// The raw record to shape. <para>待塑形的原始记录。</para>
@@ -328,14 +328,14 @@ internal sealed class WindowsUsbTopologyProvider : IUsbTopologyProvider
     }
 
     /// <summary>
-    /// <para>扫描 <c>Control\DeviceClasses</c> 建立「设备实例标识 → 已注册设备接口类 GUID」映射。注册接口
-    /// 的权威存储在这里，而不是 <c>Enum\&lt;实例&gt;\Interfaces</c>——后者在实机上并不存在。该映射决定界面能否
-    /// 如实说出「adb 接口类未注册」，因此宁可多花一次注册表遍历也不能返回空集。</para>
     /// Builds the "device instance id to registered device-interface class GUID" map by sweeping
     /// <c>Control\DeviceClasses</c>. That is where registered interfaces actually live;
     /// <c>Enum\&lt;instance&gt;\Interfaces</c> does not exist on real machines. The map decides whether the UI
     /// can truthfully state "the ADB interface class is not registered", so one extra registry sweep is
     /// cheaper than returning an empty set.
+    /// <para>扫描 <c>Control\DeviceClasses</c> 建立「设备实例标识 → 已注册设备接口类 GUID」映射。注册接口
+    /// 的权威存储在这里，而不是 <c>Enum\&lt;实例&gt;\Interfaces</c>——后者在实机上并不存在。该映射决定界面能否
+    /// 如实说出「adb 接口类未注册」，因此宁可多花一次注册表遍历也不能返回空集。</para>
     /// </summary>
     /// <returns>
     /// Registered class GUIDs per USB device instance id; empty when the registry cannot be read.

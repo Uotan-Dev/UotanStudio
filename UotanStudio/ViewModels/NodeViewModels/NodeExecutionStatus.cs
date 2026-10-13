@@ -1,32 +1,32 @@
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>节点执行状态。</para>
 /// Execution status of a node.
+/// <para>节点执行状态。</para>
 /// </summary>
 public enum NodeExecutionStatus
 {
-    /// <summary><para>未执行。</para>Not executed.</summary>
+    /// <summary>Not executed. <para>未执行。</para></summary>
     Idle,
 
-    /// <summary><para>排队中。</para>Queued.</summary>
+    /// <summary>Queued. <para>排队中。</para></summary>
     Pending,
 
-    /// <summary><para>正在执行。</para>Running.</summary>
+    /// <summary>Running. <para>正在执行。</para></summary>
     Running,
 
     /// <summary>Awaiting user input from the host.</summary>
     WaitingForInput,
 
-    /// <summary><para>执行成功。</para>Succeeded.</summary>
+    /// <summary>Succeeded. <para>执行成功。</para></summary>
     Succeeded,
 
-    /// <summary><para>执行失败。</para>Failed.</summary>
+    /// <summary>Failed. <para>执行失败。</para></summary>
     Failed,
 
-    /// <summary><para>被跳过（如分支未选中）。</para>Skipped.</summary>
+    /// <summary>Skipped. <para>被跳过（如分支未选中）。</para></summary>
     Skipped,
 
-    /// <summary><para>被取消。</para>Cancelled.</summary>
+    /// <summary>Cancelled. <para>被取消。</para></summary>
     Cancelled
 }

@@ -9,8 +9,8 @@ namespace UotanStudio.Comm.Protocols.Edl.Auth;
 /// <para>选择某个配置所属的 OnePlus 项目校验命令家族。</para></summary>
 public enum EdlOnePlusProjectFamily
 {
-    /// <summary>Uses the <c>setprojmodel</c> command with the fixed reference timestamp.
-    /// <para>使用 <c>setprojmodel</c> 命令与固定参考时间戳。</para></summary>
+    /// <summary>Uses the <c>setprojmodel</c> command with the fixed timestamp literal.
+    /// <para>使用 <c>setprojmodel</c> 命令与固定时间戳字面量。</para></summary>
     ProjectModel,
 
     /// <summary>Uses the <c>setswprojmodel</c> command with the timestamp reported by <c>setprocstart</c>.
@@ -23,18 +23,18 @@ public enum EdlOnePlusProjectFamily
 /// <para>保存构造 OnePlus 校验令牌所需的逐项目常量。</para>
 /// </summary>
 /// <remarks>
-/// <para>The reference tools keep these constants in a fixed table instead of reading them from the target, so a
+/// <para>These constants live in a fixed table instead of being read from the target, so a
 /// profile is only as correct as the project selection it was resolved from.
-/// <see cref="ReferenceTimestamp"/> is the literal the reference tools embed; the software-project family mixes
+/// <see cref="ReferenceTimestamp"/> is the embedded default literal; the software-project family mixes
 /// the device timestamp reported by <c>setprocstart</c> into its AES key instead of replacing this literal.</para>
-/// <para>参考工具把这些常量写死在固定表中，而不是从目标读取，因此配置的正确性完全取决于它所依据的项目选择。
-/// <see cref="ReferenceTimestamp"/> 是参考工具内置的字面量；软件项目家族把 <c>setprocstart</c> 上报的设备时间戳
+/// <para>这些常量保存在固定表中，而不是从目标读取，因此配置的正确性完全取决于它所依据的项目选择。
+/// <see cref="ReferenceTimestamp"/> 是内置的默认字面量；软件项目家族把 <c>setprocstart</c> 上报的设备时间戳
 /// 混入 AES 密钥，而不是替换该字面量。</para>
 /// </remarks>
 public sealed record EdlOnePlusProjectProfile
 {
-    /// <summary>Gets the timestamp literal the reference tools embed in every verification token.
-    /// <para>获取参考工具写入每个校验令牌的固定时间戳。</para></summary>
+    /// <summary>Gets the timestamp literal embedded in every verification token.
+    /// <para>获取写入每个校验令牌的固定时间戳。</para></summary>
     /// <value>The documented value 1604949411. <para>文档取值 1604949411。</para></value>
     public const long ReferenceTimestampDefault = 1604949411;
 
@@ -67,20 +67,20 @@ public sealed record EdlOnePlusProjectProfile
 
     /// <summary>Gets the customer flag written into the project-model token.
     /// <para>获取写入项目型号令牌的定制标志。</para></summary>
-    /// <value>A non-negative flag; the reference table uses zero.
-    /// <para>非负标志；参考表取 0。</para></value>
+    /// <value>A non-negative flag; the built-in table uses zero.
+    /// <para>非负标志；内置表取 0。</para></value>
     public int CustomerFlag { get; init; }
 
     /// <summary>Gets the ATO build state written into the software-project token.
     /// <para>获取写入软件项目令牌的 ATO 构建状态。</para></summary>
-    /// <value>A non-negative state; the reference table uses zero.
-    /// <para>非负状态；参考表取 0。</para></value>
+    /// <value>A non-negative state; the built-in table uses zero.
+    /// <para>非负状态；内置表取 0。</para></value>
     public int AtoBuildState { get; init; }
 
     /// <summary>Gets the flash mode written into the software-project token.
     /// <para>获取写入软件项目令牌的刷机模式。</para></summary>
-    /// <value>A non-negative mode; the reference table uses zero.
-    /// <para>非负模式；参考表取 0。</para></value>
+    /// <value>A non-negative mode; the built-in table uses zero.
+    /// <para>非负模式；内置表取 0。</para></value>
     public int FlashMode { get; init; }
 
     /// <summary>Gets the timestamp literal written into both token layouts.
@@ -141,8 +141,8 @@ public sealed record EdlOnePlusProjectProfile
 }
 
 /// <summary>
-/// Resolves OnePlus verification constants for a project identifier from the reference tool's fixed table.
-/// <para>按项目标识符从参考工具的固定表解析 OnePlus 校验常量。</para>
+/// Resolves OnePlus verification constants for a project identifier from the built-in fixed table.
+/// <para>按项目标识符从内置固定表解析 OnePlus 校验常量。</para>
 /// </summary>
 /// <remarks>
 /// <para>The table maps the project identifier a device reports to the command family, the project name written
@@ -209,14 +209,14 @@ public static class EdlOnePlusProjectCatalog
             ("20889", "OnePlus Nord 10 5G Europe (billie8)", EdlOnePlusProjectFamily.SoftwareProjectModel, "f2056ae1"),
         ];
 
-    /// <summary>Gets the project identifiers that the reference table can resolve.
-    /// <para>获取参考表可解析的项目标识符。</para></summary>
+    /// <summary>Gets the project identifiers that the built-in table can resolve.
+    /// <para>获取内置表可解析的项目标识符。</para></summary>
     /// <value>The identifiers in sorted order. <para>按排序后的标识符。</para></value>
     public static IReadOnlyList<string> ProjectIds { get; } =
         [.. Entries.Select(entry => entry.Project).Order(StringComparer.Ordinal)];
 
-    /// <summary>Resolves one profile from the reference table without probing the device.
-    /// <para>按参考表解析一个配置，不探测设备。</para></summary>
+    /// <summary>Resolves one profile from the built-in table without probing the device.
+    /// <para>按内置表解析一个配置，不探测设备。</para></summary>
     /// <param name="projectId">The project identifier reported by the device.
     /// <para>设备上报的项目标识符。</para></param>
     /// <param name="profile">The resolved profile, or <see langword="null"/> when unknown.
@@ -251,8 +251,8 @@ public static class EdlOnePlusProjectCatalog
     /// <summary>Describes one catalogued project for user selection.
     /// <para>为界面选择描述一个目录内的项目。</para></summary>
     /// <param name="projectId">The project identifier to describe. <para>要描述的项目标识符。</para></param>
-    /// <returns>The reference description, or an empty string when the identifier is unknown.
-    /// <para>参考描述；标识符未知时为空字符串。</para></returns>
+    /// <returns>The catalogued description, or an empty string when the identifier is unknown.
+    /// <para>目录描述；标识符未知时为空字符串。</para></returns>
     public static string Describe(string projectId)
     {
         var entry = Array.Find(Entries, candidate =>
@@ -266,12 +266,12 @@ public static class EdlOnePlusProjectCatalog
 /// <para>由单个显式配置构造 OnePlus <c>setprojmodel</c> 与 <c>setswprojmodel</c> 凭据。</para>
 /// </summary>
 /// <remarks>
-/// <para>Both families encrypt a comma-joined field list with AES-256-CBC under a key made of fixed reference
+/// <para>Both families encrypt a comma-joined field list with AES-256-CBC under a key made of fixed
 /// constants plus the exchange project key. The software-project family appends the little-endian device
 /// timestamp reported by <c>setprocstart</c> to that key and pads the plaintext to 512 bytes, so its token is
 /// twice as long. The project key is created once per provider instance because the device pairs the reported
 /// <c>pk</c> with every later per-command token.</para>
-/// <para>两个家族都用“固定参考常量 + 本次交换的项目密钥”作为 AES-256-CBC 密钥，加密逗号拼接的字段表。软件项目
+/// <para>两个家族都用“固定常量 + 本次交换的项目密钥”作为 AES-256-CBC 密钥，加密逗号拼接的字段表。软件项目
 /// 家族把 <c>setprocstart</c> 上报的小端设备时间戳追加到该密钥，并把明文填充到 512 字节，因此令牌长度翻倍。
 /// 项目密钥在每个提供方实例内只生成一次，因为设备会把上报的 <c>pk</c> 与后续每个命令令牌配对校验。</para>
 /// </remarks>

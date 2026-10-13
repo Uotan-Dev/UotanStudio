@@ -1,6 +1,6 @@
 namespace UotanStudio.Services.Delivery;
 
-/// <summary><para>交付输出前的磁盘剩余空间估算。</para>Disk space estimation ahead of a delivery export.</summary>
+/// <summary>Disk space estimation ahead of a delivery export. <para>交付输出前的磁盘剩余空间估算。</para></summary>
 internal static class DiskSpaceEstimator
 {
     /// <summary><para>输出过程会同时产生中间文件与最终镜像，统一按源镜像总量的 2 倍估算需求。</para>
@@ -56,7 +56,7 @@ internal static class DiskSpaceEstimator
     /// safety factor of 2; missing, oversized, or unreadable files count as zero.</summary>
     /// <param name="outputDirectory"><para>输出目录路径（当前仅用于上下文表达，保留以便扩展）。</para>
     /// Output directory path (kept for context and future extension).</param>
-    /// <param name="imagePaths"><para>所选镜像文件的完整路径列表。</para>Full paths of the selected image files.</param>
+    /// <param name="imagePaths">Full paths of the selected image files. <para>所选镜像文件的完整路径列表。</para></param>
     internal static long EstimateOutputBytes(string outputDirectory, IReadOnlyList<string> imagePaths)
     {
         long total = 0;

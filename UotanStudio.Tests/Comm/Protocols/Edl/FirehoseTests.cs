@@ -598,7 +598,13 @@ public class FirehoseTests
         Assert.Contains("<nop value=\"ping\" />", xml, StringComparison.Ordinal);
     }
 
-    /// <summary>Builds a minimal Android sparse image: header + one raw chunk.</summary>
+    /// <summary>
+    /// Builds a minimal Android sparse image: header plus one raw chunk.
+    /// <para>构造极简 Android 稀疏镜像：头部加一个 raw 块。</para>
+    /// </summary>
+    /// <param name="blockSize">Block size written to the header, in bytes.<para>写入头部的块大小，以字节计。</para></param>
+    /// <param name="chunkData">Payload of the single raw chunk.<para>唯一 raw 块的数据。</para></param>
+    /// <returns>The serialized image bytes.<para>序列化后的镜像字节。</para></returns>
     private static byte[] BuildSparseImage(int blockSize, byte[] chunkData)
     {
         const uint magic = 0xED26FF3A;

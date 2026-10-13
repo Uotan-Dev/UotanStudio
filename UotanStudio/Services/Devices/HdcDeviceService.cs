@@ -4,12 +4,15 @@ using UotanStudio.Comm.Protocols.Hdc;
 
 namespace UotanStudio.Services.Devices;
 
-/// <summary>OpenHarmony device operations shared by UI and workflows.
-/// <para>界面与工作流共用的 OpenHarmony 设备操作。</para></summary>
+/// <summary>OpenHarmony device operations routed through an HDC host channel.
+/// <para>经由 HDC 主机通道转发的 OpenHarmony 设备操作。</para></summary>
+/// <param name="host">HDC server host address.<para>HDC 服务器主机地址。</para></param>
+/// <param name="port">HDC server port, or null for the default.<para>HDC 服务器端口，为空时使用默认值。</para></param>
 internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = null)
 {
     private readonly int _port = port ?? HdcServerClient.DefaultServerPort;
-    /// <summary>Creates a service for the configured HDC host channel.</summary>
+    /// <summary>Creates a service for the configured HDC host channel.<para>为已配置的 HDC 主机通道创建服务实例。</para></summary>
+    /// <returns>A new service instance.<para>新的服务实例。</para></returns>
     public static HdcDeviceService FromSettings() => new();
 
     private static void ValidateDevice(DetectedDevice device)
@@ -20,6 +23,10 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
 
     /// <summary>Executes a shell command and verifies its remote exit status.
     /// <para>执行 Shell 命令并验证远端退出码。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="command">Shell command text.<para>Shell 命令文本。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The command output.<para>命令输出。</para></returns>
     public async Task<string> ShellAsync(DetectedDevice device, string command, CancellationToken ct = default)
     {
         ValidateDevice(device);
@@ -62,7 +69,11 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
         return output;
     }
 
-    /// <summary>Reads a system parameter. 读取系统参数。</summary>
+    /// <summary>Reads a system parameter.<para>读取系统参数。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="name">Parameter name.<para>参数名称。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The parameter value.<para>参数值。</para></returns>
     public Task<string> GetPropertyAsync(DetectedDevice device, string name, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -85,7 +96,11 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
             return operation(opened.Session);
         }, ct);
 
-    /// <summary>Executes an official task with the exact selected target. 对固定目标执行官方任务。</summary>
+    /// <summary>Executes an HDC task with the exact selected target.<para>对精确选定的目标执行 HDC 任务。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="arguments">Single-token command arguments.<para>逐词命令参数。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The task response text.<para>任务响应文本。</para></returns>
     public async Task<string> RunTaskAsync(DetectedDevice device, IEnumerable<string> arguments, CancellationToken ct = default)
     {
         ValidateDevice(device);
@@ -102,8 +117,6 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
         return text;
     }
 
-    // Without the upstream "remote" option, the local server performs host-side
-    // file/app transfer itself; only the command and bounded status cross this channel.
     private async Task<string> RunFileTaskAsync(DetectedDevice device, IEnumerable<string> arguments, CancellationToken ct)
     {
         ValidateDevice(device);
@@ -141,7 +154,12 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
         return result;
     }
 
-    /// <summary>Sends a local file or directory through the selected HDC connection.</summary>
+    /// <summary>Sends a local file or directory through the selected HDC connection.<para>通过选定 HDC 连接发送本地文件或目录。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="localPath">Local file or directory path.<para>本地文件或目录路径。</para></param>
+    /// <param name="remotePath">Remote destination path.<para>远端目标路径。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The transfer response text.<para>传输响应文本。</para></returns>
     public Task<string> SendFileAsync(DetectedDevice device, string localPath, string remotePath, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
@@ -158,6 +176,11 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
 
     /// <summary>Receives to a temporary local file and atomically publishes on success.
     /// <para>接收到本地临时文件，成功后原子发布。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="remotePath">Remote source path.<para>远端源路径。</para></param>
+    /// <param name="localPath">Local destination path.<para>本地目标路径。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The transfer response text.<para>传输响应文本。</para></returns>
     public async Task<string> ReceiveFileAsync(DetectedDevice device, string remotePath, string localPath, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
@@ -184,7 +207,11 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
         finally { Directory.Delete(staging, recursive: true); }
     }
 
-    /// <summary>Installs a HAP/HSP/APP package. 安装 HAP/HSP/APP 包。</summary>
+    /// <summary>Installs a HAP/HSP/APP package.<para>安装 HAP/HSP/APP 包。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="localPath">Local package path.<para>本地包路径。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The install response text.<para>安装响应文本。</para></returns>
     public async Task<string> InstallAsync(DetectedDevice device, string localPath, CancellationToken ct = default)
     {
         var path = Path.GetFullPath(localPath);
@@ -198,7 +225,11 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
         return result;
     }
 
-    /// <summary>Uninstalls a bundle by name. 按包名卸载应用。</summary>
+    /// <summary>Uninstalls a bundle by name.<para>按包名卸载应用。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="bundle">Bundle name.<para>包名。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The uninstall response text.<para>卸载响应文本。</para></returns>
     public async Task<string> UninstallAsync(DetectedDevice device, string bundle, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(bundle);
@@ -212,17 +243,23 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
     }
 
     /// <summary>Checks the bundle-manager result carried in an HDC Info message.
-    /// <para>检查 HDC Info 消息承载的包管理器结果；Info 不代表安装成功。</para></summary>
+    /// <para>检查 HDC Info 消息承载的包管理器结果。</para></summary>
+    /// <param name="output">Response text to inspect.<para>待检查的响应文本。</para></param>
+    /// <param name="uninstall">Whether the result belongs to an uninstall.<para>结果是否属于卸载操作。</para></param>
     public static void RequireApplicationSuccess(string output, bool uninstall)
     {
-        // Upstream test_hdc_return_value_check.py checks these exact markers. A failed
-        // uninstall is also emitted as [Info]App uninstall ... msg:error: ... .
         var marker = uninstall ? "msg:uninstall bundle successfully." : "msg:install bundle successfully.";
         if (!output.Contains(marker, StringComparison.Ordinal) || output.Contains("msg:error:", StringComparison.Ordinal))
             throw new IOException("HDC application operation did not report success: " + output.Trim());
     }
 
-    /// <summary>Creates a forward/reverse TCP mapping. 创建正向或反向 TCP 映射。</summary>
+    /// <summary>Creates a forward or reverse TCP mapping.<para>创建正向或反向 TCP 映射。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="localPort">Local TCP port.<para>本地 TCP 端口。</para></param>
+    /// <param name="remotePort">Remote TCP port.<para>远端 TCP 端口。</para></param>
+    /// <param name="reverse">Whether the mapping is reverse.<para>是否为反向映射。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The mapping response text.<para>映射响应文本。</para></returns>
     public Task<string> ForwardAsync(DetectedDevice device, int localPort, int remotePort, bool reverse = false, CancellationToken ct = default)
     {
         if (localPort is < 1 or > 65535 || remotePort is < 1 or > 65535)
@@ -236,17 +273,29 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
             : ["fport", $"tcp:{localPort}", $"tcp:{remotePort}"], ct);
     }
 
-    /// <summary>Lists the selected device's native or official forward mappings.</summary>
+    /// <summary>Lists the selected device's native or official forward mappings.<para>列出选定设备的原生或官方转发映射。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The forward listing text.<para>转发列表文本。</para></returns>
     public Task<string> ListForwardsAsync(DetectedDevice device, CancellationToken ct = default)
         => IsDirect(device) ? DirectTaskAsync(device, s => s.Connection.Forwards.List(), ct)
             : RunTaskAsync(device, ["fport", "ls"], ct);
 
-    /// <summary>Lists debuggable processes through the selected HDC connection.</summary>
+    /// <summary>Lists debuggable processes through the selected HDC connection.<para>通过选定 HDC 连接列出可调试进程。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The process listing text.<para>进程列表文本。</para></returns>
     public Task<string> ListDebugProcessesAsync(DetectedDevice device, CancellationToken ct = default)
         => IsDirect(device) ? DirectTaskAsync(device, s => s.CreateDeviceServices().ListDebugProcesses(), ct)
             : RunTaskAsync(device, ["jpid"], ct);
 
-    /// <summary>Removes one TCP mapping owned by the selected device connection.</summary>
+    /// <summary>Removes one TCP mapping owned by the selected device connection.<para>移除选定设备连接持有的一条 TCP 映射。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="localPort">Local TCP port.<para>本地 TCP 端口。</para></param>
+    /// <param name="remotePort">Remote TCP port.<para>远端 TCP 端口。</para></param>
+    /// <param name="reverse">Whether the mapping is reverse.<para>是否为反向映射。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The removal response text.<para>移除响应文本。</para></returns>
     public Task<string> RemoveForwardAsync(DetectedDevice device, int localPort, int remotePort, bool reverse = false, CancellationToken ct = default)
     {
         if (localPort is < 1 or > 65535 || remotePort is < 1 or > 65535) throw new ArgumentOutOfRangeException(nameof(localPort));
@@ -255,13 +304,19 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
             : RunTaskAsync(device, [reverse ? "rport" : "fport", "rm", $"tcp:{(reverse ? remotePort : localPort)}", $"tcp:{(reverse ? localPort : remotePort)}"], ct);
     }
 
-    /// <summary>Requests the device's native remount service.</summary>
+    /// <summary>Requests the device's native remount service.<para>请求设备原生重新挂载服务。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The remount response text.<para>重新挂载响应文本。</para></returns>
     public Task<string> RemountAsync(DetectedDevice device, CancellationToken ct = default)
         => IsDirect(device) ? DirectTaskAsync(device, s => { s.CreateDeviceServices().Remount(); return "Remount completed."; }, ct)
             : RunTaskAsync(device, ["target", "mount"], ct);
 
     /// <summary>Disconnects a network target; USB transport is not an ADB connection.
     /// <para>断开网络目标；USB 目标不走 ADB 断开路径。</para></summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The disconnect response text.<para>断开响应文本。</para></returns>
     public async Task<string> DisconnectAsync(DetectedDevice device, CancellationToken ct = default)
     {
         ValidateDevice(device);

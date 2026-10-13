@@ -8,36 +8,33 @@ using UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 namespace UotanStudio.Services.Firmware;
 
 /// <summary>
-/// <para>DEX 综合服务，封装 DEX 文件解析、反汇编（Smali 文本）与重建写入功能，基于 UotanStudio.Firmware.AndroidMeta.Dex 生态。
-/// 支持直接读取 DEX 文件或 JAR/APK 容器内的 classes*.dex 条目。</para>
-/// Dex integrated service, wrapping DEX file parsing, disassembly (Smali text) and rebuild-write capabilities,
-/// built on the UotanStudio.Firmware.AndroidMeta.Dex ecosystem. Supports plain DEX files as
-/// well as classes*.dex entries inside JAR/APK containers.
+/// Parses, disassembles, decompiles and rebuilds DEX files and DEX entries inside JAR/APK containers.
+/// <para>解析、反汇编、反编译并重建 DEX 文件以及 JAR/APK 容器内的 DEX 条目。</para>
 /// </summary>
 public sealed class DexService
 {
     private static readonly Lazy<DexService> LazyInstance = new(() => new DexService());
 
     /// <summary>
-    /// <para>获取 DexService 单例。</para>
     /// Gets the DexService singleton instance.
+    /// <para>获取 DexService 单例。</para>
     /// </summary>
+    /// <value>The shared service instance. <para>共享的服务实例。</para></value>
     public static DexService Instance => LazyInstance.Value;
 
     private DexService() { }
 
     /// <summary>
-    /// <para>解析 DEX 文件并返回其描述信息（类、方法、字段等统计）；路径为 JAR/APK 容器时解析指定 DEX 条目。</para>
-    /// Parses a DEX file and returns its description (class, method, field statistics, etc.);
-    /// for a JAR/APK container path, parses the given DEX entry.
+    /// Parses a DEX file and returns its description of classes, methods and fields.
+    /// <para>解析 DEX 文件并返回类、方法与字段等描述信息。</para>
     /// </summary>
-    /// <param name="path">DEX 或容器文件路径。<para>DEX or container file path.</para></param>
+    /// <param name="path">The DEX or container file path. <para>DEX 或容器文件路径。</para></param>
     /// <param name="entryName">
-    /// <para>容器内 DEX 条目名；为空时取第一个 DEX 条目，非容器路径忽略。</para>
     /// The container DEX entry name; empty picks the first DEX entry, ignored for plain files.
+    /// <para>容器内 DEX 条目名；为空时取第一个 DEX 条目，非容器路径忽略。</para>
     /// </param>
-    /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
-    /// <returns>操作结果；成功时 Summary 为文件描述，失败时 Summary 为异常信息。</returns>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result whose summary carries the file description. <para>操作结果，摘要为文件描述。</para></returns>
     public Task<UotanStudio.Firmware.Core.FirmwareOpResult> ParseDexAsync(string path, string? entryName = null, CancellationToken ct = default)
     {
         try
@@ -58,16 +55,16 @@ public sealed class DexService
     }
 
     /// <summary>
-    /// <para>将 DEX 文件反汇编为 Smali 文本，写入指定目录（默认取 DEX 同目录的 <c>&lt;name&gt;_dexout</c> 文件夹）下的
-    /// <c>&lt;name&gt;.smali</c> 文件。</para>
     /// Disassembles a DEX file into Smali text, written to the specified directory (defaults to the
     /// <c>&lt;name&gt;_dexout</c> folder next to the DEX file) as a <c>&lt;name&gt;.smali</c> file.
+    /// <para>将 DEX 文件反汇编为 Smali 文本，写入指定目录（默认取 DEX 同目录的 <c>&lt;name&gt;_dexout</c> 文件夹）下的
+    /// <c>&lt;name&gt;.smali</c> 文件。</para>
     /// </summary>
-    /// <param name="path">DEX 或容器文件路径。<para>DEX or container file path.</para></param>
-    /// <param name="outputDirectory">输出目录；为空时自动取 DEX 同目录下的 <c>&lt;name&gt;_dexout</c> 文件夹。</param>
-    /// <param name="entryName">容器内 DEX 条目名；为空时取第一个 DEX 条目，非容器路径忽略。<para>Container DEX entry name; empty picks the first DEX entry, ignored for plain files.</para></param>
-    /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
-    /// <returns>操作结果；Summary 含输出文件路径。</returns>
+    /// <param name="path">The DEX or container file path. <para>DEX 或容器文件路径。</para></param>
+    /// <param name="outputDirectory">The output directory; empty derives a folder beside the DEX file. <para>输出目录；为空时在 DEX 同目录推导。</para></param>
+    /// <param name="entryName">The container DEX entry name; empty picks the first DEX entry, ignored for plain files. <para>容器内 DEX 条目名；为空时取第一个 DEX 条目，非容器路径忽略。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result whose summary names the written file. <para>操作结果，摘要指明写出的文件。</para></returns>
     public async Task<UotanStudio.Firmware.Core.FirmwareOpResult> DisassembleDexAsync(string path, string? outputDirectory, string? entryName = null, CancellationToken ct = default)
     {
         try
@@ -100,18 +97,18 @@ public sealed class DexService
     }
 
     /// <summary>
-    /// <para>加载 DEX（或容器内 DEX 条目）并重建写入到指定输出路径；来源为容器时经条目写回。</para>
     /// Loads a DEX (or a container DEX entry) and rebuilds it to the specified output path;
     /// container sources are written back through the entry.
+    /// <para>加载 DEX（或容器内 DEX 条目）并重建写入到指定输出路径；来源为容器时经条目写回。</para>
     /// </summary>
-    /// <param name="path">DEX 或容器文件路径。<para>DEX or container file path.</para></param>
-    /// <param name="outputPath">输出文件路径。<para>Output file path.</para></param>
+    /// <param name="path">The DEX or container file path. <para>DEX 或容器文件路径。</para></param>
+    /// <param name="outputPath">The output file path. <para>输出文件路径。</para></param>
     /// <param name="entryName">
-    /// <para>容器内 DEX 条目名；为空时取第一个 DEX 条目，非容器路径忽略。</para>
     /// The container DEX entry name; empty picks the first DEX entry, ignored for plain files.
+    /// <para>容器内 DEX 条目名；为空时取第一个 DEX 条目，非容器路径忽略。</para>
     /// </param>
-    /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
-    /// <returns>操作结果；Summary 含输出路径。</returns>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result whose summary names the written path. <para>操作结果，摘要指明写出路径。</para></returns>
     public Task<UotanStudio.Firmware.Core.FirmwareOpResult> RebuildDexAsync(string path, string outputPath, string? entryName = null, CancellationToken ct = default)
     {
         try
@@ -140,18 +137,15 @@ public sealed class DexService
     }
 
     /// <summary>
-    /// <para>反编译 DEX 文件为伪 Java 源码，写入指定路径（默认取 DEX 同目录的 <c>&lt;name&gt;.java</c>）。
-    /// 内置重载解析；输出模式由 <see cref="DecompileOptions"/> 控制。</para>
-    /// Decompiles a DEX file into pseudo-Java source, written to the specified path (defaults to
-    /// <c>&lt;name&gt;.java</c> next to the DEX file). Overload resolution is built in; the output
-    /// mode is controlled by <see cref="DecompileOptions"/>.
+    /// Decompiles a DEX file into pseudo-Java source written to the given path or a default one beside the DEX file.
+    /// <para>将 DEX 文件反编译为伪 Java 源码，写入给定路径或 DEX 同目录的默认路径。</para>
     /// </summary>
-    /// <param name="path">DEX 或容器文件路径。<para>DEX or container file path.</para></param>
-    /// <param name="outputPath">输出文件路径；为空时自动取 DEX 同目录下的 <c>&lt;name&gt;.java</c>。</param>
-    /// <param name="entryName">容器内 DEX 条目名；为空时取第一个 DEX 条目，非容器路径忽略。<para>Container DEX entry name; empty picks the first DEX entry, ignored for plain files.</para></param>
-    /// <param name="options">反编译选项；<c>null</c> 用默认值。<para>Decompiler options; <c>null</c> for defaults.</para></param>
-    /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
-    /// <returns>操作结果；Summary 含输出文件路径与字节数。</returns>
+    /// <param name="path">The DEX or container file path. <para>DEX 或容器文件路径。</para></param>
+    /// <param name="outputPath">The output source file path; empty derives a path beside the DEX file. <para>输出源码文件路径；为空时在 DEX 同目录推导。</para></param>
+    /// <param name="entryName">The container DEX entry name; empty picks the first DEX entry, ignored for plain files. <para>容器内 DEX 条目名；为空时取第一个 DEX 条目，非容器路径忽略。</para></param>
+    /// <param name="options">Decompilation options; <see langword="null"/> uses the defaults. <para>反编译选项；空值使用默认设置。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result whose summary names the output path and byte count. <para>操作结果，摘要给出输出路径与字节数。</para></returns>
     public async Task<UotanStudio.Firmware.Core.FirmwareOpResult> DecompileDexAsync(string path, string? outputPath, string? entryName = null, DecompileOptions? options = null, CancellationToken ct = default)
     {
         try
@@ -185,19 +179,16 @@ public sealed class DexService
     }
 
     /// <summary>
-    /// <para>对 JAR/APK 容器或 DEX 文件执行 v1/v2/v3 组合签名（复用 APK 签名栈），输出到新文件。
-    /// 普通应用 JAR 通常只需 v1（JAR 规范工件），可按需启用 v2/v3。</para>
-    /// Signs a JAR/APK container or DEX-less package with the v1/v2/v3 combination (reusing the APK
-    /// signing stack) to a new output file. Plain application JARs usually need v1 only (JAR
-    /// artifacts); v2/v3 can be enabled as needed.
+    /// Signs a JAR/APK container or a package without DEX using a v1, v2 or v3 scheme combination into a new file.
+    /// <para>以 v1、v2 或 v3 方案组合对 JAR/APK 容器或无 DEX 的包签名，写出到新文件。</para>
     /// </summary>
-    /// <param name="inputPath">输入容器路径。<para>The input container path.</para></param>
-    /// <param name="outputPath">输出容器路径；必须与输入不同。<para>The output container path; must differ from the input.</para></param>
-    /// <param name="keyPath">PEM/DER/PKCS#8 私钥路径。<para>The PEM/DER/PKCS#8 private key path.</para></param>
-    /// <param name="certPath">PEM/DER/PFX 证书路径。<para>The PEM/DER/PFX certificate path.</para></param>
-    /// <param name="options">签名选项；<c>null</c> 用默认值（v1+v2+v3、剥离旧签名）。<para>Signing options; <c>null</c> for defaults (v1+v2+v3, strip old signatures).</para></param>
-    /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
-    /// <returns>操作结果；Summary 含输出路径。</returns>
+    /// <param name="inputPath">The input container path. <para>输入容器路径。</para></param>
+    /// <param name="outputPath">The output container path; must differ from the input. <para>输出容器路径，必须与输入不同。</para></param>
+    /// <param name="keyPath">The PEM, DER or PKCS#8 private key path. <para>PEM、DER 或 PKCS#8 私钥路径。</para></param>
+    /// <param name="certPath">The PEM, DER or PFX certificate path. <para>PEM、DER 或 PFX 证书路径。</para></param>
+    /// <param name="options">Signing options; <see langword="null"/> uses the defaults. <para>签名选项；空值使用默认设置。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result whose summary names the signed output path. <para>操作结果，摘要指明签名输出路径。</para></returns>
     public Task<UotanStudio.Firmware.Core.FirmwareOpResult> SignJarAsync(
         string inputPath, string outputPath, string keyPath, string certPath, ApkSigningOptions? options = null, CancellationToken ct = default)
     {
@@ -218,10 +209,12 @@ public sealed class DexService
     }
 
     /// <summary>
-    /// <para>加载 DEX：容器路径经条目有界读取（为空时取第一个 DEX 条目），普通路径直接加载。</para>
-    /// Loads a DEX: container paths read the bounded entry (the first DEX entry when empty);
-    /// plain paths load directly.
+    /// Loads a DEX from a plain file or, for a container path, from the bounded entry it selects.
+    /// <para>从普通文件加载 DEX；容器路径则按选定条目有界读取。</para>
     /// </summary>
+    /// <param name="path">The DEX or container file path. <para>DEX 或容器文件路径。</para></param>
+    /// <param name="entryName">The container DEX entry name; empty picks the first DEX entry. <para>容器内 DEX 条目名；为空时取第一个 DEX 条目。</para></param>
+    /// <returns>The loaded DEX file. <para>已加载的 DEX 文件。</para></returns>
     private static DexFile LoadDex(string path, string? entryName)
     {
         if (!JarDexContainer.IsContainerPath(path))
@@ -234,10 +227,12 @@ public sealed class DexService
     }
 
     /// <summary>
-    /// <para>解析容器内 DEX 条目名：显式指定时校验存在，为空时取第一个 DEX 条目，无 DEX 时报错。</para>
-    /// Resolves a container DEX entry name: validates explicit names, picks the first DEX entry
-    /// when empty, and errors when the container has no DEX entry.
+    /// Resolves a container DEX entry name, validating explicit names and picking the first entry when empty.
+    /// <para>解析容器内 DEX 条目名，校验显式名称并在为空时取第一个条目。</para>
     /// </summary>
+    /// <param name="path">The container file path. <para>容器文件路径。</para></param>
+    /// <param name="entryName">The requested entry name; empty picks the first DEX entry. <para>请求的条目名；为空时取第一个 DEX 条目。</para></param>
+    /// <returns>The validated entry name. <para>经校验的条目名。</para></returns>
     private static string ResolveEntryName(string path, string? entryName)
     {
         var entries = JarDexContainer.ListDexEntries(path);

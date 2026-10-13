@@ -10,17 +10,26 @@ public sealed class TempDirectory : IDisposable
 {
     private static readonly Encoding Utf8WithoutBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
-    /// <summary>Gets the directory path. 目录路径。</summary>
+    /// <summary>
+    /// Gets the directory path.
+    /// <para>目录路径。</para>
+    /// </summary>
     public string Path { get; }
 
-    /// <summary>Initializes a new temp directory. 创建新的临时目录。</summary>
+    /// <summary>
+    /// Initializes a new temp directory.
+    /// <para>创建新的临时目录。</para>
+    /// </summary>
     public TempDirectory()
     {
         Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "UotanStudioTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path);
     }
 
-    /// <summary>Writes a UTF-8 text file and returns its full path. 写入 UTF-8 文本文件并返回完整路径。</summary>
+    /// <summary>
+    /// Writes a UTF-8 text file and returns its full path.
+    /// <para>写入 UTF-8 文本文件并返回完整路径。</para>
+    /// </summary>
     public string Write(string relativePath, string content)
     {
         var full = System.IO.Path.Combine(Path, relativePath);
@@ -29,7 +38,10 @@ public sealed class TempDirectory : IDisposable
         return full;
     }
 
-    /// <summary>Writes a byte file and returns its full path. 写入字节文件并返回完整路径。</summary>
+    /// <summary>
+    /// Writes a byte file and returns its full path.
+    /// <para>写入字节文件并返回完整路径。</para>
+    /// </summary>
     public string WriteBytes(string relativePath, byte[] content)
     {
         var full = System.IO.Path.Combine(Path, relativePath);

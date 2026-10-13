@@ -9,7 +9,10 @@ using Ursa.Controls;
 
 namespace UotanStudio.Views.Shell;
 
-/// <summary>Edits the inline Lua source of one installed script-node package.</summary>
+/// <summary>
+/// Edits the inline Lua source of one installed script-node package.
+/// <para>编辑一个已安装脚本节点包的内联 Lua 源码。</para>
+/// </summary>
 public partial class ScriptPluginEditorWindow : Window
 {
     private VisualPluginRegistration? _registration;

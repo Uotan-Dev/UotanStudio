@@ -6,18 +6,15 @@ using UotanStudio.Comm.Transports.Udp;
 namespace UotanStudio.Comm.Protocols.Adb;
 
 /// <summary>
-/// One row of the mDNS table a running adb server maintains for its own browser
-/// (<c>host:mdns:services</c>). The server resolves PTR, SRV and address records itself, so the
-/// host and port in a row are already dial-ready, which is what <c>adb pair</c> and
-/// <c>adb connect</c> consume on the command line.
-/// <para>正在运行的 adb server 为其内置 mDNS 浏览器维护的表中的一行（<c>host:mdns:services</c>）。
-/// server 自己完成 PTR、SRV 与地址记录的解析，因此行内的主机和端口已可直接拨号，也就是命令行
-/// <c>adb pair</c> 与 <c>adb connect</c> 所使用的值。</para>
+/// One row of the mDNS table a running adb server maintains under
+/// <c>host:mdns:services</c>, holding a dial-ready device address and TCP port.
+/// <para>正在运行的 adb server 在 <c>host:mdns:services</c> 下维护的 mDNS 表中的一行，
+/// 包含可直接拨号的设备地址与 TCP 端口。</para>
 /// </summary>
-/// <param name="Instance">The DNS-SD instance label, e.g. the QR <c>S</c> field advertised by the
-/// phone. <para>DNS-SD 实例标签，例如手机广播的二维码 <c>S</c> 字段。</para></param>
-/// <param name="ServiceType">The service type without a trailing dot, e.g.
-/// <c>_adb-tls-pairing._tcp</c>. <para>不带尾点的服务类型，如 <c>_adb-tls-pairing._tcp</c>。</para></param>
+/// <param name="Instance">The DNS-SD instance label advertised by the phone.
+/// <para>手机广播的 DNS-SD 实例标签。</para></param>
+/// <param name="ServiceType">The service type without a trailing dot.
+/// <para>不带尾点的服务类型。</para></param>
 /// <param name="Host">The resolved device IP address. <para>已解析的设备 IP 地址。</para></param>
 /// <param name="Port">The resolved service TCP port. <para>已解析的服务 TCP 端口。</para></param>
 internal sealed record AdbServerMdnsEntry(string Instance, string ServiceType, string Host, int Port);
@@ -32,14 +29,12 @@ internal enum AdbServerMdnsStatus
     /// <para>server 已应答并返回当前表内容。</para></summary>
     Answered,
 
-    /// <summary>The server rejected the command, i.e. this build has no mDNS browser; the caller
-    /// must use another discovery source. <para>server 拒绝了该命令，即该构建没有 mDNS 浏览器；调用方
-    /// 必须改用其他发现来源。</para></summary>
+    /// <summary>The server rejected the command because this build exposes no mDNS table.
+    /// <para>server 拒绝了该命令，因为该构建不提供 mDNS 表。</para></summary>
     NotSupported,
 
-    /// <summary>The request failed transiently (stalled, refused or reset socket); the caller should
-    /// keep polling within its own deadline. <para>请求暂时性失败（停滞、被拒绝或套接字复位）；调用方
-    /// 应在自身期限内继续轮询。</para></summary>
+    /// <summary>The request failed transiently (stalled, refused or reset socket); a later poll may succeed.
+    /// <para>请求暂时性失败（停滞、被拒绝或套接字复位）；后续轮询可能成功。</para></summary>
     TransientFailure,
 }
 
@@ -47,18 +42,6 @@ internal enum AdbServerMdnsStatus
 /// Reads the adb server's own mDNS table over its control socket.
 /// <para>通过 adb server 的控制套接字读取其自身的 mDNS 表。</para>
 /// </summary>
-/// <remarks>
-/// <para>The server browser is the authoritative source for a wireless-debugging endpoint while a
-/// server listens: it holds one long-lived multicast socket, records the pairing and connect
-/// services the phone announces, and refreshes its cache without the caller re-binding UDP 5353.
-/// A tool that browses mDNS itself competes for that port and must redo the whole PTR, SRV and
-/// address resolution on every poll, so both sources are consulted at once and the first one to see
-/// the advertisement is used.</para>
-/// <para>只要有 server 在监听，server 内置浏览器就是无线调试端点的权威来源：它持有一条长生命周期的组播
-/// 套接字，会记录手机广播的配对与连接服务，并在不要求调用方重新绑定 UDP 5353 的情况下刷新缓存。自行
-/// 浏览 mDNS 的实现必须与该端口竞争，且每次轮询都要重做完整的 PTR、SRV 与地址解析，因此两个来源同时
-/// 查询，先看到广播的那个被采用。</para>
-/// </remarks>
 internal static class AdbServerMdns
 {
     private const string ServicesCommand = "host:mdns:services";
@@ -72,12 +55,8 @@ internal static class AdbServerMdns
 
     /// <summary>
     /// Polls the server table until an entry satisfies <paramref name="match"/> or the deadline
-    /// passes. The lookup reports whether the server exposes the table at all, so a caller can tell
-    /// "nobody advertised" apart from "this server cannot answer"; the pairing flow runs this poll
-    /// alongside the local multicast browser and uses whichever source resolves first.
-    /// <para>轮询 server 的表，直到某个条目满足 <paramref name="match"/> 或期限到期。结果同时说明 server
-    /// 是否提供该表，调用方因此能区分「无人广播」与「该 server 无法应答」；配对流程会把这次轮询与本地组播
-    /// 浏览器并行运行，采用先解析成功的一方。</para>
+    /// passes; the result also reports whether the server exposes the table at all.
+    /// <para>轮询 server 的表，直到某个条目满足 <paramref name="match"/> 或期限到期；结果同时说明 server 是否提供该表。</para>
     /// </summary>
     /// <param name="match">Tested against every row of every poll. <para>对每次轮询的每一行执行。</para></param>
     /// <param name="timeout">Overall deadline for the poll loop. <para>轮询循环的整体期限。</para></param>
@@ -203,11 +182,9 @@ internal static class AdbServerMdns
     }
 
     /// <summary>
-    /// Reports whether a row advertises the service type a caller browsed for, comparing the
-    /// server's <c>_adb-tls-connect._tcp</c> spelling with the local browse constant's
-    /// <c>_adb-tls-connect._tcp.local</c>.
-    /// <para>判断某一行是否广播了调用方所浏览的服务类型，即把 server 的
-    /// <c>_adb-tls-connect._tcp</c> 写法与本地浏览常量的 <c>_adb-tls-connect._tcp.local</c> 作比较。</para>
+    /// Reports whether a row advertises a browsed service type, comparing names after the trailing
+    /// <c>.local</c> suffix is dropped.
+    /// <para>判断某行是否广播了所浏览的服务类型，比较前会去掉结尾的 <c>.local</c> 后缀。</para>
     /// </summary>
     /// <param name="entry">The row to test. <para>待测试的行。</para></param>
     /// <param name="browseType">The locally browsed type name. <para>本地浏览的类型名。</para></param>
@@ -244,8 +221,8 @@ internal readonly record struct AdbServerMdnsQuery(AdbServerMdnsStatus Status,
 /// <para>对 server 的 mDNS 表进行轮询循环的结果。</para>
 /// </summary>
 /// <param name="Supported">Whether the server answered the command during the loop;
-/// <c>false</c> means the caller must use another discovery source.
-/// <para>循环期间 server 是否应答了该命令；为 <c>false</c> 表示调用方必须改用其他发现来源。</para></param>
+/// <c>false</c> means no mDNS table is exposed.
+/// <para>循环期间 server 是否应答了该命令；为 <c>false</c> 表示未暴露 mDNS 表。</para></param>
 /// <param name="Entry">The matching row, or <c>null</c> when the deadline passed without
 /// one. <para>匹配的行；期限到期仍无匹配时为 <c>null</c>。</para></param>
 internal readonly record struct AdbServerMdnsLookup(bool Supported, AdbServerMdnsEntry? Entry);

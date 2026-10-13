@@ -3,10 +3,16 @@ using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
 
-/// <summary>Runs a booted TWRP-style recovery's destructive wipe entry points over ADB.</summary>
+/// <summary>Runs a booted recovery's destructive wipe entry points over ADB.
+/// <para>通过 ADB 运行已启动 recovery 的破坏性清除入口点。</para></summary>
 public static class RecoveryCleanService
 {
-    /// <summary>Maps a clean mode to the recovery command and executes it, returning the recovery output.</summary>
+    /// <summary>Maps a clean mode to the recovery command and executes it, returning the recovery output.
+    /// <para>把清除模式映射为 recovery 命令并执行，返回 recovery 的输出。</para></summary>
+    /// <param name="device">The ADB recovery target device.<para>作为 ADB recovery 目标的设备。</para></param>
+    /// <param name="mode">The clean mode to run.<para>要运行的清除模式。</para></param>
+    /// <param name="ct">Cancellation for the command exchange.<para>用于命令交换的取消令牌。</para></param>
+    /// <returns>The recovery command output text.<para>recovery 命令的输出文本。</para></returns>
     public static async Task<string> CleanAsync(DetectedDevice device, string mode, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(device);

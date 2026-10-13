@@ -7,9 +7,9 @@ using UotanStudio.Views.Controls;
 namespace UotanStudio.Views.Editors;
 
 /// <summary>
-/// <para>DEX 编辑器视图：承载反汇编文本与容器工具栏；资源导出/替换经系统文件选择器完成后调用视图模型。</para>
 /// The DEX editor view: hosts the disassembly text and container toolbar; resource export/replace
 /// goes through system file pickers and then calls the view model.
+/// <para>DEX 编辑器视图：承载反汇编文本与容器工具栏；资源导出/替换经系统文件选择器完成后调用视图模型。</para>
 /// </summary>
 public partial class DexEditorView : UserControl
 {
@@ -17,8 +17,8 @@ public partial class DexEditorView : UserControl
         new(static model => model.Editor, static (model, editor) => model.Editor = editor);
 
     /// <summary>
-    /// <para>创建 DEX 编辑器视图并初始化组件。</para>
     /// Creates the DEX editor view and initializes its components.
+    /// <para>创建 DEX 编辑器视图并初始化组件。</para>
     /// </summary>
     public DexEditorView()
     {

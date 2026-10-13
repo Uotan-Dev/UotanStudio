@@ -3,10 +3,9 @@ using System.Globalization;
 namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
-/// Classification of a rejected Firehose response, derived only from behaviour that the local
-/// reference downloaders actually implement.
-/// <para>仅依据本地参考下载器真实实现的行为，对被拒绝的 Firehose 响应所作的分类。</para>
-/// No local oracle assigns a meaning to a numeric Firehose <c>value</c> attribute, so numeric and
+/// Classification of a rejected Firehose response.
+/// <para>对被拒绝的 Firehose 响应所作的分类。</para>
+/// No oracle assigns a meaning to a numeric Firehose <c>value</c> attribute, so numeric and
 /// otherwise unknown values are reported as <see cref="FirehoseErrorKind.Unrecognized"/> with the
 /// raw text preserved instead of being mapped onto an invented table.
 /// <para>没有任何本地权威实现为 Firehose 的数值 <c>value</c> 属性赋予含义，因此数值与未知取值一律
@@ -15,15 +14,9 @@ namespace UotanStudio.Comm.Protocols.Edl;
 public enum FirehoseErrorKind
 {
     /// <summary>
-    /// The response was acknowledged; no error was observed.
-    /// <para>响应已被确认，未观测到错误。</para>
-    /// The reference downloader sets its acknowledgement flag exactly when the response
-    /// <c>value</c> compares equal to <c>ack</c> ignoring case
-    /// (fh_loader-master/fh_loader/fh_loader.cpp:7197-7206), which the C# reference mirrors with a
-    /// literal <c>ACK</c> test (edl-ng-ref/QCEDL.NET/Layers/APSS/Firehose/QualcommFirehoseCommands.cs:40-46).
-    /// <para>参考下载器仅在响应 <c>value</c> 忽略大小写等于 <c>ack</c> 时置确认标志
-    /// （fh_loader-master/fh_loader/fh_loader.cpp:7197-7206）；C# 参考实现以字面量 <c>ACK</c>
-    /// 判断（edl-ng-ref/QCEDL.NET/Layers/APSS/Firehose/QualcommFirehoseCommands.cs:40-46）。</para>
+    /// The response was acknowledged; no error was observed. The acknowledgement flag is set exactly
+    /// when the response <c>value</c> compares equal to <c>ack</c> ignoring case.
+    /// <para>响应已被确认，未观测到错误。仅当响应 <c>value</c> 忽略大小写等于 <c>ack</c> 时置确认标志。</para>
     /// </summary>
     None = 0,
 
@@ -31,55 +24,40 @@ public enum FirehoseErrorKind
     /// The target answered <c>NAK</c> but the surrounding evidence does not identify a more
     /// specific cause; the raw value and attributes are preserved.
     /// <para>目标应答 <c>NAK</c>，但上下文证据不足以判定更具体的原因；原始取值与属性均被保留。</para>
-    /// This is the reference downloader's generic rejection state: any value that is not
-    /// <c>ack</c> leaves the acknowledgement flag cleared
-    /// (fh_loader-master/fh_loader/fh_loader.cpp:7197-7206) and the C# reference only logs
-    /// "Configure command NAKed" without a cause (edl-ng-ref/QCEDL.NET/Layers/APSS/Firehose/QualcommFirehoseCommands.cs:46-50).
-    /// <para>这对应参考下载器的通用拒绝状态：任何非 <c>ack</c> 取值都不会置起确认标志
-    /// （fh_loader-master/fh_loader/fh_loader.cpp:7197-7206），C# 参考实现也只记录 “Configure command
-    /// NAKed” 而给不出原因（edl-ng-ref/QCEDL.NET/Layers/APSS/Firehose/QualcommFirehoseCommands.cs:46-50）。</para>
+    /// This is the generic rejection state: any value that is not
+    /// <c>ack</c> leaves the acknowledgement flag cleared.
+    /// <para>这是通用拒绝状态：任何非 <c>ack</c> 取值都不会置起确认标志。</para>
     /// </summary>
     Rejected,
 
     /// <summary>
-    /// The target answered <c>NAK</c> while assigning its own attributes, which the reference
-    /// downloader treats as parameter negotiation rather than a storage failure.
-    /// <para>目标在应答 <c>NAK</c> 的同时写入了自身的属性；参考下载器把这视作参数协商而非存储故障。</para>
-    /// See fh_loader-master/fh_loader/fh_loader.cpp:6418-6427 ("Target returned NAK for your
-    /// &lt;configure&gt; but it does not seem to be an error") and the attribute table at
-    /// fh_loader-master/fh_loader/fh_loader.cpp:1223-1230 that those NAK attributes populate.
-    /// <para>参见 fh_loader-master/fh_loader/fh_loader.cpp:6418-6427（“Target returned NAK for your
-    /// &lt;configure&gt; but it does not seem to be an error”），以及这些 NAK 属性所填充的属性表
-    /// fh_loader-master/fh_loader/fh_loader.cpp:1223-1230。</para>
+    /// The target answered <c>NAK</c> while assigning its own attributes, which is treated as
+    /// parameter negotiation rather than a storage failure.
+    /// <para>目标在应答 <c>NAK</c> 的同时写入了自身的属性；这被视作参数协商而非存储故障。</para>
     /// </summary>
     AttributeNegotiation,
 
     /// <summary>
-    /// The target rejected the command in a shape the reference downloader attributes to the
-    /// storage layer.
-    /// <para>目标以参考下载器归因于存储层的形态拒绝了该命令。</para>
-    /// Two evidenced shapes map here: a NAK whose response assigned no attributes at all, which
-    /// fh_loader reads as "it failed on some storage call"
-    /// (fh_loader-master/fh_loader/fh_loader.cpp:6402-6408), and a NAK whose most recent log
-    /// contains the literal token <c>ERROR</c>, which fh_loader reports as the named storage
-    /// device not coming up (fh_loader-master/fh_loader/fh_loader.cpp:6410-6417).
-    /// <para>两种有据可循的形态归入此处：完全未写入任何属性的 NAK，fh_loader 视之为“在某次存储调用上
-    /// 失败”（fh_loader-master/fh_loader/fh_loader.cpp:6402-6408）；以及最近一条日志含字面记号
-    /// <c>ERROR</c> 的 NAK，fh_loader 将其报告为对应存储设备未能起来
-    /// （fh_loader-master/fh_loader/fh_loader.cpp:6410-6417）。</para>
+    /// The target rejected the command in a shape attributed to the storage layer.
+    /// <para>目标以归因于存储层的形态拒绝了该命令。</para>
+    /// Two evidenced shapes map here: a NAK whose response assigned no attributes at all (a storage
+    /// call failed), and a NAK whose most recent log
+    /// contains the literal token <c>ERROR</c>, meaning the named storage
+    /// device did not come up.
+    /// <para>两种有据可循的形态归入此处：完全未写入任何属性的 NAK（某次存储调用失败）；以及最近一条
+    /// 日志含字面记号 <c>ERROR</c> 的 NAK（对应存储设备未能起来）。</para>
     /// </summary>
     Storage,
 
     /// <summary>
-    /// The target reported a digest-validation failure, which the reference downloader treats as
+    /// The target reported a digest-validation failure, which is treated as
     /// unrecoverable without resetting the target.
-    /// <para>目标报告摘要校验失败；参考下载器视之为不重置目标就无法恢复的状态。</para>
-    /// The only textual error identifier the reference downloader recognises in a target log is
+    /// <para>目标报告摘要校验失败；视之为不重置目标就无法恢复的状态。</para>
+    /// The only textual error identifier recognised in a target log is
     /// <c>PACKET_HASH_MISMATCH</c>, whose handling states "There is no recovery from this. You need
-    /// to reset your target" (fh_loader-master/fh_loader/fh_loader.cpp:6468-6491).
-    /// <para>参考下载器在目标日志中唯一识别的文本错误标识是 <c>PACKET_HASH_MISMATCH</c>，其处理逻辑写明
-    /// “There is no recovery from this. You need to reset your target”
-    /// （fh_loader-master/fh_loader/fh_loader.cpp:6468-6491）。</para>
+    /// to reset your target".
+    /// <para>目标日志中唯一识别的文本错误标识是 <c>PACKET_HASH_MISMATCH</c>，其处理逻辑写明
+    /// “There is no recovery from this. You need to reset your target”。</para>
     /// </summary>
     Validation,
 
@@ -87,15 +65,9 @@ public enum FirehoseErrorKind
     /// The response value is neither an acknowledgement nor a NAK, for example a bare number; the
     /// raw text is preserved and no meaning is claimed.
     /// <para>响应取值既不是确认也不是 NAK（例如一个裸数字）；保留原始文本且不宣称任何含义。</para>
-    /// The reference downloader clears its acknowledgement flag for such a value but assigns it no
-    /// code (fh_loader-master/fh_loader/fh_loader.cpp:7197-7206), and the C# reference compares only
-    /// the literal strings <c>ACK</c> and <c>NAK</c>
-    /// (edl-ng-ref/QCEDL.NET/Layers/APSS/Firehose/QualcommFirehoseCommands.cs:40-50), so anything
+    /// The acknowledgement flag is cleared for such a value but no error code is assigned, so anything
     /// else stays unclassified by design.
-    /// <para>参考下载器对该类取值只清除确认标志而不赋予任何错误码
-    /// （fh_loader-master/fh_loader/fh_loader.cpp:7197-7206），C# 参考实现也只比较字面量 <c>ACK</c> 与
-    /// <c>NAK</c>（edl-ng-ref/QCEDL.NET/Layers/APSS/Firehose/QualcommFirehoseCommands.cs:40-50），
-    /// 因此其余取值按设计保持未分类。</para>
+    /// <para>该类取值只清除确认标志而不赋予任何错误码，因此其余取值按设计保持未分类。</para>
     /// </summary>
     Unrecognized
 }
@@ -146,11 +118,8 @@ public sealed class FirehoseResponseError
     /// <c>value</c> and <c>rawmode</c>.
     /// <para>获取被拒绝响应是否除 <c>value</c> 与 <c>rawmode</c> 之外还写入了目标控制的属性。</para>
     /// </summary>
-    /// <value><see langword="true"/> when at least one negotiation attribute is present; the
-    /// reference downloader keys its recovery decision on the same distinction
-    /// (fh_loader-master/fh_loader/fh_loader.cpp:6402-6427).
-    /// <para>至少存在一个协商属性时为 <see langword="true"/>；参考下载器的恢复判断依据同一区分
-    /// （fh_loader-master/fh_loader/fh_loader.cpp:6402-6427）。</para></value>
+    /// <value><see langword="true"/> when at least one negotiation attribute is present.
+    /// <para>至少存在一个协商属性时为 <see langword="true"/>。</para></value>
     public bool AssignsTargetAttributes { get; init; }
 
     /// <summary>
@@ -158,15 +127,12 @@ public sealed class FirehoseResponseError
     /// <para>获取证据是否把该响应标记为必须新建设备会话才能恢复。</para>
     /// </summary>
     /// <value><see langword="true"/> only for <see cref="FirehoseErrorKind.Validation"/>, the one
-    /// shape the reference downloader declares as having "no recovery"
-    /// (fh_loader-master/fh_loader/fh_loader.cpp:6479-6491). Every other kind keeps the existing
-    /// session behaviour, because no oracle marks a plain NAK as fatal; fh_loader even continues
-    /// after a NAK that only renegotiates attributes
-    /// (fh_loader-master/fh_loader/fh_loader.cpp:6418-6427).
+    /// shape declared as having "no recovery". Every other kind keeps the existing
+    /// session behaviour, because no oracle marks a plain NAK as fatal; a session even continues
+    /// after a NAK that only renegotiates attributes.
     /// <para>仅当种类为 <see cref="FirehoseErrorKind.Validation"/> 时为 <see langword="true"/>，这是
-    /// 参考下载器唯一写明“无法恢复”的形态（fh_loader-master/fh_loader/fh_loader.cpp:6479-6491）。
-    /// 其他种类均保持既有会话行为：没有任何权威实现把普通 NAK 定为致命，fh_loader 在仅重新协商属性的
-    /// NAK 之后甚至直接继续运行（fh_loader-master/fh_loader/fh_loader.cpp:6418-6427）。</para></value>
+    /// 唯一写明“无法恢复”的形态。其他种类均保持既有会话行为：没有任何权威把普通 NAK 定为致命，
+    /// 仅重新协商属性的 NAK 之后会话甚至直接继续运行。</para></value>
     public bool IsFatal { get; init; }
 
     /// <summary>
@@ -178,7 +144,10 @@ public sealed class FirehoseResponseError
     /// <see cref="Kind"/>。</para></value>
     public required string Description { get; init; }
 
-    /// <summary>Returns the kind with the preserved raw evidence. 返回分类种类与保留的原始证据。</summary>
+    /// <summary>
+    /// Returns the kind with the preserved raw evidence.
+    /// <para>返回分类种类与保留的原始证据。</para>
+    /// </summary>
     /// <returns>A single-line diagnostic string. <para>单行诊断字符串。</para></returns>
     public override string ToString()
     {
@@ -205,12 +174,9 @@ public static class FirehoseErrorClassifier
     /// </summary>
     /// <param name="response">The parsed response. <para>已解析的响应。</para></param>
     /// <param name="lastLogValue">The <c>value</c> text of the last target log observed before this
-    /// response within the same document, or <see langword="null"/> when none is available; the
-    /// reference downloader makes the same distinction using its last log value
-    /// (fh_loader-master/fh_loader/fh_loader.cpp:6410-6417).
+    /// response within the same document, or <see langword="null"/> when none is available.
     /// <para>同一文档内该响应之前最后一条目标日志的 <c>value</c> 文本；无可用日志时为
-    /// <see langword="null"/>。参考下载器使用同样的“最后一条日志”判据
-    /// （fh_loader-master/fh_loader/fh_loader.cpp:6410-6417）。</para></param>
+    /// <see langword="null"/>。</para></param>
     /// <returns>The classification, or <see langword="null"/> when the response carries no rejection
     /// to classify (an acknowledgement, a raw-mode indication, or a log-only block).
     /// <para>分类结果；响应不含需要分类的拒绝（确认应答、原始模式指示或仅含日志的块）时为
@@ -339,9 +305,8 @@ public static class FirehoseErrorClassifier
     }
 
     /// <summary>
-    /// Matches a literal token the way the reference downloader does, with a case-sensitive substring
-    /// search.
-    /// <para>按参考下载器的方式匹配字面记号，即区分大小写的子串查找。</para>
+    /// Matches a literal token with a case-sensitive substring search.
+    /// <para>以区分大小写的子串查找匹配字面记号。</para>
     /// </summary>
     /// <param name="logValue">The log text, possibly <see langword="null"/>. <para>日志文本，可为 <see langword="null"/>。</para></param>
     /// <param name="token">The token to look for. <para>要查找的记号。</para></param>

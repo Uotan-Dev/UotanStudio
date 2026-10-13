@@ -1,12 +1,12 @@
 namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 
 /// <summary>
-/// <para>把后端返回的扁平节点统一成树。所有平台共用这一份实现，因此排序、孤儿提升与父子环处理
-/// 只有一处定义；父标识缺失、自引用或成环的节点一律提升为根，绝不静默丢弃任何节点。</para>
 /// Unifies the flat nodes returned by any backend into a tree. Every platform shares this one
 /// implementation, so ordering, orphan hoisting and parent-cycle handling are defined exactly once:
 /// nodes with a missing, self-referencing or cyclic parent are promoted to roots, and no node is ever
 /// silently dropped.
+/// <para>把后端返回的扁平节点统一成树。所有平台共用这一份实现，因此排序、孤儿提升与父子环处理
+/// 只有一处定义；父标识缺失、自引用或成环的节点一律提升为根，绝不静默丢弃任何节点。</para>
 /// </summary>
 public static class UsbTopologyTree
 {

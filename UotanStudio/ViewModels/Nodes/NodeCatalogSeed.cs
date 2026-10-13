@@ -3,10 +3,11 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.ViewModels.Nodes;
 
-/// <summary>Host-owned seed catalog of built-in workflow nodes and the composite-plugin descriptor factory.</summary>
+/// <summary>Seed catalog of built-in workflow nodes and the composite-plugin descriptor factory.<para>内置工作流节点与组合插件描述符工厂的种子目录。</para></summary>
 internal static class NodeCatalogSeed
 {
-    /// <summary>Creates the ordered built-in node descriptors consumed by the plugin registry.</summary>
+    /// <summary>Creates the built-in node descriptors in registration order.<para>按注册顺序创建内置节点描述符。</para></summary>
+    /// <returns>The ordered list of built-in workflow node descriptors.<para>按顺序排列的内置工作流节点描述符列表。</para></returns>
     internal static IReadOnlyList<NodeDescriptor> CreateDescriptors() =>
     [
         D("Workspace.Document.Resolve", "Node_Workspace_Document_Resolve", "Workspace", () => WorkspaceDocumentNodeViewModel.Create("Workspace.Document.Resolve")),
@@ -120,7 +121,10 @@ internal static class NodeCatalogSeed
             () => InteractionNodeViewModel.Create(typeKey)))
     ];
 
-    /// <summary>Builds the toolbox descriptor for one composite-node package.</summary>
+    /// <summary>Builds the toolbox descriptor for one composite-node package.<para>为单个组合节点软件包构建工具箱描述符。</para></summary>
+    /// <param name="package">Composite package supplying the graph and manifest.<para>提供图与清单的组合软件包。</para></param>
+    /// <param name="validateExecution">Hook that returns validation errors before execution.<para>在执行前返回校验错误的回调。</para></param>
+    /// <returns>The descriptor naming the node type and its factory.<para>指明节点类型与其工厂的描述符。</para></returns>
     internal static NodeDescriptor CreateCompositePluginDescriptor(VisualPluginPackage package,
         Func<IReadOnlyList<string>>? validateExecution) =>
         new(package.NodeTypeKey,
@@ -130,7 +134,10 @@ internal static class NodeCatalogSeed
             DisplayName: package.Manifest.Name)
         { CategoryPath = "Composite" };
 
-    /// <summary>Builds the toolbox descriptor for one script-node package.</summary>
+    /// <summary>Builds the toolbox descriptor for one script-node package.<para>为单个脚本节点软件包构建工具箱描述符。</para></summary>
+    /// <param name="package">Script package supplying the Lua source and manifest.<para>提供 Lua 源码与清单的脚本软件包。</para></param>
+    /// <param name="validateExecution">Hook that returns validation errors before execution.<para>在执行前返回校验错误的回调。</para></param>
+    /// <returns>The descriptor naming the node type and its factory.<para>指明节点类型与其工厂的描述符。</para></returns>
     internal static NodeDescriptor CreateScriptPluginDescriptor(VisualPluginPackage package,
         Func<IReadOnlyList<string>>? validateExecution) =>
         new(package.NodeTypeKey,

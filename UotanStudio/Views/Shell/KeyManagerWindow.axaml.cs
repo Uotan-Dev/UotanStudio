@@ -10,7 +10,10 @@ using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Views.Shell;
 
-/// <summary>Independent key manager window; native pickers stay owned by this window.</summary>
+/// <summary>
+/// Independent key manager window; native pickers stay owned by this window.
+/// <para>独立的密钥管理窗口；原生选择器由该窗口持有。</para>
+/// </summary>
 public partial class KeyManagerWindow : Window
 {
     private KeyManagerViewModel Model => (KeyManagerViewModel)DataContext!;
@@ -136,8 +139,11 @@ public partial class KeyManagerWindow : Window
     }
 }
 
-/// <summary>Shows the "in use" badge when the entry matches the current default signature list. A "Adb"/"Hdc" parameter additionally requires the kind to match, so each purpose shows its own badge.</summary>
-/// <summary>当条目命中当前默认签名列表时显示“当前使用”徽标；参数为 "Adb"/"Hdc" 时额外要求用途匹配，使每种用途显示各自徽标。</summary>
+/// <summary>
+/// Shows the "in use" badge when the entry matches the current default signature list. A "Adb"/"Hdc"
+/// parameter additionally requires the kind to match, so each purpose shows its own badge.
+/// <para>当条目命中当前默认签名列表时显示“当前使用”徽标；参数为 "Adb"/"Hdc" 时额外要求用途匹配，使每种用途显示各自徽标。</para>
+/// </summary>
 internal class DefaultKeyBadgeConverter : IMultiValueConverter
 {
     public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)

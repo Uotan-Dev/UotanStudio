@@ -10,7 +10,15 @@ using UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
 namespace UotanStudio.Comm.Devices.Services;
 
-/// <summary>Opens exactly the discovered USB key or server target; never changes routes.</summary>
+/// <summary>
+/// Opens exactly the discovered USB key or server target; never changes routes.
+/// <para>只打开已发现的 USB 键或 server 目标；绝不改变路由。</para>
+/// </summary>
+/// <param name="kit">The kit used to open USB device sessions by key. <para>用于按键打开 USB 设备会话的套件。</para></param>
+/// <param name="adbHost">Host of the adb server endpoint to match. <para>待匹配的 adb server 端点主机。</para></param>
+/// <param name="adbPort">Port of the adb server endpoint to match. <para>待匹配的 adb server 端点端口。</para></param>
+/// <param name="hdcHost">Host of the HDC server endpoint to match. <para>待匹配的 HDC server 端点主机。</para></param>
+/// <param name="hdcPort">Port of the HDC server endpoint; null uses the default. <para>HDC server 端点端口；null 使用默认端口。</para></param>
 internal sealed class CommDeviceTransportOpener(
     ICommKit kit, string adbHost = "127.0.0.1", int adbPort = 5037,
     string hdcHost = "127.0.0.1", int? hdcPort = null) : IDeviceTransportOpener
@@ -18,20 +26,15 @@ internal sealed class CommDeviceTransportOpener(
     private readonly int _hdcPort = hdcPort ?? HdcServerClient.DefaultServerPort;
 
     /// <summary>
-    /// Opens exactly the endpoint's own transport without changing routes; the adb-server target
-    /// validation ends on completion or promptly on the caller's cancellation. When the exact USB
-    /// endpoint cannot be opened because the Qualcomm QDLoader driver bound it as a COM port, an
-    /// <c>edl</c> endpoint falls back to that serial port; every other protocol keeps the plain
-    /// failure.
-    /// <para>只打开端点自身的传输且不改变路由；adb-server 目标校验要么正常完成，要么被调用方取消即时终止。
-    /// 当精确 USB 端点因高通 QDLoader 驱动将其绑定为 COM 口而无法打开时，<c>edl</c> 端点回退到该串口；
-    /// 其他协议维持原有失败语义。</para>
+    /// Opens exactly the endpoint's own transport without changing routes; an <c>edl</c> endpoint
+    /// whose device was bound as a COM port falls back to that serial port.
+    /// <para>只打开端点自身的传输且不改变路由；设备已被驱动绑定为 COM 口的 <c>edl</c> 端点回退到该串口。</para>
     /// </summary>
     /// <param name="endpoint">The endpoint produced by discovery; anything unrecognized is rejected.
     /// <para>发现层产出的端点；任何无法识别的输入都会被拒绝。</para></param>
     /// <param name="cancellationToken">Cancels the open; a validation already in flight keeps its own
-    /// bounded socket timeouts and its late failure is observed instead of blocking this call.
-    /// <para>取消打开过程；已在执行的校验保留其自身有界的套接字超时，其迟到失败会被观察而不阻塞本调用。</para></param>
+    /// bounded socket timeouts.
+    /// <para>取消打开过程；已在执行的校验保留其自身有界的套接字超时。</para></param>
     /// <returns>An owned transport bound to the exact endpoint.
     /// <para>绑定到该精确端点的受管传输。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="endpoint"/> is <see langword="null"/>.

@@ -16,10 +16,9 @@ public sealed record DeviceCommunicationConfiguration
     /// <para>进程级配置，须在设备发现启动前应用。</para>
     /// </summary>
     /// <value>
-    /// The instance read with volatile semantics by every discovery and transport opener; assigning
-    /// <see langword="null"/> throws and a new instance does not rewrite already captured snapshots.
-    /// <para>由各发现与传输开启器以 volatile 语义读取的实例；赋值为 <see langword="null"/> 会抛出异常，
-    /// 且替换新实例不会重写已经捕获的快照。</para>
+    /// Each discovery and transport opener reads this instance with volatile semantics; replacing
+    /// it keeps captured snapshots.
+    /// <para>由各发现与传输开启器以 volatile 语义读取的实例；替换实例不会重写已捕获的快照。</para>
     /// </value>
     /// <exception cref="ArgumentNullException">The assigned value is <see langword="null"/>.
     /// <para>所赋的值为 <see langword="null"/>。</para></exception>

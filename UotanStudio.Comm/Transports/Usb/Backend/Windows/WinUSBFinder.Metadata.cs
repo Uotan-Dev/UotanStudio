@@ -435,12 +435,6 @@ internal static partial class WinUSBFinder
     }
 
     /// <summary>
-    /// <para>为仅元数据的枚举结果填充序列号，语义对齐 Google adb 的 Windows 实现
-    /// （AdbWinApi 的 <c>GetSerialNumber</c> 取设备实例 ID 最后一段）：实例 ID 后缀是第一
-    /// 证据——Windows 在首次插入读到 iSerial 时会把它编入实例路径；当后缀是位置式字符串
-    /// （Windows 未能缓存序列号）时，对厂商自定义（0xFF）调试接口做一次有界、不认领接口的
-    /// 描述符窥视，从 USB 字符串描述符读取真实 iSerial。窥视不打开管道、不认领接口，
-    /// server 或其他进程占用接口时同样安全。</para>
     /// Fills the enumerated serial for a metadata-only device, aligned with Google adb's Windows
     /// implementation (AdbWinApi's <c>GetSerialNumber</c> takes the last segment of the device
     /// instance ID): the instance-ID suffix is the first evidence — Windows embeds the iSerial
@@ -449,6 +443,12 @@ internal static partial class WinUSBFinder
     /// real iSerial from the USB string descriptor for vendor-specific (0xFF) debug interfaces.
     /// The peek opens no pipes and never claims the interface, so it stays safe while a server
     /// or another process owns the interface.
+    /// <para>为仅元数据的枚举结果填充序列号，语义对齐 Google adb 的 Windows 实现
+    /// （AdbWinApi 的 <c>GetSerialNumber</c> 取设备实例 ID 最后一段）：实例 ID 后缀是第一
+    /// 证据——Windows 在首次插入读到 iSerial 时会把它编入实例路径；当后缀是位置式字符串
+    /// （Windows 未能缓存序列号）时，对厂商自定义（0xFF）调试接口做一次有界、不认领接口的
+    /// 描述符窥视，从 USB 字符串描述符读取真实 iSerial。窥视不打开管道、不认领接口，
+    /// server 或其他进程占用接口时同样安全。</para>
     /// </summary>
     internal static WinUSBDevice AttachEnumeratedSerial(WinUSBDevice device, string? instanceSerial)
     {
@@ -468,11 +468,11 @@ internal static partial class WinUSBFinder
     }
 
     /// <summary>
-    /// <para>短暂打开 WinUSB 句柄读取设备描述符与 iSerial 字符串描述符；不查询管道、
-    /// 不设置策略、不认领接口，句柄随即关闭。读取失败一律返回 <c>null</c>。</para>
     /// Briefly opens a WinUSB handle to read the device descriptor and the iSerial string
     /// descriptor; no pipe queries, no policies, no interface claim, and the handle is closed
     /// immediately. Every read failure yields <c>null</c>.
+    /// <para>短暂打开 WinUSB 句柄读取设备描述符与 iSerial 字符串描述符；不查询管道、
+    /// 不设置策略、不认领接口，句柄随即关闭。读取失败一律返回 <c>null</c>。</para>
     /// </summary>
     private static string? PeekSerialNumber(string path)
     {

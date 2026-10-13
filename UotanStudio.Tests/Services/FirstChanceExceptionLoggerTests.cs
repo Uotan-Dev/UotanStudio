@@ -6,11 +6,11 @@ using Xunit;
 namespace UotanStudio.Tests.Services;
 
 /// <summary>
-/// <para><see cref="FirstChanceExceptionLogger"/> 回归测试：捕获三类被正常捕获的异常为
-/// Debug 级别日志条目，包含调用路径文本；同键短时间重复被节流。</para>
 /// Regression tests for <see cref="FirstChanceExceptionLogger"/>: the three normally-caught
 /// exception types are captured as Debug-level log entries containing the call-path text;
 /// short-window duplicates of the same key are throttled.
+/// <para><see cref="FirstChanceExceptionLogger"/> 回归测试：捕获三类被正常捕获的异常为
+/// Debug 级别日志条目，包含调用路径文本；同键短时间重复被节流。</para>
 /// </summary>
 [Collection("Log pipeline")]
 public sealed class FirstChanceExceptionLoggerTests : IDisposable

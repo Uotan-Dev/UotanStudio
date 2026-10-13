@@ -17,14 +17,14 @@ internal static partial class DeliveryScriptGenerator
         $"    [ -n \"$declared\" ] || printf '%s\\n' {Sh(T(localize, "SuperSizeUnknown", "Device does not report super-partition-size; the Super size was not verified."))} >&2\n");
 
     /// <summary>
-    /// <para>双引号化一段 shell 文案，并只把 <c>@@DECLARED@@</c> 还原成设备读数的变量展开；其余 <c>$</c>、反引号、
-    /// 反斜杠与双引号全部转义，因此本地化文案里的字面量不会被 shell 二次解释。</para>
     /// Double-quotes a shell message and restores only <c>@@DECLARED@@</c> as the expansion of the device reading; every
     /// other <c>$</c>, backtick, backslash and double quote stays escaped, so literal characters in localized text are
     /// never reinterpreted by the shell.
+    /// <para>双引号化一段 shell 文案，并只把 <c>@@DECLARED@@</c> 还原成设备读数的变量展开；其余 <c>$</c>、反引号、
+    /// 反斜杠与双引号全部转义，因此本地化文案里的字面量不会被 shell 二次解释。</para>
     /// </summary>
-    /// <param name="value"><para>要输出的原始文案。</para>The raw message text.</param>
-    /// <returns><para>可展开设备读数的双引号文本。</para>The double-quoted text that expands the reading.</returns>
+    /// <param name="value">The raw message text. <para>要输出的原始文案。</para></param>
+    /// <returns>The double-quoted text that expands the reading. <para>可展开设备读数的双引号文本。</para></returns>
     private static string QuoteShellVariable(string value) => "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"")
         .Replace("`", "\\`").Replace("$", "\\$").Replace("@@DECLARED@@", "$declared") + "\"";
 

@@ -2,8 +2,8 @@ namespace UotanStudio.Firmware.BootSecurity.Avb;
 
 /// <summary>
 /// Typed form of an AVB hash descriptor (tag 2): binds one partition name to the digest of its
-/// image content, serialized in the upstream libavb big-endian layout.
-/// <para>AVB 哈希描述符（标签 2）的类型化表示：将单个分区名与其镜像内容的摘要绑定，按上游 libavb 大端布局序列化。</para>
+/// image content in the big-endian wire layout.
+/// <para>AVB 哈希描述符（标签 2）的类型化表示：将单个分区名与其镜像内容的摘要按大端线格式绑定。</para>
 /// </summary>
 public sealed class AvbHashDescriptor
 {

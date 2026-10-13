@@ -9,14 +9,8 @@ namespace UotanStudio.Firmware.FileSystem.F2fs;
 internal static class AndroidF2fsImageBuilder
 {
     /// <summary>
-    /// Builds a fixed-capacity Android-profile F2FS image by running <c>mkfs.f2fs</c>, <c>sload.f2fs</c> and
-    /// a dry-run <c>fsck.f2fs</c> through <paramref name="tools"/>, then verifies the superblock feature bits
-    /// (extra_attr, project_quota, readonly, plus compression when enabled) before atomically moving the
-    /// validated temporary file onto <paramref name="outputPath"/>.
-    /// <para>通过 <paramref name="tools"/> 依次运行 <c>mkfs.f2fs</c>、<c>sload.f2fs</c> 与演练模式的
-    /// <c>fsck.f2fs</c> 构建固定容量的 Android 配置 F2FS 镜像，随后校验超级块特性位（extra_attr、
-    /// project_quota、只读，以及启用压缩时的 compression），最后把通过校验的临时文件原子移动到
-    /// <paramref name="outputPath"/>。</para>
+    /// Builds a fixed-capacity Android-profile F2FS image and verifies its superblock feature bits.
+    /// <para>构建固定容量的 Android 配置 F2FS 镜像并校验其超级块特性位。</para>
     /// </summary>
     /// <param name="sourceDirectory">Directory tree loaded into the image. <para>要装入镜像的目录树。</para></param>
     /// <param name="outputPath">Destination image path; an existing file is replaced only after all checks pass.
@@ -25,9 +19,9 @@ internal static class AndroidF2fsImageBuilder
     /// <para>固定镜像容量；至少 64 MiB 且须为 2 MiB 的整数倍。</para></param>
     /// <param name="tools">Native tool runner that also maps host paths to tool-visible paths.
     /// <para>原生工具运行器，同时负责把宿主路径映射为工具可见路径。</para></param>
-    /// <param name="mountPoint">Absolute Android mount point recorded by <c>sload.f2fs</c>; must start with
+    /// <param name="mountPoint">Absolute Android mount point recorded into the image; must start with
     /// <c>/</c> and contain no <c>..</c> segment. Defaults to <c>/system</c>.
-    /// <para><c>sload.f2fs</c> 记录的绝对 Android 挂载点；须以 <c>/</c> 开头且不含 <c>..</c> 段，
+    /// <para>写入镜像的绝对 Android 挂载点；须以 <c>/</c> 开头且不含 <c>..</c> 段，
     /// 默认 <c>/system</c>。</para></param>
     /// <param name="fsConfigPath">Optional Android-style <c>fs_config</c> file passed via <c>-C</c>; the file must
     /// exist. For a preserved extraction directory the payload in <c>metadata.json</c> is materialised into a

@@ -92,15 +92,15 @@ public partial class DeviceView : UserControl
         return device;
     }
 
-    /// <summary><para>连接右键菜单设备。</para>Connect the device from the context menu.</summary>
+    /// <summary>Connect the device from the context menu. <para>连接右键菜单设备。</para></summary>
     private void OnConnectMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuDevice(sender, static vm => vm.ConnectCommand, null);
 
-    /// <summary><para>断开右键菜单设备。</para>Disconnect the device from the context menu.</summary>
+    /// <summary>Disconnect the device from the context menu. <para>断开右键菜单设备。</para></summary>
     private void OnDisconnectMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuDevice(sender, static vm => vm.DisconnectCommand, null);
 
-    /// <summary><para>将右键菜单设备重启到指定模式。</para>Reboot the context-menu device to the given mode.</summary>
+    /// <summary>Reboot the context-menu device to the given mode. <para>将右键菜单设备重启到指定模式。</para></summary>
     private void OnRebootMenuClick(object? sender, RoutedEventArgs e)
     {
         if (SelectMenuDevice(sender) is not null && DataContext is DeviceViewModel vm
@@ -110,23 +110,23 @@ public partial class DeviceView : UserControl
         }
     }
 
-    /// <summary><para>为右键菜单设备打开 ADB Shell。</para>Open an ADB shell for the context-menu device.</summary>
+    /// <summary>Open an ADB shell for the context-menu device. <para>为右键菜单设备打开 ADB Shell。</para></summary>
     private void OnOpenAdbShellMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuDevice(sender, static vm => vm.OpenAdbShellCommand, null);
 
-    /// <summary><para>读取右键菜单 Fastboot 设备信息。</para>Read Fastboot info for the context-menu device.</summary>
+    /// <summary>Read Fastboot info for the context-menu device. <para>读取右键菜单 Fastboot 设备信息。</para></summary>
     private void OnFastbootReadInfoMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuDevice(sender, static vm => vm.FastbootReadInfoCommand, null);
 
-    /// <summary><para>对右键菜单设备执行快速刷写（boot 分区）。</para>Quick-flash the context-menu device (boot partition).</summary>
+    /// <summary>Quick-flash the context-menu device (boot partition). <para>对右键菜单设备执行快速刷写（boot 分区）。</para></summary>
     private void OnQuickFlashMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuDevice(sender, static vm => vm.QuickFlashCommand, "boot");
 
-    /// <summary><para>备份右键菜单 Fastboot 设备的 boot 分区。</para>Back up the context-menu Fastboot device's boot partition.</summary>
+    /// <summary>Back up the context-menu Fastboot device's boot partition. <para>备份右键菜单 Fastboot 设备的 boot 分区。</para></summary>
     private void OnBackupMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuDevice(sender, static vm => vm.BackupPartitionCommand, "boot");
 
-    /// <summary><para>还原右键菜单 Fastboot 设备的 boot 分区。</para>Restore the context-menu Fastboot device's boot partition.</summary>
+    /// <summary>Restore the context-menu Fastboot device's boot partition. <para>还原右键菜单 Fastboot 设备的 boot 分区。</para></summary>
     private void OnRestoreMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuDevice(sender, static vm => vm.RestorePartitionCommand, "boot");
 

@@ -7,65 +7,72 @@ using UotanStudio.Firmware.VendorFirmware.MediaTek;
 namespace UotanStudio.Services.Flash;
 
 /// <summary>Resolved one-storage scatter package: the selected layout, its display label and the rows
-/// whose declared images exist inside the scatter directory and satisfy the host scatter policy.</summary>
-/// <param name="Storage">The selected storage layout, ready for <c>MtkFlashService.PrepareScatterAsync</c>.</param>
-/// <param name="StorageLabel">The layout name shown to the user (for example <c>EMMC</c> or <c>UFS</c>)
-/// so a multi-storage scatter makes the automatic choice visible instead of implicit.</param>
-/// <param name="Rows">Resolvable downloadable rows in scatter order, at most the host plan-step limit.</param>
+/// whose declared images exist inside the scatter directory and satisfy the scatter policy.
+/// <para>已解析的单存储 scatter 包：所选布局、其显示标签，以及声明镜像存在于 scatter 目录内且满足 scatter 策略的条目。</para></summary>
+/// <param name="Storage">The selected storage layout.<para>所选的存储布局。</para></param>
+/// <param name="StorageLabel">The layout name, for example <c>EMMC</c> or <c>UFS</c>.
+/// <para>布局名称，例如 <c>EMMC</c> 或 <c>UFS</c>。</para></param>
+/// <param name="Rows">Resolvable downloadable rows in scatter order, bounded by the plan-step limit.
+/// <para>按 scatter 顺序的可解析下载条目，受计划步数上限约束。</para></param>
 public sealed record MtkScatterPackageResolution(MtkScatterStorage Storage, string StorageLabel,
     IReadOnlyList<MtkScatterPackageRow> Rows);
 
-/// <summary>A scatter partition whose declared image was found on disk inside the scatter directory.</summary>
-/// <param name="Partition">The manifest entry; its <c>Index</c> is the exact scatter SYS token.</param>
-/// <param name="ImagePath">Normalized absolute path of the existing image file.</param>
-/// <param name="Length">On-disk byte length at resolution time; sparse semantics are applied per step.</param>
+/// <summary>A scatter partition whose declared image was found on disk inside the scatter directory.
+/// <para>位于 scatter 目录内且声明镜像已在磁盘找到的 scatter 分区。</para></summary>
+/// <param name="Partition">The manifest entry; its <c>Index</c> is the exact scatter SYS token.
+/// <para>清单条目；其 <c>Index</c> 是精确的 scatter SYS 标记。</para></param>
+/// <param name="ImagePath">Normalized absolute path of the existing image file.
+/// <para>已存在镜像文件的规范化绝对路径。</para></param>
+/// <param name="Length">On-disk byte length at resolution time.
+/// <para>解析时的磁盘字节长度。</para></param>
 public sealed record MtkScatterPackageRow(MtkScatterPartition Partition, string ImagePath, long Length);
 
-/// <summary>A DA directory entry with a complete bounded stage-one/stage-two region pair, ready for
-/// explicit index selection in the UI. MtkLoaderProfile deliberately carries no entry names, so the
-/// hardware identity fields are the stable display key.</summary>
-/// <param name="Index">Zero-based directory index to submit as the explicit entry selection.</param>
-/// <param name="HardwareCode">Target hardware code; zero means the entry lacks identity.</param>
-/// <param name="HardwareSubCode">Hardware subcode.</param>
-/// <param name="HardwareVersion">Declared hardware revision.</param>
-/// <param name="SoftwareVersion">Declared software revision, or <see langword="null"/> in legacy layouts.</param>
-/// <param name="StageOneRegion">Region index that passed DA1 geometry validation.</param>
-/// <param name="StageTwoRegion">Region index that passed DA2 geometry validation.</param>
+/// <summary>A DA directory entry with a complete bounded stage-one/stage-two region pair, keyed for
+/// explicit index selection by its hardware identity fields.
+/// <para>带有完整有界 stage-one/stage-two 区域对的 DA 目录条目，以硬件身份字段作为显式索引选择的键。</para></summary>
+/// <param name="Index">Zero-based directory index to submit as the explicit entry selection.
+/// <para>作为显式条目选择提交的从零开始目录索引。</para></param>
+/// <param name="HardwareCode">Target hardware code; zero means the entry lacks identity.
+/// <para>目标硬件码；为零表示该条目缺少身份信息。</para></param>
+/// <param name="HardwareSubCode">Hardware subcode.<para>硬件子码。</para></param>
+/// <param name="HardwareVersion">Declared hardware revision.<para>声明的硬件修订版本。</para></param>
+/// <param name="SoftwareVersion">Declared software revision, or <see langword="null"/> in legacy layouts.
+/// <para>声明的软件修订版本，在 Legacy 布局中为 <see langword="null"/>。</para></param>
+/// <param name="StageOneRegion">Region index that passed DA1 geometry validation.
+/// <para>通过 DA1 几何校验的区域索引。</para></param>
+/// <param name="StageTwoRegion">Region index that passed DA2 geometry validation.
+/// <para>通过 DA2 几何校验的区域索引。</para></param>
 public sealed record MtkLoaderEntryInfo(int Index, ushort HardwareCode, ushort HardwareSubCode,
     ushort HardwareVersion, ushort? SoftwareVersion, int StageOneRegion, int StageTwoRegion);
 
-/// <summary>Host-side reader and resolver for MediaTek scatter packages: it opens bounded scatter text,
-/// lists the downloadable rows that are actually present on disk, and builds explicit scatter flash
-/// steps without contacting a device.</summary>
-/// <remarks>
-/// Scatter files, their names and their addresses are untrusted input. Every quantity is gated before
-/// it is used, declared file names are never globbed, and a resolved image path must stay inside the
-/// scatter directory. Row eligibility mirrors <c>MtkFlashPlan.ValidateScatterPolicy</c> entry-for-entry
-/// (download enabled, not reserved, boundary check set, <c>UPDATE</c> operation, an accepted image
-/// type, and only policy fields the plan understands), so the UI never offers a row that the plan
-/// would reject for policy. Resolution performs no device I/O and authorizes nothing; it only reports
-/// what the package and manifest agree on.
-/// </remarks>
+/// <summary>Reader and resolver for MediaTek scatter packages: it opens bounded scatter text, lists
+/// downloadable rows present on disk, and builds scatter flash steps without contacting a device.
+/// <para>读取并解析 MediaTek scatter 包：打开有界 scatter 文本，列出磁盘上存在的可下载条目，并在不接触设备的情况下构造 scatter 刷写步骤。</para></summary>
 public static class MtkScatterPackage
 {
-    /// <summary>Hard ceiling on the scatter text file size in bytes. The Firmware reader re-bounds the
-    /// decoded character count, but this gate rejects oversized files before any bytes are opened.</summary>
+    /// <summary>Hard ceiling on the scatter text file size in bytes.
+    /// <para>scatter 文本文件大小的字节数硬上限。</para></summary>
     public const long MaxScatterBytes = 8 * 1024 * 1024;
 
-    /// <summary>Maximum resolvable rows, matching the plan-step limit enforced by
-    /// <c>MtkFlashPlan.Prepare</c> and <c>MtkFlashService.PrepareScatterAsync</c>.</summary>
+    /// <summary>Maximum resolvable rows, matching the plan-step limit enforced during preparation.
+    /// <para>可解析条目数的最大值，与准备阶段强制的计划步数上限一致。</para></summary>
     public const int MaxPlanSteps = 256;
 
     private const int MaxLayoutPartitions = 4096;
     private const int MaxStorages = 8;
 
-    /// <summary>Reads a scatter file from disk after a bounded size check.</summary>
-    /// <param name="scatterPath">Explicit path to the scatter YAML file.</param>
-    /// <returns>The parsed document with all storage layouts in source order.</returns>
-    /// <exception cref="ArgumentException"><paramref name="scatterPath"/> is empty or whitespace.</exception>
-    /// <exception cref="FileNotFoundException">No file exists at <paramref name="scatterPath"/>.</exception>
-    /// <exception cref="InvalidDataException">The file exceeds <see cref="MaxScatterBytes"/> or the
-    /// bounded reader rejects the scatter structure.</exception>
+    /// <summary>Reads a scatter file from disk after a bounded size check.
+    /// <para>在大小上限检查后从磁盘读取 scatter 文件。</para></summary>
+    /// <param name="scatterPath">Explicit path to the scatter YAML file.
+    /// <para>scatter YAML 文件的显式路径。</para></param>
+    /// <returns>The parsed document with all storage layouts in source order.
+    /// <para>按源顺序包含全部存储布局的已解析文档。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="scatterPath"/> is empty or whitespace.
+    /// <para><paramref name="scatterPath"/> 为空或仅空白。</para></exception>
+    /// <exception cref="FileNotFoundException">No file exists at <paramref name="scatterPath"/>.
+    /// <para><paramref name="scatterPath"/> 处不存在文件。</para></exception>
+    /// <exception cref="InvalidDataException">The file exceeds <see cref="MaxScatterBytes"/> or the bounded
+    /// reader rejects the scatter structure. <para>文件超过 <see cref="MaxScatterBytes"/>，或有界读取器拒绝 scatter 结构。</para></exception>
     public static MtkScatterDocument Read(string scatterPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scatterPath);
@@ -78,24 +85,20 @@ public static class MtkScatterPackage
         return MtkScatterReader.Read(stream);
     }
 
-    /// <summary>Resolves which images of a parsed scatter document are present next to the scatter file.</summary>
-    /// <remarks>
-    /// With a single storage layout that one is used. With several layouts, the first one that yields at
-    /// least one policy-eligible row with an existing image is selected and its name is returned as
-    /// <see cref="MtkScatterPackageResolution.StorageLabel"/> for visible display; nothing is guessed
-    /// beyond that deterministic order, and a caller that knows the device storage family can bypass
-    /// the choice by passing the desired <see cref="MtkScatterStorage"/> to the plan directly.
-    /// A declared file name is accepted only when its normalized path stays inside the scatter
-    /// directory and the file exists exactly; escape attempts and missing files drop the row silently
-    /// because the manifest, not the disk, remains the authority on what the package contains.
-    /// </remarks>
-    /// <param name="scatterPath">The path the document was read from; its directory anchors file names.</param>
-    /// <param name="document">A previously parsed scatter document.</param>
-    /// <returns>The selected layout with its resolvable rows in manifest order.</returns>
-    /// <exception cref="ArgumentException"><paramref name="scatterPath"/> is empty or whitespace.</exception>
-    /// <exception cref="ArgumentNullException"><paramref name="document"/> is <see langword="null"/>.</exception>
-    /// <exception cref="InvalidDataException">The document or a layout exceeds the host count limits,
-    /// contains null entries, or the selected layout resolves to more than <see cref="MaxPlanSteps"/> rows.</exception>
+    /// <summary>Resolves which images of a parsed scatter document are present next to the scatter file.
+    /// <para>解析已读入的 scatter 文档中，哪些镜像存在于 scatter 文件旁。</para></summary>
+    /// <param name="scatterPath">The path the document was read from; its directory anchors file names.
+    /// <para>文档的读取路径；其目录用于锚定文件名。</para></param>
+    /// <param name="document">A previously parsed scatter document.
+    /// <para>此前已解析的 scatter 文档。</para></param>
+    /// <returns>The selected layout with its resolvable rows in manifest order.
+    /// <para>按清单顺序连同可解析条目的所选布局。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="scatterPath"/> is empty or whitespace.
+    /// <para><paramref name="scatterPath"/> 为空或仅空白。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="document"/> is <see langword="null"/>.
+    /// <para><paramref name="document"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidDataException">The document exceeds count limits, holds null entries, or
+    /// resolves past <see cref="MaxPlanSteps"/> rows. <para>文档超出数量上限、含空条目或解析出超过 <see cref="MaxPlanSteps"/> 条。</para></exception>
     public static MtkScatterPackageResolution Resolve(string scatterPath, MtkScatterDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -144,28 +147,23 @@ public static class MtkScatterPackage
         return new MtkScatterPackageResolution(selected!, selected!.Name, selectedRows);
     }
 
-    /// <summary>Builds the explicit scatter flash step for one resolved row.</summary>
-    /// <remarks>
-    /// <c>PartitionIndex</c> carries the exact SYS token from the manifest because the plan looks steps
-    /// up by ordinal string equality against <c>MtkScatterPartition.Index</c>. The operation kind is
-    /// never inferred from the scatter <c>type</c> field; it is decided by inspecting the image itself,
-    /// mirroring the host sparse probe in <c>FlashService.GetImageLogicalSize</c>: a valid sparse header
-    /// selects <see cref="MtkFlashStepKind.Sparse"/> with the expanded target capacity as length (the
-    /// meaning the plan assigns to sparse steps), while an unreadable or non-sparse header stays raw with
-    /// the on-disk length. <see cref="MtkFlashStepKind.Erase"/> is never produced here because the
-    /// scatter policy admits only <c>UPDATE</c> operations and an erase is a caller decision without a
-    /// manifest counterpart. The write starts at offset zero of the GPT partition and the source is read
-    /// from its first byte; both are reconciled against live GPT during preparation.
-    /// </remarks>
-    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.</param>
-    /// <param name="rowIndex">Zero-based index into <see cref="MtkScatterPackageResolution.Rows"/>.</param>
-    /// <param name="verify">Whether written extents require readback; passed through unchanged.</param>
-    /// <returns>The step ready for <c>MtkFlashService.PrepareScatterAsync</c>.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="resolution"/> or its rows are null.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> is outside the rows,
-    /// or the row count is beyond the host plan-step limit.</exception>
+    /// <summary>Builds the explicit scatter flash step for one resolved row.
+    /// <para>为一条已解析条目构造显式 scatter 刷写步骤。</para></summary>
+    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
+    /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
+    /// <param name="rowIndex">Zero-based index into <see cref="MtkScatterPackageResolution.Rows"/>.
+    /// <para>指向 <see cref="MtkScatterPackageResolution.Rows"/> 的从零开始索引。</para></param>
+    /// <param name="verify">Whether written extents require readback; passed through unchanged.
+    /// <para>写入范围是否需要回读；原样透传。</para></param>
+    /// <returns>The scatter flash step for this row.
+    /// <para>该行的 scatter 刷写步骤。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="resolution"/> or its rows are null.
+    /// <para><paramref name="resolution"/> 或其行为 null。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> is outside the rows or
+    /// the row count exceeds the plan-step limit. <para><paramref name="rowIndex"/> 越界，或行数超出计划步数上限。</para></exception>
     /// <exception cref="InvalidDataException">A row or its partition entry is null, or a valid sparse
-    /// header declares a target capacity that overflows or is empty.</exception>
+    /// header declares a target capacity that overflows or is empty.
+    /// <para>某行或其分区条目为 null，或有效稀疏头声明的目标容量溢出或为空。</para></exception>
     public static MtkScatterFlashStep CreateStep(MtkScatterPackageResolution resolution, int rowIndex, bool verify)
     {
         ArgumentNullException.ThrowIfNull(resolution);
@@ -179,15 +177,14 @@ public static class MtkScatterPackage
         return new MtkScatterFlashStep(partition.Index, kind, 0, length, row.ImagePath, 0, verify);
     }
 
-    /// <summary>Maps an observed storage family to the XFlash physical user-region identifier.</summary>
-    /// <remarks>
-    /// The values mirror the plan reconciliation table in <c>MtkFlashPlan.Prepare</c>: GPT observation on
-    /// eMMC targets region 8 (<c>EMMC_USER</c>) and on UFS targets region 3 (<c>UFS_LU2</c>). NOR and NAND
-    /// have no scatter user-region concept and are rejected, matching the plan's supported storage family.
-    /// </remarks>
-    /// <param name="kind">The storage family reported by the device.</param>
-    /// <returns>The physical partition identifier to pass to preparation.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="kind"/> is not eMMC or UFS.</exception>
+    /// <summary>Maps an observed storage family to the XFlash physical user-region identifier.
+    /// <para>把观察到的存储家族映射为 XFlash 物理用户区域标识符。</para></summary>
+    /// <param name="kind">The storage family reported by the device.
+    /// <para>设备上报的存储家族。</para></param>
+    /// <returns>The physical partition identifier to pass to preparation.
+    /// <para>传给准备阶段的物理分区标识符。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="kind"/> is not eMMC or UFS.
+    /// <para><paramref name="kind"/> 不是 eMMC 或 UFS。</para></exception>
     public static uint GetPhysicalPartition(MtkXFlashStorageKind kind) => kind switch
     {
         MtkXFlashStorageKind.Emmc => 8,
@@ -197,21 +194,22 @@ public static class MtkScatterPackage
     };
 
     /// <summary>Lists the DA directory entries of a loader file that carry a complete usable DA1/DA2
-    /// region pair, in original directory-index order.</summary>
-    /// <remarks>
-    /// This is a pure file-side probe: the container is parsed and hashed, no device is contacted and
-    /// nothing is uploaded. Entries without a bounded region pair are omitted because the profile
-    /// treats them as structurally defective; the returned <see cref="MtkLoaderEntryInfo.Index"/> is the
-    /// directory index for an explicit UI selection, and hardware identity is the display key because
-    /// loader entries intentionally have no names.
-    /// </remarks>
-    /// <param name="loaderPath">Explicit path to an all-in-one DA loader container.</param>
-    /// <param name="cancellationToken">Cancellation for hashing and parsing.</param>
-    /// <returns>One row per usable entry; empty when the container offers none.</returns>
-    /// <exception cref="ArgumentException"><paramref name="loaderPath"/> is empty or whitespace.</exception>
-    /// <exception cref="FileNotFoundException">No file exists at <paramref name="loaderPath"/>.</exception>
-    /// <exception cref="InvalidDataException">The container fails structural validation.</exception>
-    /// <exception cref="OperationCanceledException">Cancellation was requested.</exception>
+    /// region pair, in original directory-index order.
+    /// <para>列出加载器文件中带有完整可用 DA1/DA2 区域对的 DA 目录条目，按原目录索引顺序排列。</para></summary>
+    /// <param name="loaderPath">Explicit path to an all-in-one DA loader container.
+    /// <para>一体化 DA 加载器容器的显式路径。</para></param>
+    /// <param name="cancellationToken">Cancellation for hashing and parsing.
+    /// <para>用于哈希与解析的取消令牌。</para></param>
+    /// <returns>One row per usable entry; empty when the container offers none.
+    /// <para>每个可用条目一行；容器无可提供时为空。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="loaderPath"/> is empty or whitespace.
+    /// <para><paramref name="loaderPath"/> 为空或仅空白。</para></exception>
+    /// <exception cref="FileNotFoundException">No file exists at <paramref name="loaderPath"/>.
+    /// <para><paramref name="loaderPath"/> 处不存在文件。</para></exception>
+    /// <exception cref="InvalidDataException">The container fails structural validation.
+    /// <para>容器未通过结构校验。</para></exception>
+    /// <exception cref="OperationCanceledException">Cancellation was requested.
+    /// <para>已请求取消。</para></exception>
     public static async Task<IReadOnlyList<MtkLoaderEntryInfo>> ListUsableLoaderEntriesAsync(string loaderPath,
         CancellationToken cancellationToken = default)
     {
@@ -262,7 +260,11 @@ public static class MtkScatterPackage
     }
 
     /// <summary>Keeps only entries in the user region the plan would reconcile for this layout name;
-    /// other layouts (for example NAND scatters) yield no rows because preparation rejects them.</summary>
+    /// other layouts (for example NAND scatters) yield no rows because preparation rejects them.
+    /// <para>仅保留该布局名在准备阶段会复核的用户区域条目；其他布局（例如 NAND scatter）不产生任何行，因为准备阶段会拒绝它们。</para></summary>
+    /// <param name="storage">The storage layout under evaluation.<para>正在评估的存储布局。</para></param>
+    /// <param name="partition">The partition entry to test.<para>要测试的分区条目。</para></param>
+    /// <returns>Whether the entry lies in the reconcilable user region.<para>该条目是否位于可复核的用户区域。</para></returns>
     private static bool MatchesUserRegion(MtkScatterStorage storage, MtkScatterPartition partition) =>
         storage.Name switch
         {
@@ -271,8 +273,10 @@ public static class MtkScatterPackage
             _ => false
         };
 
-    /// <summary>Mirrors <c>MtkFlashPlan.ValidateScatterPolicy</c> as a filter: an entry stays eligible
-    /// only when the plan would accept it, including the sweep over every literal policy field.</summary>
+    /// <summary>Keeps an entry eligible only when every literal scatter policy field would be accepted.
+    /// <para>仅当每个字面 scatter 策略字段都会被接受时，才让条目保持可选。</para></summary>
+    /// <param name="partition">The partition entry to filter.<para>要过滤的分区条目。</para></param>
+    /// <returns>Whether the entry passes the scatter policy filter.<para>该条目是否通过 scatter 策略过滤。</para></returns>
     private static bool MatchesScatterPolicy(MtkScatterPartition partition)
         => partition.IsDownload && !partition.IsReserved && partition.BoundaryCheck
             && partition.OperationType == "UPDATE"
@@ -280,16 +284,21 @@ public static class MtkScatterPackage
             && !string.Equals(partition.FileName, "NONE", StringComparison.OrdinalIgnoreCase)
             && MatchesPolicyFields(partition);
 
-    /// <summary>Erasing is not a download, so the download-only gates — <c>is_download</c>,
-    /// <c>operation_type</c>, the image <c>type</c> and the declared file name — do not apply while
-    /// the region, reservation, boundary and recognized-policy-field guards stay exactly as strict.</summary>
+    /// <summary>Erasing is not a download, so the download-only gates do not apply while the region,
+    /// reservation, boundary and policy-field guards stay strict.
+    /// <para>擦除不是下载，因此仅适用于下载的门槛不生效，而区域、保留位、边界与策略字段守卫仍保持严格。</para></summary>
+    /// <param name="partition">The partition entry to filter.<para>要过滤的分区条目。</para></param>
+    /// <returns>Whether the entry may be erased.<para>该条目是否可被擦除。</para></returns>
     private static bool MatchesErasePolicy(MtkScatterPartition partition)
         => !partition.IsReserved && partition.BoundaryCheck
             && partition.Size is > 0 and <= long.MaxValue
             && MatchesPolicyFields(partition);
 
     /// <summary>Sweeps every literal policy field so an entry with unknown or contradicting policy is
-    /// rejected instead of silently acted upon.</summary>
+    /// rejected instead of silently acted upon.
+    /// <para>遍历每个字面策略字段，使策略未知或矛盾的条目被拒绝而非被静默处理。</para></summary>
+    /// <param name="partition">The partition entry whose fields are swept.<para>要遍历字段的分区条目。</para></param>
+    /// <returns>Whether every policy field is recognized and consistent.<para>每个策略字段是否都被识别且一致。</para></returns>
     private static bool MatchesPolicyFields(MtkScatterPartition partition)
     {
         if (partition.Fields is null)
@@ -347,21 +356,12 @@ public static class MtkScatterPackage
     /// image exists on disk.
     /// <para>列出一个存储布局中可被擦除的条目，无论其声明的镜像是否存在于磁盘。</para>
     /// </summary>
-    /// <remarks>
-    /// Erasing needs no source file, so an entry whose <c>file_name</c> is <c>NONE</c> or whose image
-    /// is absent stays eligible, while the user-region, reservation, boundary and recognized-policy
-    /// field guards remain identical to the flash filter. Every range is still reconciled against the
-    /// live GPT during preparation, and nothing here contacts a device.
-    /// <para>擦除不需要源文件，因此 <c>file_name</c> 为 <c>NONE</c> 或镜像缺失的条目依然可选；
-    /// 用户区域、保留位、边界检查与已识别策略字段的守卫与刷写过滤完全一致。所有范围仍在准备阶段
-    /// 与实机 GPT 核对，本方法不接触设备。</para>
-    /// </remarks>
-    /// <param name="storage"><para>已解析的存储布局。</para>The parsed storage layout.</param>
-    /// <returns><para>按清单顺序排列的可擦除条目。</para>Erased-eligible entries in manifest order.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="storage"/> 为 null。
-    /// <para><paramref name="storage"/> is null.</para></exception>
-    /// <exception cref="InvalidDataException">布局缺失、条目数量越界或包含空条目。
-    /// <para>The layout is missing, out of bounds, or contains a null entry.</para></exception>
+    /// <param name="storage">The parsed storage layout.<para>已解析的存储布局。</para></param>
+    /// <returns>Erased-eligible entries in manifest order.<para>按清单顺序排列的可擦除条目。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="storage"/> is null.
+    /// <para><paramref name="storage"/> 为 null。</para></exception>
+    /// <exception cref="InvalidDataException">The layout is missing, out of bounds, or contains a null
+    /// entry. <para>布局缺失、条目数量越界或包含空条目。</para></exception>
     public static IReadOnlyList<MtkScatterPartition> ListEraseTargets(MtkScatterStorage storage)
     {
         ArgumentNullException.ThrowIfNull(storage);
@@ -393,14 +393,13 @@ public static class MtkScatterPackage
     /// and the live GPT re-checks it during preparation.
     /// <para>为一个 scatter 条目构造擦除操作；范围取该条目声明的容量，准备阶段由实机 GPT 复核。</para>
     /// </summary>
-    /// <param name="partition"><para>可擦除的 scatter 条目，通常来自 <see cref="ListEraseTargets"/>。</para>
-    /// The erase-eligible scatter entry, usually from <see cref="ListEraseTargets"/>.</param>
-    /// <returns><para>可直接交给 <c>MtkFlashService</c> 的 GPT 命名擦除步骤。</para>
-    /// A GPT-named erase step ready for <c>MtkFlashService</c>.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="partition"/> 为 null。
-    /// <para><paramref name="partition"/> is null.</para></exception>
-    /// <exception cref="InvalidDataException">条目缺少分区名或声明容量不可用。
-    /// <para>The entry has no partition name or declares an unusable capacity.</para></exception>
+    /// <param name="partition">The erase-eligible scatter entry, usually from <see cref="ListEraseTargets"/>.
+    /// <para>可擦除的 scatter 条目，通常来自 <see cref="ListEraseTargets"/>。</para></param>
+    /// <returns>A GPT-named erase step.<para>GPT 命名的擦除步骤。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="partition"/> is null.
+    /// <para><paramref name="partition"/> 为 null。</para></exception>
+    /// <exception cref="InvalidDataException">The entry has no partition name or declares an unusable
+    /// capacity. <para>条目缺少分区名或声明容量不可用。</para></exception>
     public static MtkPartitionFlashStep CreateEraseStep(MtkScatterPartition partition)
     {
         var (name, size) = EraseRange(partition);
@@ -412,25 +411,22 @@ public static class MtkScatterPackage
     /// Legacy download agent.
     /// <para>为一个按 GPT 分区名寻址的已解析条目构造 Legacy 下载代理使用的原始写入操作。</para>
     /// </summary>
-    /// <remarks>
-    /// The Legacy agent has no sparse transport, so a row whose image carries a valid sparse container is
-    /// rejected here instead of being written as raw bytes. The extent starts at offset zero of the named
-    /// partition and covers the image rounded up to the agent's 512-byte block, with the tail explicitly
-    /// zero-filled; that mirrors the reference tools, which round the transfer length up to a whole block.
-    /// The live GPT re-checks the name and the partition bounds during preparation.
-    /// <para>Legacy 代理没有稀疏传输，因此镜像带有有效稀疏容器的条目在此被拒绝，而不是作为原始字节写入。
-    /// 范围从该命名分区的零偏移开始，覆盖向上取整到代理 512 字节块的镜像长度，尾部显式补零；这与参考工具
-    /// “传输长度向上取整到整块”的行为一致。准备阶段由实机 GPT 复核分区名与分区边界。</para>
-    /// </remarks>
-    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.</param>
-    /// <param name="rowIndex">Zero-based index into <see cref="MtkScatterPackageResolution.Rows"/>.</param>
-    /// <param name="verify">Whether written extents require readback; passed through unchanged.</param>
-    /// <returns>The step ready for <c>MtkFlashService.PrepareLegacyAsync</c>.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="resolution"/> or its rows are null.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> is outside the rows.</exception>
+    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
+    /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
+    /// <param name="rowIndex">Zero-based index into <see cref="MtkScatterPackageResolution.Rows"/>.
+    /// <para>指向 <see cref="MtkScatterPackageResolution.Rows"/> 的从零开始索引。</para></param>
+    /// <param name="verify">Whether written extents require readback; passed through unchanged.
+    /// <para>写入范围是否需要回读；原样透传。</para></param>
+    /// <returns>The Legacy raw write step for this row.<para>该行的 Legacy 原始写入步骤。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="resolution"/> or its rows are null.
+    /// <para><paramref name="resolution"/> 或其行为 null。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> is outside the rows.
+    /// <para><paramref name="rowIndex"/> 越界。</para></exception>
     /// <exception cref="InvalidDataException">A row or its partition entry is null, the entry has no
-    /// partition name, or the image is longer than the host range limits.</exception>
-    /// <exception cref="NotSupportedException">The row's image is a sparse container.</exception>
+    /// partition name, or the image exceeds the range limits.
+    /// <para>某行或其分区条目为 null、条目缺少分区名，或镜像超出范围上限。</para></exception>
+    /// <exception cref="NotSupportedException">The row's image is a sparse container.
+    /// <para>该行的镜像是稀疏容器。</para></exception>
     public static MtkLegacyPartitionFlashStep CreateLegacyStep(MtkScatterPackageResolution resolution,
         int rowIndex, bool verify)
     {
@@ -446,29 +442,23 @@ public static class MtkScatterPackage
     /// </summary>
     /// <param name="partition">The erase-eligible scatter entry, usually from <see cref="ListEraseTargets"/>.
     /// <para>可擦除的 scatter 条目，通常来自 <see cref="ListEraseTargets"/>。</para></param>
-    /// <returns><para>可直接交给 <c>MtkFlashService.PrepareLegacyAsync</c> 的 GPT 命名擦除步骤。</para>
-    /// A GPT-named erase step ready for <c>MtkFlashService.PrepareLegacyAsync</c>.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="partition"/> 为 null。
-    /// <para><paramref name="partition"/> is null.</para></exception>
-    /// <exception cref="InvalidDataException">条目缺少分区名或声明容量不可用。
-    /// <para>The entry has no partition name or declares an unusable capacity.</para></exception>
+    /// <returns>A GPT-named erase step.<para>GPT 命名的擦除步骤。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="partition"/> is null.
+    /// <para><paramref name="partition"/> 为 null。</para></exception>
+    /// <exception cref="InvalidDataException">The entry has no partition name or declares an unusable
+    /// capacity. <para>条目缺少分区名或声明容量不可用。</para></exception>
     public static MtkLegacyPartitionFlashStep CreateLegacyEraseStep(MtkScatterPartition partition)
     {
         var (name, size) = EraseRange(partition);
         return new MtkLegacyPartitionFlashStep(name, MtkFlashStepKind.Erase, 0, AlignToBlock(size));
     }
 
-    /// <summary>Maps an observed storage family to the Legacy agent's physical region identifier.</summary>
-    /// <remarks>
-    /// Legacy eMMC exposes the user area as region 8, the same region the XFlash plan reconciles; NOR and
-    /// NAND have no scatter user-region concept and the Legacy flash path rejects them because the plan
-    /// carries eMMC page geometry only.
-    /// <para>Legacy eMMC 把用户区呈现为区域 8，与 XFlash 计划复核的区域相同；NOR 与 NAND 没有 scatter
-    /// 用户区概念，且其清单不携带 eMMC 页几何信息，因此 Legacy 刷写路径拒绝它们。</para>
-    /// </remarks>
-    /// <param name="kind">The storage family reported by the device. <para>设备上报的存储家族。</param>
-    /// <returns>The region identifier to pass to Legacy preparation.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="kind"/> is not eMMC.</exception>
+    /// <summary>Maps an observed storage family to the Legacy agent's physical region identifier.
+    /// <para>把观察到的存储家族映射为 Legacy 代理的物理区域标识符。</para></summary>
+    /// <param name="kind">The storage family reported by the device.<para>设备上报的存储家族。</para></param>
+    /// <returns>The region identifier to pass to Legacy preparation.<para>传给 Legacy 准备阶段的区域标识符。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="kind"/> is not eMMC.
+    /// <para><paramref name="kind"/> 不是 eMMC。</para></exception>
     public static byte GetLegacyPhysicalPartition(MtkXFlashStorageKind kind) => kind switch
     {
         MtkXFlashStorageKind.Emmc => 8,
@@ -493,19 +483,17 @@ public static class MtkScatterPackage
     }
 
     /// <summary>
-    /// Extracts the partition name and declared capacity an erase needs: the Legacy, XML and XFlash erase
-    /// builders differ only in block granularity, so the name and capacity guards have to be identical or
-    /// the same entry would be treated differently per family.
-    /// <para>取出擦除所需的分区名与声明容量：Legacy、XML 与 XFlash 三种擦除步骤只在块粒度上不同，
-    /// 名称与容量的守卫必须逐字一致，否则同一条目会在不同家族下被差别对待。</para>
+    /// Extracts the partition name and declared capacity an erase needs so the name and capacity guards
+    /// stay identical across erase builders.
+    /// <para>取出擦除所需的分区名与声明容量，使名称与容量守卫在各擦除构造器之间保持一致。</para>
     /// </summary>
-    /// <param name="partition"><para>可擦除的 scatter 条目。</para>The erase-eligible scatter entry.</param>
-    /// <returns><para>分区名与按有符号范围校验过的声明容量。</para>The partition name and the capacity
-    /// validated against the signed range.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="partition"/> 为 null。
-    /// <para><paramref name="partition"/> is null.</para></exception>
-    /// <exception cref="InvalidDataException">条目缺少分区名或声明容量不可用。
-    /// <para>The entry has no partition name or declares an unusable capacity.</para></exception>
+    /// <param name="partition">The erase-eligible scatter entry.<para>可擦除的 scatter 条目。</para></param>
+    /// <returns>The partition name and the capacity validated against the signed range.
+    /// <para>分区名与按有符号范围校验过的声明容量。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="partition"/> is null.
+    /// <para><paramref name="partition"/> 为 null。</para></exception>
+    /// <exception cref="InvalidDataException">The entry has no partition name or declares an unusable
+    /// capacity. <para>条目缺少分区名或声明容量不可用。</para></exception>
     private static (string Name, long Size) EraseRange(MtkScatterPartition partition)
     {
         ArgumentNullException.ThrowIfNull(partition);
@@ -522,29 +510,24 @@ public static class MtkScatterPackage
     }
 
     /// <summary>
-    /// <para>取出只支持原始字节的家族（Legacy 与 XML）所需的写入条目：两者都必须有 GPT 分区名，也都必须
-    /// 拒绝稀疏容器，因为把稀疏头当原始字节写入会写坏分区。日志文案里的家族名是唯一的差别。</para>
-    /// Extracts the row a raw-only family (Legacy and XML) may write: both require a GPT partition name and
-    /// both must reject a sparse container, because streaming a sparse header as raw bytes would corrupt the
-    /// partition. The family name inside the messages is the only difference.
-    /// <para>Extracts the row a raw-only family (Legacy and XML) may write: both require a GPT partition
-    /// name and both must reject a sparse container, because streaming a sparse header as raw bytes would
-    /// corrupt the partition. The family name inside the messages is the only difference.</para>
+    /// Extracts the row a raw-only family may write: it requires a GPT partition name and rejects a sparse
+    /// container, because streaming a sparse header as raw bytes would corrupt the partition.
+    /// <para>取出只支持原始字节的家族可写入的条目：它要求 GPT 分区名并拒绝稀疏容器，因为把稀疏头当原始字节写入会损坏分区。</para>
     /// </summary>
-    /// <param name="resolution"><para>此前由 <see cref="Resolve"/> 返回的解析结果。</para>A resolution
-    /// previously returned by <see cref="Resolve"/>.</param>
-    /// <param name="rowIndex"><para>行序号。</para>Zero-based row index.</param>
-    /// <param name="agent"><para>用于文案的家族名。</para>The family name used in the messages.</param>
-    /// <returns><para>可写入的已解析行与其 GPT 分区名。</para>The resolvable row to write and its GPT
-    /// partition name.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="resolution"/> 或其行为 null。
-    /// <para><paramref name="resolution"/> or its rows are null.</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> 越界。
-    /// <para><paramref name="rowIndex"/> is outside the rows.</para></exception>
-    /// <exception cref="InvalidDataException">行或其分区条目为 null，或条目缺少分区名。
-    /// <para>The row or its partition entry is null, or the entry has no partition name.</para></exception>
-    /// <exception cref="NotSupportedException">该行的镜像是稀疏容器。
-    /// <para>The row's image is a sparse container.</para></exception>
+    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
+    /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
+    /// <param name="rowIndex">Zero-based row index.<para>行序号。</para></param>
+    /// <param name="agent">The family name used in the messages.<para>用于文案的家族名。</para></param>
+    /// <returns>The resolvable row to write and its GPT partition name.
+    /// <para>可写入的已解析行与其 GPT 分区名。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="resolution"/> or its rows are null.
+    /// <para><paramref name="resolution"/> 或其行为 null。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> is outside the rows.
+    /// <para><paramref name="rowIndex"/> 越界。</para></exception>
+    /// <exception cref="InvalidDataException">The row or its partition entry is null, or the entry has no
+    /// partition name. <para>行或其分区条目为 null，或条目缺少分区名。</para></exception>
+    /// <exception cref="NotSupportedException">The row's image is a sparse container.
+    /// <para>该行的镜像是稀疏容器。</para></exception>
     private static (MtkScatterPackageRow Row, string Name) RawWriteRow(MtkScatterPackageResolution resolution,
         int rowIndex, string agent)
     {
@@ -569,28 +552,21 @@ public static class MtkScatterPackage
     /// <para>为一个按 GPT 分区名寻址的已解析条目构造 XML 下载代理使用的原始写入操作，范围向上取整到
     /// scatter 布局声明的块粒度。</para>
     /// </summary>
-    /// <remarks>
-    /// <para>Like the Legacy builder, the XML agent has no sparse transport, so a row whose image carries a
-    /// valid sparse container is rejected instead of being written as raw bytes. The extent starts at offset
-    /// zero of the named partition, covers the image, and is rounded up to the scatter layout's
-    /// <c>block_size</c> because the agent requires block-aligned ranges; the tail beyond the image is
-    /// explicitly zero-filled. The live GPT re-checks the name and the partition bounds during preparation, and
-    /// the agent's own reported block size still has to divide the result.</para>
-    /// <para>与 Legacy 构造器一样，XML 代理没有稀疏传输，因此镜像带有有效稀疏容器的条目会被拒绝，而不是作为
-    /// 原始字节写入。范围从该命名分区的零偏移开始，覆盖镜像长度，并向上取整到 scatter 布局的 <c>block_size</c>，
-    /// 因为代理要求范围按块对齐；超出镜像的尾部显式补零。准备阶段由实机 GPT 复核分区名与分区边界，代理自报的
-    /// 块大小仍必须整除该结果。</para>
-    /// </remarks>
-    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.</param>
-    /// <param name="rowIndex">Zero-based index into <see cref="MtkScatterPackageResolution.Rows"/>.</param>
-    /// <param name="verify">Whether written extents require readback; passed through unchanged.</param>
-    /// <returns>The step ready for <c>MtkFlashService.PrepareXmlAsync</c>.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="resolution"/> or its rows are null.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> is outside the rows, or the
-    /// layout declares a block granularity outside 512 through 16 MiB.</exception>
+    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
+    /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
+    /// <param name="rowIndex">Zero-based index into <see cref="MtkScatterPackageResolution.Rows"/>.
+    /// <para>指向 <see cref="MtkScatterPackageResolution.Rows"/> 的从零开始索引。</para></param>
+    /// <param name="verify">Whether written extents require readback; passed through unchanged.
+    /// <para>写入范围是否需要回读；原样透传。</para></param>
+    /// <returns>The XML raw write step for this row.<para>该行的 XML 原始写入步骤。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="resolution"/> or its rows are null.
+    /// <para><paramref name="resolution"/> 或其行为 null。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> is outside the rows or the
+    /// block granularity is unsupported. <para><paramref name="rowIndex"/> 越界，或块粒度不受支持。</para></exception>
     /// <exception cref="InvalidDataException">A row or its partition entry is null, or the entry has no
-    /// partition name.</exception>
-    /// <exception cref="NotSupportedException">The row's image is a sparse container.</exception>
+    /// partition name. <para>某行或其分区条目为 null，或条目缺少分区名。</para></exception>
+    /// <exception cref="NotSupportedException">The row's image is a sparse container.
+    /// <para>该行的镜像是稀疏容器。</para></exception>
     public static MtkXmlPartitionFlashStep CreateXmlStep(MtkScatterPackageResolution resolution, int rowIndex,
         bool verify)
     {
@@ -606,17 +582,17 @@ public static class MtkScatterPackage
     /// rounded up to the block granularity the scatter layout declares.
     /// <para>为一个 scatter 条目构造 XML 擦除操作；范围取该条目声明容量并向上取整到 scatter 布局声明的块粒度。</para>
     /// </summary>
-    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.</param>
+    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
+    /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
     /// <param name="partition">The erase-eligible scatter entry, usually from <see cref="ListEraseTargets"/>.
     /// <para>可擦除的 scatter 条目，通常来自 <see cref="ListEraseTargets"/>。</para></param>
-    /// <returns><para>可直接交给 <c>MtkFlashService.PrepareXmlAsync</c> 的 GPT 命名擦除步骤。</para>
-    /// A GPT-named erase step ready for <c>MtkFlashService.PrepareXmlAsync</c>.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="resolution"/> 或 <paramref name="partition"/> 为 null。
-    /// <para><paramref name="resolution"/> or <paramref name="partition"/> is null.</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">布局声明的块粒度越界。
-    /// <para>The layout declares a block granularity outside the supported range.</para></exception>
-    /// <exception cref="InvalidDataException">条目缺少分区名或声明容量不可用。
-    /// <para>The entry has no partition name or declares an unusable capacity.</para></exception>
+    /// <returns>A GPT-named erase step.<para>GPT 命名的擦除步骤。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="resolution"/> or
+    /// <paramref name="partition"/> is null. <para><paramref name="resolution"/> 或 <paramref name="partition"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The layout declares a block granularity outside the
+    /// supported range. <para>布局声明的块粒度越界。</para></exception>
+    /// <exception cref="InvalidDataException">The entry has no partition name or declares an unusable
+    /// capacity. <para>条目缺少分区名或声明容量不可用。</para></exception>
     public static MtkXmlPartitionFlashStep CreateXmlEraseStep(MtkScatterPackageResolution resolution,
         MtkScatterPartition partition)
     {
@@ -626,17 +602,12 @@ public static class MtkScatterPackage
         return new MtkXmlPartitionFlashStep(name, MtkFlashStepKind.Erase, 0, AlignToBlock(size, block));
     }
 
-    /// <summary>Maps an observed storage family to the XML agent's named user-data region.</summary>
-    /// <remarks>
-    /// The tokens are the canonical ones the reference tool sends for the "user" partition of each family:
-    /// <c>EMMC-USER</c> for eMMC and <c>UFS-LUA2</c> for UFS. NOR and NAND have no scatter user-region concept
-    /// and are rejected, matching the XML agent's block-storage geometry.
-    /// <para>这些标记是参考工具为各家族 “user” 分区发送的规范值：eMMC 为 <c>EMMC-USER</c>，UFS 为
-    /// <c>UFS-LUA2</c>。NOR 与 NAND 没有 scatter 用户区概念，且 XML 代理只描述块存储几何信息，因此被拒绝。</para>
-    /// </remarks>
-    /// <param name="kind">The storage family reported by the device. <para>设备上报的存储家族。</param>
-    /// <returns>The region token to pass to XML preparation.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="kind"/> is not eMMC or UFS.</exception>
+    /// <summary>Maps an observed storage family to the XML agent's named user-data region.
+    /// <para>把观察到的存储家族映射为 XML 代理具名的用户数据区域。</para></summary>
+    /// <param name="kind">The storage family reported by the device.<para>设备上报的存储家族。</para></param>
+    /// <returns>The region token to pass to XML preparation.<para>传给 XML 准备阶段的区域标记。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="kind"/> is not eMMC or UFS.
+    /// <para><paramref name="kind"/> 不是 eMMC 或 UFS。</para></exception>
     public static string GetXmlRegionName(MtkXFlashStorageKind kind) => kind switch
     {
         MtkXFlashStorageKind.Emmc => MtkXmlStorageInfo.GetUserDataRegionName(MtkXmlStorageKind.Emmc),

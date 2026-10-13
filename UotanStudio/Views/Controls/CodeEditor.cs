@@ -11,11 +11,11 @@ using TextMateSharp.Grammars;
 namespace UotanStudio.Views.Controls;
 
 /// <summary>
-/// <para>基于 AvaloniaEdit <see cref="TextEditor"/> 的代码编辑器控件，布局选项在
-/// <c>CodeEditor.axaml</c> 中声明，本文件承载可绑定属性桥接与 TextMate 主题语法高亮逻辑。</para>
 /// A code editor control built on the AvaloniaEdit <see cref="TextEditor"/>. Layout options are
 /// declared in <c>CodeEditor.axaml</c>; this file hosts the bindable-property bridging and the
 /// TextMate theming / syntax-highlighting logic.
+/// <para>基于 AvaloniaEdit <see cref="TextEditor"/> 的代码编辑器控件，布局选项在
+/// <c>CodeEditor.axaml</c> 中声明，本文件承载可绑定属性桥接与 TextMate 主题语法高亮逻辑。</para>
 /// </summary>
 public partial class CodeEditor : TextEditor
 {
@@ -23,11 +23,11 @@ public partial class CodeEditor : TextEditor
         AvaloniaProperty.Register<CodeEditor, string?>(nameof(Language));
 
     /// <summary>
-    /// <para>可绑定的文本内容属性。底层 <see cref="TextEditor.Text"/> 是普通 CLR 属性，无法被
-    /// XAML 编译绑定直接识别，因此这里注册一个桥接属性并在两侧同步。</para>
     /// Bindable text content property. The underlying <see cref="TextEditor.Text"/> is a plain CLR
     /// property that compiled XAML bindings cannot target directly, so a bridging property is
     /// registered here and kept in sync on both sides.
+    /// <para>可绑定的文本内容属性。底层 <see cref="TextEditor.Text"/> 是普通 CLR 属性，无法被
+    /// XAML 编译绑定直接识别，因此这里注册一个桥接属性并在两侧同步。</para>
     /// </summary>
     public static readonly StyledProperty<string?> TextProperty =
         AvaloniaProperty.Register<CodeEditor, string?>(nameof(Text), defaultValue: null, defaultBindingMode: BindingMode.TwoWay);
@@ -41,8 +41,8 @@ public partial class CodeEditor : TextEditor
     }
 
     /// <summary>
-    /// <para>获取或设置编辑器文本内容（绑定桥接到 <see cref="TextProperty"/>）。</para>
     /// Gets or sets the editor text content (binding bridged to <see cref="TextProperty"/>).
+    /// <para>获取或设置编辑器文本内容（绑定桥接到 <see cref="TextProperty"/>）。</para>
     /// </summary>
     public new string? Text
     {
@@ -51,21 +51,21 @@ public partial class CodeEditor : TextEditor
     }
 
     /// <summary>
-    /// <para>TextMate 高亮安装实例（首次安装/主题变化时重建并释放旧实例；语言变化时仅更新语法）。</para>
     /// The TextMate highlight installation (created on first install or theme change, releasing the
     /// previous one; language changes only update the grammar).
+    /// <para>TextMate 高亮安装实例（首次安装/主题变化时重建并释放旧实例；语言变化时仅更新语法）。</para>
     /// </summary>
     private TextMate.Installation? _installation;
 
     /// <summary>
-    /// <para>当前安装 TextMate 时的注册选项（用于解析语法作用域名）。</para>
     /// The registry options used for the current TextMate installation (to resolve grammar scope names).
+    /// <para>当前安装 TextMate 时的注册选项（用于解析语法作用域名）。</para>
     /// </summary>
     private RegistryOptions? _options;
 
     /// <summary>
-    /// <para>当前安装 TextMate 时的主题（用于检测主题切换）。</para>
     /// The theme used for the current TextMate installation (to detect theme switches).
+    /// <para>当前安装 TextMate 时的主题（用于检测主题切换）。</para>
     /// </summary>
     private ThemeName? _installedTheme;
 

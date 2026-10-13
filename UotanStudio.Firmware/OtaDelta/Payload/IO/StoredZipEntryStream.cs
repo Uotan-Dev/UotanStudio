@@ -2,14 +2,14 @@
 namespace UotanStudio.Firmware.OtaDelta.Payload.IO;
 
 /// <summary>
-/// <para>对容器文件中某个 STORED（未压缩）ZIP 条目原始数据的可随机访问只读视图。
-/// 载荷逻辑偏移 [0, length) 映射到容器文件偏移 [dataStart, dataStart + length)；
-/// 读取使用 <see cref="RandomAccess"/> 位置化 I/O，因此每个句柄可独立寻址，
-/// 可被各分区专属的提取句柄安全并发使用，而无需先物化到临时文件。</para>
 /// A seekable, read-only view of a STORED (uncompressed) ZIP entry's raw data within its containing
 /// archive. Logical payload offsets [0, length) map to file offsets [dataStart, dataStart + length);
 /// reads use positional I/O via <see cref="RandomAccess"/>, so each handle is independently seekable
 /// and safe for the per-partition extractors to use concurrently, without materializing a temp copy.
+/// <para>对容器文件中某个 STORED（未压缩）ZIP 条目原始数据的可随机访问只读视图。
+/// 载荷逻辑偏移 [0, length) 映射到容器文件偏移 [dataStart, dataStart + length)；
+/// 读取使用 <see cref="RandomAccess"/> 位置化 I/O，因此每个句柄可独立寻址，
+/// 可被各分区专属的提取句柄安全并发使用，而无需先物化到临时文件。</para>
 /// </summary>
 internal sealed class StoredZipEntryStream : Stream
 {
@@ -19,12 +19,12 @@ internal sealed class StoredZipEntryStream : Stream
     private long _position;
 
     /// <summary>
-    /// <para>在容器文件中定位到 STORED 条目数据起点，并为后续读取保持一个只读句柄。</para>
     /// Locates the STORED entry's data start in the archive and keeps a read-only handle for reads.
+    /// <para>在容器文件中定位到 STORED 条目数据起点，并为后续读取保持一个只读句柄。</para>
     /// </summary>
-    /// <param name="zipPath"><para>容器（ZIP）文件的路径。</para>The archive (ZIP) file path.</param>
-    /// <param name="dataStart"><para>条目原始数据在容器文件内的绝对字节偏移。</para>Absolute byte offset of the entry data within the archive.</param>
-    /// <param name="length"><para>载荷（条目未压缩）字节数。</para>Payload (entry uncompressed) byte count.</param>
+    /// <param name="zipPath">The archive (ZIP) file path. <para>容器（ZIP）文件的路径。</para></param>
+    /// <param name="dataStart">Absolute byte offset of the entry data within the archive. <para>条目原始数据在容器文件内的绝对字节偏移。</para></param>
+    /// <param name="length">Payload (entry uncompressed) byte count. <para>载荷（条目未压缩）字节数。</para></param>
     internal StoredZipEntryStream(string zipPath, long dataStart, long length)
     {
         _length = length;

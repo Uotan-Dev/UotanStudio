@@ -28,7 +28,10 @@ internal sealed class HdcFactory : IProtocolFactory
         _productId = productId;
     }
 
-    /// <summary>Gets the protocol name. 获取协议名称。</summary>
+    /// <summary>
+    /// Gets the protocol name.
+    /// <para>获取协议名称。</para>
+    /// </summary>
     public string ProtocolName => "hdc";
 
     /// <summary>

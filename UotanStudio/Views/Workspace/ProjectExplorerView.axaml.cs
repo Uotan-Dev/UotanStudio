@@ -17,15 +17,15 @@ using Ursa.Controls;
 namespace UotanStudio.Views.Workspace;
 
 /// <summary>
-/// <para>项目资源管理器视图，处理目录展开加载、文件双击打开与右键打开方式。</para>
 /// Project explorer view, handling directory expansion loading, double-click opening and the
 /// right-click open-with menu for file nodes.
+/// <para>项目资源管理器视图，处理目录展开加载、文件双击打开与右键打开方式。</para>
 /// </summary>
 public partial class ProjectExplorerView : UserControl
 {
     /// <summary>
-    /// <para>创建项目资源管理器视图，订阅树节点的展开事件以触发目录惰性加载。</para>
     /// Creates the project explorer view, subscribing to tree-item expansion events to trigger lazy directory loading.
+    /// <para>创建项目资源管理器视图，订阅树节点的展开事件以触发目录惰性加载。</para>
     /// </summary>
     public ProjectExplorerView()
     {
@@ -76,9 +76,9 @@ public partial class ProjectExplorerView : UserControl
     }
 
     /// <summary>
-    /// <para>双击项目文件夹时查找并打开其项目配置文件：子项目目录打开 .uotanfw，顶层目录打开 .uotan。</para>
     /// Finds and opens the project config file when a project folder is double-clicked: a sub-project
     /// directory opens its .uotanfw, the root directory opens its .uotan.
+    /// <para>双击项目文件夹时查找并打开其项目配置文件：子项目目录打开 .uotanfw，顶层目录打开 .uotan。</para>
     /// </summary>
     private static void OpenProjectFileForFolder(ExplorerNode node)
     {
@@ -122,9 +122,9 @@ public partial class ProjectExplorerView : UserControl
     }
 
     /// <summary>
-    /// <para>稀疏转换：原始镜像与稀疏镜像之间的双向转换（需求上两项合一，方向由源文件类型决定）。</para>
     /// Sparse conversion: converts between raw and sparse images in either direction; the source file type
     /// decides the direction, so the two former entries are merged into one.
+    /// <para>稀疏转换：原始镜像与稀疏镜像之间的双向转换（需求上两项合一，方向由源文件类型决定）。</para>
     /// </summary>
     private void OnConvertSparse(object? sender, RoutedEventArgs e)
         => _ = ConvertSelectedImageAsync(ImageViewModel.ConvertSparse);
@@ -136,11 +136,11 @@ public partial class ProjectExplorerView : UserControl
         => _ = ConvertSelectedImageAsync(ImageViewModel.ConvertImgToBr);
 
     /// <summary>
-    /// <para>弹出确认对话框展示操作内容与预期输出文件，确认后执行格式转换并把进度上报到镜像管理面板。</para>
     /// Shows a confirmation dialog with the operation and expected output files, then runs the conversion
     /// whose progress is reported to the image manager panel.
+    /// <para>弹出确认对话框展示操作内容与预期输出文件，确认后执行格式转换并把进度上报到镜像管理面板。</para>
     /// </summary>
-    /// <param name="direction"><para>转换方向键（见 <see cref="ImageViewModel"/>）。</para>Conversion direction key (see <see cref="ImageViewModel"/>).</param>
+    /// <param name="direction">Conversion direction key (see <see cref="ImageViewModel"/>). <para>转换方向键（见 <see cref="ImageViewModel"/>）。</para></param>
     private async Task ConvertSelectedImageAsync(string direction)
     {
         if (ProjectTree.SelectedItem is not ExplorerNode { IsDirectory: false, IsPlaceholder: false } node
@@ -173,8 +173,8 @@ public partial class ProjectExplorerView : UserControl
     }
 
     /// <summary>
-    /// <para>打开校验窗口：复用已打开的实例，否则新建并作为主窗口的附属窗口显示。</para>
     /// Opens the checksum window: reuses the existing instance, otherwise creates one owned by the main window.
+    /// <para>打开校验窗口：复用已打开的实例，否则新建并作为主窗口的附属窗口显示。</para>
     /// </summary>
     private void OnChecksum(object? sender, RoutedEventArgs e)
     {
@@ -227,9 +227,9 @@ public partial class ProjectExplorerView : UserControl
     }
 
     /// <summary>
-    /// <para>在多列文件浏览器（原对比文档）中打开选中的文件或目录：作为文件列载入，不自动开始对比。</para>
     /// Opens the selected file or folder in the multi-column file browser (the former compare document): it loads as a file column
     /// without starting a comparison.
+    /// <para>在多列文件浏览器（原对比文档）中打开选中的文件或目录：作为文件列载入，不自动开始对比。</para>
     /// </summary>
     private void OnOpenInCompareView(object? sender, RoutedEventArgs e)
     {
@@ -307,9 +307,9 @@ public partial class ProjectExplorerView : UserControl
     }
 
     /// <summary>
-    /// <para>若节点是当前解决方案注册的子项目根目录，返回其上下文；否则返回 <c>null</c>。</para>
     /// Returns the sub-project context when the node is a registered sub-project root of the open
     /// solution; otherwise <c>null</c>.
+    /// <para>若节点是当前解决方案注册的子项目根目录，返回其上下文；否则返回 <c>null</c>。</para>
     /// </summary>
     private static SubProjectContext? FindSubProject(ExplorerNode node)
     {

@@ -109,11 +109,8 @@ internal static class FileSystemMetadataOverrides
         => table.TryGetValue(NormalizeRelativePath(relativePath), out entry);
 
     /// <summary>
-    /// Loads a <c>partition_info</c> file (<c>partition.key=value</c> lines) into a lookup keyed by
-    /// the key with the partition prefix stripped. Comment and blank lines are skipped.
-    /// Returns an empty dictionary when <paramref name="path"/> is null, empty or unreadable.
-    /// <para>加载 <c>partition_info</c> 文件（<c>partition.key=value</c> 行）为以去除分区前缀后的
-    /// key 为键的查找表。跳过注释与空行。<paramref name="path"/> 为 null、空或不可读时返回空字典。</para>
+    /// Loads a partition_info file into a lookup keyed by the prefix-stripped key.
+    /// <para>把 partition_info 文件加载为以去除分区前缀后的键为键的查找表。</para>
     /// </summary>
     /// <param name="path">File path; <see langword="null"/>, whitespace, a missing file or a
     /// reparse point yields an empty table. Lines must contain an <c>=</c> after a non-empty key;
@@ -201,7 +198,7 @@ internal static class FileSystemMetadataOverrides
     /// Returns <c>null</c> when the format recorded none or the tree fails validation.
     /// <para>从已解析的元数据实例加载可选的保留负载。格式未记录或 JSON 树校验失败时返回 <c>null</c>。</para>
     /// </summary>
-    /// <param name="metadata"><para>已解析的元数据实例。</para>The parsed metadata instance.</param>
+    /// <param name="metadata">The parsed metadata instance. <para>已解析的元数据实例。</para></param>
     /// <returns>The typed payload, or <see langword="null"/> when absent or invalid.
     /// <para>类型化负载；不存在或非法时返回 <see langword="null"/>。</para></returns>
     internal static FileSystemPreservationData? TryLoadDocument(RepackMetadata? metadata)
@@ -216,7 +213,7 @@ internal static class FileSystemMetadataOverrides
     /// <c>fs_config</c>、<c>file_contexts</c> 与 <c>info</c> 只是供外部工具消费的解包期导出物，本路径绝不回读，
     /// 因此打包不可能被同一次解包写出的附属文件左右。</para>
     /// </summary>
-    /// <param name="metadata"><para>已解析的元数据实例。</para>The parsed metadata instance.</param>
+    /// <param name="metadata">The parsed metadata instance. <para>已解析的元数据实例。</para></param>
     /// <returns>The tables and rebuild parameters recorded in the payload.
     /// <para>负载中记录的各表与重建参数。</para></returns>
     /// <exception cref="InvalidDataException">The metadata records no structured payload, or the payload fails

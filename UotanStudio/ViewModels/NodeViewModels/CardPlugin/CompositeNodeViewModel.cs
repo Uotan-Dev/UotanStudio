@@ -4,7 +4,7 @@ using UotanStudio.ViewModels.Nodes;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
-/// <summary>Host-owned node that executes a portable visual-plugin graph.</summary>
+/// <summary>Node that executes a portable visual-plugin graph.<para>执行可移植可视化插件图的节点。</para></summary>
 public sealed class CompositeNodeViewModel : FlowNodeViewModel
 {
     private static readonly AsyncLocal<IReadOnlyList<string>?> InvocationChain = new();
@@ -13,7 +13,9 @@ public sealed class CompositeNodeViewModel : FlowNodeViewModel
 
     internal VisualPluginPackage Package => _package;
 
-    /// <summary>Creates the public node surface declared by the package.</summary>
+    /// <summary>Creates the public node surface declared by the package.<para>按软件包声明创建对外节点表面。</para></summary>
+    /// <param name="package">Package declaring the node name, ports and identity.<para>声明节点名称、端口与身份的软件包。</para></param>
+    /// <param name="validateExecution">Optional hook that returns validation errors before execution.<para>可选回调，在执行前返回校验错误。</para></param>
     public CompositeNodeViewModel(VisualPluginPackage package, Func<IReadOnlyList<string>>? validateExecution = null)
         : base(package.Manifest.Name, NodeCategory.Plugin)
     {
@@ -24,13 +26,16 @@ public sealed class CompositeNodeViewModel : FlowNodeViewModel
         AddPorts(Output, package.Outputs, false);
     }
 
-    /// <summary>Installed package identity.</summary>
+    /// <summary>Installed package identity.<para>已安装软件包标识。</para></summary>
+    /// <value>The id from the installed package manifest.<para>来自已安装软件包清单的标识。</para></value>
     public string PluginId => _package.Manifest.Id;
 
-    /// <summary>Installed package version.</summary>
+    /// <summary>Installed package version.<para>已安装软件包版本。</para></summary>
+    /// <value>The version from the installed package manifest.<para>来自已安装软件包清单的版本。</para></value>
     public string PluginVersion => _package.Manifest.Version;
 
-    /// <inheritdoc />
+    /// <summary>Executes the wrapped graph after rejecting recursive or excessively nested invocation.<para>拒绝递归或过深嵌套调用后执行所封装的图。</para></summary>
+    /// <param name="context">Context supplying logging, cancellation, patches and interactions.<para>提供日志、取消、补丁与交互的上下文。</para></param>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {
         foreach (var output in Output)
@@ -129,7 +134,7 @@ public sealed class CompositeNodeViewModel : FlowNodeViewModel
         }
     }
 
-    /// <summary>One parent wait spans all concurrently waiting children in this invocation.</summary>
+    /// <summary>One parent wait spans all concurrently waiting children in this invocation.<para>单次父级等待覆盖本次调用中所有并发等待的子节点。</para></summary>
     private sealed class ChildInteractionWait : IDisposable
     {
         private readonly NodeExecutionEngine _engine;

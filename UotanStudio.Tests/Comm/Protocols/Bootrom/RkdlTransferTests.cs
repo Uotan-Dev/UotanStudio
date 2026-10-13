@@ -6,13 +6,10 @@ using Xunit;
 namespace UotanStudio.Tests.Comm.Protocols.Bootrom;
 
 /// <summary>
-/// RKDL WRITE_LBA / READ_LBA / WRITE_GPT tests driven by a simulated rockusb device: short source
-/// reads must not desynchronize the sector counter, must not repeat source bytes and must not write
-/// zero padding into the middle of an image, and a malformed flash sector count must be rejected
-/// before any WRITE_LBA reaches the device.
-/// <para>由模拟 rockusb 设备驱动的 RKDL WRITE_LBA / READ_LBA / WRITE_GPT 测试：源流短读不得使扇区
-/// 计数失步、不得重复源字节、不得把补零写进镜像中段；畸形 flash 扇区数必须在任何 WRITE_LBA 到达
-/// 设备之前被拒绝。</para>
+/// RKDL WRITE_LBA / READ_LBA / WRITE_GPT tests driven by a simulated rockusb device. Short source
+/// reads must not desynchronize the sector counter or write zero padding mid-image.
+/// <para>由模拟 rockusb 设备驱动的 RKDL WRITE_LBA / READ_LBA / WRITE_GPT 测试。源流短读不得使扇区
+/// 计数失步，也不得在镜像中段写入补零。</para>
 /// </summary>
 public class RkdlTransferTests
 {

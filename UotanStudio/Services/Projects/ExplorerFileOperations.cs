@@ -1,6 +1,6 @@
 namespace UotanStudio.Services.Projects;
 
-/// <summary>Performs non-overwriting explorer transfers. 执行不覆盖已有内容的资源管理器传输。</summary>
+/// <summary>Performs non-overwriting explorer transfers.<para>执行不覆盖已有内容的资源管理器传输。</para></summary>
 internal static class ExplorerFileOperations
 {
     internal static void Transfer(string source, string destinationDirectory, bool move)

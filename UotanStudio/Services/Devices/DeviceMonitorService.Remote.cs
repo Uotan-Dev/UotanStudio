@@ -16,12 +16,13 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>连接网络调试目标。ADB server 在监听时走 <c>host:connect:</c>；server 不在时改为直接对 adbd
-    /// 的 TCP 端口握手并登记为手动网络端点。省略端口时两条路径都按 5555。</para>
-    /// Connects a network target: through <c>host:connect:</c> while the ADB server listens, otherwise by
-    /// handshaking the daemon's TCP port directly and registering a manual network endpoint. A bare host
-    /// applies port 5555 on both paths.
+    /// Connects a network target through <c>host:connect:</c> when the ADB server listens, or by a direct
+    /// TCP handshake with the daemon when it does not.
+    /// <para>ADB server 在监听时经 <c>host:connect:</c> 连接网络目标，否则与守护进程直接完成 TCP 握手。</para>
     /// </summary>
+    /// <param name="protocol">The network protocol of the target.<para>目标所属的网络协议。</para></param>
+    /// <param name="address">A bare address or an address with a port to connect.<para>省略端口或写明端口的待连接地址。</para></param>
+    /// <param name="cancellationToken">Cancels the connection attempt.<para>取消连接尝试。</para></param>
     public async Task ConnectNetworkDeviceAsync(DeviceProtocolKind protocol, string address,
         CancellationToken cancellationToken = default)
     {
@@ -52,10 +53,11 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>在无 ADB server 时对网络目标完成一次直接握手，成功后登记为手动网络端点；失败时向上抛出底层原因。</para>
     /// Completes one direct handshake with a network target while no ADB server listens, registering a manual
     /// network endpoint on success and rethrowing the underlying reason otherwise.
+    /// <para>在无 ADB server 时对网络目标完成一次直接握手，成功后登记为手动网络端点；失败时向上抛出底层原因。</para>
     /// </summary>
+    /// <param name="target">A <c>host:port</c> endpoint to attach.<para>要登记的 <c>host:port</c> 端点。</para></param>
     private void AttachDirectNetworkTarget(string target)
     {
         if (!DebugBridgeNetworkAddress.TrySplitEndpoint(target, out var host, out var port))
@@ -79,9 +81,11 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>移除手动登记的网络目标，返回该目标此前是否由本会话直接持有。</para>
     /// Removes a manually registered network target and reports whether this session held it.
+    /// <para>移除手动登记的网络目标，返回该目标是否由本会话直接持有。</para>
     /// </summary>
+    /// <param name="target">A manually registered <c>host:port</c> value.<para>手动登记的 <c>host:port</c> 值。</para></param>
+    /// <returns><see langword="true"/> when this session registered the target.<para>该目标由本会话登记时为 <see langword="true"/>。</para></returns>
     internal bool TryDetachManualNetworkTarget(string target)
     {
         if (!_manualNetworkTargets.Remove(target))
@@ -93,16 +97,16 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>登记或更新目标后立即持久化，重启时才能按 IP 重新发现端口。</para>
     /// Persists the target set after every registration so a restart can re-discover each port by IP.
+    /// <para>登记或更新目标后立即持久化，重启时才能按 IP 重新发现端口。</para>
     /// </summary>
     private void SavePairedNetworkTargets() =>
         SettingsPersistenceService.Instance.UpdatePairedNetworkTargets(
             [.. _manualNetworkTargets.Select(entry => new PairedNetworkTarget(entry.Key, entry.Value))]);
 
     /// <summary>
-    /// <para>从设置恢复上次记住的网络目标；条目数量设上限。</para>
     /// Restores the remembered network targets from settings, with a bound on the entry count.
+    /// <para>从设置恢复上次记住的网络目标；条目数量设上限。</para>
     /// </summary>
     private void RestorePairedNetworkTargets()
     {
@@ -113,19 +117,19 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>本会话在没有 ADB server 时直接登记的网络目标；值表示该目标是否需要 TLS
-    /// （扫码直连配对的安全端点）。</para>
     /// Network targets this session registered directly while no ADB server was listening;
     /// the value reports whether the target requires TLS (a secure QR-paired endpoint).
+    /// <para>本会话在没有 ADB server 时直接登记的网络目标；值表示该目标是否需要 TLS
+    /// （扫码直连配对的安全端点）。</para>
     /// </summary>
-    /// <value><para>已登记的 <c>host:port</c> 集合。</para>The registered <c>host:port</c> values.</value>
+    /// <value>The registered <c>host:port</c> values. <para>已登记的 <c>host:port</c> 集合。</para></value>
     public IReadOnlyList<string> ManualNetworkTargets => [.. _manualNetworkTargets.Keys];
 
     private readonly Dictionary<string, bool> _manualNetworkTargets = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// <para>握手失败后按 IP 重新浏览安全连接端口的等待上限。</para>
     /// The deadline for re-browsing the secure connect port by IP address after a failed handshake.
+    /// <para>握手失败后按 IP 重新浏览安全连接端口的等待上限。</para>
     /// </summary>
     private static readonly TimeSpan RediscoverSecurePortTimeout = TimeSpan.FromSeconds(3);
 }

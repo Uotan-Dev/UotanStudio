@@ -13,13 +13,8 @@ public sealed partial class PayloadBuilder
     private int? _compressionWorkers;
 
     /// <summary>
-    /// Limits concurrent operation compression to 1 to <see cref="Core.FirmwareParallelism.MaximumWorkers"/> workers;
-    /// overrides FirmwareParallelism.Workers for this builder.
-    /// Each worker holds at most 1 MiB input and 2 MiB + 64 KiB output, plus codec state.
-    /// Choose one worker when multiple builds run concurrently or memory is constrained.
-    /// <para>将并发操作压缩限制在 1 到 <see cref="Core.FirmwareParallelism.MaximumWorkers"/> 个工作者之间；
-    /// 对本构建器覆盖 FirmwareParallelism.Workers。每个工作者最多持有 1 MiB 输入与 2 MiB + 64 KiB 输出，另有编解码器状态。
-    /// 当多个构建并发运行或内存受限时应选择单工作者。</para>
+    /// Limits concurrent operation compression to the given worker count for this builder.
+    /// <para>把本构建器的并发操作压缩限制为给定位数的工作者。</para>
     /// </summary>
     /// <param name="workers">
     /// Number of compression slots used per partition batch; the setting is stored until the build reads it and

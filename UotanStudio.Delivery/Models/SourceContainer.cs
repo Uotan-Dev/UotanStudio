@@ -1,6 +1,6 @@
 namespace UotanStudio.Services.Delivery;
 
-/// <summary><para>用于重建交付布局的原始 Super 或 Payload 元数据。</para>Original Super or Payload metadata used to rebuild delivery layouts.</summary>
+/// <summary>Original Super or Payload metadata used to rebuild delivery layouts. <para>用于重建交付布局的原始 Super 或 Payload 元数据。</para></summary>
 internal sealed record DeliverySourceContainerSettings
 {
     public string SourceName { get; init; } = "";

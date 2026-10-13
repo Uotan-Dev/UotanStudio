@@ -3,7 +3,8 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.Projects;
 
-/// <summary>Reconstructs an executable workflow without creating an editor or mutating the source snapshot.</summary>
+/// <summary>Reconstructs an executable workflow without creating an editor or mutating the source snapshot.
+/// <para>重建可执行工作流，不创建编辑画布也不改动源快照。</para></summary>
 internal static class WorkflowRuntimeBuilder
 {
     internal static WorkflowRuntime Build(WorkflowSnapshot snapshot, bool preserveUnknown,

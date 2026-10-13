@@ -4,16 +4,23 @@ using UotanStudio.Views.Controls;
 namespace UotanStudio.Messages;
 
 /// <summary>
-/// <para>打开文档请求消息，当资源管理器等面板请求在文档区打开某个文件时发送。</para>
-/// Open document request message, sent when a panel such as the project explorer requests opening a
-/// file in the document area.
+/// Message requesting that a file opens as a document in the workspace.
+/// <para>请求把某个文件作为文档打开到工作区的消息。</para>
 /// </summary>
+/// <param name="Path">
+/// The path of the file to open.
+/// <para>要打开的文件路径。</para>
+/// </param>
+/// <param name="Mode">
+/// The open mode to use, defaulting to automatic resolution.
+/// <para>使用的打开方式，默认按自动判定处理。</para>
+/// </param>
 public record OpenDocumentRequestMessage(string Path, EditorOpenMode Mode = EditorOpenMode.Auto)
 {
     /// <summary>
-    /// <para>转换为注册表派发使用的统一文档打开请求。</para>
-    /// Converts to the unified document-open request consumed by registry dispatch.
+    /// Builds the equivalent unified document-open request.
+    /// <para>构造等价的统一文档打开请求。</para>
     /// </summary>
-    /// <returns><para>等价的打开请求。</para>The equivalent open request.</returns>
+    /// <returns>The equivalent open request carrying the same path and mode. <para>携带相同路径与打开方式的等价请求。</para></returns>
     internal DocumentOpenRequest ToRequest() => new() { Path = Path, Mode = Mode };
 }

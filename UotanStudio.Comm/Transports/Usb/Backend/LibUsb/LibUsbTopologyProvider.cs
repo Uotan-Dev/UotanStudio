@@ -6,11 +6,6 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 
 /// <summary>
-/// <para>libusb 拓扑后端：由总线号与端口链重建 总线 → 端口 → 设备 层级，并从活动配置描述符取接口。
-/// libusb 不提供驱动绑定、设备接口类 GUID 或故障码，跨平台一致性优先于诊断细节。本类是唯一的原生层：
-/// 复用 <see cref="LibUsbFinder"/> 的运行时探测与 <c>UsbContext.List()</c> 设备清单，只读取列表已缓存的
-/// 设备/配置描述符；不打开、不声明接口、不复位、不切换配置，因此字符串描述符（产品名、序列号）保持
-/// <see langword="null"/>，拓扑形状本身完全交给纯的 <see cref="LibUsbTopologyGraph"/>。</para>
 /// The libusb topology backend: rebuilds a bus → port → device hierarchy from bus numbers and port
 /// chains, and takes interfaces from the active configuration descriptor. libusb exposes no driver
 /// binding, device-interface class GUIDs or problem codes, so cross-platform consistency wins over
@@ -19,6 +14,11 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 /// configuration descriptors the list already caches; it never opens, claims, resets or configures a
 /// device, so string descriptors (product name, serial) stay <see langword="null"/>, and the topology
 /// shaping itself lives entirely in the pure <see cref="LibUsbTopologyGraph"/>.
+/// <para>libusb 拓扑后端：由总线号与端口链重建 总线 → 端口 → 设备 层级，并从活动配置描述符取接口。
+/// libusb 不提供驱动绑定、设备接口类 GUID 或故障码，跨平台一致性优先于诊断细节。本类是唯一的原生层：
+/// 复用 <see cref="LibUsbFinder"/> 的运行时探测与 <c>UsbContext.List()</c> 设备清单，只读取列表已缓存的
+/// 设备/配置描述符；不打开、不声明接口、不复位、不切换配置，因此字符串描述符（产品名、序列号）保持
+/// <see langword="null"/>，拓扑形状本身完全交给纯的 <see cref="LibUsbTopologyGraph"/>。</para>
 /// </summary>
 internal sealed class LibUsbTopologyProvider : IUsbTopologyProvider
 {

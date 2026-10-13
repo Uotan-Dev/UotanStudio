@@ -8,11 +8,12 @@ namespace UotanStudio.Comm.Protocols.Fastboot;
 public sealed partial class FastbootSession
 {
     /// <summary>
-    /// Checks whether the specified partition has A/B slots. Only a confirmed <c>yes</c> is cached;
-    /// a transient failure (FAIL reply, timeout) leaves the entry uncached so a later call retries
-    /// instead of permanently resolving the partition to its slot-less name.
-    /// <para>检查指定分区是否具有 A/B 槽位。只有确认的 <c>yes</c> 才会缓存；瞬态失败（FAIL 应答、
-    /// 超时）不会写入缓存，后续调用会重试，而不会把分区永久解析为无槽位名称。</para>
+    /// Checks whether the specified partition has A/B slots.
+    /// <para>检查指定分区是否具有 A/B 槽位。</para>
+    /// Only a confirmed <c>yes</c> is cached; a transient failure (FAIL reply, timeout) leaves the entry
+    /// uncached so a later call retries instead of permanently resolving the partition to its slot-less name.
+    /// <para>只有确认的 <c>yes</c> 才会缓存；瞬态失败（FAIL 应答、超时）不会写入缓存，后续调用会重试，
+    /// 而不会把分区永久解析为无槽位名称。</para>
     /// </summary>
     /// <param name="partition">Partition name to probe. <para>要探测的分区名。</para></param>
     /// <returns><see langword="true"/> when the device reports <c>yes</c>; empty <paramref name="partition"/> returns <see langword="false"/>. Positive results are cached per partition.
@@ -52,18 +53,18 @@ public sealed partial class FastbootSession
 
     /// <summary>
     /// Resolves a partition name against A/B slots with exactly the rules used by
-    /// <see cref="FlashPartition"/>: an explicit slot suffix is authoritative and returned
-    /// unchanged, a slot-capable partition gets the current active slot appended, and any other
-    /// name is returned as-is. Callers that issue several commands for the same target (for
-    /// example <c>is-logical</c> / <c>resize-logical-partition</c> before <c>flash:</c>) use this
-    /// so every command addresses the identical partition.
-    /// <para>使用与 <see cref="FlashPartition"/> 完全相同的规则按 A/B 槽位解析分区名：显式槽位后缀
-    /// 权威且原样返回，支持槽位的分区追加当前活跃槽位，其余名称原样返回。需要对同一目标连发多条
-    /// 命令的调用方（如 <c>flash:</c> 前的 <c>is-logical</c> / <c>resize-logical-partition</c>）
-    /// 借此保证各条命令指向完全相同的分区。</para>
+    /// <see cref="FlashPartition"/>.
+    /// <para>使用与 <see cref="FlashPartition"/> 完全相同的规则按 A/B 槽位解析分区名。</para>
+    /// An explicit slot suffix is authoritative and returned unchanged, a slot-capable partition gets the
+    /// current active slot appended, and any other name is returned as-is. Callers that issue several
+    /// commands for the same target (for example <c>is-logical</c> / <c>resize-logical-partition</c> before
+    /// <c>flash:</c>) use this so every command addresses the identical partition.
+    /// <para>显式槽位后缀权威且原样返回，支持槽位的分区追加当前活跃槽位，其余名称原样返回。需要对同一
+    /// 目标连发多条命令的调用方（如 <c>flash:</c> 前的 <c>is-logical</c> /
+    /// <c>resize-logical-partition</c>）借此保证各条命令指向完全相同的分区。</para>
     /// </summary>
-    /// <param name="partition"><para>待解析的分区名。</para>The partition name to resolve.</param>
-    /// <returns><para>槽位解析后的分区名。</para>The slot-resolved partition name.</returns>
+    /// <param name="partition">The partition name to resolve. <para>待解析的分区名。</para></param>
+    /// <returns>The slot-resolved partition name. <para>槽位解析后的分区名。</para></returns>
     public string ResolvePartition(string partition)
     {
         ArgumentException.ThrowIfNullOrEmpty(partition);
@@ -113,11 +114,12 @@ public sealed partial class FastbootSession
 
     /// <summary>
     /// Gets the size of the specified partition in bytes (decimal or 0x-prefixed hex).
-    /// Returns 0 when the device does not report the partition size or reports a malformed
-    /// value; device replies are untrusted, so a non-numeric answer never surfaces as a
-    /// parsing exception from a fetch or flash path.
-    /// <para>以字节获取指定分区大小（十进制或 0x 前缀十六进制）。设备未报告或报告畸形值时
-    /// 返回 0；设备应答不可信，非数字应答不会在取回或刷写路径上以解析异常的形式冒出。</para>
+    /// <para>以字节获取指定分区大小（十进制或 0x 前缀十六进制）。</para>
+    /// Returns 0 when the device does not report the partition size or reports a malformed value; device
+    /// replies are untrusted, so a non-numeric answer never surfaces as a parsing exception from a fetch
+    /// or flash path.
+    /// <para>设备未报告或报告畸形值时返回 0；设备应答不可信，非数字应答不会在取回或刷写路径上以解析
+    /// 异常的形式冒出。</para>
     /// </summary>
     /// <param name="partition">Partition name to size. <para>要获取大小的分区名。</para></param>
     /// <returns>The parsed size in bytes, or 0 when unavailable. <para>解析出的字节大小；不可用时为 0。</para></returns>
@@ -268,18 +270,21 @@ public sealed partial class FastbootSession
 
     /// <summary>
     /// Checks whether a partition is logical, using preloaded metadata when it carries evidence,
-    /// otherwise querying the device. A preloaded set that is null <em>or empty</em> is treated as
-    /// "no evidence": super metadata parsing swallows every recognized failure into an empty result
-    /// (see <see cref="SuperImageBuilder.GetLogicalPartitions(string, int)"/>), so an empty set
-    /// cannot distinguish "this super has no logical partitions" from "the image could not be
-    /// parsed". Trusting it would classify every logical partition as physical and suppress the
-    /// <c>is-logical</c> query permanently.
-    /// <para>检查分区是否为逻辑分区：预加载元数据含有证据时使用它，否则查询设备。预加载集合为 null
-    /// <em>或空</em> 时都按“无证据”处理：super 元数据解析会把所有可识别的失败吞成空结果
-    /// （见 <see cref="SuperImageBuilder.GetLogicalPartitions(string, int)"/>），因此空集合无法区分
-    /// “该 super 没有逻辑分区”与“镜像无法解析”。信任它会把所有逻辑分区判为物理分区，并永久抑制
-    /// <c>is-logical</c> 查询。</para>
+    /// otherwise querying the device.
+    /// <para>检查分区是否为逻辑分区：预加载元数据含有证据时使用它，否则查询设备。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>A preloaded set that is null <em>or empty</em> is treated as "no evidence": super metadata
+    /// parsing swallows every recognized failure into an empty result (see
+    /// <see cref="SuperImageBuilder.GetLogicalPartitions(string, int)"/>), so an empty set cannot
+    /// distinguish "this super has no logical partitions" from "the image could not be parsed". Trusting it
+    /// would classify every logical partition as physical and suppress the <c>is-logical</c> query
+    /// permanently.</para>
+    /// <para>预加载集合为 null <em>或空</em> 时都按“无证据”处理：super 元数据解析会把所有可识别的
+    /// 失败吞成空结果（见 <see cref="SuperImageBuilder.GetLogicalPartitions(string, int)"/>），因此空
+    /// 集合无法区分“该 super 没有逻辑分区”与“镜像无法解析”。信任它会把所有逻辑分区判为物理分区，
+    /// 并永久抑制 <c>is-logical</c> 查询。</para>
+    /// </remarks>
     /// <param name="partition">Partition name to probe. <para>要探测的分区名。</para></param>
     /// <returns><see langword="true"/> when the partition is known logical, answered from a non-empty preloaded set or, absent one, from a fresh <c>is-logical</c> query.
     /// <para>该分区为已知逻辑分区时返回 <see langword="true"/>；答案来自非空预加载集合，缺少此类集合时来自一次新的 <c>is-logical</c> 查询。</para></returns>

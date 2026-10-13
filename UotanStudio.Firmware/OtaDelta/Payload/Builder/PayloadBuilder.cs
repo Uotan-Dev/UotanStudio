@@ -761,7 +761,7 @@ public sealed partial class PayloadBuilder : IDisposable
         public InstallOperation.Types.Type OperationType { get; set; }
         public CompressionType CompressionType { get; set; }
 
-        /// <summary>When true the partition is emitted as SOURCE_COPY (unchanged blocks) + REPLACE (changed blocks).</summary>
+        /// <summary>When true the partition is emitted as SOURCE_COPY (unchanged blocks) plus REPLACE (changed blocks). <para>为 true 时该分区以 SOURCE_COPY（未变块）加 REPLACE（变更块）方式输出。</para></summary>
         public bool Incremental { get; set; }
 
         public bool Imagediff { get; set; }

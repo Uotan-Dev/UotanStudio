@@ -152,11 +152,8 @@ internal static class GptRepair
     }
 
     /// <summary>
-    /// Rebuilds the primary GPT copy from the backup and publishes the repaired image atomically to a
-    /// new file. Nothing is written when the primary already validates, the backup is unusable, or the
-    /// rebuilt image fails read-back validation through <see cref="GptReader"/>.
-    /// <para>由备份重建 GPT 主副本，并将修复后的镜像原子发布到新文件。当主副本已校验通过、备份不可用，
-    /// 或重建结果无法经 <see cref="GptReader"/> 读回校验时，不写入任何内容。</para>
+    /// Rebuilds the primary GPT copy from the backup and publishes the repaired image.
+    /// <para>由备份重建 GPT 主副本并发布修复后的镜像。</para>
     /// </summary>
     /// <param name="imagePath">
     /// Damaged disk image; it is only read and never modified.

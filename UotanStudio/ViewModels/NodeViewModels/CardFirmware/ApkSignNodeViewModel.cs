@@ -22,6 +22,7 @@ public sealed class ApkSignNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>Signs asynchronously; failures propagate to the workflow engine. <para>异步签名，失败向工作流引擎传播。</para></summary>
+    /// <param name="context">Context supplying the execution cancellation token. <para>提供执行取消令牌的上下文。</para></param>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {
         WriteOutput("Signed APK", null);

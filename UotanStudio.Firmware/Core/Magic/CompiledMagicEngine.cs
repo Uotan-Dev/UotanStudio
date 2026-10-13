@@ -40,8 +40,8 @@ public static class CompiledMagicEngine
     public static int TopLevelCount => TopLevel.Count;
 
     /// <summary>
-    /// <para>解码并装载生成器规则表（幂等）。</para>
     /// Decodes and loads the generator's rule tables (idempotent).
+    /// <para>解码并装载生成器规则表（幂等）。</para>
     /// </summary>
     public static void EnsureLoaded()
     {
@@ -141,8 +141,8 @@ public static class CompiledMagicEngine
     private static string? NullIfEmpty(string s) => string.IsNullOrEmpty(s) ? null : s;
 
     /// <summary>
-    /// <para>对文件字节执行匹配，返回最佳命中（强度优先，其次加载顺序）。</para>
     /// Matches the bytes, returning the best hit (strength first, then load order).
+    /// <para>对文件字节执行匹配，返回最佳命中（强度优先，其次加载顺序）。</para>
     /// </summary>
     /// <param name="data">
     /// File bytes to probe; the span is copied into a pooled buffer and may be a slice of a larger
@@ -239,8 +239,8 @@ public static class CompiledMagicEngine
     }
 
     /// <summary>
-    /// <para>仅返回 MIME 类型。</para>
     /// Returns just the MIME type.
+    /// <para>仅返回 MIME 类型。</para>
     /// </summary>
     /// <param name="data">
     /// File bytes to probe, subject to the same rules as <see cref="Match"/>.

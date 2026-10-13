@@ -170,10 +170,10 @@ public readonly struct AvbVBMetaImageHeader
     /// <exception cref="ArgumentException">
     /// <paramref name="destination"/> is shorter than <see cref="Size"/> bytes, or <see cref="Magic"/> or
     /// <see cref="ReleaseString"/> does not fit its fixed header capacity (47 bytes plus one NUL for the
-    /// release string), mirroring avbtool's rejection instead of silent truncation.
+    /// release string); the write is rejected instead of silently truncating.
     /// <para><paramref name="destination"/> 短于 <see cref="Size"/> 字节，或 <see cref="Magic"/> /
-    /// <see cref="ReleaseString"/> 超出其定长头部容量（release string 为 47 字节加一个 NUL），与 avbtool
-    /// 的拒绝行为一致而非静默截断。</para>
+    /// <see cref="ReleaseString"/> 超出其定长头部容量（release string 为 47 字节加一个 NUL），
+    /// 此时写入被拒绝而非静默截断。</para>
     /// </exception>
     public void WriteTo(Span<byte> destination)
     {

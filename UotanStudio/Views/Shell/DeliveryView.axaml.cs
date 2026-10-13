@@ -13,7 +13,7 @@ using UotanStudio.Services.Projects;
 
 namespace UotanStudio.Views.Shell;
 
-/// <summary><para>ROM 交付页面，协调原有表单方案保存和文件输出。</para>Coordinates the existing delivery form, plan persistence and file output.</summary>
+/// <summary>Coordinates the existing delivery form, plan persistence and file output. <para>ROM 交付页面，协调原有表单方案保存和文件输出。</para></summary>
 public partial class DeliveryView : UserControl
 {
     private const double MinimumSidebarWidth = 268;
@@ -36,7 +36,7 @@ public partial class DeliveryView : UserControl
     private double _bottomImagesHeightRatio = 0.6;
     private double _rightImagesHeightRatio = 0.6;
 
-    /// <summary><para>初始化交付配置与共用 SUPER 设置。</para>Initializes delivery options and shared SUPER settings.</summary>
+    /// <summary>Initializes delivery options and shared SUPER settings. <para>初始化交付配置与共用 SUPER 设置。</para></summary>
     public DeliveryView() : this(new UotanStudio.Services.Keys.KeyLibraryService()) { }
 
     internal DeliveryView(UotanStudio.Services.Keys.KeyLibraryService keyLibrary)
@@ -501,7 +501,7 @@ public partial class DeliveryView : UserControl
         BrowsePayloadPostinstallButton.IsEnabled = enabled;
     }
 
-    /// <summary><para>进入交付页面时刷新项目镜像，并保留当前项目的表单选择。</para>Refreshes images on entry, retaining the current project's form choices.</summary>
+    /// <summary>Refreshes images on entry, retaining the current project's form choices. <para>进入交付页面时刷新项目镜像，并保留当前项目的表单选择。</para></summary>
     public void Refresh()
     {
         _ = RefreshDeliveryAsync();

@@ -4,7 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace UotanStudio.ViewModels.Shell;
 
-/// <summary>AI connection editor state, held only in memory. AI 连接编辑状态，仅保存在内存中。</summary>
+/// <summary>AI connection editor state, held only in memory.<para>AI 连接编辑状态，仅保存在内存中。</para></summary>
 public partial class AiSettingsViewModel : ViewModelBase
 {
     [ObservableProperty] private string _apiEndpoint = string.Empty;

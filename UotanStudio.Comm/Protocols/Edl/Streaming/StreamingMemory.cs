@@ -17,28 +17,18 @@ public enum StreamingMemoryLinkMode
 
     /// <summary>
     /// Stock Qualcomm loader: peek-only support through the DIAG 0x03 512-byte page loop
-    /// (streaming.py:259-274, 818-821). <para>原版 Qualcomm loader：仅支持经 DIAG 0x03 512 字节
-    /// 页循环的 peek（streaming.py:259-274、818-821）。</para></summary>
+    ///. <para>原版 Qualcomm loader：仅支持经 DIAG 0x03 512 字节
+    /// 页循环的 peek。</para></summary>
     Qualcomm = 1,
 
     /// <summary>
     /// Patched loader: full read and write support through the ARM 0x11 execute loop
-    /// (streaming.py:276-321, 331-354). <para>打补丁 loader：经 ARM 0x11 执行循环提供完整读写
-    /// （streaming.py:276-321、331-354）。</para></summary>
+    ///. <para>打补丁 loader：经 ARM 0x11 执行循环提供完整读写
+    /// 。</para></summary>
     Patched = 2
 }
 
-/// <summary>
-/// Memory reads, peek and poke, and chipset identification for the streaming protocol,
-/// transcribed from <c>edlclient/Library/streaming.py</c> (qc_memread at streaming.py:259-274,
-/// patched_memread at streaming.py:276-321, mempeek at streaming.py:323-329, memwrite at
-/// streaming.py:331-354, mempoke at streaming.py:363-366, identify_chipset at
-/// streaming.py:1003-1040).
-/// <para>流式协议的内存读取、peek/poke 与芯片识别，转写自 <c>edlclient/Library/streaming.py</c>
-/// （qc_memread 见 streaming.py:259-274，patched_memread 见 streaming.py:276-321，mempeek 见
-/// streaming.py:323-329，memwrite 见 streaming.py:331-354，mempoke 见 streaming.py:363-366，
-/// identify_chipset 见 streaming.py:1003-1040）。</para>
-/// </summary>
+/// <summary>Memory reads, peek and poke, and chipset identification for the streaming protocol. <para>流式协议的内存读取、peek/poke 与芯片组识别。</para></summary>
 public sealed partial class StreamingProtocol
 {
     /// <summary>
@@ -80,18 +70,18 @@ public sealed partial class StreamingProtocol
         "000000EA000090E504109DE40100C1E5AA00A0E30000C1E50240A0E31EFF2FE1EFBEADDE");
 
     /// <summary>
-    /// Reads target memory. The Qualcomm path loops DIAG 0x03 requests of at most
+    /// Reads target memory.
+    /// <para>读取目标内存。</para>
+    /// The Qualcomm path loops DIAG 0x03 requests of at most
     /// <see cref="StreamingConstants.MemoryReadPageBytes"/> bytes whose reply echoes the response
-    /// identifier and the requested address before the page data; the patched path loops the ARM
-    /// read blob with 1000-byte blocks, retrying short replies the way the reference
-    /// <c>patched_memread</c> does (streaming.py:264-268, 296-317). Address and length are bound
-    /// before the operation lease and any transport write, and the whole request must stay inside
-    /// the 32-bit DIAG address space.
-    /// <para>读取目标内存。Qualcomm 路径循环发送至多
-    /// <see cref="StreamingConstants.MemoryReadPageBytes"/> 字节的 DIAG 0x03 请求，回包先回显响应号
-    /// 与请求地址再跟页数据；打补丁路径用 ARM 读取机器码按 1000 字节块循环，并像参考
-    /// <c>patched_memread</c> 那样对短回包重试（streaming.py:264-268、296-317）。地址与长度在取得
-    /// 操作租约与任何传输写出之前完成边界检查，整个请求必须落在 32 位 DIAG 地址空间内。</para>
+    /// identifier and the requested address before the page data; the patched path loops the ARM read
+    /// blob with 1000-byte blocks, retrying short replies a bounded number of times. Address and length
+    /// are bound before the operation lease and any transport write, and the whole request must stay
+    /// inside the 32-bit DIAG address space.
+    /// <para>Qualcomm 路径循环发送至多 <see cref="StreamingConstants.MemoryReadPageBytes"/> 字节的
+    /// DIAG 0x03 请求，回包先回显响应号与请求地址再跟页数据；打补丁路径用 ARM 读取机器码按 1000 字节
+    /// 块循环，并对短回包做有界次数的重试。地址与长度在取得操作租约与任何传输写出之前完成边界检查，
+    /// 整个请求必须落在 32 位 DIAG 地址空间内。</para>
     /// </summary>
     /// <param name="address">The start address to read. <para>读取起始地址。</para></param>
     /// <param name="length">The number of bytes to read, at most
@@ -108,8 +98,8 @@ public sealed partial class StreamingProtocol
     /// <para>长度超出 (0, <see cref="StreamingConstants.MaxMemoryReadBytes"/>] 或读取窗口超出
     /// 32 位 DIAG 地址空间时抛出；拒绝发生在取得操作租约之前。</para></exception>
     /// <exception cref="StreamingException">Thrown when the target rejects a page, replies with a
-    /// mismatched identifier, or a patched-block reply stays short after the reference retry
-    /// budget. <para>目标拒绝某页、以不符的响应号应答，或打补丁块回包在参考重试预算后仍然过短
+    /// mismatched identifier, or a patched-block reply stays short after the retry
+    /// budget. <para>目标拒绝某页、以不符的响应号应答，或打补丁块回包在重试预算后仍然过短
     /// 时抛出。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled.
     /// <para>令牌被取消。</para></exception>
@@ -133,10 +123,8 @@ public sealed partial class StreamingProtocol
 
     /// <summary>
     /// Reads one little-endian 32-bit word from target memory via
-    /// <see cref="ReadMemoryAsync"/>, mirroring the reference <c>mempeek</c>
-    /// (streaming.py:323-329).
-    /// <para>经 <see cref="ReadMemoryAsync"/> 读取目标内存中的一个小端 32 位字，对应参考
-    /// <c>mempeek</c>（streaming.py:323-329）。</para>
+    /// <see cref="ReadMemoryAsync"/>.
+    /// <para>经 <see cref="ReadMemoryAsync"/> 读取目标内存中的一个小端 32 位字。</para>
     /// </summary>
     /// <param name="address">The word address to peek. <para>要 peek 的字地址。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
@@ -152,12 +140,11 @@ public sealed partial class StreamingProtocol
 
     /// <summary>
     /// Writes one little-endian 32-bit word into target memory through the patched loader's ARM
-    /// write blob, mirroring the reference <c>mempoke</c> (streaming.py:363-366). The word window
-    /// and the confirmation gate are both checked before the operation lease and before any byte
-    /// reaches the wire.
-    /// <para>经打补丁 loader 的 ARM 写入机器码把一个小端 32 位字写入目标内存，对应参考
-    /// <c>mempoke</c>（streaming.py:363-366）。字窗口与确认门都在取得操作租约之前、任何字节上线
-    /// 之前检查。</para>
+    /// write blob.
+    /// <para>经打补丁 loader 的 ARM 写入机器码把一个小端 32 位字写入目标内存。</para>
+    /// The word window and the confirmation gate are both checked before the operation lease and
+    /// before any byte reaches the wire.
+    /// <para>字窗口与确认门都在取得操作租约之前、任何字节上线之前检查。</para>
     /// </summary>
     /// <param name="address">The word address to poke. <para>要 poke 的字地址。</para></param>
     /// <param name="value">The 32-bit value to store. <para>要存储的 32 位值。</para></param>
@@ -194,11 +181,10 @@ public sealed partial class StreamingProtocol
 
     /// <summary>
     /// Writes up to <see cref="StreamingConstants.PatchedMemoryBlockBytes"/> bytes into target
-    /// memory with the patched loader's ARM write blob. The reference silently truncates longer
-    /// payloads at streaming.py:350-352; here they are rejected instead.
+    /// memory with the patched loader's ARM write blob. Longer payloads are rejected instead of
+    /// being silently truncated.
     /// <para>用打补丁 loader 的 ARM 写入机器码向目标内存写入至多
-    /// <see cref="StreamingConstants.PatchedMemoryBlockBytes"/> 字节。参考在 streaming.py:350-352
-    /// 对更长数据静默截断；这里改为直接拒绝。</para>
+    /// <see cref="StreamingConstants.PatchedMemoryBlockBytes"/> 字节。更长数据会被直接拒绝而不静默截断。</para>
     /// </summary>
     /// <param name="address">The start address of the write. <para>写入起始地址。</para></param>
     /// <param name="data">The bytes to store. <para>要存储的字节。</para></param>
@@ -235,16 +221,15 @@ public sealed partial class StreamingProtocol
     }
 
     /// <summary>
-    /// Identifies the patched loader's chipset by executing the search blob: a reply containing
-    /// "Power off not supported" means the stock Qualcomm loader (returned as 0xFF), the marker
-    /// byte 0xAA followed by the chipset identifier means a patched loader, and one mismatched
-    /// reply is retried exactly like the reference <c>identify_chipset</c>
-    /// (streaming.py:1003-1040). The resolved mode is cached in
+    /// Identifies the patched loader's chipset by executing the search blob.
+    /// <para>通过执行搜索机器码识别打补丁 loader 的芯片。</para>
+    /// A reply containing "Power off not supported" means the stock Qualcomm loader (returned as
+    /// 0xFF), the marker byte 0xAA followed by the chipset identifier means a patched loader, and one
+    /// mismatched reply is retried once. The resolved mode is cached in
     /// <see cref="NegotiatedLinkMode"/>.
-    /// <para>通过执行搜索机器码识别打补丁 loader 的芯片：回包含 “Power off not supported” 表示
-    /// 原版 Qualcomm loader（返回 0xFF），标记字节 0xAA 后跟芯片标识表示打补丁 loader；与参考
-    /// <c>identify_chipset</c> 一致，对一个不符回包只重试一次（streaming.py:1003-1040）。解析出的
-    /// 模式缓存到 <see cref="NegotiatedLinkMode"/>。</para>
+    /// <para>回包含 “Power off not supported” 表示原版 Qualcomm loader（返回 0xFF），标记字节 0xAA
+    /// 后跟芯片标识表示打补丁 loader；对一个不符回包只重试一次。解析出的模式缓存到
+    /// <see cref="NegotiatedLinkMode"/>。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The chipset identifier byte, 0xFF for the stock Qualcomm loader, or -1 when the
@@ -296,8 +281,8 @@ public sealed partial class StreamingProtocol
     }
 
     /// <summary>
-    /// Runs the reference chipset search exchange on an already-leased session.
-    /// <para>在已持有租约的会话上执行参考的芯片搜索交换。</para>
+    /// Runs the chipset search exchange on an already-leased session.
+    /// <para>在已持有租约的会话上执行芯片搜索交换。</para>
     /// </summary>
     private async Task<int> IdentifyChipsetOwnedAsync(CancellationToken cancellationToken)
     {
@@ -333,10 +318,9 @@ public sealed partial class StreamingProtocol
     }
 
     /// <summary>
-    /// Reads one more framed reply inside the reference 5-second budget and discards it,
-    /// tolerating a target that sends nothing (hdlc.receive_reply(5) at streaming.py:1029).
-    /// <para>在参考的 5 秒预算内再读取一个封装回包并丢弃，容忍目标不再发送
-    /// （streaming.py:1029 的 hdlc.receive_reply(5)）。</para>
+    /// Reads one more framed reply within a 5-second budget and discards it,
+    /// tolerating a target that sends nothing.
+    /// <para>在 5 秒预算内再读取一个封装回包并丢弃，容忍目标不再发送。</para>
     /// </summary>
     private async Task DrainOptionalFrameOwnedAsync(CancellationToken cancellationToken)
     {
@@ -352,10 +336,10 @@ public sealed partial class StreamingProtocol
     /// <summary>
     /// Runs the Qualcomm 0x03 page loop on an already-leased session: request identifier,
     /// little-endian uint32 address and uint16 size per page; the normalized reply carries the
-    /// 0x04 identifier, the echoed address, then the page data (streaming.py:259-274).
+    /// 0x04 identifier, the echoed address, then the page data.
     /// <para>在已持有租约的会话上运行 Qualcomm 0x03 页循环：每页请求号、小端 uint32 地址与
     /// uint16 长度；规范化后的回包携带 0x04 响应号、回显地址，随后是页数据
-    /// （streaming.py:259-274）。</para>
+    /// 。</para>
     /// </summary>
     private async Task<byte[]> ReadMemoryQualcommOwnedAsync(uint address, int length,
         CancellationToken cancellationToken)
@@ -394,11 +378,10 @@ public sealed partial class StreamingProtocol
     /// <summary>
     /// Runs the patched ARM read loop on an already-leased session: the read blob with the
     /// little-endian address and block length, replies whose first four bytes are the 0x12
-    /// status word followed by block data; short replies are re-read up to the reference 20-try
-    /// budget (streaming.py:276-321).
+    /// status word followed by block data; short replies are re-read up to a 20-try
+    /// budget.
     /// <para>在已持有租约的会话上运行打补丁 ARM 读循环：读取机器码附小端地址与块长；回包前四个
-    /// 字节为 0x12 状态字，其后是块数据；短回包按参考的 20 次重试预算补读
-    /// （streaming.py:276-321）。</para>
+    /// 字节为 0x12 状态字，其后是块数据；短回包按 20 次重试预算补读。</para>
     /// </summary>
     private async Task<byte[]> ReadMemoryPatchedOwnedAsync(uint address, int length,
         CancellationToken cancellationToken)
@@ -441,9 +424,9 @@ public sealed partial class StreamingProtocol
 
     /// <summary>
     /// Executes one patched ARM write on an already-leased session and consumes the loader's
-    /// acknowledgement (streaming.py:331-354).
+    /// acknowledgement.
     /// <para>在已持有租约的会话上执行一次打补丁 ARM 写，并消费 loader 的确认
-    /// （streaming.py:331-354）。</para>
+    /// 。</para>
     /// </summary>
     private async Task<bool> MemWriteOwnedAsync(uint address, byte[] data, CancellationToken cancellationToken)
     {

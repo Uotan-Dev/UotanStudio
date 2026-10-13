@@ -5,7 +5,10 @@ using Dock.Model.Core;
 
 namespace UotanStudio.Services.Workspace;
 
-/// <summary>Tracks unsaved documents across dock collections. 跟踪停靠集合中的未保存文档。</summary>
+/// <summary>
+/// Tracks unsaved documents across dock collections.
+/// <para>跟踪停靠集合中的未保存文档。</para>
+/// </summary>
 internal sealed class WorkspaceModificationTracker : IDisposable
 {
     private readonly Func<IDockable?> _getLayout;

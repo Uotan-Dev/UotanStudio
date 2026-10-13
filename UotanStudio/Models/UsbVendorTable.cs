@@ -3,19 +3,11 @@ using System.Collections.Frozen;
 namespace UotanStudio.Models;
 
 /// <summary>
-/// Provides a built-in USB Vendor ID (VID) to vendor name lookup for the USB devices
-/// most commonly encountered by the toolbox: Android OEMs, SoC vendors (Qualcomm /
-/// MediaTek / Rockchip / UNISOC / Allwinner / Amlogic) and the USB gadget / serial
-/// bridge chips used for ADB, Fastboot, EDL and serial debugging.
-/// <para>提供内置的 USB 厂商 ID (VID) 到厂商名查找，覆盖工具箱最常见的 USB 设备：
-/// Android OEM、SoC 厂商（Qualcomm / MediaTek / Rockchip / 紫光展锐 / 全志 / 晶晨）
-/// 以及用于 ADB、Fastboot、EDL 与串口调试的 USB gadget / 串口桥芯片。</para>
+/// Provides a built-in USB Vendor ID (VID) to vendor name lookup for Android OEMs, SoC vendors,
+/// and the gadget or serial bridge chips seen in ADB, Fastboot, EDL and serial debugging.
+/// <para>提供内置的 USB 厂商 ID（VID）到厂商名查找，覆盖 Android OEM、SoC 厂商，
+/// 以及 ADB、Fastboot、EDL 与串口调试中常见的 USB gadget / 串口桥芯片。</para>
 /// </summary>
-/// <remarks>
-/// <para>该表仅收录高频出现的厂商，并非完整 USB ID 数据库；未命中的 VID 返回空。</para>
-/// This table only includes frequently seen vendors and is not a complete USB ID
-/// database; an unmatched VID returns empty.
-/// </remarks>
 public static class UsbVendorTable
 {
     private static readonly FrozenDictionary<ushort, string> _vendors = new Dictionary<ushort, string>

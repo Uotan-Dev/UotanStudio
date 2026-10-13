@@ -28,35 +28,49 @@ internal static unsafe partial class DxgiInterop
 {
     private const string Dxgi = "dxgi.dll";
 
-    /// <summary>IID_IDXGIFactory1.</summary>
-    /// <summary>IID_IDXGIFactory1。</summary>
+    /// <summary>
+    /// IID_IDXGIFactory1.
+    /// <para>IID_IDXGIFactory1。</para>
+    /// </summary>
     public static readonly Guid IidDxgiFactory1 = new("770AAE78-F26F-4DBA-A829-253C83D1B387");
 
-    /// <summary>IID_IDXGIResource.</summary>
-    /// <summary>IID_IDXGIResource。</summary>
+    /// <summary>
+    /// IID_IDXGIResource.
+    /// <para>IID_IDXGIResource。</para>
+    /// </summary>
     public static readonly Guid IidDxgiResource = new("0451E34F-7EA8-48C0-9A8E-1E0D6B4E9D24");
 
-    /// <summary>IID_IDXGIKeyedMutex.</summary>
-    /// <summary>IID_IDXGIKeyedMutex。</summary>
+    /// <summary>
+    /// IID_IDXGIKeyedMutex.
+    /// <para>IID_IDXGIKeyedMutex。</para>
+    /// </summary>
     public static readonly Guid IidDxgiKeyedMutex = new("9D8E1289-D7B3-4E22-9574-10D6AA696D97");
 
-    /// <summary>D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX.</summary>
-    /// <summary>D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX。</summary>
+    /// <summary>
+    /// D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX.
+    /// <para>D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX。</para>
+    /// </summary>
     public const uint MiscSharedKeyedMutex = 0x100;
 
-    /// <summary>WAIT_TIMEOUT (0x102): the mutex is held by a device that acquired a different key.</summary>
-    /// <summary>WAIT_TIMEOUT（0x102）：互锁被以其他键获取的设备持有。</summary>
+    /// <summary>
+    /// WAIT_TIMEOUT (0x102): the mutex is held by a device that acquired a different key.
+    /// <para>WAIT_TIMEOUT（0x102）：互锁被以其他键获取的设备持有。</para>
+    /// </summary>
     public const int WaitTimeout = 0x102;
 
-    /// <summary>WAIT_ABANDONED (0x80): the owning device terminated without releasing the mutex.</summary>
-    /// <summary>WAIT_ABANDONED（0x80）：持有设备在未释放互锁的情况下终止。</summary>
+    /// <summary>
+    /// WAIT_ABANDONED (0x80): the owning device terminated without releasing the mutex.
+    /// <para>WAIT_ABANDONED（0x80）：持有设备在未释放互锁的情况下终止。</para>
+    /// </summary>
     public const int WaitAbandoned = 0x80;
 
     [LibraryImport(Dxgi)]
     private static partial int CreateDXGIFactory1(in Guid iid, out nint factory);
 
-    /// <summary>IDXGIFactory.EnumAdapters (slot 7: IUnknown 0–2, IDXGIObject 3–6).</summary>
-    /// <summary>IDXGIFactory.EnumAdapters（槽位 7：IUnknown 0–2，IDXGIObject 3–6）。</summary>
+    /// <summary>
+    /// IDXGIFactory.EnumAdapters (slot 7: IUnknown 0–2, IDXGIObject 3–6).
+    /// <para>IDXGIFactory.EnumAdapters（槽位 7：IUnknown 0–2，IDXGIObject 3–6）。</para>
+    /// </summary>
     public static int EnumAdapters(nint factory, uint index, out nint adapter)
     {
         fixed (nint* a = &adapter)
@@ -99,8 +113,10 @@ internal static unsafe partial class DxgiInterop
     public static int AcquireSync(nint keyedMutex, ulong key, uint timeoutMilliseconds) =>
         ((delegate* unmanaged[Stdcall]<nint, ulong, uint, int>)(*(nint***)keyedMutex)[7])(keyedMutex, key, timeoutMilliseconds);
 
-    /// <summary>IDXGIKeyedMutex.ReleaseSync (slot 8), handing the mutex over at <paramref name="key"/>.</summary>
-    /// <summary>IDXGIKeyedMutex.ReleaseSync（槽位 8），以 <paramref name="key"/> 移交互锁。</summary>
+    /// <summary>
+    /// IDXGIKeyedMutex.ReleaseSync (slot 8), handing the mutex over at <paramref name="key"/>.
+    /// <para>IDXGIKeyedMutex.ReleaseSync（槽位 8），以 <paramref name="key"/> 移交互锁。</para>
+    /// </summary>
     public static int ReleaseSync(nint keyedMutex, ulong key) =>
         ((delegate* unmanaged[Stdcall]<nint, ulong, int>)(*(nint***)keyedMutex)[8])(keyedMutex, key);
 
@@ -153,8 +169,10 @@ internal static unsafe partial class DxgiInterop
     }
 }
 
-/// <summary>DXGI_ADAPTER_DESC; the 128-character description is skipped for comparisons.</summary>
-/// <summary>DXGI_ADAPTER_DESC；128 字符的描述字段不参与比较。</summary>
+/// <summary>
+/// DXGI_ADAPTER_DESC; the 128-character description is skipped for comparisons.
+/// <para>DXGI_ADAPTER_DESC；128 字符的描述字段不参与比较。</para>
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct DxgiAdapterDesc
 {

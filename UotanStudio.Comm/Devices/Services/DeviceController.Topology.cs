@@ -9,12 +9,12 @@ using UotanStudio.Comm.Transports.Usb.Backend.Windows;
 namespace UotanStudio.Comm.Devices.Services;
 
 /// <summary>
-/// <para>L4 总线拓扑面：向服务层暴露按平台选择的 USB 设备树读取，使宿主无需直接命名
-/// <c>CommKit</c> 或任何 P/Invoke。树形状由共享的 <see cref="UsbTopologyTree"/> 统一，
-/// 各后端只负责读取自己平台的扁平节点。</para>
 /// L4 bus-topology surface: exposes platform-selected USB device-tree reads to the service layer so
 /// hosts need not name <c>CommKit</c> or any P/Invoke. The tree shape is unified by the shared
 /// <see cref="UsbTopologyTree"/>; each backend only reads the flat nodes its own platform offers.
+/// <para>L4 总线拓扑面：向服务层暴露按平台选择的 USB 设备树读取，使宿主无需直接命名
+/// <c>CommKit</c> 或任何 P/Invoke。树形状由共享的 <see cref="UsbTopologyTree"/> 统一，
+/// 各后端只负责读取自己平台的扁平节点。</para>
 /// </summary>
 public sealed partial class DeviceController
 {

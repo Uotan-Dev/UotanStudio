@@ -213,15 +213,9 @@ internal static class AvbPartitionVerifier
     }
 
     /// <summary>
-    /// Creates the digest an AVB descriptor names, or <see langword="null"/> when the name is outside the set
-    /// this descriptor accepts. <see cref="IncrementalHash"/> covers the BCL SHA family, which is the whole set:
-    /// libavb carries only <c>sha1</c>, <c>sha256</c> and <c>sha512</c>, and avbtool special-cases
-    /// <c>blake2b-256</c> in its hashtree hasher only, while the hash-descriptor and vbmeta digest paths call
-    /// plain <c>hashlib.new(name)</c> and therefore reject that name.
-    /// <para>创建 AVB 描述符所指定的摘要；名称不在该描述符接受的集合内时返回 <see langword="null"/>。
-    /// <see cref="IncrementalHash"/> 覆盖 BCL SHA 系列，而该系列就是完整集合：libavb 只带 <c>sha1</c>、
-    /// <c>sha256</c>、<c>sha512</c>，avbtool 只在 hashtree 摘要器里特判 <c>blake2b-256</c>，其哈希描述符与
-    /// vbmeta 摘要路径都使用裸 <c>hashlib.new(name)</c>，因此不接受该名称。</para>
+    /// Creates the digest an AVB descriptor names, or <see langword="null"/> when the name is outside
+    /// the accepted set (only <c>sha1</c>, <c>sha256</c> and <c>sha512</c> are supported).
+    /// <para>创建 AVB 描述符所指定的摘要；名称不在受支持集合（仅 <c>sha1</c>、<c>sha256</c>、<c>sha512</c>）内时返回 <see langword="null"/>。</para>
     /// </summary>
     private static IncrementalHash? CreateDescriptorDigest(string? algorithm) => algorithm switch
     {

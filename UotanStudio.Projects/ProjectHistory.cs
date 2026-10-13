@@ -9,25 +9,25 @@ namespace UotanStudio.Services.Projects;
 /// </summary>
 public enum HistoryOperationKind
 {
-    /// <summary><para>导入镜像。</para>Import images.</summary>
+    /// <summary>Import images. <para>导入镜像。</para></summary>
     ImportImages,
 
-    /// <summary><para>解包镜像。</para>Extract an image.</summary>
+    /// <summary>Extract an image. <para>解包镜像。</para></summary>
     ExtractImage,
 
-    /// <summary><para>合成 boot 镜像。</para>Synthesize a boot image.</summary>
+    /// <summary>Synthesize a boot image. <para>合成 boot 镜像。</para></summary>
     SynthesizeImg,
 
-    /// <summary><para>打包 Brotli。</para>Pack a Brotli archive.</summary>
+    /// <summary>Pack a Brotli archive. <para>打包 Brotli。</para></summary>
     SynthesizeBr,
 
-    /// <summary><para>删除镜像。</para>Delete an image.</summary>
+    /// <summary>Delete an image. <para>删除镜像。</para></summary>
     DeleteImage,
 
-    /// <summary><para>合成 super 镜像。</para>Synthesize a super image.</summary>
+    /// <summary>Synthesize a super image. <para>合成 super 镜像。</para></summary>
     SynthesizeSuper,
 
-    /// <summary><para>生成 DAT 镜像对。</para>Generate a DAT image pair.</summary>
+    /// <summary>Generate a DAT image pair. <para>生成 DAT 镜像对。</para></summary>
     SynthesizeDat
 }
 

@@ -7,40 +7,40 @@ using UotanStudio.ViewModels.Nodes;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>单个 <c>UI.*</c> 交互元素的描述符：端口声明与执行委托在此配对，是构造与执行两条分发路径的唯一来源。</para>
 /// Descriptor for one <c>UI.*</c> interaction element: port declaration and execution delegate are paired here,
 /// forming the single source for both the construction and execution dispatch paths.
+/// <para>单个 <c>UI.*</c> 交互元素的描述符：端口声明与执行委托在此配对，是构造与执行两条分发路径的唯一来源。</para>
 /// </summary>
 public sealed class InteractionElementDescriptor
 {
     /// <summary>
-    /// <para>元素的工作流类型键（如 <c>UI.Field.Text</c>）。</para>
     /// Workflow type key of the element (such as <c>UI.Field.Text</c>).
+    /// <para>元素的工作流类型键（如 <c>UI.Field.Text</c>）。</para>
     /// </summary>
     public required string TypeKey { get; init; }
 
     /// <summary>
-    /// <para>字段类元素对应的交互字段种类；非字段元素为 null。</para>
     /// Interaction field kind for field elements; null for non-field elements.
+    /// <para>字段类元素对应的交互字段种类；非字段元素为 null。</para>
     /// </summary>
     public InteractionElementKind? FieldKind { get; init; }
 
     /// <summary>
-    /// <para>在新建节点上声明端口集合。</para>
     /// Declares the port set on a freshly created node.
+    /// <para>在新建节点上声明端口集合。</para>
     /// </summary>
     public required Action<InteractionNodeViewModel> DeclarePorts { get; init; }
 
     /// <summary>
-    /// <para>执行该元素的委托，接收宿主节点与执行上下文。</para>
     /// Execution delegate receiving the host node and the execution context.
+    /// <para>执行该元素的委托，接收宿主节点与执行上下文。</para>
     /// </summary>
     public required Func<InteractionNodeViewModel, INodeExecutionContext, Task> Execute { get; init; }
 }
 
 /// <summary>
-/// <para>全部 <c>UI.*</c> 元素描述符的注册表；新增元素只需补一个描述符条目。</para>
 /// Registry of all <c>UI.*</c> element descriptors; adding an element only requires one descriptor entry.
+/// <para>全部 <c>UI.*</c> 元素描述符的注册表；新增元素只需补一个描述符条目。</para>
 /// </summary>
 internal static class InteractionElements
 {

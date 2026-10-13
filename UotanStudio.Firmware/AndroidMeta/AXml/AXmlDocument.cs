@@ -66,8 +66,8 @@ public sealed class AXmlAttribute
 
     /// <summary>Original source text of the attribute value, when the file retained it.
     /// <para>当文件保留了属性值的原始源文本时的内容。</para></summary>
-    /// <value>The raw text, or <see langword="null"/> when absent. When set it takes precedence over the typed encoding in <see cref="FormatValue"/>.
-    /// <para>原始文本，缺失时为 <see langword="null"/>。若已设置，在 <see cref="FormatValue"/> 中优先于类型化编码。</para></value>
+    /// <value>The raw text, which takes precedence over <see cref="FormatValue"/>; <see langword="null"/> when absent.
+    /// <para>原始文本，优先于 <see cref="FormatValue"/>；缺失时为 <see langword="null"/>。</para></value>
     public string? RawValue { get; set; }
 
     /// <summary>Data-type tag of the value.
@@ -87,12 +87,12 @@ public sealed class AXmlAttribute
     /// <para>按数据类型格式化类型化值为可读文本（优先原始值）。</para>
     /// </summary>
     /// <param name="stringPool">
-    /// Pool used to resolve string-typed values; when <see langword="null"/> a string value renders as <c>@str:index</c>. Out-of-range indices resolve to empty text.
-    /// <para>用于解析字符串类型值的池；为 <see langword="null"/> 时字符串值渲染为 <c>@str:索引</c>。越界索引解析为空文本。</para>
+    /// Pool for resolving string-typed values; when absent they render as <c>@str:index</c>.
+    /// <para>用于解析字符串类型值的池；缺失时渲染为 <c>@str:索引</c>。</para>
     /// </param>
     /// <param name="resourceMap">
-    /// Optional resource-id map kept for signature compatibility; reference and attribute formatting currently ignores it.
-    /// <para>出于签名兼容保留的可选资源 id 映射；引用与属性的格式化当前忽略它。</para>
+    /// Optional resource-id map retained for signature compatibility; formatting ignores it.
+    /// <para>出于签名兼容保留的可选资源 id 映射；格式化会忽略它。</para>
     /// </param>
     /// <returns>The readable text form of the value. <para>值的可读文本形式。</para></returns>
     public string FormatValue(AXmlStringPool? stringPool, IReadOnlyList<uint>? resourceMap = null)
@@ -140,8 +140,8 @@ public sealed class AXmlAttribute
     }
 
     /// <summary>
-    /// Converts the raw integer value to read-only text (for the properties panel).
-    /// <para>把原始整数值转为只读文本（用于属性面板展示）。</para>
+    /// Converts the raw integer value to read-only hexadecimal text.
+    /// <para>把原始整数值转为只读十六进制文本。</para>
     /// </summary>
     /// <returns><see cref="ValueData"/> rendered as an 8-digit lowercase hexadecimal string prefixed with <c>0x</c>.
     /// <para>将 <see cref="ValueData"/> 渲染为带 <c>0x</c> 前缀的 8 位小写十六进制字符串。</para></returns>

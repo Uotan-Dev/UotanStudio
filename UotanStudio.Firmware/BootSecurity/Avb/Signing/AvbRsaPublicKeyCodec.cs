@@ -6,8 +6,8 @@ using UotanStudio.Firmware.Core.IO;
 namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 
 /// <summary>
-/// Encodes and validates the RSA public-key blob produced by <c>avbtool extract_public_key</c>.
-/// <para>编解码并校验由 <c>avbtool extract_public_key</c> 生成的 RSA 公钥 Blob。</para>
+/// Encodes and validates the AVB RSA public-key blob format.
+/// <para>编解码并校验 AVB RSA 公钥 Blob 格式。</para>
 /// </summary>
 /// <remarks>
 /// Blob layout, all big-endian: a 4-byte key size in bits (2048, 4096 or 8192), a 4-byte <c>n0inv</c> equal to the

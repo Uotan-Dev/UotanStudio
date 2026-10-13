@@ -10,9 +10,6 @@ namespace UotanStudio.Benchmarks.Firmware;
 /// <para>在可寻址输入上度量 zstd 流式容器的两种形态：单个流式帧，与按 1 MiB 分块、跨槽并发压缩的多帧，
 /// 覆盖不同级别与数据可压缩性。</para>
 /// </summary>
-/// <remarks>
-/// Run with <c>dotnet run -c Release --project UotanStudio.Benchmarks -- --filter "*ZstdStreamChunk*" --job short</c>.
-/// </remarks>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 1, iterationCount: 3)]
 public class ZstdStreamChunkBenchmarks

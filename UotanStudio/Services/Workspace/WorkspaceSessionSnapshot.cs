@@ -18,7 +18,11 @@ internal sealed class WorkspaceSessionSnapshot
     public ProjectSettingsDto? DraftPackingSettings { get; set; }
     public double NodeZoom { get; set; } = 1;
     public bool NodeMinimap { get; set; } = true;
-    /// <summary>Last main-window bounds and state, when available.</summary>
+    /// <summary>
+    /// Last main-window bounds and state, when available.
+    /// <para>最近一次主窗口的边界与状态（若已捕获）。</para>
+    /// </summary>
+    /// <value>The captured window width, or null when unavailable. <para>捕获到的窗口宽度，未获取时为 null。</para></value>
     public double? WindowWidth { get; set; }
     public double? WindowHeight { get; set; }
     public int? WindowX { get; set; }
@@ -36,9 +40,11 @@ internal sealed class WorkspaceDockState
 internal static class WorkspaceSessionCapture
 {
     /// <summary>
-    /// <para>判定停靠项是否为文档型面板（与 <see cref="Documents"/> 的快照口径一致）。</para>
-    /// Whether the dockable is a document panel (same scope as <see cref="Documents"/>).
+    /// Whether the dockable is a document-style item (same scope as <see cref="Documents"/>).
+    /// <para>判定停靠项是否为文档型条目（与 <see cref="Documents"/> 的快照口径一致）。</para>
     /// </summary>
+    /// <param name="item">The dockable to test. <para>待判定的停靠项。</para></param>
+    /// <returns>True when the item is a document. <para>该条目为文档时返回 true。</para></returns>
     internal static bool IsDocument(IDockable item) =>
         DocumentOpenRegistry.ByInstance(item)?.IsDocument == true;
 

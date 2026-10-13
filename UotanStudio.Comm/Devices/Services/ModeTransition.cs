@@ -3,13 +3,11 @@ using UotanStudio.Comm.Devices.Discovery;
 namespace UotanStudio.Comm.Devices.Services;
 
 /// <summary>
-/// A cross-protocol observation that one physical device surfaced with a different mode.
-/// <para>对同一物理设备以不同模式出现的跨协议观测。</para>
-/// Transitions are only published when the device identity correlates the old and the new
-/// observation (container first, usable physical port second); the event carries the evidence
-/// kind so consumers can weigh it, and never correlates by VID/PID or enumeration position.
-/// <para>仅当设备身份能够关联新旧观测时（优先容器 ID，其次可用物理端口路径）才会发布迁移；
-/// 事件携带关联所依据的证据类型供消费者权衡，绝不按 VID/PID 或枚举位置关联。</para>
+/// A cross-protocol observation that one physical device surfaced in a different mode. Published
+/// only when a device identity correlates both observations, never from VID/PID or enumeration
+/// position.
+/// <para>同一物理设备以不同模式出现的跨协议观测。仅当设备身份能关联新旧两次观测时才发布，
+/// 绝不依据 VID/PID 或枚举位置。</para>
 /// </summary>
 /// <param name="Identity">
 /// The correlated physical device identity. <para>已关联的物理设备身份。</para>

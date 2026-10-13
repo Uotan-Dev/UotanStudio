@@ -10,15 +10,10 @@ using Org.BouncyCastle.Tls.Crypto.Impl.BC;
 namespace UotanStudio.Comm.Protocols.Adb.Pairing;
 
 /// <summary>
-/// Client for the AOSP wireless pairing protocol (Android 11+ <c>adb pair</c>), used by
-/// the serverless QR pairing path: TLS 1.3 with mutual self-signed certificates, then
-/// SPAKE2 (password plus the RFC 5705 exporter output bound to the TLS channel) and an
-/// AES-128-GCM protected PeerInfo exchange, all inside the TLS channel. On success the
-/// device registers our ADB RSA public key and returns its GUID.
-/// <para>AOSP 无线配对协议客户端（Android 11+ <c>adb pair</c>），供无 server 的扫码配对
-/// 路径使用：先做双向自签证书的 TLS 1.3，随后在 TLS 通道内执行 SPAKE2（密码加上绑定
-/// TLS 通道的 RFC 5705 exporter 输出）与 AES-128-GCM 保护的 PeerInfo 交换。成功后设备
-/// 登记我方 ADB RSA 公钥并返回其 GUID。</para>
+/// Client for the ADB wireless pairing protocol: mutual self-signed TLS 1.3, then SPAKE2
+/// and an AES-128-GCM protected PeerInfo exchange inside the TLS channel.
+/// <para>ADB 无线配对协议客户端：先完成双向自签证书的 TLS 1.3，随后在 TLS 通道内执行
+/// SPAKE2 与 AES-128-GCM 保护的 PeerInfo 交换。</para>
 /// </summary>
 internal static class AdbPairingConnection
 {
@@ -239,42 +234,54 @@ internal static class AdbPairingConnection
 }
 
 /// <summary>
-/// TLS 1.3 client for the pairing channel: presents the toolbox ADB certificate,
-/// accepts the device's self-signed certificate (the SPAKE2 password is the trust
-/// anchor), and negotiates TLS 1.3 only.
-/// <para>配对通道的 TLS 1.3 客户端：出示工具箱 ADB 证书，接受设备自签证书（SPAKE2
-/// 密码即信任锚），仅协商 TLS 1.3。</para>
+/// TLS 1.3 client for the pairing channel: presents the ADB certificate and accepts the
+/// device's self-signed certificate, since the SPAKE2 password is the trust anchor.
+/// <para>配对通道的 TLS 1.3 客户端：出示 ADB 证书并接受设备自签证书，因为 SPAKE2
+/// 密码即信任锚。</para>
 /// </summary>
+/// <param name="crypto">The TLS crypto provider. <para>TLS 密码学提供方。</para></param>
+/// <param name="certificateDer">The DER-encoded client certificate. <para>DER 编码的客户端证书。</para></param>
+/// <param name="privateKey">The private key paired with that certificate.
+/// <para>与该证书配对的私钥。</para></param>
 internal sealed class AdbPairingTlsClient(BcTlsCrypto crypto, byte[] certificateDer, AsymmetricKeyParameter privateKey)
     : DefaultTlsClient(crypto)
 {
     private const int ExportedKeySize = 64;
 
     /// <summary>
-    /// Gets the channel-bound keying material captured at handshake completion. BouncyCastle
-    /// only permits a TLS 1.3 export from inside the handshake-completed callback, so the value
-    /// is snapshotted there rather than exported after <c>Connect</c> returns; it is <c>null</c>
-    /// until the handshake completes.
-    /// <para>获取在握手完成时抓取的通道绑定密钥材料。BouncyCastle 只允许 TLS 1.3 的
-    /// exporter 在握手完成回调内调用，因此该值在该回调中快照保存，而不是等 <c>Connect</c>
-    /// 返回后再导出；握手完成前为 <c>null</c>。</para>
+    /// Gets the channel-bound keying material snapshotted during handshake completion,
+    /// because a TLS 1.3 export is only permitted from inside that callback.
+    /// <para>获取在握手完成回调期间快照保存的通道绑定密钥材料，因为只有该回调内才允许
+    /// TLS 1.3 导出。</para>
     /// </summary>
-    /// <value><para>64 字节 exporter 输出，或握手尚未完成时的 <c>null</c>。</para>
-    /// The 64-byte exporter output, or <c>null</c> while the handshake is unfinished.</value>
+    /// <value>The 64-byte exporter output, or <c>null</c> while the handshake is unfinished.
+    /// <para>64 字节的 exporter 输出，握手未完成时为 <c>null</c>。</para></value>
     internal byte[]? ExportedKeyMaterial { get; private set; }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Exports and stores the channel-bound keying material, then finishes the base
+    /// handshake-completion work.
+    /// <para>导出并保存通道绑定密钥材料，随后完成基类的握手收尾处理。</para>
+    /// </summary>
     public override void NotifyHandshakeComplete()
     {
         ExportedKeyMaterial = m_context.ExportKeyingMaterial("adb-label\0", null, ExportedKeySize);
         base.NotifyHandshakeComplete();
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Supplies the pairing channel's certificate authentication.
+    /// <para>提供配对通道的证书认证。</para>
+    /// </summary>
+    /// <returns>The authentication used for this handshake. <para>本次握手使用的认证对象。</para></returns>
     public override TlsAuthentication GetAuthentication() =>
         new AdbPairingTlsAuthentication(new TlsCryptoParameters(m_context), crypto, certificateDer, privateKey);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Restricts protocol negotiation to TLS 1.3.
+    /// <para>把协议协商限制为 TLS 1.3。</para>
+    /// </summary>
+    /// <returns>The array holding the one allowed protocol version. <para>仅含唯一允许协议版本的数组。</para></returns>
     public override ProtocolVersion[] GetProtocolVersions() => [ProtocolVersion.TLSv13];
 
     private sealed class AdbPairingTlsAuthentication(TlsCryptoParameters cryptoParameters, BcTlsCrypto crypto,

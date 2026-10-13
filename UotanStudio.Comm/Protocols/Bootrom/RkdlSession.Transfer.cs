@@ -5,13 +5,13 @@ namespace UotanStudio.Comm.Protocols.Bootrom;
 public sealed partial class RkdlSession
 {
     /// <summary>
-    /// Writes the given GPT image to the device. The image may be a 34-sector master table
-    /// only (the backup table is then generated from it) or a 67-sector master+backup image
-    /// (34 + 33 sectors, as loaded by rkdeveloptool load_gpt_buffer). The tables are updated
-    /// for the device's total sector count and written at LBA 0 / LBA (total - 33).
-    /// <para>将给定 GPT 镜像写入设备。镜像可以是仅 34 扇区的主表（此时据此生成备份表），
-    /// 也可以是 67 扇区的主+备镜像（34 + 33 扇区，如同 rkdeveloptool load_gpt_buffer 加载的
-    /// 文件）。表会按设备总扇区数更新，并写入 LBA 0 / LBA（总扇区 - 33）。</para>
+    /// Writes the given GPT image to the device.
+    /// <para>将给定 GPT 镜像写入设备。</para>
+    /// The image may be a 34-sector master table only (the backup table is then generated from it) or
+    /// a 67-sector master+backup image (34 + 33 sectors, both written verbatim). The tables are
+    /// updated for the device's total sector count and written at LBA 0 / LBA (total - 33).
+    /// <para>镜像可以是仅 34 扇区的主表（此时据此生成备份表），也可以是 67 扇区的主+备镜像
+    /// （34 + 33 扇区，两者都原样写入）。表会按设备总扇区数更新，并写入 LBA 0 / LBA（总扇区 - 33）。</para>
     /// </summary>
     /// <param name="gptData">The GPT image bytes. <para>GPT 镜像字节。</para></param>
     /// <param name="progress">Optional progress callback (bytes written). <para>可选进度回调（已写入字节数）。</para></param>
@@ -70,17 +70,16 @@ public sealed partial class RkdlSession
 
     /// <summary>
     /// Writes data to flash at the specified LBA address (in 512-byte sectors) using
-    /// WRITE_LBA (0x15) CBW/CSW transactions, chunked by
-    /// <see cref="RkdlConstants.TransferChunkSize"/>. Each chunk is filled from the stream with a
-    /// read loop, so a short <see cref="Stream.Read(byte[], int, int)"/> never truncates a chunk,
-    /// never repeats source bytes and never writes zero padding into the middle of the image; only
-    /// the final chunk of a non sector-multiple <paramref name="length"/> is zero padded up to a
+    /// WRITE_LBA (0x15) CBW/CSW transactions.
+    /// <para>使用 WRITE_LBA（0x15）CBW/CSW 事务，将数据写入指定 LBA 地址（512 字节扇区）。</para>
+    /// Each chunk is chunked by <see cref="RkdlConstants.TransferChunkSize"/> and filled from the
+    /// stream with a read loop, so a short <see cref="Stream.Read(byte[], int, int)"/> never truncates
+    /// a chunk, never repeats source bytes and never writes zero padding into the middle of the image;
+    /// only the final chunk of a non sector-multiple <paramref name="length"/> is zero padded up to a
     /// sector boundary.
-    /// <para>使用 WRITE_LBA（0x15）CBW/CSW 事务，将数据写入指定 LBA 地址（512 字节扇区），
-    /// 按 <see cref="RkdlConstants.TransferChunkSize"/> 分块。每个分块都用读循环从流中填满，
+    /// <para>每个分块按 <see cref="RkdlConstants.TransferChunkSize"/> 划分，并用读循环从流中填满，
     /// 因此 <see cref="Stream.Read(byte[], int, int)"/> 的短读既不会截断分块，也不会重复源字节或把补零写进镜像
-    /// 中段；只有当 <paramref name="length"/> 不是扇区整数倍时，最后一个分块才会向上补零到扇区
-    /// 边界。</para>
+    /// 中段；只有当 <paramref name="length"/> 不是扇区整数倍时，最后一个分块才会向上补零到扇区边界。</para>
     /// </summary>
     /// <param name="address">The start LBA; must fit in an unsigned 32-bit value.
     /// <para>起始 LBA；必须能容纳于无符号 32 位值。</para></param>
@@ -278,9 +277,9 @@ public sealed partial class RkdlSession
 
     /// <summary>
     /// Downloads a loader through the 0x0471/0x0472 vendor request, framing the payload in
-    /// 4096-byte control transfers with a trailing CRC-16/CCITT (rkdeveloptool RKU_DeviceRequest).
+    /// 4096-byte control transfers with a trailing CRC-16/CCITT.
     /// <para>通过 0x0471/0x0472 vendor 请求下载 loader，将负载按 4096 字节控制传输分帧，
-    /// 尾部追加 CRC-16/CCITT（rkdeveloptool RKU_DeviceRequest）。</para>
+    /// 尾部追加 CRC-16/CCITT。</para>
     /// </summary>
     /// <param name="wIndex">The vendor request wIndex (0x0471 or 0x0472). <para>vendor 请求 wIndex（0x0471 或 0x0472）。</para></param>
     /// <param name="loaderData">The loader image data. <para>loader 镜像数据。</para></param>
@@ -436,10 +435,9 @@ public sealed partial class RkdlSession
     /// <summary>
     /// Reads a CSW from the bulk IN endpoint and validates signature + tag (UFI_CHECK_SIGN).
     /// When <paramref name="recovery"/> is set, a mismatching CSW is drained up to 16 KB with
-    /// up to three attempts (see rkdeveloptool RKU_ClearBuffer).
+    /// up to three attempts.
     /// <para>从 bulk IN 端点读取 CSW 并校验签名与标签（UFI_CHECK_SIGN）。
-    /// 当 <paramref name="recovery"/> 开启时，不匹配的 CSW 最多清空 16 KB、重试 3 次
-    /// （见 rkdeveloptool RKU_ClearBuffer）。</para>
+    /// 当 <paramref name="recovery"/> 开启时，不匹配的 CSW 最多清空 16 KB、重试 3 次。</para>
     /// </summary>
     /// <param name="tag">The CBW tag the CSW must echo. <para>CSW 必须回显的 CBW 标签。</para></param>
     /// <param name="recovery">Whether to drain and retry on a mismatch. <para>不匹配时是否清空并重试。</para></param>

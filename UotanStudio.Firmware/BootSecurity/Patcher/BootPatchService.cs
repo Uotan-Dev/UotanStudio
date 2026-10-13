@@ -463,7 +463,7 @@ public sealed class BootPatchService
     }
 
     /// <summary>
-    /// Mirrors ksud's boot_patch cpio sequence: the stock init moves to
+    /// Installs the KernelSU init: the stock init moves to
     /// init.real (when present) and ksuinit becomes the root init with 0755.
     /// </summary>
     private static void InstallKernelSuInit(CpioArchiveEditor editor, string initTarget, List<string> changes)

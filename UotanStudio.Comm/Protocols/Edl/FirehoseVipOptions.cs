@@ -1,6 +1,6 @@
 namespace UotanStudio.Comm.Protocols.Edl;
 
-/// <summary>Provides pre-signed qdl-style VIP tables matching the exact outgoing packet sequence.
+/// <summary>Provides pre-signed VIP tables matching the exact outgoing packet sequence.
 /// <para>提供与精确出站包序列匹配、预先签名的 qdl 风格 VIP 表。</para></summary>
 public interface IFirehoseVipTableProvider
 {
@@ -20,9 +20,9 @@ public interface IFirehoseVipTableProvider
 }
 
 /// <summary>
-/// Selects the qdl VIP profile: 53 authenticated packets in the initial table and 255 in each chained table.
+/// Selects the VIP profile: 53 authenticated packets in the initial table and 255 in each chained table.
 /// XML and raw data packets both consume entries; tables must match exact bytes and packet boundaries.
-/// <para>选择 qdl VIP 配置：初始表包含 53 个认证包，每张链式表包含 255 个认证包。
+/// <para>选择 VIP 配置：初始表包含 53 个认证包，每张链式表包含 255 个认证包。
 /// XML 和 raw 数据包均消耗条目；表必须匹配精确字节和包边界。</para>
 /// </summary>
 public sealed record FirehoseVipOptions

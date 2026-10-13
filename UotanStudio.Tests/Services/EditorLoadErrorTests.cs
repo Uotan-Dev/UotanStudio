@@ -6,9 +6,9 @@ using Xunit;
 namespace UotanStudio.Tests.Services;
 
 /// <summary>
-/// <para>编辑器页面顶部错误条的数据来源：加载失败必须在视图模型上留下错误文本，成功加载则清空。</para>
 /// Data source of the editor pages' top error banner: a failed load must leave error text on the view model,
 /// while a successful load clears it.
+/// <para>编辑器页面顶部错误条的数据来源：加载失败必须在视图模型上留下错误文本，成功加载则清空。</para>
 /// </summary>
 public sealed class EditorLoadErrorTests
 {

@@ -7,9 +7,9 @@ using UotanStudio.ViewModels.Nodes;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>Patch 节点家族的声明式端口表：每个 TypeKey 的端口集合、默认值与面板规则在此唯一定义，取代旧的 Create switch 与参数 Schema 双轨配置。</para>
 /// Declarative port table for the patch node family: each TypeKey's port set, defaults and panel rules are defined
 /// exactly once here, replacing the old Create switch and the dual parameter-schema configuration.
+/// <para>Patch 节点家族的声明式端口表：每个 TypeKey 的端口集合、默认值与面板规则在此唯一定义，取代旧的 Create switch 与参数 Schema 双轨配置。</para>
 /// </summary>
 internal static class PatchNodePorts
 {
@@ -335,9 +335,9 @@ internal static class PatchNodePorts
     internal static bool TryGetSet(string typeKey, out NodePortSet set) => Sets.TryGetValue(typeKey, out set!);
 
     /// <summary>
-    /// <para>把声明表中的面板旗标（必填、高级、配置语义、可见性）附加到节点端口。与旧行为一致，旗标只由注册表 Prepare 边界应用，直接构造的节点保持裸端口。</para>
     /// Attaches the declared panel flags (required, advanced, configuration semantics, visibility) to the node ports.
     /// Matching the old behavior, flags are applied only at the registrar Prepare boundary; directly constructed nodes stay bare.
+    /// <para>把声明表中的面板旗标（必填、高级、配置语义、可见性）附加到节点端口。与旧行为一致，旗标只由注册表 Prepare 边界应用，直接构造的节点保持裸端口。</para>
     /// </summary>
     internal static void ApplyPanelFlags(FlowNodeViewModel node)
     {

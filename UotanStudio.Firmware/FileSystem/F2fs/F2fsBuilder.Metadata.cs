@@ -23,16 +23,11 @@ public sealed partial class F2fsBuilder
     /// <returns>The superblock model ready for <see cref="WriteSuperblock"/>.
     /// <para>可直接交给 <see cref="WriteSuperblock"/> 的超级块模型。</para></returns>
     /// <remarks>
-    /// A kernel that sees the flexible inline-xattr feature requires every inode to carry the
-    /// extra-attribute flag as well, because <c>i_inline_xattr_size</c> lives inside the extra
-    /// attribute block; without the flag it rejects the root inode with
-    /// <c>sanity_check_inode: corrupted inode ino=3</c>. Advertising the pair unconditionally keeps
+    /// Advertising the extra-attribute and flexible inline-xattr pair unconditionally keeps
     /// <c>i_extra_isize</c>, and therefore the block-address base <c>i_addr[i_extra_isize / 4]</c>,
     /// identical whether or not the tree carries SELinux labels, so adding an xattr cannot shift the
     /// root directory's dentry block address.
-    /// <para>看到弹性内联 xattr 特性的内核会要求每个 inode 同时带扩展属性标志，因为
-    /// <c>i_inline_xattr_size</c> 位于扩展属性块内；缺少该标志时会以
-    /// <c>sanity_check_inode: corrupted inode ino=3</c> 拒绝根 inode。无条件声明这一对特性，可使
+    /// <para>无条件声明扩展属性与弹性内联 xattr 这一对特性，可使
     /// <c>i_extra_isize</c> 以及由此得出的块地址基准 <c>i_addr[i_extra_isize / 4]</c> 在目录树是否带
     /// SELinux 标签时保持完全一致，因此新增 xattr 不会移动根目录的 dentry 块地址。</para>
     /// </remarks>
@@ -241,8 +236,8 @@ public sealed partial class F2fsBuilder
     }
 
     /// <summary>
-    /// Flushes an accumulated SIT block to its primary and second copies (kernel get_current_sit_page addressing).
-    /// <para>把累积好的 SIT 块写入主副本与第二副本（内核 get_current_sit_page 寻址）。</para>
+    /// Flushes an accumulated SIT block to its primary and second copies at their layout addresses.
+    /// <para>把累积好的 SIT 块按布局地址写入主副本与第二副本。</para>
     /// </summary>
     private static void FlushSitBlock(Stream output, long baseOffset, Layout layout, long sitBlocks, long blockIndex, byte[] block)
     {

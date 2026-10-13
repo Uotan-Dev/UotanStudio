@@ -5,16 +5,29 @@ using UotanStudio.Comm.Routing;
 
 namespace UotanStudio.Services.Devices;
 
-/// <summary>Explicit host-server shutdown. Success requires connection refusal, not just command completion.</summary>
+/// <summary>
+/// Explicit host-server shutdown. Success requires connection refusal, not just command completion.
+/// <para>显式关闭调试桥服务；成功以连接被拒绝为准，而非命令执行完成。</para>
+/// </summary>
 internal static class DebugBridgeServerControl
 {
-    /// <summary>Stops ADB through its host protocol without starting an executable.</summary>
+    /// <summary>
+    /// Stops ADB through its host protocol without starting an executable.
+    /// <para>通过 ADB 的主机协议停止服务，不启动任何可执行文件。</para>
+    /// </summary>
+    /// <param name="monitor">Device monitor refreshed after the shutdown. <para>关闭完成后用于刷新设备的监视器。</para></param>
+    /// <param name="cancellationToken">Token cancelling the shutdown. <para>用于取消关闭操作的令牌。</para></param>
     public static Task StopAdbAsync(DeviceMonitorService monitor, CancellationToken cancellationToken = default)
         => StopAsync(monitor, DeviceCommunicationConfiguration.AdbServerPort,
             token => AdbServerServices.KillAsync(DeviceCommunicationConfiguration.ServerHost,
                 DeviceCommunicationConfiguration.AdbServerPort, token), cancellationToken);
 
-    /// <summary>Stops HDC through its host channel protocol; the hdc executable is never started.</summary>
+    /// <summary>
+    /// Stops HDC through its host channel protocol; the hdc executable is never started.
+    /// <para>通过 HDC 的主机通道协议停止服务，不会启动 hdc 可执行文件。</para>
+    /// </summary>
+    /// <param name="monitor">Device monitor refreshed after the shutdown. <para>关闭完成后用于刷新设备的监视器。</para></param>
+    /// <param name="cancellationToken">Token cancelling the shutdown. <para>用于取消关闭操作的令牌。</para></param>
     public static Task StopHdcAsync(DeviceMonitorService monitor, CancellationToken cancellationToken = default)
     {
         var port = HdcServerClient.DefaultServerPort;

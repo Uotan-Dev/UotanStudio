@@ -5,8 +5,8 @@ using UotanStudio.Services.Checksum;
 namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
-/// <para>「粘贴并校验」的比对结果。</para>
 /// The comparison result of the "paste and verify" row.
+/// <para>「粘贴并校验」的比对结果。</para>
 /// </summary>
 public enum ChecksumMatchResult
 {
@@ -21,22 +21,22 @@ public enum ChecksumMatchResult
 }
 
 /// <summary>
-/// <para>校验窗口视图模型：文件名选择、MD5/SHA1/SHA256/CRC 勾选与结果显示，以及「粘贴并校验」比对。</para>
 /// Checksum window view model: file selection, the MD5/SHA1/SHA256/CRC checkboxes and result rows, plus the
 /// "paste and verify" comparison.
+/// <para>校验窗口视图模型：文件名选择、MD5/SHA1/SHA256/CRC 勾选与结果显示，以及「粘贴并校验」比对。</para>
 /// </summary>
 public sealed partial class ChecksumViewModel : ObservableObject
 {
     /// <summary>
-    /// <para>当前校验任务的取消源；文件切换清空结果时取消进行中的校验，旧结果不得写回界面。</para>
     /// The cancellation source of the running verification; switching files cancels it so stale
     /// results never reach the UI.
+    /// <para>当前校验任务的取消源；文件切换清空结果时取消进行中的校验，旧结果不得写回界面。</para>
     /// </summary>
     private CancellationTokenSource? _verifyCts;
 
     /// <summary>
-    /// <para>已选择的文件名（完整路径）。</para>
     /// The selected file name (full path).
+    /// <para>已选择的文件名（完整路径）。</para>
     /// </summary>
     [ObservableProperty] private string _filePath = string.Empty;
 
@@ -68,8 +68,8 @@ public sealed partial class ChecksumViewModel : ObservableObject
     [ObservableProperty] private string _pastedText = string.Empty;
 
     /// <summary>
-    /// <para>是否有校验正在进行（期间禁用校验按钮）。</para>
     /// Whether a verification is running (the verify button stays disabled meanwhile).
+    /// <para>是否有校验正在进行（期间禁用校验按钮）。</para>
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanVerify))]
@@ -82,14 +82,14 @@ public sealed partial class ChecksumViewModel : ObservableObject
     private ChecksumMatchResult _matchResult;
 
     /// <summary>
-    /// <para>是否已选择有效文件（决定复制与粘贴是否可用）。</para>
     /// Whether a valid file is selected (decides whether copy and paste are available).
+    /// <para>是否已选择有效文件（决定复制与粘贴是否可用）。</para>
     /// </summary>
     public bool HasFile => !string.IsNullOrWhiteSpace(FilePath) && File.Exists(FilePath);
 
     /// <summary>
-    /// <para>「校验」是否可用：必须已选择文件且当前没有校验在跑。</para>
     /// Whether "verify" is available: a file must be selected and no verification may be running.
+    /// <para>「校验」是否可用：必须已选择文件且当前没有校验在跑。</para>
     /// </summary>
     public bool CanVerify => HasFile && !IsBusy;
 
@@ -106,16 +106,16 @@ public sealed partial class ChecksumViewModel : ObservableObject
     public bool CanCopyCrc => HasFile && CrcValue.Length > 0;
 
     /// <summary>
-    /// <para>是否已有校验值（四种结果里至少有一个非空）。</para>
     /// Whether any checksum value exists (at least one of the four result rows is filled).
+    /// <para>是否已有校验值（四种结果里至少有一个非空）。</para>
     /// </summary>
     public bool HasAnyValue => Md5Value.Length > 0 || Sha1Value.Length > 0 ||
         Sha256Value.Length > 0 || CrcValue.Length > 0;
 
     /// <summary>
-    /// <para>粘贴是否可用：必须先选出文件并已得到至少一个校验值，否则「粘贴并校验」的按钮与输入框都禁用。</para>
     /// Whether paste is available: a file must be selected and at least one checksum value must exist,
     /// otherwise both the "paste and verify" button and its text box stay disabled.
+    /// <para>粘贴是否可用：必须先选出文件并已得到至少一个校验值，否则「粘贴并校验」的按钮与输入框都禁用。</para>
     /// </summary>
     public bool CanPaste => HasFile && HasAnyValue;
 
@@ -126,20 +126,20 @@ public sealed partial class ChecksumViewModel : ObservableObject
     public bool PasteIsCorrect => MatchResult == ChecksumMatchResult.Correct;
 
     /// <summary>
-    /// <para>选择/切换文件：重选文件时清空下方结果与粘贴内容，并禁用复制与粘贴。</para>
     /// Selects or switches the file: re-selecting clears the result rows and the pasted text and disables
     /// copy and paste.
+    /// <para>选择/切换文件：重选文件时清空下方结果与粘贴内容，并禁用复制与粘贴。</para>
     /// </summary>
-    /// <param name="path"><para>文件路径。</para>The file path.</param>
+    /// <param name="path">The file path. <para>文件路径。</para></param>
     public void SetFilePath(string? path)
     {
         FilePath = path ?? string.Empty;
     }
 
     /// <summary>
-    /// <para>执行「校验」：单次流式读取同时计算勾选的算法，未勾选的行清空；校验期间按钮禁用。</para>
     /// Runs "verify": one streaming pass computes every checked algorithm; unchecked rows are cleared.
     /// The verify button stays disabled while a verification runs.
+    /// <para>执行「校验」：单次流式读取同时计算勾选的算法，未勾选的行清空；校验期间按钮禁用。</para>
     /// </summary>
     public async Task VerifyAsync()
     {
@@ -198,9 +198,9 @@ public sealed partial class ChecksumViewModel : ObservableObject
     }
 
     /// <summary>
-    /// <para>清空全部结果、粘贴内容与比对结论（重选文件、清空文件名、校验失败时调用），并取消进行中的校验。</para>
     /// Clears every result row, the pasted text and the verdict (on file switch, cleared file name or
     /// verification failure), and cancels any running verification.
+    /// <para>清空全部结果、粘贴内容与比对结论（重选文件、清空文件名、校验失败时调用），并取消进行中的校验。</para>
     /// </summary>
     public void ClearResults()
     {
@@ -227,9 +227,9 @@ public sealed partial class ChecksumViewModel : ObservableObject
     partial void OnPastedTextChanged(string value) => EvaluatePaste();
 
     /// <summary>
-    /// <para>把粘贴内容与上方四种校验值比对：命中任意一项显示正确，否则显示错误；无文件或内容为空时不显示结论。</para>
     /// Compares the pasted text against the four computed values: a hit shows "correct", otherwise "wrong";
     /// nothing is shown without a file or with empty text.
+    /// <para>把粘贴内容与上方四种校验值比对：命中任意一项显示正确，否则显示错误；无文件或内容为空时不显示结论。</para>
     /// </summary>
     private void EvaluatePaste()
     {
@@ -254,8 +254,8 @@ public sealed partial class ChecksumViewModel : ObservableObject
     }
 
     /// <summary>
-    /// <para>通知所有派生属性（可用性、比对结论）刷新。</para>
     /// Raises change notifications for every derived property (availability, verdict).
+    /// <para>通知所有派生属性（可用性、比对结论）刷新。</para>
     /// </summary>
     private void NotifyDerived()
     {

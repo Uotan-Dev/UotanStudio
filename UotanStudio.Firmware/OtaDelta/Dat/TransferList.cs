@@ -147,7 +147,7 @@ public sealed class TransferList
     public long NewDataBlocks { get; }
 }
 
-/// <summary>Parses recovery transfer-list versions 1 through 4. <para>解析 recovery 传输列表版本 1 至 4。</para></summary>
+/// <summary>Parses transfer-list versions 1 through 4. <para>解析传输列表版本 1 至 4。</para></summary>
 internal static class TransferListParser
 {
     /// <summary>Parses a transfer-list file. <para>解析传输列表文件。</para></summary>

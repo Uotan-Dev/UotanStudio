@@ -213,16 +213,18 @@ public sealed partial class FastbootSession
     public FastbootResponse GsiWipe() => GsiCommand("wipe");
 
     /// <summary>
-    /// Performs a snapshot update action on the device. Common actions include "cancel" to
-    /// abort an in-progress update. A bootloader that can only complete the action from fastbootd says
-    /// so in free-form reply text; that request is reported on
-    /// <see cref="FastbootResponse.RequestsFastbootReboot"/> and deliberately not acted on here,
-    /// because a reboot invalidates the caller's session and the hint comes from untrusted text.
-    /// <para>在设备上执行快照更新操作。常见操作包括 "cancel" 以中止正在进行的更新。只能在 fastbootd 中
-    /// 完成该操作的 bootloader 会以自由文本应答说明这一点；该请求通过
+    /// Performs a snapshot update action on the device; "cancel" aborts an in-progress update.
+    /// <para>在设备上执行快照更新操作；"cancel" 用于中止正在进行的更新。</para>
+    /// </summary>
+    /// <remarks>
+    /// <para>A bootloader that can only complete the action from fastbootd says so in free-form reply
+    /// text; that request is reported on <see cref="FastbootResponse.RequestsFastbootReboot"/> and
+    /// deliberately not acted on here, because a reboot invalidates the caller's session and the hint comes
+    /// from untrusted text.</para>
+    /// <para>只能在 fastbootd 中完成该操作的 bootloader 会以自由文本应答说明这一点；该请求通过
     /// <see cref="FastbootResponse.RequestsFastbootReboot"/> 上报，并且刻意不在此处执行，因为重启会使
     /// 调用方的会话失效，而该提示来自不可信文本。</para>
-    /// </summary>
+    /// </remarks>
     /// <param name="action">Snapshot-update action sent after the <c>snapshot-update:</c> prefix; defaults to <c>cancel</c>.
     /// <para>追加在 <c>snapshot-update:</c> 前缀之后的操作；默认为 <c>cancel</c>。</para></param>
     /// <returns>The parsed snapshot-update response. <para>解析后的 snapshot-update 响应。</para></returns>
@@ -302,13 +304,14 @@ public sealed partial class FastbootSession
         => ExecuteCommand(FastbootConstants.CommandShutdown);
 
     /// <summary>
-    /// Flashes a partition with data from a stream. Before any payload is transferred the target is
-    /// validated against the device through the read-only queries selected by
-    /// <paramref name="options"/> (see <see cref="FlashPartitionPreflight"/>), so a rejected flash
-    /// leaves the device untouched instead of failing after a full image transfer.
-    /// <para>用流中的数据刷写分区。在传输任何负载之前，先通过 <paramref name="options"/> 选定的只读查询
-    /// 对照设备校验目标（见 <see cref="FlashPartitionPreflight"/>），因此被拒绝的刷写不会改动设备，
-    /// 而不是在整镜像传完之后才失败。</para>
+    /// Flashes a partition with data from a stream.
+    /// <para>用流中的数据刷写分区。</para>
+    /// Before any payload is transferred the target is validated against the device through the read-only
+    /// queries selected by <paramref name="options"/> (see <see cref="FlashPartitionPreflight"/>), so a
+    /// rejected flash leaves the device untouched instead of failing after a full image transfer.
+    /// <para>在传输任何负载之前，先通过 <paramref name="options"/> 选定的只读查询对照设备校验目标
+    /// （见 <see cref="FlashPartitionPreflight"/>），因此被拒绝的刷写不会改动设备，而不是在整镜像传完
+    /// 之后才失败。</para>
     /// </summary>
     /// <param name="partition">Target partition name; resolved against A/B slots unless <paramref name="resolveSlot"/> is <see langword="false"/>.
     /// <para>目标分区名；除 <paramref name="resolveSlot"/> 为 <see langword="false"/> 外，按 A/B 槽位解析。</para></param>

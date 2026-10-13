@@ -3,8 +3,8 @@ using System.Collections.ObjectModel;
 namespace UotanStudio.ViewModels.NodeViewModels.EditorCommands;
 
 /// <summary>
-/// <para>添加连接命令。执行时在两个连接器之间建立连接，撤销时移除该连接。</para>
 /// Add-connection command. Executing creates a connection between two connectors; undoing removes it.
+/// <para>添加连接命令。执行时在两个连接器之间建立连接，撤销时移除该连接。</para>
 /// </summary>
 public sealed class AddConnectionCommand : IEditorCommand
 {
@@ -14,8 +14,8 @@ public sealed class AddConnectionCommand : IEditorCommand
     public string DisplayName => "Add Connection";
 
     /// <summary>
-    /// <para>创建添加连接命令。</para>
     /// Creates an add-connection command.
+    /// <para>创建添加连接命令。</para>
     /// </summary>
     /// <param name="connections">画布连接线集合。<para>Canvas connection collection.</para></param>
     /// <param name="connection">要建立的连接。<para>The connection to establish.</para></param>
@@ -42,8 +42,8 @@ public sealed class AddConnectionCommand : IEditorCommand
 }
 
 /// <summary>
-/// <para>移除连接命令。执行时移除指定连接，撤销时恢复该连接。</para>
 /// Remove-connection command. Executing removes the specified connection; undoing restores it.
+/// <para>移除连接命令。执行时移除指定连接，撤销时恢复该连接。</para>
 /// </summary>
 public sealed class RemoveConnectionCommand : IEditorCommand
 {
@@ -53,8 +53,8 @@ public sealed class RemoveConnectionCommand : IEditorCommand
     public string DisplayName => "Remove Connection";
 
     /// <summary>
-    /// <para>创建移除连接命令。</para>
     /// Creates a remove-connection command.
+    /// <para>创建移除连接命令。</para>
     /// </summary>
     /// <param name="connections">画布连接线集合。<para>Canvas connection collection.</para></param>
     /// <param name="connection">要移除的连接。<para>The connection to remove.</para></param>

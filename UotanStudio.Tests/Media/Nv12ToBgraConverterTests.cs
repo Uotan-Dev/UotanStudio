@@ -4,7 +4,8 @@ using Xunit;
 namespace UotanStudio.Tests.Media;
 
 /// <summary>
-/// Nv12ToBgraConverter 像素级正确性与边界条件测试。
+/// <para>Nv12ToBgraConverter 像素级正确性与边界条件测试。
+/// </para>
 /// </summary>
 public class Nv12ToBgraConverterTests
 {
@@ -84,7 +85,8 @@ public class Nv12ToBgraConverterTests
     private static byte Clamp(int value) => (byte)(value < 0 ? 0 : (value > 255 ? 255 : value));
 
     /// <summary>
-    /// 双线性色度参考采样：水平 3:1 加权靠前一列，奇数亮度行垂直 1:1 混合，末列钳制。
+    /// <para>双线性色度参考采样：水平 3:1 加权靠前一列，奇数亮度行垂直 1:1 混合，末列钳制。
+    /// </para>
     /// </summary>
     private static byte SampleChroma(byte[] nv12, int uvRow, int uvRowNext, int cell, int width, int verticalWeight)
     {

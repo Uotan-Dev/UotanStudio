@@ -3,8 +3,8 @@ using System.Text.Json.Serialization;
 namespace UotanStudio.Services.Projects;
 
 /// <summary>
-/// <para>工作流快照 JSON 序列化上下文（AOT 源生成）。</para>
 /// Workflow snapshot JSON serialization context (AOT source-generated).
+/// <para>工作流快照 JSON 序列化上下文（AOT 源生成）。</para>
 /// </summary>
 [JsonSerializable(typeof(WorkflowSnapshot))]
 [JsonSerializable(typeof(List<NodeDto>))]
@@ -16,8 +16,8 @@ namespace UotanStudio.Services.Projects;
 internal partial class WorkflowJsonContext : JsonSerializerContext;
 
 /// <summary>
-/// <para>工作流快照，承载工程文件的完整结构。</para>
 /// Workflow snapshot, carrying the complete structure of the project file.
+/// <para>工作流快照，承载工程文件的完整结构。</para>
 /// </summary>
 public sealed class WorkflowSnapshot
 {
@@ -27,8 +27,8 @@ public sealed class WorkflowSnapshot
     /// </summary>
     public const int CurrentFormatVersion = 1;
     /// <summary>
-    /// <para>工程文件格式版本。</para>
     /// Project file format version.
+    /// <para>工程文件格式版本。</para>
     /// </summary>
     /// <value>
     /// Version stamped into the serialized file; defaults to <see cref="CurrentFormatVersion"/>.
@@ -66,8 +66,8 @@ public sealed class WorkflowSnapshot
     }
 
     /// <summary>
-    /// <para>节点 DTO 列表。</para>
     /// List of node DTOs.
+    /// <para>节点 DTO 列表。</para>
     /// </summary>
     /// <value>
     /// All captured canvas nodes; an empty list when the workflow has none.
@@ -76,8 +76,8 @@ public sealed class WorkflowSnapshot
     public List<NodeDto> Nodes { get; set; } = [];
 
     /// <summary>
-    /// <para>连接 DTO 列表。</para>
     /// List of connection DTOs.
+    /// <para>连接 DTO 列表。</para>
     /// </summary>
     /// <value>
     /// Edges between node ports; each endpoint may be identified by stable port id or by connector title.
@@ -87,21 +87,21 @@ public sealed class WorkflowSnapshot
 }
 
 /// <summary>
-/// <para>节点数据传输对象，仅持久化必要字段。</para>
 /// Node data transfer object, persisting only essential fields.
+/// <para>节点数据传输对象，仅持久化必要字段。</para>
 /// </summary>
 public sealed class NodeDto
 {
     /// <summary>
-    /// <para>节点实例 ID。</para>
     /// Node instance ID.
+    /// <para>节点实例 ID。</para>
     /// </summary>
     /// <value>Identifier unique within the snapshot that connections bind to. <para>快照内唯一、供连接绑定的标识符。</para></value>
     public string InstanceId { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>节点标题。</para>
     /// Node title.
+    /// <para>节点标题。</para>
     /// </summary>
     /// <value>
     /// Displayed node title, also used to match connections when stable port ids are absent.
@@ -110,29 +110,29 @@ public sealed class NodeDto
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>节点类别字符串。</para>
     /// Node category string.
+    /// <para>节点类别字符串。</para>
     /// </summary>
     /// <value>Palette grouping string. <para>用于分组展示的类别字符串。</para></value>
     public string Category { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>画布 X 坐标。</para>
     /// Canvas X coordinate.
+    /// <para>画布 X 坐标。</para>
     /// </summary>
     /// <value>Horizontal canvas position in layout units. <para>以布局单位表示的画布水平位置。</para></value>
     public double X { get; set; }
 
     /// <summary>
-    /// <para>画布 Y 坐标。</para>
     /// Canvas Y coordinate.
+    /// <para>画布 Y 坐标。</para>
     /// </summary>
     /// <value>Vertical canvas position in layout units. <para>以布局单位表示的画布垂直位置。</para></value>
     public double Y { get; set; }
 
     /// <summary>
-    /// <para>稳定节点类型键，对应 NodeTypeRegistry 注册键</para>
     /// Stable node type key matching a NodeTypeRegistry key.
+    /// <para>稳定节点类型键，对应 NodeTypeRegistry 注册键</para>
     /// </summary>
     /// <value>
     /// Registry key of the node implementation; an unregistered key keeps the node and its ports as a placeholder.
@@ -191,8 +191,8 @@ public sealed class NodeDto
     public string? CustomName { get; set; }
 
     /// <summary>
-    /// <para>输入端口用户编辑初始值映射（端口标题 → 字符串值）。仅持久化用户显式填写的值。</para>
     /// User-edited initial values of input ports (port title → string value). Only explicitly set values are persisted.
+    /// <para>输入端口用户编辑初始值映射（端口标题 → 字符串值）。仅持久化用户显式填写的值。</para>
     /// </summary>
     /// <value>
     /// Title-keyed map of edited values; <see langword="null"/> when nothing was edited.
@@ -279,8 +279,8 @@ public sealed class NodePortDto
 }
 
 /// <summary>
-/// <para>连接数据传输对象。</para>
 /// Connection data transfer object.
+/// <para>连接数据传输对象。</para>
 /// </summary>
 public sealed class ConnectionDto
 {
@@ -305,8 +305,8 @@ public sealed class ConnectionDto
     public string? TargetPortId { get; set; }
 
     /// <summary>
-    /// <para>源连接器标题。</para>
     /// Source connector title.
+    /// <para>源连接器标题。</para>
     /// </summary>
     /// <value>
     /// Display caption of the source connector, used to match the endpoint when the stable port id is absent.
@@ -315,8 +315,8 @@ public sealed class ConnectionDto
     public string SourceConnectorTitle { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>目标连接器标题。</para>
     /// Target connector title.
+    /// <para>目标连接器标题。</para>
     /// </summary>
     /// <value>
     /// Display caption of the target connector, used to match the endpoint when the stable port id is absent.
@@ -325,8 +325,8 @@ public sealed class ConnectionDto
     public string TargetConnectorTitle { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>源节点实例 ID（可选；缺失时按连接器标题匹配重建）。</para>
     /// Source node instance ID (optional; when omitted, rebuild falls back to connector-title matching).
+    /// <para>源节点实例 ID（可选；缺失时按连接器标题匹配重建）。</para>
     /// </summary>
     /// <value>
     /// <see cref="NodeDto.InstanceId"/> of the node owning the source port; <see langword="null"/> when the file carries titles only.
@@ -335,8 +335,8 @@ public sealed class ConnectionDto
     public string? SourceInstanceId { get; set; }
 
     /// <summary>
-    /// <para>目标节点实例 ID（可选；缺失时按连接器标题匹配重建）。</para>
     /// Target node instance ID (optional; when omitted, rebuild falls back to connector-title matching).
+    /// <para>目标节点实例 ID（可选；缺失时按连接器标题匹配重建）。</para>
     /// </summary>
     /// <value>
     /// <see cref="NodeDto.InstanceId"/> of the node owning the target port; <see langword="null"/> when the file carries titles only.

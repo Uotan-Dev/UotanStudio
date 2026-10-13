@@ -20,9 +20,8 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// Lists server-managed targets without selecting a device transport.
     /// <para>列出 server 管理的目标，不选择设备传输通道。</para>
     /// </summary>
-    /// <returns>One entry per non-empty <c>serial state descriptors</c> line reported by
-    /// <c>host:devices-l</c>, with each line's transport descriptor preserved.
-    /// <para>对应 <c>host:devices-l</c> 报告的每条非空 “serial state 描述符” 行的条目，并保留每行的传输描述符。</para></returns>
+    /// <returns>One entry per non-empty device line reported by <c>host:devices-l</c>, keeping its transport descriptor.
+    /// <para>对应 <c>host:devices-l</c> 报告的每条非空设备行，并保留其传输描述符。</para></returns>
     /// <exception cref="IOException">The device list length is invalid or the server connection failed.
     /// <para>设备列表长度非法或 server 连接失败。</para></exception>
     public IReadOnlyList<AdbTargetInfo> ListTargets()
@@ -46,12 +45,12 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
 
     /// <summary>
     /// Opens an owned byte stream to a service on the explicitly selected device.
-    /// <para>在显式选定的设备上打开一个由调用方持有的字节服务流。</para>
+    /// <para>在显式选定的设备上打开一个由接收方持有的字节服务流。</para>
     /// </summary>
-    /// <param name="service">The raw ADB service name, e.g. <c>shell:id</c> or <c>sync:</c>.
+    /// <param name="service">The raw ADB service name, such as <c>shell:id</c> or <c>sync:</c>.
     /// <para>原始 ADB 服务名，如 <c>shell:id</c> 或 <c>sync:</c>。</para></param>
-    /// <returns>A stream positioned after the OKAY handshake; the caller owns and must dispose it.
-    /// <para>定位在 OKAY 握手之后的流；归调用方所有并必须由其释放。</para></returns>
+    /// <returns>A stream positioned after the OKAY handshake; its receiver owns and must dispose it.
+    /// <para>定位在 OKAY 握手之后的流；由接收方持有并必须由其释放。</para></returns>
     /// <exception cref="ArgumentException">The instance <c>serial</c> is blank.
     /// <para>实例的 <c>serial</c> 为空。</para></exception>
     /// <exception cref="IOException">The server rejected the transport or service request.
@@ -99,8 +98,6 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// <param name="cancellationToken">Checked before each read; a read interrupted by an
     /// <see cref="IOException"/> after cancellation ends the loop instead of throwing.
     /// <para>每次读取前检查；取消后以 <see cref="IOException"/> 形式结束的读取会退出循环而不抛出。</para></param>
-    /// <returns>A task that completes when the stream ends or <paramref name="onLine"/>
-    /// returned <c>false</c>. <para>当流结束或 <paramref name="onLine"/> 返回 <c>false</c> 时完成的任务。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="command"/> is blank.
     /// <para><paramref name="command"/> 为空。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="onLine"/> is <c>null</c>.
@@ -142,10 +139,8 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// </summary>
     /// <param name="host">The adb server host. <para>adb server 主机。</para></param>
     /// <param name="port">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
-    /// <param name="cancellationToken">Cancels the connect and the <c>host:kill</c> exchange.
+    /// <param name="cancellationToken">Cancels connecting and <c>host:kill</c> processing.
     /// <para>取消连接与 <c>host:kill</c> 交互。</para></param>
-    /// <returns>A task that completes once the server accepted the <c>host:kill</c> request.
-    /// <para>server 接受 <c>host:kill</c> 请求后完成的任务。</para></returns>
     /// <exception cref="IOException">The server reported FAIL or sent an invalid status.
     /// <para>server 返回 FAIL 或发送了非法状态。</para></exception>
     /// <exception cref="OperationCanceledException">The token was canceled before completion.
@@ -169,7 +164,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// <para>二维码旁显示的一次性配对密码。</para></param>
     /// <param name="serverHost">The adb server host. <para>adb server 主机。</para></param>
     /// <param name="serverPort">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
-    /// <param name="cancellationToken">Cancels the connect and the <c>host:pair:</c> exchange.
+    /// <param name="cancellationToken">Cancels connecting and <c>host:pair:</c> processing.
     /// <para>取消连接与 <c>host:pair:</c> 交互。</para></param>
     /// <returns>The server's pairing result, which begins with <c>Successfully paired</c> once the
     /// device accepted the password. <para>server 返回的配对结果；设备接受密码后以 <c>Successfully paired</c> 开头。</para></returns>
@@ -238,14 +233,12 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// Disconnects one network target from the local adb server.
     /// <para>将单个网络目标从本地 adb server 断开。</para>
     /// </summary>
-    /// <param name="serial">The <c>host:port</c> connect key of the target to disconnect.
+    /// <param name="serial">Identifies the target by its <c>host:port</c> connect key.
     /// <para>待断开目标的 <c>host:port</c> 连接标识。</para></param>
     /// <param name="host">The adb server host. <para>adb server 主机。</para></param>
     /// <param name="port">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
-    /// <param name="cancellationToken">Cancels the connect and the <c>host:disconnect:</c> exchange.
+    /// <param name="cancellationToken">Cancels connecting and <c>host:disconnect:</c> processing.
     /// <para>取消连接与 <c>host:disconnect:</c> 交互。</para></param>
-    /// <returns>A task that completes once the server accepted the disconnect request.
-    /// <para>server 接受断开请求后完成的任务。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="serial"/> is blank.
     /// <para><paramref name="serial"/> 为空。</para></exception>
     /// <exception cref="IOException">The server reported FAIL or sent an invalid status.
@@ -262,13 +255,11 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     }
 
     /// <summary>
-    /// Runs one host-level command and returns its payload text. Callers that poll the server in a
-    /// loop pass a deadline short enough to keep the poll cadence, because a wedged server would
-    /// otherwise hold the request for the network default.
-    /// <para>执行一条 host 级命令并返回其应答文本。按循环轮询 server 的调用方应传入足够短的期限以保持轮询
-    /// 节奏，否则卡住的 server 会把该请求占用整个网络默认超时。</para>
+    /// Runs one host-level command over the control socket and returns its payload text, with
+    /// a deadline covering connect, request and response.
+    /// <para>通过控制套接字执行一条 host 级命令并返回其应答文本，期限覆盖连接、请求与响应。</para>
     /// </summary>
-    /// <param name="command">The raw host command, e.g. <c>host:mdns:services</c>.
+    /// <param name="command">The raw host command, such as <c>host:mdns:services</c>.
     /// <para>原始 host 命令，如 <c>host:mdns:services</c>。</para></param>
     /// <param name="host">The adb server host. <para>adb server 主机。</para></param>
     /// <param name="port">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
@@ -445,38 +436,77 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     }
 }
 
-/// <summary>Preserves unread bytes when adapting ADB packet chunks to a byte-oriented stream.</summary>
-/// <remarks>
-/// The synchronous <see cref="Stream"/> members stay because most host paths consume this façade through
-/// blocking BCL helpers; <see cref="ReadAsync(Memory{byte}, CancellationToken)"/>,
-/// <see cref="WriteAsync(ReadOnlyMemory{byte}, CancellationToken)"/> and <see cref="FlushAsync"/> are the
-/// non-parking forms that <c>CopyToAsync</c> and the terminal relays use.
-/// <para>同步的 <see cref="Stream"/> 成员予以保留，因为宿主多数路径经由阻塞的 BCL 辅助方法消费该门面；
-/// <see cref="ReadAsync(Memory{byte}, CancellationToken)"/>、<see cref="WriteAsync(ReadOnlyMemory{byte}, CancellationToken)"/>
-/// 与 <see cref="FlushAsync"/> 是不占用线程的形式，供 <c>CopyToAsync</c> 与终端转发使用。</para>
-/// </remarks>
+/// <summary>
+/// Preserves unread bytes when adapting ADB packet chunks to a byte-oriented stream.
+/// <para>在把 ADB 数据包块适配为面向字节的流时保留未读字节。</para>
+/// </summary>
+/// <param name="stream">The ADB packet stream to adapt. <para>要适配的 ADB 包流。</para></param>
 internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream stream) : Stream
 {
     private bool _disposed;
     private byte[]? _pending;
     private int _offset;
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets or sets the synchronous read timeout in milliseconds.
+    /// <para>获取或设置同步读取的毫秒级超时。</para>
+    /// </summary>
+    /// <value>The timeout in milliseconds, defaulting to 10000. <para>毫秒级超时时长，默认为 10000。</para></value>
     public override int ReadTimeout { get; set; } = 10000;
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets whether read and write operations honour a timeout.
+    /// <para>获取读写操作是否遵循超时设置。</para>
+    /// </summary>
+    /// <value><c>true</c>; this stream applies read and write timeouts. <para>为 <c>true</c>；该流应用读写超时。</para></value>
     public override bool CanTimeout => true;
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets whether the stream supports reading.
+    /// <para>获取该流是否支持读取。</para>
+    /// </summary>
+    /// <value><c>true</c>; chunk bytes can be read. <para>为 <c>true</c>；可以读取块字节。</para></value>
     public override bool CanRead => true;
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets whether the stream supports seeking.
+    /// <para>获取该流是否支持定位。</para>
+    /// </summary>
+    /// <value><c>false</c>; packet chunks cannot be seeked. <para>为 <c>false</c>；数据包块不可定位。</para></value>
     public override bool CanSeek => false;
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets whether the stream supports writing.
+    /// <para>获取该流是否支持写入。</para>
+    /// </summary>
+    /// <value><c>true</c>; payloads can be written. <para>为 <c>true</c>；可以写入负载。</para></value>
     public override bool CanWrite => true;
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets the stream length, which a packet chunk stream does not define.
+    /// <para>获取流长度，而包块流并不定义该概念。</para>
+    /// </summary>
+    /// <value>Never available; the getter always throws. <para>永远不可用；读取该属性总是抛出异常。</para></value>
+    /// <exception cref="NotSupportedException">The length of a packet chunk stream is undefined.
+    /// <para>包块流的长度未定义。</para></exception>
     public override long Length => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets or sets the stream position, which a packet chunk stream does not define.
+    /// <para>获取或设置流位置，而包块流并不定义该概念。</para>
+    /// </summary>
+    /// <value>Never available; both accessors always throw. <para>永远不可用；两个访问器总是抛出异常。</para></value>
+    /// <exception cref="NotSupportedException">The position of a packet chunk stream is undefined.
+    /// <para>包块流的位置未定义。</para></exception>
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads bytes from the buffered chunk queue into an array region.
+    /// <para>把缓冲块队列中的字节读入数组区间。</para>
+    /// </summary>
+    /// <param name="buffer">The destination array. <para>目标数组。</para></param>
+    /// <param name="offset">The start index within the array. <para>数组内的起始下标。</para></param>
+    /// <param name="count">The maximum number of bytes to copy. <para>最多拷入的字节数。</para></param>
+    /// <returns>The number of bytes copied, or 0 at end of stream. <para>拷入的字节数；流结束时为 0。</para></returns>
     public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads bytes from the buffered chunk queue into a span.
+    /// <para>把缓冲块队列中的字节读入 Span。</para>
+    /// </summary>
+    /// <param name="destination">The span receiving the bytes. <para>接收字节的目标区间。</para></param>
+    /// <returns>The number of bytes copied, or 0 at end of stream. <para>拷入的字节数；流结束时为 0。</para></returns>
     public override int Read(Span<byte> destination)
     {
         if (destination.IsEmpty) return 0;
@@ -495,7 +525,14 @@ internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream str
 
         return ConsumePending(destination);
     }
-    /// <inheritdoc />
+    /// <summary>
+    /// Asynchronously reads bytes from the buffered chunk queue into a memory region.
+    /// <para>异步把缓冲块队列中的字节读入 Memory 区间。</para>
+    /// </summary>
+    /// <param name="buffer">The destination memory region. <para>目标 Memory 区间。</para></param>
+    /// <param name="cancellationToken">Cancels the read. <para>取消本次读取。</para></param>
+    /// <returns>A value task yielding the bytes copied, or 0 at end of stream.
+    /// <para>给出拷入字节数的值任务；流结束时为 0。</para></returns>
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
         if (buffer.IsEmpty) return 0;
@@ -514,37 +551,76 @@ internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream str
 
         return ConsumePending(buffer);
     }
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the array region to the underlying packet stream.
+    /// <para>将数组区间写入底层包流。</para>
+    /// </summary>
+    /// <param name="buffer">The source array. <para>源数组。</para></param>
+    /// <param name="offset">The start index within the array. <para>数组内的起始下标。</para></param>
+    /// <param name="count">The number of bytes to write. <para>要写入的字节数。</para></param>
     public override void Write(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);
         if (count == 0) return;
         WriteBlocking(offset == 0 && count == buffer.Length ? buffer : buffer.AsSpan(offset, count).ToArray());
     }
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes a span payload to the underlying packet stream.
+    /// <para>将 Span 负载写入底层包流。</para>
+    /// </summary>
+    /// <param name="buffer">The bytes to write. <para>要写入的字节。</para></param>
     public override void Write(ReadOnlySpan<byte> buffer)
     {
         if (buffer.IsEmpty) return;
         WriteBlocking(Exact(buffer));
     }
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes a payload through the packet stream without parking a thread.
+    /// <para>经由包流写入负载而不阻塞线程。</para>
+    /// </summary>
+    /// <param name="buffer">The bytes to write. <para>要写入的字节。</para></param>
+    /// <param name="cancellationToken">Cancels the write. <para>取消本次写入。</para></param>
     public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         => stream.WriteAsync(buffer, cancellationToken);
-    /// <inheritdoc />
+    /// <summary>
+    /// Does nothing; writes reach the packet stream immediately.
+    /// <para>不执行操作；写入即时到达包流。</para>
+    /// </summary>
     public override void Flush() { }
-    /// <inheritdoc />
+    /// <summary>
+    /// Completes immediately; writes reach the packet stream synchronously.
+    /// <para>立即完成；写入同步到达包流。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Unused cancellation token. <para>未使用的取消令牌。</para></param>
     public override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    /// <inheritdoc />
+    /// <summary>
+    /// Not supported; a packet chunk stream cannot seek.
+    /// <para>不支持；包块流无法定位。</para>
+    /// </summary>
+    /// <param name="offset">Ignored seek offset. <para>被忽略的定位偏移。</para></param>
+    /// <param name="origin">Ignored seek origin. <para>被忽略的定位起点。</para></param>
+    /// <returns>Never returns; the call always throws. <para>永不返回；调用总是抛出异常。</para></returns>
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Not supported; a packet chunk stream has no fixed length.
+    /// <para>不支持；包块流没有固定长度。</para>
+    /// </summary>
+    /// <param name="value">Ignored requested length. <para>被忽略的请求长度。</para></param>
     public override void SetLength(long value) => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Releases the underlying packet stream once.
+    /// <para>一次性释放底层包流。</para>
+    /// </summary>
+    /// <param name="disposing">When <c>true</c>, managed resources are released. <para>为 <c>true</c> 时释放托管资源。</para></param>
     protected override void Dispose(bool disposing)
     {
         if (disposing && !_disposed) { _disposed = true; stream.Dispose(); }
         base.Dispose(disposing);
     }
-    /// <inheritdoc />
+    /// <summary>
+    /// Asynchronously releases the underlying packet stream once.
+    /// <para>异步一次性释放底层包流。</para>
+    /// </summary>
     public override async ValueTask DisposeAsync()
     {
         if (!_disposed)
@@ -558,6 +634,8 @@ internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream str
 
     /// <summary>Copies buffered chunk bytes into the destination and forgets the chunk once it is consumed.
     /// <para>把已缓冲的块字节拷入目标，并在用完后丢弃该块。</para></summary>
+    /// <param name="destination">The span receiving the bytes. <para>接收字节的目标区间。</para></param>
+    /// <returns>The number of bytes copied. <para>拷入的字节数。</para></returns>
     private int ConsumePending(Span<byte> destination)
     {
         var count = Math.Min(destination.Length, _pending!.Length - _offset);
@@ -568,6 +646,8 @@ internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream str
     }
 
     /// <summary>Memory form of the span overload. <para>Span 重载的 Memory 形式。</para></summary>
+    /// <param name="destination">The memory receiving the bytes. <para>接收字节的目标 Memory 区间。</para></param>
+    /// <returns>The number of bytes copied. <para>拷入的字节数。</para></returns>
     private int ConsumePending(Memory<byte> destination)
     {
         var count = Math.Min(destination.Length, _pending!.Length - _offset);
@@ -579,6 +659,7 @@ internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream str
 
     /// <summary>Reads one packet chunk with the stream's own synchronous wait.
     /// <para>用流自身的同步等待读取一个数据包块。</para></summary>
+    /// <returns>The next chunk bytes, or <c>null</c> when the stream is closed. <para>下一个块的字节；流已关闭时为 <c>null</c>。</para></returns>
     private byte[]? ReadChunkBlocking()
     {
         if (stream is AdbStream direct)
@@ -599,6 +680,8 @@ internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream str
 
     /// <summary>Reads one packet chunk asynchronously, honouring <see cref="ReadTimeout"/> as a deadline.
     /// <para>异步读取一个数据包块，并把 <see cref="ReadTimeout"/> 当作期限执行。</para></summary>
+    /// <param name="cancellationToken">Cancels the read. <para>取消本次读取。</para></param>
+    /// <returns>The next chunk bytes, or <c>null</c> when the stream is closed. <para>下一个块的字节；流已关闭时为 <c>null</c>。</para></returns>
     private async ValueTask<byte[]?> ReadChunkAsync(CancellationToken cancellationToken)
     {
         using var deadline = Deadline(cancellationToken);
@@ -612,8 +695,10 @@ internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream str
         }
     }
 
-    /// <summary>Builds the read deadline token source, leaving it unbounded when the caller opted out of
-    /// timeouts. <para>构造读取期限的令牌源；调用方取消超时约定时不设期限。</para></summary>
+    /// <summary>Builds the read deadline token source, leaving it unbounded when timeout checking is disabled.
+    /// <para>构造读取期限的令牌源；关闭超时检查时不设期限。</para></summary>
+    /// <param name="cancellationToken">The token the deadline source links to. <para>期限令牌源链接的令牌。</para></param>
+    /// <returns>A linked source cancelled after the read timeout, or unbounded. <para>读取超时后取消的链接令牌源，或不限期限的令牌源。</para></returns>
     private CancellationTokenSource Deadline(CancellationToken cancellationToken)
     {
         var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -621,8 +706,10 @@ internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream str
         return linked;
     }
 
-    /// <summary>Projects a span payload onto an array, avoiding the copy when the caller already owns an
-    /// exact-size array. <para>把 Span 负载映射为数组；调用方已持有恰好长度数组时不拷贝。</para></summary>
+    /// <summary>Copies a span payload into a new exact-size array.
+    /// <para>把 Span 负载拷入新的恰好长度数组。</para></summary>
+    /// <param name="buffer">The span to copy. <para>待拷贝的 Span。</para></param>
+    /// <returns>A new array holding the same bytes. <para>持有相同字节的新数组。</para></returns>
     private static byte[] Exact(ReadOnlySpan<byte> buffer)
     {
         var payload = new byte[buffer.Length];
@@ -632,6 +719,7 @@ internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream str
 
     /// <summary>Writes a payload with the stream's own synchronous write path.
     /// <para>用流自身的同步写入路径写出负载。</para></summary>
+    /// <param name="payload">The bytes to write. <para>要写入的字节。</para></param>
     private void WriteBlocking(byte[] payload)
     {
         if (stream is AdbStream direct)

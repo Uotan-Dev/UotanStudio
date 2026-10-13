@@ -85,7 +85,7 @@ internal static class ToolJson
 /// </remarks>
 internal sealed record ToolResult(bool Success, string Summary, JsonElement? Data = null)
 {
-    /// <summary><para>把工具结果映射为协议结果。</para>Maps the envelope onto the protocol tool result.</summary>
+    /// <summary>Maps the envelope onto the protocol tool result. <para>把工具结果映射为协议结果。</para></summary>
     /// <returns><para>带文本信封、错误标志与结构化数据的协议结果。</para>A protocol result carrying the text
     /// envelope, the error flag, and the structured data payload.</returns>
     internal CallToolResult ToResult() => new()
@@ -96,12 +96,12 @@ internal sealed record ToolResult(bool Success, string Summary, JsonElement? Dat
     };
 
     /// <summary>
-    /// <para>把异常的类型与消息保留为失败结果；SDK 会吞掉非 <see cref="ModelContextProtocol.McpException"/> 的消息。</para>
     /// Preserves the exception type and message as a failure result; the SDK discards the message of any
     /// exception type other than <see cref="ModelContextProtocol.McpException"/>.
+    /// <para>把异常的类型与消息保留为失败结果；SDK 会吞掉非 <see cref="ModelContextProtocol.McpException"/> 的消息。</para>
     /// </summary>
-    /// <param name="exception"><para>处理过程中抛出的异常。</para>The exception raised while running the tool.</param>
-    /// <returns><para>摘要为「类型: 消息」的失败结果。</para>A failure result whose summary is the type and message.</returns>
+    /// <param name="exception">The exception raised while running the tool. <para>处理过程中抛出的异常。</para></param>
+    /// <returns>A failure result whose summary is the type and message. <para>摘要为「类型: 消息」的失败结果。</para></returns>
     internal static ToolResult FromException(Exception exception) =>
         new(false, $"{exception.GetType().Name}: {exception.Message}");
 

@@ -318,14 +318,8 @@ public static class AdbQrPairingService
     }
 
     /// <summary>
-    /// Completes the connection half of QR pairing with an explicit port, for the case where
-    /// pairing succeeded but the device never advertised its secure connect service via mDNS.
-    /// The port is the one shown on the phone's Wireless debugging page. The ADB-server route
-    /// connects through the server; the direct route only validates the arguments and returns
-    /// the endpoint — the caller performs the TLS handshake that proves the stored credentials.
-    /// <para>在配对成功但设备始终未通过 mDNS 广播安全连接服务时，用显式端口完成配对流程的连接
-    /// 环节。端口取自手机“无线调试”页面。ADB server 路由经 server 连接；直连路由只校验参数并
-    /// 返回端点——由调用方执行 TLS 握手以证实已保存的凭据。</para>
+    /// Completes the connection half of QR pairing with an explicit port, for the case where the device never advertised its secure connect service via mDNS. The ADB-server route connects through the server; the direct route validates the arguments and returns the endpoint.
+    /// <para>以显式端口完成 QR 配对的连接后半段，用于设备未通过 mDNS 通告安全连接服务的场景。ADB server 路由经 server 连接；直连路由仅校验参数并返回端点。</para>
     /// </summary>
     /// <param name="route">The route the pairing completed through.
     /// <para>配对完成的路径。</para></param>
@@ -376,15 +370,8 @@ public static class AdbQrPairingService
 }
 
 /// <summary>
-/// Raised when QR pairing succeeded but the device never advertised its secure connect
-/// service, so the connect port could not be discovered via mDNS. Some phones stop answering
-/// mDNS queries once the pairing dialog closes; the caller can still complete the connection
-/// with the port shown on the phone's Wireless debugging page through
-/// <see cref="AdbQrPairingService.ConnectPairedAsync"/>.
-/// <para>扫码配对成功、但设备始终未广播安全连接服务导致无法经 mDNS 发现连接端口时抛出。
-/// 部分机型在配对对话框关闭后不再应答 mDNS 查询；调用方仍可通过
-/// <see cref="AdbQrPairingService.ConnectPairedAsync"/> 使用手机上“无线调试”页面显示的端口
-/// 完成连接。</para>
+/// Raised when QR pairing succeeded but the device never advertised its secure connect service, so the connect port could not be discovered via mDNS. The caller can complete the connection with the port shown on the phone's Wireless debugging page.
+/// <para>QR 配对成功但设备从未通告安全连接服务、因而无法通过 mDNS 发现连接端口时抛出。调用方可使用手机“无线调试”页面上显示的端口完成连接。</para>
 /// </summary>
 public sealed class AdbQrPairingConnectPortException : TimeoutException
 {
@@ -409,13 +396,13 @@ public sealed class AdbQrPairingConnectPortException : TimeoutException
     /// Gets the route the pairing completed through.
     /// <para>获取配对完成的路径。</para>
     /// </summary>
-    /// <value><para>配对完成的路径。</para>The pairing route.</value>
+    /// <value>The pairing route. <para>配对完成的路径。</para></value>
     public AdbQrPairingRoute Route { get; }
 
     /// <summary>
     /// Gets the device IP address discovered during pairing.
     /// <para>获取配对阶段发现的设备 IP 地址。</para>
     /// </summary>
-    /// <value><para>设备 IP 地址。</para>The device IP address.</value>
+    /// <value>The device IP address. <para>设备 IP 地址。</para></value>
     public string Host { get; }
 }

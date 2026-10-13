@@ -31,11 +31,8 @@ public enum AudioDecoderBackend
 public static class AudioDecoderFactory
 {
     /// <summary>
-    /// Creates an uninitialized decoder. PCM is served by a passthrough decoder; AAC prefers the platform native
-    /// decoder (Media Foundation on Windows, AudioToolbox on macOS); every other codec, or an explicit GStreamer
-    /// selection, uses the GStreamer pipeline decoder.
-    /// <para>创建未初始化的解码器。PCM 由直通解码器处理；AAC 优先使用平台原生解码器（Windows 上为
-    /// Media Foundation，macOS 上为 AudioToolbox）；其他编码或显式选择 GStreamer 时使用 GStreamer 管线解码器。</para>
+    /// Creates an uninitialized decoder for the requested codec and backend.
+    /// <para>为指定的音频编码与后端创建未初始化的解码器。</para>
     /// </summary>
     /// <param name="codec">Wire codec of the incoming packets; <see cref="AudioCodecId.Pcm"/> ignores the backend.
     /// <para>待解码数据包的音频编码；<see cref="AudioCodecId.Pcm"/> 会忽略后端选择。</para></param>
@@ -96,12 +93,10 @@ internal sealed class PcmAudioDecoder : IAudioDecoder
     public void Dispose() { _callback = null; _disposed = true; }
 }
 
-/// <summary>
-/// GStreamer packet audio decoding into bounded stereo PCM: compressed packets are pushed through a private
-/// appsrc/decoder pipeline and re-emitted as interleaved S16LE 48 kHz stereo frames via the frame callback.
-/// <para>基于 GStreamer 的分包音频解码，输出有界的立体声 PCM：压缩数据包经私有 appsrc/解码器管线推送，
-/// 并以交织存放的 S16LE、48 kHz 立体声帧经帧回调重新输出。</para>
-/// </summary>
+    /// <summary>
+    /// (Re)builds the pipeline for the selected codec and registers the frame callback.
+    /// <para>为所选编码重建解码管线并登记帧回调。</para>
+    /// </summary>
 /// <param name="codec">Wire codec the pipeline decodes; this backend does not serve raw PCM.
 /// <para>管线所解码的音频编码；此后端不处理原始 PCM。</para></param>
 public sealed unsafe class GStreamerAudioDecoder(AudioCodecId codec) : IAudioDecoder
@@ -135,11 +130,8 @@ public sealed unsafe class GStreamerAudioDecoder(AudioCodecId codec) : IAudioDec
     /// <value>Always 16. <para>恒为 16。</para></value>
     public int BitsPerSample => 16;
     /// <summary>
-    /// (Re)builds the GStreamer pipeline for the selected codec and registers the frame callback. Any previous
-    /// pipeline is disposed first. AAC expects a raw AudioSpecificConfig; Opus expects an OpusHead with mapping
-    /// family zero and one or two channels; FLAC accepts an empty or native stream-header configuration.
-    /// <para>为所选编码重建 GStreamer 管线并登记帧回调，既有管线会先被释放。AAC 需要原始 AudioSpecificConfig；
-    /// Opus 需要映射族为零、单声道或立体声的 OpusHead；FLAC 允许为空或携带原生流头配置。</para>
+    /// (Re)builds the pipeline for the selected codec and registers the frame callback.
+    /// <para>为所选编码重建解码管线并登记帧回调。</para>
     /// </summary>
     /// <param name="codecConfig">
     /// Codec initialization bytes, at most 65 536 bytes; for FLAC a non-empty header is pushed into the pipeline
@@ -224,11 +216,8 @@ public sealed unsafe class GStreamerAudioDecoder(AudioCodecId codec) : IAudioDec
         Poll();
     }
     /// <summary>
-    /// Drains decoded PCM samples from the pipeline without feeding another packet: the first pull waits up to
-    /// 10 ms and each subsequent pull is non-blocking, delivering at most 4 096 frames per call. Does nothing
-    /// before initialization.
-    /// <para>在不输入新数据包的情况下抽取管线中已解码的 PCM 样本：首次拉取最多等待 10 毫秒，
-    /// 其后每次拉取均非阻塞，单次调用至多交付 4 096 帧。初始化之前调用不做任何事。</para>
+    /// Drains decoded PCM samples from the pipeline without feeding another packet.
+    /// <para>在不输入新数据包的情况下抽取管线中已解码的 PCM 样本。</para>
     /// </summary>
     /// <exception cref="InvalidOperationException">Called from inside a frame callback. <para>在帧回调内部被调用。</para></exception>
     /// <exception cref="InvalidDataException">

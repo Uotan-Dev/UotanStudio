@@ -12,11 +12,10 @@ namespace UotanStudio.Comm.Protocols.Edl.Auth;
 /// <para>The token is the uppercase hex encoding of one AES-256-CBC block over
 /// <c>"907heavyworkload"</c> followed by the SHA-256 digest of
 /// <c>"2e7006834dafe8ad" + serial + "a6674c6b039707ff"</c>, zero-padded to 256 bytes. The serial is written as
-/// decimal digits and left-padded with zeros to ten characters, which is how the reference tools derive it
-/// from the SoC serial reported by Sahara.</para>
+/// decimal digits and left-padded with zeros to ten characters.</para>
 /// <para>令牌为一段 AES-256-CBC 密文的大写十六进制编码，明文是 <c>"907heavyworkload"</c> 加上
 /// <c>"2e7006834dafe8ad" + 序列号 + "a6674c6b039707ff"</c> 的 SHA-256 摘要，并零填充到 256 字节。序列号按十进制
-/// 书写并在左侧补零到十位，与参考工具从 Sahara 上报的 SoC 序列号推导的方式一致。</para>
+/// 书写并在左侧补零到十位。</para>
 /// </remarks>
 public sealed class EdlOnePlusDemaciaAuthProvider : IEdlProjectAuthenticationProvider
 {

@@ -115,10 +115,10 @@ public interface IWritableFormatHandler : IReadonlyFormatHandler
     /// <para>带可选字节级进度的打包。默认委托给 <see cref="PackAsync(string, string, CancellationToken)"/>；
     /// ext4、EROFS 与 F2FS 处理器重写它以向调用方上报真实字节进度，其余处理器沿用不上报进度的默认路径。</para>
     /// </summary>
-    /// <param name="inputPath"><para>输入路径（目录或文件，依格式而定）。</para>Input path (directory or file, format-specific).</param>
-    /// <param name="outputPath"><para>输出文件路径。</para>Output file path.</param>
-    /// <param name="progress"><para>可选的字节级进度回调。</para>Optional byte-level progress callback.</param>
-    /// <param name="cancellationToken"><para>取消令牌。</para>Cancellation token.</param>
+    /// <param name="inputPath">Input path (directory or file, format-specific). <para>输入路径（目录或文件，依格式而定）。</para></param>
+    /// <param name="outputPath">Output file path. <para>输出文件路径。</para></param>
+    /// <param name="progress">Optional byte-level progress callback. <para>可选的字节级进度回调。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>An outcome describing the produced file, identical to the two-argument overload.
     /// <para>结果对象说明生成的文件，与两参数重载一致。</para></returns>
     Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken = default)

@@ -68,16 +68,16 @@ public static class QcnKnownItems
     /// <para>查询编号 NV 条目的字典项。</para>
     /// </summary>
     /// <param name="id">
-    /// <para>NV 条目 id。</para>
     /// The NV item id.
+    /// <para>NV 条目 id。</para>
     /// </param>
     /// <param name="item">
-    /// <para>命中的字典项；未命中时为 <c>null</c>。</para>
     /// The matching entry; <c>null</c> when not found.
+    /// <para>命中的字典项；未命中时为 <c>null</c>。</para>
     /// </param>
     /// <returns>
-    /// <para>命中返回 <c>true</c>。</para>
     /// <c>true</c> when the id is known.
+    /// <para>命中返回 <c>true</c>。</para>
     /// </returns>
     public static bool TryGet(ushort id, out QcnKnownItem? item)
     {

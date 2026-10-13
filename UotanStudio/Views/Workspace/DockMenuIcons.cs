@@ -10,10 +10,10 @@ using UotanStudio.Services;
 namespace UotanStudio.Views.Workspace;
 
 /// <summary>
-/// <para>为 Dock 主题自带的菜单补齐图标。主题中的右键菜单与顶栏 MenuFlyout 不是普通控件、无法用样式覆盖，
-/// 因此菜单打开后按其已解析的标题匹配对应的 Material 图标。</para>
 /// Fills in icons for the Dock theme's own menus. The theme's context menus and header MenuFlyout are not
 /// ordinary controls and cannot be styled, so after the menu opens we match its resolved headers to Material icons.
+/// <para>为 Dock 主题自带的菜单补齐图标。主题中的右键菜单与顶栏 MenuFlyout 不是普通控件、无法用样式覆盖，
+/// 因此菜单打开后按其已解析的标题匹配对应的 Material 图标。</para>
 /// </summary>
 internal static class DockMenuIcons
 {
@@ -21,11 +21,11 @@ internal static class DockMenuIcons
     private static int _wired;
 
     /// <summary>
-    /// <para>全局接线：Dock 顶栏（主窗口与浮动窗口一致）在指针按下/键盘按下的隧道阶段先挂上 Opened 处理，
-    /// 按钮随后才弹出菜单，因此启动后第一次打开也带图标；Click 冒泡仅作兜底。</para>
     /// Wires app-wide: every Dock header (main window or floating window) attaches the Opened handler during the
     /// pointer-press / key-down tunnel phase, before the button pops the menu, so even the first open right after
     /// startup carries icons; the bubbling Click is only a fallback.
+    /// <para>全局接线：Dock 顶栏（主窗口与浮动窗口一致）在指针按下/键盘按下的隧道阶段先挂上 Opened 处理，
+    /// 按钮随后才弹出菜单，因此启动后第一次打开也带图标；Click 冒泡仅作兜底。</para>
     /// </summary>
     internal static void EnsureWired()
     {
@@ -47,9 +47,9 @@ internal static class DockMenuIcons
     internal static void Apply(MenuFlyout menu) => ApplyItems(menu.Items);
 
     /// <summary>
-    /// <para>为顶栏 MenuFlyout 注册一次性的 <c>Opened</c> 处理，在其打开、标题解析完成后再补齐图标。</para>
     /// Registers a one-time <c>Opened</c> handler for the header MenuFlyout, filling icons after the menu opens
     /// and its headers have resolved.
+    /// <para>为顶栏 MenuFlyout 注册一次性的 <c>Opened</c> 处理，在其打开、标题解析完成后再补齐图标。</para>
     /// </summary>
     private static void AttachHeader(ToolChromeControl chrome)
     {

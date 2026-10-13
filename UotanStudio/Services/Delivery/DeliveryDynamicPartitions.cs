@@ -2,7 +2,10 @@ using UotanStudio.Services.Firmware;
 
 namespace UotanStudio.Services.Delivery;
 
-/// <summary>Resolves logical partition membership from the image's own source project.</summary>
+/// <summary>
+/// Resolves logical partition membership from the image's own source project.
+/// <para>按镜像自身的源工程解析逻辑分区的归属关系。</para>
+/// </summary>
 internal static class DeliveryDynamicPartitions
 {
     internal static IReadOnlySet<string>? Read(string projectRoot)

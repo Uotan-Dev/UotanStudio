@@ -3,9 +3,13 @@ using System.Collections.Concurrent;
 namespace UotanStudio.Services;
 
 /// <summary>
-/// <para>日志条目记录，包含时间戳、级别、来源和文本。</para>
 /// Log entry record, containing timestamp, level, source and text.
+/// <para>日志条目记录，包含时间戳、级别、来源和文本。</para>
 /// </summary>
+/// <param name="Timestamp">The local time the entry was written. <para>写入条目的本地时间。</para></param>
+/// <param name="Level">The severity level of the entry. <para>条目的严重级别。</para></param>
+/// <param name="Source">The name of the log source. <para>日志来源名称。</para></param>
+/// <param name="Message">The log text. <para>日志文本。</para></param>
 public sealed record LogEntry(
     DateTime Timestamp,
     LogLevel Level,
@@ -13,40 +17,31 @@ public sealed record LogEntry(
     string Message);
 
 /// <summary>
-/// <para>日志通道分类，用于在日志面板中按来源（Source）对日志条目归类展示。</para>
-/// Log channel categories, used to group log entries by their source in the log panel.
+/// Log channel categories that group entries by their source.
+/// <para>按来源对日志条目归类的日志通道分类。</para>
 /// </summary>
-/// <remarks>
-/// <para>通道信息不写入 <see cref="LogEntry"/>，而是由 <see cref="LogService.ChannelOf"/> 在展示时按来源关键字映射。</para>
-/// Channel information is not stored in <see cref="LogEntry"/>; it is mapped at display time by
-/// <see cref="LogService.ChannelOf"/> based on source keywords.
-/// </remarks>
 public enum LogChannel
 {
-    /// <summary><para>通用通道：未匹配到其他通道关键字的日志。</para>General channel: logs that match no other channel keywords.</summary>
+    /// <summary>General channel: logs that match no other channel keywords. <para>通用通道：未匹配到其他通道关键字的日志。</para></summary>
     General,
 
-    /// <summary><para>设备通道：设备发现、连接、USB/ADB 等设备相关日志。</para>Device channel: device discovery, connection and USB/ADB logs.</summary>
+    /// <summary>Device channel: device discovery, connection and USB/ADB logs. <para>设备通道：设备发现、连接、USB/ADB 等设备相关日志。</para></summary>
     Device,
 
-    /// <summary><para>烧录通道：刷机、烧录、分区写入等日志。</para>Flash channel: flashing and partition writing logs.</summary>
+    /// <summary>Flash channel: flashing and partition writing logs. <para>烧录通道：刷机、烧录、分区写入等日志。</para></summary>
     Flash,
 
-    /// <summary><para>固件通道：固件解包/打包、签名与镜像处理日志。</para>Firmware channel: firmware unpack/pack, signing and image processing logs.</summary>
+    /// <summary>Firmware channel: firmware unpack/pack, signing and image processing logs. <para>固件通道：固件解包/打包、签名与镜像处理日志。</para></summary>
     Firmware,
 
-    /// <summary><para>节点通道：工作流、节点执行、打包与命令行工具日志。</para>Node channel: workflow, node execution, packing and CLI tool logs.</summary>
+    /// <summary>Node channel: workflow, node execution, packing and CLI tool logs. <para>节点通道：工作流、节点执行、打包与命令行工具日志。</para></summary>
     Build
 }
 
 /// <summary>
-/// <para>统一日志服务实现。所有方法（节点执行、设备协议、UI 命令等）均通过此推送文本，由主日志窗口订阅显示。</para>
-/// Unified log service implementation. All methods (node execution, device protocols, UI commands, etc.) push text through this; the main log window subscribes to display.
+/// Unified log service that buffers entries, applies a minimum level, and notifies subscribers.
+/// <para>统一日志服务：缓冲日志条目，执行最低级别过滤，并向订阅者推送。</para>
 /// </summary>
-/// <remarks>
-/// <para>AOT 友好：无反射，使用 <see cref="ConcurrentQueue{T}"/> 与事件订阅。</para>
-/// AOT-friendly: no reflection, uses <see cref="ConcurrentQueue{T}"/> and event subscription.
-/// </remarks>
 public sealed class LogService : IUnifiedLog
 {
     private static readonly Lazy<LogService> LazyInstance = new(() => new LogService());
@@ -58,23 +53,25 @@ public sealed class LogService : IUnifiedLog
     private int _maxQueueSize = 5000;
 
     /// <summary>
-    /// <para>单例实例。</para>
     /// Singleton instance.
+    /// <para>单例实例。</para>
     /// </summary>
+    /// <value>The shared log service instance. <para>共享的日志服务实例。</para></value>
     public static LogService Instance => LazyInstance.Value;
 
     private LogService() { }
 
     /// <summary>
-    /// <para>日志条目入队事件。UI 日志窗口订阅此事件以增量接收日志。</para>
-    /// Log entry enqueued event. The UI log window subscribes to incrementally receive logs.
+    /// Raised when a log entry is enqueued.
+    /// <para>日志条目入队时触发。</para>
     /// </summary>
     public event EventHandler<LogEntry>? LogEnqueued;
 
     /// <summary>
-    /// <para>当前缓冲区中所有日志条目（只读快照）。</para>
     /// All log entries currently buffered (read-only snapshot).
+    /// <para>当前缓冲区中所有日志条目（只读快照）。</para>
     /// </summary>
+    /// <value>A snapshot copy of the buffered entries. <para>缓冲条目的快照副本。</para></value>
     public IReadOnlyList<LogEntry> Entries
     {
         get
@@ -86,16 +83,24 @@ public sealed class LogService : IUnifiedLog
     }
 
     /// <summary>
-    /// <para>缓冲区最大条目数，超出后丢弃最旧条目。</para>
     /// Maximum number of entries in the buffer; the oldest entries are dropped when exceeded.
+    /// <para>缓冲区最大条目数，超出后丢弃最旧条目。</para>
     /// </summary>
+    /// <value>The entry ceiling; assigned values below 100 are raised to 100.
+    /// <para>条目数上限；赋值小于 100 时提升为 100。</para></value>
     public int MaxQueueSize
     {
         get => _maxQueueSize;
         set => _maxQueueSize = Math.Max(100, value);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes a log entry when its level meets the minimum, buffers it, trims the queue, and notifies subscribers.
+    /// <para>级别不低于最低值时写入日志条目：入队缓冲、超限裁剪并通知订阅者。</para>
+    /// </summary>
+    /// <param name="level">The entry level. <para>条目级别。</para></param>
+    /// <param name="source">The log source name. <para>日志来源名称。</para></param>
+    /// <param name="message">The log text. <para>日志文本。</para></param>
     public void Write(LogLevel level, string source, string message)
     {
         if (level < _minimumLevel) return;
@@ -103,11 +108,8 @@ public sealed class LogService : IUnifiedLog
         var entry = new LogEntry(DateTime.Now, level, source ?? string.Empty, message ?? string.Empty);
         _entries.Enqueue(entry);
 
-        // 丢弃最旧条目以限制内存占用
         while (_entries.Count > _maxQueueSize && _entries.TryDequeue(out _)) { }
 
-        // 触发订阅者回调（线程安全）
-        // Subscriptions change much less frequently than messages; publish immutable snapshots.
         var handlers = Volatile.Read(ref _subscriberSnapshot);
         if (handlers.Length != 0)
         {
@@ -120,7 +122,14 @@ public sealed class LogService : IUnifiedLog
         LogEnqueued?.Invoke(this, entry);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes a log entry whose text is formatted from the arguments when the level meets the minimum.
+    /// <para>级别不低于最低值时写入按参数格式化日志文本的条目。</para>
+    /// </summary>
+    /// <param name="level">The entry level. <para>条目级别。</para></param>
+    /// <param name="source">The log source name. <para>日志来源名称。</para></param>
+    /// <param name="format">The composite format string. <para>复合格式字符串。</para></param>
+    /// <param name="args">The format arguments. <para>格式化使用的参数数组。</para></param>
     public void Write(LogLevel level, string source, string format, params object[] args)
     {
         if (level < _minimumLevel) return;
@@ -136,27 +145,33 @@ public sealed class LogService : IUnifiedLog
         Write(level, source, message);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Sets the minimum output level; entries below it are discarded.
+    /// <para>设置最低输出级别，低于该级别的条目将被丢弃。</para>
+    /// </summary>
+    /// <param name="level">The new minimum level. <para>新的最低级别。</para></param>
     public void SetMinimumLevel(LogLevel level)
     {
         _minimumLevel = level;
     }
 
     /// <summary>
-    /// <para>应用调试模式设置：开启时最低级别为 <see cref="LogLevel.Trace"/>，关闭时为 <see cref="LogLevel.Info"/>。</para>
     /// Applies the debug mode setting: when enabled the minimum level is <see cref="LogLevel.Trace"/>;
     /// when disabled it is <see cref="LogLevel.Info"/>.
+    /// <para>应用调试模式设置：开启时最低级别为 <see cref="LogLevel.Trace"/>，关闭时为 <see cref="LogLevel.Info"/>。</para>
     /// </summary>
-    /// <param name="debug"><para>是否启用调试模式。</para>Whether debug mode is enabled.</param>
+    /// <param name="debug">Whether debug mode is enabled. <para>是否启用调试模式。</para></param>
     public void ApplyDebugMode(bool debug)
     {
         SetMinimumLevel(debug ? LogLevel.Trace : LogLevel.Info);
     }
 
     /// <summary>
-    /// <para>订阅日志条目推送（线程安全）。返回取消订阅的委托。</para>
     /// Subscribes to log entry push (thread-safe). Returns a delegate to unsubscribe.
+    /// <para>订阅日志条目推送（线程安全）。返回取消订阅的委托。</para>
     /// </summary>
+    /// <param name="handler">The handler invoked for each new entry. <para>每条新日志触发的处理器。</para></param>
+    /// <returns>A delegate that removes the subscription. <para>用于取消订阅的委托。</para></returns>
     public Action Subscribe(EventHandler<LogEntry> handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
@@ -176,8 +191,8 @@ public sealed class LogService : IUnifiedLog
     }
 
     /// <summary>
-    /// <para>清空缓冲区。</para>
     /// Clears the buffer.
+    /// <para>清空缓冲区。</para>
     /// </summary>
     public void Clear()
     {
@@ -185,25 +200,11 @@ public sealed class LogService : IUnifiedLog
     }
 
     /// <summary>
-    /// <para>根据日志来源（Source）归类日志通道，供 <see cref="UotanStudio.ViewModels.Shell.LogViewModel"/> 按通道过滤展示。</para>
-    /// Classifies a log source into a <see cref="LogChannel"/>, used by the log panel to filter by channel.
+    /// Classifies a log source into a <see cref="LogChannel"/> by case-insensitive keyword match, first hit wins.
+    /// <para>按不区分大小写的关键字将日志来源归入某个 <see cref="LogChannel"/>，首个命中生效。</para>
     /// </summary>
-    /// <remarks>
-    /// <para>按关键字归类（不区分大小写，顺序优先）：包含 Flash/Fastboot/EDL/Firehose/Sideload → <see cref="LogChannel.Flash"/>；
-    /// ADB/Device/USB/Usb/RKDL → <see cref="LogChannel.Device"/>；
-    /// Firmware/Payload/AVB/Ext4/Erofs/F2fs/DEX/Format → <see cref="LogChannel.Firmware"/>；
-    /// 组件名 Images（完整匹配）也归入 <see cref="LogChannel.Firmware"/>；
-    /// Build/Pack/Node/Workflow/Cli → <see cref="LogChannel.Build"/>；其余归 <see cref="LogChannel.General"/>。
-    /// 此方法不改动任何写入调用点，仅作展示层分类。</para>
-    /// Classified by keyword (case-insensitive, first match wins): Flash/Fastboot/EDL/Firehose/Sideload → <see cref="LogChannel.Flash"/>;
-    /// ADB/Device/USB/Usb/RKDL → <see cref="LogChannel.Device"/>;
-    /// Firmware/Payload/AVB/Ext4/Erofs/F2fs/DEX/Format → <see cref="LogChannel.Firmware"/>;
-    /// the exact source name Images also maps to <see cref="LogChannel.Firmware"/>;
-    /// Build/Pack/Node/Workflow/Cli → <see cref="LogChannel.Build"/>; otherwise <see cref="LogChannel.General"/>.
-    /// This method does not modify any write call sites; it only classifies at the presentation layer.
-    /// </remarks>
-    /// <param name="source"><para>日志来源字符串。</para>Log source string.</param>
-    /// <returns><para>对应的日志通道。</para>The corresponding log channel.</returns>
+    /// <param name="source">Log source string. <para>日志来源字符串。</para></param>
+    /// <returns>The corresponding log channel. <para>对应的日志通道。</para></returns>
     public static LogChannel ChannelOf(string source)
     {
         if (string.IsNullOrEmpty(source))
@@ -236,9 +237,12 @@ public sealed class LogService : IUnifiedLog
     }
 
     /// <summary>
-    /// <para>判断来源是否包含任一关键字（不区分大小写）。</para>
     /// Determines whether the source contains any of the given keywords (case-insensitive).
+    /// <para>判断来源是否包含任一关键字（不区分大小写）。</para>
     /// </summary>
+    /// <param name="source">The string to search. <para>待搜索的字符串。</para></param>
+    /// <param name="keywords">The keywords to look for. <para>要查找的关键字。</para></param>
+    /// <returns>True when any keyword occurs in the source. <para>来源中包含任一关键字时为 true。</para></returns>
     private static bool ContainsAny(string source, params ReadOnlySpan<string> keywords)
     {
         foreach (var keyword in keywords)
@@ -252,6 +256,12 @@ public sealed class LogService : IUnifiedLog
         return false;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Interface implementation that writes a buffered, subscriber-notified log entry.
+    /// <para>接口实现：写入经过缓冲并通知订阅者的日志条目。</para>
+    /// </summary>
+    /// <param name="level">The entry level. <para>条目级别。</para></param>
+    /// <param name="source">The log source name. <para>日志来源名称。</para></param>
+    /// <param name="message">The log text. <para>日志文本。</para></param>
     void IUnifiedLog.Write(LogLevel level, string source, string message) => Write(level, source, message);
 }

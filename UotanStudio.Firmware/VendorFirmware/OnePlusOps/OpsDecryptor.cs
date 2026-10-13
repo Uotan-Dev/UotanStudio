@@ -218,14 +218,8 @@ internal class OpsDecryptor(Stream stream, IOnePlusLogger? logger = null)
     }
 
     /// <summary>
-    /// Decrypts data using AES-ECB mode with a key from the OnePlusKeyTable.
-    /// Only the AES-suitable entry (index 0) is accepted; MBox data entries
-    /// (indices 1–3) are rejected with <see cref="NotSupportedException"/> because
-    /// they belong to a different decryption path and must not be fed to AES.
-    /// <para>使用 OnePlusKeyTable 中的密钥以 AES-ECB 模式解密数据。
-    /// 仅接受适合 AES 的条目（索引 0）；MBox 数据条目（索引 1–3）以
-    /// <see cref="NotSupportedException"/> 拒绝，因为它们属于另一解密路径，
-    /// 不得传入 AES。</para>
+    /// Decrypts data using AES-ECB with a key from the OnePlus key table.
+    /// <para>使用一加密钥表中的密钥以 AES-ECB 模式解密数据。</para>
     /// </summary>
     /// <param name="encryptedData">The ciphertext to decrypt.
     /// <para>待解密的密文。</para></param>

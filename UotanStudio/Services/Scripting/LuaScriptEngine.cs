@@ -10,60 +10,38 @@ using UotanStudio.Services.Projects;
 namespace UotanStudio.Services.Scripting;
 
 /// <summary>
-/// <para>Executes one plugin Lua script inside a sandboxed <see cref="LuaState"/>: the pure computation
-/// standard libraries (base, string, table, math, coroutine and bit32) are opened for the script, while
-/// the platform-facing <c>io</c>, <c>os</c>, <c>package</c> and <c>debug</c> libraries stay closed and the
-/// base <c>dofile</c>/<c>loadfile</c> entries are removed because they read through the host file system.
-/// Scripts therefore reach the standard library, the host-injected <c>tool</c>, <c>ctx</c> and <c>ui</c>
-/// tables, and <c>print</c> routed into the node log. The execution cancellation token flows into the
-/// interpreter, so a runaway script stops when the surrounding node execution is cancelled.</para>
-/// <para>在沙箱化的 <see cref="LuaState"/> 内执行一个插件 Lua 脚本：为脚本打开纯计算类标准库（base、string、
-/// table、math、coroutine 与 bit32），不打开面向平台的 <c>io</c>、<c>os</c>、<c>package</c> 与 <c>debug</c>，
-/// 并移除经宿主文件系统读取的 <c>dofile</c>/<c>loadfile</c>。脚本可访问标准库、宿主注入的 <c>tool</c>、
-/// <c>ctx</c> 与 <c>ui</c> 三个表，以及被路由到节点日志的 <c>print</c>。执行取消令牌贯穿解释器，
-/// 外层节点执行取消时失控脚本会随之停止。</para>
+/// Runs one Lua script in a sandboxed <see cref="LuaState"/> that opens only the pure computation
+/// libraries; the platform <c>io</c>, <c>os</c>, <c>package</c> and <c>debug</c> libraries stay closed
+/// and cancellation follows node execution.
+/// <para>在沙箱化的 <see cref="LuaState"/> 内执行一个 Lua 脚本，只打开纯计算类库；
+/// <c>io</c>、<c>os</c>、<c>package</c> 与 <c>debug</c> 平台库保持关闭，取消信号跟随节点执行。</para>
 /// </summary>
 public sealed class LuaScriptEngine
 {
     /// <summary>
-    /// <para>Gets the maximum accepted script source size; oversized sources are rejected before
-    /// parsing to bound host memory. The bound is shared with package validation so an installed
-    /// script can never exceed what the host refuses to run.</para>
-    /// <para>获取接受的脚本源码大小上限；超限源码在解析前即被拒绝，以约束宿主内存。该上限与包校验共用，
-    /// 因此已安装脚本不会超过宿主拒绝执行的规模。</para>
+    /// Gets the maximum accepted script source size; oversized sources are rejected before
+    /// parsing. The bound is shared with package validation.
+    /// <para>获取接受的脚本源码大小上限；超限源码在解析前即被拒绝。该上限与包校验共用。</para>
     /// </summary>
     public const int MaximumScriptLength = VisualPluginValidation.MaximumScriptLength;
 
     /// <summary>
-    /// <para>Runs one script to completion and returns its first return value converted to a string,
-    /// or an empty string when the script returns nothing.</para>
+    /// Runs one script to completion and returns its first return value converted to a string,
+    /// or an empty string when the script returns nothing.
     /// <para>把脚本执行到结束并返回其首个返回值的字符串转换；脚本无返回值时返回空字符串。</para>
     /// </summary>
-    /// <param name="script">
-    /// <para>The Lua source to execute.</para>
-    /// <para>要执行的 Lua 源码。</para>
-    /// </param>
-    /// <param name="chunkName">
-    /// <para>Chunk name used in interpreter diagnostics, usually the plugin id.</para>
-    /// <para>解释器诊断使用的块名，通常是插件 Id。</para>
-    /// </param>
-    /// <param name="tools">
-    /// <para>Tool surface exposed to the script as <c>tool</c>; each entry is one named capability.</para>
-    /// <para>以 <c>tool</c> 暴露给脚本的工具面；每个条目是一个具名能力。</para>
-    /// </param>
-    /// <param name="context">
-    /// <para>Node execution context backing the <c>ctx</c> and <c>ui</c> tables.</para>
-    /// <para>支撑 <c>ctx</c> 与 <c>ui</c> 表的节点执行上下文。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// <para>Token cancelling script execution.</para>
-    /// <para>取消脚本执行的令牌。</para>
-    /// </param>
+    /// <param name="script">The Lua source to execute.<para>要执行的 Lua 源码。</para></param>
+    /// <param name="chunkName">Chunk name used in interpreter diagnostics, usually the plugin id.
+    /// <para>解释器诊断使用的块名，通常是插件 Id。</para></param>
+    /// <param name="tools">Tool surface exposed to the script as <c>tool</c>; each entry is one named capability.
+    /// <para>以 <c>tool</c> 暴露给脚本的工具面；每个条目是一个具名能力。</para></param>
+    /// <param name="context">Node execution context backing the <c>ctx</c> and <c>ui</c> tables.
+    /// <para>支撑 <c>ctx</c> 与 <c>ui</c> 表的节点执行上下文。</para></param>
+    /// <param name="cancellationToken">Token cancelling script execution.<para>取消脚本执行的令牌。</para></param>
     /// <returns>The first script return value as a string, or an empty string.
     /// <para>脚本首个返回值的字符串形式；无返回值时为空字符串。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// <para>Raised when the script is empty or exceeds <see cref="MaximumScriptLength"/>.</para>
-    /// <para>脚本为空或超过 <see cref="MaximumScriptLength"/> 时抛出。</para></exception>
+    /// <exception cref="ArgumentException">Thrown when the script is empty or exceeds
+    /// <see cref="MaximumScriptLength"/>. <para>脚本为空或超过 <see cref="MaximumScriptLength"/> 时抛出。</para></exception>
     public async Task<string> RunAsync(string script, string chunkName,
         IReadOnlyDictionary<string, ScriptTool> tools,
         INodeExecutionContext context, CancellationToken cancellationToken)
@@ -101,9 +79,6 @@ public sealed class LuaScriptEngine
         state.OpenMathLibrary();
         state.OpenStringLibrary();
         state.OpenTableLibrary();
-        // base 库会一并注册 dofile/loadfile，两者经平台文件系统读取宿主磁盘，必须移除以维持插件沙箱。
-        // The base library registers dofile/loadfile, which read the host file system through the
-        // platform abstraction; both are removed to keep installed plugins sandboxed.
         state.Environment["dofile"] = LuaValue.Nil;
         state.Environment["loadfile"] = LuaValue.Nil;
     }

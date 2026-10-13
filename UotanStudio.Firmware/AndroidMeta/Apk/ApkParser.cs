@@ -18,18 +18,18 @@ public static class ApkParser
     /// <para>分析 APK 文件并提取元数据。</para>
     /// </summary>
     /// <param name="apkPath">Path to the APK on disk; the file must exist and is opened for reading only. <para>磁盘上的 APK 路径；文件必须存在且仅以只读方式打开。</para></param>
-    /// <param name="preferredLanguage">Locale for the localized application label (for example <c>en-US</c> or <c>zh-rCN</c>; underscores and <c>-r</c> separators are normalized, exact match beats language-only match); <see langword="null"/> or empty keeps the default configuration. <para>用于本地化应用名称的语言（如 <c>en-US</c>、<c>zh-rCN</c>；下划线与 <c>-r</c> 分隔会被归一化，精确匹配优于仅语言匹配）；为 null 或空时取默认配置。</para></param>
-    /// <returns>A populated <see cref="ApkInfo"/>; fields that could not be resolved keep their empty or zero defaults. Signature-block parse failures are swallowed and surface only as a missing v2/v3 entry. <para>填充完成的 <see cref="ApkInfo"/>；未能解析的字段保持空值或零默认。签名块解析失败会被吞掉，仅表现为缺少 v2/v3 条目。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="apkPath"/> is <see langword="null"/>. <para><paramref name="apkPath"/> 为 null。</para></exception>
+    /// <param name="preferredLanguage">Locale for the localized application label, for example <c>en-US</c>; <see langword="null"/> keeps the default configuration. <para>本地化应用名称所用的语言，例如 <c>en-US</c>；为 <see langword="null"/> 时取默认配置。</para></param>
+    /// <returns>A populated <see cref="ApkInfo"/>; unresolvable fields keep their empty or zero defaults. <para>填充完成的 <see cref="ApkInfo"/>；无法解析的字段保持空值或零默认。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="apkPath"/> is <see langword="null"/>. <para><paramref name="apkPath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="FileNotFoundException">No file exists at <paramref name="apkPath"/>. <para><paramref name="apkPath"/> 处没有文件。</para></exception>
-    /// <exception cref="InvalidDataException">The ZIP is malformed, or a manifest/icon/resources entry exceeds its read limit (16 MiB for manifest and icon). <para>ZIP 结构非法，或清单/图标/resources 条目超出读取上限（清单与图标为 16 MiB）。</para></exception>
-    /// <exception cref="AXmlException">The embedded <c>AndroidManifest.xml</c> cannot be parsed. <para>内嵌的 <c>AndroidManifest.xml</c> 无法解析。</para></exception>
-    /// <exception cref="ArscException">The embedded <c>resources.arsc</c> cannot be parsed. <para>内嵌的 <c>resources.arsc</c> 无法解析。</para></exception>
+    /// <exception cref="InvalidDataException">The ZIP is malformed, or a manifest, icon or resources entry exceeds its read limit. <para>ZIP 结构非法，或清单、图标、resources 条目超出读取上限。</para></exception>
+    /// <exception cref="AXmlException">The embedded binary-XML manifest cannot be parsed. <para>内嵌的二进制 XML 清单无法解析。</para></exception>
+    /// <exception cref="ArscException">The embedded resource table cannot be parsed. <para>内嵌的资源表无法解析。</para></exception>
     /// <example>
-    /// <code>
-    /// ApkInfo info = ApkParser.Analyze(@"packages\release.apk", "zh-rCN");
-    /// string line = info.Describe();
+    /// <code language="csharp">
+    /// ApkInfo info = ApkParser.Analyze(apkPath);
     /// </code>
+    /// <para>分析指定路径的 APK 文件。</para>
     /// </example>
     public static ApkInfo Analyze(string apkPath, string? preferredLanguage = null)
     {
@@ -150,6 +150,8 @@ public static class ApkParser
     /// Parses the manifest root and children: package name, version, SDK, permissions and icon reference.
     /// <para>解析 manifest 根元素与子元素：包名、版本、SDK、权限与图标引用。</para>
     /// </summary>
+    /// <param name="doc">Parsed manifest document whose element tree is read. <para>待读取元素树的已解析清单文档。</para></param>
+    /// <param name="info">Container filled with the manifest values found. <para>写入所发现清单值的容器。</para></param>
     private static void ExtractManifest(AXmlDocument doc, ApkInfo info)
     {
         var root = doc.Root;
@@ -246,6 +248,8 @@ public static class ApkParser
     /// Resolves the icon AXML attribute to a resource ID from the Reference-typed value data field.
     /// <para>把图标的 AXML 属性的 Reference 型 data 字段解析为资源 ID。</para>
     /// </summary>
+    /// <param name="icon">Icon attribute whose value data may hold a resource reference. <para>值数据可能为资源引用的图标属性。</para></param>
+    /// <returns>The referenced resource ID, or 0 when the attribute is not reference-typed. <para>被引用的资源 ID；属性不是引用类型时为 0。</para></returns>
     private static uint ResolveIconReference(AXmlAttribute icon)
     {
         if (icon.ValueType is AXmlValueType.Reference or AXmlValueType.DynamicReference)
@@ -260,6 +264,10 @@ public static class ApkParser
     /// Resolves the icon file path in ARSC by resource ID; falls back to scanning image entries.
     /// <para>在 ARSC 中按资源 ID 查图标路径；失败时兜底扫描图片条目。</para>
     /// </summary>
+    /// <param name="table">Parsed resource table searched for the referenced entry. <para>用于查找被引用条目的已解析资源表。</para></param>
+    /// <param name="zip">Archive used to confirm the resolved path is present. <para>用于确认解析出的路径确实存在的归档。</para></param>
+    /// <param name="iconReference">Resource ID taken from the manifest icon attribute. <para>取自清单 icon 属性的资源 ID。</para></param>
+    /// <returns>The bitmap entry path, or <see langword="null"/> when no entry matches. <para>位图条目路径；无匹配条目时为 <see langword="null"/>。</para></returns>
     private static string? ResolveIconPath(ResourceTable table, ZipArchive zip, uint iconReference)
     {
 
@@ -283,6 +291,11 @@ public static class ApkParser
     /// Recursively resolves an adaptive/layer-list icon XML to a bitmap path by following resource references.
     /// <para>递归解析自适应/图层图标 XML，沿资源引用链找到位图路径。</para>
     /// </summary>
+    /// <param name="table">Parsed resource table used to resolve the references. <para>用于解析资源引用的已解析资源表。</para></param>
+    /// <param name="zip">Archive holding the icon description entries. <para>存放图标描述条目的归档。</para></param>
+    /// <param name="xmlPath">Path of the icon description to follow. <para>待跟随的图标描述路径。</para></param>
+    /// <param name="visited">Paths already followed, guarding against reference cycles. <para>已跟随的路径，用于防止引用成环。</para></param>
+    /// <returns>The bitmap path reached through the references, or <see langword="null"/> when none resolves. <para>沿引用到达的位图路径；无法解析时为 <see langword="null"/>。</para></returns>
     private static string? ResolveXmlIconPath(ResourceTable table, ZipArchive zip, string xmlPath, HashSet<string>? visited = null)
     {
         visited ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -353,6 +366,8 @@ public static class ApkParser
     /// Recursively collects resource IDs of every Reference/DynamicReference attribute in the element tree.
     /// <para>递归收集元素树中所有资源引用属性值。</para>
     /// </summary>
+    /// <param name="el">Element whose attributes and descendants are scanned. <para>待扫描属性与子孙的元素。</para></param>
+    /// <param name="references">List receiving the collected resource IDs. <para>接收所收集资源 ID 的列表。</para></param>
     private static void CollectReferences(AXmlElement el, List<uint> references)
     {
         foreach (var attr in el.Attributes)
@@ -373,15 +388,21 @@ public static class ApkParser
     /// Determines whether the path has a renderable bitmap extension (PNG/WebP/JPG).
     /// <para>判断路径是否为可渲染位图扩展名（PNG/WebP/JPG）。</para>
     /// </summary>
+    /// <param name="path">Entry path to classify. <para>待归类的条目路径。</para></param>
+    /// <returns><see langword="true"/> when the path ends with a bitmap extension. <para>路径以位图扩展名结尾时为 <see langword="true"/>。</para></returns>
     private static bool IsImagePath(string path) =>
         path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
         || path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)
         || path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Locates an entry by resource ID (0xPPTTEEEE) in ARSC and returns its string value; references are resolved one level.
-    /// <para>按资源 ID 在 ARSC 中定位条目并返回其字符串值；引用型条目递归解析一层。</para>
+    /// Locates an entry by resource ID in ARSC and returns its string value, following reference entries.
+    /// <para>按资源 ID 在 ARSC 中定位条目并返回其字符串值，会跟随引用型条目。</para>
     /// </summary>
+    /// <param name="table">Parsed resource table to search. <para>待查找的已解析资源表。</para></param>
+    /// <param name="resId">Resource ID built from package, type and entry index. <para>由包、类型与条目索引组成的资源 ID。</para></param>
+    /// <param name="visited">IDs already followed, guarding against reference cycles. <para>已跟随的资源 ID，用于防止引用成环。</para></param>
+    /// <returns>The resolved string value, or <see langword="null"/> when the ID does not resolve. <para>解析出的字符串值；该 ID 无法解析时为 <see langword="null"/>。</para></returns>
     private static string? LookupEntryPath(ResourceTable table, uint resId, HashSet<uint>? visited = null)
     {
         visited ??= [];
@@ -482,6 +503,8 @@ public static class ApkParser
     /// Fallback: scans all resource types for image paths, preferring entries whose name contains "launcher" or "icon".
     /// <para>兜底：扫描所有资源类型，优先返回资源名含 launcher/icon 的图片路径。</para>
     /// </summary>
+    /// <param name="table">Parsed resource table whose entries are scanned. <para>待扫描条目的已解析资源表。</para></param>
+    /// <returns>The preferred image path, or <see langword="null"/> when none is found. <para>优先选用的图片路径；未找到时为 <see langword="null"/>。</para></returns>
     private static string? ScanForImagePath(ResourceTable table)
     {
         string? fallback = null;

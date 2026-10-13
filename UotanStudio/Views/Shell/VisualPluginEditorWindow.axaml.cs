@@ -11,7 +11,10 @@ using Ursa.Controls;
 
 namespace UotanStudio.Views.Shell;
 
-/// <summary>Edits one composite node in an isolated node-editor context.</summary>
+/// <summary>
+/// Edits one composite node in an isolated node-editor context.
+/// <para>在隔离的节点编辑上下文中编辑单个复合节点。</para>
+/// </summary>
 public partial class VisualPluginEditorWindow : Window
 {
     private VisualPluginRegistration? _registration;
@@ -62,7 +65,18 @@ public partial class VisualPluginEditorWindow : Window
         _ = _editor.LoadFromAsync(registration.Package.Graph);
     }
 
-    /// <summary>Edits an embedded composite without installing it in the global catalog.</summary>
+    /// <summary>
+    /// Edits an embedded composite without installing it in the global catalog.
+    /// <para>编辑内嵌复合节点而不将其安装到全局目录。</para>
+    /// </summary>
+    /// <param name="package">
+    /// The embedded composite package to edit.
+    /// <para>要编辑的内嵌复合包。</para>
+    /// </param>
+    /// <param name="publish">
+    /// The callback receiving the updated package on save.
+    /// <para>保存时接收更新后包的回调。</para>
+    /// </param>
     public VisualPluginEditorWindow(VisualPluginPackage package, Action<VisualPluginPackage> publish) : this()
     {
         _publishLocal = publish;

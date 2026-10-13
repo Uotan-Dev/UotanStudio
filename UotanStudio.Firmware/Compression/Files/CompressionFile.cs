@@ -14,12 +14,12 @@ public static class CompressionFile
     /// Compresses a file, reporting the bytes read against the source length.
     /// <para>压缩文件，并按源文件长度上报已读字节进度。</para>
     /// </summary>
-    /// <param name="inputPath"><para>源文件路径。</para>The input file path.</param>
-    /// <param name="outputPath"><para>目标文件路径。</para>The output file path.</param>
-    /// <param name="format"><para>压缩格式。</para>The compression format.</param>
-    /// <param name="options"><para>压缩选项。</para>Compression options.</param>
-    /// <param name="progress"><para>压缩进度 <c>(已读字节, 源文件总字节)</c>，可为空。</para>Progress <c>(bytes read, total)</c>; may be null.</param>
-    /// <param name="cancellationToken"><para>取消令牌。</para>Cancellation token.</param>
+    /// <param name="inputPath">The input file path. <para>源文件路径。</para></param>
+    /// <param name="outputPath">The output file path. <para>目标文件路径。</para></param>
+    /// <param name="format">The compression format. <para>压缩格式。</para></param>
+    /// <param name="options">Compression options. <para>压缩选项。</para></param>
+    /// <param name="progress">Progress <c>(bytes read, total)</c>; may be null. <para>压缩进度 <c>(已读字节, 源文件总字节)</c>，可为空。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     public static void CompressFile(string inputPath, string outputPath, CompressionFormat format, CompressionOptions? options = null, IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(inputPath))

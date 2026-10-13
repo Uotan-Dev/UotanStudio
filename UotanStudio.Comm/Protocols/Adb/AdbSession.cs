@@ -13,7 +13,11 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
 {
     private bool _disposed;
 
-    /// <summary>Creates a session whose services are opened through the selected server target.</summary>
+    /// <summary>
+    /// Creates a session whose services are opened through the selected server target.
+    /// <para>创建会话，其服务经由所选 adb server 目标开启。</para>
+    /// </summary>
+    /// <param name="server">The server target services.<para>Server 目标的服务句柄。</para></param>
     public AdbSession(AdbServerServices server)
     {
         ArgumentNullException.ThrowIfNull(server);
@@ -24,6 +28,8 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Creates a session bound to a freshly opened direct-USB device, encapsulating the native transport wrapper.
     /// <para>基于新打开的 USB 直连设备创建会话，封装原生传输包装。</para>
     /// </summary>
+    /// <param name="usb">The freshly opened direct-USB device session.<para>新打开的 USB 直连设备会话。</para></param>
+    /// <returns>A session bound to the device transport.<para>绑定到该设备传输的会话。</para></returns>
     internal static AdbSession ForDirectUsb(IUsbDeviceSession usb)
     {
         ArgumentNullException.ThrowIfNull(usb);
@@ -34,6 +40,10 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Creates a session routed through the adb server target identified by <paramref name="serial"/>.
     /// <para>基于 adb server 中由 <paramref name="serial"/> 标识的目标创建会话。</para>
     /// </summary>
+    /// <param name="serial">The server-reported serial of the target.<para>server 上报的目标序列号。</para></param>
+    /// <param name="host">The server host name.<para>Server 主机名。</para></param>
+    /// <param name="port">The server TCP port.<para>Server TCP 端口。</para></param>
+    /// <returns>A session routed through the adb server.<para>经由 adb server 路由的会话。</para></returns>
     public static AdbSession ForServer(string serial, string host, int port)
         => new(new AdbServerServices(serial, host, port));
 
@@ -42,54 +52,65 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Gets the protocol name.
     /// <para>获取协议名称。</para>
     /// </summary>
+    /// <value>The fixed tag <c>adb</c>.<para>固定标记 <c>adb</c>。</para></value>
     public string ProtocolName => "adb";
 
     /// <summary>
     /// Gets the underlying transport session.
     /// <para>获取底层传输会话。</para>
     /// </summary>
+    /// <value>The transport backing the connection.<para>支撑该连接的传输。</para></value>
     public ICommTransport Transport => Connection.Transport;
 
     /// <summary>
     /// Gets whether the session is connected and authenticated.
     /// <para>获取会话是否已连接并通过认证。</para>
     /// </summary>
+    /// <value><see langword="true"/> when connected, authenticated and not disposed.
+    /// <para>已连接、已认证且未释放时为 <see langword="true"/>。</para></value>
     public bool IsConnected => Connection.IsConnected && !_disposed;
 
     /// <summary>
     /// Gets the ADB connection.
     /// <para>获取 ADB 连接。</para>
     /// </summary>
+    /// <value>The connection owning the message loop.<para>持有消息循环的连接。</para></value>
     internal AdbConnection Connection { get; }
 
     /// <summary>
     /// Gets the peer protocol version.
     /// <para>获取对端协议版本。</para>
     /// </summary>
+    /// <value>The version reported by the peer handshake.<para>对端握手报告的版本。</para></value>
     public uint PeerVersion => Connection.PeerVersion;
 
     /// <summary>
     /// Gets whether this session is mediated by a local adb server rather than raw USB.
     /// <para>获取本会话是否经本机 adb server 交互，而非原生 USB 直连。</para>
     /// </summary>
+    /// <value><see langword="true"/> when an adb server channel backs the session.
+    /// <para>会话由 adb server 通道支撑时为 <see langword="true"/>。</para></value>
     public bool UsesServer => Connection.UsesServer;
 
     /// <summary>
     /// Gets the peer max payload size.
     /// <para>获取对端最大负载大小。</para>
     /// </summary>
+    /// <value>The payload ceiling negotiated with the peer.<para>与对端商定的负载上限。</para></value>
     public uint PeerMaxPayload => Connection.PeerMaxPayload;
 
     /// <summary>
     /// Gets the peer banner.
     /// <para>获取对端横幅。</para>
     /// </summary>
+    /// <value>The banner text sent by the peer.<para>对端发送的横幅文本。</para></value>
     public string? PeerBanner => Connection.PeerBanner;
 
     /// <summary>
     /// Gets the features advertised by the peer.
     /// <para>获取对端宣告的特性。</para>
     /// </summary>
+    /// <value>The feature names advertised in the peer banner.<para>对端横幅中宣告的特性名称。</para></value>
     public IReadOnlyList<string> PeerFeatures => Connection.PeerFeatures;
 
     /// <summary>
@@ -99,7 +120,7 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// <para>在指定设备传输上创建新的 ADB 会话，使用持久化的默认密钥（从
     /// %USERPROFILE%/.android/adbkey 加载，不存在时生成）。</para>
     /// </summary>
-    /// <param name="transport">The device transport. 设备传输。</param>
+    /// <param name="transport">The device transport.<para>设备传输。</para></param>
     public AdbSession(ICommTransport transport)
         : this(transport, AdbAuthentication.LoadOrCreate())
     {
@@ -112,8 +133,8 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// <para>在指定设备传输上创建使用单个认证身份的新 ADB 会话。会话（其连接）
     /// 拥有并释放该身份。</para>
     /// </summary>
-    /// <param name="transport">The device transport. 设备传输。</param>
-    /// <param name="authentication">The RSA authentication identity. RSA 认证身份。</param>
+    /// <param name="transport">The device transport.<para>设备传输。</para></param>
+    /// <param name="authentication">The RSA authentication identity.<para>RSA 认证身份。</para></param>
     public AdbSession(ICommTransport transport, AdbAuthentication authentication)
     {
         Connection = new AdbConnection(
@@ -128,8 +149,8 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// <para>在指定设备传输上创建使用有序认证身份列表（密钥轮换）的新 ADB 会话。
     /// 会话（其连接）拥有并释放所有身份。</para>
     /// </summary>
-    /// <param name="transport">The device transport. 设备传输。</param>
-    /// <param name="authentications">The ordered RSA authentication identities. 有序 RSA 认证身份列表。</param>
+    /// <param name="transport">The device transport.<para>设备传输。</para></param>
+    /// <param name="authentications">The ordered RSA authentication identities.<para>有序 RSA 认证身份列表。</para></param>
     public AdbSession(ICommTransport transport, IReadOnlyList<AdbAuthentication> authentications)
     {
         Connection = new AdbConnection(
@@ -156,7 +177,7 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Asynchronously connects and authenticates.
     /// <para>异步连接并认证。</para>
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <exception cref="TimeoutException">The peer did not answer the handshake; when the message
     /// loop already stopped, the loop's own failure is the inner cause.
     /// <para>对端未完成握手；消息循环已经停止时，循环自身的失败作为内部原因。</para></exception>
@@ -178,8 +199,8 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Opens a stream to a service.
     /// <para>打开到服务的流。</para>
     /// </summary>
-    /// <param name="service">The service destination string. 服务目标字符串。</param>
-    /// <returns>An ADB stream. ADB 流。</returns>
+    /// <param name="service">The service destination string.<para>服务目标字符串。</para></param>
+    /// <returns>An ADB stream.<para>ADB 流。</para></returns>
     public IAdbStream OpenStream(string service)
     {
         ThrowIfDisposed();
@@ -188,20 +209,20 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
 
     /// <summary>
     /// Opens a byte-oriented stream to a service.
-    /// <para>打开面向字节的服務流。</para>
+    /// <para>打开面向字节的服务流。</para>
     /// </summary>
-    /// <param name="service">The service destination string. 服务目标字符串。</param>
-    /// <returns>A byte stream. 字节流。</returns>
+    /// <param name="service">The service destination string.<para>服务目标字符串。</para></param>
+    /// <returns>A byte stream.<para>字节流。</para></returns>
     public Stream OpenServiceStream(string service) => new AdbServiceStream(Connection.OpenStream(service));
 
     /// <summary>
     /// Creates a shell client for the given command.
     /// <para>为给定命令创建 shell 客户端。</para>
     /// </summary>
-    /// <param name="command">The command to execute. 要执行的命令。</param>
-    /// <param name="term">Terminal type, or null for default. 终端类型，null 表示默认。</param>
-    /// <param name="pty">Whether to use a pseudo-terminal. 是否使用伪终端。</param>
-    /// <returns>A shell client. Shell 客户端。</returns>
+    /// <param name="command">The command to execute.<para>要执行的命令。</para></param>
+    /// <param name="term">Terminal type, or null for default.<para>终端类型，null 表示默认。</para></param>
+    /// <param name="pty">Whether to use a pseudo-terminal.<para>是否使用伪终端。</para></param>
+    /// <returns>A shell client.<para>Shell 客户端。</para></returns>
     public IAdbShellClient CreateShellClient(string command, string? term = null, bool pty = false)
     {
         ThrowIfDisposed();
@@ -212,8 +233,8 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Creates a sync client for file transfer.
     /// <para>创建用于文件传输的 sync 客户端。</para>
     /// </summary>
-    /// <param name="maxChunk">Maximum chunk size in bytes. 最大块大小（字节）。</param>
-    /// <returns>A sync client. Sync 客户端。</returns>
+    /// <param name="maxChunk">Maximum chunk size in bytes.<para>最大块大小（字节）。</para></param>
+    /// <returns>A sync client.<para>Sync 客户端。</para></returns>
     public IAdbSyncClient CreateSyncClient(uint maxChunk = 64 * 1024)
     {
         ThrowIfDisposed();
@@ -224,7 +245,7 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Creates a device-services client for one-shot services (reboot, remount, getprop).
     /// <para>创建一次性设备服务（reboot、remount、getprop）客户端。</para>
     /// </summary>
-    /// <returns>A device services client. 设备服务客户端。</returns>
+    /// <returns>A device services client.<para>设备服务客户端。</para></returns>
     public IAdbDeviceServices CreateDeviceServices()
     {
         ThrowIfDisposed();
@@ -235,13 +256,9 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Executes a shell command and returns the result.
     /// <para>执行 shell 命令并返回结果。</para>
     /// </summary>
-    /// <remarks>Synchronous boundary kept for callers that already run the whole ADB transaction on a worker
-    /// thread; it parks that thread on the asynchronous command execution.
-    /// <para>为已经在专用工作线程上运行整次 ADB 事务的调用方保留的同步边界；它会阻塞该线程等待异步命令执行完成。</para>
-    /// </remarks>
-    /// <param name="command">The command to execute. 要执行的命令。</param>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <returns>The shell execution result. Shell 执行结果。</returns>
+    /// <param name="command">The command to execute.<para>要执行的命令。</para></param>
+    /// <param name="timeoutMs">Timeout in milliseconds.<para>超时（毫秒）。</para></param>
+    /// <returns>The shell execution result.<para>Shell 执行结果。</para></returns>
     /// <exception cref="TimeoutException">A read timed out while the stream was still open.
     /// <para>流仍打开时读取超时。</para></exception>
     public ShellResult ExecuteCommand(string command, int timeoutMs = 30000)
@@ -251,9 +268,9 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Executes a shell command asynchronously and returns the result.
     /// <para>异步执行 shell 命令并返回结果。</para>
     /// </summary>
-    /// <param name="command">The command to execute. 要执行的命令。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The shell execution result. Shell 执行结果。</returns>
+    /// <param name="command">The command to execute.<para>要执行的命令。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The shell execution result.<para>Shell 执行结果。</para></returns>
     /// <exception cref="TimeoutException">A read timed out after 30 seconds while the stream was still open.
     /// <para>流仍打开时某次读取超过 30 秒。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
@@ -265,10 +282,10 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Executes a shell command with an explicit per-read wait.
     /// <para>按显式的单次读取等待时长异步执行 shell 命令。</para>
     /// </summary>
-    /// <param name="command">The command to execute. 要执行的命令。</param>
-    /// <param name="timeoutMs">Per-read wait in milliseconds. 单次读取的等待毫秒数。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>A task resolving to the shell execution result. <para>结果为 shell 执行结果的任务。</para></returns>
+    /// <param name="command">The command to execute.<para>要执行的命令。</para></param>
+    /// <param name="timeoutMs">Per-read wait in milliseconds.<para>单次读取的等待毫秒数。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>A task resolving to the shell execution result.<para>结果为 shell 执行结果的任务。</para></returns>
     /// <exception cref="TimeoutException">A read timed out while the stream was still open.
     /// <para>流仍打开时读取超时。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
@@ -290,8 +307,8 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     }
 
     /// <summary>
-    /// Releases all resources used by the session.
-    /// <para>释放会话使用的所有资源。</para>
+    /// Releases the resources held by the session.
+    /// <para>释放会话持有的资源。</para>
     /// </summary>
     public void Dispose()
     {

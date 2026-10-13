@@ -4,9 +4,9 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Models;
 
 /// <summary>
 /// On-disk device slot (struct erofs_deviceslot, 128 bytes): tag[64], blocks_lo, uniaddr_lo,
-/// blocks_hi, uniaddr_hi, reserved[52]. The 48-bit accessors mirror the upstream INCOMPAT_48BIT layout.
+/// blocks_hi, uniaddr_hi, reserved[52]. The 48-bit accessors follow the INCOMPAT_48BIT layout.
 /// <para>磁盘设备槽位（struct erofs_deviceslot，128 字节）：tag[64]、blocks_lo、uniaddr_lo、
-/// blocks_hi、uniaddr_hi、reserved[52]。48 位访问器与上游 INCOMPAT_48BIT 布局一致。</para>
+/// blocks_hi、uniaddr_hi、reserved[52]。48 位访问器遵循 INCOMPAT_48BIT 布局。</para>
 /// </summary>
 internal sealed class ErofsDeviceSlot
 {

@@ -3,7 +3,13 @@ using UotanStudio.Firmware.Infrastructure.Downloads;
 
 namespace UotanStudio.Services.Network;
 
-/// <summary>One validated download request shared by the download node and the script tool surface.</summary>
+/// <summary>One validated download request.<para>一条已校验的下载请求。</para></summary>
+/// <param name="Uri">Absolute HTTP or HTTPS address to download.<para>要下载的绝对 HTTP 或 HTTPS 地址。</para></param>
+/// <param name="DestinationPath">Full path of the published file.<para>发布后文件的完整路径。</para></param>
+/// <param name="UseGitHubMirror">Whether the mirrored route is requested.<para>是否请求镜像路线。</para></param>
+/// <param name="RequestHeaders">Optional additional request headers.<para>可选的附加请求头。</para></param>
+/// <param name="ExpectedSha256">Optional lowercase hexadecimal SHA-256 digest to verify.<para>可选的小写十六进制 SHA-256 摘要。</para></param>
+/// <param name="TimeoutSeconds">Optional overall timeout in seconds.<para>可选的总体超时秒数。</para></param>
 public sealed record FileDownloadRequest(
     Uri Uri,
     string DestinationPath,
@@ -12,16 +18,25 @@ public sealed record FileDownloadRequest(
     string? ExpectedSha256 = null,
     double? TimeoutSeconds = null);
 
-/// <summary>Outcome of a completed download: the published path, the winning source and the byte count.</summary>
+/// <summary>Outcome of a completed download: the published path, the winning source and the byte count.<para>完成下载的结果：发布路径、胜出来源与字节数。</para></summary>
+/// <param name="Path">Published destination path.<para>已发布的目标路径。</para></param>
+/// <param name="Source">Address that produced the file.<para>实际产出文件的地址。</para></param>
+/// <param name="Bytes">Length of the published file.<para>发布文件的长度。</para></param>
 public sealed record FileDownloadResult(string Path, Uri Source, long Bytes);
 
 /// <summary>
 /// Downloads a remote artifact to a path-backed file, verifying an optional SHA-256 and publishing with
 /// an atomic replace so a failed or mismatched transfer never overwrites an existing destination.
+/// <para>把远程产物下载到路径文件，可选校验 SHA-256，并以原子替换发布，失败或摘要不符时不会覆盖既有目标。</para>
 /// </summary>
 public static class FileDownloadService
 {
-    /// <summary>Validates, downloads and atomically publishes one artifact.</summary>
+    /// <summary>Validates, downloads and atomically publishes one artifact.<para>校验、下载并原子发布单个产物。</para></summary>
+    /// <param name="httpClient">Client performing the transfer.<para>执行传输的客户端。</para></param>
+    /// <param name="request">Validated download request.<para>已校验的下载请求。</para></param>
+    /// <param name="progress">Optional byte progress sink.<para>可选的字节进度上报。</para></param>
+    /// <param name="cancellationToken">Token cancelling the transfer.<para>取消传输的令牌。</para></param>
+    /// <returns>The published path, winning source and byte count.<para>发布路径、胜出来源与字节数。</para></returns>
     public static async Task<FileDownloadResult> DownloadAsync(
         HttpClient httpClient,
         FileDownloadRequest request,

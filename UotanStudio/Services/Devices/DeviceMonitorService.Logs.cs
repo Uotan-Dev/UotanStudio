@@ -30,12 +30,11 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>停止该设备的活动 logcat 捕获并等待其端点租约释放。外部停止对捕获发起方
-    /// （日志页）表现为正常结束，不产生取消错误；调用方自身的取消仍按取消传播。</para>
-    /// Stops the active logcat capture for the device and awaits its endpoint-lease release.
-    /// An external stop completes the capture normally for its owner (the log page) instead of
-    /// surfacing a cancellation error; cancellation by the owner's own token still propagates.
+    /// Stops the active logcat capture for a device and awaits its endpoint-lease release. An
+    /// external stop completes the capture instead of surfacing a cancellation error.
+    /// <para>停止该设备的活动 logcat 捕获并等待其端点租约释放；外部停止使捕获正常结束，不表现为取消错误。</para>
     /// </summary>
+    /// <param name="device">The device whose capture is stopped. <para>要停止捕获的设备。</para></param>
     internal async Task StopLogcatStreamingAsync(DetectedDevice device)
     {
         LogStreamRegistration? registration;
@@ -149,8 +148,10 @@ public sealed partial class DeviceMonitorService
 
     /// <summary>
     /// Clears all device logcat buffers, using adb server or direct USB.
-    /// <para>通过 adb server 或 USB 直连清空设备端全部 logcat 缓冲区；失败时抛出异常。</para>
+    /// <para>通过 adb server 或 USB 直连清空设备端全部 logcat 缓冲区。</para>
     /// </summary>
+    /// <param name="device">The device whose buffers are cleared. <para>要清空缓冲区的设备。</para></param>
+    /// <param name="cancellationToken">Token observing the clear operation. <para>观测清空操作的取消令牌。</para></param>
     public async Task ClearLogcatBuffersAsync(DetectedDevice device, CancellationToken cancellationToken = default)
     {
         if (device.Protocol == DeviceProtocolKind.Hdc)

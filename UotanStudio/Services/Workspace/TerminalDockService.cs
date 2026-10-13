@@ -49,11 +49,9 @@ internal sealed class TerminalDockService(IFactory factory, IDock defaultHost) :
     }
 
     /// <summary>
-    /// <para>仅把终端加回宿主可见列表，不激活任何终端（供会话恢复使用，避免恢复可见性时
-    /// 把活动面板切到终端上）。无条目时创建但不激活。</para>
-    /// Re-adds the terminals to their hosts without activating any (used by session restore so
-    /// restoring visibility never switches the active panel to a terminal). Creates one without
-    /// activation when there are no entries.
+    /// Re-adds each terminal to its containing dock without activating any of them, and creates one
+    /// without activation when there are no entries.
+    /// <para>把每个终端加回其所在容器但不激活任何一个；无条目时创建且不激活。</para>
     /// </summary>
     internal void ShowWithoutActivate()
     {

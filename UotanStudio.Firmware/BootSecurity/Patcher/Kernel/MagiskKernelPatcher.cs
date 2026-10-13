@@ -1,6 +1,6 @@
 namespace UotanStudio.Firmware.BootSecurity.Patcher.Kernel;
 
-/// <summary>Applies the source-faithful, pattern based kernel fixes used by Magisk patchers.</summary>
+/// <summary>Applies the source-faithful, pattern based kernel fixes for Magisk-style patching.</summary>
 internal static class MagiskKernelPatcher
 {
     private static ReadOnlySpan<byte> SkipInitramfs => "skip_initramfs"u8;

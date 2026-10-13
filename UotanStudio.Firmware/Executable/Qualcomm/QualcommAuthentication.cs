@@ -309,17 +309,12 @@ internal static class QualcommAuthentication
     /// <summary>
     /// Orders the digest algorithms attempted for one image signature.
     /// A hash declared by exactly one distinct certificate organizational-unit value is attempted first for
-    /// every MBN version, because the declaration describes how the signer hashed the image rather than which
-    /// MBN layout is in use. A conflicting declaration contributes no candidate: an ambiguous untrusted string
-    /// is not evidence about the algorithm. MBN v6 and v7 still keep SHA-384 ahead of the defaults, so a
-    /// declaration can only reorder candidates and can never widen the result of a verification. This mirrors
-    /// the reference tool's candidate composition, which is deliberately broader than the previous fixed
-    /// two-algorithm list.
+    /// every MBN version, and a conflicting declaration contributes no candidate; MBN v6 and v7 still keep
+    /// SHA-384 ahead of the defaults, so a declaration can only reorder candidates and can never widen the
+    /// result of a verification.
     /// <para>排列单个镜像签名依次尝试的摘要算法。当证书 organizational unit 恰好以一种互不冲突的算法
-    /// 声明时，所有 MBN 版本都会优先尝试该算法，因为声明描述的是签名方如何对镜像做摘要，而不是使用哪种
-    /// MBN 布局。声明冲突时不产生任何候选：歧义的不可信字符串不能作为算法证据。MBN v6 与 v7 仍把
-    /// SHA-384 排在默认序列之前，因此声明只能调整候选顺序，绝不能扩大验证结论。此处与参考工具的候选组合
-    /// 保持一致，明显宽于此前的两种算法固定列表。</para>
+    /// 声明时，所有 MBN 版本都会优先尝试该算法，声明冲突时不产生任何候选；MBN v6 与 v7 仍把
+    /// SHA-384 排在默认序列之前，因此声明只能调整候选顺序，绝不能扩大验证结论。</para>
     /// </summary>
     /// <param name="version">MBN header version, or <see langword="null"/> for layouts without an MBN header.
     /// <para>MBN 头版本；无 MBN 头的布局为空。</para></param>
@@ -551,16 +546,10 @@ internal static class QualcommAuthentication
     /// Trims at most <paramref name="maximumPaddingBytes"/> bytes of homogeneous 0x00 or 0xFF filler from one
     /// end of an RSA signature so that it matches the key modulus length. A signature shorter than the
     /// modulus is always rejected, mixed filler byte values are rejected, and an excess larger than the bound
-    /// is rejected. The standard verification path uses the bounded form: the reference tool trims filler of
-    /// any length and additionally retries a byte-reversed signature, and neither behaviour was adopted here
-    /// because unbounded trimming lets an adversary choose the trimmed width, and a reversed encoding is not
-    /// an observed Qualcomm container variant but widens the space of byte sequences that can satisfy a public
-    /// key. Rejecting an encoding is an encoding defect, so callers report it rather than a signature mismatch.
+    /// is rejected. Rejecting an encoding is an encoding defect, so callers report it rather than a signature mismatch.
     /// <para>从 RSA 签名的一端裁剪最多 <paramref name="maximumPaddingBytes"/> 字节的单一 0x00 或 0xFF 填充，
     /// 使其长度与密钥模数一致。短于模数的签名一律拒绝，填充区域出现其它字节值时拒绝，超出上限的多余长度也
-    /// 拒绝。标准验证路径使用有界形式：参考工具会裁剪任意长度的填充，并额外尝试字节序反转的签名；
-    /// 两者都未在此采纳，因为无界裁剪等于把裁剪宽度交给攻击者选择，而反转编码并非已知 Qualcomm 容器变体，
-    /// 却会扩大可满足公钥验证的字节序列空间。编码被拒绝属于编码缺陷，调用方应报告缺陷而非签名不匹配。</para>
+    /// 拒绝。编码被拒绝属于编码缺陷，调用方应报告缺陷而非签名不匹配。</para>
     /// </summary>
     /// <param name="signature">Signature bytes as stored by the container. <para>容器内保存的签名字节。</para></param>
     /// <param name="keySize">Public-key size in bits. <para>公钥位数。</para></param>
@@ -602,16 +591,11 @@ internal static class QualcommAuthentication
     /// <summary>
     /// Trims at most <see cref="MaxSignaturePaddingBytes"/> bytes of homogeneous 0x00 or 0xFF filler from
     /// the tail of an ECDSA signature and returns the enclosed DER sequence. An exact DER signature passes
-    /// through unchanged. Malformed ASN.1 yields a rejection rather than an exception, because container
-    /// bytes are untrusted input. The reference tool has no bound on the trimmed tail and converts the DER
-    /// into IEEE P1363 before verification; this implementation keeps the strict DER check inside
-    /// <see cref="ECDsa"/> and only bounds the filler, so a malformed interior is rejected by the cryptographic
-    /// layer rather than here.
+    /// through unchanged; malformed ASN.1 yields a rejection rather than an exception, because container
+    /// bytes are untrusted input and the strict DER check stays inside <see cref="ECDsa"/>.
     /// <para>从 ECDSA 签名尾部裁剪最多 <see cref="MaxSignaturePaddingBytes"/> 字节的单一 0x00 或 0xFF
-    /// 填充，并返回其中的 DER 序列。精确的 DER 签名原样通过。ASN.1 结构错误会被判定为拒绝而不抛出异常，
-    /// 因为容器字节属于不可信输入。参考工具对裁剪的尾部长度不设上限，并在验证前把 DER 转换为 IEEE P1363；
-    /// 本实现把严格的 DER 检查留在 <see cref="ECDsa"/> 内部，仅对填充长度设界，因此内部结构错误由密码学层
-    /// 拒绝，而不是在此处。</para>
+    /// 填充，并返回其中的 DER 序列。精确的 DER 签名原样通过；ASN.1 结构错误会被判定为拒绝而不抛出异常，
+    /// 因为容器字节属于不可信输入，严格的 DER 检查留在 <see cref="ECDsa"/> 内部。</para>
     /// </summary>
     /// <param name="signature">Signature bytes as stored by the container. <para>容器内保存的签名字节。</para></param>
     /// <param name="trimmed">The DER sequence bytes including its header, or an empty array on rejection.

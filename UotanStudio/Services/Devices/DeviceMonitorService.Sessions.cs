@@ -11,12 +11,12 @@ namespace UotanStudio.Services.Devices;
 public sealed partial class DeviceMonitorService
 {
     /// <summary>
-    /// <para>校验设备可被直连 USB 打开（server 权威守卫 + 唯一物理关联），返回用于打开稳定按键；
-    /// 不可直连时返回 <c>null</c>。会话封装由控制器完成，宿主不再取得原始 USB 会话句柄。</para>
-    /// Validates that the device may be opened over direct USB (server-authority guard + unique physical
-    /// association) and returns the stable key to open it with, or <c>null</c> when not directly openable.
-    /// The controller wraps the session; the host never receives a raw USB session handle.
+    /// Validates that the device may be opened over direct USB and returns the stable key to open it with,
+    /// or <c>null</c> when it is not directly openable.
+    /// <para>校验设备能否经直连 USB 打开，返回用于打开的稳定键；不可直连时返回 <c>null</c>。</para>
     /// </summary>
+    /// <param name="device">The device to resolve.<para>要解析的设备。</para></param>
+    /// <returns>The stable key for a direct USB open, or <c>null</c>.<para>可直连 USB 打开时的稳定键，否则为 <c>null</c>。</para></returns>
     public string? ResolveDirectUsbOpenKey(DetectedDevice device)
     {
         ArgumentNullException.ThrowIfNull(device);
@@ -30,7 +30,10 @@ public sealed partial class DeviceMonitorService
         return direct.Transport == DeviceTransportKind.Usb ? direct.Key : null;
     }
 
-    /// <summary>Opens a lease for the exact stable physical key via the controller; null when the key cannot open.</summary>
+    /// <summary>Opens a lease for an exact stable physical key, or returns <c>null</c> when that key cannot open.<para>按精确的稳定物理键打开租约，该键无法打开时返回 <c>null</c>。</para></summary>
+    /// <param name="deviceKey">The exact stable physical key of the endpoint.<para>端点的精确稳定物理键。</para></param>
+    /// <param name="kind">The session kind the lease must provide.<para>租约需要提供的会话类型。</para></param>
+    /// <returns>The lease for that key, or <c>null</c>.<para>该键对应的租约，或为 <c>null</c>。</para></returns>
     internal DeviceLease? OpenLeaseByKey(string deviceKey, DeviceSessionKind kind)
         => _controller.OpenLeaseByKeyAsync(deviceKey, kind).GetAwaiter().GetResult();
 
@@ -67,12 +70,12 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>为设备打开 ADB 会话租约：server 目标与被 server 拥有的序列号改经 server 会话服务（绝不直写 USB），
-    /// 直连目标按稳定键租约化 USB；server 不存在且 USB 无法打开时返回 <c>null</c>。调用方持有租约并负责释放。</para>
-    /// Opens an ADB session lease for the device: server targets and server-owned serials are served through
-    /// the server (never raw USB), direct targets lease the exact USB key; returns <c>null</c> when no server
-    /// exists and the USB device cannot be opened. Callers own the lease and must dispose it.
+    /// Opens an ADB session lease for the device: server-managed targets route through the server, direct
+    /// targets through their exact USB key. Returns <c>null</c> when no lease can be opened.
+    /// <para>为设备打开 ADB 会话租约：server 管理的目标经 server 路由，直连目标按其精确 USB 键；无法打开租约时返回 <c>null</c>。</para>
     /// </summary>
+    /// <param name="device">The device whose ADB lease is opened.<para>要打开 ADB 租约的设备。</para></param>
+    /// <returns>The lease and ADB session to dispose, or <c>null</c> when none is available.<para>需释放的租约与 ADB 会话，不可用时为 <c>null</c>。</para></returns>
     public (DeviceLease Lease, IAdbDeviceSession Session)? OpenAdbLease(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Adb) return null;
@@ -123,15 +126,12 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>为无 server 期间手动登记的网络目标打开直接 TCP ADB 会话租约。安全目标记住的端口会随
-    /// 设备重启无线调试而改变，因此 TLS 握手失败时先按 IP 重新浏览一次端口再重试；两条路径都失败
-    /// 才注销目标。重解析有期限，因为本方法是同步的租约打开边界。</para>
-    /// Opens a direct TCP ADB lease for a manually registered network target while no server listens.
-    /// A secure target's remembered port changes whenever the device restarts wireless debugging, so a
-    /// failed TLS handshake re-browses the port by IP address once and retries; only when both attempts
-    /// fail is the target detached. The re-resolution is bounded because this method is a synchronous
-    /// lease-opening boundary.
+    /// Opens a direct TCP ADB lease for a manually registered network target while no server listens. A
+    /// failed secure handshake re-browses the port by IP once before detaching the target.
+    /// <para>为无 server 期间手动登记的网络目标打开直连 TCP ADB 租约；安全握手失败时先按 IP 重新浏览一次端口，仍失败才注销目标。</para>
     /// </summary>
+    /// <param name="serial">A remembered <c>host:port</c> of a manual target.<para>已记住的手动目标 <c>host:port</c>。</para></param>
+    /// <returns>The lease and the connected ADB session.<para>租约与已连接的 ADB 会话。</para></returns>
     private (DeviceLease Lease, IAdbDeviceSession Session) OpenDirectNetworkAdbLease(string serial)
     {
         if (!DebugBridgeNetworkAddress.TrySplitEndpoint(serial, out var host, out var port))
@@ -190,10 +190,14 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>打开并完成一次网络 ADB 握手；失败时释放会话后向上抛出底层原因。</para>
     /// Opens a network ADB session and completes its handshake, releasing the session and rethrowing
     /// the underlying reason on failure.
+    /// <para>打开并完成一次网络 ADB 握手；失败时释放会话后向上抛出底层原因。</para>
     /// </summary>
+    /// <param name="host">The target IP address or name.<para>目标的 IP 地址或名称。</para></param>
+    /// <param name="port">The target TCP port.<para>目标的 TCP 端口。</para></param>
+    /// <param name="isSecure">When true, the session connects over TLS.<para>为 true 时会话经 TLS 连接。</para></param>
+    /// <returns>The session after a completed handshake.<para>完成握手后的会话。</para></returns>
     private IAdbDeviceSession OpenConnectedNetworkSession(string host, int port, bool isSecure)
     {
         var session = isSecure
@@ -212,10 +216,14 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>判断 HDC 目标是否应经本机 hdc server 交互；非 USB 目标无 server 时拒绝。</para>
     /// Decides whether an HDC target must go through the local hdc server; non-USB targets are
     /// rejected when no server is present.
+    /// <para>判断 HDC 目标是否应经本机 hdc server 交互；非 USB 目标无 server 时拒绝。</para>
     /// </summary>
+    /// <param name="device">The HDC target under consideration.<para>待判断的 HDC 目标。</para></param>
+    /// <param name="host">The server address to probe.<para>要探测的 server 地址。</para></param>
+    /// <param name="port">Optional server port override.<para>可选的 server 端口覆盖。</para></param>
+    /// <returns><see langword="true"/> when the target must use the HDC server.<para>目标必须经 HDC server 交互时为 <see langword="true"/>。</para></returns>
     internal static bool UseHdcServerFor(DetectedDevice device, string host = DeviceCommunicationConfiguration.ServerHost, int? port = null)
     {
         if (device.Protocol != DeviceProtocolKind.Hdc || string.IsNullOrWhiteSpace(device.Serial))
@@ -227,11 +235,12 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>为设备打开 HDC 会话租约：server 在时经 server 会话服务，不在时按稳定键直连 USB；
-    /// 非 HDC 协议返回 <c>null</c>。调用方持有租约并负责释放。</para>
-    /// Opens an HDC session lease for the device: through the server when one is running, otherwise
-    /// the exact USB key; returns <c>null</c> for non-HDC devices. Callers own the lease and must dispose it.
+    /// Opens an HDC session lease for the device: through the server when one is running, otherwise through
+    /// the exact USB key.
+    /// <para>为设备打开 HDC 会话租约：server 在运行时经 server，否则按精确稳定键直连 USB。</para>
     /// </summary>
+    /// <param name="device">The device whose HDC lease is opened.<para>要打开 HDC 租约的设备。</para></param>
+    /// <returns>The lease and HDC session to dispose, or <c>null</c> for non-HDC devices.<para>需释放的租约与 HDC 会话，非 HDC 设备时为 <c>null</c>。</para></returns>
     public (DeviceLease Lease, HdcSession Session)? OpenHdcLease(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Hdc) return null;
@@ -257,7 +266,10 @@ public sealed partial class DeviceMonitorService
         return HdcDirectConnection.Open(device);
     }
 
-    /// <summary>Executes a shell command against the exact selected ADB server target.</summary>
+    /// <summary>Executes a shell command against the exact selected ADB server target.<para>针对精确选中的 ADB server 目标执行一条 shell 命令。</para></summary>
+    /// <param name="device">The ADB server target to run against.<para>要执行命令的 ADB server 目标。</para></param>
+    /// <param name="command">The shell command text.<para>shell 命令文本。</para></param>
+    /// <returns>The output of the command.<para>命令输出文本。</para></returns>
     public string ExecuteAdbServerShell(DetectedDevice device, string command)
     {
         if (device.Protocol != DeviceProtocolKind.Adb)
@@ -271,10 +283,12 @@ public sealed partial class DeviceMonitorService
             .RunShellAsync(command).GetAwaiter().GetResult();
     }
 
-    /// <summary>Checks whether an official adb server is running and reachable.</summary>
+    /// <summary>Checks whether an official adb server is running and reachable.<para>检查官方 adb server 是否正在运行且可达。</para></summary>
+    /// <value><see langword="true"/> when an adb server responds.<para>有 adb server 应答时为 <see langword="true"/>。</para></value>
     public bool HasAdbServer => DebugBridgeRoute.UseAdbServer();
 
-    /// <summary>Requires the exact server-owned ADB target without opening a direct USB session.</summary>
+    /// <summary>Requires the exact server-owned ADB target without opening a direct USB session.<para>要求目标确由 server 持有，不打开直连 USB 会话。</para></summary>
+    /// <param name="device">The ADB target that the server must own.<para>必须由 server 持有的 ADB 目标。</para></param>
     public void RequireAdbServerDevice(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Adb)
@@ -284,21 +298,27 @@ public sealed partial class DeviceMonitorService
         EnsureAdbServerTarget(device.Serial);
     }
 
-    /// <summary>Probes the selected ADB target through the controller lease; server errors never grant direct USB access.</summary>
+    /// <summary>Probes the selected ADB target through the controller lease; server errors never grant direct USB access.<para>经控制器租约探测所选 ADB 目标；server 错误不会转为直连 USB 访问。</para></summary>
+    /// <param name="device">The ADB target to probe.<para>要探测的 ADB 目标。</para></param>
+    /// <returns><see langword="true"/> when the target is connected.<para>目标已连接时为 <see langword="true"/>。</para></returns>
     public bool ProbeAdb(DetectedDevice device)
     {
         try { return RunAdb(device, session => session.IsConnected); }
         catch { return false; }
     }
 
-    /// <summary>Probes the selected Fastboot target and reads its product variable.</summary>
+    /// <summary>Probes the selected Fastboot target and reads its product variable.<para>探测所选 Fastboot 目标并读取其 product 变量。</para></summary>
+    /// <param name="device">The Fastboot target to probe.<para>要探测的 Fastboot 目标。</para></param>
+    /// <returns>Whether the target answered and the product variable it reports.<para>目标是否应答，以及其报告的 product 变量。</para></returns>
     public (bool Ready, string? Product) ProbeFastboot(DetectedDevice device)
     {
         try { return (true, RunFastboot(device, session => session.GetVariable("product", useCache: false))); }
         catch { return (false, null); }
     }
 
-    /// <summary>Checks whether the selected RKDL target is responsive.</summary>
+    /// <summary>Checks whether the selected RKDL target is responsive.<para>检查所选 RKDL 目标是否可以响应。</para></summary>
+    /// <param name="device">The RKDL target to check.<para>要检查的 RKDL 目标。</para></param>
+    /// <returns><see langword="true"/> when the target answers the readiness check.<para>目标响应就绪检查时为 <see langword="true"/>。</para></returns>
     public bool ProbeRkdl(DetectedDevice device)
     {
         try
@@ -309,7 +329,8 @@ public sealed partial class DeviceMonitorService
         catch { return false; }
     }
 
-    /// <summary>Lists the targets managed by the running adb server, or an empty list when it is absent.</summary>
+    /// <summary>Lists the targets managed by the running adb server, or an empty list when it is absent.<para>列出正在运行的 adb server 所管理的目标；server 不在时为空列表。</para></summary>
+    /// <returns>The server target list, empty when the server is absent.<para>server 的目标列表；server 不在时为空列表。</para></returns>
     internal static IReadOnlyList<AdbTargetInfo> ListAdbServerTargets() =>
         new AdbServerServices(string.Empty, DeviceCommunicationConfiguration.ServerHost,
             DeviceCommunicationConfiguration.AdbServerPort).ListTargets();
@@ -320,7 +341,9 @@ public sealed partial class DeviceMonitorService
             throw new IOException("The ADB server does not contain the selected target. Direct USB fallback is prohibited while the server is running.");
     }
 
-    /// <summary>Reports whether the running server manages the device, for routing server versus direct-USB work.</summary>
+    /// <summary>Reports whether the running server manages the device, for routing server versus direct-USB work.<para>报告正在运行的 server 是否管理该设备，用于在 server 与直连 USB 之间路由。</para></summary>
+    /// <param name="device">The device to look for in the server list.<para>要在 server 列表中查找的设备。</para></param>
+    /// <returns><see langword="true"/> when the running server manages that device.<para>正在运行的 server 管理该设备时为 <see langword="true"/>。</para></returns>
     private static bool AdbServerManages(DetectedDevice device)
     {
         if (!DebugBridgeRoute.UseAdbServer())
@@ -335,7 +358,8 @@ public sealed partial class DeviceMonitorService
         return present;
     }
 
-    /// <summary>Checks the current HDC server and propagates handshake errors.</summary>
+    /// <summary>Checks the current HDC server and propagates handshake errors.<para>检查当前的 HDC server，并传递握手错误。</para></summary>
+    /// <returns>A connected HDC server client, or <c>null</c>.<para>已连接的 HDC server 客户端，或为 <c>null</c>。</para></returns>
     private HdcServerClient? ProbeHdcServer()
     {
         if (!DebugBridgeRoute.UseHdcServer()) return null;

@@ -4,31 +4,48 @@ using UotanStudio.Firmware.AndroidMeta.Arsc;
 namespace UotanStudio.Services.Workspace;
 
 /// <summary>
-/// <para>ARSC 资源表的结构化搜索文本定位锚点：按行记录所属的包/类型/条目模型。</para>
 /// The structural location anchor of an ARSC resource-table search-text line: the owning
 /// package/type/entry models of that line.
+/// <para>ARSC 资源表的结构化搜索文本定位锚点：按行记录所属的包/类型/条目模型。</para>
 /// </summary>
-/// <param name="Package">所属包。<para>The owning package.</para></param>
-/// <param name="Type">所属类型表；包级行为 <c>null</c>。<para>The owning type table; <c>null</c> for package lines.</para></param>
-/// <param name="Entry">所属条目；包/类型级行为 <c>null</c>。<para>The owning entry; <c>null</c> for package/type lines.</para></param>
+/// <param name="Package">
+/// The owning package.
+/// <para>所属包。</para>
+/// </param>
+/// <param name="Type">
+/// The owning type table; <c>null</c> for package lines.
+/// <para>所属类型表；包级行为 <c>null</c>。</para>
+/// </param>
+/// <param name="Entry">
+/// The owning entry; <c>null</c> for package or type lines.
+/// <para>所属条目；包或类型级行为 <c>null</c>。</para>
+/// </param>
 internal sealed record ResSearchAnchor(ResPackage Package, ResType? Type, ResEntry? Entry);
 
 /// <summary>
-/// <para>把 ARSC 资源表序列化为行式搜索文本（包 → 类型 → 配置 → 条目）。ARSC 编辑器与项目范围
-/// 格式适配共用同一序列化，保证「同一文件两次文本化结果一致」，使项目范围导航的快照比对成立。</para>
 /// Serializes an ARSC resource table into line-based search text (package → type → configuration →
-/// entry). The ARSC editor and the project-scope format adapter share this serializer so the same
-/// file always yields identical text, keeping project-scope navigation's snapshot comparison valid.
+/// entry), always yielding identical text for the same table.
+/// <para>把 ARSC 资源表序列化为行式搜索文本（包 → 类型 → 配置 → 条目），同一张表始终产出一致的文本。</para>
 /// </summary>
 internal static class ResourceTableSearchText
 {
     /// <summary>
-    /// <para>序列化资源表为搜索文本；可选回调按行报告起始偏移与结构锚点（供树节点定位）。</para>
-    /// Serializes the table into search text; an optional callback reports each line's start offset
-    /// and structural anchor (for tree-node location).
+    /// Serializes the table into search text; an optional callback reports each line's start offset and
+    /// structural anchor.
+    /// <para>把资源表序列化为搜索文本；可选回调按行报告起始偏移与结构锚点。</para>
     /// </summary>
-    /// <param name="table">资源表模型。<para>The resource-table model.</para></param>
-    /// <param name="onLine">每行回调；为 <c>null</c> 时只生成文本。<para>Per-line callback; text-only when <c>null</c>.</param>
+    /// <param name="table">
+    /// The resource-table model.
+    /// <para>资源表模型。</para>
+    /// </param>
+    /// <param name="onLine">
+    /// Per-line callback receiving the start offset and anchor; null for text-only output.
+    /// <para>按行接收起始偏移与锚点的回调；为 null 时只生成文本。</para>
+    /// </param>
+    /// <returns>
+    /// The generated search text.
+    /// <para>生成的搜索文本。</para>
+    /// </returns>
     internal static string Serialize(ResourceTable table, Action<int, ResSearchAnchor>? onLine = null)
     {
         ArgumentNullException.ThrowIfNull(table);
@@ -64,9 +81,17 @@ internal static class ResourceTableSearchText
     }
 
     /// <summary>
-    /// <para>资源类型 ID 的显示名（与 ARSC 编辑器的左栏类型分组一致）。</para>
-    /// The display name of a resource type ID (aligned with the ARSC editor's left type group).
+    /// The display name of a resource type ID.
+    /// <para>资源类型 ID 的显示名。</para>
     /// </summary>
+    /// <param name="typeId">
+    /// The resource type ID byte.
+    /// <para>资源类型 ID 字节。</para>
+    /// </param>
+    /// <returns>
+    /// The mapped name, or a generic label for an unmapped ID.
+    /// <para>已映射的名称；未映射的 ID 返回通用标签。</para>
+    /// </returns>
     internal static string TypeDisplayName(byte typeId) => typeId switch
     {
         1 => "attr",

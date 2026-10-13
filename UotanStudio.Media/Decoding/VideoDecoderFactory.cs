@@ -9,11 +9,8 @@ namespace UotanStudio.Media.Decoding;
 public static class VideoDecoderFactory
 {
     /// <summary>
-    /// Checks whether a backend accepts a 1920x1080 stream configuration (Windows) or advertises
-    /// hardware codec support (macOS). Actual stream profile, dimensions and decoding can still fail.
-    /// Linux probes the VA bridge/driver and installed GStreamer plugins; a real stream may still fail.
-    /// <para>检查后端是否接受 1920x1080 的流配置（Windows），或是否声明支持硬件编解码（macOS）。
-    /// Linux 会探测 VA 桥接/驱动与已安装的 GStreamer 插件；真实码流仍可能解码失败。</para>
+    /// Checks whether a backend accepts the codec with a 1920x1080 stream configuration.
+    /// <para>检查后端是否以 1920x1080 流配置接受该编码格式。</para>
     /// </summary>
     /// <param name="codec">
     /// Codec to probe; only H.264, H.265 and AV1 are considered, everything else reports unsupported.
@@ -207,11 +204,8 @@ public static class VideoDecoderFactory
     }
 
     /// <summary>
-    /// Probes whether a hardware decode path exists for the codec: D3D11 initialization at 1920x1080 on
-    /// Windows, VA-API or GStreamer hardware on Linux, VideoToolbox on macOS with AV1 routed through
-    /// GStreamer. Actual stream decoding can still fail, and other platforms always report false.
-    /// <para>探测该编码格式是否存在硬件解码路径：Windows 上按 1920x1080 初始化 D3D11，Linux 上探测 VA-API
-    /// 或 GStreamer 硬件，macOS 上使用 VideoToolbox 并将 AV1 交由 GStreamer。真实码流解码仍可能失败；其他平台一律返回 false。</para>
+    /// Probes whether a hardware decode path exists for the codec.
+    /// <para>探测该编码格式是否存在硬件解码路径。</para>
     /// </summary>
     /// <param name="codec">
     /// Codec to probe; anything other than H.264, H.265 or AV1 returns false without touching native code.

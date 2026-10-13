@@ -6,11 +6,9 @@ using Xunit;
 namespace UotanStudio.Tests.Comm.Protocols.Edl;
 
 /// <summary>
-/// Project-verification credential tests against tokens emitted by the reference OnePlus tool implementation,
-/// so the hash layout, AES key composition, payload padding and hex casing are pinned to upstream behaviour
-/// rather than to this repository's own reading of it.
-/// <para>项目校验凭据测试对照参考 OnePlus 工具实现产出的令牌，因此摘要布局、AES 密钥组成、明文填充与十六进制
-/// 大小写都锁定为上游行为，而不是本仓库对上游的解读。</para>
+/// Project-verification credential tests against fixed OnePlus token vectors, pinning hash layout,
+/// AES key composition, payload padding and hexadecimal casing.
+/// <para>对照固定的 OnePlus 令牌向量验证项目校验凭据，锁定摘要布局、AES 密钥组成、明文填充与十六进制大小写。</para>
 /// </summary>
 internal static class EdlOnePlusReferenceVectors
 {

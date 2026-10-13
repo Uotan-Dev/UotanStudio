@@ -50,11 +50,8 @@ public sealed class SolutionSettings
 public static class SolutionSettingsService
 {
     /// <summary>
-    /// Asynchronously saves the solution settings to the specified path. The document is staged in a
-    /// sibling temporary file and the destination is replaced only when the generated text differs from
-    /// the existing content; a failed attempt leaves the previous file untouched.
-    /// <para>异步保存解决方案设置到指定路径。文档先写入同级临时文件，仅当生成的文本与现有内容不同时才替换
-    /// 目标；失败会保留既有文件。</para>
+    /// Asynchronously saves the solution settings to the specified path.
+    /// <para>异步保存解决方案设置到指定路径。</para>
     /// </summary>
     /// <param name="path">
     /// Destination settings file path; must not be null or whitespace.

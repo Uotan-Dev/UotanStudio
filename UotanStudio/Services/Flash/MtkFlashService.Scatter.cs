@@ -7,19 +7,19 @@ namespace UotanStudio.Services.Flash;
 
 public static partial class MtkFlashService
 {
-    /// <summary>Starts an explicitly selected serial agent and prepares selected Scatter operations against live GPT.</summary>
-    /// <remarks>
-    /// The caller must authorize startup separately from execution. Selection and metadata
-    /// collections are copied before asynchronous connection; concurrent mutation while copying
-    /// is unsupported. Manifest file names are never resolved to local source paths.
-    /// </remarks>
-    /// <param name="serial">Explicit serial port and line settings.</param>
-    /// <param name="startup">Explicit loader, agent stages and compatibility policy.</param>
-    /// <param name="physicalPartition">Explicit physical user region to observe.</param>
-    /// <param name="layout">Selected Scatter storage layout, not automatic platform authorization.</param>
-    /// <param name="steps">Explicit operations and caller-selected sources.</param>
-    /// <param name="cancellationToken">Cancellation for connection, metadata and source preflight.</param>
-    /// <returns>An owned preview which performs storage writes only on a separate ExecuteAsync call.</returns>
+    /// <summary>Starts an explicitly selected serial agent and prepares selected Scatter operations against live GPT.
+    /// <para>启动显式选择的串口代理，并针对实时 GPT 准备所选 Scatter 操作。</para></summary>
+    /// <param name="serial">Explicit serial port and line settings. <para>显式的串口与线路设置。</para></param>
+    /// <param name="startup">Explicit loader, agent stages and compatibility policy.
+    /// <para>显式的加载器、代理阶段与兼容性策略。</para></param>
+    /// <param name="physicalPartition">Explicit physical user region to observe. <para>显式指定的待观测物理用户区域。</para></param>
+    /// <param name="layout">Selected Scatter storage layout, not automatic platform authorization.
+    /// <para>所选 Scatter 存储布局，而非自动平台授权。</para></param>
+    /// <param name="steps">Explicit operations and selected source images. <para>显式操作与所选源镜像。</para></param>
+    /// <param name="cancellationToken">Cancellation for connection, metadata and source preflight.
+    /// <para>用于连接、元数据与源预检的取消令牌。</para></param>
+    /// <returns>An owned preview which performs storage writes only on a separate ExecuteAsync call.
+    /// <para>仅在单独的 ExecuteAsync 调用中写入存储的自有预览对象。</para></returns>
     public static Task<MtkFlashPreparation> PrepareScatterAsync(SerialConnectionOptions serial,
         MtkXFlashBootstrapOptions startup, uint physicalPartition, MtkScatterStorage layout,
         IReadOnlyList<MtkScatterFlashStep> steps, CancellationToken cancellationToken = default)
@@ -31,20 +31,21 @@ public static partial class MtkFlashService
     }
 
     /// <summary>Starts a serial agent whose loader entry is matched from the reported hardware identity,
-    /// then prepares selected Scatter operations against the live GPT.</summary>
-    /// <remarks>
-    /// The handshake happens before the entry is chosen, so an ambiguous container stops before any
-    /// download agent byte is uploaded. The DA family is explicit, and an SLA key store is consulted only
-    /// for the identity the device reports.
-    /// </remarks>
-    /// <param name="serial">Explicit serial port and line settings.</param>
-    /// <param name="protocol">Explicit DA family; no detection or fallback is performed.</param>
-    /// <param name="startup">Parsed loader profile, storage family, identity policy and companion resources.</param>
-    /// <param name="physicalPartition">Explicit physical user region to observe.</param>
-    /// <param name="layout">Selected Scatter storage layout, not automatic platform authorization.</param>
-    /// <param name="steps">Explicit operations and caller-selected sources.</param>
-    /// <param name="cancellationToken">Cancellation for connection, metadata and source preflight.</param>
-    /// <returns>An owned preview which performs storage writes only on a separate ExecuteAsync call.</returns>
+    /// then prepares selected Scatter operations against the live GPT.
+    /// <para>启动按上报硬件身份匹配加载器条目的串口代理，随后针对实时 GPT 准备所选 Scatter 操作。</para></summary>
+    /// <param name="serial">Explicit serial port and line settings. <para>显式的串口与线路设置。</para></param>
+    /// <param name="protocol">Explicit DA family; no detection or fallback is performed.
+    /// <para>显式的 DA 家族；不执行检测或回退。</para></param>
+    /// <param name="startup">Parsed loader profile, storage family, identity policy and companion resources.
+    /// <para>已解析的加载器配置、存储族、身份策略与伴随资源。</para></param>
+    /// <param name="physicalPartition">Explicit physical user region to observe. <para>显式指定的待观测物理用户区域。</para></param>
+    /// <param name="layout">Selected Scatter storage layout, not automatic platform authorization.
+    /// <para>所选 Scatter 存储布局，而非自动平台授权。</para></param>
+    /// <param name="steps">Explicit operations and selected source images. <para>显式操作与所选源镜像。</para></param>
+    /// <param name="cancellationToken">Cancellation for connection, metadata and source preflight.
+    /// <para>用于连接、元数据与源预检的取消令牌。</para></param>
+    /// <returns>An owned preview which performs storage writes only on a separate ExecuteAsync call.
+    /// <para>仅在单独的 ExecuteAsync 调用中写入存储的自有预览对象。</para></returns>
     public static Task<MtkFlashPreparation> PrepareScatterMatchedAsync(SerialConnectionOptions serial,
         MtkDaProtocol protocol, MtkAutoStartup startup, uint physicalPartition, MtkScatterStorage layout,
         IReadOnlyList<MtkScatterFlashStep> steps, CancellationToken cancellationToken = default)
@@ -56,20 +57,21 @@ public static partial class MtkFlashService
     }
 
     /// <summary>Boots an identity-matched agent on a session the device lease already owns, then prepares
-    /// selected Scatter operations against the live GPT.</summary>
-    /// <remarks>
-    /// The session stays bound to the caller's lease: disposing the returned preparation releases the plan
-    /// and the session, and the lease disposes the transport afterwards. Use this entry for USB-classified
-    /// MTK targets, where no serial port is selected.
-    /// </remarks>
-    /// <param name="session">A leased session in the created state.</param>
-    /// <param name="protocol">Explicit DA family; no detection or fallback is performed.</param>
-    /// <param name="startup">Parsed loader profile, storage family, identity policy and companion resources.</param>
-    /// <param name="physicalPartition">Explicit physical user region to observe.</param>
-    /// <param name="layout">Selected Scatter storage layout, not automatic platform authorization.</param>
-    /// <param name="steps">Explicit operations and caller-selected sources.</param>
-    /// <param name="cancellationToken">Cancellation for startup, metadata and source preflight.</param>
-    /// <returns>An owned preview which performs storage writes only on a separate ExecuteAsync call.</returns>
+    /// selected Scatter operations against the live GPT.
+    /// <para>在设备租约已持有的会话上启动按身份匹配的代理，随后针对实时 GPT 准备所选 Scatter 操作。</para></summary>
+    /// <param name="session">A leased session in the created state. <para>处于已创建状态的已租用会话。</para></param>
+    /// <param name="protocol">Explicit DA family; no detection or fallback is performed.
+    /// <para>显式的 DA 家族；不执行检测或回退。</para></param>
+    /// <param name="startup">Parsed loader profile, storage family, identity policy and companion resources.
+    /// <para>已解析的加载器配置、存储族、身份策略与伴随资源。</para></param>
+    /// <param name="physicalPartition">Explicit physical user region to observe. <para>显式指定的待观测物理用户区域。</para></param>
+    /// <param name="layout">Selected Scatter storage layout, not automatic platform authorization.
+    /// <para>所选 Scatter 存储布局，而非自动平台授权。</para></param>
+    /// <param name="steps">Explicit operations and selected source images. <para>显式操作与所选源镜像。</para></param>
+    /// <param name="cancellationToken">Cancellation for startup, metadata and source preflight.
+    /// <para>用于启动、元数据与源预检的取消令牌。</para></param>
+    /// <returns>An owned preview which performs storage writes only on a separate ExecuteAsync call.
+    /// <para>仅在单独的 ExecuteAsync 调用中写入存储的自有预览对象。</para></returns>
     public static Task<MtkFlashPreparation> PrepareScatterOnSessionAsync(MtkSession session,
         MtkDaProtocol protocol, MtkAutoStartup startup, uint physicalPartition, MtkScatterStorage layout,
         IReadOnlyList<MtkScatterFlashStep> steps, CancellationToken cancellationToken = default)

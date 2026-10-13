@@ -9,11 +9,19 @@ namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
 {
-    /// <summary>Provides the USB inventory to an embedded MCP host.</summary>
+    /// <summary>
+    /// Enumerates the USB devices visible through the current discovery snapshot.
+    /// <para>枚举当前发现快照中可见的 USB 设备。</para>
+    /// </summary>
+    /// <returns>The USB device inventory. <para>USB 设备清单。</para></returns>
     public IReadOnlyList<UsbDeviceInfo> ListUsbDevices() => _controller.EnumerateUsb();
 
-    /// <summary>Lists the direct-USB interfaces left in the snapshot; debug bridge servers own their
-    /// protocol's interfaces, and discovery already removed those endpoints.</summary>
+    /// <summary>
+    /// Lists the direct-USB interfaces left in the snapshot; debug bridge servers own their
+    /// protocol's interfaces, and discovery already removed those endpoints.
+    /// <para>列出快照中剩余的直连 USB 接口；调试桥服务持有自身协议的接口，这些端点已在发现阶段被移除。</para>
+    /// </summary>
+    /// <returns>The routable direct-USB interfaces. <para>可路由的直连 USB 接口。</para></returns>
     public IReadOnlyList<UsbDeviceInfo> ListRoutableUsbDevices()
     {
         var snapshot = _controller.RefreshAsync().GetAwaiter().GetResult();
@@ -23,13 +31,24 @@ public sealed partial class DeviceMonitorService
             .Select(endpoint => endpoint.UsbInfo!)];
     }
 
-    /// <summary>Lists the routed server and direct USB targets.</summary>
+    /// <summary>
+    /// Lists the routed server and direct USB targets.
+    /// <para>列出已路由的 server 目标与直连 USB 目标。</para>
+    /// </summary>
+    /// <returns>Each ADB target with its serial and state. <para>每个 ADB 目标的序列号与状态。</para></returns>
     public IReadOnlyList<(string Serial, string State)> ListAdbTargets()
         => [.. Scan().Where(device => device.Protocol == DeviceProtocolKind.Adb)
             .Select(device => (device.Serial, device.Key.StartsWith("adb:", StringComparison.Ordinal)
                 ? device.State : ProbeAdb(device) ? "device" : "offline"))];
 
-    /// <summary>Forwards a service to the exact routed ADB target.</summary>
+    /// <summary>
+    /// Forwards a service to the exact routed ADB target.
+    /// <para>把服务转发到指定的已路由 ADB 目标。</para>
+    /// </summary>
+    /// <param name="serial">Serial of the routed ADB target. <para>已路由 ADB 目标的序列号。</para></param>
+    /// <param name="service">Name of the service stream to open. <para>要打开的服务流名称。</para></param>
+    /// <param name="operation">Function run over the opened service stream. <para>在打开的服务流上执行的函数。</para></param>
+    /// <returns>The value produced by the operation. <para>操作返回的值。</para></returns>
     public TResult RunAdbService<TResult>(string serial, string service, Func<Stream, TResult> operation)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
@@ -42,7 +61,14 @@ public sealed partial class DeviceMonitorService
         });
     }
 
-    /// <summary>Uploads through the exact routed ADB target without parking a thread on the transfer.</summary>
+    /// <summary>
+    /// Uploads through the exact routed ADB target without parking a thread on the transfer.
+    /// <para>通过指定的已路由 ADB 目标上传，不会为传输占用线程。</para>
+    /// </summary>
+    /// <param name="device">Target device receiving the file. <para>接收文件的设备。</para></param>
+    /// <param name="localPath">Path of the local source file. <para>本地源文件路径。</para></param>
+    /// <param name="remotePath">Path on the device to write. <para>设备上要写入的路径。</para></param>
+    /// <param name="cancellationToken">Token cancelling the transfer. <para>用于取消传输的令牌。</para></param>
     public Task PushAdbFileAsync(DetectedDevice device, string localPath, string remotePath,
         CancellationToken cancellationToken = default)
     {
@@ -56,7 +82,14 @@ public sealed partial class DeviceMonitorService
         }, cancellationToken);
     }
 
-    /// <summary>Downloads through the exact routed ADB target without parking a thread on the transfer.</summary>
+    /// <summary>
+    /// Downloads through the exact routed ADB target without parking a thread on the transfer.
+    /// <para>通过指定的已路由 ADB 目标下载，不会为传输占用线程。</para>
+    /// </summary>
+    /// <param name="device">Target device the file is read from. <para>读取文件的设备。</para></param>
+    /// <param name="remotePath">Path on the device to read. <para>设备上要读取的路径。</para></param>
+    /// <param name="localPath">Path of the local destination file. <para>本地目标文件路径。</para></param>
+    /// <param name="cancellationToken">Token cancelling the transfer. <para>用于取消传输的令牌。</para></param>
     public Task PullAdbFileAsync(DetectedDevice device, string remotePath, string localPath,
         CancellationToken cancellationToken = default)
     {
@@ -81,7 +114,12 @@ public sealed partial class DeviceMonitorService
         return matches[0];
     }
 
-    /// <summary>Forwards a legacy MCP Fastboot operation only when the target is unambiguous.</summary>
+    /// <summary>
+    /// Runs a Fastboot operation only when exactly one Fastboot device is present.
+    /// <para>仅在恰好连接一个 Fastboot 设备时执行该 Fastboot 操作。</para>
+    /// </summary>
+    /// <param name="operation">Function run against the connected Fastboot session. <para>在已连接的 Fastboot 会话上执行的函数。</para></param>
+    /// <returns>The value produced by the operation. <para>操作返回的值。</para></returns>
     public TResult RunSingleFastboot<TResult>(Func<FastbootSession, TResult> operation)
     {
         var devices = Scan().Where(device => device.Protocol == DeviceProtocolKind.Fastboot).ToArray();

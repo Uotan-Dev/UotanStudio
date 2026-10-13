@@ -6,11 +6,9 @@ using Xunit;
 namespace UotanStudio.Tests.Comm.Protocols.Edl;
 
 /// <summary>
-/// Nothing project-verification credential tests pinned to the reference tool's own documented vector and
-/// constants, so the digest input layout, hexadecimal casing and nonce width are locked to upstream
-/// behaviour (nothing.py, lines 16 to 38 and 60 to 62) rather than to this repository's reading of it.
-/// <para>Nothing 项目校验凭据测试锁定参考工具自带的向量与常量，因此摘要输入布局、十六进制大小写与随机数宽度
-/// 都对齐上游行为（nothing.py 第 16 至 38 行、第 60 至 62 行），而不是本仓库对上游的解读。</para>
+/// Nothing project-verification credential tests built on literal token vectors. The digest input
+/// layout, hexadecimal casing and nonce width are pinned to those literals.
+/// <para>基于字面令牌向量的 Nothing 项目校验凭据测试。摘要输入布局、十六进制大小写与随机数宽度都锁定到这些字面量。</para>
 /// </summary>
 public sealed class EdlAuthProviderNothingTests
 {

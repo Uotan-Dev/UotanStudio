@@ -6,7 +6,10 @@ using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Services.Workspace;
 
-/// <summary>Adapts the current desktop workspace to project data and document operations.</summary>
+/// <summary>
+/// Adapts the current desktop workspace to project data and document operations.
+/// <para>把当前桌面工作区适配到工程数据与文档操作。</para>
+/// </summary>
 internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
 {
     internal NodeEditorViewModel? NodeEditor { get; set; }
@@ -25,13 +28,18 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
     public void ApplySettings(ProjectSettingsDto settings) => ProjectSettingViewModel.EnsureInstance().ApplyFromDto(settings);
 
     /// <summary>
-    /// <para>工程根目录变更通知：<paramref name="preserveDocuments"/> 为 false 时（新建解决方案、
-    /// 打开工程、关闭工程）关闭工作区全部文档型面板，避免上一工程的编辑器残留；为 true 时
-    /// （另存为）保留已打开文档，页面记录按新根重算相对路径。</para>
-    /// Root-change notification: with <paramref name="preserveDocuments"/> false (new solution, open,
-    /// close) closes every document-kind panel so editors of the previous solution do not linger;
-    /// with true (save-as) documents stay open and page records re-resolve against the new root.
+    /// Root-change notification: with <paramref name="preserveDocuments"/> false all open documents
+    /// close; with true they stay and their records re-resolve against the new root.
+    /// <para>工程根目录变更通知：为 false 时关闭全部已打开文档，为 true 时保留并让记录按新根重算。</para>
     /// </summary>
+    /// <param name="rootDirectory">
+    /// The new project root; null leaves open documents untouched.
+    /// <para>新的工程根目录；为 null 时不改动已打开文档。</para>
+    /// </param>
+    /// <param name="preserveDocuments">
+    /// True to keep open documents through the change.
+    /// <para>为真时变更过程中保留已打开文档。</para>
+    /// </param>
     public void ChangeProjectRoot(string? rootDirectory, bool preserveDocuments)
     {
         if (preserveDocuments || rootDirectory is null) return;

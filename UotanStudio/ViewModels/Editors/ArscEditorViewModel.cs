@@ -10,43 +10,43 @@ using UotanStudio.Services.Workspace;
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
-/// <para>ARSC（resources.arsc）资源表编辑器视图模型：左栏包→类型→配置→条目四级资源树 +
-/// 右栏选中条目的可视化详情（键名、类型、格式化值与原始数据），支持解析、值级编辑与重建保存。</para>
 /// ARSC (resources.arsc) resource-table editor view model: a left package→type→configuration→entry
 /// tree plus a right details pane (key name, type, formatted value and raw data) for the selected
 /// entry, supporting parse, value-level editing and rebuild-save.
+/// <para>ARSC（resources.arsc）资源表编辑器视图模型：左栏包→类型→配置→条目四级资源树 +
+/// 右栏选中条目的可视化详情（键名、类型、格式化值与原始数据），支持解析、值级编辑与重建保存。</para>
 /// </summary>
 public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearchMatchLocator
 {
     /// <summary>
-    /// <para>保存按钮的本地化标题。</para>
     /// The localized title of the save button.
+    /// <para>保存按钮的本地化标题。</para>
     /// </summary>
     public static string SaveLabel => LanguageService.Instance.GetString("Dock_Arsc_Save");
 
     /// <summary>
-    /// <para>加载中提示文案的本地化标题。</para>
     /// The localized title of the busy/loading label.
+    /// <para>加载中提示文案的本地化标题。</para>
     /// </summary>
     public static string BusyLabel => LanguageService.Instance.GetString("Dock_Arsc_Busy");
 
     /// <summary>
-    /// <para>是否正在后台解析（联动忙碌指示动画）。</para>
     /// Whether the background parse is running (drives the busy indicator animation).
+    /// <para>是否正在后台解析（联动忙碌指示动画）。</para>
     /// </summary>
     [ObservableProperty] private bool _isBusy;
 
     /// <summary>
-    /// <para>文档对应的文件路径。</para>
     /// The file path of the document.
+    /// <para>文档对应的文件路径。</para>
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FilePathDisplay))]
     private string? _filePath;
 
     /// <summary>
-    /// <para>本地化后的文件路径显示文本（顶部工具栏）。</para>
     /// Localized file path display text (top toolbar).
+    /// <para>本地化后的文件路径显示文本（顶部工具栏）。</para>
     /// </summary>
     public string FilePathDisplay =>
         string.IsNullOrEmpty(FilePath)
@@ -54,89 +54,89 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
             : string.Format(LanguageService.Instance.GetString("Dock_File_PathFormat"), FilePath);
 
     /// <summary>
-    /// <para>解析错误文本；为空表示无错误。</para>
     /// The parse error text; empty means no error.
+    /// <para>解析错误文本；为空表示无错误。</para>
     /// </summary>
     [ObservableProperty] private string _compileError = string.Empty;
 
     /// <summary>
-    /// <para>文档已修改状态（值级编辑后置位，保存后清除）。</para>
     /// Document dirty state (set after a value edit, cleared on save).
+    /// <para>文档已修改状态（值级编辑后置位，保存后清除）。</para>
     /// </summary>
     [ObservableProperty] private bool _isDirty;
 
     /// <summary>
-    /// <para>当前选中的树节点（左栏选择联动，驱动右栏详情面板）。</para>
     /// The currently selected tree node (left-pane selection linkage, drives the right details pane).
+    /// <para>当前选中的树节点（左栏选择联动，驱动右栏详情面板）。</para>
     /// </summary>
     [ObservableProperty] private ArscTreeNodeViewModel? _selectedNode;
 
     /// <summary>
-    /// <para>左栏资源树根节点（每个包一个根）。</para>
     /// Left-pane tree root nodes (one per package).
+    /// <para>左栏资源树根节点（每个包一个根）。</para>
     /// </summary>
     public ObservableCollection<ArscTreeNodeViewModel> Nodes { get; } = [];
 
     /// <summary>
-    /// <para>右栏详情面板的键值行。</para>
     /// Key/value rows of the right details pane.
+    /// <para>右栏详情面板的键值行。</para>
     /// </summary>
     public ObservableCollection<ArscDetailRow> Details { get; } = [];
 
     /// <summary>
-    /// <para>解析后的资源表模型（供详情取值与重建保存）。</para>
     /// The parsed resource-table model (for the details pane and rebuild-save).
+    /// <para>解析后的资源表模型（供详情取值与重建保存）。</para>
     /// </summary>
     private ResourceTable? _table;
 
     /// <summary>
-    /// <para>行式反编译搜索文本（包→类型→配置→条目），加载后生成并缓存；只读结构化视图的文本载体。</para>
     /// The line-based decompiled search text (package→type→configuration→entry), generated and cached
     /// after loading; the text carrier of this read-only structured view.
+    /// <para>行式反编译搜索文本（包→类型→配置→条目），加载后生成并缓存；只读结构化视图的文本载体。</para>
     /// </summary>
     private string? _searchText;
 
     /// <summary>
-    /// <para>搜索文本行起始偏移 → 结构锚点（供匹配偏移映射回资源树节点）。</para>
     /// Search-text line start offset → structural anchor (maps a match offset back to a resource-tree node).
+    /// <para>搜索文本行起始偏移 → 结构锚点（供匹配偏移映射回资源树节点）。</para>
     /// </summary>
     private readonly List<(int Offset, ResSearchAnchor Anchor)> _searchAnchors = [];
 
     /// <summary>
-    /// <para>模型引用 → 左栏节点，用于把搜索锚点解析成可选中的树节点。</para>
     /// Model reference → left-tree node, used to resolve a search anchor into a selectable node.
+    /// <para>模型引用 → 左栏节点，用于把搜索锚点解析成可选中的树节点。</para>
     /// </summary>
     private readonly Dictionary<ResPackage, ArscTreeNodeViewModel> _packageNodes = [];
     private readonly Dictionary<ResType, ArscTreeNodeViewModel> _typeNodes = [];
     private readonly Dictionary<ResEntry, ArscTreeNodeViewModel> _entryNodes = [];
 
     /// <summary>
-    /// <para>包总数；未加载时为 0。</para>
     /// Total package count; 0 when not loaded.
+    /// <para>包总数；未加载时为 0。</para>
     /// </summary>
     public int PackageCount { get; private set; }
 
     /// <summary>
-    /// <para>类型表总数；未加载时为 0。</para>
     /// Total type-table count; 0 when not loaded.
+    /// <para>类型表总数；未加载时为 0。</para>
     /// </summary>
     public int TypeCount { get; private set; }
 
     /// <summary>
-    /// <para>条目总数；未加载时为 0。</para>
     /// Total entry count; 0 when not loaded.
+    /// <para>条目总数；未加载时为 0。</para>
     /// </summary>
     public int EntryCount { get; private set; }
 
     /// <summary>
-    /// <para>保存命令：经 <see cref="ArscWriter"/> 重建并写回原文件。</para>
     /// Save command: rebuilds via <see cref="ArscWriter"/> and writes back to the file.
+    /// <para>保存命令：经 <see cref="ArscWriter"/> 重建并写回原文件。</para>
     /// </summary>
     public IAsyncRelayCommand SaveCommand { get; }
 
     /// <summary>
-    /// <para>创建 ARSC 编辑器视图模型。</para>
     /// Creates the ARSC editor view model.
+    /// <para>创建 ARSC 编辑器视图模型。</para>
     /// </summary>
     public ArscEditorViewModel()
     {
@@ -144,8 +144,8 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
     }
 
     /// <summary>
-    /// <para>异步加载 ARSC 文件：读取字节 → 解析 → 构建资源树。</para>
     /// Asynchronously loads an ARSC file: read bytes, parse, and build the resource tree.
+    /// <para>异步加载 ARSC 文件：读取字节 → 解析 → 构建资源树。</para>
     /// </summary>
     /// <param name="path">ARSC 文件路径。<para>ARSC file path.</para></param>
     public async Task LoadAsync(string path)
@@ -198,8 +198,8 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
     }
 
     /// <summary>
-    /// <para>选中节点变化：按节点层级加载详情面板内容。</para>
     /// Selected node changed: loads the details pane by node level.
+    /// <para>选中节点变化：按节点层级加载详情面板内容。</para>
     /// </summary>
     partial void OnSelectedNodeChanged(ArscTreeNodeViewModel? value)
     {
@@ -271,8 +271,8 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
     }
 
     /// <summary>
-    /// <para>判断值类型是否支持可视化编辑。</para>
     /// Whether the value type supports visual editing.
+    /// <para>判断值类型是否支持可视化编辑。</para>
     /// </summary>
     private static bool IsEditableType(ResValueType type) => type switch
     {
@@ -282,8 +282,8 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
     };
 
     /// <summary>
-    /// <para>按类型解析编辑文本并写回条目值；返回是否成功。</para>
     /// Parses the edited text by value type and writes it back to the entry; returns success.
+    /// <para>按类型解析编辑文本并写回条目值；返回是否成功。</para>
     /// </summary>
     private static bool ApplyValueEdit(ResValue value, ResEntryEntry entry, string text)
     {
@@ -313,8 +313,8 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
     }
 
     /// <summary>
-    /// <para>保存：经 <see cref="ArscWriter"/> 重建模型并写回原文件。</para>
     /// Saves: rebuilds the model via <see cref="ArscWriter"/> and writes back to the file.
+    /// <para>保存：经 <see cref="ArscWriter"/> 重建模型并写回原文件。</para>
     /// </summary>
     public async Task SaveAsync()
     {
@@ -390,8 +390,8 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
     }
 
     /// <summary>
-    /// <para>生成行式搜索文本并缓存，同时建立模型引用到左栏节点的映射。</para>
     /// Builds and caches the line-based search text and maps model references to left-tree nodes.
+    /// <para>生成行式搜索文本并缓存，同时建立模型引用到左栏节点的映射。</para>
     /// </summary>
     private void BuildSearchText(ResourceTable table)
     {
@@ -420,8 +420,8 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
     }
 
     /// <summary>
-    /// <para>展开目标节点的祖先链，使被定位的条目在左栏可见。</para>
     /// Expands the target node's ancestor chain so the located entry is visible in the left tree.
+    /// <para>展开目标节点的祖先链，使被定位的条目在左栏可见。</para>
     /// </summary>
     private static bool ExpandPath(IEnumerable<ArscTreeNodeViewModel> nodes, ArscTreeNodeViewModel target)
     {
@@ -504,8 +504,8 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
     }
 
     /// <summary>
-    /// <para>释放文档持有的模型与视图数据（文档关闭时调用）。</para>
     /// Releases the model and view data held by this document (called when the document is closed).
+    /// <para>释放文档持有的模型与视图数据（文档关闭时调用）。</para>
     /// </summary>
     public void Cleanup()
     {
@@ -526,16 +526,16 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
 }
 
 /// <summary>
-/// <para>右栏详情面板的键值行；值可编辑时提供写回回调。</para>
 /// A key/value row of the right details pane; editable rows carry a write-back callback.
+/// <para>右栏详情面板的键值行；值可编辑时提供写回回调。</para>
 /// </summary>
 public partial class ArscDetailRow : ObservableObject
 {
     private readonly Action<string>? _applyEdit;
 
     /// <summary>
-    /// <para>创建只读详情行。</para>
     /// Creates a read-only detail row.
+    /// <para>创建只读详情行。</para>
     /// </summary>
     public ArscDetailRow(string key, string value)
         : this(key, value, null)
@@ -543,9 +543,9 @@ public partial class ArscDetailRow : ObservableObject
     }
 
     /// <summary>
-    /// <para>创建详情行；提供 <paramref name="applyEdit"/> 时值可编辑并写回模型。</para>
     /// Creates a detail row; providing <paramref name="applyEdit"/> makes the value editable and
     /// writes it back to the model.
+    /// <para>创建详情行；提供 <paramref name="applyEdit"/> 时值可编辑并写回模型。</para>
     /// </summary>
     public ArscDetailRow(string key, string value, Action<string>? applyEdit)
     {
@@ -558,8 +558,8 @@ public partial class ArscDetailRow : ObservableObject
     public string Key { get; }
 
     /// <summary>
-    /// <para>详情值；编辑时经写回回调更新模型。</para>
     /// Detail value; edits flow through the write-back callback.
+    /// <para>详情值；编辑时经写回回调更新模型。</para>
     /// </summary>
     [ObservableProperty] private string _value;
 
@@ -576,9 +576,9 @@ public partial class ArscDetailRow : ObservableObject
 }
 
 /// <summary>
-/// <para>条目详情负载：条目模型 + 解析后的键名、包 ID 与全局字符串池（详情/编辑取值用）。</para>
 /// Entry-details payload: the entry model plus its resolved key name, package ID and the global
 /// string pool (for the details pane and value editing).
+/// <para>条目详情负载：条目模型 + 解析后的键名、包 ID 与全局字符串池（详情/编辑取值用）。</para>
 /// </summary>
 public sealed class ResEntryEntry
 {

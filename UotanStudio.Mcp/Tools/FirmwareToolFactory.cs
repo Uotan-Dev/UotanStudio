@@ -345,13 +345,13 @@ internal static class FirmwareToolHandlers
     }
 
     /// <summary>
-    /// <para>把协议进度目标转为固件的字节进度接收端；没有进度令牌时返回 <see langword="null"/>，
-    /// 底层实现因此不会消耗上报开销。</para>
     /// Converts the protocol progress sink into the firmware byte-progress sink; without a progress
     /// token this returns <see langword="null"/> so backing implementations skip reporting overhead.
+    /// <para>把协议进度目标转为固件的字节进度接收端；没有进度令牌时返回 <see langword="null"/>，
+    /// 底层实现因此不会消耗上报开销。</para>
     /// </summary>
-    /// <param name="progress"><para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para>The MCP-bound progress instance, possibly <see langword="null"/>.</param>
-    /// <returns><para>供固件处理器上报字节进度的接收端。</para>A byte-progress sink for firmware handlers to report to.</returns>
+    /// <param name="progress">The MCP-bound progress instance, possibly <see langword="null"/>. <para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para></param>
+    /// <returns>A byte-progress sink for firmware handlers to report to. <para>供固件处理器上报字节进度的接收端。</para></returns>
     internal static IProgress<FileSystemByteProgress>? ToByteProgress(IProgress<ProgressNotificationValue>? progress) =>
         progress is null
             ? null
@@ -363,12 +363,12 @@ internal static class FirmwareToolHandlers
             }));
 
     /// <summary>
-    /// <para>把协议进度目标转为容器抽取的字节计数接收端；没有进度令牌时返回 <see langword="null"/>。</para>
     /// Converts the protocol progress sink into the container extractor's byte-count sink; without a
     /// progress token this returns <see langword="null"/>.
+    /// <para>把协议进度目标转为容器抽取的字节计数接收端；没有进度令牌时返回 <see langword="null"/>。</para>
     /// </summary>
-    /// <param name="progress"><para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para>The MCP-bound progress instance, possibly <see langword="null"/>.</param>
-    /// <returns><para>供容器抽取器上报已处理/总字节数的接收端。</para>A processed/total byte sink for the extractor.</returns>
+    /// <param name="progress">The MCP-bound progress instance, possibly <see langword="null"/>. <para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para></param>
+    /// <returns>A processed/total byte sink for the extractor. <para>供容器抽取器上报已处理/总字节数的接收端。</para></returns>
     internal static IProgress<(long Processed, long Total)>? ToTupleProgress(IProgress<ProgressNotificationValue>? progress) =>
         progress is null
             ? null

@@ -97,21 +97,15 @@ public sealed record SamsungPayloadPartitionInfo(string PartitionName, long NewS
 public sealed record SamsungPayloadMergePlan(uint BlockSize, IReadOnlyList<SamsungPayloadPartitionInfo> Partitions);
 
 /// <summary>
-/// Managed equivalent of Samsung's closed-source incremental-OTA mergers (<c>samsung_dat_merge</c> and
-/// <c>samsung_payload_merge</c>). DAT mode takes a base image (a single partition image or a
-/// <c>super.img</c>, optionally LZ4-wrapped), locates each <c>.transfer.list</c>/<c>.new.dat[.br]</c>/
-/// <c>.patch.dat[.br]</c> triple inside a ZIP by basename (or as loose siblings), strips A/B slot suffixes when
-/// pairing partitions, skips the <c>prism</c> stem, replays every triple through the block-OTA execution
-/// pipeline, and publishes merged images into the output directory only after all merges succeeded. Payload
-/// mode lists manifest partitions with their source-dependency flags and merges selected partitions against a
-/// directory of extracted old images. All limits, cancellation checks and atomic publications are enforced by
-/// the reused firmware pipelines.
-/// <para>三星闭源增量 OTA 合并器（<c>samsung_dat_merge</c> 与 <c>samsung_payload_merge</c>）的托管等价实现。
-/// DAT 模式接收基座镜像（单分区镜像或 <c>super.img</c>，可选 LZ4 封装），在 ZIP 内按文件名（而非完整路径）
-/// 定位每组 <c>.transfer.list</c>/<c>.new.dat[.br]</c>/<c>.patch.dat[.br]</c> 三元组（或直接使用同目录散装文件），
-/// 配对分区时剥离 A/B 槽位后缀，跳过 <c>prism</c> 词干，将每组三元组交由块 OTA 执行管线回放，并在全部合并成功后
-/// 才把合并镜像发布到输出目录。Payload 模式列出清单分区及其源依赖标记，并把选定分区针对解包后的旧镜像目录合并。
-/// 所有上限、取消检查与原子发布均由复用的固件管线保证。</para>
+/// Merges Samsung incremental-OTA payloads into full partition images, in DAT or payload mode.
+/// DAT mode takes a base image (a single partition image or a <c>super.img</c>, optionally LZ4-wrapped),
+/// locates each <c>.transfer.list</c>/<c>.new.dat[.br]</c>/<c>.patch.dat[.br]</c> triple inside a ZIP by
+/// basename (or as loose siblings), strips A/B slot suffixes when pairing partitions, skips the
+/// <c>prism</c> stem, replays every triple through the block-OTA execution pipeline, and publishes merged
+/// images only after all merges succeeded. Payload mode lists manifest partitions with their
+/// source-dependency flags and merges selected partitions against a directory of extracted old images.
+/// <para>以 DAT 或 payload 模式将三星增量 OTA 载荷合并为完整分区镜像：DAT 模式按文件名定位三元组并回放块 OTA
+/// 管线，全部成功后才发布；payload 模式按清单针对解包后的旧镜像目录合并。</para>
 /// </summary>
 internal sealed class SamsungIncrementalMergeService
 {

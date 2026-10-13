@@ -7,8 +7,9 @@ namespace UotanStudio.Tests.Projects;
 /// <summary>
 /// Verifies the sub-project layout guard: a sub-project root must be a nested directory below the
 /// solution root, never the solution root itself; each sub-project owns its state directory.
-/// 验证子项目布局守卫：子项目根必须是解决方案根下的嵌套目录，不得为解决方案根本身，
+/// <para>验证子项目布局守卫：子项目根必须是解决方案根下的嵌套目录，不得为解决方案根本身，
 /// 每个子项目独立持有状态目录。
+/// </para>
 /// </summary>
 public sealed class SubProjectLayoutGuardTests : IDisposable
 {

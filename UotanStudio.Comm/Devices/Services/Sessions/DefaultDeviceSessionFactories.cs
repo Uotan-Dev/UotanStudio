@@ -13,7 +13,7 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Devices.Services.Sessions;
 
-/// <summary>Session factories registered by the controller by default. 控制器默认注册的会话工厂。</summary>
+/// <summary>Session factories registered by the controller by default. <para>控制器默认注册的会话工厂。</para></summary>
 internal static class DefaultDeviceSessionFactories
 {
     public static readonly IDeviceSessionFactory[] All =
@@ -28,7 +28,7 @@ internal static class DefaultDeviceSessionFactories
 }
 
 /// <summary>Guards shared by session factories; failure must leave the leased transport untouched.
-/// 会话工厂共用的守卫；失败时必须保持已租约的传输原样不动。</summary>
+/// <para>会话工厂共用的守卫；失败时必须保持已租约的传输原样不动。</para></summary>
 internal static class LeasedTransport
 {
     public static bool TryUnwrap<T>(IAsyncDisposable transport, [NotNullWhen(true)] out T? value)
@@ -49,7 +49,9 @@ internal static class LeasedTransport
             : throw new InvalidOperationException($"The lease does not carry the exact transport required for a {kind} session.");
 
     /// <summary>Only an observed protocol on the endpoint authorizes the session; never re-infers from serials.
-    /// 只有端点上观测到的协议才能授权该会话；绝不按序列号重新推断。</summary>
+    /// <para>只有端点上观测到的协议才能授权该会话；绝不按序列号重新推断。</para></summary>
+    /// <param name="endpoint">The endpoint carrying the observed protocol. <para>携带已观测协议的端点。</para></param>
+    /// <param name="protocol">The protocol string the endpoint must match. <para>端点必须匹配的协议字符串。</para></param>
     public static void RequireProtocol(DeviceEndpoint endpoint, string protocol)
     {
         if (!string.Equals(endpoint.Protocol, protocol, StringComparison.Ordinal))

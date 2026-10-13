@@ -2,10 +2,28 @@ using System.Text;
 
 namespace UotanStudio.Services.Workspace;
 
-/// <summary>A matching project file and its searched contents. 匹配的项目文件及搜索时的内容。</summary>
+/// <summary>
+/// A matching project file together with the text that was searched.
+/// <para>命中匹配的项目文件及被搜索的文本。</para>
+/// </summary>
+/// <param name="Path">
+/// The matching file path.
+/// <para>匹配的文件路径。</para>
+/// </param>
+/// <param name="Text">
+/// The contents that were searched.
+/// <para>被搜索的文件内容。</para>
+/// </param>
+/// <param name="Matches">
+/// The matches found in that text.
+/// <para>该文本中找到的匹配项。</para>
+/// </param>
 internal sealed record ProjectTextSearchResult(string Path, string Text, IReadOnlyList<TextSearchMatch> Matches);
 
-/// <summary>Reads bounded text files without following directory links. 有界读取文本文件，不跟随目录链接。</summary>
+/// <summary>
+/// Reads bounded text files without following directory links.
+/// <para>有界读取文本文件，不跟随目录链接。</para>
+/// </summary>
 internal static class ProjectTextSearchService
 {
     internal static IReadOnlyList<ProjectTextSearchResult> Find(string root, TextSearchOptions options,
@@ -54,12 +72,22 @@ internal static class ProjectTextSearchService
     }
 
     /// <summary>
-    /// <para>读取文件的搜索文本：优先纯文本，其次二进制格式适配；均失败或超限时返回 <c>null</c>。
-    /// 用于项目范围结果导航前核对磁盘内容与搜索快照是否一致。</para>
-    /// Reads a file's search text: plain text first, then the binary-format adapter; returns
-    /// <c>null</c> when both fail or the result is over-limit. Used to verify a project-scope result's
-    /// on-disk content matches the search snapshot before navigation.
+    /// Reads a file's search text: plain text first, then the binary-format adapter; <c>null</c> when
+    /// both fail or the result is over-limit.
+    /// <para>读取文件的搜索文本：优先纯文本，其次二进制格式适配；均失败或超限时为 <c>null</c>。</para>
     /// </summary>
+    /// <param name="path">
+    /// The file to read.
+    /// <para>待读取的文件。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The token checked while reading.
+    /// <para>读取期间检查的取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The search text, or <c>null</c> when unreadable or over-limit.
+    /// <para>搜索文本；无法读取或超限时为 <c>null</c>。</para>
+    /// </returns>
     internal static string? ReadSearchText(string path, CancellationToken cancellationToken) =>
         ReadText(path, cancellationToken) ?? FormatSearchText.TryRead(path, cancellationToken);
 

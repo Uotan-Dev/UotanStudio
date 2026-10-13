@@ -40,13 +40,7 @@ public static class SparseImageConverter
 
     /// <summary>
     /// Converts one or more sparse image chunks to a raw image with cancellation and atomic publication.
-    /// Inputs are validated first, the expansion runs into a temporary file beside the destination, and
-    /// the result replaces the destination only after every image has been written and flushed to disk.
-    /// The output is pre-sized to the largest declared logical image size, and each input is expanded in
-    /// order, so a multi-file request concatenates the expanded logical bytes.
-    /// <para>在支持取消的前提下把一个或多个稀疏镜像的数据块转换为原始镜像并原子发布。会先校验全部输入，
-    /// 把展开结果写入目标旁边的临时文件，只有在每个镜像都已写出并刷盘后才替换目标。
-    /// 输出会预设为最大的声明逻辑大小，并按顺序展开每个输入，因此多文件请求会把展开后的逻辑字节依次拼接。</para>
+    /// <para>在支持取消的前提下把一个或多个稀疏镜像数据块转换为原始镜像并原子发布。</para>
     /// </summary>
     /// <param name="inputFiles">
     /// Paths of the sparse images to expand; each must exist and must not be the destination path.
@@ -211,11 +205,7 @@ public static class SparseImageConverter
 
     /// <summary>
     /// Converts a raw image and atomically publishes a structurally validated Android Sparse image.
-    /// The publication temporary file is created beside the destination. The converted bytes are read
-    /// back and checked for the expected block count and the absence of trailing data before the
-    /// destination is replaced, so a failed conversion leaves the previous file untouched.
-    /// <para>转换原始镜像并原子发布一个经过结构校验的 Android Sparse 镜像。发布用的临时文件创建在目标旁边。
-    /// 转换结果会先被读回，检查预期的块数且不存在尾部多余数据，之后才替换目标，因此失败的转换不会改动已有文件。</para>
+    /// <para>转换原始镜像并原子发布一个经过结构校验的 Android Sparse 镜像。</para>
     /// </summary>
     /// <param name="inputFile">
     /// Path of the raw image; its file size at the start of the call fixes the converted logical length.
@@ -362,13 +352,8 @@ public static class SparseImageConverter
     }
 
     /// <summary>
-    /// Converts a raw image stream to a sparse image stream. A seekable source is scanned block by
-    /// block and coalesced into <c>DONT_CARE</c>, <c>FILL</c> and <c>RAW</c> chunks, and the last block
-    /// is zero-padded to a full block; a non-seekable source becomes one <c>RAW</c> chunk read from the
-    /// current position. A zero-length source yields headers only.
-    /// <para>将原始镜像流转换为稀疏镜像流。可寻址的源会逐块扫描并合并为 <c>DONT_CARE</c>、<c>FILL</c>
-    /// 与 <c>RAW</c> 数据块，最后一个块会零填充至完整块；不可寻址的源会变成从当前位置读取的单个 <c>RAW</c> 数据块。
-    /// 长度为零的源只产生头部。</para>
+    /// Converts a raw image stream to a sparse image stream.
+    /// <para>将原始镜像流转换为稀疏镜像流。</para>
     /// </summary>
     /// <param name="input">
     /// The source raw stream.
@@ -395,8 +380,8 @@ public static class SparseImageConverter
     /// </param>
     /// <exception cref="ArgumentOutOfRangeException">
     /// Thrown when <paramref name="blockSize"/> is not a positive multiple of 4, which would make the
-    /// bootloader misparse the sparse stream.
-    /// <para>当 <paramref name="blockSize"/> 不是 4 的正整数倍时抛出，此时 bootloader 会错解析稀疏流。</para>
+    /// sparse stream unparseable.
+    /// <para>当 <paramref name="blockSize"/> 不是 4 的正整数倍时抛出，此时稀疏流会无法被正确解析。</para>
     /// </exception>
     /// <exception cref="EndOfStreamException">
     /// <paramref name="input"/> holds fewer bytes than the length it is asked to convert.
@@ -437,8 +422,6 @@ public static class SparseImageConverter
             return;
         }
 
-        // Classification reads whole windows (multiples of blockSize) instead of one block per
-        // ReadExactly call: multi-GB images otherwise issue millions of 4 KiB reads on the hot path.
         const uint ClassifyWindowBytes = 4 * 1024 * 1024;
         var windowBlocks = Math.Max(1U, ClassifyWindowBytes / blockSize);
         var windowBytes = checked(windowBlocks * blockSize);
@@ -598,17 +581,15 @@ public static class SparseImageConverter
 
     /// <summary>
     /// Splits a large sparse image into multiple sparse images of a specified maximum size,
-    /// mirroring AOSP libsparse <c>sparse_file_resparse</c> semantics.
-    /// <para>按 AOSP libsparse <c>sparse_file_resparse</c> 的语义把大型稀疏镜像拆分为
-    /// 指定最大大小的多个稀疏镜像。</para>
+    /// preserving absolute-address chunking semantics.
+    /// <para>把大型稀疏镜像按指定最大大小拆分为多个稀疏镜像，并保留绝对寻址分块语义。</para>
     /// </summary>
     /// <remarks>
-    /// <para>与上游一致的关键不变量：每个输出分片的头部保留原始镜像的完整 <c>total_blks</c>，
+    /// <para>关键不变量：每个输出分片的头部保留原始镜像的完整 <c>total_blks</c>，
     /// chunk 携带绝对块地址，chunk 之间的空隙由写入端补 DONT_CARE（skip），FILL/RAW chunk
-    /// 类型原样保留（CRC 除外，读取阶段已丢弃）。bootloader 对每次 <c>flash:</c> 从分区偏移 0
-    /// 开始顺序消费 chunk，前导 DONT_CARE 把写入偏移推进到本分片的数据块，因此官方 fastboot
-    /// 对每个分片单独 download+flash（<c>flash_partition_files</c>）能落到正确位置。若分片改用
-    /// 分片本地寻址（每片从块 0 开始），多次 flash 会反复覆盖分区前缀导致数据错位。</para>
+    /// 类型原样保留（CRC 除外，读取阶段已丢弃）。逐分片刷写时从分区偏移 0 顺序消费 chunk，
+    /// 前导 DONT_CARE 把写入偏移推进到本分片的数据块，因此每个分片单独下载并刷写能落到正确位置；
+    /// 若分片改用分片本地寻址（每片从块 0 开始），多次刷写会反复覆盖分区前缀导致数据错位。</para>
     /// </remarks>
     /// <param name="inputFile">
     /// Path of the sparse image to split; it is parsed and fully expanded block addresses are preserved.

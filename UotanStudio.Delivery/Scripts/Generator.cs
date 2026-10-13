@@ -11,8 +11,8 @@ internal static partial class DeliveryScriptGenerator
     private static string ImagePath(DeliveryPlan plan, DeliveryFile file)
         => plan.PackSuper ? DeliveryOutputService.OrganizedImageRelativePath(file).Replace('\\', '/') : "images/" + file.FileName;
     /// <summary>
-    /// <para>对计划的关键字段计算脚本指纹，用于检测生成脚本是否随安装器契约或计划内容而过期。</para>
     /// Computes a fingerprint over the plan's key fields to detect when generated scripts are stale relative to the installer contract.
+    /// <para>对计划的关键字段计算脚本指纹，用于检测生成脚本是否随安装器契约或计划内容而过期。</para>
     /// </summary>
     internal static string Fingerprint(DeliveryPlan plan)
     {

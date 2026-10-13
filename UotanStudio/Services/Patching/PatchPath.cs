@@ -1,6 +1,6 @@
 namespace UotanStudio.Services.Patching;
 
-/// <summary>Path confinement shared by patch workspaces and publication.</summary>
+/// <summary>Path confinement shared by patch workspaces and publication.<para>补丁工作区与发布共用的路径限制逻辑。</para></summary>
 internal static class PatchPath
 {
     internal static StringComparer Comparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -19,7 +19,9 @@ internal static class PatchPath
         return full;
     }
 
-    /// <summary>Validates path syntax before layout mapping, without probing an unrelated host path.</summary>
+    /// <summary>Validates relative path syntax before layout mapping, without probing the filesystem.<para>在布局映射前校验相对路径语法，不探测文件系统。</para></summary>
+    /// <param name="relative">The relative path to validate.<para>要校验的相对路径。</para></param>
+    /// <returns>The split path segments.<para>拆分后的路径段。</para></returns>
     internal static string[] ValidateRelative(string relative)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relative);
@@ -51,18 +53,8 @@ internal static class PatchPath
         return Resolve(root, Path.GetRelativePath(root, full));
     }
 
-    /// <summary>
-    /// Rejects reparse points between the deepest existing non-link directory of the path and the path itself.
-    /// <para>
-    /// 沿目录向上检查到已存在的最深真实目录为止，中途遇到符号链接即拒绝。边界之上的祖先由调用方或操作系统选定，
-    /// 不受补丁内容控制，因此不参与判定；macOS 上 <c>/var</c> 是指向 <c>/private/var</c> 的符号链接，
-    /// 临时目录必定经由它解析，把链接本身当作边界并拒绝会误伤所有合法的工作区。
-    /// </para>
-    /// The walk stops at the deepest existing non-link directory because ancestors above a workspace root are chosen
-    /// by the caller or the operating system and are not patch-controlled. macOS resolves <c>Path.GetTempPath()</c>
-    /// through the <c>/var</c> to <c>/private/var</c> symbolic link, so treating that link as the boundary rejects
-    /// every legitimate workspace.
-    /// </summary>
+    /// <summary>Rejects reparse points between the deepest existing non-link directory of a path and the path itself. Ancestors above that boundary are system-chosen and stay outside patch control.<para>在路径与其最深已存在的非链接目录之间拒绝重解析点。该边界之上的祖先目录由系统选定，不受补丁内容控制。</para></summary>
+    /// <param name="path">The path to inspect.<para>要检查的路径。</para></param>
     internal static void RejectLinks(string path)
     {
         var full = Path.GetFullPath(path);
@@ -84,12 +76,9 @@ internal static class PatchPath
         }
     }
 
-    /// <summary>
-    /// Returns the deepest ancestor that already exists as a real directory. A component that does not exist, or that
-    /// is itself a symbolic link, is skipped so the search continues upwards for a real directory; <see cref="RejectLinks"/>
-    /// still inspects every skipped link while walking down to the target, so a link planted inside a workspace is
-    /// rejected while an operating-system link above it is not.
-    /// </summary>
+    /// <summary>Returns the deepest ancestor that already exists as a real directory, skipping missing components and symbolic links so the walk continues upwards.<para>返回已存在且为真实目录的最深上级目录，跳过缺失组件与符号链接并继续向上查找。</para></summary>
+    /// <param name="full">The normalized full path to walk.<para>要向上遍历的规范化完整路径。</para></param>
+    /// <returns>The boundary directory whose ancestors are exempt from link checks.<para>其上级目录免于链接检查的边界目录。</para></returns>
     private static string DeepestExistingAncestor(string full)
     {
         for (var current = Path.GetDirectoryName(full); current is not null; current = Path.GetDirectoryName(current))

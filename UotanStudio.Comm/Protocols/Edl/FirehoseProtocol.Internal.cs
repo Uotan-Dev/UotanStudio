@@ -109,15 +109,11 @@ public sealed partial class FirehoseProtocol
 
     /// <summary>
     /// Faults the session when, and only when, the evidence classifies a rejected response as
-    /// unrecoverable. The reference downloader declares the digest-mismatch report as having "no
-    /// recovery" besides a target reset (fh_loader-master/fh_loader/fh_loader.cpp:6479-6491), while a
-    /// plain NAK is explicitly continued through when it only renegotiates attributes
-    /// (fh_loader-master/fh_loader/fh_loader.cpp:6418-6427), so ordinary rejections keep the existing
+    /// unrecoverable; a digest-mismatch report is treated as unrecoverable, while a plain NAK that
+    /// only renegotiates attributes is continued through, so ordinary rejections keep the existing
     /// session behaviour untouched.
-    /// <para>仅当证据把某个被拒绝响应判定为不可恢复时才让会话失效。参考下载器把摘要不匹配的报告写明
-    /// 除重置目标外“无法恢复”（fh_loader-master/fh_loader/fh_loader.cpp:6479-6491），而普通 NAK 在其
-    /// 只是重新协商属性时被明确地继续处理（fh_loader-master/fh_loader/fh_loader.cpp:6418-6427），
-    /// 因此普通拒绝完全保持既有的会话行为。</para>
+    /// <para>仅当证据把某个被拒绝响应判定为不可恢复时才让会话失效：摘要不匹配视为不可恢复，而只是
+    /// 重新协商属性的普通 NAK 会被继续处理，因此普通拒绝完全保持既有的会话行为。</para>
     /// </summary>
     /// <param name="response">The response about to be returned to the calling verb.
     /// <para>即将返回给上层命令的响应。</para></param>

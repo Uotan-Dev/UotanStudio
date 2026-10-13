@@ -74,13 +74,8 @@ public sealed partial class DeviceController
     }
 
     /// <summary>
-    /// <para>按稳定设备键直开 USB 并租约化所请求协议的会话；键无法打开时返回 <c>null</c>。
-    /// 端点占用按与发现源同构的身份登记；server 归属守卫在原生打开路径内 fail-closed，
-    /// 会话工厂只按端点上观测到的协议构建会话，失败绝不回退其他路由。</para>
-    /// Opens the USB device by its stable key and leases it with the requested protocol session;
-    /// returns <c>null</c> when the key cannot be opened. The endpoint reservation uses the same
-    /// identity shape as discovery, the server-ownership guard fails closed inside the native open,
-    /// and the session factory only builds sessions for the protocol observed on the endpoint.
+    /// Opens the USB device by its stable key and leases it with the requested protocol session; returns null when the key cannot be opened. The server-ownership guard fails closed inside the native open, and sessions are built only for the protocol observed on the endpoint.
+    /// <para>按稳定键打开 USB 设备并以指定协议会话租用，键无法打开时返回 null。server 所有权守卫在原生打开内部失败即关闭，且仅对端点上观测到的协议构建会话。</para>
     /// </summary>
     /// <param name="deviceKey">
     /// Nonempty stable device key of the physical node to open. <para>待打开物理节点的非空稳定设备键。</para>

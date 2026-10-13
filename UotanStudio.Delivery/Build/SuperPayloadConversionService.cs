@@ -109,13 +109,8 @@ public sealed record SuperPayloadConversionResult(
     bool VirtualAb);
 
 /// <summary>
-/// Transactional Super-to-Payload conversion used by desktop and headless hosts. The Super image is opened
-/// read-only, its logical partitions are extracted into a GUID-suffixed staging directory, and both the
-/// Payload and its properties file are published only after the generated manifest is re-parsed and shown to
-/// contain every extracted partition; publication failures restore the previous files.
-/// <para>供桌面宿主与无头宿主使用的 transactional Super 转 Payload 流程。Super 镜像以只读方式打开，其逻辑分区被
-/// 解出到带 GUID 后缀的暂存目录，只有在重新解析生成的清单并确认包含每个解出的分区之后，才发布 Payload 与其属性
-/// 文件；发布失败时会恢复此前的文件。</para>
+/// Transactional Super-to-Payload conversion. The Super image is opened read-only, its logical partitions extracted into a GUID-suffixed staging directory, and both the Payload and its properties file are published only after the manifest is re-parsed and shown to contain every extracted partition; publication failures restore the previous files.
+/// <para>事务性的 Super 转 Payload 流程。只读打开 Super 镜像，把逻辑分区解包到带 GUID 后缀的暂存目录，待重解析后的清单确认包含全部已解包分区，才发布 Payload 及其属性文件；发布失败则还原先前文件。</para>
 /// </summary>
 public static class SuperPayloadConversionService
 {

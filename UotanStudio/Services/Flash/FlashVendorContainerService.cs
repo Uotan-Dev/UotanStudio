@@ -3,10 +3,16 @@ using UotanStudio.Firmware.VendorFirmware.NTPi;
 
 namespace UotanStudio.Services.Flash;
 
-/// <summary>Lists and selectively extracts NB0 and NTPI image entries.</summary>
+/// <summary>Lists and selectively extracts NB0 and NTPI image entries.
+/// <para>列举并选择性提取 NB0 与 NTPI 镜像条目。</para></summary>
 public static class FlashVendorContainerService
 {
-    /// <summary>Reads image entries with unambiguous partition-like filenames.</summary>
+    /// <summary>Reads image entries with unambiguous partition-like filenames.
+    /// <para>读取文件名可无歧义对应分区的镜像条目。</para></summary>
+    /// <param name="path">Path of the container file to inspect. <para>要检查的容器文件路径。</para></param>
+    /// <param name="ct">Cancellation for parsing. <para>解析过程的取消令牌。</para></param>
+    /// <returns>Partition-like name, entry path and size for each image.
+    /// <para>每个镜像的类分区名、条目路径与大小。</para></returns>
     public static async Task<IReadOnlyList<(string Name, string Entry, long Size)>> ListAsync(
         string path, CancellationToken ct)
     {
@@ -36,7 +42,13 @@ public static class FlashVendorContainerService
         return images;
     }
 
-    /// <summary>Publishes selected original entries only when every requested image exists.</summary>
+    /// <summary>Publishes selected original entries only when every requested image exists.
+    /// <para>仅当每个请求的镜像都存在时发布所选原始条目。</para></summary>
+    /// <param name="path">Path of the container file to unpack. <para>要解包的容器文件路径。</para></param>
+    /// <param name="entryNames">Requested image entry names. <para>请求的镜像条目名。</para></param>
+    /// <param name="parent">Existing parent directory for the output. <para>输出所在的已存在父目录。</para></param>
+    /// <param name="ct">Cancellation for extraction and publishing. <para>提取与发布过程的取消令牌。</para></param>
+    /// <returns>Path of the newly published output directory. <para>新发布输出目录的路径。</para></returns>
     public static async Task<string> ExtractAsync(string path, IReadOnlyList<string> entryNames, string parent, CancellationToken ct)
     {
         if (entryNames.Count == 0 || entryNames.Any(name => !name.EndsWith(".img", StringComparison.OrdinalIgnoreCase) ||

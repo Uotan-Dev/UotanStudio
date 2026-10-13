@@ -49,8 +49,8 @@ internal sealed class ApkFormatHandler : IFormatHandler
     /// <para>在分析开始前取消；分析本身为同步执行。</para>
     /// </param>
     /// <returns>
-    /// A completed task whose result is <c>Ok</c> with the analyzer's description, or <c>Fail</c> prefixed <c>APK analysis failed:</c> when the archive cannot be read.
-    /// <para>已完成的 Task，其结果为 <c>Ok</c> 且携带分析器的描述，或在归档无法读取时返回以 <c>APK analysis failed:</c> 为前缀的 <c>Fail</c>。</para>
+    /// A task whose result is <c>Ok</c> with the analyzer description, or <c>Fail</c> when the archive cannot be read.
+    /// <para>任务结果为 <c>Ok</c> 并携带分析器描述，归档无法读取时为 <c>Fail</c>。</para>
     /// </returns>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken"/> was signalled.
@@ -79,24 +79,24 @@ internal sealed class ApkFormatHandler : IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     /// <param name="filePath">
-    /// APK archive to extract; every entry is written out, with each declared size checked against the remaining output budget and the produced byte count verified before the file is committed.
-    /// <para>要解包的 APK 归档；写出全部条目，每个条目的声明长度都要对照剩余输出预算校验，并在提交文件前核对实际写入字节数。</para>
+    /// APK archive to extract; each declared entry size is checked against the output budget.
+    /// <para>要解包的 APK 归档；每个条目的声明长度都对照输出预算校验。</para>
     /// </param>
     /// <param name="outputDirectory">
-    /// Destination directory, created on demand; entry names must be safe relative paths and are resolved so no entry can escape this directory.
-    /// <para>目标目录，按需创建；条目名必须是安全相对路径，解析时保证任何条目都无法逃逸出该目录。</para>
+    /// Destination directory, created on demand; no entry may resolve outside it.
+    /// <para>目标目录，按需创建；任何条目不得解析到目录之外。</para>
     /// </param>
     /// <param name="options">
-    /// Extraction options; <see langword="null"/> uses the defaults. <c>Overwrite</c> governs replacing existing outputs and <c>MaximumOutputBytes</c> (default 64 GiB) bounds the summed declared entry sizes; other options are not consulted.
-    /// <para>解包选项；<see langword="null"/> 表示使用默认值。<c>Overwrite</c> 决定是否替换已有输出，<c>MaximumOutputBytes</c>（默认 64 GiB）限制所有条目声明长度之和；其余选项在此不被读取。</para>
+    /// Extraction options; <c>Overwrite</c> governs replacing outputs and <c>MaximumOutputBytes</c> bounds entry sizes.
+    /// <para>解包选项；<c>Overwrite</c> 决定是否替换已有输出，<c>MaximumOutputBytes</c> 限制条目大小总和。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// Checked before opening the archive and between entries; cancellation is rethrown rather than converted to a failed result.
-    /// <para>在打开归档前与条目之间检查；取消异常会重新抛出，而不是转换为失败结果。</para>
+    /// Checked before opening the archive and between entries; cancellation is rethrown.
+    /// <para>在打开归档前与条目之间检查；取消异常会重新抛出。</para>
     /// </param>
     /// <returns>
-    /// A task whose result is <c>Ok</c> with a bilingual summary and <c>Entries</c> listing the generated <c>apk-metadata.txt</c> (written under the ambient metadata root's partition folder when one is set, otherwise into the output directory) followed by every extracted file, or <c>Fail</c> prefixed <c>APK unpack failed:</c> on blank output directory, unsafe or over-budget entries, overwrite conflicts or archive errors; the shared wrapper turns an unusable pre-existing repack metadata file into a failure before any extraction runs.
-    /// <para>任务结果为 <c>Ok</c> 时携带中英混合摘要，<c>Entries</c> 首位是生成的 <c>apk-metadata.txt</c>（设置了环境元数据根时写入其分区目录，否则写入输出目录），其后为每个解出的文件；输出目录为空、条目不安全或超出预算、覆盖冲突或归档错误时返回以 <c>APK unpack failed:</c> 为前缀的 <c>Fail</c>；共享包装器会在解包运行前把不可用的既有重打包元数据文件直接判为失败。</para>
+    /// A task naming the generated metadata file and every extracted entry, or reporting an unpack failure.
+    /// <para>任务指明生成的元数据文件与每个解出的条目，或报告解包失败。</para>
     /// </returns>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken"/> was signalled; extraction errors are reported as failed results instead.
@@ -188,8 +188,8 @@ internal sealed class ApkFormatHandler : IFormatHandler
 
     /// <summary>
     /// Packs the input into firmware asynchronously. Directories are rebuilt into an APK via
-    /// <see cref="UotanStudio.Firmware.AndroidMeta.Apk.ApkRepacker"/>; APK files are copied through.
-    /// <para>异步将输入打包为固件。目录经 <see cref="UotanStudio.Firmware.AndroidMeta.Apk.ApkRepacker"/> 重建为 APK；APK 文件直接复制。</para>
+    /// <see cref="ApkRepacker"/>; APK files are copied through.
+    /// <para>异步将输入打包为固件。目录经 <see cref="ApkRepacker"/> 重建为 APK；APK 文件直接复制。</para>
     /// </summary>
     /// <param name="inputPath">
     /// Existing unpacked directory or an already-built APK file; a missing path yields a failed result.
@@ -204,8 +204,8 @@ internal sealed class ApkFormatHandler : IFormatHandler
     /// <para>在打包开始前取消，并在目录重建时继续传递；文件复制为同步执行，无法感知取消。</para>
     /// </param>
     /// <returns>
-    /// A task whose result is <c>Ok</c> naming the produced file, or <c>Fail</c> prefixed <c>APK pack failed:</c> when the output path is blank or the rebuild or copy fails.
-    /// <para>任务结果为 <c>Ok</c> 并指明生成的文件；输出路径为空白或重建/复制失败时返回以 <c>APK pack failed:</c> 为前缀的 <c>Fail</c>。</para>
+    /// A task naming the produced file, or reporting a failure prefixed <c>APK pack failed:</c>.
+    /// <para>任务指明生成的文件，或以 <c>APK pack failed:</c> 前缀报告失败。</para>
     /// </returns>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken"/> was signalled.

@@ -79,7 +79,7 @@ public static class McpLauncher
     /// <para>构建桌面会话内 <c>delivery_build</c> 使用的宿主等价工具准备提供器。它只交给单个
     /// <see cref="McpServerHost"/>，不再写入进程级状态，因此能力可用性取决于所构建的宿主而非启动顺序。</para>
     /// </summary>
-    /// <returns><para>每次调用创建缓存目录与 HTTP 客户端组合的工具准备服务。</para>A provider creating a tool service over the shared cache directory on each call.</returns>
+    /// <returns>A provider creating a tool service over the shared cache directory on each call. <para>每次调用创建缓存目录与 HTTP 客户端组合的工具准备服务。</para></returns>
     internal static Func<UotanStudio.Services.Delivery.IDeliveryTools?> CreateDesktopDeliveryTools() =>
         static () =>
             new UotanStudio.Services.Delivery.DeliveryToolService(

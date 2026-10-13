@@ -284,14 +284,8 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     }
 
     /// <summary>
-    /// <para>停止本机 hdc server。上游 <c>hdc kill</c> 不走主机通道协议：客户端读取
-    /// server 写入的 pid 文件（<c>.HDCServer.pid</c> / 较早 server 使用的 <c>.hdc.pid</c>）后直接终止该
-    /// 进程（client.cpp KillServer + base.cpp ProgramMutex）。真机验证表明 server 会忽略
-    /// 线上 kill 命令，因此这里对齐上游语义。找不到 pid 文件或进程已退出时视为无 server。</para>
-    /// Stops the local hdc server the way upstream does: the client reads the server's pid
-    /// file (<c>.HDCServer.pid</c> / legacy <c>.hdc.pid</c>) and terminates that process,
-    /// because the server ignores any wire-level kill command (verified against a real 3.0.0e
-    /// server). A missing pid file or an already-exited process means no server is running.
+    /// Stops the local hdc server by reading its pid file and terminating that process, because the server ignores any wire-level kill command. A missing pid file or an already-exited process means no server is running.
+    /// <para>读取本地 hdc server 的 pid 文件并终止该进程以停止 server，因为 server 忽略任何协议层的 kill 命令。pid 文件缺失或进程已退出即表示 server 未运行。</para>
     /// </summary>
     /// <returns><c>true</c> when a running server was terminated; <c>false</c> when none was found.
     /// <para>成功终止运行中的 server 返回 <c>true</c>；未发现 server 返回 <c>false</c>。</para></returns>

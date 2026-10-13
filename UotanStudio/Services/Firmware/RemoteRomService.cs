@@ -10,7 +10,13 @@ using UotanStudio.Firmware.OtaDelta.Payload;
 
 namespace UotanStudio.Services.Firmware;
 
-/// <summary>Describes a ROM discovered at a remote URL.</summary>
+/// <summary>Describes a ROM discovered at a remote URL.<para>描述在远端 URL 发现的 ROM。</para></summary>
+/// <param name="Url">Remote URL of the ROM.<para>ROM 的远端 URL。</para></param>
+/// <param name="FileName">Resolved file name.<para>解析出的文件名。</para></param>
+/// <param name="Kind">Detected container kind.<para>检测到的容器类型。</para></param>
+/// <param name="Entries">Listed container entries.<para>列出的容器条目。</para></param>
+/// <param name="ContentLength">Total byte length, or null when unknown.<para>总字节长度，未知时为空。</para></param>
+/// <param name="SupportsPartitionSelection">Whether partition selection is supported.<para>是否支持分区选择。</para></param>
 public sealed record RemoteRomAnalysis(
     Uri Url,
     string FileName,
@@ -19,14 +25,13 @@ public sealed record RemoteRomAnalysis(
     long? ContentLength,
     bool SupportsPartitionSelection);
 
-/// <summary>Describes a successfully published remote incremental-payload merge.</summary>
+/// <summary>Describes a successfully published remote incremental-payload merge.<para>描述成功发布的远端增量载荷合并结果。</para></summary>
+/// <param name="PartitionNames">Merged partition names.<para>已合并的分区名称。</para></param>
+/// <param name="OutputPaths">Published output paths.<para>已发布的输出路径。</para></param>
 public sealed record RemotePayloadMergeResult(IReadOnlyList<string> PartitionNames, IReadOnlyList<string> OutputPaths);
 
-/// <summary>
-/// Probes direct ROM URLs and downloads the selected content when a project is created.
-/// Header and payload manifest reads use HTTP range requests; the complete package is only
-/// downloaded for creation or for formats whose metadata requires a ZIP/LP directory.
-/// </summary>
+/// <summary>Probes direct ROM URLs and downloads selected content using HTTP range requests.<para>探测直接 ROM 链接并以 HTTP 范围请求下载所选内容。</para></summary>
+/// <param name="client">HTTP client used for requests.<para>用于请求的 HTTP 客户端。</para></param>
 public sealed class RemoteRomService(HttpClient client)
 {
     private const int ProbeBytes = 8 * 1024 * 1024;
@@ -86,8 +91,6 @@ public sealed class RemoteRomService(HttpClient client)
             return new(uri, fileName, ContainerKind.Payload, entries, length, true);
         }
 
-        // ZIP and super metadata are directory based. Keep the probe bounded when possible;
-        // the full file is fetched later if the server does not expose a sufficiently useful range.
         if (bytes.Length >= 2 && bytes[0] == 0x50 && bytes[1] == 0x4B)
         {
             var details = await ReadZipEntryDetailsAsync(uri, length, cancellationToken).ConfigureAwait(false);
@@ -122,13 +125,17 @@ public sealed class RemoteRomService(HttpClient client)
 
     public async Task<string> DownloadAsync(Uri uri, string destination, IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default)
     {
-        // GitHub 链接由共享入口做镜像测速并从最快源下载；非 GitHub 链接行为不变。
-        // GitHub URLs are speed-probed across mirrors by the shared entry point; other URLs behave as before.
         await HttpDownload.DownloadAsync(_client, uri, destination, progress, cancellationToken).ConfigureAwait(false);
         return destination;
     }
 
-    /// <summary>Extracts selected raw-payload partitions with range reads, one partition at a time.</summary>
+    /// <summary>Extracts selected raw-payload partitions with range reads, one partition at a time.<para>以范围读取逐个提取选定的原始载荷分区。</para></summary>
+    /// <param name="uri">Remote payload URL.<para>远端载荷 URL。</para></param>
+    /// <param name="partitionNames">Partitions to extract.<para>待提取的分区。</para></param>
+    /// <param name="outputDirectory">Directory receiving extracted images.<para>接收提取镜像的目录。</para></param>
+    /// <param name="baseOffset">Byte offset of the payload within the resource.<para>载荷在资源内的字节偏移。</para></param>
+    /// <param name="progress">Optional byte progress reporter.<para>可选的字节进度报告器。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     public async Task ExtractPayloadPartitionsAsync(Uri uri, IReadOnlyList<string> partitionNames, string outputDirectory,
         long baseOffset = 0,
         IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default)
@@ -142,10 +149,15 @@ public sealed class RemoteRomService(HttpClient client)
         }
     }
 
-    /// <summary>
-    /// Applies selected partitions from a remote raw Payload against explicitly mapped local base images.
-    /// All partitions are reconstructed and verified in a staging directory before any destination image is replaced.
-    /// </summary>
+    /// <summary>Applies selected partitions from a remote raw Payload against mapped local base images.<para>将远端原始载荷的选定分区应用到已映射的本地基础镜像。</para></summary>
+    /// <param name="uri">Remote payload URL.<para>远端载荷 URL。</para></param>
+    /// <param name="partitionNames">Partitions to apply.<para>待应用的分区。</para></param>
+    /// <param name="sourceImages">Partition-to-base-image mapping.<para>分区到基础镜像的映射。</para></param>
+    /// <param name="outputDirectory">Directory receiving published images.<para>接收发布镜像的目录。</para></param>
+    /// <param name="baseOffset">Byte offset of the payload within the resource.<para>载荷在资源内的字节偏移。</para></param>
+    /// <param name="progress">Optional byte progress reporter.<para>可选的字节进度报告器。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The published merge result.<para>已发布的合并结果。</para></returns>
     public async Task<RemotePayloadMergeResult> MergeIncrementalPayloadAsync(
         Uri uri,
         IReadOnlyList<string> partitionNames,
@@ -262,7 +274,14 @@ public sealed class RemoteRomService(HttpClient client)
         await ExtractPayloadPartitionsAsync(uri, partitionNames, outputDirectory, offset, progress, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Applies selected partitions from a stored payload.bin inside a remote ZIP.</summary>
+    /// <summary>Applies selected partitions from a stored payload.bin inside a remote ZIP.<para>应用远端 ZIP 内已存储的 payload.bin 的选定分区。</para></summary>
+    /// <param name="uri">Remote ZIP URL.<para>远端 ZIP 的 URL。</para></param>
+    /// <param name="partitionNames">Partitions to apply.<para>待应用的分区。</para></param>
+    /// <param name="sourceImages">Partition-to-base-image mapping.<para>分区到基础镜像的映射。</para></param>
+    /// <param name="outputDirectory">Directory receiving published images.<para>接收发布镜像的目录。</para></param>
+    /// <param name="progress">Optional byte progress reporter.<para>可选的字节进度报告器。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The published merge result.<para>已发布的合并结果。</para></returns>
     public async Task<RemotePayloadMergeResult> MergeZipIncrementalPayloadAsync(
         Uri uri,
         IReadOnlyList<string> partitionNames,

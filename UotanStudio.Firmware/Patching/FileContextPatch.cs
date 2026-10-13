@@ -24,14 +24,8 @@ public static class FileContextPatch
     private static readonly char[] RegexMetacharacters = ['.', '^', '$', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|', '\\'];
 
     /// <summary>
-    /// Rebases a partition-owned file_contexts document under <c>&lt;mountPrefix&gt;/&lt;partition&gt;</c>:
-    /// removes the leading <c>/</c> default entry and duplicate prefix defaults, prefixes every literal
-    /// expression, keeps already-rebased and regex-bearing expressions verbatim (reporting the latter as
-    /// warnings), and appends the <c>system_file</c> default entry. Rebasing an already-rebased document
-    /// yields the same text.
-    /// <para>将分区自有的 file_contexts 文档改基到 <c>&lt;mountPrefix&gt;/&lt;partition&gt;</c> 之下：移除首行的 <c>/</c>
-    /// 默认条目与前缀默认重复条目，为每个字面表达式加上前缀，保持已改基条目与含正则条目原样（后者以警告形式报告），
-    /// 并追加 <c>system_file</c> 默认条目。对已改基文档再次改基得到完全相同的文本。</para>
+    /// Rebases a partition-owned file_contexts document under the configured mount and partition prefix.
+    /// <para>把分区自有的 file_contexts 文档改基到配置的挂载与分区前缀之下。</para>
     /// </summary>
     /// <param name="text">
     /// The existing file_contexts source text. <para>现有的 file_contexts 源文本。</para>

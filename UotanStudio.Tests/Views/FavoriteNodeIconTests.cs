@@ -20,8 +20,6 @@ public sealed class FavoriteNodeIconTests(NodeEditorUiFixture fixture)
             dispatchTask = fixture.Session.Dispatch(() =>
             {
                 using var editor = new NodeEditorViewModel();
-                // A fresh CI profile has no Recent/Favorites shortcut and every real category is
-                // collapsed, so surface the item through an expanded category the view can render.
                 var sourceCategory = editor.ToolboxCategories.First(category => category.Items.Count > 0);
                 var item = sourceCategory.Items.First();
                 var testCategory = new NodeToolboxCategory("Test", sourceCategory.Category,

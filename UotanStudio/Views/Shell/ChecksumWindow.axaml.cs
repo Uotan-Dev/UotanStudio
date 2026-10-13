@@ -8,25 +8,25 @@ using UotanStudio.ViewModels.Shell;
 namespace UotanStudio.Views.Shell;
 
 /// <summary>
-/// <para>校验窗口：选择文件、按算法显示校验值并支持复制，以及「粘贴并校验」比对结论。</para>
 /// Checksum window: file selection, per-algorithm result rows with copy support, and the "paste and verify"
 /// comparison verdict.
+/// <para>校验窗口：选择文件、按算法显示校验值并支持复制，以及「粘贴并校验」比对结论。</para>
 /// </summary>
 public partial class ChecksumWindow : Window
 {
     /// <summary>
-    /// <para>创建校验窗口（不带初始文件）。</para>
     /// Creates the checksum window without an initial file.
+    /// <para>创建校验窗口（不带初始文件）。</para>
     /// </summary>
     public ChecksumWindow() : this(null)
     {
     }
 
     /// <summary>
-    /// <para>创建校验窗口并预选文件。</para>
     /// Creates the checksum window with a pre-selected file.
+    /// <para>创建校验窗口并预选文件。</para>
     /// </summary>
-    /// <param name="filePath"><para>预选文件路径。</para>The pre-selected file path.</param>
+    /// <param name="filePath">The pre-selected file path. <para>预选文件路径。</para></param>
     public ChecksumWindow(string? filePath)
     {
         InitializeComponent();
@@ -39,11 +39,11 @@ public partial class ChecksumWindow : Window
     private ChecksumViewModel ViewModel => (ChecksumViewModel)DataContext!;
 
     /// <summary>
-    /// <para>切换当前文件（资源管理器复用同一窗口时也会调用）；重选会清空下方结果与粘贴内容。</para>
     /// Switches the current file (also used when the explorer reuses this window); re-selecting clears the
     /// result rows and the pasted text.
+    /// <para>切换当前文件（资源管理器复用同一窗口时也会调用）；重选会清空下方结果与粘贴内容。</para>
     /// </summary>
-    /// <param name="filePath"><para>文件路径；为空表示未选择文件。</para>The file path; empty means no file.</param>
+    /// <param name="filePath">The file path; empty means no file. <para>文件路径；为空表示未选择文件。</para></param>
     public void SetFile(string? filePath) => ViewModel.SetFilePath(filePath);
 
     private async void OnChooseFile(object? sender, RoutedEventArgs e)

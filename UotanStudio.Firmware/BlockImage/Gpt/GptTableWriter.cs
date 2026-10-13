@@ -284,11 +284,8 @@ internal static class GptTableWriter
     }
 
     /// <summary>
-    /// Copies a base disk image to a new file and overwrites the GPT metadata regions with the table,
-    /// preserving partition payloads that lie outside those regions. The table capacity must equal the
-    /// base image length, so geometry-changing edits need an already-resized base.
-    /// <para>将基础磁盘镜像复制到新文件，并用该表覆写 GPT 元数据区域，保留区域之外的分区数据。
-    /// 表容量必须等于基础镜像长度，因此改变几何的编辑需要先按新大小准备好的基础镜像。</para>
+    /// Copies a base disk image and overwrites its GPT metadata regions with the table.
+    /// <para>复制基础磁盘镜像并用该表覆写其 GPT 元数据区域。</para>
     /// </summary>
     /// <param name="baseImagePath">
     /// Source disk image; it is only read and never modified.

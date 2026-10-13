@@ -3,98 +3,101 @@ using System.Globalization;
 namespace UotanStudio.Models;
 
 /// <summary>
-/// <para>分区表数据源类型，供分区表编辑器与打开方式判定共享。</para>
-/// Kind of a partition-table data source, shared by the partition-table editor and the open-mode routing.
+/// Kind of a partition-table data source.
+/// <para>分区表数据源类型。</para>
 /// </summary>
 public enum PartitionTableSource
 {
     /// <summary>
-    /// <para>Android Logical Partition（LP）super 元数据。</para>
     /// Android Logical Partition (LP) super metadata.
+    /// <para>Android Logical Partition（LP）super 元数据。</para>
     /// </summary>
     Lp = 0,
 
     /// <summary>
-    /// <para>Rockchip parameter 文件（<c>CMDLINE: mtdparts=...</c> 分区表）。</para>
-    /// Rockchip parameter file (<c>CMDLINE: mtdparts=...</c> partition table).
+    /// Rockchip parameter file whose CMDLINE carries an <c>mtdparts</c> partition table.
+    /// <para>CMDLINE 携带 <c>mtdparts</c> 分区表的 Rockchip parameter 文件。</para>
     /// </summary>
     Rockchip = 1,
 
     /// <summary>
-    /// <para>UEFI GPT 分区表（保护性 MBR + <c>EFI PART</c> 头 + 分区表项）。</para>
     /// UEFI GPT partition table (protective MBR + <c>EFI PART</c> header + partition entries).
+    /// <para>UEFI GPT 分区表（保护性 MBR + <c>EFI PART</c> 头 + 分区表项）。</para>
     /// </summary>
     Gpt = 2,
 
     /// <summary>
-    /// <para>经典 MBR 分区表（0x55AA 签名 + 4 主分区项 + 扩展分区 EBR 链）。</para>
     /// Classic MBR partition table (0x55AA signature + 4 primary slots + extended EBR chain).
+    /// <para>经典 MBR 分区表（0x55AA 签名 + 4 主分区项 + 扩展分区 EBR 链）。</para>
     /// </summary>
     Mbr = 3,
 
     /// <summary>
-    /// <para>Amlogic 厂商私有分区表（自定义 MBR 风格布局 + 名称表）。</para>
     /// Amlogic vendor partition table (custom MBR-style layout + name table).
+    /// <para>Amlogic 厂商私有分区表（自定义 MBR 风格布局 + 名称表）。</para>
     /// </summary>
     Amlogic = 4
 }
 
 /// <summary>
-/// <para>归一化的分区表条目，供编辑器视图模型与打开方式判定共享。</para>
-/// A normalized partition-table entry, shared by the editor view model and the open-mode routing.
+/// A normalized partition-table entry.
+/// <para>归一化的分区表条目。</para>
 /// </summary>
 public sealed class PartitionEntry
 {
     /// <summary>
-    /// <para>分区名称。</para>
     /// Partition name.
+    /// <para>分区名称。</para>
     /// </summary>
+    /// <value>The partition name.<para>分区名称。</para></value>
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>分区起始扇区（512 字节扇区）。</para>
     /// Partition start sector (512-byte sectors).
+    /// <para>分区起始扇区（512 字节扇区）。</para>
     /// </summary>
+    /// <value>The first sector of the partition.<para>分区的起始扇区。</para></value>
     public ulong StartSector { get; set; }
 
     /// <summary>
-    /// <para>分区大小（512 字节扇区）。</para>
     /// Partition size in 512-byte sectors.
+    /// <para>分区大小（512 字节扇区）。</para>
     /// </summary>
+    /// <value>The partition size counted in sectors.<para>分区大小，以扇区计数。</para></value>
     public ulong SizeSectors { get; set; }
 
     /// <summary>
-    /// <para>分区类型描述：LP 为第一个 extent 的目标类型（<c>linear</c>/<c>zero</c>），
-    /// Rockchip 为 <c>mtd</c>。</para>
     /// Partition type description: for LP the first extent's target type (<c>linear</c>/<c>zero</c>),
     /// for Rockchip <c>mtd</c>.
+    /// <para>分区类型描述：LP 为第一个 extent 的目标类型（<c>linear</c>/<c>zero</c>），
+    /// Rockchip 为 <c>mtd</c>。</para>
     /// </summary>
+    /// <value>The type description of the partition.<para>分区的类型描述。</para></value>
     public string Type { get; set; } = string.Empty;
 }
 
 /// <summary>
-/// <para>分区扇区值解析与格式化助手（与 Rockchip parameter 语法一致：
-/// 支持 0x 十六进制、十进制与 K/M/G/T 后缀）。</para>
 /// Partition sector value parse/format helpers (matching the Rockchip parameter syntax: 0x-hex,
 /// decimal and K/M/G/T suffixes are supported).
+/// <para>分区扇区值解析与格式化助手（与 Rockchip parameter 语法一致：
+/// 支持 0x 十六进制、十进制与 K/M/G/T 后缀）。</para>
 /// </summary>
 public static class PartitionTableFormat
 {
     /// <summary>
-    /// <para>扇区大小（字节）。</para>
     /// Sector size in bytes.
+    /// <para>扇区大小（字节）。</para>
     /// </summary>
     public const int SectorSize = 512;
 
     /// <summary>
-    /// <para>解析扇区值：支持 0x 十六进制、十进制与 K/M/G/T 后缀（后缀先换算为字节再换算为
-    /// 512 字节扇区；无后缀时按扇区处理，与 rkdeveloptool 一致）。解析失败返回 <c>false</c>。</para>
-    /// Parses a sector value: 0x-hex, decimal and K/M/G/T suffixes are supported (suffixed values are
-    /// converted to bytes then to 512-byte sectors; bare values are already treated as sectors,
-    /// matching rkdeveloptool). Returns <c>false</c> when the value cannot be parsed.
+    /// Parses a sector value accepting 0x-hex, decimal, and K/M/G/T suffixes. Suffixed values are
+    /// converted from bytes to 512-byte sectors; bare values are treated as sectors.
+    /// <para>解析扇区值，支持 0x 十六进制、十进制与 K/M/G/T 后缀。带后缀的值先按字节换算为 512 字节扇区，无后缀的值按扇区处理。</para>
     /// </summary>
-    /// <param name="text">要解析的文本。 The text to parse.</param>
-    /// <param name="sectors">解析出的扇区数（失败时为 0）。 The parsed sector count (0 on failure).</param>
+    /// <param name="text">The text to parse. <para>要解析的文本。</para></param>
+    /// <param name="sectors">The parsed sector count, zero on failure. <para>解析出的扇区数，失败时为 0。</para></param>
+    /// <returns>True when the value parsed; otherwise, false.<para>解析成功时为 true，否则为 false。</para></returns>
     public static bool TryParseSectors(string? text, out ulong sectors)
     {
         sectors = 0;
@@ -150,8 +153,10 @@ public static class PartitionTableFormat
     }
 
     /// <summary>
-    /// <para>以 0x 十六进制格式化扇区数（无符号）。</para>
     /// Formats a sector count as unsigned 0x-hex.
+    /// <para>以 0x 十六进制格式化扇区数（无符号）。</para>
     /// </summary>
+    /// <param name="sectors">The sector count to format. <para>要格式化的扇区数。</para></param>
+    /// <returns>The 0x-prefixed hexadecimal text.<para>带 0x 前缀的十六进制文本。</para></returns>
     public static string FormatSectors(ulong sectors) => "0x" + sectors.ToString("X", CultureInfo.InvariantCulture);
 }

@@ -159,16 +159,8 @@ public class FastbootResponse
     public bool IsSuccess => State == FastbootResponseState.Success;
 
     /// <summary>
-    /// Gets whether the device asked the host to reboot into fastbootd before the requested action
-    /// can complete. Bootloaders report this as free-form text ("Fastboot doesn't support updating
-    /// super partition metadata", "reboot fastboot"), so the hint is exposed for the caller to act
-    /// on instead of being honored inside the session: rebooting is a device-visible side effect the
-    /// caller must own, and a value inferred from untrusted reply text must never trigger it on its
-    /// own.
-    /// <para>获取设备是否要求宿主先重启进入 fastbootd 才能完成所请求的操作。bootloader 以自由文本上报
-    /// 该请求（如 "Fastboot doesn't support updating super partition metadata"、"reboot fastboot"），
-    /// 因此该提示暴露给调用方自行处置，而不是在会话内部被执行：重启是调用方必须自己承担的设备可见
-    /// 副作用，且由不可信应答文本推断出的取值绝不能单独触发重启。</para>
+    /// Gets whether the device asked the host to reboot into fastbootd before the requested action can complete. The hint is exposed for the caller to act on; the session never reboots the device itself.
+    /// <para>获取设备是否要求宿主先重启进入 fastbootd 才能完成所请求的操作。该提示暴露给调用方自行处置，会话自身不重启设备。</para>
     /// </summary>
     /// <value><see langword="true"/> when the terminal payload or any INFO/TEXT line carries the reboot hint (case-insensitive); <see langword="false"/> otherwise.
     /// <para>终止负载或任一 INFO/TEXT 行带有重启提示（不区分大小写）时为 <see langword="true"/>；其余情况为 <see langword="false"/>。</para></value>
@@ -178,16 +170,18 @@ public class FastbootResponse
            || InfoLines.Exists(line => line.Contains(FastbootRebootHint, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// Throws a <see cref="FastbootException"/> unless the response is a confirmed OKAY. Only
-    /// <c>OKAY</c> is a trustworthy terminal frame: <c>FAIL</c>, a timeout, or an unrecognized
-    /// status must all fail the operation, because every destructive call site (download, flash,
-    /// boot, update-super) gates the next command on this check, and a silently-passed garbage
-    /// reply would let a flash proceed on a device that never acknowledged the payload.
-    /// <para>除确认的 OKAY 外一律抛出 <see cref="FastbootException"/>。只有 <c>OKAY</c> 是可信的
-    /// 终态帧：<c>FAIL</c>、超时或无法识别的状态都必须使操作失败，因为每个破坏性调用点
-    /// （download、flash、boot、update-super）都以本检查作为下一条命令的闸门；被静默放行的
-    /// 垃圾应答会让刷写从未确认负载的设备上继续。</para>
+    /// Throws a <see cref="FastbootException"/> unless the response is a confirmed OKAY.
+    /// <para>除确认的 OKAY 外一律抛出 <see cref="FastbootException"/>。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>Only <c>OKAY</c> is a trustworthy terminal frame: <c>FAIL</c>, a timeout, or an unrecognized
+    /// status must all fail the operation, because every destructive call site (download, flash, boot,
+    /// update-super) gates the next command on this check, and a silently-passed garbage reply would let a
+    /// flash proceed on a device that never acknowledged the payload.</para>
+    /// <para>只有 <c>OKAY</c> 是可信的终态帧：<c>FAIL</c>、超时或无法识别的状态都必须使操作失败，因为
+    /// 每个破坏性调用点（download、flash、boot、update-super）都以本检查作为下一条命令的闸门；被静默
+    /// 放行的垃圾应答会让刷写从未确认负载的设备上继续。</para>
+    /// </remarks>
     /// <exception cref="FastbootException">The response is anything other than an OKAY status.
     /// <para>响应不是 OKAY 状态时抛出。</para></exception>
     public void ThrowIfFailed()

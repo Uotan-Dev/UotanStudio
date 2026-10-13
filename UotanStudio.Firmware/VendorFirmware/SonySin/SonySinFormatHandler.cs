@@ -115,11 +115,8 @@ internal sealed class SonySinFormatHandler : IReadonlyFormatHandler
     }
 
     /// <summary>
-    /// Reassembles the image into a single <c>.img</c> file next to nothing else: segments are written in output
-    /// order, gaps before each segment are filled with <c>0xFF</c>, <c>ADDR</c> segments are copied verbatim and
-    /// <c>LZ4A</c> segments are decoded by a raw LZ4 block decoder bounded by the declared output size.
-    /// <para>将镜像重组为单个 <c>.img</c> 文件：按输出偏移顺序写出各段，段前空隙以 <c>0xFF</c> 填充，
-    /// <c>ADDR</c> 段原样复制，<c>LZ4A</c> 段由原始 LZ4 块解码器解码，并受声明的输出长度约束。</para>
+    /// Reassembles the Sony SIN image into a single raw image file.
+    /// <para>把 Sony SIN 镜像重组为单个原始镜像文件。</para>
     /// </summary>
     /// <param name="filePath">
     /// SIN image to unpack.

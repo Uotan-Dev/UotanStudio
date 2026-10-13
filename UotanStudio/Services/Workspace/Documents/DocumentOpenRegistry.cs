@@ -9,17 +9,9 @@ using UotanStudio.Views.Controls;
 namespace UotanStudio.Services.Workspace.Documents;
 
 /// <summary>
-/// <para>文档编辑器注册表：打开派发、会话恢复、会话捕获、清理与"打开方式"菜单的共同数据源，
-/// 取代此前手工维护在 WorkspaceViewModel、WorkspaceSessionCapture 与 WorkspaceDockFactory 的并行枚举。</para>
-/// The document-editor registry: the shared source of truth for open dispatch, session restore,
-/// session capture, cleanup and the "Open As" menu, replacing the parallel hand-maintained
-/// enumerations previously spread across WorkspaceViewModel, WorkspaceSessionCapture and
-/// WorkspaceDockFactory.
-/// <para>自动模式（<see cref="EditorOpenMode.Auto"/>）的格式路由决策序列集中在此，
-/// 与 <see cref="FileOpenMode"/> 的判定谓词组合有序命中；魔数实现与扩展名集合本身保留在 FileOpenMode。</para>
-/// The automatic-mode format-routing decision sequence lives here, composed in priority order from
-/// <see cref="FileOpenMode"/>'s detection predicates; the magic-number implementations and extension
-/// sets themselves remain in FileOpenMode.
+/// Registry of document-open descriptors: the single source of truth for open dispatch, session
+/// restore, cleanup and the "Open As" menu, and the owner of the automatic-mode rule ordering.
+/// <para>文档打开描述符注册表：打开派发、会话恢复、清理与"打开方式"菜单的唯一数据源，并持有自动模式的规则次序。</para>
 /// </summary>
 internal static class DocumentOpenRegistry
 {
@@ -242,53 +234,67 @@ internal static class DocumentOpenRegistry
         },
     ];
 
-    /// <summary><para>全部描述符，按登记顺序。</para>All descriptors in registration order.</summary>
+    /// <summary>All descriptors in registration order. <para>全部描述符，按登记顺序。</para></summary>
+    /// <value>The registered descriptor array. <para>已登记的描述符数组。</para></value>
     public static IReadOnlyList<DocumentOpenDescriptor> All => _descriptors;
 
-    /// <summary><para>需要出现在"打开方式"菜单中的描述符，按 MenuOrder 升序（Auto 伪项由菜单侧固定置顶）。</para>
+    /// <summary>
     /// Descriptors listed in the "Open As" menu in ascending MenuOrder (the Auto pseudo entry is
-    /// pinned first by the menu itself).</summary>
+    /// pinned first by the menu itself).
+    /// <para>需要出现在"打开方式"菜单中的描述符，按 MenuOrder 升序（Auto 伪项由菜单侧固定置顶）。</para>
+    /// </summary>
+    /// <value>The menu-listed descriptors in ascending order. <para>进入菜单的描述符，按升序排列。</para></value>
     public static IReadOnlyList<DocumentOpenDescriptor> MenuEntries { get; } =
         [.. _descriptors.Where(d => d.MenuOrder >= 0).OrderBy(d => d.MenuOrder)];
 
-    /// <summary><para>按会话 Kind 字符串查找；未登记返回 null。</para>Looks up by session Kind string; null when unregistered.</summary>
+    /// <summary>Looks up by session Kind string; null when unregistered. <para>按会话 Kind 字符串查找；未登记返回 null。</para></summary>
+    /// <param name="kind">The session Kind string to match verbatim. <para>需逐字匹配的会话 Kind 字符串。</para></param>
+    /// <returns>The matching descriptor, or null. <para>匹配的描述符，或为 null。</para></returns>
     public static DocumentOpenDescriptor? ByKind(string kind) =>
         _descriptors.FirstOrDefault(d => string.Equals(d.Kind, kind, StringComparison.Ordinal));
 
-    /// <summary><para>按显式打开模式查找；Auto 与未登记模式返回 null。</para>Looks up by explicit open mode; null for Auto and unregistered modes.</summary>
+    /// <summary>Looks up by explicit open mode; null for Auto and unregistered modes. <para>按显式打开模式查找；Auto 与未登记模式返回 null。</para></summary>
+    /// <param name="mode">The explicit open mode to match. <para>要匹配的显式打开方式。</para></param>
+    /// <returns>The matching descriptor, or null. <para>匹配的描述符，或为 null。</para></returns>
     public static DocumentOpenDescriptor? ByMode(EditorOpenMode mode) =>
         _descriptors.FirstOrDefault(d => d.Mode == mode);
 
-    /// <summary><para>按 ViewModel 类型查找，用于会话捕获与清理。</para>Looks up by ViewModel type, used for session capture and cleanup.</summary>
+    /// <summary>Looks up by the document type registered for a kind. <para>按各种类登记的文档类型查找。</para></summary>
+    /// <param name="viewModelType">The document type to match. <para>要匹配的文档类型。</para></param>
+    /// <returns>The matching descriptor, or null. <para>匹配的描述符，或为 null。</para></returns>
     public static DocumentOpenDescriptor? ByViewModelType(Type viewModelType) =>
         _descriptors.FirstOrDefault(d => d.ViewModelType == viewModelType);
 
-    /// <summary><para>按实例类型查找（与类型模式匹配语义一致，含派生类型）。</para>
-    /// Looks up by instance type, matching the semantics of a type pattern including derived types.</summary>
+    /// <summary>
+    /// Looks up by instance type, matching the semantics of a type pattern including derived types.
+    /// <para>按实例类型查找（与类型模式匹配语义一致，含派生类型）。</para>
+    /// </summary>
+    /// <param name="dockable">The document instance to classify. <para>待判定的文档实例。</para></param>
+    /// <returns>The matching descriptor, or null. <para>匹配的描述符，或为 null。</para></returns>
     public static DocumentOpenDescriptor? ByInstance(object dockable) =>
         _descriptors.FirstOrDefault(d => d.ViewModelType.IsInstanceOfType(dockable));
 
     /// <summary>
-    /// <para>自动模式格式路由：按优先级顺序组合 <see cref="FileOpenMode"/> 的判定谓词，
-    /// 命中的首个规则决定打开方式。魔数与扩展名集合的实现保留在 FileOpenMode，此处只编排顺序。
-    /// 当无头部样本时等价于扩展名路由，与旧 <c>FileOpenMode.ResolveMode(path, header, detection)</c> 行为一致。</para>
-    /// Automatic-mode format routing: composes <see cref="FileOpenMode"/>'s detection predicates in priority
-    /// order and returns the mode of the first matching rule. The magic-number and extension-set implementations
-    /// stay in FileOpenMode; only the ordering lives here. With no header sample it degrades to the
-    /// extension-only route, matching the former <c>FileOpenMode.ResolveMode(path, header, detection)</c>.
+    /// Automatic-mode format routing: evaluates the detection predicates in priority order and returns
+    /// the first matching mode, degrading to extension-only routing without a header sample.
+    /// <para>自动模式格式路由：按优先级顺序判定检测谓词，取首个命中规则的打开方式；无头部样本时退化为扩展名路由。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>文件名或完整路径。</para>
     /// A file name or full path.
+    /// <para>文件名或完整路径。</para>
     /// </param>
     /// <param name="header">
-    /// <para>可选的已加载文件头部字节；为 <c>null</c> 时跳过依赖头部的规则。</para>
     /// Optional loaded file-header bytes; header-dependent rules are skipped when <c>null</c>.
+    /// <para>可选的已加载文件头部字节；为 <c>null</c> 时跳过依赖头部的规则。</para>
     /// </param>
     /// <param name="detection">
-    /// <para>可选的格式检测结果；非 <c>ExtensionOnly</c> 置信度时按格式名路由。</para>
     /// Optional format-detection result; a non-<c>ExtensionOnly</c> confidence routes by format name.
+    /// <para>可选的格式检测结果；非 <c>ExtensionOnly</c> 置信度时按格式名路由。</para>
     /// </param>
+    /// <returns>
+    /// The mode of the first matching rule, or Auto when none match.
+    /// <para>首个命中规则的打开方式；无命中时为 Auto。</para>
+    /// </returns>
     public static EditorOpenMode ResolveMode(string path, byte[]? header, FormatDetectionResult? detection)
     {
         var extension = new Lazy<EditorOpenMode>(() => ResolveExtensionOnly(path));
@@ -304,13 +310,17 @@ internal static class DocumentOpenRegistry
     }
 
     /// <summary>
-    /// <para>仅按文件名/扩展名的自动路由（无头部样本）。</para>
-    /// Automatic routing by file name/extension only (no header sample).
+    /// Automatic routing by file name or extension only, with no header sample.
+    /// <para>仅按文件名或扩展名的自动路由，无头部样本。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>文件名或完整路径。</para>
     /// A file name or full path.
-    /// </para>
+    /// <para>文件名或完整路径。</para>
+    /// </param>
+    /// <returns>
+    /// The mode chosen by the first matching rule, or Auto.
+    /// <para>首个命中规则选择的打开方式，或为 Auto。</para>
+    /// </returns>
     public static EditorOpenMode ResolveMode(string path) => ResolveMode(path, null, null);
 
     private delegate bool AutoRuleMatch(string path, byte[]? header, FormatDetectionResult? detection, Lazy<EditorOpenMode> extension);
@@ -319,51 +329,40 @@ internal static class DocumentOpenRegistry
 
     private static readonly AutoRule[] _autoRules =
     [
-        // 1. ELF header: a malformed ELF falls back to Hex, a valid one opens the information panel.
         new(EditorOpenMode.Elf, static (_, header, _, _) =>
             header is not null && header.AsSpan().StartsWith("\u007fELF"u8) && ElfReader.TryReadHeader(header, out _)),
         new(EditorOpenMode.Hex, static (_, header, _, _) =>
             header is not null && header.AsSpan().StartsWith("\u007fELF"u8) && !ElfReader.TryReadHeader(header, out _)),
 
-        // 2. Binary-XML manifest.
         new(EditorOpenMode.Axml, static (_, header, _, _) =>
             header is not null && UotanStudio.Firmware.AndroidMeta.AXml.AXmlParser.IsAxml(header)),
 
-        // 3. Device tree (FDT/DTBO magic).
         new(EditorOpenMode.Dtb, static (_, header, _, _) =>
             header is not null && FileOpenMode.IsDtbMagic(header)),
 
-        // 4. DEX container.
         new(EditorOpenMode.Dex, static (_, header, _, _) =>
             header is not null && FileOpenMode.IsDexMagic(header)),
 
-        // 5. Strong firmware magic independent of extension.
         new(EditorOpenMode.Firmware, static (_, header, _, _) =>
             header is not null && FileOpenMode.IsFirmwareMagic(header)),
 
-        // 6. ZIP container that is not an APK/JAR (those keep their dedicated editors).
         new(EditorOpenMode.FileSystem, static (path, header, _, _) =>
             header is not null && FileOpenMode.IsZipMagic(header)
             && !FileOpenMode.IsApkExtension(Path.GetExtension(path))
             && !FileOpenMode.IsJarExtension(Path.GetExtension(path))),
 
-        // 7. Filesystem image magic (ext4/EROFS/F2FS/FAT/exFAT).
         new(EditorOpenMode.FileSystem, static (_, header, _, _) =>
             header is not null && FileOpenMode.IsFilesystemMagic(header)),
 
-        // 8. LP super metadata magic.
         new(EditorOpenMode.Partition, static (_, header, _, _) =>
             header is not null && FileOpenMode.IsLpMetadataMagic(header)),
 
-        // 9. GPT/MBR partition-table magic.
         new(EditorOpenMode.Partition, static (_, header, _, _) =>
             header is not null && (FileOpenMode.IsGptMagic(header) || FileOpenMode.IsMbrMagic(header))),
 
-        // 10. Rockchip parameter text (CMDLINE:/mtdparts= markers).
         new(EditorOpenMode.Partition, static (_, header, _, _) =>
             header is not null && FileOpenMode.IsRockchipParameterText(header)),
 
-        // 11. Confirmed format detection (non-extension-only confidence) routes by format name.
         new(EditorOpenMode.Arsc, static (_, _, detection, _) =>
             detection is { Confidence: not DetectionConfidence.ExtensionOnly }
             && detection.Handler.FormatName.Contains("Resource Table", StringComparison.OrdinalIgnoreCase)),
@@ -374,19 +373,16 @@ internal static class DocumentOpenRegistry
         new(EditorOpenMode.Firmware, static (_, _, detection, _) =>
             detection is { Confidence: not DetectionConfidence.ExtensionOnly }),
 
-        // 12. Text/Log extension route upgraded to Hex when the sample is binary.
         new(EditorOpenMode.Hex, static (_, header, _, extension) =>
             header is not null && extension.Value is EditorOpenMode.Text or EditorOpenMode.Log
             && FileOpenMode.IsBinaryContent(header)),
 
-        // 13. Log-shaped content for a .txt/extension-less file.
         new(EditorOpenMode.Log, static (path, header, _, extension) =>
             header is not null && extension.Value is EditorOpenMode.Auto or EditorOpenMode.Text
             && (string.IsNullOrEmpty(Path.GetExtension(path))
                 || Path.GetExtension(path).Equals(".txt", StringComparison.OrdinalIgnoreCase))
             && UotanStudio.Services.Logging.LogFileService.LooksLikeLog(header)),
 
-        // 14. Extension-only route result when it is decisive.
         new(EditorOpenMode.Text, static (_, _, _, extension) => extension.Value == EditorOpenMode.Text),
         new(EditorOpenMode.Log, static (_, _, _, extension) => extension.Value == EditorOpenMode.Log),
         new(EditorOpenMode.Dtb, static (_, _, _, extension) => extension.Value == EditorOpenMode.Dtb),
@@ -399,16 +395,13 @@ internal static class DocumentOpenRegistry
         new(EditorOpenMode.Firmware, static (_, _, _, extension) => extension.Value == EditorOpenMode.Firmware),
         new(EditorOpenMode.Hex, static (_, _, _, extension) => extension.Value == EditorOpenMode.Hex),
 
-        // 15. ARSC magic on an otherwise-unknown (Auto) file.
         new(EditorOpenMode.Arsc, static (_, header, _, _) =>
             header is not null && UotanStudio.Firmware.AndroidMeta.Arsc.ArscParser.IsArsc(header)),
 
-        // 16. Extension-less file with a detectable firmware format.
         new(EditorOpenMode.Firmware, static (path, header, detection, _) =>
             header is not null && header.Length > 0 && string.IsNullOrEmpty(Path.GetExtension(path))
             && (detection ?? DetectDetailedWithRegistry(path)) is not null),
 
-        // 17. Generic file magic or binary content falls back to Hex.
         new(EditorOpenMode.Hex, static (_, header, _, _) =>
             header is not null && FileMagic.Describe(header) is not null),
         new(EditorOpenMode.Hex, static (_, header, _, _) =>
@@ -422,10 +415,17 @@ internal static class DocumentOpenRegistry
     }
 
     /// <summary>
-    /// <para>扩展名/文件名优先路由表，逐条沿用旧 <c>FileOpenMode.ResolveMode(path)</c> 的顺序与谓词。</para>
-    /// Extension/file-name first routing table, preserving the order and predicates of the former
-    /// <c>FileOpenMode.ResolveMode(path)</c>.
+    /// Extension and file-name routing table, evaluated entry by entry in list order.
+    /// <para>扩展名与文件名路由表，按表内顺序逐条判定。</para>
     /// </summary>
+    /// <param name="path">
+    /// A file name or full path.
+    /// <para>文件名或完整路径。</para>
+    /// </param>
+    /// <returns>
+    /// The mode chosen by the first matching entry, or Auto.
+    /// <para>首个命中项选择的打开方式，或为 Auto。</para>
+    /// </returns>
     private static EditorOpenMode ResolveExtensionOnly(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -561,10 +561,17 @@ internal static class DocumentOpenRegistry
     }
 
     /// <summary>
-    /// <para>读取有界文件头用于描述符路由谓词；读取失败或路径为空返回空数组。</para>
-    /// Reads a bounded file header for descriptor routing predicates; returns an empty array on a read
-    /// failure or empty path.
+    /// Reads a bounded file header for descriptor routing predicates.
+    /// <para>读取有界文件头，供描述符路由谓词判定。</para>
     /// </summary>
+    /// <param name="request">
+    /// The open request carrying the target path.
+    /// <para>持有目标路径的打开请求。</para>
+    /// </param>
+    /// <returns>
+    /// The header bytes, or an empty array on a read failure or empty path.
+    /// <para>头部字节；读取失败或路径为空时为空数组。</para>
+    /// </returns>
     private static byte[] ProbeHeader(DocumentOpenRequest request)
     {
         var path = request.Path;

@@ -5,10 +5,10 @@ using Google.Protobuf.Reflection;
 namespace UotanStudio.Firmware.OtaDelta.CareMap;
 
 /// <summary>
-/// Care map consumed by the recovery update verifier: the block ranges a verified partition must
+/// Care map consumed by the update verifier: the block ranges a verified partition must
 /// present after an update, carried as <c>care_map.pb</c> in an OTA package and
 /// <c>META/care_map.pb</c> in target files.
-/// <para>供 recovery 校验器使用的 care map：记录已校验分区在更新后必须呈现的块区间，
+/// <para>供更新校验器使用的 care map：记录已校验分区在更新后必须呈现的块区间，
 /// OTA 包内成员名为 <c>care_map.pb</c>，target files 内为 <c>META/care_map.pb</c>。</para>
 /// </summary>
 public sealed class CareMap : IMessage<CareMap>

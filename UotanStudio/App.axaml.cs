@@ -23,24 +23,23 @@ public partial class App : Application
 {
     private DesktopApplicationServices? _desktopServices;
     private MacOSApplicationMenu? _macApplicationMenu;
-    /// <summary>Existing files passed by desktop file associations, opened after window creation.</summary>
+    /// <summary>Existing files passed by desktop file associations, opened after window creation.<para>桌面文件关联传入的已存在文件，在窗口创建后打开。</para></summary>
+    /// <value>The file paths collected before the window exists.<para>在窗口存在之前收集到的文件路径。</para></value>
     public static string[] StartupFiles { get; set; } = [];
 
     /// <summary>
-    /// <para>命令行 <c>--open-screen-mirror</c> 携带的设备序列号；启动序列在设备扫描完成后打开投屏文档并启动会话。</para>
-    /// The device serial carried by the <c>--open-screen-mirror</c> command line; the startup sequence opens
-    /// the mirror document and starts its session after the device scan completes.
+    /// The device serial carried by the <c>--open-screen-mirror</c> command line.
+    /// <para>由命令行 <c>--open-screen-mirror</c> 携带的设备序列号。</para>
     /// </summary>
+    /// <value>The requested serial, or null when no mirror was requested.<para>请求的序列号；未请求投屏时为 null。</para></value>
     public static string? StartupScreenMirrorSerial { get; set; }
 
     /// <summary>
-    /// <para>桌面进程唯一的设备监视组合实例，由应用组合根拥有并经由
-    /// <see cref="DesktopApplicationServices"/> 在退出时释放；界面与设备服务统一读取此实例，
-    /// <c>DeviceMonitorService</c> 不提供类型级全局单例。</para>
-    /// The single composition-root-owned device monitor for the desktop process, released on exit via
-    /// <see cref="DesktopApplicationServices"/>; UI and device services read this instance, since
+    /// The single device monitor instance owned by the composition root and released on desktop exit;
     /// <c>DeviceMonitorService</c> provides no type-level global singleton.
+    /// <para>组合根拥有、在桌面退出时释放的唯一设备监视实例；<c>DeviceMonitorService</c> 不提供类型级全局单例。</para>
     /// </summary>
+    /// <value>The shared desktop device monitor.<para>共享的桌面设备监视实例。</para></value>
     internal static UotanStudio.Services.Devices.DeviceMonitorService DeviceMonitor { get; } =
         UotanStudio.Services.Devices.DeviceMonitorService.Create();
 
@@ -61,7 +60,6 @@ public partial class App : Application
 #if DEBUG
         if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
         {
-            // AttachDeveloperTools was removed with the DevTools diagnostics package.
         }
 #endif
     }
@@ -115,16 +113,12 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// <para>启动序列：应用持久化设置（主题/语言）、启动设备监视并执行首次全局 USB 扫描，
-    /// 期间更新启动窗状态文本；扫描完成后预构建主窗口。完成后由调用方关闭启动窗
-    /// （<see cref="MainSplashWindow.CanClose"/> 等待本任务）。</para>
-    /// Startup sequence: applies persisted settings (theme/language), starts the device monitor
-    /// and performs the initial full USB scan, updating the splash status text along the way;
-    /// the main window is pre-built once the scan completes. The caller closes the splash when
-    /// done (<see cref="MainSplashWindow.CanClose"/> awaits this task).
+    /// Startup sequence: applies persisted settings, starts device monitoring with the initial full
+    /// USB scan while reporting stage status, and pre-builds the main window once the scan completes.
+    /// <para>启动序列：应用持久化设置，启动设备监视并执行首次全局 USB 扫描且上报阶段状态，扫描完成后预构建主窗口。</para>
     /// </summary>
     /// <param name="splashWindow">The splash window receiving the pre-built main window. <para>接收预构建主窗口的启动窗。</para></param>
-    /// <param name="splash">The splash view model receiving status updates. <para>接收状态更新的启动窗视图模型。</para></param>
+    /// <param name="splash">The splash status target receiving stage updates. <para>接收阶段状态更新的启动提示目标。</para></param>
     private async Task RunStartupSequenceAsync(MainSplashWindow splashWindow, SplashViewModel splash)
     {
         var stageTimer = Stopwatch.StartNew();
@@ -191,7 +185,9 @@ public partial class App : Application
         }
     }
 
-    /// <summary>Releases application-wide monitoring only after desktop shutdown has been accepted.</summary>
+    /// <summary>Releases application-wide monitoring only after desktop shutdown has been accepted.<para>仅在桌面关闭已被接受后释放应用级监视资源。</para></summary>
+    /// <param name="sender">The desktop lifetime raising the exit event.<para>引发退出事件的桌面生命周期实例。</para></param>
+    /// <param name="e">The exit arguments describing the accepted shutdown.<para>描述已接受关闭操作的退出参数。</para></param>
     private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
         if (sender is IClassicDesktopStyleApplicationLifetime desktop) desktop.Exit -= OnDesktopExit;
@@ -208,10 +204,12 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// <para>应用命令行选项：打开指定解决方案并导入文件（失败仅记日志，不阻断启动）。</para>
-    /// Applies startup file-association inputs: opens the specified solution and imports files (failures only log,
-    /// never block startup).
+    /// Applies startup file-association inputs: opens the specified solution and imports files;
+    /// failures only log and never block startup.
+    /// <para>应用文件关联启动输入：打开指定解决方案并导入文件，失败仅记录日志且不阻断启动。</para>
     /// </summary>
+    /// <param name="splashWindow">The splash window whose pre-built main window receives the inputs.<para>其预构建主窗口接收这些输入的启动窗。</para></param>
+    /// <param name="files">The startup paths to open as a project or import as files.<para>作为项目打开或作为文件导入的启动路径。</para></param>
     private async Task ApplyStartupFilesAsync(MainSplashWindow splashWindow, string[] files)
     {
         try
@@ -239,10 +237,12 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// <para>应用命令行选项：打开投屏文档并对指定序列号启动会话（失败仅记日志，不阻断启动）。</para>
-    /// Applies the startup screen-mirror input: opens the mirror document and starts a session for the
-    /// given serial (failures only log, never block startup).
+    /// Applies the startup screen-mirror input: opens the mirror document and starts a session for
+    /// the given serial; failures only log and never block startup.
+    /// <para>应用投屏启动输入：打开投屏文档并为指定序列号启动会话，失败仅记录日志且不阻断启动。</para>
     /// </summary>
+    /// <param name="splashWindow">The splash window whose pre-built main window hosts the document.<para>其预构建主窗口承载该文档的启动窗。</para></param>
+    /// <param name="serial">The serial of the device to mirror.<para>需要投屏的设备序列号。</para></param>
     private void ApplyStartupScreenMirror(MainSplashWindow splashWindow, string serial)
     {
         try
@@ -271,25 +271,30 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// <para>响应打开文档请求消息，将请求转发给主窗口工作区视图模型，由其打开对应文档。</para>
-    /// Responds to open-document request messages by forwarding them to the main window's workspace
-    /// view model, which opens the requested document.
+    /// Responds to an open-document request by opening the requested workspace document.
+    /// <para>响应打开文档请求，打开所请求的工作区文档。</para>
     /// </summary>
+    /// <param name="recipient">The registered handler instance targeted by the message.<para>该消息指向的已注册处理实例。</para></param>
+    /// <param name="message">The request describing the document to open.<para>描述待打开文档的请求。</para></param>
     private async void OnOpenDocument(object recipient, OpenDocumentRequestMessage message)
         => await RunMainRequestAsync("Open document failed", main => main.WorkspaceVM.OpenDocumentAsync(message.ToRequest()));
 
     /// <summary>
-    /// <para>响应打开节点项目请求消息：把解决方案登记的节点项目载入节点编辑器画布并切到该选项卡。</para>
-    /// Responds to open-node-project requests by loading a solution-registered node project into the node
-    /// editor canvas and switching to that tab.
+    /// Responds to an open-node-project request by loading a solution-registered node project and
+    /// switching to its tab.
+    /// <para>响应打开节点项目请求，载入解决方案登记的节点项目并切换到对应标签页。</para>
     /// </summary>
+    /// <param name="recipient">The registered handler instance targeted by the message.<para>该消息指向的已注册处理实例。</para></param>
+    /// <param name="message">The request naming the node project to open.<para>指明待打开节点项目名的请求。</para></param>
     private async void OnOpenNodeProject(object recipient, OpenNodeProjectRequestMessage message)
         => await RunMainRequestAsync("Open node project failed", main => main.MenuVM.OpenNodeProjectAsync(message.NodeProjectName));
 
     /// <summary>
-    /// <para>打开或聚焦工作区对比文档，并将右键选中的路径加入比较。</para>
-    /// Opens or focuses the workspace compare document and adds the explorer selection when provided.
+    /// Opens or focuses the workspace compare document and adds the selected path when provided.
+    /// <para>打开或聚焦工作区对比文档，并在给出路径时将其加入比较。</para>
     /// </summary>
+    /// <param name="recipient">The registered handler instance targeted by the message.<para>该消息指向的已注册处理实例。</para></param>
+    /// <param name="message">The request carrying the optional path and the new-tab preference.<para>携带可选路径与新标签页偏好的请求。</para></param>
     private async void OnOpenCompare(object recipient, OpenCompareRequestMessage message)
         => await RunCompareRequestAsync(
             "Open compare failed",
@@ -297,9 +302,11 @@ public partial class App : Application
             openInNewTab: message.OpenInNewTab);
 
     /// <summary>
-    /// <para>响应投屏请求：打开投屏文档并对指定设备启动会话。</para>
-    /// Responds to the mirror request: opens the mirror document and starts the session for the device.
+    /// Responds to a screen-mirror request by opening the mirror document and starting its session.
+    /// <para>响应投屏请求，打开投屏文档并启动对应会话。</para>
     /// </summary>
+    /// <param name="recipient">The registered handler instance targeted by the message.<para>该消息指向的已注册处理实例。</para></param>
+    /// <param name="message">The request carrying the device serial to mirror.<para>携带待投屏设备序列号的请求。</para></param>
     private void OnOpenScreenMirror(object recipient, OpenScreenMirrorRequestMessage message)
     {
         try
@@ -316,27 +323,31 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// <para>响应添加子项目请求：转发到菜单命令（打开子项目模式的新建窗口）。</para>
-    /// Responds to the add-sub-project request: forwards to the menu command (the new-project window
-    /// in sub-project mode).
+    /// Responds to an add-sub-project request by starting the new-project flow in sub-project mode.
+    /// <para>响应添加子项目请求，以子项目模式启动新建项目流程。</para>
     /// </summary>
+    /// <param name="recipient">The registered handler instance targeted by the message.<para>该消息指向的已注册处理实例。</para></param>
+    /// <param name="message">The request, which carries no additional payload.<para>该请求不携带附加数据。</para></param>
     private async void OnAddSubProject(object recipient, AddSubProjectRequestMessage message)
         => await RunMainRequestAsync("Open add sub-project failed", main => main.MenuVM.AddSubProjectCommand.ExecuteAsync(null));
 
     /// <summary>
-    /// <para>响应文件比较请求消息，在工作区对比文档中载入两个文件。</para>
-    /// Responds to file-compare requests by loading both files in the workspace compare document.
+    /// Responds to a file-compare request by loading both files into a workspace compare document.
+    /// <para>响应文件比较请求，把两个文件载入工作区对比文档。</para>
     /// </summary>
+    /// <param name="recipient">The registered handler instance targeted by the message.<para>该消息指向的已注册处理实例。</para></param>
+    /// <param name="message">The request carrying the left and right file paths.<para>携带左右两侧文件路径的请求。</para></param>
     private async void OnOpenFileCompare(object recipient, OpenFileCompareRequestMessage message)
         => await RunCompareRequestAsync("Open file compare failed",
             compare => compare.OpenCompareFilesAsync(message.LeftPath, message.RightPath));
 
     /// <summary>
-    /// <para>响应「在新标签打开文件比较」请求：新建一个对比文档并载入两侧文件（一侧为空时该侧留白），
-    /// 当前标签（目录对比）保持不变。</para>
-    /// Responds to the "open the file comparison in a new tab" request: creates an additional compare document and
-    /// loads both files (an empty side stays blank), leaving the current tab (the folder comparison) untouched.
+    /// Responds to a new-compare-tab request by creating an additional compare document and loading
+    /// both files, leaving the existing tab untouched; a blank side stays blank.
+    /// <para>响应新建比较标签请求：创建额外的对比文档并载入两侧文件，已有标签保持不变；空缺的一侧保持留白。</para>
     /// </summary>
+    /// <param name="recipient">The registered handler instance targeted by the message.<para>该消息指向的已注册处理实例。</para></param>
+    /// <param name="message">The request carrying the left and right file paths.<para>携带左右两侧文件路径的请求。</para></param>
     private async void OnOpenFileCompareInNewTab(object recipient, OpenFileCompareInNewTabRequestMessage message)
         => await RunMainRequestAsync("Open file compare in new tab failed", main =>
             main.WorkspaceVM.OpenNewCompareDocument() is { } compare
@@ -344,17 +355,22 @@ public partial class App : Application
                 : Task.CompletedTask);
 
     /// <summary>
-    /// <para>响应文件夹比较请求消息，在工作区对比文档中载入两个目录。</para>
-    /// Responds to folder-compare requests by loading both directories in the workspace compare document.
+    /// Responds to a folder-compare request by loading both directories into a compare document.
+    /// <para>响应目录比较请求，把两个目录载入对比文档。</para>
     /// </summary>
+    /// <param name="recipient">The registered handler instance targeted by the message.<para>该消息指向的已注册处理实例。</para></param>
+    /// <param name="message">The request carrying the left and right directory paths.<para>携带左右两侧目录路径的请求。</para></param>
     private async void OnOpenFolderCompare(object recipient, OpenFolderCompareRequestMessage message)
         => await RunCompareRequestAsync("Open folder compare failed",
             compare => compare.OpenCompareFoldersAsync(message.LeftDirectory, message.RightDirectory));
 
     /// <summary>
-    /// <para>响应退出应用程序消息，关闭主窗口并退出。</para>
-    /// Responds to the exit-application message by closing the main window and quitting.
+    /// Responds to the exit-application message by closing the main window or shutting the
+    /// controlled lifetime down.
+    /// <para>响应退出应用程序消息，关闭主窗口或终止受控生命周期。</para>
     /// </summary>
+    /// <param name="recipient">The registered handler instance targeted by the message.<para>该消息指向的已注册处理实例。</para></param>
+    /// <param name="message">The request asking the application to exit.<para>请求退出应用程序的消息。</para></param>
     private void OnExitApplication(object recipient, ExitApplicationMessage message)
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: { } window })
@@ -368,7 +384,11 @@ public partial class App : Application
         }
     }
 
-    /// <summary>Resolves the same desktop request target used by the existing message adapters.</summary>
+    /// <summary>
+    /// Resolves the desktop main model bound as the main window's data context.
+    /// <para>解析绑定为主窗口数据上下文的桌面主模型。</para>
+    /// </summary>
+    /// <returns>The main model, or null when no desktop lifetime or bound window exists.<para>桌面主模型；没有桌面生命周期或已绑定窗口时为 null。</para></returns>
     private MainViewModel? GetDesktopMainViewModel() => ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
         ? desktop.MainWindow?.DataContext as MainViewModel : null;
 

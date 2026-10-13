@@ -1,14 +1,10 @@
 namespace UotanStudio.Comm.Devices.Services;
 
 /// <summary>
-/// A monotonic counter identifying one transport instantiation of a physical device.
-/// <para>标识物理设备一次传输实例化的单调计数器。</para>
-/// Every successful native open advances the generation for the device identity, so a lease,
-/// plan, or cached observation can prove which transport instantiation it was taken on and be
-/// retired once that instantiation is gone. Generations are per identity and never comparable
-/// across devices.
-/// <para>每次成功的原生打开都会推进该设备身份的代际，因此租约、计划或缓存观测都能证明自己
-/// 取自哪一次传输实例化，并在该实例化结束后被废弃。代际按身份独立计数，绝不在设备之间比较。</para>
+/// A monotonic counter identifying one transport instantiation of a physical device. Successful
+/// native opens advance it per device identity, and generations are never comparable across devices.
+/// <para>标识物理设备一次传输实例化的单调计数器。每次成功的原生打开都会推进对应设备身份的
+/// 代际，代际绝不在设备之间比较。</para>
 /// </summary>
 public readonly record struct TransportGeneration : IComparable<TransportGeneration>
 {

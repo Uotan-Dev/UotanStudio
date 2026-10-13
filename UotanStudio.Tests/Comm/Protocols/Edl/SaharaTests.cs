@@ -7,12 +7,10 @@ using Xunit;
 namespace UotanStudio.Tests.Comm.Protocols.Edl;
 
 /// <summary>
-/// Sahara protocol handshake tests: HELLO/HELLO_RESPONSE packet layout, READ_DATA / READ_DATA64
-/// image upload, DONE flow, Firehose-already-running detection and error paths — all scripted
-/// through <see cref="ScriptedCommTransport"/> (no real hardware).
-/// <para>Sahara 协议握手测试：HELLO/HELLO_RESPONSE 包布局、READ_DATA/READ_DATA64 镜像上传、
-/// DONE 流程、Firehose 已在运行检测与错误路径——全部通过 <see cref="ScriptedCommTransport"/>
-/// 脚本化模拟（无真实硬件）。</para>
+/// Sahara handshake tests on a scripted transport: HELLO/HELLO_RESPONSE packet layout, READ_DATA
+/// and READ_DATA64 image upload, the DONE flow, Firehose-already-running detection and error paths.
+/// <para>脚本化传输上的 Sahara 握手测试：HELLO/HELLO_RESPONSE 包布局、READ_DATA 与 READ_DATA64
+/// 镜像上传、DONE 流程、Firehose 已在运行检测与错误路径。</para>
 /// </summary>
 public partial class SaharaTests
 {

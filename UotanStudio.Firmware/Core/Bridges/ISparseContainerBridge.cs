@@ -23,13 +23,8 @@ public interface ISparseLogicalView : IDisposable
 }
 
 /// <summary>
-/// Kernel-facing seam over the sparse container utilities. A bounded context that needs to read a raw
-/// image through a sparse container, or to publish its own output inside one, consumes this interface
-/// instead of referencing another context's concrete classes; the owning context registers the
-/// implementation with <see cref="FormatDetector"/> as part of its format handler.
-/// <para>面向内核的稀疏容器工具接缝。需要在稀疏容器之上读取原始镜像、或把自身输出发布到稀疏容器内的
-/// 限界上下文，应消费本接口而不是引用另一个上下文的具体类；实现由所属上下文作为其格式处理器的一部分
-/// 注册到 <see cref="FormatDetector"/>。</para>
+/// Seam over the sparse container utilities for a bounded context that must read a raw image through a sparse container or publish its own output inside one, instead of referencing another context's concrete classes.
+/// <para>稀疏容器工具的服务接口，供需要经稀疏容器读取原始镜像、或把自身输出装入稀疏容器的有界上下文使用，避免引用其他上下文的具象类型。</para>
 /// </summary>
 public interface ISparseContainerBridge
 {

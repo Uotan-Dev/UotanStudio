@@ -5,12 +5,8 @@ using UotanStudio.Firmware.Core;
 namespace UotanStudio.Firmware.OtaDelta.CareMap;
 
 /// <summary>
-/// Derives care-map records from built partition images. A verified image is the original filesystem
-/// image followed by hash-tree data, FEC data and an AVB footer; the verifier reads back only the
-/// original blocks, so the record is the image's own populated blocks clipped to the verified length the
-/// caller read from the image's AVB footer.
-/// <para>从已构建的分区镜像推导 care map 记录。已校验镜像由原始文件系统镜像、hash tree 数据、FEC 数据与
-/// AVB footer 依次拼接而成；校验方只读回原始块，因此记录取镜像自身已填充的块，并按调用方从 footer 读到的受校验长度裁剪。</para>
+/// Derives care-map records from built partition images. A verified image is the filesystem image followed by hash-tree, FEC and AVB footer data; the verifier reads back only the original blocks, so the record is the image's populated blocks clipped to the verified length.
+/// <para>从构建出的分区镜像导出 care-map 记录。已校验镜像由文件系统镜像及其后的哈希树、FEC 与 AVB 页脚组成；校验器只回读原始块，因此记录为镜像已填充块裁剪到校验长度后的结果。</para>
 /// </summary>
 public static class CareMapBuilder
 {
@@ -33,8 +29,8 @@ public static class CareMapBuilder
         "system_dlkm"
     ];
 
-    /// <summary>Gets the partition names a care map may carry, in the order upstream emits them.
-    /// <para>获取可以承载 care map 的分区名，顺序与上游输出一致。</para></summary>
+    /// <summary>Gets the partition names a care map may carry.
+    /// <para>获取可以承载 care map 的分区名。</para></summary>
     /// <value>Eight verity-capable partitions; other partitions never appear in a care map.
     /// <para>8 个可启用 verity 的分区；其余分区永不出现在 care map 中。</para></value>
     public static IReadOnlyList<string> SupportedPartitions => SupportedPartitionNames;

@@ -1,13 +1,8 @@
 namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
-/// Debug-stage memory access: <c>&lt;poke&gt;</c> writes and peek-driven <c>&lt;memcpy&gt;</c>,
-/// mirroring the reference client (bkerler/edl firehose.py cmd_poke/cmd_memcpy: up to 8 bytes per
-/// poke command, payload carried as a big-endian hex literal, and an uppercase-attribute retry when
-/// the target rejects the lowercase form).
-/// <para>调试级内存访问：<c>&lt;poke&gt;</c> 写入与基于 peek 的 <c>&lt;memcpy&gt;</c>，镜像参考
-/// 客户端（bkerler/edl firehose.py 的 cmd_poke/cmd_memcpy：每条 poke 命令最多 8 字节，负载以
-/// 大端十六进制字面量携带，目标拒绝小写属性名时按大写属性名重试一次）。</para>
+/// Debug-stage memory access: <c>&lt;poke&gt;</c> writes and peek-driven <c>&lt;memcpy&gt;</c>.
+/// <para>调试级内存访问：<c>&lt;poke&gt;</c> 写入与基于 peek 的 <c>&lt;memcpy&gt;</c>。</para>
 /// </summary>
 public sealed partial class FirehoseProtocol
 {

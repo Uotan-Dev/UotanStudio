@@ -3,14 +3,63 @@ using System.Text.RegularExpressions;
 
 namespace UotanStudio.Services.Workspace;
 
-/// <summary>Options shared by document and project searches. 文档与项目搜索共用选项。</summary>
+/// <summary>
+/// Options shared by document and project searches.
+/// <para>文档与项目搜索共用选项。</para>
+/// </summary>
+/// <param name="Pattern">
+/// Text or expression to locate.
+/// <para>要定位的文本或表达式。</para>
+/// </param>
+/// <param name="Replacement">
+/// Replacement text, supporting capture references when regex mode is on.
+/// <para>替换文本；正则模式下可引用捕获组。</para>
+/// </param>
+/// <param name="MatchCase">
+/// Whether matching distinguishes letter case.
+/// <para>匹配是否区分大小写。</para>
+/// </param>
+/// <param name="WholeWord">
+/// Whether matches must form whole words.
+/// <para>匹配是否必须为整词。</para>
+/// </param>
+/// <param name="UseRegex">
+/// Whether the pattern is treated as a regular expression.
+/// <para>是否把模式当作正则表达式处理。</para>
+/// </param>
+/// <param name="PreserveCase">
+/// Whether replacements adopt the case style of each match.
+/// <para>替换结果是否沿用每次匹配的大小写风格。</para>
+/// </param>
 internal sealed record TextSearchOptions(string Pattern, string Replacement = "", bool MatchCase = false,
     bool WholeWord = false, bool UseRegex = false, bool PreserveCase = false);
 
-/// <summary>A replacement against an immutable text snapshot. 针对不可变文本快照的替换。</summary>
+/// <summary>
+/// A replacement against an immutable text snapshot.
+/// <para>针对不可变文本快照的替换。</para>
+/// </summary>
+/// <param name="Offset">
+/// Zero-based offset of the matched span.
+/// <para>匹配片段的零基偏移。</para>
+/// </param>
+/// <param name="Length">
+/// Length in characters of the matched span.
+/// <para>匹配片段的字符长度。</para>
+/// </param>
+/// <param name="Value">
+/// Matched text, verified before applying.
+/// <para>匹配到的文本，应用前会再次校验。</para>
+/// </param>
+/// <param name="Replacement">
+/// Text written in place of the matched span.
+/// <para>写入以取代匹配片段的文本。</para>
+/// </param>
 internal sealed record TextSearchMatch(int Offset, int Length, string Value, string Replacement);
 
-/// <summary>Bounded, cancellable text matching without UI dependencies. 无 UI 依赖的有界可取消文本匹配。</summary>
+/// <summary>
+/// Bounded, cancellable text matching without UI dependencies.
+/// <para>有界且可取消的文本匹配。</para>
+/// </summary>
 internal static class TextSearchService
 {
     internal const int MaximumTextLength = 8 * 1024 * 1024;
@@ -53,12 +102,17 @@ internal static class TextSearchService
     }
 
     /// <summary>
-    /// Reuses the last compiled <see cref="Regex"/> while the pattern and its switches are unchanged;
-    /// document and project searches call <see cref="Find"/> once per document or per file with the same
-    /// options, and the pattern is user input, so it cannot be source-generated.
-    /// <para>模式与开关未变时复用上一次编译出的 <see cref="Regex"/>：文档与项目搜索会用同一份选项按文档或
-    /// 按文件多次调用 <see cref="Find"/>，而模式来自用户输入，无法源码生成。</para>
+    /// Reuses the last compiled <see cref="Regex"/> while the pattern and its switches stay unchanged.
+    /// <para>模式与其开关保持不变时，复用上一次编译出的 <see cref="Regex"/>。</para>
     /// </summary>
+    /// <param name="options">
+    /// Options supplying the pattern and its switches.
+    /// <para>提供模式及其开关的选项。</para>
+    /// </param>
+    /// <returns>
+    /// The regex that matches the current options.
+    /// <para>匹配当前选项的正则表达式。</para>
+    /// </returns>
     private static Regex GetCompiledRegex(TextSearchOptions options)
     {
         var cached = _cachedSearch;
@@ -84,6 +138,30 @@ internal static class TextSearchService
     /// <para>字面量（非正则、非整词）搜索快路径：用 IndexOf 保持与 Regex 路径一致的
     /// 边界、限额与超时语义。</para>
     /// </summary>
+    /// <param name="text">
+    /// Immutable text snapshot to scan.
+    /// <para>要扫描的不可变文本快照。</para>
+    /// </param>
+    /// <param name="options">
+    /// Options supplying the literal pattern and its switches.
+    /// <para>提供字面量模式及其开关的选项。</para>
+    /// </param>
+    /// <param name="start">
+    /// Offset where scanning begins.
+    /// <para>开始扫描的偏移。</para>
+    /// </param>
+    /// <param name="end">
+    /// Exclusive offset where scanning stops.
+    /// <para>停止扫描的不含端点偏移。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token cancelling the pending scan.
+    /// <para>取消待执行扫描的令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The matches found within the requested range.
+    /// <para>在请求范围内找到的匹配。</para>
+    /// </returns>
     private static List<TextSearchMatch> FindLiteral(string text, TextSearchOptions options,
         int start, int end, CancellationToken cancellationToken)
     {

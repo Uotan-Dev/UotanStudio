@@ -2,16 +2,8 @@ using UotanStudio.Firmware.Core;
 namespace UotanStudio.Firmware.Application.Formats;
 
 /// <summary>
-/// Single registration point that publishes every built-in read-only format handler to
-/// <see cref="FormatDetector"/>. Detection first probes handlers whose <c>FileExtensions</c> claim
-/// the file extension and only selects one after its <c>CanHandle</c> content check passes; when no
-/// extension candidate validates, every registered handler gets the same content check in
-/// registration order. An extension match therefore never selects a handler on its own, a handler
-/// whose check throws is skipped, and re-registering an existing <c>FormatName</c> is ignored.
-/// <para>把全部内置只读格式处理器发布到 <see cref="FormatDetector"/> 的唯一注册入口。检测先探测
-/// <c>FileExtensions</c> 声明了该扩展名的处理器，且只有其 <c>CanHandle</c> 内容校验通过才会选中；
-/// 若所有扩展名候选均未通过，则按注册顺序对每个已注册处理器执行同样的内容校验。因此仅扩展名匹配
-/// 从不决定选择；校验抛出异常的处理器会被跳过；重复注册已存在的 <c>FormatName</c> 会被忽略。</para>
+/// Single registration point publishing every built-in read-only format handler to <see cref="FormatDetector"/>. Detection probes extension-claiming handlers first and selects one only after its <c>CanHandle</c> check passes; otherwise every handler gets the same check in registration order.
+/// <para>把全部内置只读格式处理器发布到 <see cref="FormatDetector"/> 的唯一注册入口。检测先探测声明该扩展名的处理器，且仅当其 <c>CanHandle</c> 校验通过才选中；否则按注册顺序对每个处理器执行同样校验。</para>
 /// </summary>
 public static class FirmwareFormatRegistry
 {

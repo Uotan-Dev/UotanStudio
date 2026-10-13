@@ -69,14 +69,8 @@ public sealed record MtkCommandInterfaceResult(
     string Reason);
 
 /// <summary>
-/// Selects the single vendor-specific bulk command interface (one bulk IN plus one bulk OUT)
-/// from observed USB descriptors. Logging-shaped interfaces are excluded explicitly, candidates
-/// are never resolved by enumeration order, and optionally the endpoints actually claimed by the
-/// opened session must belong to the selected interface. The policy is a pure function; it opens
-/// nothing and sends nothing.
-/// <para>从已观测的 USB 描述符中选出唯一的厂商特定 bulk 命令接口（一个 bulk-IN 加一个 bulk-OUT）。
-/// 日志形状接口会被显式排除，候选项绝不按枚举顺序裁决，并可选择要求已打开会话实际占用的端点
-/// 属于被选接口。该策略为纯函数；不打开、不发送任何内容。</para>
+/// Selects the single vendor-specific bulk command interface (one bulk IN plus one bulk OUT) from observed USB descriptors. Logging-shaped interfaces are excluded, candidates are never resolved by enumeration order, and optionally the claimed endpoints must belong to the selected interface.
+/// <para>从观测到的 USB 描述符中选出唯一的厂商专属批量命令接口（一个 bulk IN 加一个 bulk OUT）。排除日志形态接口，候选从不按枚举顺序解析，且可选要求已申请端点必须属于所选接口。</para>
 /// </summary>
 public static class MtkCommandInterfacePolicy
 {

@@ -34,7 +34,7 @@ public partial class QualcommImageViewModel : Document
     /// <summary>Selected local image path. <para>选中的本地镜像路径。</para></summary>
     [ObservableProperty] private string? _filePath;
 
-    /// <summary>Optional caller-supplied trust anchor path. <para>调用方可选的可信根路径。</para></summary>
+    /// <summary>Optional trust anchor path.<para>可选的可信根路径。</para></summary>
     [ObservableProperty] private string? _trustedRootPath;
 
     /// <summary>Whether analysis is in progress. <para>分析是否正在进行。</para></summary>
@@ -50,6 +50,7 @@ public partial class QualcommImageViewModel : Document
     [ObservableProperty] private string _errorMessage = string.Empty;
 
     /// <summary>Whether the error banner is visible. <para>错误提示是否可见。</para></summary>
+    /// <value>Whether a localized error message is present.<para>是否存在本地化的错误信息。</para></value>
     public bool HasError => ErrorMessage.Length > 0;
 
     /// <summary>Overview rows. <para>概览行。</para></summary>
@@ -85,8 +86,6 @@ public partial class QualcommImageViewModel : Document
     /// <para>加载镜像，分析结束后不保留文件句柄。</para></summary>
     /// <param name="path">Existing local image path. <para>现有本地镜像路径。</para></param>
     /// <param name="cancellationToken">Optional cancellation. <para>可选的取消令牌。</para></param>
-    /// <returns>A task that completes when the report is ready or analysis stops.
-    /// <para>结果就绪或分析终止时完成。</para></returns>
     public async Task LoadAsync(string path, CancellationToken cancellationToken = default)
     {
         if (_closed)
@@ -162,8 +161,6 @@ public partial class QualcommImageViewModel : Document
     /// <para>将当前结构化离线报告原子导出为 JSON。</para></summary>
     /// <param name="path">Destination path. <para>目标路径。</para></param>
     /// <param name="cancellationToken">Cancels writing before publication. <para>发布前取消写入。</para></param>
-    /// <returns>A task that completes after publication or failure handling.
-    /// <para>发布完成或失败处理后结束。</para></returns>
     public async Task ExportAsync(string path, CancellationToken cancellationToken = default)
     {
         if (_closed || _report is not { } report)
@@ -276,6 +273,8 @@ public partial class QualcommImageViewModel : Document
 }
 
 /// <summary>One rendered name/value pair. <para>一个展示用的名称/值对。</para></summary>
+/// <param name="Name">Rendered row label. <para>展示用的行标签。</para></param>
+/// <param name="Value">Rendered row value. <para>展示用的行值。</para></param>
 public sealed record QualcommRow(string Name, string Value);
 
 internal sealed record QualcommReportField(string Name, string Value, bool LocalizedName = false, bool LocalizedValue = false,

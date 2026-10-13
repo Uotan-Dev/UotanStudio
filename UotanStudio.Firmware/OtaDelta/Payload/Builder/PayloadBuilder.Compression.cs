@@ -121,9 +121,9 @@ public sealed partial class PayloadBuilder
     /// <param name="outputStream">Single-frame zstd output sink. <para>单帧 zstd 输出接收流。</para></param>
     /// <param name="dictionary">
     /// Exact raw dictionary bytes, or empty for a dictionary-free frame. Payloads that use a non-empty
-    /// dictionary are gated by the AOSP <c>max_zstd_dict_raw_size</c> property in
+    /// dictionary are gated by the <c>max_zstd_dict_raw_size</c> property in
     /// <c>payload_properties.txt</c>; callers must record that key when publishing such a payload.
-    /// <para>完全一致的原始字典字节，空则表示无字典帧。使用非空字典的载荷由 AOSP 在
+    /// <para>完全一致的原始字典字节，空则表示无字典帧。使用非空字典的载荷由
     /// <c>payload_properties.txt</c> 中的 <c>max_zstd_dict_raw_size</c> 属性管控；发布此类载荷的调用方必须记录该键。</para>
     /// </param>
     /// <param name="level">

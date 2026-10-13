@@ -5,21 +5,25 @@ using UotanStudio.Services.Logging;
 namespace UotanStudio.Services.Devices;
 
 /// <summary>
-/// A logcat entry with the fields displayed by Android Studio.
-/// <para>携带 Android Studio 日志行所显示字段的 logcat 条目。</para>
+/// A logcat threadtime entry carrying the fields parsed from one device output line.
+/// <para>logcat threadtime 条目，携带从单行设备输出解析出的各字段。</para>
 /// </summary>
-/// <param name="RawText">Original device output. 设备原始输出。</param>
-/// <param name="Timestamp">Device date and time. 设备日期时间。</param>
-/// <param name="ProcessId">Process ID. 进程 ID。</param>
-/// <param name="ThreadId">Thread ID. 线程 ID。</param>
-/// <param name="Tag">Log tag. 日志组件。</param>
-/// <param name="ProcessName">Process name, or - when unavailable. 进程名称，未知时为 -。</param>
-/// <param name="Priority">Logcat priority letter. logcat 等级字母。</param>
-/// <param name="Message">Message text. 消息正文。</param>
+/// <param name="RawText">Original device output. <para>设备原始输出。</para></param>
+/// <param name="Timestamp">Device date and time. <para>设备日期时间。</para></param>
+/// <param name="ProcessId">Process ID. <para>进程 ID。</para></param>
+/// <param name="ThreadId">Thread ID. <para>线程 ID。</para></param>
+/// <param name="Tag">Log tag. <para>日志组件。</para></param>
+/// <param name="ProcessName">Process name, or - when unavailable. <para>进程名称，未知时为 -。</para></param>
+/// <param name="Priority">Logcat priority letter. <para>logcat 等级字母。</para></param>
+/// <param name="Message">Message text. <para>消息正文。</para></param>
 public sealed partial record AdbLogcatEntry(string RawText, string Timestamp, int ProcessId, int ThreadId,
     string Tag, string ProcessName, char Priority, string Message) : ILogLine
 {
-    /// <summary>Unified level; null for non-entry lines. 统一等级，非日志条目行为空。</summary>
+    /// <summary>
+    /// Unified level mapped from the priority letter.
+    /// <para>由等级字母映射出的统一等级。</para>
+    /// </summary>
+    /// <value>The mapped level; null for non-entry lines. <para>映射后的等级；非日志条目行为 null。</para></value>
     public LogLevel? Level { get; } = Priority switch
     {
         'V' => LogLevel.Trace,
@@ -31,12 +35,18 @@ public sealed partial record AdbLogcatEntry(string RawText, string Timestamp, in
         _ => null
     };
 
-    /// <summary>Complete displayed and searchable text. 用于显示和搜索的完整日志行。</summary>
+    /// <summary>
+    /// Complete displayed and searchable text.
+    /// <para>用于显示和搜索的完整日志行。</para>
+    /// </summary>
     private string? _text;
     public string Text => _text ??= Priority == '\0' ? RawText
         : $"{Timestamp,-23} {ProcessId + "-" + ThreadId,-13} {Tag,-24} {ProcessName,-32} {Priority} {Message}";
 
-    /// <summary>Display columns retaining complete field spans. 保留完整字段范围的显示列。</summary>
+    /// <summary>
+    /// Display columns retaining complete field spans.
+    /// <para>保留完整字段范围的显示列。</para>
+    /// </summary>
     private IReadOnlyList<LogTextColumn>? _columns;
     public IReadOnlyList<LogTextColumn> Columns => _columns ??= Priority == '\0' ? [] :
     [
@@ -51,6 +61,9 @@ public sealed partial record AdbLogcatEntry(string RawText, string Timestamp, in
     /// Parses threadtime output; preserves headers and unrecognized lines verbatim.
     /// <para>解析 threadtime 输出；原样保留缓冲区标题和未识别的行。</para>
     /// </summary>
+    /// <param name="text">One raw logcat line. <para>单条原始 logcat 文本。</para></param>
+    /// <param name="processNames">Process ID to name map; null when unavailable. <para>进程 ID 到名称的映射；不可用时为 null。</para></param>
+    /// <returns>The parsed entry, or a verbatim entry for unparsed lines. <para>解析后的条目；未能解析的行按原样生成条目。</para></returns>
     public static AdbLogcatEntry Parse(string text, IReadOnlyDictionary<int, string>? processNames = null)
     {
         if (text.Length > AdbLogcatLineDecoder.MaximumLineLength)

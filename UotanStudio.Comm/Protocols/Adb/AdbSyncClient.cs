@@ -38,36 +38,19 @@ public readonly struct SyncEntry(uint mode, uint size, uint time, string name)
 
 /// <summary>
 /// Client for the ADB sync service ("sync:"), implementing file transfer
-/// (SEND / RECV / STAT / LIST) aligned with AOSP file_sync_protocol.h.
-/// Speaks the v1 wire format, which adbd accepts even when sendrecv_v2 is negotiated.
-/// <para>ADB sync 服务客户端，实现文件传输（SEND / RECV / STAT / LIST）。</para>
+/// (SEND / RECV / STAT / LIST) over the v1 wire format, which adbd accepts even when sendrecv_v2 is negotiated.
+/// <para>ADB sync 服务客户端，以 v1 线上格式实现文件传输（SEND / RECV / STAT / LIST）。</para>
 /// </summary>
-/// <remarks>
-/// <para>
-/// The outbound chunk size and the inbound acceptance ceiling are deliberately separate.
-/// <see cref="InboundMaxChunkBytes"/> mirrors AOSP <c>SYNC_DATA_MAX</c> and is the ceiling an untrusted peer
-/// must stay inside; it never widens with the requested outbound size, because a larger push chunk would be a
-/// protocol violation for real adbd and would simultaneously loosen what this client accepts. The outbound size
-/// is additionally clamped by the peer-advertised payload limit so a single sync packet never has to be split
-/// across WRTE frames.
-/// </para>
-/// <para>
-/// 出站块大小与入站接受上限刻意分开。<see cref="InboundMaxChunkBytes"/> 对齐 AOSP 的 <c>SYNC_DATA_MAX</c>，
-/// 是不可信对端必须待在上限内；它不会随请求的出站大小放宽，因为更大的推送块对真实 adbd 属于协议违规，同时也会削弱本客户端的接受校验。
-/// 出站大小还会再按对端通告的负载上限钳制，使单个 sync 数据包不必被拆成多条 WRTE 帧。
-/// </para>
-/// </remarks>
-/// <param name="connection">The ADB connection. ADB 连接。</param>
-/// <param name="maxChunk">Requested outbound chunk size in file bytes. 请求的出站数据块大小（文件字节数）。</param>
+/// <param name="connection">The ADB connection.<para>ADB 连接。</para></param>
+/// <param name="maxChunk">Requested outbound chunk size in file bytes.<para>请求的出站数据块大小（文件字节数）。</para></param>
 internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = AdbSyncClient.DefaultMaxChunk) : IAdbSyncClient
 {
     private const int V1HeaderSize = 8;
     private const uint DefaultMaxChunk = 64 * 1024;
 
-    /// <summary>Inbound acceptance ceiling for DATA, DENT name and fail-message lengths, aligned with AOSP
-    /// <c>SYNC_DATA_MAX</c>; a peer reporting more is rejected as a protocol violation regardless of the
-    /// outbound chunk size. <para>DATA、DENT 名称与失败消息长度的入站接受上限，对齐 AOSP 的
-    /// <c>SYNC_DATA_MAX</c>；上报更大值的对端一律按协议违规拒绝，与出站块大小无关。</para></summary>
+    /// <summary>Inbound acceptance ceiling for DATA, DENT name and fail-message lengths; a peer reporting more
+    /// is rejected as a protocol violation regardless of the outbound chunk size.
+    /// <para>DATA、DENT 名称与失败消息长度的入站接受上限；上报更大值的对端一律按协议违规拒绝，与出站块大小无关。</para></summary>
     internal const uint InboundMaxChunkBytes = 64 * 1024;
 
     private readonly AdbConnection _connection = connection ?? throw new ArgumentNullException(nameof(connection));
@@ -81,8 +64,8 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Opens the sync stream unless it is already open.
     /// <para>确保 sync 流已打开，需要时打开。</para>
     /// </summary>
-    /// <param name="cancellationToken">Cancels the stream open. 取消打开流。</param>
-    /// <returns>The sync stream. sync 流。</returns>
+    /// <param name="cancellationToken">Cancels the stream open.<para>取消打开流。</para></param>
+    /// <returns>The sync stream.<para>Sync 流。</para></returns>
     /// <exception cref="TimeoutException">The OPEN frame did not reach the transport within its deadline.
     /// <para>OPEN 帧未在期限内抵达传输层。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
@@ -97,8 +80,8 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Stats a remote file/directory.
     /// <para>异步查询单个远端文件或目录状态。</para>
     /// </summary>
-    /// <param name="remotePath">Device-side path to stat. 待查询的设备侧路径。</param>
-    /// <param name="cancellationToken">Cancels the request or the reply wait. 取消请求或应答等待。</param>
+    /// <param name="remotePath">Device-side path to stat.<para>待查询的设备侧路径。</para></param>
+    /// <param name="cancellationToken">Cancels the request or the reply wait.<para>取消请求或应答等待。</para></param>
     /// <returns>A task resolving to the entry, or <see langword="null"/> when the peer reports the path as
     /// absent. <para>结果为条目的任务；对端报告路径不存在时返回 <see langword="null"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> is <see langword="null"/>.
@@ -144,9 +127,9 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Lists a remote directory.
     /// <para>异步列出远端目录内容。</para>
     /// </summary>
-    /// <param name="remotePath">Device-side directory path. 设备侧目录路径。</param>
+    /// <param name="remotePath">Device-side directory path.<para>设备侧目录路径。</para></param>
     /// <param name="cancellationToken">Cancels the listing between records and during a read.
-    /// 在记录之间与读取期间取消列举。</param>
+    /// <para>在记录之间与读取期间取消列举。</para></param>
     /// <returns>A task resolving to every entry received before the done marker.
     /// <para>结果为结束标记之前收到的全部条目的任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> is <see langword="null"/>.
@@ -207,11 +190,11 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Pushes a local file to the device.
     /// <para>异步将本地文件推送到设备。</para>
     /// </summary>
-    /// <param name="localPath">Existing local file opened for reading. 以只读方式打开的已存在本地文件。</param>
-    /// <param name="remotePath">Destination path on the device. 设备上的目标路径。</param>
-    /// <param name="mode">Unix permission bits, sent as octal. 以八进制发送的 Unix 权限位。</param>
-    /// <param name="mtime">Device-side modification timestamp in seconds. 设备侧修改时间（秒）。</param>
-    /// <param name="cancellationToken">Cancels the push between packets. 在数据包之间取消推送。</param>
+    /// <param name="localPath">Existing local file opened for reading.<para>以只读方式打开的已存在本地文件。</para></param>
+    /// <param name="remotePath">Destination path on the device.<para>设备上的目标路径。</para></param>
+    /// <param name="mode">Unix permission bits, sent as octal.<para>以八进制发送的 Unix 权限位。</para></param>
+    /// <param name="mtime">Device-side modification timestamp in seconds.<para>设备侧修改时间（秒）。</para></param>
+    /// <param name="cancellationToken">Cancels the push between packets.<para>在数据包之间取消推送。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="localPath"/> or
     /// <paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="localPath"/> 或 <paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
@@ -235,19 +218,13 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Pushes a stream to the device.
     /// <para>异步将流推送到设备。</para>
     /// </summary>
-    /// <param name="source">Read to end-of-stream in client chunk sizes; the caller keeps ownership.
-    /// 按客户端块大小读至流末尾；所有权仍归调用方。</param>
-    /// <param name="remotePath">Destination path on the device. 设备上的目标路径。</param>
-    /// <param name="mode">Unix permission bits, sent as octal. 以八进制发送的 Unix 权限位。</param>
+    /// <param name="source">Read to end-of-stream in this client's chunk sizes; ownership stays with the
+    /// holder of the stream. <para>按本客户端的块大小读至流末尾；所有权仍归流的原持有者。</para></param>
+    /// <param name="remotePath">Destination path on the device.<para>设备上的目标路径。</para></param>
+    /// <param name="mode">Unix permission bits, sent as octal.<para>以八进制发送的 Unix 权限位。</para></param>
     /// <param name="mtime">Device-side modification timestamp in seconds; <c>0</c> means the current UTC time.
-    /// 设备侧修改时间（秒）；<c>0</c> 表示传输时的当前 UTC 时间。</param>
-    /// <param name="cancellationToken">Cancels the push between packets. 在数据包之间取消推送。</param>
-    /// <remarks>The source is read straight into the one packet buffer that also carries the 8-byte sync header,
-    /// so a full chunk costs a single copy and no per-packet allocation; only a short trailing chunk is copied
-    /// into an exact-size frame.
-    /// <para>源数据直接读入同时承载 8 字节 sync 头部的唯一数据包缓冲区，因此整块只需一次拷贝且不再按包分配；只有末尾的短块会被
-    /// 拷进一条恰好长度的帧。</para>
-    /// </remarks>
+    /// <para>设备侧修改时间（秒）；<c>0</c> 表示传输时的当前 UTC 时间。</para></param>
+    /// <param name="cancellationToken">Cancels the push between packets.<para>在数据包之间取消推送。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> or
     /// <paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="source"/> 或 <paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
@@ -300,9 +277,9 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Pulls a remote file into a local file.
     /// <para>异步将设备上的远端文件拉取到本地文件。</para>
     /// </summary>
-    /// <param name="remotePath">Device-side source file. 设备侧源文件。</param>
-    /// <param name="localPath">Local destination; created or truncated. 本地目标；不存在则创建，存在则截断。</param>
-    /// <param name="cancellationToken">Cancels the pull between packets. 在数据包之间取消拉取。</param>
+    /// <param name="remotePath">Device-side source file.<para>设备侧源文件。</para></param>
+    /// <param name="localPath">Local destination; created or truncated.<para>本地目标；不存在则创建，存在则截断。</para></param>
+    /// <param name="cancellationToken">Cancels the pull between packets.<para>在数据包之间取消拉取。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> or
     /// <paramref name="localPath"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 或 <paramref name="localPath"/> 为 <see langword="null"/>。</para></exception>
@@ -323,14 +300,10 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Pulls a remote file into a stream.
     /// <para>异步将远端文件拉取到流中。</para>
     /// </summary>
-    /// <param name="remotePath">Device-side source file. 设备侧源文件。</param>
-    /// <param name="destination">Written sequentially from the current position; the caller keeps ownership.
-    /// 从当前位置顺序写入；所有权仍归调用方。</param>
-    /// <param name="cancellationToken">Cancels the pull between packets. 在数据包之间取消拉取。</param>
-    /// <remarks>Device payload is written to <paramref name="destination"/> straight out of the inbound chunk
-    /// buffer, so a chunk that covers the requested body costs one copy instead of the previous two.
-    /// <para>设备负载直接从入站块缓冲区写入 <paramref name="destination"/>，因此覆盖所请求负载的块只需一次拷贝，而不是原来的两次。</para>
-    /// </remarks>
+    /// <param name="remotePath">Device-side source file.<para>设备侧源文件。</para></param>
+    /// <param name="destination">Written sequentially from the current position; ownership stays with the
+    /// holder of the stream. <para>从当前位置顺序写入；所有权仍归流的原持有者。</para></param>
+    /// <param name="cancellationToken">Cancels the pull between packets.<para>在数据包之间取消拉取。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> or
     /// <paramref name="destination"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 或 <paramref name="destination"/> 为 <see langword="null"/>。</para></exception>
@@ -383,12 +356,6 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Sends the QUIT marker and releases the sync stream.
     /// <para>发送 QUIT 标记并释放 sync 流。</para>
     /// </summary>
-    /// <returns>A task that completes once the stream has been released.
-    /// <para>流已释放后完成的任务。</para></returns>
-    /// <remarks>A device that rejects the marker is ignored: the stream closes either way, so disposing a
-    /// finished transfer never fails.
-    /// <para>设备拒绝标记时被忽略：无论如何流都会关闭，因此释放已完成的传输永不失败。</para>
-    /// </remarks>
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -423,9 +390,9 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Expects an OKAY or FAIL response from the sync service.
     /// <para>异步等待 sync 服务的 OKAY 或 FAIL 响应。</para>
     /// </summary>
-    /// <param name="stream">The sync stream. Sync 流。</param>
-    /// <param name="operation">The operation name for error messages. 用于错误消息的操作名称。</param>
-    /// <param name="cancellationToken">Cancels the reply wait. 取消应答等待。</param>
+    /// <param name="stream">The sync stream.<para>Sync 流。</para></param>
+    /// <param name="operation">The operation name for error messages.<para>用于错误消息的操作名称。</para></param>
+    /// <param name="cancellationToken">Cancels the reply wait.<para>取消应答等待。</para></param>
     /// <exception cref="InvalidDataException">The device reported FAIL or answered with an unexpected id.
     /// <para>设备上报 FAIL 或返回了非预期标识。</para></exception>
     private async ValueTask ExpectResponseAsync(AdbStream stream, string operation, CancellationToken cancellationToken)
@@ -453,9 +420,9 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Reads a 32-bit unsigned integer from the sync stream.
     /// <para>异步从 sync 流读取 32 位无符号整数。</para>
     /// </summary>
-    /// <param name="stream">The sync stream. Sync 流。</param>
-    /// <param name="cancellationToken">Cancels the read. 取消读取。</param>
-    /// <returns>The little-endian value. 小端取值。</returns>
+    /// <param name="stream">The sync stream.<para>Sync 流。</para></param>
+    /// <param name="cancellationToken">Cancels the read.<para>取消读取。</para></param>
+    /// <returns>The little-endian value.<para>小端取值。</para></returns>
     private async ValueTask<uint> ReadUInt32Async(AdbStream stream, CancellationToken cancellationToken) =>
         BinaryPrimitives.ReadUInt32LittleEndian(await ReadExactAsync(stream, 4, cancellationToken).ConfigureAwait(false));
 
@@ -463,9 +430,9 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Builds a v1 sync wire packet (4-byte id + 4-byte length + payload).
     /// <para>构建 v1 sync 线数据包（4 字节 id + 4 字节长度 + 负载）。</para>
     /// </summary>
-    /// <param name="id">The 4-byte command id. 4 字节命令 id。</param>
-    /// <param name="payload">The packet payload. 数据包负载。</param>
-    /// <returns>The assembled packet. 组装好的数据包。</returns>
+    /// <param name="id">The 4-byte command id.<para>4 字节命令 id。</para></param>
+    /// <param name="payload">The packet payload.<para>数据包负载。</para></param>
+    /// <returns>The assembled packet.<para>组装好的数据包。</para></returns>
     private static byte[] BuildV1Packet(string id, ReadOnlySpan<byte> payload)
     {
         var packet = new byte[V1HeaderSize + payload.Length];
@@ -478,9 +445,9 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Writes the 4-byte id and the payload length into a packet buffer that already holds the payload.
     /// <para>把 4 字节 id 与负载长度就地写入已承载负载的数据包缓冲区。</para>
     /// </summary>
-    /// <param name="packet">Buffer starting at the sync header. 以 sync 头部起始的缓冲区。</param>
-    /// <param name="id">The 4-byte command id. 4 字节命令 id。</param>
-    /// <param name="payloadLength">Bytes of payload that follow the header. 头部之后的负载字节数。</param>
+    /// <param name="packet">Buffer starting at the sync header.<para>以 sync 头部起始的缓冲区。</para></param>
+    /// <param name="id">The 4-byte command id.<para>4 字节命令 id。</para></param>
+    /// <param name="payloadLength">Bytes of payload that follow the header.<para>头部之后的负载字节数。</para></param>
     private static void WritePacketHeader(Span<byte> packet, string id, int payloadLength)
     {
         Encoding.ASCII.GetBytes(id, packet[..4]);
@@ -489,14 +456,12 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
 
     /// <summary>
     /// Reads an exact number of bytes from the sync stream, keeping any excess as a buffer slice instead of a
-    /// per-byte queue, so a 64 KiB DATA chunk followed by a small request does not degenerate into per-byte
-    /// enqueue/dequeue work.
-    /// <para>从 sync 流精确读取指定字节数，多余部分以缓冲区切片保留而非逐字节队列，因此 64 KiB DATA 块之后的小请求
-    /// 不会退化为逐字节入队/出队。</para>
+    /// per-byte queue.
+    /// <para>从 sync 流精确读取指定字节数，多余部分以缓冲区切片保留而非逐字节队列。</para>
     /// </summary>
-    /// <param name="stream">The sync stream. Sync 流。</param>
-    /// <param name="length">The number of bytes to read. 要读取的字节数。</param>
-    /// <param name="cancellationToken">Cancels the read. 取消读取。</param>
+    /// <param name="stream">The sync stream.<para>Sync 流。</para></param>
+    /// <param name="length">The number of bytes to read.<para>要读取的字节数。</para></param>
+    /// <param name="cancellationToken">Cancels the read.<para>取消读取。</para></param>
     /// <returns>A task resolving to the requested bytes. <para>结果为所请求字节的任务。</para></returns>
     /// <exception cref="InvalidDataException"><paramref name="length"/> is negative.
     /// <para><paramref name="length"/> 为负数。</para></exception>
@@ -557,10 +522,10 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// assembling an intermediate copy.
     /// <para>向目标写入恰好数量的 sync 负载字节，直接转交入站块切片而不另外组装中间副本。</para>
     /// </summary>
-    /// <param name="destination">Where the payload is appended. 负载写入的目标。</param>
-    /// <param name="stream">The sync stream. Sync 流。</param>
-    /// <param name="length">The number of payload bytes, already validated. 已校验的负载字节数。</param>
-    /// <param name="cancellationToken">Cancels the copy between chunks. 在块之间取消拷贝。</param>
+    /// <param name="destination">Where the payload is appended.<para>负载写入的目标。</para></param>
+    /// <param name="stream">The sync stream.<para>Sync 流。</para></param>
+    /// <param name="length">The number of payload bytes, already validated.<para>已校验的负载字节数。</para></param>
+    /// <param name="cancellationToken">Cancels the copy between chunks.<para>在块之间取消拷贝。</para></param>
     /// <exception cref="EndOfStreamException">The stream closed before the body was complete.
     /// <para>流在数据体结束前已关闭。</para></exception>
     private async ValueTask CopyExactAsync(Stream destination, AdbStream stream, int length,
@@ -585,16 +550,13 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     }
 
     /// <summary>
-    /// Validates a device-supplied chunk length against the inbound acceptance ceiling. The sync v1 wire
-    /// protocol never reports a payload or name longer than <see cref="InboundMaxChunkBytes"/>, so a larger
-    /// value is a protocol violation from an untrusted peer and must fail instead of driving an attacker-sized
-    /// allocation.
-    /// <para>按入站接受上限校验设备给出的分块长度。sync v1 线上协议上报的负载或名称不会超过
-    /// <see cref="InboundMaxChunkBytes"/>，更大的值属于不可信对端的协议违规，必须失败而不是驱动攻击者指定大小的分配。</para>
+    /// Validates a device-supplied chunk length against the inbound acceptance ceiling; a larger value is an
+    /// untrusted-peer protocol violation and must not drive allocation.
+    /// <para>按入站接受上限校验设备给出的分块长度；更大的值属于不可信对端的协议违规，不得驱动分配。</para>
     /// </summary>
-    /// <param name="length">The length field as reported by the device. 设备上报的长度字段。</param>
-    /// <param name="context">Protocol context used in the error message. 用于错误消息的协议上下文。</param>
-    /// <returns>The validated length as an <see cref="int"/>. 校验后的 <see cref="int"/> 长度。</returns>
+    /// <param name="length">The length field as reported by the device.<para>设备上报的长度字段。</para></param>
+    /// <param name="context">Protocol context used in the error message.<para>用于错误消息的协议上下文。</para></param>
+    /// <returns>The validated length as an <see cref="int"/>.<para>校验后的 <see cref="int"/> 长度。</para></returns>
     /// <exception cref="InvalidDataException">The reported length exceeds the inbound ceiling.
     /// <para>上报长度超过入站上限。</para></exception>
     private static int CheckedChunkLength(uint length, string context)
@@ -609,14 +571,14 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     }
 
     /// <summary>
-    /// Clamps the requested outbound chunk to AOSP <c>SYNC_DATA_MAX</c> and to the peer-advertised payload
+    /// Clamps the requested outbound chunk to the inbound acceptance ceiling and to the peer-advertised payload
     /// limit, so one sync packet fits a single WRTE frame.
-    /// <para>把请求的出站块钳制到 AOSP 的 <c>SYNC_DATA_MAX</c> 与对端通告的负载上限，使单个 sync 数据包适配一条 WRTE 帧。</para>
+    /// <para>把请求的出站块钳制到入站接受上限与对端通告的负载上限，使单个 sync 数据包适配一条 WRTE 帧。</para>
     /// </summary>
-    /// <param name="requestedMaxChunk">Chunk size requested by the caller. 调用方请求的分块大小。</param>
+    /// <param name="requestedMaxChunk">Chunk size requested for the transfer.<para>为该传输请求的分块大小。</para></param>
     /// <param name="peerMaxPayload">Payload limit advertised by the peer; <c>0</c> before the handshake or for an
-    /// adb-server-mediated connection. 对端通告的负载上限；握手前或经 adb server 的连接为 <c>0</c>。</param>
-    /// <returns>The outbound chunk size in file bytes. 出站数据块的文件字节数。</returns>
+    /// adb-server-mediated connection.<para>对端通告的负载上限；握手前或经 adb server 的连接为 <c>0</c>。</para></param>
+    /// <returns>The outbound chunk size in file bytes.<para>出站数据块的文件字节数。</para></returns>
     private static int ResolveOutChunk(uint requestedMaxChunk, uint peerMaxPayload)
     {
         uint outbound = requestedMaxChunk is 0 or > InboundMaxChunkBytes ? InboundMaxChunkBytes : requestedMaxChunk;

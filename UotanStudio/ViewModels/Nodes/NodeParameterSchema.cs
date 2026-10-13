@@ -4,7 +4,7 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.ViewModels.Nodes;
 
-/// <summary>Presentation rules for existing operation contracts; hidden values remain part of execution.</summary>
+/// <summary>Presentation rules for existing operation contracts; hidden values remain part of execution.<para>面向既有操作契约的呈现规则；隐藏值仍参与执行。</para></summary>
 internal static class NodeParameterSchema
 {
     internal static void Apply(FlowNodeViewModel node)

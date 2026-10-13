@@ -5,9 +5,9 @@ using Google.Protobuf.Reflection;
 namespace UotanStudio.Firmware.OtaDelta.Payload.Proto;
 
 /// <summary>
-/// In-memory protobuf message for one update_engine install operation, pairing an operation type
+/// In-memory protobuf message for one payload install operation, pairing an operation type
 /// with a payload data region and source/destination extents.
-/// <para>update_engine 单个安装操作的内存 protobuf 消息，将操作类型与载荷数据区域及源/目标范围（extents）配对。</para>
+/// <para>单个安装操作的内存 protobuf 消息，将操作类型与载荷数据区域及源/目标范围（extents）配对。</para>
 /// </summary>
 public sealed class InstallOperation : IMessage<InstallOperation>
 {

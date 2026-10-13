@@ -1,9 +1,11 @@
 namespace UotanStudio.Messages;
 
 /// <summary>
-/// <para>镜像选中变更消息，当镜像面板中选中的镜像条目发生变化时发送，
-/// 供属性面板等订阅方刷新显示镜像详细参数。</para>
-/// Image selection changed message, sent when the selected image entry in the image panel changes,
-/// allowing subscribers such as the properties panel to refresh and display detailed image parameters.
+/// Message announcing that the selected image entry changed.
+/// <para>宣告选中的镜像条目发生变化的消息。</para>
 /// </summary>
+/// <param name="Image">
+/// The image entry now selected, or <see langword="null"/> when the selection was cleared.
+/// <para>当前选中的镜像条目，选中被清空时为空。</para>
+/// </param>
 public record ImageSelectionChangedMessage(UotanStudio.ViewModels.Workspace.ImageEntryViewModel? Image);

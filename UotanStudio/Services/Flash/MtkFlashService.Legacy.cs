@@ -3,17 +3,8 @@ using UotanStudio.Comm.Transports.Serial;
 
 namespace UotanStudio.Services.Flash;
 
-/// <summary>
-/// A previewed, one-shot MediaTek download-agent plan that a host can confirm and execute.
-/// <para>已预览的一次性联发科下载代理计划，由宿主确认后执行。</para>
-/// </summary>
-/// <remarks>
-/// <para>Both the XFlash and Legacy preparations expose the same preview surface so confirmation and progress
-/// policy lives in one place. Execution runs at most once, applies no retry or rollback, and never performs
-/// an erase that the plan does not list explicitly.</para>
-/// <para>XFlash 与 Legacy 两种预览共用同一套预览接口，确认与进度策略因此只需实现一处。执行至多发生一次，
-/// 不重试、不回滚，且绝不执行计划未显式列出的擦除。</para>
-/// </remarks>
+/// <summary>A previewed, one-shot MediaTek download-agent plan awaiting explicit confirmation before execution.
+/// <para>已预览的一次性联发科下载代理计划，需显式确认后方可执行。</para></summary>
 public interface IMtkFlashPlanPreview : IDisposable
 {
     /// <summary>Gets the number of executable extents in the plan.
@@ -31,8 +22,8 @@ public interface IMtkFlashPlanPreview : IDisposable
     /// <value>The current state. <para>当前状态。</para></value>
     MtkFlashPlanState State { get; }
 
-    /// <summary>Executes the plan only after the host's explicit confirmation.
-    /// <para>仅在宿主显式确认后执行计划。</para></summary>
+    /// <summary>Executes the plan only after explicit confirmation.
+    /// <para>仅在显式确认后执行计划。</para></summary>
     /// <param name="progress">Optional phase-local progress reporter.
     /// <para>可选的阶段内进度报告器。</para></param>
     /// <param name="eraseTimeoutMs">The deadline for each erase range.
@@ -44,15 +35,8 @@ public interface IMtkFlashPlanPreview : IDisposable
         int eraseTimeoutMs = 120000, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Host orchestration for the MediaTek Legacy download agent family.
-/// <para>面向联发科 Legacy 下载代理家族的宿主编排。</para></summary>
-/// <remarks>
-/// <para>The Legacy agent transfers raw, 512-aligned ranges of a discovered eMMC region only. Preparation boots
-/// the agent, reads the region's GPT and reconciles the requested partition names with that live table before
-/// any source is opened; nothing here erases, pads or writes until execution is confirmed separately.</para>
-/// <para>Legacy 代理只传输已发现 eMMC 区域中按 512 对齐的原始范围。准备阶段启动代理、读取该区域的 GPT，
-/// 并在打开任何源之前把请求的分区名与该实时表核对；在单独确认执行之前，本流程不会擦除、填充或写入。</para>
-/// </remarks>
+/// <summary>Operations for the MediaTek Legacy download agent family.
+/// <para>面向联发科 Legacy 下载代理家族的操作。</para></summary>
 public static partial class MtkFlashService
 {
     /// <summary>Boots a Legacy agent on a leased session and previews GPT-named operations.
@@ -105,8 +89,8 @@ public static partial class MtkFlashService
             physicalPartition, steps, cancellationToken);
     }
 
-    /// <summary>Previews GPT-named Legacy operations through a caller-supplied session connector.
-    /// <para>经调用方提供的会话连接器预览按 GPT 名寻址的 Legacy 操作。</para></summary>
+    /// <summary>Previews GPT-named Legacy operations through a supplied session connector.
+    /// <para>经传入的会话连接器预览按 GPT 名寻址的 Legacy 操作。</para></summary>
     /// <param name="connect">Connector returning a storage-ready Legacy session; ownership transfers to the
     /// returned preview. <para>返回存储就绪 Legacy 会话的连接器；所有权转移给返回的预览对象。</para></param>
     /// <param name="physicalPartition">Explicit discovered Legacy region holding the GPT, 1 through 8.
@@ -162,11 +146,6 @@ public static partial class MtkFlashService
 
 /// <summary>Owns a previewed Legacy plan and its live session.
 /// <para>持有已预览的 Legacy 计划与其活动会话。</para></summary>
-/// <remarks>
-/// <para>Abandoning a preview requires disposal. Disposal while execution is running is rejected so an active
-/// transfer keeps its source handles alive.</para>
-/// <para>放弃预览必须释放。执行期间拒绝释放，使进行中的传输仍能持有源句柄。</para>
-/// </remarks>
 public sealed class MtkLegacyFlashPreparation : IMtkFlashPlanPreview
 {
     private readonly MtkSession _session;
@@ -189,21 +168,36 @@ public sealed class MtkLegacyFlashPreparation : IMtkFlashPlanPreview
     /// <value>One entry per extent. <para>每个范围对应一项。</para></value>
     public IReadOnlyList<MtkLegacyFlashOperation> Operations => _plan.Operations;
 
-    /// <inheritdoc />
+    /// <summary>Gets the number of executable extents in the plan.
+    /// <para>获取计划中可执行范围的数量。</para></summary>
+    /// <value>The extent count after preparation. <para>准备完成后的范围数量。</para></value>
     public int OperationCount => _plan.Operations.Count;
 
-    /// <inheritdoc />
+    /// <summary>Gets the planned write and erase bytes, excluding readback.
+    /// <para>获取计划的写入与擦除字节数，不含回读。</para></summary>
+    /// <value>The checked total. <para>防溢出累加的总量。</para></value>
     public long TotalBytes => _plan.TotalBytes;
 
-    /// <inheritdoc />
+    /// <summary>Gets the plan's one-shot lifecycle state.
+    /// <para>获取计划的单次生命周期状态。</para></summary>
+    /// <value>The current state. <para>当前状态。</para></value>
     public MtkFlashPlanState State => _plan.State;
 
-    /// <inheritdoc />
+    /// <summary>Executes the plan only after explicit confirmation.
+    /// <para>仅在显式确认后执行计划。</para></summary>
+    /// <param name="progress">Optional phase-local progress reporter.
+    /// <para>可选的阶段内进度报告器。</para></param>
+    /// <param name="eraseTimeoutMs">The deadline for each erase range.
+    /// <para>每个擦除范围的截止时间。</para></param>
+    /// <param name="cancellationToken">The execution cancellation token.
+    /// <para>执行取消令牌。</para></param>
+    /// <returns>Completion totals. <para>完成总量。</para></returns>
     public Task<MtkFlashPlanResult> ExecuteAsync(IProgress<MtkFlashPlanProgress>? progress = null,
         int eraseTimeoutMs = 120000, CancellationToken cancellationToken = default) =>
         _session.ExecuteLegacyPlanAsync(_plan, progress, eraseTimeoutMs, cancellationToken);
 
-    /// <inheritdoc />
+    /// <summary>Releases the plan and the session.
+    /// <para>释放计划与会话。</para></summary>
     public void Dispose()
     {
         _plan.Dispose();

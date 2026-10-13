@@ -330,13 +330,8 @@ public static class FormatDetector
     public static bool HasMagic(byte[] header, ReadOnlySpan<byte> magic) => header.AsSpan(0, Math.Min(header.Length, magic.Length)).SequenceEqual(magic);
 
     /// <summary>
-    /// Confirms, through each registered handler's optional <see cref="IFormatProbeHints"/> capability, whether
-    /// a pre-read header carries a known structural magic beyond the extension candidates. Registry population is
-    /// the caller's responsibility (for example <c>FirmwareFormatRegistry.RegisterAll()</c>); this only iterates the
-    /// <see cref="RegisteredHandlers"/> snapshot with a plain loop, so it stays statically dispatchable for AOT.
-    /// <para>通过各已注册处理器可选的 <see cref="IFormatProbeHints"/> 能力，确认预先读取的头部是否在扩展名候选之外
-    /// 携带已知的结构魔数。注册表填充是调用方的职责（例如 <c>FirmwareFormatRegistry.RegisterAll()</c>）；本方法只以普通
-    /// 循环遍历 <see cref="RegisteredHandlers"/> 快照，因此对 AOT 保持静态可分发。</para>
+    /// Confirms whether a pre-read header carries a known structural magic.
+    /// <para>确认预先读取的头部是否携带已知的结构魔数。</para>
     /// </summary>
     /// <param name="path">
     /// Path the header was read from, forwarded to each handler for cheap name-based disambiguation; never opened.
@@ -354,14 +349,8 @@ public static class FormatDetector
         => TryGetProbeMatch(path, header, out _);
 
     /// <summary>
-    /// Same confirmation as <see cref="MatchesProbeHints"/> but also reports which handler matched, so the caller
-    /// can distinguish formats that share an extension by reading the returned handler's
-    /// <see cref="IReadonlyFormatHandler.FormatName"/>. Handlers are consulted in registration order and the first
-    /// confirmation wins; the loop is a plain iteration over the <see cref="RegisteredHandlers"/> snapshot, keeping
-    /// it statically dispatchable for AOT, and registry population stays the caller's responsibility.
-    /// <para>与 <see cref="MatchesProbeHints"/> 相同的确认，但额外报告命中的处理器，使调用方能读取返回处理器的
-    /// <see cref="IReadonlyFormatHandler.FormatName"/> 以区分共用同一扩展名的格式。处理器按注册顺序咨询，首个确认即胜出；
-    /// 该循环是对 <see cref="RegisteredHandlers"/> 快照的普通遍历，因此对 AOT 保持静态可分发，注册表填充仍由调用方负责。</para>
+    /// Confirms a probe match and reports which registered handler matched.
+    /// <para>确认探测命中，并报告命中的已注册处理器。</para>
     /// </summary>
     /// <param name="path">
     /// Path the header was read from, forwarded to each handler; never opened. <para>读取该头部所用的路径，转发给各处理器；绝不打开。</para>

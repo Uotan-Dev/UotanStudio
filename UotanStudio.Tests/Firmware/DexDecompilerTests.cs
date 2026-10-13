@@ -243,7 +243,10 @@ public class DexDecompilerTests
         return dex;
     }
 
-    /// <summary>new-instance + invoke-direct &lt;init&gt; 折叠：build()Ljava/lang/StringBuilder;。</summary>
+    /// <summary>
+    /// new-instance + invoke-direct &lt;init&gt;
+    /// <para>折叠：build()Ljava/lang/StringBuilder;。</para>
+    /// </summary>
     private static DexFile BuildConstructorDex()
     {
         var dex = new DexFile("035");

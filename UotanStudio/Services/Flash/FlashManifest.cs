@@ -1,20 +1,26 @@
 namespace UotanStudio.Services.Flash;
 
-/// <summary>A validated ordered flash plan and an optional required device product.</summary>
+/// <summary>A validated ordered flash plan and an optional required device product.<para>经过校验的有序刷写计划，外加可选的目标设备产品要求。</para></summary>
+/// <param name="CodeName">Device product name the plan requires, when constrained.<para>计划限定的设备产品名，无要求时为空。</para></param>
+/// <param name="Steps">The ordered steps to execute.<para>要按序执行的步骤。</para></param>
+/// <param name="RequiresFastbootd">Marks the plan as requiring fastbootd.<para>标记该计划是否要求 fastbootd。</para></param>
 public sealed record FlashManifest(string? CodeName, IReadOnlyList<FlashStep> Steps, bool RequiresFastbootd = false)
 {
-    /// <summary>Image-writing steps for consumers that only need their source files.</summary>
+    /// <summary>Image-writing steps for consumers that only need their source files.<para>只给出镜像写入步骤及其源文件。</para></summary>
+    /// <value>The partition names, image paths and lengths of flash steps.<para>刷写步骤的分区名、镜像路径与长度。</para></value>
     public IReadOnlyList<(string Partition, string Path, long Length)> Images =>
         [.. Steps.Where(step => step.Command == "flash").Select(step => (step.Partition, step.ImagePath, step.ImageLength))];
 }
 
-/// <summary>Parses the legacy fastboot TXT image list without executing its contents as commands.</summary>
+/// <summary>Parses the legacy fastboot TXT image list without executing its contents as commands.<para>解析旧式 fastboot TXT 镜像清单，但不把其中的内容当作命令执行。</para></summary>
 public static class FlashManifestReader
 {
     private const int MaxLines = 4096;
     private const long MaxManifestBytes = 1024 * 1024;
 
-    /// <summary>Reads an explicit list; unsupported commands cause the whole list to fail.</summary>
+    /// <summary>Reads an explicit list; unsupported commands cause the whole list to fail.<para>读取显式清单，出现不支持的命令时整份清单失败。</para></summary>
+    /// <param name="manifestPath">Path of the TXT image list.<para>TXT 镜像清单的路径。</para></param>
+    /// <returns>The validated ordered plan.<para>经过校验的有序计划。</para></returns>
     public static FlashManifest Read(string manifestPath)
     {
         var file = new FileInfo(manifestPath);

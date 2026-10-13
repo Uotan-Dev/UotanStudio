@@ -382,10 +382,8 @@ internal sealed class DtsParser
 
     /// <summary>
     /// Resolves and applies pending <c>/delete-node/ &amp;label;</c> directives after
-    /// all labels have been registered.  Following dtc v1.7.2 <c>DT_DEL_NODE dt_ref ';'</c>,
-    /// the node referenced by the label is removed from its parent.
-    /// <para>在全部标签注册后解析并执行 <c>/delete-node/ &amp;label;</c> 指令，
-    /// 按 dtc v1.7.2 <c>DT_DEL_NODE dt_ref ';'</c> 规则从父节点移除被引用节点。</para>
+    /// all labels have been registered; the node referenced by the label is removed from its parent.
+    /// <para>在全部标签注册后解析并执行 <c>/delete-node/ &amp;label;</c> 指令，从父节点移除被引用节点。</para>
     /// </summary>
     private void ApplyPendingLabelDeletes()
     {
@@ -864,18 +862,11 @@ internal sealed class DtsParser
     }
 
     /// <summary>
-    /// Parses a cell-level expression: a number optionally followed by binary
-    /// arithmetic operators (<c>+ - * / &lt;&lt; &gt;&gt;</c>).
-    /// <para>解析单元格级表达式：数字后可选跟二元算术运算符（<c>+ - * / &lt;&lt; &gt;&gt;</c>）。</para>
-    /// </summary>
-    /// <summary>
-    /// Parses a DTS integer expression with dtc v1.7.2 precedence:
-    /// unary (+ - ~ !)  &gt; multiplicative (* / %)  &gt; additive (+ -)
-    /// &gt; shift (&lt;&lt; &gt;&gt;)  &gt; relational (&lt; &gt; &lt;= &gt;=)  &gt; equality (== !=)
-    /// &gt; bitwise AND (&amp;)  &gt; bitwise XOR (^)  &gt; bitwise OR (|)
-    /// &gt; logical AND (&amp;&amp;)  &gt; logical OR (||)
-    /// Parenthesised sub-expressions are supported.
-    /// <para>按 dtc v1.7.2 优先级解析 DTS 整数表达式，支持括号子表达式。</para>
+    /// Parses a DTS integer expression with standard operator precedence (unary, multiplicative,
+    /// additive, shift, relational, equality, bitwise AND/XOR/OR, logical AND/OR);
+    /// parenthesised sub-expressions are supported.
+    /// <para>按标准运算符优先级解析 DTS 整数表达式（一元、乘除、加减、移位、关系、相等、
+    /// 位与/异或/或、逻辑与/或），支持括号子表达式。</para>
     /// </summary>
     private ulong ParseCellExpression()
     {

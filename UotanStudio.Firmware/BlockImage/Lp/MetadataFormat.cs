@@ -48,12 +48,10 @@ public static class MetadataFormat
 
     /// <summary>
     /// On-disk byte width of the fixed name field shared by the three LP name kinds, namely the
-    /// partition name, the partition-group name and the block-device partition name. Upstream
-    /// <c>liblp</c> stores each of them as an ASCII C string in <c>LP_NAME_MAX_LENGTH</c> bytes, so a
+    /// partition name, the partition-group name and the block-device partition name; a
     /// value that does not fit cannot be stored at all and must never be clipped into the field.
     /// <para>LP 三种名称（分区名、分区组名、块设备分区名）共用的定宽名称字段磁盘字节数。
-    /// 上游 <c>liblp</c> 把它们分别按 ASCII C 字符串存储在 <c>LP_NAME_MAX_LENGTH</c> 字节内，
-    /// 因此放不下的值根本无法存储，绝不能再裁剪写入字段。</para>
+    /// 放不下的值根本无法存储，绝不能再裁剪写入字段。</para>
     /// </summary>
     /// <value>
     /// The 36 bytes each name field occupies: bytes 0..35 of a partition or group entry and bytes
@@ -660,14 +658,12 @@ public readonly struct LpMetadataPartition
 
     /// <summary>
     /// Writes one LP name into the bytes of its fixed field, failing instead of clipping when the value
-    /// does not fit. A clipped name would silently rename a partition on the device, because
-    /// <c>dump-super</c>, <c>fastboot</c> and the kernel read back exactly the bytes stored here, and a
+    /// does not fit: a clipped name would silently rename a partition on the device, and a
     /// value wider than the field would also overwrite the adjacent flags or index. The caller passes a
     /// destination slice that starts at the field, and <see cref="MetadataFormat.NameFieldBytes"/> stays
     /// the single authority on the accepted width for all three name kinds.
-    /// <para>把一个 LP 名称写入其定宽字节的字段；值放不下时直接失败而不是裁剪。裁剪后的名称会在设备上
-    /// 静默改名，因为 <c>dump-super</c>、<c>fastboot</c> 与内核读回的就是此处存储的字节；超出字段宽度的
-    /// 值还会覆盖相邻的标志或索引字段。调用方传入从该字段起始的目标切片，而
+    /// <para>把一个 LP 名称写入其定宽字节的字段；值放不下时直接失败而不是裁剪——裁剪后的名称会在设备上
+    /// 静默改名，超出字段宽度的值还会覆盖相邻的标志或索引字段。调用方传入从该字段起始的目标切片，而
     /// <see cref="MetadataFormat.NameFieldBytes"/> 始终是三种名称共用的唯一宽度依据。</para>
     /// </summary>
     /// <param name="dest">

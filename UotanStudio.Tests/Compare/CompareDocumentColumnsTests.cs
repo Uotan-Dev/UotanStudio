@@ -7,14 +7,14 @@ using Xunit;
 namespace UotanStudio.Tests.Compare;
 
 /// <summary>
-/// <para>对比文档的文件列契约（对齐 Beyond Compare 的行为）：默认两列、可继续追加（浏览用）、导入目录后
-/// 保持折叠；文件夹对比把两侧压平成同一份对齐行列表——同名条目同一行、单侧条目在另一侧留空、差异整行变色、
-/// 两侧共享展开状态；双击文件在新标签打开文件对比；对比中的刷新与返回上一级同时作用于两侧。</para>
 /// File-column contract of the compare document (aligned with Beyond Compare): two columns by default, freely
 /// appendable for browsing, an imported folder stays collapsed; a folder comparison flattens both sides into one
 /// aligned row list — same-name entries share a row, single-side entries stay blank on the other side, differing
 /// rows are coloured as a whole and both sides share one expansion state; double-clicking a file opens its
 /// comparison in a new tab; refresh and go-up act on both sides while comparing.
+/// <para>对比文档的文件列契约（对齐 Beyond Compare 的行为）：默认两列、可继续追加（浏览用）、导入目录后
+/// 保持折叠；文件夹对比把两侧压平成同一份对齐行列表——同名条目同一行、单侧条目在另一侧留空、差异整行变色、
+/// 两侧共享展开状态；双击文件在新标签打开文件对比；对比中的刷新与返回上一级同时作用于两侧。</para>
 /// </summary>
 public sealed class CompareDocumentColumnsTests : IDisposable
 {
@@ -538,11 +538,11 @@ public sealed class CompareDocumentColumnsTests : IDisposable
     }
 
     /// <summary>
-    /// <para>建立一对包含相同/不同/仅左/仅右与同名子目录的对比目录（子目录本身两侧都存在，只有其中的文件
-    /// 不同，因此子目录的状态只能靠子树聚合得出）。</para>
     /// Creates a pair of directories holding equal/different/left-only/right-only entries plus a same-named
     /// subdirectory (the subdirectory itself exists on both sides and only its file differs, so its status can only
     /// come from subtree aggregation).
+    /// <para>建立一对包含相同/不同/仅左/仅右与同名子目录的对比目录（子目录本身两侧都存在，只有其中的文件
+    /// 不同，因此子目录的状态只能靠子树聚合得出）。</para>
     /// </summary>
     private void CreateCompareFixture()
     {

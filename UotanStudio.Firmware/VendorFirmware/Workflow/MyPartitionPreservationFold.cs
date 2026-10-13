@@ -32,13 +32,13 @@ internal static class MyPartitionPreservationFold
     /// The system partition's consolidated metadata directory receiving the fold.
     /// <para>接收折叠的 system 分区统一元数据目录。</para>
     /// </param>
-    /// <param name="partition"><para>被合并分区的完整名称（含槽位后缀）。</para>The merged partition's full name (with slot suffix).</param>
-    /// <param name="systemPartitionName"><para>system 分区自身的名称。</para>The system partition's own name.</param>
+    /// <param name="partition">The merged partition's full name (with slot suffix). <para>被合并分区的完整名称（含槽位后缀）。</para></param>
+    /// <param name="systemPartitionName">The system partition's own name. <para>system 分区自身的名称。</para></param>
     /// <param name="rekeyPrefix">
     /// Merged location inside the system image, e.g. <c>system/my_product</c>.
     /// <para>system 镜像内的合并位置，例如 <c>system/my_product</c>。</para>
     /// </param>
-    /// <param name="cancellationToken"><para>取消折叠；取消时不改动任何清单。</para>Cancels the fold; no manifest is changed on cancellation.</param>
+    /// <param name="cancellationToken">Cancels the fold; no manifest is changed on cancellation. <para>取消折叠；取消时不改动任何清单。</para></param>
     /// <returns>
     /// Whether both manifests existed and the fold was applied, plus the folded inode entry count.
     /// <para>两份清单都存在且折叠已应用时为 <see langword="true"/>，并返回折叠的 inode 条目数。</para>

@@ -4,8 +4,9 @@ using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
-/// <summary>Regression tests for the default-signature publishing and runtime identity import flow.</summary>
-/// <summary>默认签名发布与运行时身份导入流程的回归测试。</summary>
+/// <summary>Regression tests for the default-signature publishing and runtime identity import flow.
+/// <para>默认签名发布与运行时身份导入流程的回归测试。</para>
+/// </summary>
 [Collection("DebugBridgeIdentitySettings")]
 public sealed class DefaultSignatureTests : IDisposable
 {

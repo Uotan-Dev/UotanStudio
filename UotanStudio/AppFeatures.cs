@@ -1,8 +1,9 @@
 namespace UotanStudio;
 
-/// <summary>Availability of retained application features. 保留功能的应用内可用性。</summary>
+/// <summary>Availability of retained application features.<para>保留功能的可用性。</para></summary>
 public static class AppFeatures
 {
-    /// <summary>Keep the AI UI unavailable in all builds. 在所有构建中隐藏 AI 界面。</summary>
+    /// <summary>Keeps the AI assistant feature unavailable in every build.<para>AI 助手功能在所有构建中保持不可用。</para></summary>
+    /// <value>Always false.<para>始终为 false。</para></value>
     public static bool AiAssistantEnabled => false;
 }

@@ -13,71 +13,71 @@ using UotanStudio.ViewModels.Devices;
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
-/// <para>APK 元数据编辑器视图模型：承载 <see cref="ApkParser"/> 提取的应用信息
-/// （包名/版本/SDK/权限/ABI/图标），主视图展示图标与全部详细信息。</para>
 /// APK metadata editor view model: hosts the application info extracted by <see cref="ApkParser"/>
 /// (package name/version/SDK/permissions/ABIs/icon), with the main view showing the icon and all
 /// details.
+/// <para>APK 元数据编辑器视图模型：承载 <see cref="ApkParser"/> 提取的应用信息
+/// （包名/版本/SDK/权限/ABI/图标），主视图展示图标与全部详细信息。</para>
 /// </summary>
 public partial class ApkEditorViewModel : Document
 {
     /// <summary>
-    /// <para>加载中提示文案的本地化标题。</para>
     /// The localized title of the busy/loading label.
+    /// <para>加载中提示文案的本地化标题。</para>
     /// </summary>
     public static string BusyLabel => LanguageService.Instance.GetString("Dock_Apk_Busy");
 
     /// <summary>
-    /// <para>是否正在后台分析（联动忙碌指示动画）。</para>
     /// Whether the background analysis is running (drives the busy indicator animation).
+    /// <para>是否正在后台分析（联动忙碌指示动画）。</para>
     /// </summary>
     [ObservableProperty] private bool _isBusy;
 
     /// <summary>
-    /// <para>文档对应的文件路径。</para>
     /// The file path of the document.
+    /// <para>文档对应的文件路径。</para>
     /// </summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SignApkCommand))]
     private string? _filePath;
 
     /// <summary>
-    /// <para>分析错误文本；为空表示无错误。</para>
     /// The analysis error text; empty means no error.
+    /// <para>分析错误文本；为空表示无错误。</para>
     /// </summary>
     [ObservableProperty] private string _compileError = string.Empty;
 
     /// <summary>
-    /// <para>文件大小显示文本（状态栏/概览）。</para>
     /// The localized file-size display text (status bar / overview).
+    /// <para>文件大小显示文本（状态栏/概览）。</para>
     /// </summary>
     [ObservableProperty] private string _sizeDisplay = string.Empty;
 
     /// <summary>
-    /// <para>应用包名。</para>
     /// The application package name.
+    /// <para>应用包名。</para>
     /// </summary>
     [ObservableProperty] private string _packageName = string.Empty;
 
     [ObservableProperty] private string _applicationName = string.Empty;
 
     /// <summary>
-    /// <para>版本名（versionName）。</para>
     /// The version name.
+    /// <para>版本名（versionName）。</para>
     /// </summary>
     [ObservableProperty] private string _versionName = string.Empty;
 
     /// <summary>
-    /// <para>版本号文本（versionCode）。</para>
     /// The version-code text.
+    /// <para>版本号文本（versionCode）。</para>
     /// </summary>
     [ObservableProperty] private string _versionCodeDisplay = string.Empty;
 
     [ObservableProperty] private string _versionDisplay = string.Empty;
 
     /// <summary>
-    /// <para>SDK 信息文本（min/target/compile）。</para>
     /// The SDK info text (min/target/compile).
+    /// <para>SDK 信息文本（min/target/compile）。</para>
     /// </summary>
     [ObservableProperty] private string _sdkDisplay = string.Empty;
 
@@ -90,26 +90,26 @@ public partial class ApkEditorViewModel : Document
     [ObservableProperty] private string _hardeningStateDisplay = "-";
 
     /// <summary>
-    /// <para>ABI 列表文本。</para>
     /// The ABI list text.
+    /// <para>ABI 列表文本。</para>
     /// </summary>
     [ObservableProperty] private string _abiDisplay = string.Empty;
 
     /// <summary>
-    /// <para>权限列表（主视图逐行展示）。</para>
     /// The permission list (shown line by line in the main view).
+    /// <para>权限列表（主视图逐行展示）。</para>
     /// </summary>
     [ObservableProperty] private string _permissionsDisplay = string.Empty;
 
     /// <summary>
-    /// <para>应用图标（PNG/WebP/JPG 可渲染；矢量/缺失为 <c>null</c> 时显示占位）。</para>
     /// The application icon (rendered for PNG/WebP/JPG; placeholder when <c>null</c>).
+    /// <para>应用图标（PNG/WebP/JPG 可渲染；矢量/缺失为 <c>null</c> 时显示占位）。</para>
     /// </summary>
     [ObservableProperty] private Bitmap? _iconBitmap;
 
     /// <summary>
-    /// <para>图标是否可渲染（否则主视图显示占位）。</para>
     /// Whether the icon is renderable (otherwise the main view shows a placeholder).
+    /// <para>图标是否可渲染（否则主视图显示占位）。</para>
     /// </summary>
     [ObservableProperty] private bool _hasIcon;
 
@@ -117,20 +117,20 @@ public partial class ApkEditorViewModel : Document
     [ObservableProperty] private bool _isInstalling;
 
     /// <summary>
-    /// <para>解析后的 APK 元数据（属性面板取值用）。</para>
     /// The parsed APK metadata (for the properties panel).
+    /// <para>解析后的 APK 元数据（属性面板取值用）。</para>
     /// </summary>
     private ApkInfo? _info;
 
     /// <summary>
-    /// <para>解析后的 APK 元数据；未加载时为 <c>null</c>。</para>
     /// The parsed APK metadata; <c>null</c> when not loaded.
+    /// <para>解析后的 APK 元数据；未加载时为 <c>null</c>。</para>
     /// </summary>
     public ApkInfo? Info => _info;
 
     /// <summary>
-    /// <para>创建 APK 元数据编辑器视图模型。</para>
     /// Creates the APK metadata editor view model.
+    /// <para>创建 APK 元数据编辑器视图模型。</para>
     /// </summary>
     public ApkEditorViewModel()
     {
@@ -200,8 +200,8 @@ public partial class ApkEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>异步分析 APK 文件并填充元数据展示属性。</para>
     /// Asynchronously analyzes an APK file and populates the metadata display properties.
+    /// <para>异步分析 APK 文件并填充元数据展示属性。</para>
     /// </summary>
     /// <param name="path">APK 文件路径。<para>APK file path.</para></param>
     public async Task LoadAsync(string path)
@@ -277,10 +277,10 @@ public partial class ApkEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>从图标字节生成位图：PNG/WebP/JPG 直接解码；AXML vector drawable 解析并渲染；
-    /// 其余格式显示占位。</para>
     /// Creates a bitmap from the icon bytes: PNG/WebP/JPG decode directly; AXML vector
     /// drawables are parsed and rendered; other formats show a placeholder.
+    /// <para>从图标字节生成位图：PNG/WebP/JPG 直接解码；AXML vector drawable 解析并渲染；
+    /// 其余格式显示占位。</para>
     /// </summary>
     private void LoadIcon(ApkInfo info)
     {
@@ -321,9 +321,9 @@ public partial class ApkEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>解析 AXML vector drawable 并渲染为位图；解析或渲染失败时返回 <c>null</c>。</para>
     /// Parses an AXML vector drawable and renders it to a bitmap; returns <c>null</c> when
     /// parsing or rendering fails.
+    /// <para>解析 AXML vector drawable 并渲染为位图；解析或渲染失败时返回 <c>null</c>。</para>
     /// </summary>
     private static Bitmap? RenderVectorIcon(byte[] bytes)
     {
@@ -385,8 +385,8 @@ public partial class ApkEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>释放文档持有的模型与视图数据（文档关闭时调用）。</para>
     /// Releases the model and view data held by this document (called when the document is closed).
+    /// <para>释放文档持有的模型与视图数据（文档关闭时调用）。</para>
     /// </summary>
     public void Cleanup()
     {

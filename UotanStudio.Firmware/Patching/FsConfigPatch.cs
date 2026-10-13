@@ -27,13 +27,8 @@ public static class FsConfigPatch
     /// </summary>
     private const ushort DefaultDirectoryMode = 0x1ED;
     /// <summary>
-    /// Rebases a partition-owned fs_config document under <c>&lt;rootPrefix&gt;&lt;partition&gt;</c>: removes the
-    /// root <c>/</c> default entry and duplicate prefix defaults, prefixes every other entry path with the
-    /// configured root, keeps already-rebased entries verbatim, and appends the <c>0 0 0755</c> default entry.
-    /// Rebasing an already-rebased document yields the same text.
-    /// <para>将分区自有的 fs_config 文档改基到 <c>&lt;rootPrefix&gt;&lt;partition&gt;</c> 之下：移除根 <c>/</c> 默认条目与前缀
-    /// 默认重复条目，为其余条目路径加上配置根前缀，保持已改基条目原样，并追加 <c>0 0 0755</c> 默认条目。
-    /// 对已改基文档再次改基得到完全相同的文本。</para>
+    /// Rebases a partition-owned fs_config document under the configured root and partition prefix.
+    /// <para>把分区自有的 fs_config 文档改基到配置的根与分区前缀之下。</para>
     /// </summary>
     /// <param name="text">
     /// The existing fs_config source text. <para>现有的 fs_config 源文本。</para>
@@ -236,8 +231,8 @@ public static class FsConfigPatch
         return new TextPatchResult(text[..start] + text[end..], 1, true);
     }
     /// <summary>
-    /// Reads one exact image path. Mode tokens are octal, the single dialect both the export and AOSP tools use.
-    /// <para>读取一个精确的镜像路径。模式记号为八进制，即导出文件与 AOSP 工具共同使用的唯一方言。</para>
+    /// Reads one exact image path. Mode tokens are octal.
+    /// <para>读取一个精确的镜像路径。模式记号为八进制。</para>
     /// </summary>
     /// <param name="text">
     /// The fs_config source text. <para>fs_config 源文本。</para>

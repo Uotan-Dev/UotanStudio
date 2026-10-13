@@ -21,19 +21,34 @@ internal sealed class LpGeometry
     /// </summary>
     public const int StructSizeBytes = MetadataFormat.Sizes.Geometry;
 
-    /// <summary>Gets the reported struct size from the blob. 从数据块中读取的报告结构大小。</summary>
+    /// <summary>
+    /// Gets the reported struct size from the blob.
+    /// <para>从数据块中读取的报告结构大小。</para>
+    /// </summary>
     public uint StructSize { get; }
 
-    /// <summary>Gets the SHA256 checksum covering the complete 52-byte structure. 覆盖完整 52 字节结构的 SHA256 校验和。</summary>
+    /// <summary>
+    /// Gets the SHA256 checksum covering the complete 52-byte structure.
+    /// <para>覆盖完整 52 字节结构的 SHA256 校验和。</para>
+    /// </summary>
     public byte[] Checksum { get; }
 
-    /// <summary>Gets the maximum size of a metadata slot in bytes. 元数据槽位的最大大小（字节）。</summary>
+    /// <summary>
+    /// Gets the maximum size of a metadata slot in bytes.
+    /// <para>元数据槽位的最大大小（字节）。</para>
+    /// </summary>
     public uint MetadataMaxSize { get; }
 
-    /// <summary>Gets the number of metadata slots. 元数据槽位数量。</summary>
+    /// <summary>
+    /// Gets the number of metadata slots.
+    /// <para>元数据槽位数量。</para>
+    /// </summary>
     public uint MetadataSlotCount { get; }
 
-    /// <summary>Gets the logical block size in bytes. 逻辑块大小（字节）。</summary>
+    /// <summary>
+    /// Gets the logical block size in bytes.
+    /// <para>逻辑块大小（字节）。</para>
+    /// </summary>
     public uint LogicalBlockSize { get; }
 
     /// <summary>
@@ -107,25 +122,43 @@ internal sealed class SuperLogicalPartition(
     string name, uint groupIndex, string? groupName, uint attributes,
     uint firstExtentIndex, uint numExtents, long sizeInBytes)
 {
-    /// <summary>Gets the logical partition name. 逻辑分区名称。</summary>
+    /// <summary>
+    /// Gets the logical partition name.
+    /// <para>逻辑分区名称。</para>
+    /// </summary>
     public string Name { get; } = name;
 
-    /// <summary>Gets the index of the partition group. 分区组索引。</summary>
+    /// <summary>
+    /// Gets the index of the partition group.
+    /// <para>分区组索引。</para>
+    /// </summary>
     public uint GroupIndex { get; } = groupIndex;
 
-    /// <summary>Gets the partition group name, when resolvable. 分区组名称（可解析时）。</summary>
+    /// <summary>
+    /// Gets the partition group name, when resolvable.
+    /// <para>分区组名称（可解析时）。</para>
+    /// </summary>
     public string? GroupName { get; } = groupName;
 
-    /// <summary>Gets the partition attributes flags. 分区属性标志。</summary>
+    /// <summary>
+    /// Gets the partition attributes flags.
+    /// <para>分区属性标志。</para>
+    /// </summary>
     public uint Attributes { get; } = attributes;
 
-    /// <summary>Gets the index of the first extent. 首个 extent 的索引。</summary>
+    /// <summary>
+    /// Gets the index of the first extent.
+    /// <para>首个 extent 的索引。</para>
+    /// </summary>
     public uint FirstExtentIndex { get; } = firstExtentIndex;
 
     /// <summary>Gets the number of extents. extent 数量。</summary>
     public uint NumExtents { get; } = numExtents;
 
-    /// <summary>Gets the total partition size in bytes (sum of extent sectors × 512). 分区总大小（字节）（extent 扇区数之和 × 512）。</summary>
+    /// <summary>
+    /// Gets the total partition size in bytes (sum of extent sectors × 512).
+    /// <para>分区总大小（字节）（extent 扇区数之和 × 512）。</para>
+    /// </summary>
     public long SizeInBytes { get; } = sizeInBytes;
 
     /// <inheritdoc />
@@ -140,17 +173,26 @@ internal sealed class SuperLogicalPartition(
 internal sealed class SuperImageExtent(
     ulong numSectors, uint targetType, ulong targetData, uint targetSource)
 {
-    /// <summary>Gets the number of 512-byte sectors in this extent. 此 extent 的 512 字节扇区数。</summary>
+    /// <summary>
+    /// Gets the number of 512-byte sectors in this extent.
+    /// <para>此 extent 的 512 字节扇区数。</para>
+    /// </summary>
     public ulong NumSectors { get; } = numSectors;
 
-    /// <summary>Gets the target type (0=Linear, 1=Zero). 目标类型（0=线性，1=零）。</summary>
+    /// <summary>
+    /// Gets the target type (0=Linear, 1=Zero).
+    /// <para>目标类型（0=线性，1=零）。</para>
+    /// </summary>
     public uint TargetType { get; } = targetType;
 
     /// <summary>Gets the absolute starting sector within the source block device.
     /// 获取源块设备内的绝对起始扇区。</summary>
     public ulong TargetData { get; } = targetData;
 
-    /// <summary>Gets the source block device index. 源块设备索引。</summary>
+    /// <summary>
+    /// Gets the source block device index.
+    /// <para>源块设备索引。</para>
+    /// </summary>
     public uint TargetSource { get; } = targetSource;
 }
 
@@ -162,22 +204,40 @@ internal sealed class SuperImageBlockDevice(
     ulong firstLogicalSector, uint alignment, uint alignmentOffset, ulong size,
     string partitionName, uint flags)
 {
-    /// <summary>Gets the first sector available for logical partitions. 可用于逻辑分区的首个扇区。</summary>
+    /// <summary>
+    /// Gets the first sector available for logical partitions.
+    /// <para>可用于逻辑分区的首个扇区。</para>
+    /// </summary>
     public ulong FirstLogicalSector { get; } = firstLogicalSector;
 
-    /// <summary>Gets the alignment requirement in bytes. 对齐要求（字节）。</summary>
+    /// <summary>
+    /// Gets the alignment requirement in bytes.
+    /// <para>对齐要求（字节）。</para>
+    /// </summary>
     public uint Alignment { get; } = alignment;
 
-    /// <summary>Gets the alignment offset relative to the first sector. 相对首个扇区的对齐偏移。</summary>
+    /// <summary>
+    /// Gets the alignment offset relative to the first sector.
+    /// <para>相对首个扇区的对齐偏移。</para>
+    /// </summary>
     public uint AlignmentOffset { get; } = alignmentOffset;
 
-    /// <summary>Gets the total size of the block device in bytes. 块设备总大小（字节）。</summary>
+    /// <summary>
+    /// Gets the total size of the block device in bytes.
+    /// <para>块设备总大小（字节）。</para>
+    /// </summary>
     public ulong Size { get; } = size;
 
-    /// <summary>Gets the backing partition name. 支撑该块设备的分区名称。</summary>
+    /// <summary>
+    /// Gets the backing partition name.
+    /// <para>支撑该块设备的分区名称。</para>
+    /// </summary>
     public string PartitionName { get; } = partitionName;
 
-    /// <summary>Gets the device flags. 设备标志。</summary>
+    /// <summary>
+    /// Gets the device flags.
+    /// <para>设备标志。</para>
+    /// </summary>
     public uint Flags { get; } = flags;
 }
 
@@ -187,16 +247,28 @@ internal sealed class SuperImageBlockDevice(
 /// </summary>
 internal sealed class SuperBuildPartition(string name, string groupName, long sizeInBytes, uint attributes = 0)
 {
-    /// <summary>Gets the logical partition name. 逻辑分区名称。</summary>
+    /// <summary>
+    /// Gets the logical partition name.
+    /// <para>逻辑分区名称。</para>
+    /// </summary>
     public string Name { get; } = name;
 
-    /// <summary>Gets the partition group name. 分区组名称。</summary>
+    /// <summary>
+    /// Gets the partition group name.
+    /// <para>分区组名称。</para>
+    /// </summary>
     public string GroupName { get; } = groupName;
 
-    /// <summary>Gets the partition size in bytes. 分区大小（字节）。</summary>
+    /// <summary>
+    /// Gets the partition size in bytes.
+    /// <para>分区大小（字节）。</para>
+    /// </summary>
     public long SizeInBytes { get; } = sizeInBytes;
 
-    /// <summary>Gets the partition attributes flags. 分区属性标志。</summary>
+    /// <summary>
+    /// Gets the partition attributes flags.
+    /// <para>分区属性标志。</para>
+    /// </summary>
     public uint Attributes { get; } = attributes;
 }
 
@@ -212,10 +284,16 @@ internal sealed class SuperImageMetadata(
     IReadOnlyList<SuperImageBlockDevice> blockDevices,
     IReadOnlyList<string> groupNames)
 {
-    /// <summary>Gets the parsed geometry. 解析出的 geometry。</summary>
+    /// <summary>
+    /// Gets the parsed geometry.
+    /// <para>解析出的 geometry。</para>
+    /// </summary>
     public LpGeometry Geometry { get; } = geometry;
 
-    /// <summary>Gets the metadata slot index this blob was read from. 读取该数据块的元数据槽位索引。</summary>
+    /// <summary>
+    /// Gets the metadata slot index this blob was read from.
+    /// <para>读取该数据块的元数据槽位索引。</para>
+    /// </summary>
     public int Slot { get; } = slot;
 
     /// <summary>Gets the LP metadata major version. LP 元数据主版本号。</summary>
@@ -224,29 +302,50 @@ internal sealed class SuperImageMetadata(
     /// <summary>Gets the LP metadata minor version. LP 元数据次版本号。</summary>
     public uint MinorVersion { get; } = minorVersion;
 
-    /// <summary>Gets the header size in bytes. 头大小（字节）。</summary>
+    /// <summary>
+    /// Gets the header size in bytes.
+    /// <para>头大小（字节）。</para>
+    /// </summary>
     public uint HeaderSize { get; } = headerSize;
 
-    /// <summary>Gets the actual metadata size in bytes. 实际元数据大小（字节）。</summary>
+    /// <summary>
+    /// Gets the actual metadata size in bytes.
+    /// <para>实际元数据大小（字节）。</para>
+    /// </summary>
     public uint MetadataSize { get; } = metadataSize;
 
-    /// <summary>Gets the maximum metadata slot size in bytes. 元数据槽位最大大小（字节）。</summary>
+    /// <summary>
+    /// Gets the maximum metadata slot size in bytes.
+    /// <para>元数据槽位最大大小（字节）。</para>
+    /// </summary>
     public uint MetadataMaxSize { get; } = metadataMaxSize;
 
-    /// <summary>Gets the metadata slot count. 元数据槽位数量。</summary>
+    /// <summary>
+    /// Gets the metadata slot count.
+    /// <para>元数据槽位数量。</para>
+    /// </summary>
     public uint MetadataSlotCount { get; } = metadataSlotCount;
 
-    /// <summary>Gets the logical partitions described by this metadata slot. 该槽位描述的逻辑分区。</summary>
+    /// <summary>
+    /// Gets the logical partitions described by this metadata slot.
+    /// <para>该槽位描述的逻辑分区。</para>
+    /// </summary>
     public IReadOnlyList<SuperLogicalPartition> Partitions { get; } = partitions;
 
     /// <summary>Gets all extents referenced by the partitions, indexed by extent index.
     /// 分区引用的全部 extent（按 extent 索引排列）。</summary>
     public IReadOnlyList<SuperImageExtent> Extents { get; } = extents;
 
-    /// <summary>Gets the block devices described by this metadata slot. 该槽位描述的块设备。</summary>
+    /// <summary>
+    /// Gets the block devices described by this metadata slot.
+    /// <para>该槽位描述的块设备。</para>
+    /// </summary>
     public IReadOnlyList<SuperImageBlockDevice> BlockDevices { get; } = blockDevices;
 
-    /// <summary>Gets the partition group names, indexed by group index. 按组索引排列的分区组名称。</summary>
+    /// <summary>
+    /// Gets the partition group names, indexed by group index.
+    /// <para>按组索引排列的分区组名称。</para>
+    /// </summary>
     public IReadOnlyList<string> GroupNames { get; } = groupNames;
 
     /// <summary>
@@ -298,13 +397,22 @@ internal sealed class SuperImageBuilder
     /// <summary>LP geometry magic ("gDla"). LP geometry 魔数。</summary>
     public const uint GeometryMagic = MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
 
-    /// <summary>Linear extent target type. 线性 extent 目标类型。</summary>
+    /// <summary>
+    /// Linear extent target type.
+    /// <para>线性 extent 目标类型。</para>
+    /// </summary>
     public const uint LinearTargetType = MetadataFormat.LP_TARGET_TYPE_LINEAR;
 
-    /// <summary>Zero-fill extent target type. 零填充 extent 目标类型。</summary>
+    /// <summary>
+    /// Zero-fill extent target type.
+    /// <para>零填充 extent 目标类型。</para>
+    /// </summary>
     public const uint ZeroTargetType = MetadataFormat.LP_TARGET_TYPE_ZERO;
 
-    /// <summary>Size of one geometry block in bytes. 单个 geometry 块大小（字节）。</summary>
+    /// <summary>
+    /// Size of one geometry block in bytes.
+    /// <para>单个 geometry 块大小（字节）。</para>
+    /// </summary>
     public const int GeometryBlockSize = MetadataFormat.LP_METADATA_GEOMETRY_SIZE;
 
     /// <summary>LP sector size in bytes. LP 扇区大小（字节）。</summary>

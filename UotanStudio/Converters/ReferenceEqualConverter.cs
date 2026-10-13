@@ -4,26 +4,29 @@ using Avalonia.Data.Converters;
 namespace UotanStudio.Converters;
 
 /// <summary>
-/// <para>引用相等比较转换器：值与 ConverterParameter 为同一实例（引用相等）时返回 true。
-/// 用于设备列表项与当前选中设备（<see cref="ViewModels.Devices.DeviceInfo"/>）的选中打勾绑定——
-/// DeviceInfo 未重写 Equals，按实例比较可避免序列号相同但状态变化重建实例后的误判。</para>
-/// Reference-equality converter: returns true when the value is the same instance as
-/// ConverterParameter. Used for the checked state of device list items against the currently
-/// selected <see cref="ViewModels.Devices.DeviceInfo"/> — DeviceInfo does not override Equals,
-/// so instance comparison avoids false positives after instances are rebuilt on state change.
+/// Compares by reference identity, returning true when the value is the same instance as the
+/// conversion parameter.
+/// <para>按引用标识比较，值与转换参数为同一实例时返回 true。</para>
 /// </summary>
 public class ReferenceEqualConverter : IValueConverter
 {
-    /// <summary>共享实例，供 XAML 以 <c>{x:Static}</c> 引用。<para>Shared instance for XAML <c>{x:Static}</c> use.</para></summary>
+    /// <summary>
+    /// Shared instance that markup can reference directly with <c>{x:Static}</c>.
+    /// <para>共享实例，可在标记中以 <c>{x:Static}</c> 直接引用。</para>
+    /// </summary>
+    /// <value>The single converter instance.<para>唯一的转换器实例。</para></value>
     public static ReferenceEqualConverter Instance { get; } = new();
 
     /// <summary>
-    /// <para>值与参数引用相等时返回 true，否则 false；同时支持双值 MultiBinding
-    /// （值为长度 2 的数组时比较两个元素）。</para>
-    /// Returns true when the value and the parameter are the same instance; otherwise false.
-    /// Also supports a two-value MultiBinding (compares the two elements when the value is
-    /// an array of length 2).
+    /// Returns true when the value and the parameter are the same instance, or, when the value is a
+    /// two-element array, when its two elements are the same instance.
+    /// <para>值与参数为同一实例时返回 true；值为二元数组时比较其两个元素。</para>
     /// </summary>
+    /// <param name="value">The bound value, possibly a two-element array. <para>绑定的值，可能是二元数组。</para></param>
+    /// <param name="targetType">The target type of the binding, unused. <para>绑定的目标类型，未使用。</para></param>
+    /// <param name="parameter">The instance compared against a single value. <para>与单个值比较的目标实例。</para></param>
+    /// <param name="culture">The culture information, unused. <para>区域信息，未使用。</para></param>
+    /// <returns>True when the compared references are identical. <para>被比较的引用指向同一实例时为 true。</para></returns>
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         if (value is object?[] { Length: 2 } values)
@@ -34,7 +37,16 @@ public class ReferenceEqualConverter : IValueConverter
         return ReferenceEquals(value, parameter);
     }
 
-    /// <summary>不支持反向转换。 Reverse conversion is not supported.</summary>
+    /// <summary>
+    /// Reverse conversion is not supported.
+    /// <para>不支持反向转换。</para>
+    /// </summary>
+    /// <param name="value">The converted value, unused. <para>已转换的值，未使用。</para></param>
+    /// <param name="targetType">The target type of the binding, unused. <para>绑定的目标类型，未使用。</para></param>
+    /// <param name="parameter">The converter parameter, unused. <para>转换参数，未使用。</para></param>
+    /// <param name="culture">The culture information, unused. <para>区域信息，未使用。</para></param>
+    /// <returns>No value is produced because the method always throws. <para>方法始终抛出异常，因此不会产出结果。</para></returns>
+    /// <exception cref="NotSupportedException">Reverse conversion is not implemented. <para>未实现反向转换。</para></exception>
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();
 }

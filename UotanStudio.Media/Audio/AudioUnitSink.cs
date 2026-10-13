@@ -29,8 +29,9 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
     private const uint ScopeInput = 1;
     private const uint ElementOutput = 0;
     private const uint PropertyStreamFormat = 8;
-    /// <summary>kAudioUnitProperty_SetRenderCallback (AudioUnitProperties.h); 11 is ElementCount.</summary>
-    /// <summary>kAudioUnitProperty_SetRenderCallback（AudioUnitProperties.h）；11 是 ElementCount。</summary>
+    /// <summary>kAudioUnitProperty_SetRenderCallback (AudioUnitProperties.h); 11 is ElementCount.
+    /// <para>kAudioUnitProperty_SetRenderCallback（AudioUnitProperties.h）；11 是 ElementCount。</para>
+    /// </summary>
     private const uint PropertyRenderCallback = 23;
     private const uint FormatIdPcm = 0x6C70636D;
     private nint _unit;

@@ -271,10 +271,10 @@ public sealed partial class SaharaProtocol
     /// <para>为主机刻意不实现的命令构造失败信息，使协议 3.0 目标报告具体原因而不是未知命令错误。</para>
     /// </summary>
     /// <remarks>
-    /// No public reference implementation (linux-msm/qdl, bkerler/edl) performs the version
+    /// No public implementation performs the version
     /// 3.0 WRITE_DATA image push, so the transfer layout is not transcribed from evidence and
     /// is refused rather than approximated.
-    /// <para>没有公开参考实现（linux-msm/qdl、bkerler/edl）执行版本 3.0 的 WRITE_DATA 镜像推送，
+    /// <para>没有公开实现执行版本 3.0 的 WRITE_DATA 镜像推送，
     /// 其传输布局缺乏可转录的证据，因此拒绝而不是近似实现。</para>
     /// </remarks>
     /// <param name="command">The command code reported by the device.
@@ -345,8 +345,8 @@ public sealed partial class SaharaProtocol
     }
 
     /// <summary>
-    /// Maps common Sahara NAK status codes to descriptions (bkerler/edl sahara_defs.py).
-    /// <para>将常见 Sahara NAK 状态码映射为描述（bkerler/edl 的 sahara_defs.py）。</para>
+    /// Maps common Sahara NAK status codes to descriptions.
+    /// <para>将常见 Sahara NAK 状态码映射为描述。</para>
     /// </summary>
     private static string DescribeSaharaStatus(uint status) => status switch
     {

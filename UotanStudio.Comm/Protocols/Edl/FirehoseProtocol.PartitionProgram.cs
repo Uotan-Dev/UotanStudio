@@ -49,12 +49,12 @@ public sealed partial class FirehoseProtocol
     /// <para>是否要求在返回成功之前完成完整的回读比对。</para>
     /// </param>
     /// <param name="skipMatchedRegions">
-    /// Opt-in skip-before-write fast path (qdl skipblock): when <paramref name="verify"/> is also
+    /// Opt-in skip-before-write fast path: when <paramref name="verify"/> is also
     /// requested and the storage is not NAND, the region is walked in bounded chunks and chunks
     /// whose source already matches the on-target digest are left untouched. Targets without digest
     /// support fall back to a normal program of the whole region. The returned result still reports
     /// the full requested length, because digest-matched chunks are confirmed present on the target.
-    /// <para>可选的“先比对后跳过”快速路径（qdl 的 skipblock）：当同时请求 <paramref name="verify"/>
+    /// <para>可选的“先比对后跳过”快速路径：当同时请求 <paramref name="verify"/>
     /// 且存储不是 NAND 时，区域按有界分块遍历，源数据已与目标摘要一致的块保持不动。目标不支持摘要时
     /// 回退为整区域的常规编程。返回结果仍报告完整的请求长度，因为摘要匹配的块已确认存在于目标上。</para>
     /// </param>

@@ -38,54 +38,59 @@ internal sealed class AdbConnection : IDisposable
         _authentications = [];
     }
 
-    /// <summary>Whether services are owned by an external ADB server.</summary>
+    /// <summary>Whether services are owned by an external ADB server. <para>服务是否由外部 ADB server 持有。</para></summary>
+    /// <value>True when an external ADB server owns the services. <para>外部 ADB server 持有服务时为真。</para></value>
     public bool UsesServer => _server is not null;
 
     private int _authKeyIndex;
 
     /// <summary>
-    /// Gets why the message loop stopped, or <c>null</c> while it is still reading. The loop runs on
-    /// its own long-running task, so a handshake failure would otherwise never reach the caller that is waiting
-    /// for the peer banner.
-    /// <para>获取消息循环停止的原因；循环仍在读取时为 <c>null</c>。循环运行在自己的长任务上，
-    /// 否则握手失败永远到不了正在等待对端横幅的调用方。</para>
+    /// Gets why the message loop stopped, or <c>null</c> while the loop is running.
+    /// <para>获取消息循环停止的原因；循环运行时为 <c>null</c>。</para>
     /// </summary>
+    /// <value>The captured fault, or <c>null</c> before the loop stops. <para>捕获的故障；循环停止前为 <c>null</c>。</para></value>
     internal Exception? LoopFault => Volatile.Read(ref _loopFault);
 
     /// <summary>
     /// Gets whether the connection is established.
     /// <para>获取连接是否已建立。</para>
     /// </summary>
+    /// <value>True when the connection is established. <para>连接已建立时为真。</para></value>
     public bool IsConnected { get { lock (_lock) { return _connected; } } }
 
     /// <summary>
     /// Gets the peer protocol version.
     /// <para>获取对端协议版本。</para>
     /// </summary>
+    /// <value>The version reported by the peer. <para>对端报告的版本。</para></value>
     public uint PeerVersion { get; private set; }
 
     /// <summary>
     /// Gets the peer max payload size.
     /// <para>获取对端最大负载大小。</para>
     /// </summary>
+    /// <value>The max payload size reported by the peer. <para>对端报告的最大负载大小。</para></value>
     public uint PeerMaxPayload { get; private set; }
 
     /// <summary>
     /// Gets the peer banner / system info.
     /// <para>获取对端横幅 / 系统信息。</para>
     /// </summary>
+    /// <value>The banner string, or <c>null</c> before CNXN arrives. <para>横幅字符串；CNXN 到达前为 <c>null</c>。</para></value>
     public string? PeerBanner { get; private set; }
 
     /// <summary>
     /// Gets the features advertised by the peer.
     /// <para>获取对端宣告的特性。</para>
     /// </summary>
+    /// <value>The feature names parsed from the peer banner. <para>从对端横幅解析出的特性名。</para></value>
     public IReadOnlyList<string> PeerFeatures { get; private set; } = [];
 
     /// <summary>
     /// Gets the underlying transport.
     /// <para>获取底层传输。</para>
     /// </summary>
+    /// <value>The transport backing this connection. <para>支撑本连接的传输。</para></value>
     public ICommTransport Transport => _transport ?? throw new NotSupportedException("Server services do not expose a raw daemon transport.");
 
     /// <summary>
@@ -93,27 +98,22 @@ internal sealed class AdbConnection : IDisposable
     /// single authentication identity.
     /// <para>使用单个认证身份初始化 <see cref="AdbConnection"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="transport">The device transport. 设备传输。</param>
-    /// <param name="authentication">The RSA authentication identity. RSA 认证身份。</param>
+    /// <param name="transport">The device transport. <para>设备传输。</para></param>
+    /// <param name="authentication">The RSA authentication identity. <para>RSA 认证身份。</para></param>
     public AdbConnection(ICommTransport transport, AdbAuthentication authentication)
         : this(transport, authentication is null ? [] : [authentication])
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="AdbConnection"/> class with an
-    /// ordered list of authentication identities. On AUTH token challenges each
-    /// identity is tried in order (AOSP adb_auth_host.cpp NextKey semantics); when
-    /// the list is exhausted the client advertises its public key. The connection
-    /// OWNS the list and disposes every identity in <see cref="Dispose"/>; callers
-    /// must not dispose the identities themselves.
-    /// <para>使用有序认证身份列表初始化 <see cref="AdbConnection"/> 类的新实例。
-    /// AUTH 令牌挑战时按顺序尝试每个身份（AOSP adb_auth_host.cpp NextKey 语义）；
-    /// 列表耗尽后客户端宣告其公钥。连接拥有该列表并在 <see cref="Dispose"/> 中释放
-    /// 每个身份；调用方不得自行释放这些身份。</para>
+    /// Initializes a new instance with an ordered list of authentication
+    /// identities, tried in order on AUTH token challenges and disposed with
+    /// the connection.
+    /// <para>使用有序认证身份列表初始化新实例；AUTH 令牌挑战时按顺序尝试各身份，
+    /// 所有身份随连接一起释放。</para>
     /// </summary>
-    /// <param name="transport">The device transport. 设备传输。</param>
-    /// <param name="authentications">The ordered RSA authentication identities. 有序 RSA 认证身份列表。</param>
+    /// <param name="transport">The device transport. <para>设备传输。</para></param>
+    /// <param name="authentications">The ordered RSA authentication identities. <para>有序 RSA 认证身份列表。</para></param>
     public AdbConnection(ICommTransport transport, IReadOnlyList<AdbAuthentication> authentications)
     {
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
@@ -128,11 +128,6 @@ internal sealed class AdbConnection : IDisposable
     /// Connects to the ADB peer (sends CNXN and starts the message loop).
     /// <para>连接到 ADB 对端（发送 CNXN 并启动消息循环）。</para>
     /// </summary>
-    /// <remarks>The synchronous entry point: it writes the handshake with the transport's blocking API and is
-    /// meant for callers that already own a worker thread for the connection. Data-plane traffic always goes
-    /// through the asynchronous path.
-    /// <para>同步入口：使用传输的阻塞 API 写出握手，供已经为该连接占用工作线程的调用方使用；数据面流量一律走异步路径。</para>
-    /// </remarks>
     public void Connect()
     {
         if (!TryBeginHandshake())
@@ -158,9 +153,7 @@ internal sealed class AdbConnection : IDisposable
     /// Asynchronously connects to the ADB peer.
     /// <para>异步连接到 ADB 对端。</para>
     /// </summary>
-    /// <param name="cancellationToken">Cancels the handshake write. 取消握手写出。</param>
-    /// <returns>A task that completes once the handshake has been written and the dispatch loop is running.
-    /// <para>握手已写出且分发循环已启动后完成的任务。</para></returns>
+    /// <param name="cancellationToken">Cancels the handshake write. <para>取消握手写出。</para></param>
     /// <exception cref="ObjectDisposedException">The connection is disposed. <para>连接已被释放。</para></exception>
     /// <exception cref="TimeoutException">The handshake did not reach the transport within the transport
     /// deadline. <para>握手未在传输期限内抵达传输层。</para></exception>
@@ -191,8 +184,8 @@ internal sealed class AdbConnection : IDisposable
     /// Performs the dispose checks, the server-target validation and the USB interface claim.
     /// <para>完成释放检查、server 目标校验与 USB 接口申请。</para>
     /// </summary>
-    /// <returns><see langword="true"/> when the caller still has to write the CNXN handshake.
-    /// <para>调用方仍需写出 CNXN 握手时返回 <see langword="true"/>。</para></returns>
+    /// <returns><see langword="true"/> when the CNXN handshake still has to be written.
+    /// <para>仍需写出 CNXN 握手时返回 <see langword="true"/>。</para></returns>
     /// <exception cref="ObjectDisposedException">The connection is disposed. <para>连接已被释放。</para></exception>
     private bool TryBeginHandshake()
     {
@@ -255,8 +248,8 @@ internal sealed class AdbConnection : IDisposable
     /// Opens a raw service stream with the sustained-output receive budget.
     /// <para>以面向持续产出的接收预算打开裸服务流。</para>
     /// </summary>
-    /// <param name="service">The service destination string. 服务目标字符串。</param>
-    /// <returns>An ADB stream. ADB 流。</returns>
+    /// <param name="service">The service destination string. <para>服务目标字符串。</para></param>
+    /// <returns>An ADB stream. <para>ADB 流。</para></returns>
     public AdbStream OpenStream(string service)
         => OpenStream(service, AdbStream.RawServiceReceiveBudgetBytes, AdbStream.DefaultWritePermitWaitMs);
 
@@ -264,12 +257,12 @@ internal sealed class AdbConnection : IDisposable
     /// Opens a service stream with an explicit receive budget and write-permit wait.
     /// <para>以显式接收预算与写入许可等待时长打开服务流。</para>
     /// </summary>
-    /// <param name="service">The service destination string. 服务目标字符串。</param>
+    /// <param name="service">The service destination string. <para>服务目标字符串。</para></param>
     /// <param name="receiveBudgetBytes">Queued payload bytes the stream tolerates before faulting.
-    /// 流在判定故障前可容忍的队列负载字节数。</param>
+    /// <para>流在判定故障前可容忍的队列负载字节数。</para></param>
     /// <param name="writePermitWaitMs">Milliseconds a write waits for the previous chunk acknowledgement.
-    /// 写入等待上一块确认的毫秒数。</param>
-    /// <returns>An ADB stream. ADB 流。</returns>
+    /// <para>写入等待上一块确认的毫秒数。</para></param>
+    /// <returns>An ADB stream. <para>ADB 流。</para></returns>
     internal AdbStream OpenStream(string service, int receiveBudgetBytes, int writePermitWaitMs)
     {
         var stream = RegisterStream(service, receiveBudgetBytes, writePermitWaitMs);
@@ -281,8 +274,8 @@ internal sealed class AdbConnection : IDisposable
     /// Opens a protocol-client stream with the shell and sync receive budget.
     /// <para>以 shell/sync 接收预算打开协议客户端流。</para>
     /// </summary>
-    /// <param name="service">The service destination string. 服务目标字符串。</param>
-    /// <returns>An ADB stream. ADB 流。</returns>
+    /// <param name="service">The service destination string. <para>服务目标字符串。</para></param>
+    /// <returns>An ADB stream. <para>ADB 流。</para></returns>
     internal AdbStream OpenProtocolStream(string service)
         => OpenStream(service, AdbStream.ProtocolReceiveBudgetBytes, AdbStream.DefaultWritePermitWaitMs);
 
@@ -290,8 +283,8 @@ internal sealed class AdbConnection : IDisposable
     /// Opens a protocol-client stream without blocking a thread on the OPEN frame.
     /// <para>打开协议客户端流，等待 OPEN 帧时不占用线程。</para>
     /// </summary>
-    /// <param name="service">The service destination string. 服务目标字符串。</param>
-    /// <param name="cancellationToken">Cancels the OPEN write. 取消 OPEN 写出。</param>
+    /// <param name="service">The service destination string. <para>服务目标字符串。</para></param>
+    /// <param name="cancellationToken">Cancels the OPEN write. <para>取消 OPEN 写出。</para></param>
     /// <returns>A task resolving to the opened stream. <para>结果为已打开流的任务。</para></returns>
     /// <exception cref="TimeoutException">The OPEN frame did not reach the transport within the transport
     /// deadline. <para>OPEN 帧未在传输期限内抵达传输层。</para></exception>
@@ -306,11 +299,12 @@ internal sealed class AdbConnection : IDisposable
     /// Allocates and registers the stream object for a service destination.
     /// <para>为服务目标分配并登记流对象。</para>
     /// </summary>
-    /// <param name="service">The service destination string. 服务目标字符串。</param>
+    /// <param name="service">The service destination string. <para>服务目标字符串。</para></param>
     /// <param name="receiveBudgetBytes">Queued payload bytes tolerated before faulting.
-    /// 判定故障前可容忍的队列负载字节数。</param>
+    /// <para>判定故障前可容忍的队列负载字节数。</para></param>
     /// <param name="writePermitWaitMs">Milliseconds a write waits for an acknowledgement.
-    /// 写入等待确认的毫秒数。</param>
+    /// <para>写入等待确认的毫秒数。</para></param>
+    /// <returns>The registered stream. <para>已登记的流。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="service"/> is <see langword="null"/>.
     /// <para><paramref name="service"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidOperationException">The connection has not been established.
@@ -351,9 +345,9 @@ internal sealed class AdbConnection : IDisposable
     /// Waits for the peer CNXN banner to arrive (handshake complete).
     /// <para>等待对端 CNXN 横幅到达（握手完成）。</para>
     /// </summary>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <param name="cancellationToken">Cancels the handshake wait.</param>
-    /// <returns><c>true</c> if the peer responded; otherwise, <c>false</c>. 对端是否响应。</returns>
+    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
+    /// <param name="cancellationToken">Cancels the handshake wait. <para>取消握手等待。</para></param>
+    /// <returns><c>true</c> if the peer responded; otherwise, <c>false</c>. <para>对端是否响应。</para></returns>
     public bool WaitForPeer(int timeoutMs = 10000, CancellationToken cancellationToken = default)
         => _peerReady.Wait(timeoutMs, cancellationToken);
 
@@ -361,8 +355,8 @@ internal sealed class AdbConnection : IDisposable
     /// Waits for the peer CNXN banner without holding a thread.
     /// <para>异步等待对端 CNXN 横幅，等待期间不占用线程。</para>
     /// </summary>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <param name="cancellationToken">Cancels the handshake wait. 取消握手等待。</param>
+    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
+    /// <param name="cancellationToken">Cancels the handshake wait. <para>取消握手等待。</para></param>
     /// <returns>A task whose result reports whether the peer banner arrived before the deadline.
     /// <para>结果指示对端横幅是否在期限前到达。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
@@ -374,12 +368,8 @@ internal sealed class AdbConnection : IDisposable
     /// Writes data to the specified stream on a caller thread that already owns it.
     /// <para>在已持有该流的调用线程上同步向流写入数据。</para>
     /// </summary>
-    /// <param name="stream">The target stream. 目标流。</param>
-    /// <param name="data">The data to write. 要写入的数据。</param>
-    /// <remarks>Reserved for the synchronous byte façade and the one-shot device services; the header and its
-    /// payload stay two separate transport writes because ADB-over-USB has no zero-length packet handling.
-    /// <para>仅供同步字节门面与一次性设备服务使用；头部与其负载仍分两次传输写入，因为 ADB-over-USB 没有零长包处理。</para>
-    /// </remarks>
+    /// <param name="stream">The target stream. <para>目标流。</para></param>
+    /// <param name="data">The data to write. <para>要写入的数据。</para></param>
     /// <exception cref="InvalidOperationException">The stream was not acknowledged by the peer.
     /// <para>对端未确认该流。</para></exception>
     internal void WriteToStream(AdbStream stream, byte[] data)
@@ -403,9 +393,9 @@ internal sealed class AdbConnection : IDisposable
     /// Writes one acknowledged chunk of a stream without holding a thread.
     /// <para>异步写入流的一个已确认数据块，等待期间不占用线程。</para>
     /// </summary>
-    /// <param name="stream">The target stream. 目标流。</param>
-    /// <param name="data">The chunk payload. 块负载。</param>
-    /// <param name="cancellationToken">Cancels the write. 取消写入。</param>
+    /// <param name="stream">The target stream. <para>目标流。</para></param>
+    /// <param name="data">The chunk payload. <para>块负载。</para></param>
+    /// <param name="cancellationToken">Cancels the write. <para>取消写入。</para></param>
     /// <exception cref="InvalidOperationException">The stream was not acknowledged by the peer.
     /// <para>对端未确认该流。</para></exception>
     /// <exception cref="TimeoutException">The OPEN acknowledgement or the transport write exceeded its deadline
@@ -432,7 +422,7 @@ internal sealed class AdbConnection : IDisposable
     /// Closes the specified stream and notifies the peer.
     /// <para>关闭指定流并通知对端。</para>
     /// </summary>
-    /// <param name="stream">The stream to close. 要关闭的流。</param>
+    /// <param name="stream">The stream to close. <para>要关闭的流。</para></param>
     internal void CloseStream(AdbStream stream)
     {
         lock (_lock) { _streams.Remove(stream.LocalId); }
@@ -443,9 +433,7 @@ internal sealed class AdbConnection : IDisposable
     /// Closes the specified stream and notifies the peer without holding a thread.
     /// <para>异步关闭指定流并通知对端，等待期间不占用线程。</para>
     /// </summary>
-    /// <param name="stream">The stream to close. 要关闭的流。</param>
-    /// <returns>A task that completes once the CLSE frame has been handed to the transport.
-    /// <para>CLSE 帧已交给传输后完成的任务。</para></returns>
+    /// <param name="stream">The stream to close. <para>要关闭的流。</para></param>
     internal async ValueTask CloseStreamAsync(AdbStream stream)
     {
         lock (_lock) { _streams.Remove(stream.LocalId); }
@@ -460,13 +448,7 @@ internal sealed class AdbConnection : IDisposable
     /// Sends a message to the transport from a synchronous boundary.
     /// <para>从同步边界向传输发送一条消息。</para>
     /// </summary>
-    /// <param name="message">The message to send. 要发送的消息。</param>
-    /// <remarks>Only handshake, OPEN and CLSE control frames use this path; WRTE payloads are written by
-    /// <see cref="SendAsync"/> so that a stalled peer cannot park a thread while the send gate is held. The
-    /// header and payload stay two separate bulk transfers, which is what ADB-over-USB requires.
-    /// <para>仅握手、OPEN 与 CLSE 控制帧走该路径；WRTE 负载一律由 <see cref="SendAsync"/> 写出，
-    /// 避免对端卡住时在持有发送闸门期间占用线程。头部与负载仍分两次批量传输，这是 ADB-over-USB 的要求。</para>
-    /// </remarks>
+    /// <param name="message">The message to send. <para>要发送的消息。</para></param>
     /// <exception cref="TimeoutException">The message did not reach the transport within the transport
     /// deadline. <para>消息未在传输期限内抵达传输层。</para></exception>
     private void Send(AdbMessage message)
@@ -497,14 +479,8 @@ internal sealed class AdbConnection : IDisposable
     /// Sends a message to the transport asynchronously.
     /// <para>异步向传输发送一条消息。</para>
     /// </summary>
-    /// <param name="message">The message to send. 要发送的消息。</param>
-    /// <param name="cancellationToken">Cancels the queue wait and both writes. 取消排队与两次写入。</param>
-    /// <remarks>The queue wait and the writes share one deadline expressed with
-    /// <c>CancellationTokenSource.CancelAfter</c>; the header and payload remain two separate bulk transfers,
-    /// which is what ADB-over-USB requires and what the peer's framing expects.
-    /// <para>排队等待与两次写入共用由 <c>CancellationTokenSource.CancelAfter</c> 表达的同一期限；头部与负载仍是两次
-    /// 独立的批量传输，这既是 ADB-over-USB 的要求也是对端的分帧预期。</para>
-    /// </remarks>
+    /// <param name="message">The message to send. <para>要发送的消息。</para></param>
+    /// <param name="cancellationToken">Cancels the queue wait and both writes. <para>取消排队与两次写入。</para></param>
     /// <exception cref="ObjectDisposedException">The connection is disposed. <para>连接已被释放。</para></exception>
     /// <exception cref="TimeoutException">The message did not reach the transport within the transport deadline
     /// while <paramref name="cancellationToken"/> stayed unset.
@@ -550,9 +526,10 @@ internal sealed class AdbConnection : IDisposable
     /// Reads the next ADB message from the transport.
     /// <para>从传输读取下一条 ADB 消息。</para>
     /// </summary>
-    /// <exception cref="InvalidDataException">The advertised payload length exceeds the protocol maximum, the
-    /// header magic is wrong, or the payload CRC matches neither the reserved zero value nor the legacy additive
-    /// checksum. <para>通告的负载长度超过协议上限、头部 magic 错误，或负载 CRC 既非保留零值也非旧式累加校验和。</para></exception>
+    /// <param name="cancellationToken">Stops the read when the connection shuts down. <para>连接关停时停止读取。</para></param>
+    /// <returns>The next message read from the transport. <para>从传输读取的下一条消息。</para></returns>
+    /// <exception cref="InvalidDataException">The frame failed header or payload validation.
+    /// <para>该帧未通过头部或负载校验。</para></exception>
     /// <exception cref="TimeoutException">A partially received frame made no progress within the transport
     /// deadline. <para>已部分接收的帧在传输期限内没有进展。</para></exception>
     private async ValueTask<AdbMessage> ReadMessageAsync(CancellationToken cancellationToken)
@@ -581,7 +558,7 @@ internal sealed class AdbConnection : IDisposable
     /// Main message dispatch loop running as a long-running task.
     /// <para>以长任务运行的主消息分发循环。</para>
     /// </summary>
-    /// <param name="cancellationToken">Stops the loop when the connection is disposed. 连接释放时停止循环。</param>
+    /// <param name="cancellationToken">Stops the loop when the connection is disposed. <para>连接释放时停止循环。</para></param>
     private async Task MessageLoopAsync(CancellationToken cancellationToken)
     {
         try
@@ -629,8 +606,8 @@ internal sealed class AdbConnection : IDisposable
     /// Handles the AUTH handshake from the peer (TOKEN / SIGNATURE / RSAPUBLICKEY).
     /// <para>处理来自对端的 AUTH 握手（TOKEN / SIGNATURE / RSAPUBLICKEY）。</para>
     /// </summary>
-    /// <param name="message">The AUTH message. AUTH 消息。</param>
-    /// <param name="cancellationToken">Cancels the reply write. 取消应答写出。</param>
+    /// <param name="message">The AUTH message. <para>AUTH 消息。</para></param>
+    /// <param name="cancellationToken">Cancels the reply write. <para>取消应答写出。</para></param>
     private async ValueTask HandleAuthAsync(AdbMessage message, CancellationToken cancellationToken)
     {
         switch ((AdbAuthType)message.Arg0)
@@ -670,7 +647,7 @@ internal sealed class AdbConnection : IDisposable
     /// Handles the CNXN connect message from the peer.
     /// <para>处理来自对端的 CNXN 连接消息。</para>
     /// </summary>
-    /// <param name="message">The CNXN message. CNXN 消息。</param>
+    /// <param name="message">The CNXN message. <para>CNXN 消息。</para></param>
     private void HandleConnect(AdbMessage message)
     {
         PeerVersion = message.Arg0;
@@ -684,8 +661,8 @@ internal sealed class AdbConnection : IDisposable
     /// Handles the OPEN message from the peer.
     /// <para>处理来自对端的 OPEN 消息。</para>
     /// </summary>
-    /// <param name="message">The OPEN message. OPEN 消息。</param>
-    /// <param name="cancellationToken">Cancels the OKAY reply. 取消 OKAY 应答。</param>
+    /// <param name="message">The OPEN message. <para>OPEN 消息。</para></param>
+    /// <param name="cancellationToken">Cancels the OKAY reply. <para>取消 OKAY 应答。</para></param>
     private async ValueTask HandleOpenAsync(AdbMessage message, CancellationToken cancellationToken)
     {
         AdbStream stream;
@@ -703,9 +680,9 @@ internal sealed class AdbConnection : IDisposable
     /// Handles the OKAY message from the peer.
     /// <para>处理来自对端的 OKAY 消息。</para>
     /// </summary>
-    /// <param name="message">The OKAY message. OKAY 消息。</param>
+    /// <param name="message">The OKAY message. <para>OKAY 消息。</para></param>
     /// <param name="cancellationToken">Cancels the close reply sent to an unknown stream.
-    /// 取消向未知流发送的关闭帧。</param>
+    /// <para>取消向未知流发送的关闭帧。</para></param>
     private async ValueTask HandleOkayAsync(AdbMessage message, CancellationToken cancellationToken)
     {
         AdbStream? stream;
@@ -728,9 +705,9 @@ internal sealed class AdbConnection : IDisposable
     /// Handles the WRTE message from the peer.
     /// <para>处理来自对端的 WRTE 消息。</para>
     /// </summary>
-    /// <param name="message">The WRTE message. WRTE 消息。</param>
+    /// <param name="message">The WRTE message. <para>WRTE 消息。</para></param>
     /// <param name="cancellationToken">Cancels the acknowledgement or the close reply.
-    /// 取消确认或关闭应答。</param>
+    /// <para>取消确认或关闭应答。</para></param>
     private async ValueTask HandleWriteAsync(AdbMessage message, CancellationToken cancellationToken)
     {
         AdbStream? stream;
@@ -754,7 +731,7 @@ internal sealed class AdbConnection : IDisposable
     /// Handles the CLSE message from the peer.
     /// <para>处理来自对端的 CLSE 消息。</para>
     /// </summary>
-    /// <param name="message">The CLSE message. CLSE 消息。</param>
+    /// <param name="message">The CLSE message. <para>CLSE 消息。</para></param>
     private void HandleClose(AdbMessage message)
     {
         AdbStream? stream;
@@ -776,7 +753,7 @@ internal sealed class AdbConnection : IDisposable
     /// Faults all open streams due to an error.
     /// <para>因错误将所有打开的流标记为故障。</para>
     /// </summary>
-    /// <param name="ex">The exception. 异常。</param>
+    /// <param name="ex">The exception. <para>异常。</para></param>
     private void FaultAllStreams(Exception ex)
     {
         AdbStream[] streams;
@@ -798,7 +775,8 @@ internal sealed class AdbConnection : IDisposable
     /// Parses the features list from the peer banner.
     /// <para>从对端横幅解析特性列表。</para>
     /// </summary>
-    /// <param name="banner">The peer banner string. 对端横幅字符串。</param>
+    /// <param name="banner">The peer banner string. <para>对端横幅字符串。</para></param>
+    /// <returns>The parsed feature names. <para>解析出的特性名列表。</para></returns>
     private static IReadOnlyList<string> ParseFeatures(string? banner)
     {
         if (string.IsNullOrEmpty(banner))
@@ -826,16 +804,12 @@ internal sealed class AdbConnection : IDisposable
     /// its true length.
     /// <para>从传输精确读取指定字节数到池化帧缓冲区，再按真实长度拷出该帧。</para>
     /// </summary>
-    /// <param name="length">The number of bytes to read. 要读取的字节数。</param>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
+    /// <param name="length">The number of bytes to read. <para>要读取的字节数。</para></param>
+    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
     /// <param name="allowIdle">Keep waiting between packets; incomplete packets still time out.
     /// <para>在包之间持续等待；未完成的包仍会超时。</para></param>
-    /// <param name="cancellationToken">Stops the read when the connection shuts down. 连接关停时停止读取。</param>
+    /// <param name="cancellationToken">Stops the read when the connection shuts down. <para>连接关停时停止读取。</para></param>
     /// <returns>A task resolving to the frame bytes. <para>结果为帧字节的任务。</para></returns>
-    /// <remarks>The frame escapes into the owning stream's receive queue, whose accounting is sized by array
-    /// length, so the exact-length copy stays and one allocation per frame remains.
-    /// <para>帧会被交给流的接收队列，而队列记账以数组长度为键，因此恰长度拷贝无法省掉，每帧仍有一次分配。</para>
-    /// </remarks>
     /// <exception cref="TimeoutException">A partially received frame made no progress within
     /// <paramref name="timeoutMs"/>. <para>已部分接收的帧在 <paramref name="timeoutMs"/> 内没有进展。</para></exception>
     /// <exception cref="ObjectDisposedException">The connection was disposed mid-read.
@@ -889,7 +863,7 @@ internal sealed class AdbConnection : IDisposable
     /// Signals a one-shot readiness primitive, ignoring the extra signals a repeated banner cannot use.
     /// <para>触发一次性的就绪原语，并忽略重复横幅无法使用的多余信号。</para>
     /// </summary>
-    /// <param name="signal">The primitive to signal. 待触发的原语。</param>
+    /// <param name="signal">The primitive to signal. <para>待触发的原语。</para></param>
     private static void Release(SemaphoreSlim signal)
     {
         try
@@ -916,13 +890,10 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
-    /// Releases all resources used by the connection.
-    /// <para>释放连接使用的所有资源。</para>
+    /// Releases the transport, streams, authentication identities and loop resources
+    /// held by the connection.
+    /// <para>释放连接持有的传输、流、认证身份与循环资源。</para>
     /// </summary>
-    /// <remarks>Dispatch-loop shutdown is awaited with a bounded join: a loop still parked in a transport read
-    /// is left to observe the disposed transport rather than blocking teardown indefinitely.
-    /// <para>关停分发循环时只做有界等待：仍卡在传输读取里的循环交由已释放的传输本身结束，不会无限阻塞拆除。</para>
-    /// </remarks>
     public void Dispose()
     {
         if (Volatile.Read(ref _disposed))

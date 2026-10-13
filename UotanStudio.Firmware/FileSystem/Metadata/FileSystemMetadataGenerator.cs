@@ -172,11 +172,8 @@ internal static class FileSystemMetadataGenerator
     }
 
     /// <summary>
-    /// Generates metadata files using the extraction directory on disk (fallback when parser is unavailable).
-    /// Host links are never enumerated into the export because <c>fs_config</c> has no file-type column; the
-    /// structured payload stays the lossless record for them.
-    /// <para>使用磁盘上的解包目录生成元数据文件（解析器不可用时的回退方案）。宿主机链接不会参与导出，
-    /// 因为 <c>fs_config</c> 没有文件类型列；结构化负载仍是其无损记录。</para>
+    /// Generates metadata files from the extraction directory on disk.
+    /// <para>从磁盘上的解包目录生成元数据文件。</para>
     /// </summary>
     /// <param name="metadataDirectory">Directory the files are written to; created when missing.
     /// <para>写入目标的目录；不存在时自动创建。</para></param>

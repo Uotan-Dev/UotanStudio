@@ -3,13 +3,15 @@ using Avalonia.Threading;
 
 namespace UotanStudio.Services.Interactions;
 
-/// <summary>An invocation-owned progress surface; cancellation disposes it even if close is skipped.</summary>
+/// <summary>An invocation-owned progress surface; cancellation disposes it even if close is skipped.
+/// <para>由单次调用持有的进度反馈接口；即使跳过关闭，取消时也会将其释放。</para></summary>
 public interface IInteractionProgress : IAsyncDisposable
 {
     Task UpdateAsync(string message, double? progress, CancellationToken cancellationToken);
 }
 
-/// <summary>Host capabilities for nonmodal feedback.</summary>
+/// <summary>Provides nonmodal feedback capabilities.
+/// <para>提供非模态反馈的能力接口。</para></summary>
 public interface IWorkflowFeedbackService
 {
     bool SupportsFeedback => true;

@@ -5,14 +5,10 @@ using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 namespace UotanStudio.Benchmarks.Firmware;
 
 /// <summary>
-/// Builds an Lz4-compressed EROFS image with the dense pcluster planner enabled and disabled, which is the cost of
-/// the probe search plus the write pass, and the difference staging removes from that write pass.
-/// <para>分别在启用与禁用密集 pcluster 规划器的情况下构建 Lz4 压缩 EROFS 镜像，体现探测搜索加写出阶段的成本，
-/// 以及暂存从写出阶段消除的那部分。</para>
+/// Builds an Lz4-compressed EROFS image with the dense pcluster planner enabled and disabled, measuring the
+/// probe search plus write pass cost.
+/// <para>在启用与禁用密集 pcluster 规划器的情况下构建 Lz4 压缩 EROFS 镜像，度量探测搜索加写出阶段的成本。</para>
 /// </summary>
-/// <remarks>
-/// Run with <c>dotnet run -c Release --project UotanStudio.Benchmarks -- --filter "*ErofsDensePlanning*" --job short</c>.
-/// </remarks>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 1, iterationCount: 2)]
 public class ErofsDensePlanningBenchmarks : IDisposable

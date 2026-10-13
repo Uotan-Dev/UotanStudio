@@ -8,11 +8,9 @@ using Xunit;
 namespace UotanStudio.Tests.Comm.Protocols.Edl;
 
 /// <summary>
-/// Firehose program wire tests for manifest entries whose declared sector count is the partition
-/// capacity: the payload must carry the source bytes with only the final sector zero-filled, and a
-/// source longer than the declared range must be truncated to it.
-/// <para>当清单声明扇区数为分区容量时的 Firehose program 线上测试：载荷必须只携带源文件字节并仅零填充最后一个扇区，
-/// 长于声明范围的源文件必须被截断到声明范围。</para>
+/// Firehose program wire tests for manifest entries whose declared sector count equals the partition
+/// capacity. The payload carries source bytes with only the final sector zero-filled.
+/// <para>针对声明扇区数等于分区容量的清单条目的 Firehose program 线上测试。载荷携带源字节，仅最后一个扇区补零。</para>
 /// </summary>
 public class EdlProgramSectorCountTests
 {

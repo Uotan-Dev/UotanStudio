@@ -14,9 +14,8 @@ internal static class EdlFailureText
     /// <para>获取一次拒绝的展示文本。</para>
     /// </summary>
     /// <param name="response">The parsed response. <para>已解析的响应。</para></param>
-    /// <returns>The classified description together with its kind and observed evidence, the raw value
-    /// when nothing was classified, or a placeholder when the response carries no text at all.
-    /// <para>分类描述连同其类别与观测到的取值；未分类时返回原始值，响应不含文本时返回占位文本。</para></returns>
+    /// <returns>The classified description with its kind and evidence, the raw value, or a placeholder.
+    /// <para>分类描述连同其类别与观测取值；未分类时为原始值，无文本时为占位文本。</para></returns>
     internal static string Describe(FirehoseResponse response) =>
         response.Error is { } error
             ? $"{error.Description} ({error})"

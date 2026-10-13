@@ -80,7 +80,7 @@ public static partial class FileSystemPreservation
     /// materialized on demand, so callers that only need the outer metadata never pay for it.
     /// <para>读取元数据实例携带的文件系统保留负载。JSON 树按需物化，只关心外层元数据的调用方无需承担开销。</para>
     /// </summary>
-    /// <param name="metadata"><para>已读取的元数据实例。</para>The parsed metadata instance.</param>
+    /// <param name="metadata">The parsed metadata instance. <para>已读取的元数据实例。</para></param>
     /// <returns>
     /// The typed payload, or <see langword="null"/> when the format recorded none or the tree is invalid.
     /// <para>类型化负载；格式未记录或 JSON 树非法时返回 <see langword="null"/>。</para>

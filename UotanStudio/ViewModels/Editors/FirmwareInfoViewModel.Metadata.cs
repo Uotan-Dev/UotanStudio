@@ -3,7 +3,9 @@ using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Editors;
 
-/// <summary>A localized group of firmware configuration fields.</summary>
+/// <summary>A localized group of firmware configuration fields.<para>本地化的固件配置字段分组。</para></summary>
+/// <param name="Name">Localized group name.<para>本地化的分组名称。</para></param>
+/// <param name="Rows">Property rows belonging to the group.<para>属于该分组的属性行。</para></param>
 public sealed record FirmwareMetadataGroup(string Name, IReadOnlyList<PropertyRow> Rows);
 
 public partial class FirmwareInfoViewModel
@@ -13,7 +15,8 @@ public partial class FirmwareInfoViewModel
     private CancellationTokenSource? _loadCancellation;
     private bool _closed;
 
-    /// <summary>Grouped metadata, preserving descriptor order and repeated partition names.</summary>
+    /// <summary>Grouped metadata, preserving descriptor order and repeated partition names.<para>分组后的元数据，保留描述符顺序与重复的分区名称。</para></summary>
+    /// <value>Observable collection of localized metadata groups.<para>本地化元数据分组的可观察集合。</para></value>
     public ObservableCollection<FirmwareMetadataGroup> MetadataGroups { get; } = [];
 
     private static string FieldLabel(string key)

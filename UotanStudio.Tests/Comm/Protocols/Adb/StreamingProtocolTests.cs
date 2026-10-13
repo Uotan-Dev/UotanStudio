@@ -3,7 +3,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Comm.Protocols.Adb;
 
-/// <summary>Regression tests for incremental communication-protocol framing.</summary>
+/// <summary>Regression tests for incremental communication-protocol framing.<para>增量通信协议分帧的回归测试。</para></summary>
 public class StreamingProtocolTests
 {
     [Fact]

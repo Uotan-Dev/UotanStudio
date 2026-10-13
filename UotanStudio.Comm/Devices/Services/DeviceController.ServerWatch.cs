@@ -5,19 +5,11 @@ using UotanStudio.Comm.Routing;
 namespace UotanStudio.Comm.Devices.Services;
 
 /// <summary>
-/// Server-lifecycle watch: periodically probes the local adb/HDC server ports with the tri-state
-/// debug-bridge probe and releases adopted server-session leases whose target vanished from the
-/// server list while a server is retained as live. An inconclusive probe keeps the last known
-/// state; only a conclusive listening/refused change raises
-/// <see cref="DebugBridgeAvailabilityChanged"/> and invalidates cached probes (the snapshot then
-/// flips between server endpoints and direct-USB endpoints). Every pass also refreshes the
-/// process-global adb and HDC availability parameters so operations route on them without probing.
-/// <para>server 生命周期监视：用三态调试桥探测周期检查本机 adb/HDC server 端口，并在有 server
-/// 被保留为存活时释放目标已从 server 列表消失的已采纳 server 会话租约。未能得出结论的探测保持
-/// 上次已知状态；只有确定性的监听/拒绝结论变化才会触发
-/// <see cref="DebugBridgeAvailabilityChanged"/> 并使缓存探测结果失效（快照随之在 server 端点与
-/// direct-usb 端点之间切换）。每轮还会刷新进程全局的 adb 与 HDC 存在性参数，使操作无需探测即可
-/// 按该参数路由。</para>
+/// Server-lifecycle watch: probes the local adb/HDC server ports, releases vanished server leases
+/// while any server is live, and raises <see cref="DebugBridgeAvailabilityChanged"/> only on a
+/// conclusive listening/refused flip.
+/// <para>server 生命周期监视：探测本机 adb/HDC server 端口，在有 server 存活时释放已消失的
+/// server 租约，仅在探测出现确定性的监听/拒绝翻转时触发可用性事件。</para>
 /// </summary>
 public sealed partial class DeviceController
 {
@@ -59,43 +51,25 @@ public sealed partial class DeviceController
         => DebugBridgeRoute.TryProbeAsync(DebugBridgeEndpoints.ServerHost, port, cancellationToken);
 
     /// <summary>
-    /// Runs one full watch loop until cancellation: probes both ports, keeps the last known state
-    /// through inconclusive probes, raises the availability event and invalidates cached probes
-    /// only when a conclusive listening/refused result changes the retained state, and releases
-    /// vanished server leases while any server is retained as live.
-    /// <para>运行完整监视循环直至取消：探测两个端口，在未能得出结论的探测中保持上次已知状态；仅当
-    /// 确定性的监听/拒绝结论改变保留状态时才上报可用性事件并使缓存探测结果失效；只要有 server 被
-    /// 保留为存活就释放已消失的 server 租约。</para>
+    /// Runs the watch loop until cancellation, holding the last known state through inconclusive
+    /// probes, raising availability events only on conclusive flips and releasing vanished server
+    /// leases.
+    /// <para>运行监视循环直至取消：无结论的探测保持上次已知状态，仅在确定性结论翻转时上报可用性事件，
+    /// 并释放已消失的 server 租约。</para>
     /// </summary>
-    /// <remarks>
-    /// The public entry point is <see cref="StartServerStateWatch"/>; this overload exposes the
-    /// probe function, ports and cadence so callers can drive the exact loop without opening real
-    /// sockets.
-    /// <para>公共入口是 <see cref="StartServerStateWatch"/>；本重载暴露探测函数、端口与周期，
-    /// 使调用方无需打开真实套接字即可驱动同一循环。</para>
-    /// </remarks>
     /// <param name="adbPort">Port probed for the adb server. <para>用于探测 adb server 的端口。</para></param>
     /// <param name="hdcPort">Port probed for the HDC server. <para>用于探测 HDC server 的端口。</para></param>
-    /// <param name="probe">Tri-state endpoint probe; production passes
-    /// <see cref="DebugBridgeRoute.TryProbeAsync"/> through
-    /// <see cref="DebugBridgeEndpoints.ServerHost"/>.
-    /// <para>三态端点探测；生产路径经 <see cref="DebugBridgeEndpoints.ServerHost"/> 传入
-    /// <see cref="DebugBridgeRoute.TryProbeAsync"/>。</para></param>
+    /// <param name="probe">Tri-state probe run for each port.
+    /// <para>对每个端口执行的三态探测。</para></param>
     /// <param name="interval">Delay between passes. <para>两轮探测之间的延时。</para></param>
     /// <param name="cancellationToken">Stops the loop; cancellation ends the task normally.
     /// <para>停止循环；取消后任务正常结束。</para></param>
-    /// <param name="adbAvailabilitySink">Receives the retained adb liveness on every pass; the
-    /// production loop writes it into <see cref="DebugBridgeRoute.AdbServerAvailable"/> so every
-    /// adb operation routes on the global parameter. Null keeps the loop side-effect free for tests.
-    /// <para>每轮把保留的 adb 存活状态交给它；生产循环将其写入
-    /// <see cref="DebugBridgeRoute.AdbServerAvailable"/>，使所有 adb 操作按全局参数路由。
-    /// 为 null 时循环无副作用（测试用）。</para></param>
-    /// <param name="hdcAvailabilitySink">Receives the retained HDC liveness on every pass; the
-    /// production loop writes it into <see cref="DebugBridgeRoute.HdcServerAvailable"/>. Null keeps
-    /// the loop side-effect free for tests.
-    /// <para>每轮把保留的 HDC 存活状态交给它；生产循环将其写入
-    /// <see cref="DebugBridgeRoute.HdcServerAvailable"/>。为 null 时循环无副作用（测试用）。</para></param>
-    /// <returns>Task that completes after the loop exits. <para>循环退出后完成的任务。</para></returns>
+    /// <param name="adbAvailabilitySink">Receives the retained adb liveness on each pass; null
+    /// keeps the loop side-effect free.
+    /// <para>每轮接收保留的 adb 存活状态；为 null 时循环无副作用。</para></param>
+    /// <param name="hdcAvailabilitySink">Receives the retained HDC liveness on each pass; null
+    /// keeps the loop side-effect free.
+    /// <para>每轮接收保留的 HDC 存活状态；为 null 时循环无副作用。</para></param>
     internal async Task RunServerWatchAsync(int adbPort, int hdcPort,
         Func<int, CancellationToken, Task<DebugBridgeProbeOutcome>> probe, TimeSpan interval,
         CancellationToken cancellationToken, Action<bool>? adbAvailabilitySink = null,
@@ -146,13 +120,16 @@ public sealed partial class DeviceController
 
     /// <summary>
     /// Reduces one tri-state probe to the retained live flag: listening means live, refused means
-    /// absent, and an inconclusive probe keeps <c>lastKnownState</c>; before the first conclusive
-    /// pass there is no known state, so an unknown there resolves to absent exactly like the old
-    /// two-state behaviour. Caller cancellation propagates so the watch still stops on time.
-    /// <para>把一次三态探测归约为保留的存活标志：监听表示存活，拒绝表示不存在，未能得出结论的探测
-    /// 保持 <c>lastKnownState</c>；首次确定性结论之前没有已知状态，此时未知按不存在处理，与旧的
-    /// 二态行为一致。调用方取消继续上抛，监视照旧停表。</para>
+    /// absent, and an inconclusive probe keeps the last known state.
+    /// <para>把一次三态探测归约为保留的存活标志：监听表示存活，拒绝表示不存在，无结论的探测保持
+    /// 上次已知状态。</para>
     /// </summary>
+    /// <param name="probe">The tri-state probe to run. <para>要执行的三态探测。</para></param>
+    /// <param name="port">Port to probe. <para>待探测的端口。</para></param>
+    /// <param name="lastKnownState">State retained when the probe is inconclusive.
+    /// <para>探测无结论时保留的状态。</para></param>
+    /// <param name="cancellationToken">Cancels the probe. <para>取消探测。</para></param>
+    /// <returns>Task yielding the resolved live flag. <para>给出归约后存活标志的任务。</para></returns>
     private static async Task<bool> ResolveLastKnownStateAsync(
         Func<int, CancellationToken, Task<DebugBridgeProbeOutcome>> probe, int port, bool lastKnownState,
         CancellationToken cancellationToken)
@@ -168,11 +145,12 @@ public sealed partial class DeviceController
 
     /// <summary>
     /// Invokes an event and records a subscriber exception as an error instead of letting it abort
-    /// the watch pass: one faulty host subscriber must not hide later availability flips or block
-    /// lease release for the remaining sources of the same pass.
-    /// <para>调用事件并把订阅方异常记录为错误，而不是让它中断本轮监视：单个故障的宿主订阅方不得
-    /// 掩盖后续可用性翻转，也不得阻止同一轮中其余发现源的租约释放。</para>
+    /// the current watch pass, so one faulty subscriber cannot hide later availability flips.
+    /// <para>调用事件并把订阅方异常记录为错误而不是中断本轮监视，单个故障订阅方不会掩盖后续
+    /// 可用性翻转。</para>
     /// </summary>
+    /// <param name="raise">The event invocation to run. <para>要执行的事件调用。</para></param>
+    /// <param name="context">Label prefixed to the recorded error. <para>记录错误时附加的标签。</para></param>
     private static void RaiseSafe(Action raise, string context)
     {
         try

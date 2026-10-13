@@ -14,9 +14,9 @@ internal class PayloadHeader
 
 
     /// <summary>
-    /// Manifest minor versions accepted by this library. Minor version 1 is deprecated upstream and never
-    /// accepted; 10 is the upstream minimum that permits REPLACE_ZSTD operations.
-    /// <para>本库接受的清单 minor 版本集合。minor 1 在上游已废弃、永不接受；10 是上游允许
+    /// Manifest minor versions accepted by this library. Minor version 1 is deprecated and never
+    /// accepted; 10 is the minimum that permits REPLACE_ZSTD operations.
+    /// <para>本库接受的清单 minor 版本集合。minor 1 已废弃、永不接受；10 是允许
     /// REPLACE_ZSTD 操作的最低版本。</para>
     /// </summary>
     internal static readonly FrozenSet<uint> SupportedMinorVersions = BuildSupportedMinorVersions();

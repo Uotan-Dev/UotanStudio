@@ -439,10 +439,16 @@ internal static class AdbMdnsDiscovery
     /// </summary>
     internal sealed class DeviceAccumulator
     {
-        /// <summary>Whether the instance is an adb TLS-connect or legacy service. 该实例是否为 adb TLS 连接或早期服务。</summary>
+        /// <summary>
+        /// Whether the instance is an adb TLS-connect or legacy service.
+        /// <para>该实例是否为 adb TLS 连接或早期服务。</para>
+        /// </summary>
         public bool IsAdb { get; set; }
 
-        /// <summary>Whether the instance is an adb TLS-pairing service. 该实例是否为 adb TLS 配对服务。</summary>
+        /// <summary>
+        /// Whether the instance is an adb TLS-pairing service.
+        /// <para>该实例是否为 adb TLS 配对服务。</para>
+        /// </summary>
         public bool IsPairing { get; set; }
 
         /// <summary>The SRV port; zero until an SRV record resolves it. SRV 端口；解析到 SRV 记录前为 0。</summary>

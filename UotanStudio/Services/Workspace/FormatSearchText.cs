@@ -9,45 +9,49 @@ using UotanStudio.Views.Controls;
 namespace UotanStudio.Services.Workspace;
 
 /// <summary>
-/// <para>项目范围文本搜索的格式适配层：把项目内未打开的二进制格式（DTB、ARSC、AXML、
-/// DEX/JAR）有界地文本化，复用现有 <see cref="ProjectTextSearchService"/> 的匹配与限额通道。
-/// 适配只生成临时搜索文本，不修改原文件；魔数不识别、解析失败或超限时按跳过处理。</para>
-/// The format-adapter layer for project-scope text search: bounded text-ification of unopened binary
-/// formats inside a project (DTB, ARSC, AXML, DEX/JAR), reusing the existing
-/// <see cref="ProjectTextSearchService"/> match and limit channel. Adaptation only produces
-/// temporary search text and never mutates the source file; unrecognized magic, parse failures or
-/// over-limit results are skipped.
+/// Bounded text-ification of unopened project binary formats (DTB, ARSC, AXML, DEX/JAR) for
+/// project-scope text search; unrecognized or oversized files are skipped.
+/// <para>把项目内未打开的二进制格式（DTB、ARSC、AXML、DEX/JAR）有界地文本化，用于项目范围的文本搜索；无法识别或超限的文件按跳过处理。</para>
 /// </summary>
 internal static class FormatSearchText
 {
     /// <summary>
-    /// <para>一次读取的文件头长度：取最长魔数判定的长度（ARSC 表头类型 + 头部大小 + 文件大小），
-    /// AXML（8）与 DEX（8）判定复用同一头部。</para>
     /// Length of the single header read: the longest magic-check length (ARSC table type + header
     /// size + file size); AXML (8) and DEX (8) checks reuse the same header.
+    /// <para>一次读取的文件头长度：取最长魔数判定的长度（ARSC 表头类型 + 头部大小 + 文件大小），
+    /// AXML（8）与 DEX（8）判定复用同一头部。</para>
     /// </summary>
     private const int ArscHeaderLength = 12;
 
     /// <summary>
-    /// <para>DEX 魔数判定所需的头部长度（"dex\\n" + 版本 + NUL）。</para>
     /// Header length needed for DEX magic detection ("dex\\n" + version + NUL).
+    /// <para>DEX 魔数判定所需的头部长度（"dex\\n" + 版本 + NUL）。</para>
     /// </summary>
     private const int DexHeaderLength = 8;
 
     /// <summary>
-    /// <para>DTB 魔数判定所需的头部长度（大端 FDT 魔数）。</para>
     /// Header length needed for DTB magic detection (big-endian FDT magic).
+    /// <para>DTB 魔数判定所需的头部长度（大端 FDT 魔数）。</para>
     /// </summary>
     private const int DtbHeaderLength = 4;
 
     /// <summary>
-    /// <para>按扩展名/魔数识别并文本化项目文件；无法识别或超限时返回 <c>null</c>（调用方跳过）。</para>
-    /// Identifies and text-ifies a project file by extension/magic; returns <c>null</c> when
-    /// unrecognized or over-limit (the caller skips it).
+    /// Identifies and text-ifies a project file by extension/magic; <c>null</c> when unrecognized or
+    /// over-limit.
+    /// <para>按扩展名/魔数识别并文本化项目文件；无法识别或超限时为 <c>null</c>。</para>
     /// </summary>
-    /// <param name="path">项目文件路径。<para>The project file path.</para></param>
-    /// <param name="cancellationToken">取消令牌。<para>The cancellation token.</para></param>
-    /// <returns>可搜索文本；跳过时为 <c>null</c>。<para>The searchable text; <c>null</c> when skipped.</para></returns>
+    /// <param name="path">
+    /// The project file path.
+    /// <para>项目文件路径。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The token checked before and during parsing.
+    /// <para>解析前后均检查的取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The searchable text, or <c>null</c> when the file is skipped.
+    /// <para>可搜索文本，跳过该文件时为 <c>null</c>。</para>
+    /// </returns>
     internal static string? TryRead(string path, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -112,15 +116,35 @@ internal static class FormatSearchText
     }
 
     /// <summary>
-    /// <para>把 DTB 字节解析为 DTS 文本。</para>
     /// Parses DTB bytes into DTS text.
+    /// <para>把 DTB 字节解析为 DTS 文本。</para>
     /// </summary>
+    /// <param name="path">
+    /// The DTB file path.
+    /// <para>DTB 文件路径。</para>
+    /// </param>
+    /// <returns>
+    /// The rendered DTS text.
+    /// <para>渲染出的 DTS 文本。</para>
+    /// </returns>
     private static string ReadDtb(string path) => DtsFormat.Write(DtbFormat.Read(File.ReadAllBytes(path)));
 
     /// <summary>
-    /// <para>把 ARSC 字节解析为资源表搜索文本。</para>
     /// Parses ARSC bytes into resource-table search text.
+    /// <para>把 ARSC 字节解析为资源表搜索文本。</para>
     /// </summary>
+    /// <param name="path">
+    /// The ARSC file path.
+    /// <para>ARSC 文件路径。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The token checked around parsing.
+    /// <para>解析过程两侧检查的取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The serialized resource-table text.
+    /// <para>序列化后的资源表文本。</para>
+    /// </returns>
     private static string ReadArsc(string path, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -130,9 +154,21 @@ internal static class FormatSearchText
     }
 
     /// <summary>
-    /// <para>把普通 DEX 字节反汇编为 Smali 文本。</para>
     /// Disassembles plain DEX bytes into Smali text.
+    /// <para>把普通 DEX 字节反汇编为 Smali 文本。</para>
     /// </summary>
+    /// <param name="path">
+    /// The DEX file path.
+    /// <para>DEX 文件路径。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The token checked before disassembly.
+    /// <para>反汇编前检查的取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The disassembled Smali text.
+    /// <para>反汇编得到的 Smali 文本。</para>
+    /// </returns>
     private static string ReadDex(string path, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -140,9 +176,21 @@ internal static class FormatSearchText
     }
 
     /// <summary>
-    /// <para>把 JAR/APK 容器的全部 classes*.dex 合并反汇编为 Smali 文本。</para>
     /// Merges and disassembles every classes*.dex entry of a JAR/APK container into Smali text.
+    /// <para>把 JAR/APK 容器的全部 classes*.dex 条目合并反汇编为 Smali 文本。</para>
     /// </summary>
+    /// <param name="path">
+    /// The container file path.
+    /// <para>容器文件路径。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The token checked before merging.
+    /// <para>合并前检查的取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The merged Smali text.
+    /// <para>合并后的 Smali 文本。</para>
+    /// </returns>
     private static string ReadContainer(string path, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -150,9 +198,21 @@ internal static class FormatSearchText
     }
 
     /// <summary>
-    /// <para>把 AXML 字节解析为 XML 文本（与 Manifest 编辑器的预览文本一致）。</para>
-    /// Parses AXML bytes into XML text (identical to the Manifest editor's preview text).
+    /// Parses AXML bytes into XML text.
+    /// <para>把 AXML 字节解析为 XML 文本。</para>
     /// </summary>
+    /// <param name="path">
+    /// The AXML file path.
+    /// <para>AXML 文件路径。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The token checked around parsing.
+    /// <para>解析过程两侧检查的取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The rendered XML text.
+    /// <para>渲染出的 XML 文本。</para>
+    /// </returns>
     private static string ReadAxml(string path, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -162,24 +222,48 @@ internal static class FormatSearchText
     }
 
     /// <summary>
-    /// <para>超过 8 MiB 搜索文本上限时放弃该文件，避免把超长文本带入匹配通道。</para>
     /// Discards the file when the search text exceeds the 8 MiB limit, keeping oversized text out
     /// of the matching channel.
+    /// <para>超过 8 MiB 搜索文本上限时放弃该文件，避免把超长文本带入匹配通道。</para>
     /// </summary>
+    /// <param name="text">
+    /// The text produced for a candidate file.
+    /// <para>为候选文件生成的文本。</para>
+    /// </param>
+    /// <returns>
+    /// The text when within the limit, or <c>null</c>.
+    /// <para>未超限时返回该文本，否则为 <c>null</c>。</para>
+    /// </returns>
     private static string? Bound(string text) =>
         text.Length > TextSearchService.MaximumTextLength ? null : text;
 
     /// <summary>
-    /// <para>判断文件名是否为 AndroidManifest.xml（大小写不敏感）。</para>
     /// Whether the file name is AndroidManifest.xml (case-insensitive).
+    /// <para>判断文件名是否为 AndroidManifest.xml（大小写不敏感）。</para>
     /// </summary>
+    /// <param name="path">
+    /// The project file path.
+    /// <para>项目文件路径。</para>
+    /// </param>
+    /// <returns>
+    /// True when the file name matches.
+    /// <para>文件名匹配时为真。</para>
+    /// </returns>
     private static bool IsManifestPath(string path) =>
         Path.GetFileName(path).Equals("AndroidManifest.xml", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// <para>有界文件头 {@code header} 的 DTB 魔数判定（大端 FDT 魔数）。</para>
     /// DTB magic check (big-endian FDT magic) on the bounded file header.
+    /// <para>有界文件头的 DTB 魔数判定（大端 FDT 魔数）。</para>
     /// </summary>
+    /// <param name="header">
+    /// The bounded header bytes read from the file.
+    /// <para>从文件读取的有界头部字节。</para>
+    /// </param>
+    /// <returns>
+    /// True when the header starts with the FDT magic.
+    /// <para>头部以 FDT 魔数开头时为真。</para>
+    /// </returns>
     private static bool IsDtbMagic(byte[] header) =>
         header.Length >= DtbHeaderLength && BinaryPrimitives.ReadUInt32BigEndian(header) == FdtConstants.FdtMagic;
 

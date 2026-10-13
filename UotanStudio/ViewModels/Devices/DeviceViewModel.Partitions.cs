@@ -10,15 +10,15 @@ namespace UotanStudio.ViewModels.Devices;
 public partial class DeviceViewModel
 {
     /// <summary>
-    /// <para>快速刷写入口：为选中设备选择镜像并刷写到指定分区（默认 boot），经
-    /// <see cref="FlashService.FlashImageAsync"/> 执行，进度与结果回报到状态栏与统一日志。
-    /// 刷写前会经 DialogService 请求用户确认。</para>
     /// Quick flash entry: picks an image and flashes it to the given partition (default "boot") on
     /// the selected device via <see cref="FlashService.FlashImageAsync"/>, reporting progress and
     /// results to the status bar and unified log. User confirmation is requested through
     /// DialogService before flashing.
+    /// <para>快速刷写入口：为选中设备选择镜像并刷写到指定分区（默认 boot），经
+    /// <see cref="FlashService.FlashImageAsync"/> 执行，进度与结果回报到状态栏与统一日志。
+    /// 刷写前会经 DialogService 请求用户确认。</para>
     /// </summary>
-    /// <param name="partition"><para>目标分区名；null 时使用 "boot"。</para>The target partition; "boot" when null.</param>
+    /// <param name="partition">The target partition; "boot" when null. <para>目标分区名；null 时使用 "boot"。</para></param>
     [RelayCommand(CanExecute = nameof(CanQuickFlash))]
     private async Task QuickFlashAsync(object? partition)
     {
@@ -87,15 +87,15 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>备份分区入口：为选中 Fastboot 设备经 <c>SaveFileDialog</c> 选择输出路径，
-    /// 打开 fastboot 会话后调用 <see cref="BackupService.BackupFastbootPartition"/> 备份指定分区，
-    /// 进度回报状态栏与统一日志，结果写状态栏。</para>
     /// Backup entry: picks an output path for the selected Fastboot device via a save-file dialog,
     /// opens a fastboot session and backs up the given partition through
     /// <see cref="BackupService.BackupFastbootPartition"/>, reporting progress to the status bar
     /// and writing the result back to it.
+    /// <para>备份分区入口：为选中 Fastboot 设备经 <c>SaveFileDialog</c> 选择输出路径，
+    /// 打开 fastboot 会话后调用 <see cref="BackupService.BackupFastbootPartition"/> 备份指定分区，
+    /// 进度回报状态栏与统一日志，结果写状态栏。</para>
     /// </summary>
-    /// <param name="partition"><para>目标分区名；null 时使用 "boot"。</para>The target partition; "boot" when null.</param>
+    /// <param name="partition">The target partition; "boot" when null. <para>目标分区名；null 时使用 "boot"。</para></param>
     [RelayCommand(CanExecute = nameof(CanBackupRestore))]
     private async Task BackupPartitionAsync(object? partition)
     {
@@ -164,15 +164,15 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>还原分区入口：为选中 Fastboot 设备经 <c>OpenFileDialog</c> 选择镜像文件，
-    /// 打开 fastboot 会话后调用 <see cref="BackupService.RestoreFastbootPartition"/> 刷回指定分区，
-    /// 进度回报状态栏与统一日志，结果写状态栏。</para>
     /// Restore entry: picks an image for the selected Fastboot device via an open-file dialog,
     /// opens a fastboot session and restores the given partition through
     /// <see cref="BackupService.RestoreFastbootPartition"/>, reporting progress to the status bar
     /// and writing the result back to it.
+    /// <para>还原分区入口：为选中 Fastboot 设备经 <c>OpenFileDialog</c> 选择镜像文件，
+    /// 打开 fastboot 会话后调用 <see cref="BackupService.RestoreFastbootPartition"/> 刷回指定分区，
+    /// 进度回报状态栏与统一日志，结果写状态栏。</para>
     /// </summary>
-    /// <param name="partition"><para>目标分区名；null 时使用 "boot"。</para>The target partition; "boot" when null.</param>
+    /// <param name="partition">The target partition; "boot" when null. <para>目标分区名；null 时使用 "boot"。</para></param>
     [RelayCommand(CanExecute = nameof(CanBackupRestore))]
     private async Task RestorePartitionAsync(object? partition)
     {
@@ -240,17 +240,17 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>EDL 备份核心流程：选择 rawprogram XML 解析分区几何与输出路径，打开 EDL 会话后经
-    /// <see cref="BackupService.ResolveEdlPartitionGeometry"/> 与 <see cref="BackupService.BackupEdlPartitionAsync"/>
-    /// 流式备份指定分区，进度回报状态栏与统一日志。</para>
     /// EDL backup core flow: picks a rawprogram XML for partition geometry plus an output path,
     /// opens an EDL session and streams the partition backup through
     /// <see cref="BackupService.ResolveEdlPartitionGeometry"/> and
     /// <see cref="BackupService.BackupEdlPartitionAsync"/>, reporting progress to the status bar
     /// and the unified log.
+    /// <para>EDL 备份核心流程：选择 rawprogram XML 解析分区几何与输出路径，打开 EDL 会话后经
+    /// <see cref="BackupService.ResolveEdlPartitionGeometry"/> 与 <see cref="BackupService.BackupEdlPartitionAsync"/>
+    /// 流式备份指定分区，进度回报状态栏与统一日志。</para>
     /// </summary>
-    /// <param name="device"><para>选中的 EDL 设备。</para>The selected EDL device.</param>
-    /// <param name="partitionName"><para>目标分区名。</para>The target partition name.</param>
+    /// <param name="device">The selected EDL device. <para>选中的 EDL 设备。</para></param>
+    /// <param name="partitionName">The target partition name. <para>目标分区名。</para></param>
     private async Task BackupEdlPartitionCoreAsync(DeviceInfo device, string partitionName)
     {
         var topLevel = TopLevelExtensions.GetTopLevel();
@@ -316,16 +316,16 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>EDL 还原核心流程：选择 rawprogram XML，解析出目标分区条目后打开 EDL 会话，经
-    /// <see cref="BackupService.RestoreEdlPartitionAsync"/> 刷回该分区（镜像文件由 rawprogram
-    /// 条目引用定位），进度回报状态栏与统一日志。</para>
     /// EDL restore core flow: picks a rawprogram XML, resolves the target partition entry,
     /// opens an EDL session and restores the partition through
     /// <see cref="BackupService.RestoreEdlPartitionAsync"/> (the image is located via the
     /// rawprogram entry), reporting progress to the status bar and the unified log.
+    /// <para>EDL 还原核心流程：选择 rawprogram XML，解析出目标分区条目后打开 EDL 会话，经
+    /// <see cref="BackupService.RestoreEdlPartitionAsync"/> 刷回该分区（镜像文件由 rawprogram
+    /// 条目引用定位），进度回报状态栏与统一日志。</para>
     /// </summary>
-    /// <param name="device"><para>选中的 EDL 设备。</para>The selected EDL device.</param>
-    /// <param name="partitionName"><para>目标分区名。</para>The target partition name.</param>
+    /// <param name="device">The selected EDL device. <para>选中的 EDL 设备。</para></param>
+    /// <param name="partitionName">The target partition name. <para>目标分区名。</para></param>
     private async Task RestoreEdlPartitionCoreAsync(DeviceInfo device, string partitionName)
     {
         var topLevel = TopLevelExtensions.GetTopLevel();

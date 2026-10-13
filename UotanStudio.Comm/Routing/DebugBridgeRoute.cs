@@ -33,14 +33,9 @@ public static class DebugBridgeRoute
     private static bool _adbServerAvailable;
 
     /// <summary>
-    /// <para>进程全局的 adb server 存在性参数。启动时由 <see cref="InitializeAdbServerProbe"/> 探测写入，
-    /// 之后由 server 监视循环每轮对默认端点的确定性结论刷新；未知结果保持上次状态。所有 adb 操作路由
-    /// （shell、push、pull、reboot、logcat、投屏等）读取本参数决定经 server 转发还是直写目标端口。</para>
-    /// Process-global adb server availability. Written by <see cref="InitializeAdbServerProbe"/> at
-    /// startup and refreshed each pass by the server-lifecycle watch's conclusive probe of the
-    /// default endpoint; inconclusive probes keep the previous value. Every adb operation route
-    /// (shell, push, pull, reboot, logcat, mirroring) reads this value to choose server forwarding
-    /// versus direct port access.</summary>
+    /// Process-global adb server availability, written at startup and refreshed each pass by the conclusive probe of the default endpoint; inconclusive probes keep the previous value. Every adb route reads it to choose between server forwarding and direct connection.
+    /// <para>进程级的 adb server 可用性，启动时写入，并由对默认端点的确证探测每轮刷新；未确证的探测保持原值。所有 adb 路由据此在“经 server 转发”与“直连”之间选择。</para>
+    /// </summary>
     /// <value>
     /// <see langword="true"/> when the last conclusive probe of <see cref="DebugBridgeEndpoints.ServerHost"/>
     /// at <see cref="DebugBridgeEndpoints.AdbServerPort"/> found a listening server.
@@ -52,14 +47,14 @@ public static class DebugBridgeRoute
     private static bool _hdcServerAvailable;
 
     /// <summary>
-    /// <para>进程全局的 HDC server 存在性参数，语义与 <see cref="AdbServerAvailable"/> 对称：启动时由
-    /// <see cref="InitializeHdcServerProbe"/> 探测写入，之后由 server 监视循环每轮的确定性结论刷新；
-    /// 未知结果保持上次状态。所有 HDC 操作路由（shell、hilog、文件传输等）读取本参数决定经
-    /// HDC server 转发还是直连 USB。</para>
     /// Process-global HDC server availability, mirroring <see cref="AdbServerAvailable"/>: written
     /// by <see cref="InitializeHdcServerProbe"/> at startup and refreshed each pass by the
     /// server-lifecycle watch's conclusive probe of the default HDC endpoint; inconclusive probes
     /// keep the previous value. Every HDC operation route (shell, hilog, file transfer) reads this
+    /// <para>进程全局的 HDC server 存在性参数，语义与 <see cref="AdbServerAvailable"/> 对称：启动时由
+    /// <see cref="InitializeHdcServerProbe"/> 探测写入，之后由 server 监视循环每轮的确定性结论刷新；
+    /// 未知结果保持上次状态。所有 HDC 操作路由（shell、hilog、文件传输等）读取本参数决定经
+    /// HDC server 转发还是直连 USB。</para>
     /// value to choose server forwarding versus direct USB access.</summary>
     /// <value>
     /// <see langword="true"/> when the last conclusive probe of <see cref="DebugBridgeEndpoints.ServerHost"/>
@@ -70,12 +65,12 @@ public static class DebugBridgeRoute
     internal static void SetHdcServerAvailable(bool available) => Volatile.Write(ref _hdcServerAvailable, available);
 
     /// <summary>
-    /// <para>程序启动与显式 server 生命周期操作后的重同步边界：对默认 HDC 端点做一次真实探测，
-    /// 把确定性结论（监听或拒绝）写入 <see cref="HdcServerAvailable"/>；未知结论保持当前值。
-    /// 本方法不抛出 socket 异常。</para>
     /// Startup and post-lifecycle resync boundary: probes the default HDC endpoint once for real
     /// and writes the conclusive outcome (listening or refused) into
     /// <see cref="HdcServerAvailable"/>; an inconclusive probe keeps the current value. The method
+    /// <para>程序启动与显式 server 生命周期操作后的重同步边界：对默认 HDC 端点做一次真实探测，
+    /// 把确定性结论（监听或拒绝）写入 <see cref="HdcServerAvailable"/>；未知结论保持当前值。
+    /// 本方法不抛出 socket 异常。</para>
     /// never throws socket exceptions.</summary>
     public static void InitializeHdcServerProbe()
     {
@@ -94,12 +89,12 @@ public static class DebugBridgeRoute
     }
 
     /// <summary>
-    /// <para>程序启动与显式 server 生命周期操作后的重同步边界：对默认 adb 端点做一次真实探测，
-    /// 把确定性结论（监听或拒绝）写入 <see cref="AdbServerAvailable"/>；未知结论保持当前值。
-    /// 本方法不抛出 socket 异常。</para>
     /// Startup and post-lifecycle resync boundary: probes the default adb endpoint once for real
     /// and writes the conclusive outcome (listening or refused) into
     /// <see cref="AdbServerAvailable"/>; an inconclusive probe keeps the current value. The method
+    /// <para>程序启动与显式 server 生命周期操作后的重同步边界：对默认 adb 端点做一次真实探测，
+    /// 把确定性结论（监听或拒绝）写入 <see cref="AdbServerAvailable"/>；未知结论保持当前值。
+    /// 本方法不抛出 socket 异常。</para>
     /// never throws socket exceptions.</summary>
     public static void InitializeAdbServerProbe()
     {
@@ -233,14 +228,9 @@ public static class DebugBridgeRoute
     }
 
     /// <summary>
-    /// <para>对端点做三态探测：监听、拒绝、未知。未知涵盖内部 3 秒截止时间到期、目标不可达、
-    /// DNS 解析失败与连接复位等非拒绝故障；调用方必须把未知解释为「维持上次已知状态」，
-    /// 只有拒绝才代表 server 不存在（协议错误不得自动回退 direct-USB）。</para>
-    /// Probes an endpoint with three outcomes: listening, refused, unknown. Unknown covers the
-    /// internal 3-second deadline, unreachable targets, DNS resolution failures and connect
-    /// resets, that is every non-refusal fault; callers must interpret unknown as "keep the
-    /// last known state", and only a refusal means the server is absent (a protocol or
-    /// transport error must never fall back to direct USB on its own).</summary>
+    /// Probes an endpoint with three outcomes: listening, refused, unknown. Unknown covers the internal deadline, unreachable targets, DNS failures and connect resets; callers must interpret it as "keep the last known state", and only a refusal means the server is absent.
+    /// <para>探测端点，三种结果：正在监听、拒绝、未知。未知涵盖内部时限、不可达目标、DNS 失败与连接重置；调用方应把它解释为“保持最后已知状态”，只有拒绝才意味着 server 不存在。</para>
+    /// </summary>
     /// <remarks>
     /// <para>监听结果与 <see cref="IsListeningAsync"/> 共用同一正向 TTL 缓存；拒绝与未知都不缓存。
     /// 未知不会向 <see cref="ServerAvailabilityChanged"/> 上报，因此不会翻转已上报状态。
@@ -347,13 +337,13 @@ public static class DebugBridgeRoute
     }
 
     /// <summary>
-    /// <para>开启一次探测范围：范围内对同一端点的探测（含拒绝结果）在同一线程上复用首次结论，
-    /// 范围结束即失效。用于一次全量扫描内合并对 adb/HDC 端点的重复连接。</para>
     /// Begins a probe scope: within the scope, probes of the same endpoint (including refusals)
     /// reuse the first result on the same thread and become invalid when the scope ends.
     /// Used to merge repeated endpoint connections within one full scan pass.
+    /// <para>开启一次探测范围：范围内对同一端点的探测（含拒绝结果）在同一线程上复用首次结论，
+    /// 范围结束即失效。用于一次全量扫描内合并对 adb/HDC 端点的重复连接。</para>
     /// </summary>
-    /// <returns><para>作用域句柄，Dispose 后恢复外层作用域。</para>Scope handle; Dispose restores the outer scope.</returns>
+    /// <returns>Scope handle; Dispose restores the outer scope. <para>作用域句柄，Dispose 后恢复外层作用域。</para></returns>
     public static IDisposable BeginProbeScope()
     {
         _scopeCache ??= new ConcurrentDictionary<string, bool>(StringComparer.Ordinal);
@@ -388,12 +378,12 @@ public static class DebugBridgeRoute
     }
 
     /// <summary>
-    /// <para>读取全局 adb server 存在性参数；本方法不发起探测。参数由启动时的
-    /// <see cref="InitializeAdbServerProbe"/> 写入，并由 server 监视循环对默认端点的周期性
-    /// <see cref="TryProbeAsync"/> 保持更新。</para>
     /// Reads the process-global adb server availability parameter without probing. The value is
     /// written by <see cref="InitializeAdbServerProbe"/> at startup and kept fresh by the
     /// server-watch loop's periodic <see cref="TryProbeAsync"/> passes over the default
+    /// <para>读取全局 adb server 存在性参数；本方法不发起探测。参数由启动时的
+    /// <see cref="InitializeAdbServerProbe"/> 写入，并由 server 监视循环对默认端点的周期性
+    /// <see cref="TryProbeAsync"/> 保持更新。</para>
     /// endpoint.</summary>
     /// <returns>
     /// <see langword="true"/> when the global parameter currently marks the adb server as present.
@@ -401,10 +391,10 @@ public static class DebugBridgeRoute
     public static bool UseAdbServer() => AdbServerAvailable;
 
     /// <summary>
-    /// <para>按端点选择存在性来源：默认端点读取全局参数 <see cref="AdbServerAvailable"/>；
-    /// 其他端点（测试替身或第二台 server）保持实时 <see cref="ProbeEndpoint"/> 探测。</para>
     /// Selects the availability source per endpoint: the default endpoint reads the global
     /// <see cref="AdbServerAvailable"/> parameter; any other endpoint (test doubles or a second
+    /// <para>按端点选择存在性来源：默认端点读取全局参数 <see cref="AdbServerAvailable"/>；
+    /// 其他端点（测试替身或第二台 server）保持实时 <see cref="ProbeEndpoint"/> 探测。</para>
     /// server) keeps live <see cref="ProbeEndpoint"/> probing.</summary>
     /// <param name="host">adb server host to decide for. <para>待判定的 adb server 主机。</para></param>
     /// <param name="port">adb server port to decide for. <para>待判定的 adb server 端口。</para></param>
@@ -418,12 +408,12 @@ public static class DebugBridgeRoute
             : ProbeEndpoint(host, port);
 
     /// <summary>
-    /// <para>按端点选择 HDC 存在性来源：默认端点（含 OHOS_HDC_SERVER_PORT 解析出的端口）读取全局参数
-    /// <see cref="HdcServerAvailable"/>；其他端点（测试替身或自定义 server）保持实时
-    /// <see cref="ProbeEndpoint"/> 探测。</para>
     /// Selects the HDC availability source per endpoint: the default endpoint (including the port
     /// resolved from OHOS_HDC_SERVER_PORT) reads the global <see cref="HdcServerAvailable"/>
     /// parameter; any other endpoint (test doubles or a custom server) keeps live
+    /// <para>按端点选择 HDC 存在性来源：默认端点（含 OHOS_HDC_SERVER_PORT 解析出的端口）读取全局参数
+    /// <see cref="HdcServerAvailable"/>；其他端点（测试替身或自定义 server）保持实时
+    /// <see cref="ProbeEndpoint"/> 探测。</para>
     /// <see cref="ProbeEndpoint"/> probing.</summary>
     /// <param name="host">Server host, defaulting to <see cref="DebugBridgeEndpoints.ServerHost"/>.
     /// <para>server 主机，默认为 <see cref="DebugBridgeEndpoints.ServerHost"/>。</para></param>
@@ -458,13 +448,13 @@ public static class DebugBridgeRoute
 }
 
 /// <summary>
-/// <para>调试桥 server 端点探测的三态结果。只有 <see cref="Refused"/> 表示 server 不存在；
-/// <see cref="Unknown"/> 表示探测未能得出结论（超时、不可达、DNS 失败、复位），
-/// 消费方必须据此维持上次已知状态，不得翻转为「无 server」。</para>
 /// Tri-state outcome of a debug bridge server endpoint probe. Only <see cref="Refused"/> means the
 /// server is absent; <see cref="Unknown"/> means the probe could not conclude (deadline elapsed,
 /// unreachable target, DNS failure, connect reset) and consumers must keep the last known state
 /// instead of flipping to "no server".
+/// <para>调试桥 server 端点探测的三态结果。只有 <see cref="Refused"/> 表示 server 不存在；
+/// <see cref="Unknown"/> 表示探测未能得出结论（超时、不可达、DNS 失败、复位），
+/// 消费方必须据此维持上次已知状态，不得翻转为「无 server」。</para>
 /// </summary>
 public enum DebugBridgeProbeOutcome
 {

@@ -59,13 +59,6 @@ public sealed class McpHttpServerHost : IAsyncDisposable
     /// optionally adding the resources built by <see cref="McpServerHost.BuildResources"/>.
     /// <para>由已构建的工具列表（见 <see cref="McpServerHost.BuildTools"/>）创建宿主，并可选加入
     /// <see cref="McpServerHost.BuildResources"/> 构建的资源。</para>
-    /// The Streamable HTTP listener forwards every JSON-RPC method to the server unchanged, so omitting
-    /// the resources is what keeps <c>resources/list</c>, <c>resources/templates/list</c> and
-    /// <c>resources/read</c> answering <c>-32601</c>: the SDK registers those method groups only when a
-    /// resource collection is present in the shared options.
-    /// <para>Streamable HTTP 监听器会把任意 JSON-RPC 方法原样转发给服务器，因此未给出资源才是
-    /// <c>resources/list</c>、<c>resources/templates/list</c> 与 <c>resources/read</c> 仍返回
-    /// <c>-32601</c> 的原因：SDK 只在共用选项中存在资源集合时才注册这些方法组。</para>
     /// </summary>
     /// <param name="tools">Tools every session registers. <para>会话注册的工具。</para></param>
     /// <param name="resources">Resources and resource templates every session serves; <see langword="null"/>

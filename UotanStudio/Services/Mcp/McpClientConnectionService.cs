@@ -3,13 +3,9 @@ using UotanStudio.Mcp;
 namespace UotanStudio.Services.Mcp;
 
 /// <summary>
-/// Owns the MCP client configuration the settings page maintains: pushing a server list to
-/// <see cref="McpClientService"/> replaces the active configs and drops cached connections, so a
-/// saved settings change takes effect immediately for later tool listing and calls. Failures are
-/// reported through the log and never break a settings save or application startup.
-/// <para>管理设置页维护的 MCP 客户端配置：把服务器列表推送给 <see cref="McpClientService"/> 会替换生效
-/// 配置并清空缓存连接，使保存后的设置对后续的工具列举与调用立即生效。失败只记录日志，
-/// 不会中断设置保存或应用启动。</para>
+/// Owns the MCP client configuration: pushing a server list replaces the active configs and drops cached
+/// connections, and failures are reported through the log only.
+/// <para>管理 MCP 客户端配置：推送服务器列表会替换生效配置并清空缓存连接，失败只记录日志。</para>
 /// </summary>
 internal sealed class McpClientConnectionService
 {
@@ -19,7 +15,8 @@ internal sealed class McpClientConnectionService
     {
     }
 
-    /// <summary><para>全局单例。</para>The global singleton.</summary>
+    /// <summary>The global singleton. <para>全局单例。</para></summary>
+    /// <value>The shared connection service instance. <para>共享的连接服务实例。</para></value>
     internal static McpClientConnectionService Instance { get; } = new();
 
     /// <summary>
@@ -37,20 +34,17 @@ internal sealed class McpClientConnectionService
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            // Reading the file must never break startup; the client simply keeps no servers configured.
             LogService.Instance.Write(LogLevel.Error, "McpClient", $"Loading MCP client servers failed: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Applies the given client configs: converts each host config into the client DTO and pushes the
-    /// list to <see cref="McpClientService"/>, which disposes cached connections so the new list is
-    /// authoritative. Runs off the caller's thread; failures are logged only.
-    /// <para>应用给定的客户端配置：把每个宿主配置转换为客户端 DTO 并推送给
-    /// <see cref="McpClientService"/>，由其释放缓存连接使新列表成为权威配置。
-    /// 操作不占用调用方线程；失败只记录日志。</para>
+    /// Applies the given client configs: each entry is converted into the client DTO and pushed to
+    /// <see cref="McpClientService"/>, which drops cached connections. Runs off the current thread and logs failures.
+    /// <para>应用给定的客户端配置：逐条转换为客户端 DTO 并推送给 <see cref="McpClientService"/>，由其释放
+    /// 缓存连接。操作在当前线程之外执行，失败只记录日志。</para>
     /// </summary>
-    /// <param name="servers"><para>要生效的服务器配置列表。</para>The server configs to activate.</param>
+    /// <param name="servers">The server configs to activate. <para>要生效的服务器配置列表。</para></param>
     internal void Apply(IReadOnlyList<McpServerConfig> servers)
         => _ = ApplyAsync(servers);
 

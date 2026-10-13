@@ -11,14 +11,11 @@ namespace UotanStudio.Services.Devices;
 public sealed partial class DeviceMonitorService
 {
     /// <summary>
-    /// <para>全量扫描：直连 USB 端点由 Comm 的发现层提供（某协议的调试桥 server 在监听时，该协议的
-    /// 直连端点已不在端点清单内），再把 adb 与 HDC server 的目标并入结果。结果缓存至下一次设备变更
-    /// （启动窗的首次扫描结果可直接供设备管理器复用，避免重复枚举）。</para>
-    /// Full scan: consumes the direct-USB endpoints Comm's discovery layer reports (once a protocol's
-    /// debug bridge server is listening, that protocol's direct endpoints are already absent) and appends
-    /// the adb and HDC server targets. The result is cached until the next device change (the splash's
-    /// initial scan is reused by the device manager, avoiding a duplicate enumeration).
+    /// Full scan of the direct-USB endpoints plus the adb and HDC server targets, cached until the
+    /// next device change.
+    /// <para>全量扫描直连 USB 端点并并入 adb 与 HDC server 目标，结果缓存至下一次设备变更。</para>
     /// </summary>
+    /// <returns>The detected devices from this scan or from the cache. <para>本次扫描或缓存中的设备列表。</para></returns>
     public IReadOnlyList<DetectedDevice> Scan()
     {
         var cached = _cachedScan;
@@ -33,20 +30,10 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>执行实际的全量枚举与分类。</para>
     /// Performs the actual full enumeration and classification.
+    /// <para>执行实际的全量枚举与分类。</para>
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// adb 为自己经 mDNS 自动建立的传输按 DNS-SD 实例名命名，因此同一台设备还会以该名字解析出的
-    /// <c>host:port</c> 再列一次；两行都带上这个端点作为别名，随后并入同一张卡。
-    /// </para>
-    /// <para>
-    /// adb keys a transport it auto-connected through mDNS by the DNS-SD instance name, so the same device
-    /// is listed again under the <c>host:port</c> that name resolves to; both rows carry that endpoint as
-    /// their alias and merge into one card.
-    /// </para>
-    /// </remarks>
+    /// <returns>The classified device list with same-endpoint entries coalesced. <para>分类后的设备列表，同端点条目已合并。</para></returns>
     private IReadOnlyList<DetectedDevice> ScanCore()
     {
         List<DetectedDevice> devices = [];
@@ -147,11 +134,13 @@ public sealed partial class DeviceMonitorService
         => target.Transport is "USB" or "TCP";
 
     /// <summary>
-    /// <para>把一条 adb server 目标投影为设备行；<paramref name="networkAlias"/> 是 server 为其解析出的
-    /// 网络端点，用于把同一设备的多条传输并入一张卡。</para>
-    /// Projects one adb server target into a device row; <paramref name="networkAlias"/> is the network
-    /// endpoint the server resolved for it, used to fold several transports of one device into a card.
+    /// Projects one adb server target into a device row keyed by the target address.
+    /// <para>把一条 adb server 目标投影为以目标地址为键的设备行。</para>
     /// </summary>
+    /// <param name="target">The adb server endpoint to project. <para>要投影的 adb server 端点。</para></param>
+    /// <param name="usbInfos">Direct-USB device information used to resolve a physical identity. <para>用于解析物理身份的直接 USB 设备信息。</para></param>
+    /// <param name="networkAlias">Network endpoint resolved for this target, or null when absent. <para>为该目标解析出的网络端点；缺失时为 null。</para></param>
+    /// <returns>The device row for the target. <para>该目标对应的设备行。</para></returns>
     private static DetectedDevice AdbDevice(DeviceEndpoint target, IReadOnlyList<UsbDeviceInfo> usbInfos,
         string? networkAlias)
     {
@@ -172,12 +161,12 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>把 server 上报的链路文本映射为传输类型；缺少链路证据时返回 <c>Unknown</c>，不按序列号形状猜测
-    /// USB。adb server 只在真实 USB 传输的行上打印 <c>usb:</c> 描述符。</para>
-    /// Maps the server-reported link text to a transport kind; returns <c>Unknown</c> without link evidence
-    /// instead of guessing USB from the serial shape, because the adb server prints the <c>usb:</c>
-    /// descriptor only on genuine USB transport lines.
+    /// Maps server-reported link text to a transport kind, returning Unknown when there is no link
+    /// evidence rather than guessing USB from the serial shape.
+    /// <para>把 server 上报的链路文本映射为传输类型；没有链路证据时返回 Unknown，而不按序列号形状猜测 USB。</para>
     /// </summary>
+    /// <param name="targetTransport">The server-reported link text. <para>server 上报的链路文本。</para></param>
+    /// <returns>The transport kind for the link text. <para>该链路文本对应的传输类型。</para></returns>
     internal static DeviceTransportKind MapServerTransport(string? targetTransport) => targetTransport switch
     {
         "USB" => DeviceTransportKind.Usb,
@@ -208,12 +197,12 @@ public sealed partial class DeviceMonitorService
         => [.. endpoints.GroupBy(device => device.GroupId, StringComparer.Ordinal).Select(group => OrderGroupLeader([.. group]))];
 
     /// <summary>
-    /// <para>把可拨号地址那一行放到组首，使合并后的卡片默认使用 server 直接列出的 <c>host:port</c> 端点，
-    /// 而不是按实例名拨号的重复传输；无别名时保持发现顺序。</para>
-    /// Puts the dial-address row first so a merged card defaults to the <c>host:port</c> endpoint the
-    /// server lists directly rather than the instance-name duplicate; discovery order is kept without
-    /// an alias.
+    /// Puts the row carrying a dialable address first so a merged group defaults to the endpoint the
+    /// server lists directly; discovery order is kept when there is no alias.
+    /// <para>把带可拨号地址的行放到组首，使合并组默认使用 server 直接列出的端点；没有别名时保持发现顺序。</para>
     /// </summary>
+    /// <param name="group">The device rows sharing one physical identity. <para>属于同一物理身份的设备行。</para></param>
+    /// <returns>The reordered device rows. <para>重排后的设备行。</para></returns>
     private static IReadOnlyList<DetectedDevice> OrderGroupLeader(IReadOnlyList<DetectedDevice> group)
     {
         var alias = group.FirstOrDefault(device => device.NetworkAlias is not null)?.NetworkAlias;
@@ -259,8 +248,8 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>手动强制刷新：重新执行全量扫描并广播变更。</para>
     /// Manual force refresh: reruns the full scan and broadcasts the change.
+    /// <para>手动强制刷新：重新执行全量扫描并广播变更。</para>
     /// </summary>
     public Task ForceRefreshAsync()
     {
@@ -270,9 +259,11 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>按序列号查找当前扫描结果中的设备；找不到时返回 <c>null</c>。</para>
     /// Finds a device from the current scan result by serial; returns <c>null</c> when absent.
+    /// <para>按序列号查找当前扫描结果中的设备；找不到时返回 <c>null</c>。</para>
     /// </summary>
+    /// <param name="serial">The device serial to look up. <para>要查找的设备序列号。</para></param>
+    /// <returns>The matching device, or <see langword="null"/> when absent. <para>匹配的设备；缺失时为 <see langword="null"/>。</para></returns>
     public DetectedDevice? FindDeviceBySerial(string serial)
     {
         var matches = Scan().Where(d => d.Serial == serial).Take(2).ToArray();
@@ -281,11 +272,11 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>按接口类/VID-PID 将 USB 设备分类到协议类型；分类事实由 Comm 的
-    /// <c>UsbProtocolClassifier</c> 唯一提供，此处仅做字符串到枚举的映射。</para>
-    /// Classifies a USB device into a protocol kind by interface class / VID-PID; the classification
-    /// facts come solely from Comm's <c>UsbProtocolClassifier</c>; this only maps the string to the enum.
+    /// Maps a USB device to a protocol kind by interface class and VID/PID.
+    /// <para>按接口类与 VID/PID 把 USB 设备映射为协议类型。</para>
     /// </summary>
+    /// <param name="info">The USB device information to classify. <para>要分类的 USB 设备信息。</para></param>
+    /// <returns>The protocol kind, or <see langword="null"/> when unclassified. <para>协议类型；无法分类时为 <see langword="null"/>。</para></returns>
     private static DeviceProtocolKind? Classify(UsbDeviceInfo info)
         => UsbProtocolClassifier.Classify(info) switch
         {

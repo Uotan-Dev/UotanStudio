@@ -72,7 +72,7 @@ internal static class DeliveryToolFactory
     /// <para>为单个宿主构建交付构建工具，并绑定该宿主获得的工具准备服务提供器；该提供器不再是进程级可变静态，
     /// 因此无头服务器不会继承其他会话的注入，能力缺口的如实上报只取决于本宿主配置。</para>
     /// </summary>
-    /// <param name="sandbox"><para>约束计划与输出路径的沙箱。</para>The sandbox confining plan and output paths.</param>
+    /// <param name="sandbox">The sandbox confining plan and output paths. <para>约束计划与输出路径的沙箱。</para></param>
     /// <param name="deliveryTools"><para>本宿主的工具准备服务提供器；为 <see langword="null"/> 时 <c>delivery_build</c> 如实报告能力缺口。</para>
     /// This host's tool-preparation provider; when <see langword="null"/> <c>delivery_build</c> reports the capability gap.</param>
     /// <param name="signingKeys"><para>本宿主的签名密钥供应器；为 <see langword="null"/> 时签名计划如实失败。</para>
@@ -136,24 +136,19 @@ internal static class DeliveryToolHandlers
     }
 
     /// <summary>
-    /// Runs a full delivery build through the public <see cref="DeliveryService"/> facade, threading
-    /// the request's cancellation token and progress sink all the way down. The sandbox-confined plan
-    /// is re-serialized back to the delivery JSON contract first, because the facade parses plain
-    /// JSON and must only ever see sandbox-resolved paths.
-    /// <para>通过公共 <see cref="DeliveryService"/> 门面执行完整交付构建，把请求的取消令牌与进度
-    /// 接收端一路贯穿到底。沙箱收敛后的计划会先重新序列化回交付 JSON 契约——门面只解析纯 JSON，
-    /// 必须只看到经沙箱解析后的路径。</para>
+    /// Runs a full delivery build through the public <see cref="DeliveryService"/> facade.
+    /// <para>通过公共 <see cref="DeliveryService"/> 门面执行完整交付构建。</para>
     /// </summary>
-    /// <param name="sandbox"><para>约束计划路径的沙箱。</para>The sandbox confining the plan's paths.</param>
-    /// <param name="planJson"><para>待构建的交付计划 JSON。</para>The delivery plan JSON to build from.</param>
-    /// <param name="overwrite"><para>允许覆盖的既有输出文件名，可为 null。</para>Existing output file names allowed to be replaced, possibly null.</param>
-    /// <param name="progress"><para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para>The MCP-bound progress instance, possibly <see langword="null"/>.</param>
+    /// <param name="sandbox">The sandbox confining the plan's paths. <para>约束计划路径的沙箱。</para></param>
+    /// <param name="planJson">The delivery plan JSON to build from. <para>待构建的交付计划 JSON。</para></param>
+    /// <param name="overwrite">Existing output file names allowed to be replaced, possibly null. <para>允许覆盖的既有输出文件名，可为 null。</para></param>
+    /// <param name="progress">The MCP-bound progress instance, possibly <see langword="null"/>. <para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para></param>
     /// <param name="deliveryTools"><para>本宿主的工具准备服务提供器；为 <see langword="null"/> 或未产出实例时如实报告能力缺口。</para>
     /// This host's tool-preparation provider; when <see langword="null"/> or empty the capability gap is reported honestly.</param>
     /// <param name="signingKeys"><para>本宿主的签名密钥供应器；为 <see langword="null"/> 时签名计划如实失败。</para>
     /// This host's signing key provider; signed plans fail honestly when it is <see langword="null"/>.</param>
-    /// <param name="cancellationToken"><para>取消进行中构建或工具下载的令牌。</para>Token cancelling the in-flight build or tool download.</param>
-    /// <returns><para>描述产出路径数量的结果信封。</para>An envelope summarizing the produced output paths.</returns>
+    /// <param name="cancellationToken">Token cancelling the in-flight build or tool download. <para>取消进行中构建或工具下载的令牌。</para></param>
+    /// <returns>An envelope summarizing the produced output paths. <para>描述产出路径数量的结果信封。</para></returns>
     /// <exception cref="OperationCanceledException"><para>客户端在构建中请求取消时重新抛出，交由 <see cref="ToolGuard"/> 映射为取消结果。</para>
     /// Rethrown when the client requests cancellation during the build so <see cref="ToolGuard"/> maps it to a cancellation result.</exception>
     public static async Task<ToolResult> Build(
@@ -200,25 +195,25 @@ internal static class DeliveryToolHandlers
         => DeliveryPlanJson.ParseConfinedPlan(sandbox, planJson);
 
     /// <summary>
-    /// <para>把协议进度目标转为交付门面的强类型进度接收端；没有进度令牌时返回 <see langword="null"/>，
-    /// 底层实现因此不会消耗上报开销。</para>
     /// Converts the protocol progress sink into the facade's typed progress sink; without a progress token
     /// this returns <see langword="null"/> so backing implementations skip reporting overhead.
+    /// <para>把协议进度目标转为交付门面的强类型进度接收端；没有进度令牌时返回 <see langword="null"/>，
+    /// 底层实现因此不会消耗上报开销。</para>
     /// </summary>
-    /// <param name="progress"><para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para>The MCP-bound progress instance, possibly <see langword="null"/>.</param>
-    /// <returns><para>供交付构建上报进度值的接收端。</para>A progress sink the delivery build reports to.</returns>
+    /// <param name="progress">The MCP-bound progress instance, possibly <see langword="null"/>. <para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para></param>
+    /// <returns>A progress sink the delivery build reports to. <para>供交付构建上报进度值的接收端。</para></returns>
     private static IProgress<DeliveryBuildProgress>? ToBuildProgress(IProgress<ProgressNotificationValue>? progress) =>
         progress is null
             ? null
             : new Progress<DeliveryBuildProgress>(value => progress.Report(ToNotification(value)));
 
     /// <summary>
-    /// <para>把门面进度值转为协议进度通知；总进度固定为 100，消息取门面的可读文本。</para>
     /// Maps a facade progress value onto a protocol progress notification with the total pinned to 100 and
     /// the facade's human-readable text as the message.
+    /// <para>把门面进度值转为协议进度通知；总进度固定为 100，消息取门面的可读文本。</para>
     /// </summary>
-    /// <param name="value"><para>门面输出的一帧进度值。</para>One progress value emitted by the delivery facade.</param>
-    /// <returns><para>百分比与文本组成的协议进度值。</para>A protocol progress value carrying the percent and the text.</returns>
+    /// <param name="value">One progress value emitted by the delivery facade. <para>门面输出的一帧进度值。</para></param>
+    /// <returns>A protocol progress value carrying the percent and the text. <para>百分比与文本组成的协议进度值。</para></returns>
     private static ProgressNotificationValue ToNotification(DeliveryBuildProgress value)
         => new() { Progress = (float)value.Percent, Total = 100f, Message = value.Message };
 }

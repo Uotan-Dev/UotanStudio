@@ -11,8 +11,8 @@ public static partial class SmaliAssembler
 {
     /// <remarks>
     /// The project-specific .packed-switch-raw and .sparse-switch-raw blocks retain signed decimal code-unit offsets
-    /// in unreferenced tables. These directives are not upstream Smali syntax.
-    /// <para>项目专用的 .packed-switch-raw 和 .sparse-switch-raw 块保留无引用表的有符号十进制代码单元偏移，不属于上游 Smali 语法。</para>
+    /// in unreferenced tables; these directives are an extension of standard Smali syntax.
+    /// <para>项目专用的 .packed-switch-raw 和 .sparse-switch-raw 块保留无引用表的有符号十进制代码单元偏移，属于标准 Smali 语法的扩展。</para>
     /// </remarks>
     /// <summary>
     /// Parses text emitted by <see cref="Disassembler"/>.

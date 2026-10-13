@@ -108,12 +108,11 @@ public sealed partial class RkdlSession : IProtocolSession
     public bool IsMaskromMode => IsRockchipDevice() && !IsRockusbMode;
 
     /// <summary>
-    /// Checks if this is a Rockchip bootrom device (maskrom or loader mode). Uses the upstream
-    /// generic rule (vendor 0x2207 and pid >> 8 != 0) plus the known loader product IDs
-    /// (see rkdeveloptool RKScan.cpp IsRockusbDevice).
-    /// <para>检查是否为 Rockchip bootrom 设备（maskrom 或 loader 模式）。使用上游通用规则
-    /// （厂商 0x2207 且 pid >> 8 != 0）加已知 loader 产品 ID（见 rkdeveloptool RKScan.cpp
-    /// 的 IsRockusbDevice）。</para>
+    /// Checks if this is a Rockchip bootrom device (maskrom or loader mode). Vendor 0x2207 with
+    /// pid >> 8 != 0 identifies the bootrom product-ID range, and the known loader product IDs
+    /// are accepted on top of it.
+    /// <para>检查是否为 Rockchip bootrom 设备（maskrom 或 loader 模式）。厂商 0x2207 且
+    /// pid >> 8 != 0 标识 bootrom 产品 ID 区间，在此之上另行接受已知 loader 产品 ID。</para>
     /// </summary>
     /// <returns><c>true</c> when the vendor and product IDs match the Rockchip bootrom or a
     /// known loader product ID. <para>厂商与产品 ID 匹配 Rockchip bootrom 或已知 loader

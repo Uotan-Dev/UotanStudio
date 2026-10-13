@@ -391,14 +391,8 @@ public static partial class PayloadParser
     }
 
     /// <summary>
-    /// Returns the authoritative destination size (in bytes) for a partition update. Prefers the
-    /// manifest's declared <c>new_partition_info.size</c> and otherwise falls back to the highest
-    /// destination-extent end offset. Incremental payloads dominated by <c>SOURCE_COPY</c> operations
-    /// carry an empty destination-extent list, so the declared size is the only honest figure
-    /// available before the partition is actually reconstructed.
-    /// <para>返回分区更新的权威目标大小（字节）。优先使用 manifest 声明的
-    /// <c>new_partition_info.size</c>，否则回退到最高目标 extent 结束偏移。以 <c>SOURCE_COPY</c>
-    /// 为主的增量载荷目标 extent 为空，声明大小是唯一在重建前可信的数值。</para>
+    /// Returns the authoritative destination size in bytes for a partition update.
+    /// <para>返回分区更新的权威目标大小（字节）。</para>
     /// </summary>
     /// <param name="partition">Partition update from a payload manifest; must be non-null. <para>来自载荷清单的分区更新；不得为 null。</para></param>
     /// <param name="blockSize">Payload block size used to convert extent blocks to bytes. <para>载荷块大小，用于把 extent 块数换算为字节。</para></param>
@@ -482,8 +476,8 @@ public static partial class PayloadParser
 
     /// <summary>
     /// Extracts partitions from a payload file while threading external raw content dictionaries into
-    /// REPLACE_ZSTD operations, mirroring the AOSP <c>max_zstd_dict_raw_size</c> ceiling.
-    /// <para>从载荷文件提取分区，并把外部原始内容字典贯穿到 REPLACE_ZSTD 操作，对应 AOSP 的 <c>max_zstd_dict_raw_size</c> 上限。</para>
+    /// REPLACE_ZSTD operations, honoring the <c>max_zstd_dict_raw_size</c> ceiling.
+    /// <para>从载荷文件提取分区，并把外部原始内容字典贯穿到 REPLACE_ZSTD 操作，遵循 <c>max_zstd_dict_raw_size</c> 上限。</para>
     /// </summary>
     /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
     /// <param name="extractFiles">Partition names to extract; null or empty extracts every named partition. <para>要提取的分区名；为 null 或空时提取全部有名字分区。</para></param>

@@ -3,7 +3,7 @@ using UotanStudio.Services.Projects;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
-/// <summary>Creates a typed file reference without reading its contents into memory.</summary>
+/// <summary>Creates a typed file reference without reading its contents into memory.<para>创建类型化文件引用，不将内容读入内存。</para></summary>
 public sealed class ArtifactNodeViewModel : FlowNodeViewModel
 {
     public ArtifactNodeViewModel() : base("File artifact", NodeCategory.Data)

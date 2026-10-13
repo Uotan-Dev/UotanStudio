@@ -16,14 +16,14 @@ using UotanStudio.Views.Controls;
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
-/// <para>分区表编辑器视图模型：顶部为 GNOME Disks 风格的可视化分区段布局（按扇区比例排布，
-/// 点击联动选择），下方左侧分区列表 + 右侧属性编辑（分区名/起始/大小/类型），
-/// 支持 Android LP super 元数据、GPT、MBR、Amlogic 与 Rockchip parameter 多种数据源，
-/// 可解析、可视化编辑、增删分区并回写保存。</para>
 /// Partition-table editor view model: a GNOME Disks style visual partition band at the top (segments
 /// laid out by sector proportion, clicking selects), a left partition list plus a right properties
 /// pane (name/start/size/type); it parses Android LP super metadata, GPT, MBR, Amlogic and Rockchip
 /// parameter files, edits, adds/removes partitions and saves the table back to the file.
+/// <para>分区表编辑器视图模型：顶部为 GNOME Disks 风格的可视化分区段布局（按扇区比例排布，
+/// 点击联动选择），下方左侧分区列表 + 右侧属性编辑（分区名/起始/大小/类型），
+/// 支持 Android LP super 元数据、GPT、MBR、Amlogic 与 Rockchip parameter 多种数据源，
+/// 可解析、可视化编辑、增删分区并回写保存。</para>
 /// </summary>
 public partial class PartitionEditorViewModel : Document, ICommandSaveableDocument
 {
@@ -39,168 +39,168 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     private bool _isLoaded;
 
     /// <summary>
-    /// <para>保存按钮的本地化标题。</para>
     /// The localized title of the save button.
+    /// <para>保存按钮的本地化标题。</para>
     /// </summary>
     public static string SaveLabel => LanguageService.Instance.GetString("Dock_Partition_Save");
 
     /// <summary>
-    /// <para>属性面板“名称”字段的本地化标题。</para>
     /// The localized title of the name field in the properties pane.
+    /// <para>属性面板“名称”字段的本地化标题。</para>
     /// </summary>
     public static string NameLabel => LanguageService.Instance.GetString("Dock_Partition_Name");
 
     /// <summary>
-    /// <para>属性面板“起始”字段的本地化标题。</para>
     /// The localized title of the start field in the properties pane.
+    /// <para>属性面板“起始”字段的本地化标题。</para>
     /// </summary>
     public static string StartLabel => LanguageService.Instance.GetString("Dock_Partition_Start");
 
     /// <summary>
-    /// <para>属性面板“大小”字段的本地化标题。</para>
     /// The localized title of the size field in the properties pane.
+    /// <para>属性面板“大小”字段的本地化标题。</para>
     /// </summary>
     public static string SizeLabel => LanguageService.Instance.GetString("Dock_Partition_Size");
 
     /// <summary>
-    /// <para>属性面板“类型”字段的本地化标题。</para>
     /// The localized title of the type field in the properties pane.
+    /// <para>属性面板“类型”字段的本地化标题。</para>
     /// </summary>
     public static string TypeLabel => LanguageService.Instance.GetString("Dock_Partition_Type");
 
     /// <summary>
-    /// <para>左栏分区列表的本地化标题。</para>
     /// The localized title of the left partition list.
+    /// <para>左栏分区列表的本地化标题。</para>
     /// </summary>
     public static string PartitionsLabel => LanguageService.Instance.GetString("Dock_Partition_Partitions");
 
     /// <summary>
-    /// <para>属性面板的本地化标题。</para>
     /// The localized title of the properties pane.
+    /// <para>属性面板的本地化标题。</para>
     /// </summary>
     public static string PropertiesLabel => LanguageService.Instance.GetString("Dock_Partition_Properties");
 
     /// <summary>
-    /// <para>未选中分区时的本地化提示。</para>
     /// The localized hint shown when no partition is selected.
+    /// <para>未选中分区时的本地化提示。</para>
     /// </summary>
     public static string NoSelectionLabel => LanguageService.Instance.GetString("Dock_Partition_NoSelection");
 
     /// <summary>
-    /// <para>“类型”输入框的本地化占位提示。</para>
     /// The localized placeholder hint of the type input.
+    /// <para>“类型”输入框的本地化占位提示。</para>
     /// </summary>
     public static string TypeHintLabel => LanguageService.Instance.GetString("Dock_Partition_TypeHint");
 
     /// <summary>
-    /// <para>“添加分区”按钮的本地化标题。</para>
     /// The localized title of the add-partition button.
+    /// <para>“添加分区”按钮的本地化标题。</para>
     /// </summary>
     public static string AddLabel => LanguageService.Instance.GetString("Dock_Partition_Add");
 
     /// <summary>
-    /// <para>“删除分区”按钮的本地化标题。</para>
     /// The localized title of the remove-partition button.
+    /// <para>“删除分区”按钮的本地化标题。</para>
     /// </summary>
     public static string RemoveLabel => LanguageService.Instance.GetString("Dock_Partition_Remove");
 
     /// <summary>
-    /// <para>未分配间隙段的本地化文本。</para>
     /// The localized text of an unallocated gap segment.
+    /// <para>未分配间隙段的本地化文本。</para>
     /// </summary>
     public static string UnallocatedLabel => LanguageService.Instance.GetString("Dock_Partition_Unallocated");
 
     /// <summary>
-    /// <para>文档对应的文件路径。</para>
     /// The file path of the document.
+    /// <para>文档对应的文件路径。</para>
     /// </summary>
     [ObservableProperty] private string? _filePath;
 
     /// <summary>
-    /// <para>是否正在后台解析（联动忙碌指示动画）。</para>
     /// Whether a background parse is running (drives the busy indicator animation).
+    /// <para>是否正在后台解析（联动忙碌指示动画）。</para>
     /// </summary>
     [ObservableProperty] private bool _isBusy;
 
     /// <summary>
-    /// <para>文档已修改状态。</para>
     /// Document dirty state.
+    /// <para>文档已修改状态。</para>
     /// </summary>
     [ObservableProperty] private bool _isDirty;
 
     partial void OnIsDirtyChanged(bool value) => IsModified = value;
 
     /// <summary>
-    /// <para>最后一次解析/保存错误文本；为空表示无错误。</para>
     /// The last parse/save error text; empty means no error.
+    /// <para>最后一次解析/保存错误文本；为空表示无错误。</para>
     /// </summary>
     [ObservableProperty] private string _compileError = string.Empty;
 
     /// <summary>
-    /// <para>数据源描述（用于顶部状态栏）。</para>
     /// Data-source description (shown in the top status bar).
+    /// <para>数据源描述（用于顶部状态栏）。</para>
     /// </summary>
     [ObservableProperty] private string _sourceDescription = string.Empty;
 
     /// <summary>
-    /// <para>当前选中的分区（左栏选择与分区段布局点击联动，驱动右栏属性面板）。</para>
     /// The currently selected partition (linked with the left list and the visual band clicks, drives
     /// the right properties pane).
+    /// <para>当前选中的分区（左栏选择与分区段布局点击联动，驱动右栏属性面板）。</para>
     /// </summary>
     [ObservableProperty] private PartitionItemViewModel? _selectedPartition;
 
     /// <summary>
-    /// <para>容量/范围摘要文本（分区段布局上方的本地化标签）。</para>
     /// Capacity/extent summary text (shown above the visual partition band).
+    /// <para>容量/范围摘要文本（分区段布局上方的本地化标签）。</para>
     /// </summary>
     [ObservableProperty] private string _capacityText = string.Empty;
 
     /// <summary>
-    /// <para>左栏分区列表。</para>
     /// Left-pane partition list.
+    /// <para>左栏分区列表。</para>
     /// </summary>
     public ObservableCollection<PartitionItemViewModel> Partitions { get; } = [];
 
     /// <summary>
-    /// <para>可视化分区段布局的段列表（含未分配间隙），按起始扇区排序。</para>
     /// Segments of the visual partition band (including unallocated gaps), ordered by start sector.
+    /// <para>可视化分区段布局的段列表（含未分配间隙），按起始扇区排序。</para>
     /// </summary>
     public ObservableCollection<PartitionSegmentViewModel> Segments { get; } = [];
 
     /// <summary>
-    /// <para>保存命令：将当前编辑写回原文件。</para>
     /// Save command: writes the current edits back to the file.
+    /// <para>保存命令：将当前编辑写回原文件。</para>
     /// </summary>
     public IAsyncRelayCommand SaveCommand { get; }
 
     /// <summary>
-    /// <para>添加分区命令：在列表末尾追加一个新分区条目（起始取当前最大结束扇区的对齐值）。</para>
     /// Add-partition command: appends a new partition entry (starting at the aligned end of the
     /// current last partition).
+    /// <para>添加分区命令：在列表末尾追加一个新分区条目（起始取当前最大结束扇区的对齐值）。</para>
     /// </summary>
     public RelayCommand AddPartitionCommand { get; }
 
     /// <summary>
-    /// <para>删除分区命令：从列表移除当前选中的分区条目。</para>
     /// Remove-partition command: removes the selected partition entry from the list.
+    /// <para>删除分区命令：从列表移除当前选中的分区条目。</para>
     /// </summary>
     public RelayCommand RemovePartitionCommand { get; }
 
     /// <summary>
-    /// <para>分区总数；未加载时为 0。</para>
     /// Total partition count; 0 when not loaded.
+    /// <para>分区总数；未加载时为 0。</para>
     /// </summary>
     public int PartitionCount { get; private set; }
 
     /// <summary>
-    /// <para>是否已选中分区（右栏属性面板可见性）。</para>
     /// Whether a partition is selected (drives the right properties-pane visibility).
+    /// <para>是否已选中分区（右栏属性面板可见性）。</para>
     /// </summary>
     public bool HasSelection => SelectedPartition is not null;
 
     /// <summary>
-    /// <para>创建分区表编辑器视图模型并初始化保存命令。</para>
     /// Creates the partition-table editor view model and initializes the save command.
+    /// <para>创建分区表编辑器视图模型并初始化保存命令。</para>
     /// </summary>
     public PartitionEditorViewModel()
     {
@@ -210,9 +210,9 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     }
 
     /// <summary>
-    /// <para>选中分区变化：刷新属性面板可见性、分区段布局高亮与删除命令可用态。</para>
     /// Selected partition changed: refreshes the properties-pane visibility, the visual band highlight
     /// and the remove command availability.
+    /// <para>选中分区变化：刷新属性面板可见性、分区段布局高亮与删除命令可用态。</para>
     /// </summary>
     partial void OnSelectedPartitionChanged(PartitionItemViewModel? value)
     {
@@ -226,10 +226,10 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     }
 
     /// <summary>
-    /// <para>异步加载分区表：先尝试 LP super 元数据，失败后回落到 Rockchip parameter 文本，
-    /// 两者都失败则视为不支持。</para>
     /// Asynchronously loads a partition table: tries LP super metadata first, then falls back to
     /// Rockchip parameter text; neither is treated as unsupported.
+    /// <para>异步加载分区表：先尝试 LP super 元数据，失败后回落到 Rockchip parameter 文本，
+    /// 两者都失败则视为不支持。</para>
     /// </summary>
     /// <param name="path">分区表文件路径。<para>The partition-table file path.</para></param>
     public async Task LoadAsync(string path)
@@ -253,11 +253,6 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             {
                 lp = await Task.Run(() =>
                 {
-                    // 格式识别以注册表为权威：Detect 返回的处理器就是注册表单例，
-                    // 因此按处理器类型判定 LP super，而不是在编辑器另起一次 CanHandle 探测。
-                    // The registry is the authority for format identity: Detect returns the registered
-                    // singleton, so LP super images are decided by handler type instead of a second
-                    // CanHandle probe owned by this editor.
                     FirmwareFormatRegistry.RegisterAll();
                     return FormatDetector.Detect(path) is LpFormatHandler
                         ? MetadataReader.ReadFromImageFile(path)
@@ -336,10 +331,10 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     }
 
     /// <summary>
-    /// <para>保存：校验编辑结果并回写原文件（LP 经 <see cref="MetadataWriter"/>，Rockchip 重建
-    /// <c>CMDLINE: mtdparts=...</c> 行）。</para>
     /// Saves: validates the edits and writes them back to the file (LP via <see cref="MetadataWriter"/>,
     /// Rockchip by rebuilding the <c>CMDLINE: mtdparts=...</c> line).
+    /// <para>保存：校验编辑结果并回写原文件（LP 经 <see cref="MetadataWriter"/>，Rockchip 重建
+    /// <c>CMDLINE: mtdparts=...</c> 行）。</para>
     /// </summary>
     public async Task SaveAsync()
     {
@@ -401,8 +396,8 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     }
 
     /// <summary>
-    /// <para>释放文档持有的模型与视图数据（文档关闭时调用）。</para>
     /// Releases the model and view data held by this document (called when the document is closed).
+    /// <para>释放文档持有的模型与视图数据（文档关闭时调用）。</para>
     /// </summary>
     public void Cleanup()
     {
@@ -966,11 +961,11 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     }
 
     /// <summary>
-    /// <para>按当前编辑值重建可视化分区段布局：有效值优先取可解析的输入文本，解析失败回落到
-    /// 上次已应用的条目值；间隙段与首尾未分配区域一并生成。</para>
     /// Rebuilds the visual partition band from the current edits: effective values prefer parseable
     /// input text and fall back to the last applied entry values; gap segments including the leading
     /// and trailing unallocated regions are generated as well.
+    /// <para>按当前编辑值重建可视化分区段布局：有效值优先取可解析的输入文本，解析失败回落到
+    /// 上次已应用的条目值；间隙段与首尾未分配区域一并生成。</para>
     /// </summary>
     private void RebuildBand()
     {
@@ -1098,9 +1093,9 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
 }
 
 /// <summary>
-/// <para>可视化分区段布局中的一个段（分区或未分配间隙），宽度按扇区占比计算。</para>
 /// One segment of the visual partition band (a partition or an unallocated gap); the width is the
 /// sector-count ratio of the layout base.
+/// <para>可视化分区段布局中的一个段（分区或未分配间隙），宽度按扇区占比计算。</para>
 /// </summary>
 public sealed partial class PartitionSegmentViewModel : ObservableObject, IBandSegmentLayout
 {
@@ -1118,8 +1113,8 @@ public sealed partial class PartitionSegmentViewModel : ObservableObject, IBandS
     ];
 
     /// <summary>
-    /// <para>创建分区段视图模型。</para>
     /// Creates a band segment view model.
+    /// <para>创建分区段视图模型。</para>
     /// </summary>
     /// <param name="item">对应的分区条目；间隙段为 <c>null</c>。 The owning partition entry; <c>null</c> for gaps.</param>
     /// <param name="text">条内显示的文本。 The text shown inside the bar segment.</param>
@@ -1140,68 +1135,68 @@ public sealed partial class PartitionSegmentViewModel : ObservableObject, IBandS
     }
 
     /// <summary>
-    /// <para>对应的分区条目；间隙段为 <c>null</c>。</para>
     /// The owning partition entry; <c>null</c> for gaps.
+    /// <para>对应的分区条目；间隙段为 <c>null</c>。</para>
     /// </summary>
     public PartitionItemViewModel? Item { get; }
 
     /// <summary>
-    /// <para>条内显示文本（分区名；间隙为空）。</para>
     /// The text shown inside the bar segment (partition name; empty for gaps).
+    /// <para>条内显示文本（分区名；间隙为空）。</para>
     /// </summary>
     public string Text { get; }
 
     /// <summary>
-    /// <para>标签行显示的文本。</para>
     /// The text shown in the label row.
+    /// <para>标签行显示的文本。</para>
     /// </summary>
     public string LabelText { get; }
 
     /// <summary>
-    /// <para>标签行中的偏移文本。</para>
     /// The offset text in the label row.
+    /// <para>标签行中的偏移文本。</para>
     /// </summary>
     public string OffsetText { get; }
 
     /// <summary>
-    /// <para>悬停提示文本。</para>
     /// The tooltip text.
+    /// <para>悬停提示文本。</para>
     /// </summary>
     public string Tooltip { get; }
 
     /// <summary>
-    /// <para>段填充画刷。</para>
     /// The segment fill brush.
+    /// <para>段填充画刷。</para>
     /// </summary>
     public IBrush Fill { get; }
 
     /// <summary>
-    /// <para>段宽度占可用总宽的比例（0..1）。</para>
     /// The fraction of the available width this segment occupies (0..1).
+    /// <para>段宽度占可用总宽的比例（0..1）。</para>
     /// </summary>
     public double BandWidthRatio { get; }
 
     /// <summary>
-    /// <para>是否为未分配间隙段。</para>
     /// Whether this segment is an unallocated gap.
+    /// <para>是否为未分配间隙段。</para>
     /// </summary>
     public bool BandIsGap => Item is null;
 
     /// <summary>
-    /// <para>是否为当前选中分区对应的段。</para>
     /// Whether this segment belongs to the currently selected partition.
+    /// <para>是否为当前选中分区对应的段。</para>
     /// </summary>
     [ObservableProperty] private bool _isSelected;
 
     /// <summary>
-    /// <para>按序取分区段配色。</para>
     /// Returns the palette brush for the given segment ordinal.
+    /// <para>按序取分区段配色。</para>
     /// </summary>
     public static IBrush BrushFor(int index) => Palette[index % Palette.Length];
 
     /// <summary>
-    /// <para>未分配间隙的填充画刷。</para>
     /// The fill brush of unallocated gaps.
+    /// <para>未分配间隙的填充画刷。</para>
     /// </summary>
     public static IBrush GapFill => GapBrush;
 
@@ -1213,8 +1208,8 @@ public sealed partial class PartitionSegmentViewModel : ObservableObject, IBandS
 }
 
 /// <summary>
-/// <para>分区表条目视图模型（左栏列表与右栏属性编辑的绑定对象）。</para>
 /// Partition-table entry view model (the binding object for the left list and the right properties pane).
+/// <para>分区表条目视图模型（左栏列表与右栏属性编辑的绑定对象）。</para>
 /// </summary>
 public partial class PartitionItemViewModel : ObservableObject
 {
@@ -1222,8 +1217,8 @@ public partial class PartitionItemViewModel : ObservableObject
     private readonly Action? _onChanged;
 
     /// <summary>
-    /// <para>创建分区条目视图模型。</para>
     /// Creates a partition-entry view model.
+    /// <para>创建分区条目视图模型。</para>
     /// </summary>
     /// <param name="entry">条目数据。 The entry data.</param>
     /// <param name="index">条目在原表中的索引；会话内新增的条目为 <c>-1</c>。 The entry index in the original table; <c>-1</c> for entries added in this session.</param>
@@ -1243,63 +1238,63 @@ public partial class PartitionItemViewModel : ObservableObject
     }
 
     /// <summary>
-    /// <para>条目在原表中的索引；会话内新增的条目为 <c>-1</c>（保存时据此保留原 GUID、可引导标志等
-    /// 每条目元数据）。</para>
     /// The entry index in the original table; <c>-1</c> for entries added in this session (the save
     /// path uses it to carry per-entry metadata such as GUIDs and bootable flags).
+    /// <para>条目在原表中的索引；会话内新增的条目为 <c>-1</c>（保存时据此保留原 GUID、可引导标志等
+    /// 每条目元数据）。</para>
     /// </summary>
     public int OriginalIndex { get; }
 
     /// <summary>
-    /// <para>条目所属组（LP；Rockchip 为 <c>null</c>）。</para>
     /// The owning group (LP; <c>null</c> for Rockchip).
+    /// <para>条目所属组（LP；Rockchip 为 <c>null</c>）。</para>
     /// </summary>
     public string? Group { get; }
 
     /// <summary>
-    /// <para>分区名称（可编辑）。</para>
     /// The partition name (editable).
+    /// <para>分区名称（可编辑）。</para>
     /// </summary>
     [ObservableProperty] private string _name;
     partial void OnNameChanged(string value) => _onChanged?.Invoke();
 
     /// <summary>
-    /// <para>分区起始显示值（可编辑，0x 十六进制）。</para>
     /// The partition start display value (editable, 0x-hex).
+    /// <para>分区起始显示值（可编辑，0x 十六进制）。</para>
     /// </summary>
     [ObservableProperty] private string _start;
     partial void OnStartChanged(string value) => _onChanged?.Invoke();
 
     /// <summary>
-    /// <para>分区大小显示值（可编辑，0x 十六进制）。</para>
     /// The partition size display value (editable, 0x-hex).
+    /// <para>分区大小显示值（可编辑，0x 十六进制）。</para>
     /// </summary>
     [ObservableProperty] private string _size;
     partial void OnSizeChanged(string value) => _onChanged?.Invoke();
 
     /// <summary>
-    /// <para>分区类型（可编辑；LP 写回 extent 目标类型，Rockchip 为展示字段）。</para>
     /// The partition type (editable; written back to the LP extent target type, display-only for Rockchip).
+    /// <para>分区类型（可编辑；LP 写回 extent 目标类型，Rockchip 为展示字段）。</para>
     /// </summary>
     [ObservableProperty] private string _type;
     partial void OnTypeChanged(string value) => _onChanged?.Invoke();
 
     /// <summary>
-    /// <para>解析后的起始扇区（<see cref="TryApply"/> 成功后的当前值）。</para>
     /// The parsed start sector (current value after a successful <see cref="TryApply"/>).
+    /// <para>解析后的起始扇区（<see cref="TryApply"/> 成功后的当前值）。</para>
     /// </summary>
     public ulong StartSector => _entry.StartSector;
 
     /// <summary>
-    /// <para>解析后的大小扇区（<see cref="TryApply"/> 成功后的当前值）。</para>
     /// The parsed size in sectors (current value after a successful <see cref="TryApply"/>).
+    /// <para>解析后的大小扇区（<see cref="TryApply"/> 成功后的当前值）。</para>
     /// </summary>
     public ulong SizeSectors => _entry.SizeSectors;
 
     /// <summary>
-    /// <para>校验并应用当前编辑值到条目数据；失败时输出错误文本并返回 <c>false</c>。</para>
     /// Validates and applies the current edit values to the entry data; returns <c>false</c> with an
     /// error message when a value is invalid.
+    /// <para>校验并应用当前编辑值到条目数据；失败时输出错误文本并返回 <c>false</c>。</para>
     /// </summary>
     /// <param name="error">校验错误文本；成功时为 <c>null</c>。 The validation error message; <c>null</c> on success.</param>
     public bool TryApply(out string? error)

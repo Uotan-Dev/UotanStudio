@@ -4,13 +4,6 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 namespace UotanStudio.Comm.Transports.Usb.Backend.MacOS;
 
 /// <summary>
-/// <para>macOS I/O Registry USB 平面的原生枚举层：只读取注册表属性（<c>IOServiceGetMatchingServices</c>、
-/// <c>IORegistryEntryCreateIterator</c>、<c>IORegistryEntryGetParentEntry</c>、
-/// <c>IORegistryEntryCreateCFProperty</c>、<c>IORegistryEntryGetPath</c>），把每个服务读成
-/// <see cref="MacIoRegistryEntry"/> 属性袋。硬约束：绝不打开设备、绝不申请接口、绝不发起控制传输或
-/// MIG 调用，因为卡死的设备会挂住 USB 树窗口；这与 <see cref="UsbHostFinder"/> 头部注释记录的“迭代全部
-/// 接口服务读取属性会在设备卡死时无限阻塞”是同一风险的规避。所有 <c>io_iterator_t</c>、
-/// <c>io_service_t</c>、CF 键与 CF 值都在每条路径上用 try/finally 释放，跨刷新周期不泄漏。</para>
 /// The native enumeration layer for the macOS I/O Registry USB plane: it performs registry reads only
 /// (<c>IOServiceGetMatchingServices</c>, <c>IORegistryEntryCreateIterator</c>,
 /// <c>IORegistryEntryGetParentEntry</c>, <c>IORegistryEntryCreateCFProperty</c>,
@@ -20,6 +13,13 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.MacOS;
 /// <see cref="UsbHostFinder"/> header documents when iterating every interface service. Every
 /// <c>io_iterator_t</c>, <c>io_service_t</c>, CF key and CF value is released with try/finally on every
 /// path, so nothing leaks across refresh cycles.
+/// <para>macOS I/O Registry USB 平面的原生枚举层：只读取注册表属性（<c>IOServiceGetMatchingServices</c>、
+/// <c>IORegistryEntryCreateIterator</c>、<c>IORegistryEntryGetParentEntry</c>、
+/// <c>IORegistryEntryCreateCFProperty</c>、<c>IORegistryEntryGetPath</c>），把每个服务读成
+/// <see cref="MacIoRegistryEntry"/> 属性袋。硬约束：绝不打开设备、绝不申请接口、绝不发起控制传输或
+/// MIG 调用，因为卡死的设备会挂住 USB 树窗口；这与 <see cref="UsbHostFinder"/> 头部注释记录的“迭代全部
+/// 接口服务读取属性会在设备卡死时无限阻塞”是同一风险的规避。所有 <c>io_iterator_t</c>、
+/// <c>io_service_t</c>、CF 键与 CF 值都在每条路径上用 try/finally 释放，跨刷新周期不泄漏。</para>
 /// </summary>
 internal static partial class MacIoRegistryNative
 {

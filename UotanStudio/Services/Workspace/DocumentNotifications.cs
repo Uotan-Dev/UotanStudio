@@ -5,13 +5,20 @@ using UotanStudio.ViewModels.Editors;
 
 namespace UotanStudio.Services.Workspace;
 
-/// <summary>Single adapter for document selection and refresh notifications, including legacy typed payloads.</summary>
+/// <summary>
+/// Single adapter for document selection and refresh notifications, including typed payloads.
+/// <para>文档选中与刷新通知的单一适配入口，包含具类型负载。</para>
+/// </summary>
 internal static class DocumentNotifications
 {
     /// <summary>
-    /// Publishes synchronously at the caller's existing notification point. Repeated notifications are
-    /// intentional: content completion and clicking a mirror also refresh the properties panel.
+    /// Publishes the document notification synchronously.
+    /// <para>同步发布文档通知消息。</para>
     /// </summary>
+    /// <param name="document">
+    /// Document to describe, or null for no active document.
+    /// <para>要描述的文档；无活动文档时为 null。</para>
+    /// </param>
     internal static void Publish(IDockable? document)
         => WeakReferenceMessenger.Default.Send(Create(document));
 

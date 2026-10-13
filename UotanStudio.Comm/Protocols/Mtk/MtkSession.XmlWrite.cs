@@ -159,8 +159,9 @@ public sealed partial class MtkSession
     /// moves, matching the ceiling the DA2 stage already applies. The packet length is
     /// device-authored, so a tiny negotiated value cannot turn a bounded transfer into an
     /// unbounded number of acknowledgement exchanges.
-    /// 在写出任何负载字节之前，按包数约束一次设备协商的 XML 文件传输，上限与 DA2 阶段既有上限一致。
+    /// <para>在写出任何负载字节之前，按包数约束一次设备协商的 XML 文件传输，上限与 DA2 阶段既有上限一致。
     /// 包长由设备决定，因此极小的协商值无法把有界传输变成无限次应答交换。
+    /// </para>
     /// </summary>
     /// <param name="length">The declared transfer byte count. 声明的传输字节数。</param>
     /// <param name="packetLength">The negotiated packet length in bytes. 协商出的包长（字节）。</param>

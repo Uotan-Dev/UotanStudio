@@ -6,12 +6,11 @@ using UotanStudio.ViewModels.NodeViewModels;
 namespace UotanStudio.Services.Plugins;
 
 /// <summary>
-/// <para>Default registry implementation. Built-in descriptors are supplied once as an ordered seed and
-/// plugin descriptors are layered on top, so both kinds are enumerated and resolved through the same
-/// surface. A single lock guards every mutation and every snapshot, matching the atomic snapshot
-/// semantics the toolbox and execution preflight rely on.</para>
-/// <para>默认注册表实现。内置描述符以有序种子一次性给出，插件描述符叠加在其上，两类节点都经同一注册面枚举与解析。
-/// 单一锁保护所有变更与快照，保持工具箱与执行预检依赖的原子快照语义。</para>
+/// Default registry implementation: seeded built-in descriptors and layered plugin descriptors
+/// are enumerated and resolved through one surface under a single lock with atomic snapshot
+/// semantics.
+/// <para>默认注册表实现：以种子形式给出的内置描述符与叠加其上的插件描述符都经同一注册面枚举与解析，
+/// 由单一锁保护并具备原子快照语义。</para>
 /// </summary>
 public sealed class PluginRegistry : IPluginRegistry
 {
@@ -21,20 +20,17 @@ public sealed class PluginRegistry : IPluginRegistry
     private readonly Dictionary<string, VisualPluginPackage> _pluginPackages = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// <para>Gets the application-wide registry seeded with the host's built-in node catalog.</para>
-    /// <para>获取以宿主内置节点目录为种子创建的应用级注册表。</para>
+    /// Gets the application-wide registry seeded with the built-in node catalog.
+    /// <para>获取以内置节点目录为种子创建的应用级注册表。</para>
     /// </summary>
+    /// <value>The shared registry instance.<para>共享的注册表实例。</para></value>
     public static PluginRegistry Shared { get; } = new(NodeCatalogSeed.CreateDescriptors());
 
     /// <summary>
-    /// <para>Creates a registry around an ordered set of built-in descriptors; isolated tests supply
-    /// their own seed.</para>
-    /// <para>围绕一组有序内置描述符创建注册表；隔离测试提供自己的种子。</para>
+    /// Creates a registry around an ordered set of built-in descriptors.
+    /// <para>围绕一组有序内置描述符创建注册表。</para>
     /// </summary>
-    /// <param name="builtInDescriptors">
-    /// <para>The ordered built-in descriptors.</para>
-    /// <para>有序的内置描述符。</para>
-    /// </param>
+    /// <param name="builtInDescriptors">The ordered built-in descriptors.<para>有序的内置描述符。</para></param>
     public PluginRegistry(IEnumerable<NodeDescriptor> builtInDescriptors)
     {
         ArgumentNullException.ThrowIfNull(builtInDescriptors);
@@ -43,7 +39,12 @@ public sealed class PluginRegistry : IPluginRegistry
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets a snapshot of built-in descriptors followed by plugin descriptors ordered by display
+    /// name; the snapshot is stable for the duration of the call.
+    /// <para>获取描述符快照：内置项在前，插件项按显示名排序；快照在本次调用内保持稳定。</para>
+    /// </summary>
+    /// <value>The ordered descriptor snapshot.<para>有序的描述符快照。</para></value>
     public IReadOnlyList<NodeDescriptor> Descriptors
     {
         get
@@ -55,13 +56,27 @@ public sealed class PluginRegistry : IPluginRegistry
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets the stable type keys of the built-in nodes, excluding plugin nodes.
+    /// <para>获取内置节点的稳定类型键，不含插件节点。</para>
+    /// </summary>
+    /// <value>The built-in type keys.<para>内置类型键集合。</para></value>
     public IReadOnlySet<string> BuiltInTypeKeys { get; }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Raised whenever the set of registered descriptors changes.
+    /// <para>注册描述符集合发生变化时触发。</para>
+    /// </summary>
     public event EventHandler? DescriptorsChanged;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Registers or replaces one descriptor, optionally binding it to the package that provided
+    /// it.
+    /// <para>注册或替换一个描述符，并可选地绑定提供它的包。</para>
+    /// </summary>
+    /// <param name="descriptor">The descriptor to register.<para>要注册的描述符。</para></param>
+    /// <param name="package">The owning package, or <see langword="null"/> for a built-in node.
+    /// <para>所属包；内置节点为 <see langword="null"/>。</para></param>
     public void RegisterNode(NodeDescriptor descriptor, VisualPluginPackage? package = null)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
@@ -81,7 +96,13 @@ public sealed class PluginRegistry : IPluginRegistry
         DescriptorsChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Removes one descriptor and its owning package binding.
+    /// <para>移除一个描述符及其所属包绑定。</para>
+    /// </summary>
+    /// <param name="typeKey">The type key to remove.<para>要移除的类型键。</para></param>
+    /// <returns><see langword="true"/> when a descriptor was removed.
+    /// <para>确实移除了描述符时为 <see langword="true"/>。</para></returns>
     public bool UnregisterNode(string typeKey)
     {
         ArgumentNullException.ThrowIfNull(typeKey);
@@ -98,7 +119,14 @@ public sealed class PluginRegistry : IPluginRegistry
         return true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets the owning package for one type key.
+    /// <para>获取某个类型键所属的包。</para>
+    /// </summary>
+    /// <param name="typeKey">The type key to look up.<para>要查询的类型键。</para></param>
+    /// <param name="package">The owning package when found.<para>找到时返回所属包。</para></param>
+    /// <returns><see langword="true"/> when the type key belongs to a registered package.
+    /// <para>该类型键属于已注册包时为 <see langword="true"/>。</para></returns>
     public bool TryGetPackage(string typeKey, [NotNullWhen(true)] out VisualPluginPackage? package)
     {
         lock (_lock)
@@ -107,7 +135,10 @@ public sealed class PluginRegistry : IPluginRegistry
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Publishes every current descriptor into the node type registry.
+    /// <para>把当前全部描述符发布到节点类型注册表。</para>
+    /// </summary>
     public void RegisterAll()
     {
         lock (_lock)

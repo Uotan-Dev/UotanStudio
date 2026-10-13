@@ -4,8 +4,8 @@ using Avalonia;
 namespace UotanStudio.ViewModels.NodeViewModels.EditorCommands;
 
 /// <summary>
-/// <para>添加节点命令。执行时将节点加入画布，撤销时移除该节点及其关联连接。</para>
 /// Add-node command. Executing adds the node to the canvas; undoing removes the node and its related connections.
+/// <para>添加节点命令。执行时将节点加入画布，撤销时移除该节点及其关联连接。</para>
 /// </summary>
 public sealed class AddNodeCommand : IEditorCommand
 {
@@ -17,8 +17,8 @@ public sealed class AddNodeCommand : IEditorCommand
     public string DisplayName => "Add Node";
 
     /// <summary>
-    /// <para>创建添加节点命令。</para>
     /// Creates an add-node command.
+    /// <para>创建添加节点命令。</para>
     /// </summary>
     /// <param name="nodes">画布节点集合。<para>Canvas node collection.</para></param>
     /// <param name="connections">画布连接线集合。<para>Canvas connection collection.</para></param>
@@ -53,8 +53,8 @@ public sealed class AddNodeCommand : IEditorCommand
 }
 
 /// <summary>
-/// <para>移除节点命令。执行时移除节点及其关联连接，撤销时重新加入节点与连接。</para>
 /// Remove-node command. Executing removes the node and its connections; undoing restores the node and connections.
+/// <para>移除节点命令。执行时移除节点及其关联连接，撤销时重新加入节点与连接。</para>
 /// </summary>
 public sealed class RemoveNodeCommand : IEditorCommand
 {
@@ -66,8 +66,8 @@ public sealed class RemoveNodeCommand : IEditorCommand
     public string DisplayName => "Remove Node";
 
     /// <summary>
-    /// <para>创建移除节点命令。</para>
     /// Creates a remove-node command.
+    /// <para>创建移除节点命令。</para>
     /// </summary>
     /// <param name="nodes">画布节点集合。<para>Canvas node collection.</para></param>
     /// <param name="connections">画布连接线集合。<para>Canvas connection collection.</para></param>
@@ -109,8 +109,8 @@ public sealed class RemoveNodeCommand : IEditorCommand
 }
 
 /// <summary>
-/// <para>移动节点命令，记录一组节点移动前后的位置。执行时应用新位置，撤销时恢复原位置。</para>
 /// Move-node command, recording the before/after positions of a batch of nodes. Executing applies the new positions; undoing restores the original ones.
+/// <para>移动节点命令，记录一组节点移动前后的位置。执行时应用新位置，撤销时恢复原位置。</para>
 /// </summary>
 public sealed class MoveNodeCommand : IEditorCommand
 {
@@ -119,16 +119,16 @@ public sealed class MoveNodeCommand : IEditorCommand
     public string DisplayName => "Move Nodes";
 
     /// <summary>
-    /// <para>创建移动节点命令。</para>
     /// Creates a move-node command.
+    /// <para>创建移动节点命令。</para>
     /// </summary>
     public MoveNodeCommand()
     {
     }
 
     /// <summary>
-    /// <para>添加一个要移动的节点及其目标位置；是否为有效移动（位置有变化）将在地点创建时判定。</para>
     /// Adds a node to move along with its target position; whether it is a valid move is determined at command creation.
+    /// <para>添加一个要移动的节点及其目标位置；是否为有效移动（位置有变化）将在地点创建时判定。</para>
     /// </summary>
     /// <param name="node">要移动的节点。<para>The node to move.</para></param>
     /// <param name="newLocation">目标位置。<para>The target position.</para></param>
@@ -152,8 +152,8 @@ public sealed class MoveNodeCommand : IEditorCommand
     }
 
     /// <summary>
-    /// <para>获取是否包含至少一个有效的移动目标，用于决定命令是否需要入栈。</para>
     /// Gets whether there is at least one valid move target, deciding whether the command needs to be pushed onto the stack.
+    /// <para>获取是否包含至少一个有效的移动目标，用于决定命令是否需要入栈。</para>
     /// </summary>
     public bool HasTargets => _targets.Count > 0;
 

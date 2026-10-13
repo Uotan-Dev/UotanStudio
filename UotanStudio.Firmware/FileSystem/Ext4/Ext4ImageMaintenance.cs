@@ -4,25 +4,22 @@ using UotanStudio.Firmware.FileSystem.Native;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4;
 
-/// <summary>Checks, optionally repairs, and minimizes an existing raw EXT4 image using e2fsprogs on a private copy.
-/// <para>在私有副本上使用 e2fsprogs 对既有 raw EXT4 镜像进行检查、可选修复与容量最小化。</para></summary>
+/// <summary>Checks, optionally repairs, and minimizes an existing raw EXT4 image on a private copy with native filesystem tools.
+/// <para>在私有副本上用原生文件系统工具对既有 raw EXT4 镜像进行检查、可选修复与容量最小化。</para></summary>
 public static class Ext4ImageMaintenance
 {
     /// <summary>
-    /// Shrinks a raw or Android-sparse EXT4 image to its minimum size with resize2fs and publishes the
-    /// result to outputPath. All work happens on a private temporary copy; the destination is replaced
-    /// only after the final check passes, and the temporary file is always deleted.
-    /// <para>使用 resize2fs 将 raw 或 Android 稀疏 EXT4 镜像缩小到最小容量并发布到 outputPath。全部
-    /// 工作发生在私有临时副本上；只有最终检查通过后才会替换目标文件，临时文件始终会被删除。</para>
+    /// Shrinks a raw or Android-sparse EXT4 image to its minimum size and publishes the result.
+    /// <para>把 raw 或 Android 稀疏 EXT4 镜像缩小到最小容量并发布结果。</para>
     /// </summary>
     /// <param name="inputPath">Source image; sparse containers (magic 0xED26FF3A) are converted to raw before resizing. <para>源镜像；稀疏容器（魔数 0xED26FF3A）先转换为 raw 再调整。</para></param>
     /// <param name="outputPath">Destination image path; an existing file is replaced. It must differ from inputPath. <para>目标镜像路径；已存在的文件会被替换。必须与 inputPath 不同。</para></param>
-    /// <param name="tools">Native e2fsprogs provider used to stage and run e2fsck and resize2fs. <para>用于暂存并运行 e2fsck 与 resize2fs 的原生 e2fsprogs 提供方。</para></param>
-    /// <param name="repairBeforeResize">When <c>true</c>, runs <c>e2fsck -fy</c> first and accepts exit codes 0 or 1. <para>为 <c>true</c> 时先执行 <c>e2fsck -fy</c>，并接受退出码 0 或 1。</para></param>
+    /// <param name="tools">Native tool provider that stages the image and runs the check and resize passes. <para>用于暂存镜像并执行检查与容量调整步骤的原生工具提供方。</para></param>
+    /// <param name="repairBeforeResize">When <c>true</c>, runs a forced repair first and accepts exit codes 0 or 1. <para>为 <c>true</c> 时先执行强制修复，并接受退出码 0 或 1。</para></param>
     /// <param name="cancellationToken">Cancels the copy, the checks and the native tool runs; the destination is left untouched. <para>取消复制、检查与原生工具运行；目标文件保持不变。</para></param>
     /// <returns>A task that completes once the minimized image has been published to outputPath. <para>最小化后的镜像发布到 outputPath 后完成的任务。</para></returns>
     /// <exception cref="ArgumentException">The tools provider is <see langword="null"/>, or the input and output paths denote the same file. <para>tools 提供方为 <see langword="null"/>，或输入与输出为同一文件。</para></exception>
-    /// <exception cref="FileSystemCorruptedException">The image is too small, lacks the EXT4 magic at offset 1080, or an e2fsck/resize2fs run fails. <para>镜像过小、偏移 1080 处缺少 EXT4 魔数，或 e2fsck/resize2fs 执行失败。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">The image is too small, lacks the EXT4 magic at offset 1080, or a repair or resize run fails. <para>镜像过小、偏移 1080 处缺少 EXT4 魔数，或修复/容量调整步骤执行失败。</para></exception>
     public static async Task MinimizeAsync(string inputPath, string outputPath, NativeFileSystemTools tools,
         bool repairBeforeResize = false, CancellationToken cancellationToken = default)
     {

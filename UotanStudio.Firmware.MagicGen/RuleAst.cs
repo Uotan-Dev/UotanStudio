@@ -3,8 +3,8 @@ using UotanStudio.Firmware.Core.Magic;
 namespace UotanStudio.Firmware.MagicGen;
 
 /// <summary>
-/// <para>解析中间表示，与运行时 <c>CompiledRule</c> 字段一一对应，供序列化器写出。</para>
 /// Parse-time IR mirroring the runtime <c>CompiledRule</c> fields for serialization.
+/// <para>解析中间表示，与运行时 <c>CompiledRule</c> 字段一一对应，供序列化器写出。</para>
 /// </summary>
 internal sealed class RuleAst
 {
@@ -50,14 +50,23 @@ internal sealed class RuleAst
 
     public int Strength = 50;
 
-    /// <summary>解析器内部：类型 token 去掩码后的基本类型名。</summary>
+    /// <summary>
+    /// The basic type name of a type token with its mask bits cleared.
+    /// <para>解析器内部：类型 token 去掩码后的基本类型名。</para>
+    /// </summary>
     internal string TempBaseType = string.Empty;
 
-    /// <summary>解析器内部：无法建模的值类别。</summary>
+    /// <summary>
+    /// The kind of value the parser cannot model.
+    /// <para>解析器内部：无法建模的值类别。</para>
+    /// </summary>
     internal SkipKind _skip;
 }
 
-/// <summary>暂不支持而需跳过的构造类别。</summary>
+/// <summary>
+/// The kind of construction skipped while unsupported.
+/// <para>暂不支持而需跳过的构造类别。</para>
+/// </summary>
 internal enum SkipKind
 {
     None = 0,

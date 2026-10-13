@@ -7,8 +7,8 @@ using UotanStudio.ViewModels.Shell;
 namespace UotanStudio.Views.Shell;
 
 /// <summary>
-/// <para>将主窗口现有菜单映射到 macOS 菜单栏，共用命令、本地化和动态条目。</para>
 /// Projects the existing window menu into the macOS menu bar, sharing commands, localization and dynamic items.
+/// <para>将主窗口现有菜单映射到 macOS 菜单栏，共用命令、本地化和动态条目。</para>
 /// </summary>
 internal sealed class MainWindowNativeMenu : IDisposable
 {

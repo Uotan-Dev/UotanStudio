@@ -6,16 +6,10 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 namespace UotanStudio.Comm.Devices.Discovery;
 
 /// <summary>
-/// Projects exact CommKit USB keys without merging backends or serials. While a debug-bridge
-/// server is listening, every direct-USB endpoint of that protocol is suppressed: the server's
-/// target list is the only inventory for that protocol (full server takeover).
-/// <para>按精确 CommKit USB 键投影端点，不合并后端或序列号。调试桥 server 处于监听状态时，该协议的
-/// direct-usb 端点被完全抑制：该协议的设备清单只来自 server 目标列表（server 完全让位）。</para>
-/// Missing fastboot serials are probed at most a bounded number of times per physical identity and
-/// resolved serials are memoized under that identity, so interface renumbering of one device does
-/// not re-claim it every round and a permanently silent device does not burn a claim per refresh.
-/// <para>缺失的 fastboot 序列号按物理身份限次探测，成功读到的序列号按该身份记忆化，
-/// 因此同一设备接口重编号不会每轮重新认领，长期无响应的设备也不会每次刷新都占用一次认领。</para>
+/// Projects exact CommKit USB keys without merging backends or serials; while a debug-bridge
+/// server is listening, that protocol's direct-USB endpoints are suppressed entirely.
+/// <para>按精确 CommKit USB 键投影端点，不合并后端或序列号；调试桥 server 处于监听状态时，
+/// 该协议的 direct-usb 端点被完全抑制。</para>
 /// </summary>
 public sealed class UsbDiscoverySource : IDeviceDiscoverySource
 {
@@ -59,16 +53,10 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
     public string Name => SourceName;
 
     /// <summary>
-    /// Enumerates the backend's USB devices and projects each into a <c>direct-usb</c> endpoint,
-    /// classifying its protocol and completing missing fastboot serials via a memoized, failure-bounded
-    /// <c>getvar serialno</c> probe keyed by physical identity.
-    /// <para>枚举后端的 USB 设备并把每个设备投影为 <c>direct-usb</c> 端点，分类其协议，并按物理身份
-    /// 键控、记忆化且限次失败的 <c>getvar serialno</c> 探测补全缺失的 fastboot 序列号。</para>
-    /// While a debug-bridge server is listening, every adb or hdc endpoint of that protocol is
-    /// suppressed without consulting the server's target list; other protocols are never filtered
-    /// by server state.
-    /// <para>调试桥 server 处于监听状态时，该协议的全部 adb 或 hdc 端点被抑制，且不再查询 server 的
-    /// 目标列表；其他协议从不受 server 状态影响。</para>
+    /// Enumerates backend USB devices and projects each into a <c>direct-usb</c> endpoint; while a
+    /// debug-bridge server is listening, that protocol's endpoints are suppressed.
+    /// <para>枚举后端的 USB 设备并把每个设备投影为 <c>direct-usb</c> 端点；调试桥 server 监听时
+    /// 抑制该协议的端点。</para>
     /// </summary>
     /// <param name="cancellationToken">
     /// Cancels USB enumeration; it is re-checked once enumeration completes.
@@ -104,12 +92,19 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
     }
 
     /// <summary>
-    /// Projects one device into its <c>direct-usb</c> endpoint; the probed serial slot is pre-filled by
-    /// the concurrent probe pass so projection itself never claims an interface and enumeration order
-    /// is preserved.
-    /// <para>把单个设备投影为 <c>direct-usb</c> 端点；探测序列号槽位由并发探测阶段预先填充，因此投影
-    /// 本身不再认领接口，枚举顺序得以保留。</para>
+    /// Projects one device into its <c>direct-usb</c> endpoint; the probed serial slot is pre-filled
+    /// by the concurrent probe pass so projection never claims an interface.
+    /// <para>把单个设备投影为 <c>direct-usb</c> 端点；探测序列号槽位由并发探测阶段预先填充，
+    /// 因此投影本身不认领接口。</para>
     /// </summary>
+    /// <param name="device">
+    /// The enumerated USB device to project. <para>待投影的已枚举 USB 设备。</para>
+    /// </param>
+    /// <param name="probedSerial">
+    /// The serial from the probe pass, or <see langword="null"/> to keep the descriptor serial.
+    /// <para>来自探测阶段的序列号；为 <see langword="null"/> 时沿用描述符序列号。</para>
+    /// </param>
+    /// <returns>The <c>direct-usb</c> endpoint for this device. <para>该设备的 <c>direct-usb</c> 端点。</para></returns>
     private DeviceEndpoint Project(UsbDeviceInfo device, string? probedSerial)
     {
         var serial = device.SerialNumber;
@@ -135,12 +130,21 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
     }
 
     /// <summary>
-    /// Probes serial-less fastboot devices concurrently, one task per distinct physical path. Concurrent
-    /// probes claim different USB handles, and path grouping guarantees a device is never claimed twice
-    /// within one round; the memoized, failure-bounded per-identity rules are unchanged.
-    /// <para>对缺少序列号的 fastboot 设备并发探测，每个不同物理路径一个任务。并发探测认领的是不同
-    /// USB 句柄，且按路径分组保证同一设备在一轮内不会被重复认领；按身份记忆化与限次的规则保持不变。</para>
+    /// Probes serial-less fastboot devices concurrently, one task per distinct physical path, so a
+    /// device is never claimed twice within one round.
+    /// <para>对缺少序列号的 fastboot 设备并发探测，每个不同物理路径一个任务，同一设备在一轮内
+    /// 不会被重复认领。</para>
     /// </summary>
+    /// <param name="devices">
+    /// The enumerated devices to filter for serial-less fastboot candidates.
+    /// <para>待筛选出缺少序列号的 fastboot 候选设备的已枚举设备集合。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels the per-path probe tasks. <para>取消各物理路径的探测任务。</para>
+    /// </param>
+    /// <returns>A map from device path to probed serial, with a <see langword="null"/> entry when
+    /// that probe failed.
+    /// <para>设备路径到探测序列号的映射；对应探测失败时该项为 <see langword="null"/>。</para></returns>
     private async Task<Dictionary<string, string?>> ProbeMissingFastbootSerialsAsync(
         IReadOnlyList<UsbDeviceInfo> devices, CancellationToken cancellationToken)
     {
@@ -178,22 +182,17 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
     };
 
     /// <summary>
-    /// <para>按物理身份记忆化 fastboot <c>getvar serialno</c> 探测：键为
-    /// <see cref="PhysicalDeviceIdentity.From(UsbDeviceInfo)"/> 的身份键，
-    /// 身份不可推导时才退回精确设备键（稳定认领键，绝非会被回收的总线地址或设备路径）；
-    /// 只记忆化读取成功的值，失败按同一身份计数并在有界次数后停止认领，读到新值后计数清零。</para>
-    /// Memoizes the fastboot <c>getvar serialno</c> probe by physical identity: the key is the
-    /// <see cref="PhysicalDeviceIdentity"/> derived from the device, falling back to the exact stable
-    /// device key only when no identity can be derived (never a recycled bus address or device path);
-    /// only successful reads are cached, failures count per the same identity and stop claiming after
-    /// a bounded number of rounds, and a later success resets the counter.
+    /// Memoizes the fastboot <c>getvar serialno</c> probe by physical identity, caching only
+    /// successful reads and stopping claims after a bounded number of failures.
+    /// <para>按物理身份记忆化 fastboot <c>getvar serialno</c> 探测：只缓存成功读取的值，
+    /// 失败次数到达上限后停止认领。</para>
     /// </summary>
     /// <param name="device">
     /// The fastboot-mode device missing a descriptor serial. <para>描述符缺少序列号的 fastboot 模式设备。</para>
     /// </param>
-    /// <returns>The cached or freshly probed serial, or <see langword="null"/> when the probe failed
-    /// or this identity already exhausted its bounded failure rounds.
-    /// <para>缓存或新探测到的序列号；探测失败或该身份已用尽有限次失败配额时返回 <see langword="null"/>。</para></returns>
+    /// <returns>The cached or probed serial, or <see langword="null"/> when the probe failed or
+    /// its failure quota is exhausted.
+    /// <para>缓存或新探测的序列号；探测失败或失败配额用尽时返回 <see langword="null"/>。</para></returns>
     private string? ProbeFastbootSerial(UsbDeviceInfo device)
     {
         var identityKey = PhysicalDeviceIdentity.From(device)?.Key ?? device.DeviceKey;

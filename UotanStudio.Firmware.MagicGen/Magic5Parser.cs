@@ -5,10 +5,10 @@ using UotanStudio.Firmware.Core.Magic;
 namespace UotanStudio.Firmware.MagicGen;
 
 /// <summary>
-/// <para>把上游 magic(5) 文本片段解析为 <see cref="RuleAst"/> 树。逐行解析，异常行按类别计入
-/// <see cref="Stats"/> 并跳过，绝不因单行失败中断整个语料。</para>
 /// Parses an upstream magic(5) fragment into a <see cref="RuleAst"/> tree. Line-oriented; a failing line
 /// is counted under a category in <see cref="Stats"/> and skipped, never aborting the corpus.
+/// <para>把上游 magic(5) 文本片段解析为 <see cref="RuleAst"/> 树。逐行解析，异常行按类别计入
+/// <see cref="Stats"/> 并跳过，绝不因单行失败中断整个语料。</para>
 /// </summary>
 internal sealed class Magic5Parser
 {
@@ -28,12 +28,15 @@ internal sealed class Magic5Parser
     private readonly Stats _stats = new();
     public Stats Statistics => _stats;
 
-    /// <summary>当前片段标识（诊断用），由调用方在解析前设置。</summary>
+    /// <summary>
+    /// Identifies the current parse segment for diagnostics; set by the caller before parsing.
+    /// <para>当前解析片段的标识，用于诊断；由调用方在解析前设置。</para>
+    /// </summary>
     public string CurrentSource = string.Empty;
 
     /// <summary>
-    /// <para>解析单个片段文本，返回顶层规则列表。</para>
     /// Parses one fragment's text into its top-level rule list.
+    /// <para>解析单个片段文本，返回顶层规则列表。</para>
     /// </summary>
     /// <param name="text">
     /// Fragment text read line by line; empty lines and <c>#</c> comments are skipped, malformed lines are

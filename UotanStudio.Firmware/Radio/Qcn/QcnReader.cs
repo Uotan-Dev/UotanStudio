@@ -5,15 +5,8 @@ using UotanStudio.Firmware.CompoundFile;
 namespace UotanStudio.Firmware.Radio.Qcn;
 
 /// <summary>
-/// Parser for Qualcomm QCN NV backup files. A QCN is an OLE2/CFB compound document whose numbered NV
-/// records live in one or more streams named <c>NV_ITEM_ARRAY</c>; this parser merges the records of
-/// all such streams, verifies the fixed 136-byte record layout and decodes the auxiliary
-/// <c>File_Version</c> and <c>Mobile_Property_Info</c> streams. Input is untrusted: stream sizes,
-/// record counts and string lengths are bounds-checked before use.
-/// <para>Qualcomm QCN NV 备份文件解析器。QCN 是 OLE2/CFB 复合文档，其编号 NV 记录存于一个或多个名为
-/// <c>NV_ITEM_ARRAY</c> 的流中；本解析器合并所有这些流的记录，校验 136 字节定长记录布局，并解码辅助的
-/// <c>File_Version</c> 与 <c>Mobile_Property_Info</c> 流。输入视为不可信：流大小、记录数与字符串长度
-/// 均在使用前做上限检查。</para>
+/// Parser for Qualcomm QCN NV backup files: an OLE2/CFB container whose numbered NV records live in one or more streams named NV_ITEM_ARRAY. The parser merges all such streams, verifies the fixed 136-byte record layout and decodes the File_Version and Mobile_Property_Info streams.
+/// <para>Qualcomm QCN NV 备份文件解析器：OLE2/CFB 容器中编号 NV 记录存放于一个或多个名为 NV_ITEM_ARRAY 的流。本解析器合并全部此类流，校验 136 字节定长记录布局，并解码 File_Version 与 Mobile_Property_Info 流。</para>
 /// </summary>
 public static class QcnReader
 {
@@ -45,32 +38,32 @@ public static class QcnReader
     /// <para>将指定路径的 QCN 文件解析为可编辑的 <see cref="QcnDocument"/>。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>QCN 文件路径。</para>
     /// The QCN file path.
+    /// <para>QCN 文件路径。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// <para>取消令牌，贯穿容器与流读取。</para>
     /// Cancellation token carried through the container and stream reads.
+    /// <para>取消令牌，贯穿容器与流读取。</para>
     /// </param>
     /// <returns>
-    /// <para>解析后的文档。</para>
     /// The parsed document.
+    /// <para>解析后的文档。</para>
     /// </returns>
     /// <exception cref="QcnException">
-    /// <para>文件超过大小上限。</para>
     /// The file exceeds the size limit.
+    /// <para>文件超过大小上限。</para>
     /// </exception>
     /// <exception cref="UotanStudio.Firmware.CompoundFile.InvalidCompoundFileMagicException">
-    /// <para>文件不是 OLE2/CFB 容器。</para>
     /// The file is not an OLE2/CFB container.
+    /// <para>文件不是 OLE2/CFB 容器。</para>
     /// </exception>
     /// <exception cref="UotanStudio.Firmware.CompoundFile.CompoundFileException">
-    /// <para>容器结构损坏或不受支持。</para>
     /// The container structure is corrupted or unsupported.
+    /// <para>容器结构损坏或不受支持。</para>
     /// </exception>
     /// <exception cref="InvalidQcnFormatException">
+    /// The container has no <c>NV_ITEM_ARRAY</c> record, or the record header violates the 136-byte layout.
     /// <para>容器中不存在 <c>NV_ITEM_ARRAY</c> 记录，或记录头违反 136 字节布局。</para>
-    /// The container carries no <c>NV_ITEM_ARRAY</c> records, or a record header violates the 136-byte layout.
     /// </exception>
     public static async Task<QcnDocument> ParseAsync(string path, CancellationToken cancellationToken = default)
     {

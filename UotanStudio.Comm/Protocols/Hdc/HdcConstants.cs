@@ -266,11 +266,20 @@ internal enum HdcConnType : byte
     Usb = 0,
     /// <summary>TCP/IP transport. TCP/IP 传输。</summary>
     Tcp = 1,
-    /// <summary>Serial transport. 串口传输。</summary>
+    /// <summary>
+    /// Serial transport.
+    /// <para>串口传输。</para>
+    /// </summary>
     Serial = 2,
-    /// <summary>Bluetooth transport. 蓝牙传输。</summary>
+    /// <summary>
+    /// Bluetooth transport.
+    /// <para>蓝牙传输。</para>
+    /// </summary>
     Bt = 3,
-    /// <summary>Unknown transport. 未知传输。</summary>
+    /// <summary>
+    /// Unknown transport.
+    /// <para>未知传输。</para>
+    /// </summary>
     Unknown = 4,
 }
 
@@ -280,15 +289,30 @@ internal enum HdcConnType : byte
 /// </summary>
 internal enum HdcConnStatus : byte
 {
-    /// <summary>Status unknown. 状态未知。</summary>
+    /// <summary>
+    /// Status unknown.
+    /// <para>状态未知。</para>
+    /// </summary>
     Unknown = 0,
-    /// <summary>Ready for connection. 准备就绪。</summary>
+    /// <summary>
+    /// Ready for connection.
+    /// <para>准备就绪。</para>
+    /// </summary>
     Ready = 1,
-    /// <summary>Connected. 已连接。</summary>
+    /// <summary>
+    /// Connected.
+    /// <para>已连接。</para>
+    /// </summary>
     Connected = 2,
-    /// <summary>Device offline. 设备离线。</summary>
+    /// <summary>
+    /// Device offline.
+    /// <para>设备离线。</para>
+    /// </summary>
     Offline = 3,
-    /// <summary>Unauthorized (key not confirmed). 未授权（密钥未确认）。</summary>
+    /// <summary>
+    /// Unauthorized (key not confirmed).
+    /// <para>未授权（密钥未确认）。</para>
+    /// </summary>
     Unauthorized = 4,
 }
 
@@ -298,9 +322,15 @@ internal enum HdcConnStatus : byte
 /// </summary>
 internal enum HdcUsbOption : byte
 {
-    /// <summary>Full header follows. 后续为完整头部。</summary>
+    /// <summary>
+    /// Full header follows.
+    /// <para>后续为完整头部。</para>
+    /// </summary>
     Header = 1,
-    /// <summary>Reset / abort. 重置/中止。</summary>
+    /// <summary>
+    /// Reset / abort.
+    /// <para>重置/中止。</para>
+    /// </summary>
     Reset = 2,
 }
 
@@ -310,10 +340,19 @@ internal enum HdcUsbOption : byte
 /// </summary>
 internal enum HdcMessageLevel : byte
 {
-    /// <summary>Failure. 失败。</summary>
+    /// <summary>
+    /// Failure.
+    /// <para>失败。</para>
+    /// </summary>
     Fail = 0,
-    /// <summary>Informational. 信息。</summary>
+    /// <summary>
+    /// Informational.
+    /// <para>信息。</para>
+    /// </summary>
     Info = 1,
-    /// <summary>Success. 成功。</summary>
+    /// <summary>
+    /// Success.
+    /// <para>成功。</para>
+    /// </summary>
     Ok = 2,
 }

@@ -9,9 +9,9 @@ using UotanStudio.Views.Controls;
 namespace UotanStudio.Views.Editors;
 
 /// <summary>
-/// <para>DTB 设备树双栏编辑器视图，承载左栏节点树与右栏可编辑 DTS 源码，并实现双向联动。</para>
 /// DTB device-tree dual-pane editor view, hosting the left node tree and the right editable DTS source,
 /// implementing bi-directional linkage between them.
+/// <para>DTB 设备树双栏编辑器视图，承载左栏节点树与右栏可编辑 DTS 源码，并实现双向联动。</para>
 /// </summary>
 public partial class DtbEditorView : UserControl
 {
@@ -19,14 +19,14 @@ public partial class DtbEditorView : UserControl
         new(static model => model.Editor, static (model, editor) => model.Editor = editor);
 
     /// <summary>
-    /// <para>保存按钮的本地化标题。</para>
     /// The localized title of the save button.
+    /// <para>保存按钮的本地化标题。</para>
     /// </summary>
     public static string SaveLabel => LanguageService.Instance.GetString("Dock_Dtb_Save");
 
     /// <summary>
-    /// <para>创建 DTB 编辑器视图并初始化组件。</para>
     /// Creates the DTB editor view and initializes its components.
+    /// <para>创建 DTB 编辑器视图并初始化组件。</para>
     /// </summary>
     public DtbEditorView()
     {
@@ -42,9 +42,9 @@ public partial class DtbEditorView : UserControl
     }
 
     /// <summary>
-    /// <para>左栏选中节点 → 右栏滚动并高亮对应源码段，并向属性面板广播节点选中变更。</para>
     /// Left-pane node selection scrolls and highlights the corresponding source region in the right
     /// pane, and broadcasts the node-selection change to the properties panel.
+    /// <para>左栏选中节点 → 右栏滚动并高亮对应源码段，并向属性面板广播节点选中变更。</para>
     /// </summary>
     private void OnNodeTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
@@ -79,8 +79,8 @@ public partial class DtbEditorView : UserControl
         => _editorOwner.Update(!detach && IsLoaded ? DataContext as DtbEditorViewModel : null, SourceEditor);
 
     /// <summary>
-    /// <para>右栏光标/选区变化 → 左栏高亮所属节点。</para>
     /// Right-pane caret/selection change highlights the owning node in the left tree.
+    /// <para>右栏光标/选区变化 → 左栏高亮所属节点。</para>
     /// </summary>
     private void OnSourceCaretChanged(object? sender, System.EventArgs e)
     {

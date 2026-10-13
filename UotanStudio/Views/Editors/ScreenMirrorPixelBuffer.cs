@@ -3,8 +3,10 @@ using UotanStudio.Media.Decoding.MediaFoundation;
 
 namespace UotanStudio.Views.Editors;
 
-/// <summary>Owns one reusable, tightly packed BGRA copy between decoder and UI updates.</summary>
-/// <remarks>The caller must serialize updates and reads until the bitmap copy completes.</remarks>
+/// <summary>
+/// Owns one reusable, tightly packed BGRA copy between decoder and UI updates.
+/// <para>持有解码与 UI 更新之间一份可复用的紧凑 BGRA 副本。</para>
+/// </summary>
 internal sealed class ScreenMirrorPixelBuffer
 {
     internal byte[] Pixels { get; private set; } = [];

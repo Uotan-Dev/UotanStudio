@@ -8,24 +8,22 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// Represents a parsed shell v2 protocol frame.
 /// <para>解析后的 shell v2 协议帧。</para>
 /// </summary>
-/// <remarks>
-/// Initializes a new instance of the <see cref="ShellFrame"/> struct.
-/// <para>初始化 <see cref="ShellFrame"/> 结构的新实例。</para>
-/// </remarks>
-/// <param name="kind">The frame kind. 帧类型。</param>
-/// <param name="payload">The frame payload. 帧负载。</param>
+/// <param name="kind">The frame kind.<para>帧类型。</para></param>
+/// <param name="payload">The frame payload.<para>帧负载。</para></param>
 internal readonly struct ShellFrame(ShellFrameKind kind, byte[] payload)
 {
     /// <summary>
     /// Gets the frame kind.
     /// <para>获取帧类型。</para>
     /// </summary>
+    /// <value>The parsed frame kind.<para>解析得到的帧类型。</para></value>
     public ShellFrameKind Kind { get; } = kind;
 
     /// <summary>
     /// Gets the frame payload.
     /// <para>获取帧负载。</para>
     /// </summary>
+    /// <value>The frame payload bytes.<para>帧负载字节。</para></value>
     public byte[] Payload { get; } = payload;
 }
 
@@ -33,10 +31,6 @@ internal readonly struct ShellFrame(ShellFrameKind kind, byte[] payload)
 /// Result of a shell command execution.
 /// <para>Shell 命令执行结果。</para>
 /// </summary>
-/// <remarks>
-/// Initializes a new instance of the <see cref="ShellResult"/> struct.
-/// <para>初始化 <see cref="ShellResult"/> 结构的新实例。</para>
-/// </remarks>
 /// <param name="stdout">The concatenated stdout frame payloads. <para>各 stdout 帧负载的拼接结果。</para></param>
 /// <param name="stderr">The concatenated stderr frame payloads. <para>各 stderr 帧负载的拼接结果。</para></param>
 /// <param name="exitCode">The shell exit frame value. <para>shell 退出帧的值。</para></param>
@@ -72,20 +66,19 @@ public readonly struct ShellResult(byte[] stdout, byte[] stderr, int exitCode)
 /// exposes stdout / stderr / exit code.
 /// <para>ADB shell v2 协议客户端：在设备上执行命令并暴露 stdout / stderr / 退出码。</para>
 /// </summary>
-/// <remarks>
-/// Initializes a new shell v2 client for the given command.
-/// <para>为给定命令初始化新的 shell v2 客户端。</para>
-/// </remarks>
-/// <param name="connection">The ADB connection. ADB 连接。</param>
-/// <param name="command">The command to execute. 要执行的命令。</param>
-/// <param name="term">Terminal type, or null for default. 终端类型，null 表示默认。</param>
-/// <param name="pty">Whether to use a pseudo-terminal. 是否使用伪终端。</param>
+/// <param name="connection">The ADB connection.<para>ADB 连接。</para></param>
+/// <param name="command">The command to execute.<para>要执行的命令。</para></param>
+/// <param name="term">Terminal type, or null for default.<para>终端类型，null 表示默认。</para></param>
+/// <param name="pty">Whether to use a pseudo-terminal.<para>是否使用伪终端。</para></param>
 internal sealed class AdbShellClient(AdbConnection connection, string command, string? term = null, bool pty = false) : IAdbShellClient
 {
     private const int FrameHeaderSize = 5;
     private const int MaxFramePayloadSize = 16 * 1024 * 1024;
 
-    /// <summary>Incremental shell-v2 frame parser used across ADB WRTE chunk boundaries.</summary>
+    /// <summary>
+    /// Incremental shell-v2 frame parser used across ADB WRTE chunk boundaries.
+    /// <para>跨 ADB WRTE 块边界增量解析 shell v2 帧。</para>
+    /// </summary>
     internal sealed class FrameParser
     {
         private byte[] _buffer = [];
@@ -175,6 +168,7 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
     /// Builds the shell v2 service string.
     /// <para>构建 shell v2 服务字符串。</para>
     /// </summary>
+    /// <returns>The shell v2 service string.<para>shell v2 服务字符串。</para></returns>
     private string BuildServiceString()
     {
         var sb = new StringBuilder("shell,v2");
@@ -192,8 +186,8 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
     /// Executes the command asynchronously and returns captured stdout/stderr/exit code.
     /// <para>异步执行命令并返回捕获的 stdout / stderr / 退出码。</para>
     /// </summary>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <param name="timeoutMs">Timeout in milliseconds.<para>超时（毫秒）。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>A task resolving to the shell result. <para>结果为 shell 执行结果的任务。</para></returns>
     /// <exception cref="TimeoutException">A read timed out while the stream was still open.
     /// <para>流仍打开时读取超时。</para></exception>
@@ -256,9 +250,9 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
     /// Executes the command asynchronously, streaming stdout/stderr chunks to callbacks.
     /// <para>异步流式执行命令，将 stdout / stderr 块传递给回调。</para>
     /// </summary>
-    /// <param name="onStdout">Callback for stdout chunks. stdout 块回调。</param>
-    /// <param name="onStderr">Callback for stderr chunks. stderr 块回调。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <param name="onStdout">Callback for stdout chunks.<para>stdout 块回调。</para></param>
+    /// <param name="onStderr">Callback for stderr chunks.<para>stderr 块回调。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>A task resolving to the exit code. <para>结果为退出码的任务。</para></returns>
     /// <exception cref="InvalidDataException">The stream ended with a truncated shell v2 frame.
     /// <para>流在 shell v2 帧未完整时结束。</para></exception>
@@ -321,10 +315,10 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
     /// rather than parked.
     /// <para>按以 <c>CancelAfter</c> 表达的单次读取期限读取一块数据，使等待被取消而非占用线程。</para>
     /// </summary>
-    /// <param name="stream">The shell stream. shell 流。</param>
-    /// <param name="timeoutMs">Per-read wait in milliseconds. 单次读取的等待毫秒数。</param>
-    /// <param name="cancellationToken">Caller token, which always outranks the deadline.
-    /// 调用方令牌，其优先级始终高于内部期限。</param>
+    /// <param name="stream">The shell stream.<para>shell 流。</para></param>
+    /// <param name="timeoutMs">Per-read wait in milliseconds.<para>单次读取的等待毫秒数。</para></param>
+    /// <param name="cancellationToken">Cancellation token, which outranks the internal deadline.
+    /// <para>取消令牌，其优先级高于内部期限。</para></param>
     /// <returns>The next chunk, or <see langword="null"/> when the deadline expired or the stream closed after
     /// its queue drained. <para>下一块数据；期限到达，或流已关闭且队列读空时返回 <see langword="null"/>。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
@@ -348,9 +342,8 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
     /// Reads the exit code from a shell exit frame payload.
     /// <para>从 shell 退出帧负载读取退出码。</para>
     /// </summary>
-    /// <param name="payload">The frame payload. 帧负载。</param>
-    /// <returns>The exit code, or null if the payload is empty. 退出码，负载为空时返回 null。</returns>
-    /// <remarks>AOSP shell_v2_protocol sends the exit code as a single byte.</remarks>
+    /// <param name="payload">The frame payload.<para>帧负载。</para></param>
+    /// <returns>The exit code, or null if the payload is empty.<para>退出码，负载为空时返回 null。</para></returns>
     private static int? ReadExitCode(byte[] payload) => payload is { Length: >= 1 } ? payload[0] : null;
 
 }

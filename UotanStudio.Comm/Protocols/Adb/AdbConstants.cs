@@ -1,14 +1,14 @@
 namespace UotanStudio.Comm.Protocols.Adb;
 
 /// <summary>
-/// ADB protocol constants aligned with AOSP (adb/protocol.h, adb.h).
-/// <para>与 AOSP 对齐的 ADB 协议常量。</para>
+/// Constants of the ADB wire protocol.
+/// <para>ADB 线上协议常量。</para>
 /// </summary>
 internal static class AdbConstants
 {
     /// <summary>
-    /// Protocol version supported by this client (A_VERSION, 1.0.1).
-    /// <para>此客户端支持的协议版本（A_VERSION，1.0.1）。</para>
+    /// Protocol version supported by this client (A_VERSION).
+    /// <para>此客户端支持的协议版本（A_VERSION）。</para>
     /// </summary>
     public const uint ProtocolVersion = 0x01000001;
 
@@ -48,12 +48,13 @@ internal static class AdbConstants
     /// Builds the CNXN system-information payload.
     /// <para>构建 CNXN 系统信息负载。</para>
     /// </summary>
+    /// <returns>The CNXN system-information payload string. <para>CNXN 系统信息负载字符串。</para></returns>
     public static string BuildConnectPayload() => $"host::features={Features}";
 }
 
 /// <summary>
-/// ADB wire command identifiers (AOSP, byte-swapped for little-endian wire order).
-/// <para>ADB 线命令标识符（AOSP，按小端线序字节交换）。</para>
+/// ADB wire command identifiers, byte-swapped for little-endian wire order.
+/// <para>ADB 线上命令标识符，已按小端线序做字节交换。</para>
 /// </summary>
 internal enum AdbCommand : uint
 {
@@ -118,7 +119,7 @@ internal enum AdbAuthType : uint
 }
 
 /// <summary>
-/// Shell v2 protocol frame kinds (AOSP shell_v2_protocol.h).
+/// Shell v2 protocol frame kinds.
 /// <para>Shell v2 协议帧类型。</para>
 /// </summary>
 internal enum ShellFrameKind : byte
@@ -156,29 +157,29 @@ internal enum ShellFrameKind : byte
 }
 
 /// <summary>
-/// Sync wire command identifiers (AOSP sync.h / SYNC.TXT).
+/// Sync wire command identifiers.
 /// <para>Sync 线命令标识符。</para>
 /// </summary>
 internal static class SyncIds
 {
-    /// <summary>Stat a remote file. 查询远端文件状态。</summary>
+    /// <summary>Stat a remote file. <para>查询远端文件状态。</para></summary>
     public const string Stat = "STAT";
-    /// <summary>List a remote directory. 列出远端目录。</summary>
+    /// <summary>List a remote directory. <para>列出远端目录。</para></summary>
     public const string List = "LIST";
-    /// <summary>Directory entry. 目录条目。</summary>
+    /// <summary>Directory entry. <para>目录条目。</para></summary>
     public const string Dent = "DENT";
-    /// <summary>Receive (pull) a file. 接收（拉取）文件。</summary>
+    /// <summary>Receive (pull) a file. <para>接收（拉取）文件。</para></summary>
     public const string Recv = "RECV";
-    /// <summary>Send (push) a file. 发送（推送）文件。</summary>
+    /// <summary>Send (push) a file. <para>发送（推送）文件。</para></summary>
     public const string Send = "SEND";
-    /// <summary>Data chunk. 数据块。</summary>
+    /// <summary>Data chunk. <para>数据块。</para></summary>
     public const string Data = "DATA";
-    /// <summary>Transfer complete. 传输完成。</summary>
+    /// <summary>Transfer complete. <para>传输完成。</para></summary>
     public const string Done = "DONE";
-    /// <summary>Quit sync session. 退出 sync 会话。</summary>
+    /// <summary>Quit sync session. <para>退出 sync 会话。</para></summary>
     public const string Quit = "QUIT";
-    /// <summary>Success acknowledgment. 成功确认。</summary>
+    /// <summary>Success acknowledgment. <para>成功确认。</para></summary>
     public const string Okay = "OKAY";
-    /// <summary>Failure response. 失败响应。</summary>
+    /// <summary>Failure response. <para>失败响应。</para></summary>
     public const string Fail = "FAIL";
 }

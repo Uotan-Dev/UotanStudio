@@ -7,12 +7,8 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 
 public partial class FirmwareNodeViewModel
 {
-    /// <summary>
-    /// <para>创建 boot 内核命令行编辑节点。</para>
-    /// Creates the boot kernel command line edit node.
-    /// </summary>
-    /// <returns>配置好输入输出端口与默认参数的命令行编辑节点。
-    /// The configured command line edit node with its ports and defaults.</returns>
+    /// <summary>Creates the boot kernel command line edit node.<para>创建 boot 内核命令行编辑节点。</para></summary>
+    /// <returns>The configured command line edit node with its ports and defaults.<para>配置好输入输出端口与默认参数的命令行编辑节点。</para></returns>
     public static FirmwareNodeViewModel CreateCmdlineEditNode()
     {
         var node = new FirmwareNodeViewModel("Boot Cmdline")

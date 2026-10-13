@@ -188,9 +188,9 @@ public sealed class SparseReadStreamTests
     }
 
     /// <summary>
-    /// <para>构造 4 块测试镜像：block0 raw（带图案）、block1 fill（0xDEADBEEF）、block2 dont-care、block3 raw。</para>
     /// Builds a 4-block fixture: block 0 raw (patterned), block 1 fill (0xDEADBEEF), block 2 dont-care,
     /// block 3 raw.
+    /// <para>构造 4 块测试镜像：block0 raw（带图案）、block1 fill（0xDEADBEEF）、block2 dont-care、block3 raw。</para>
     /// </summary>
     private static SparseFile BuildFixture()
     {

@@ -5,8 +5,8 @@ using System.Text.RegularExpressions;
 namespace UotanStudio.Firmware.BootSecurity.Patcher;
 
 /// <summary>
-/// <para>表示从 KernelSU 模块 ELF 中定位到的一个资源条目及其还原结果。</para>
 /// Represents a single asset located in the KernelSU module ELF together with its restored result.
+/// <para>表示从 KernelSU 模块 ELF 中定位到的一个资源条目及其还原结果。</para>
 /// </summary>
 public sealed class Asset
 {
@@ -66,8 +66,8 @@ public sealed class Asset
     public Asset() { }
 
     /// <summary>
-    /// <para>复制另一个资源条目的全部字段。</para>
     /// Copies all fields of another asset entry.
+    /// <para>复制另一个资源条目的全部字段。</para>
     /// </summary>
     /// <param name="other">Entry whose field values are copied. <para>被复制字段值的条目。</para></param>
     public Asset(Asset other)
@@ -94,8 +94,8 @@ public sealed class SkippedAsset
 }
 
 /// <summary>
-/// <para>汇总一次 KernelSU 资源提取的结果、跳过的条目与日志。</para>
 /// Aggregates the result, skipped entries and log of a KernelSU asset extraction run.
+/// <para>汇总一次 KernelSU 资源提取的结果、跳过的条目与日志。</para>
 /// </summary>
 public sealed class Report
 {
@@ -129,14 +129,14 @@ public sealed class Report
 }
 
 /// <summary>
-/// <para>解析 KernelSU 模块 ELF，定位并还原其中压缩打包的资源。</para>
 /// Parses a KernelSU module ELF to locate and restore the compressed assets it embeds.
+/// <para>解析 KernelSU 模块 ELF，定位并还原其中压缩打包的资源。</para>
 /// </summary>
 public static partial class Extractor
 {
     /// <summary>
-    /// <para>在 AArch64 函数内扫描 ADRP/ADD 指令对（ADRP: 0x90000000，掩码 0x9F000000），收集解析后的页引用地址。</para>
     /// Scans an AArch64 function for ADRP/ADD instruction pairs (ADRP: 0x90000000, mask 0x9F000000) and collects the resolved page-reference addresses.
+    /// <para>在 AArch64 函数内扫描 ADRP/ADD 指令对（ADRP: 0x90000000，掩码 0x9F000000），收集解析后的页引用地址。</para>
     /// </summary>
     /// <param name="elf">Image supplying the bytes and the PT_LOAD segment map.
     /// <para>提供字节与 PT_LOAD 段映射的镜像。</para></param>
@@ -211,8 +211,8 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <para>在 x86-64 函数内扫描指向全局数据的 RIP+disp32 指令并收集解析后的目标地址。</para>
     /// Scans an x86-64 function for RIP+disp32 instructions that address global data and collects the resolved target addresses.
+    /// <para>在 x86-64 函数内扫描指向全局数据的 RIP+disp32 指令并收集解析后的目标地址。</para>
     /// </summary>
     /// <param name="elf">Image supplying the bytes and the PT_LOAD segment map.
     /// <para>提供字节与 PT_LOAD 段映射的镜像。</para></param>
@@ -260,8 +260,8 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <para>依据 ELF 机器类型选择对应的引用扫描实现。</para>
     /// Dispatches to the reference scanner matching the ELF machine type.
+    /// <para>依据 ELF 机器类型选择对应的引用扫描实现。</para>
     /// </summary>
     /// <param name="elf">Image whose <c>e_machine</c> selects the scanner.
     /// <para>以 <c>e_machine</c> 决定扫描实现的镜像。</para></param>
@@ -282,8 +282,8 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <para>在 ELF 视图数据中查找 KernelSU 资源表条目，返回名称、工厂函数地址与表偏移。</para>
     /// Finds KernelSU asset table entries in the ELF view data, returning their name, factory function address and table offset.
+    /// <para>在 ELF 视图数据中查找 KernelSU 资源表条目，返回名称、工厂函数地址与表偏移。</para>
     /// </summary>
     /// <param name="view">
     /// Bytes to scan, normally the relocation-patched view of the image.
@@ -365,8 +365,8 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <para>在给定静态地址附近扫描指向可执行代码的 64 位字，返回候选内部函数地址。</para>
     /// Scans for 64-bit words pointing into executable code near a given static address and returns candidate internal function addresses.
+    /// <para>在给定静态地址附近扫描指向可执行代码的 64 位字，返回候选内部函数地址。</para>
     /// </summary>
     /// <param name="view">Bytes to scan, normally the relocation-patched view of the image.
     /// <para>待扫描的字节，通常为镜像经重定位修补后的视图。</para></param>
@@ -424,8 +424,8 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <para>二分查找被 deflate 流实际消耗的输入字节数。</para>
     /// Binary-searches how many input bytes the deflate stream actually consumes.
+    /// <para>二分查找被 deflate 流实际消耗的输入字节数。</para>
     /// </summary>
     private static int FindConsumed(byte[] data, int off, int chunkLen, int outputLen, int capOut)
     {
@@ -442,8 +442,8 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <para>尝试把 <paramref name="off" /> 处的数据当作 deflate 流解压，并返回消耗字节数与输出。</para>
     /// Attempts to decompress data at <paramref name="off" /> as a deflate stream and returns the consumed bytes and output.
+    /// <para>尝试把 <paramref name="off" /> 处的数据当作 deflate 流解压，并返回消耗字节数与输出。</para>
     /// </summary>
     /// <param name="data">Buffer containing a candidate deflate stream.
     /// <para>包含候选 deflate 流的缓冲区。</para></param>
@@ -482,8 +482,8 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <para>返回指定资源条目对应位置的解压后字节内容。</para>
     /// Returns the decompressed byte content stored at the given asset's data offset.
+    /// <para>返回指定资源条目对应位置的解压后字节内容。</para>
     /// </summary>
     /// <param name="data">Image bytes (or patched view) containing the asset's deflate stream.
     /// <para>包含资源 deflate 流的镜像字节（或修补视图）。</para></param>
@@ -500,9 +500,9 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <para>净化资源名称：把反斜杠归一化为正斜杠、去掉前导分隔符，再把其余分隔符与非法字符压平为下划线。</para>
     /// Sanitizes an asset name by normalizing backslashes to forward slashes, stripping leading separators, then
     /// flattening every remaining separator together with the other invalid characters into underscores.
+    /// <para>净化资源名称：把反斜杠归一化为正斜杠、去掉前导分隔符，再把其余分隔符与非法字符压平为下划线。</para>
     /// </summary>
     /// <param name="name">Raw asset name as stored in the table entry.
     /// <para>表中记录的资源原始名称。</para></param>
@@ -627,8 +627,8 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <para>从 KernelSU 模块 ELF 中提取全部资源条目，返回资源列表与日志。</para>
     /// Extracts every asset entry from a KernelSU module ELF and returns the asset list and log.
+    /// <para>从 KernelSU 模块 ELF 中提取全部资源条目，返回资源列表与日志。</para>
     /// </summary>
     /// <param name="elf">KernelSU module ELF to analyze; its data is kept read-only.
     /// <para>待分析的 KernelSU 模块 ELF；其数据保持只读。</para></param>

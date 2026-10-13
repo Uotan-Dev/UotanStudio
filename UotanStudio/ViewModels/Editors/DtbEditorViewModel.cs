@@ -10,32 +10,32 @@ using UotanStudio.Services.Workspace;
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
-/// <para>DTB 设备树双栏编辑器视图模型：左侧设备节点树 + 右侧可编辑 DTS 源码，
-/// 支持双向联动与回编译保存（DTS→DTB）。</para>
 /// DTB device-tree dual-pane editor view model: a left device-node tree plus an editable DTS source pane,
 /// with bidirectional linkage and recompile-save (DTS→DTB).
+/// <para>DTB 设备树双栏编辑器视图模型：左侧设备节点树 + 右侧可编辑 DTS 源码，
+/// 支持双向联动与回编译保存（DTS→DTB）。</para>
 /// </summary>
 public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableDocument, ISearchableDocument
 {
     private Dictionary<string, int> _lineMap = [];
 
     /// <summary>
-    /// <para>保存按钮的本地化标题。</para>
     /// The localized title of the save button.
+    /// <para>保存按钮的本地化标题。</para>
     /// </summary>
     public static string SaveLabel => UotanStudio.Services.LanguageService.Instance.GetString("Dock_Dtb_Save");
 
     /// <summary>
-    /// <para>文档对应的文件路径。</para>
     /// The file path of the document.
+    /// <para>文档对应的文件路径。</para>
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FilePathDisplay))]
     private string? _filePath;
 
     /// <summary>
-    /// <para>本地化后的文件路径显示文本（顶部工具栏）。</para>
     /// Localized file path display text (top toolbar).
+    /// <para>本地化后的文件路径显示文本（顶部工具栏）。</para>
     /// </summary>
     public string FilePathDisplay =>
         string.IsNullOrEmpty(FilePath)
@@ -45,32 +45,32 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
                 FilePath);
 
     /// <summary>
-    /// <para>可编辑的 DTS 源码文本。</para>
     /// The editable DTS source text.
+    /// <para>可编辑的 DTS 源码文本。</para>
     /// </summary>
     [ObservableProperty] private string _source = string.Empty;
 
     /// <summary>
-    /// <para>设备树节点树（左栏绑定）。</para>
     /// The device-node tree (left pane binding).
+    /// <para>设备树节点树（左栏绑定）。</para>
     /// </summary>
     public ObservableCollection<DtbNodeViewModel> Nodes { get; } = [];
 
     /// <summary>
-    /// <para>当前选中的节点（左栏选择联动）。</para>
     /// The currently selected node (left-pane selection linkage).
+    /// <para>当前选中的节点（左栏选择联动）。</para>
     /// </summary>
     [ObservableProperty] private DtbNodeViewModel? _selectedNode;
 
     /// <summary>
-    /// <para>最后一次编译/解析错误文本；为空表示无错误。</para>
     /// The last compile/parse error text; empty means no error.
+    /// <para>最后一次编译/解析错误文本；为空表示无错误。</para>
     /// </summary>
     [ObservableProperty] private string _compileError = string.Empty;
 
     /// <summary>
-    /// <para>原始字节数据（用于回写与刷新）。</para>
     /// The original raw bytes (used for write-back and refresh).
+    /// <para>原始字节数据（用于回写与刷新）。</para>
     /// </summary>
     [ObservableProperty] private byte[]? _rawBytes;
 
@@ -78,71 +78,71 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     [ObservableProperty] private bool _isDtboContainer;
 
     /// <summary>
-    /// <para>文档已修改状态。</para>
     /// Document dirty state.
+    /// <para>文档已修改状态。</para>
     /// </summary>
     [ObservableProperty] private bool _isDirty;
 
     partial void OnIsDirtyChanged(bool value) => IsModified = value;
 
     /// <summary>
-    /// <para>设备树节点总数（含根节点）；未加载时为 0。</para>
     /// Total node count of the device tree (including the root); 0 when not loaded.
+    /// <para>设备树节点总数（含根节点）；未加载时为 0。</para>
     /// </summary>
     public int NodeCount { get; private set; }
 
     /// <summary>
-    /// <para>根节点的 <c>compatible</c> 属性值（多个以逗号分隔）；无则返回空字符串。</para>
     /// The root node's <c>compatible</c> property (comma-separated when multiple); empty string when
     /// absent.
+    /// <para>根节点的 <c>compatible</c> 属性值（多个以逗号分隔）；无则返回空字符串。</para>
     /// </summary>
     public string RootCompatible { get; private set; } = string.Empty;
 
     /// <summary>
-    /// <para>根节点的 <c>#address-cells</c> 属性值；无则返回空字符串。</para>
     /// The root node's <c>#address-cells</c> property; empty string when absent.
+    /// <para>根节点的 <c>#address-cells</c> 属性值；无则返回空字符串。</para>
     /// </summary>
     public string RootAddressCells { get; private set; } = string.Empty;
 
     /// <summary>
-    /// <para>根节点的 <c>#size-cells</c> 属性值；无则返回空字符串。</para>
     /// The root node's <c>#size-cells</c> property; empty string when absent.
+    /// <para>根节点的 <c>#size-cells</c> 属性值；无则返回空字符串。</para>
     /// </summary>
     public string RootSizeCells { get; private set; } = string.Empty;
 
     /// <summary>
-    /// <para>设备树内存保留条目数；未加载时为 0。</para>
     /// Number of memory reservation entries; 0 when not loaded.
+    /// <para>设备树内存保留条目数；未加载时为 0。</para>
     /// </summary>
     public int MemoryReservationCount { get; private set; }
 
     /// <summary>
-    /// <para>当前选中节点的完整路径；无选中时为空字符串。</para>
     /// The full path of the currently selected node; empty string when none is selected.
+    /// <para>当前选中节点的完整路径；无选中时为空字符串。</para>
     /// </summary>
     public string SelectedNodePath => SelectedNode?.FullPath ?? string.Empty;
 
     /// <summary>
-    /// <para>当前选中节点的属性数；无选中时为 0。</para>
     /// Property count of the currently selected node; 0 when none is selected.
+    /// <para>当前选中节点的属性数；无选中时为 0。</para>
     /// </summary>
     public int SelectedNodePropertyCount => SelectedNode?.Node.Properties.Count ?? 0;
 
     /// <summary>
-    /// <para>当前选中节点的子节点数；无选中时为 0。</para>
     /// Child count of the currently selected node; 0 when none is selected.
+    /// <para>当前选中节点的子节点数；无选中时为 0。</para>
     /// </summary>
     public int SelectedNodeChildCount => SelectedNode?.Node.Children.Count ?? 0;
 
     /// <summary>
-    /// <para>保存命令：将 DTS 源码解析并回编译为 DTB 写回原文件。</para>
     /// Save command: parse the DTS source, recompile it to a DTB and write it back to the file.
+    /// <para>保存命令：将 DTS 源码解析并回编译为 DTB 写回原文件。</para>
     /// </summary>
     public IAsyncRelayCommand SaveCommand { get; }
 
     /// <summary>
-    /// <para>创建 DTB 编辑器视图模型并初始化保存命令。</para>
     /// Creates the DTB editor view model and initializes the save command.
+    /// <para>创建 DTB 编辑器视图模型并初始化保存命令。</para>
     /// </summary>
     public DtbEditorViewModel()
     {
@@ -155,12 +155,12 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     }
 
     /// <summary>
-    /// <para>异步加载 DTB 文件：读取字节 → 解析设备树 → 生成 DTS 源码与节点树。</para>
     /// Asynchronously loads a DTB file: read bytes, parse the device tree, and produce the DTS source and node tree.
+    /// <para>异步加载 DTB 文件：读取字节 → 解析设备树 → 生成 DTS 源码与节点树。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>DTB 文件路径。</para>
     /// The DTB file path.
+    /// <para>DTB 文件路径。</para>
     /// </param>
     public async Task LoadAsync(string path)
     {
@@ -214,7 +214,10 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
         UpdateTreeStatistics(tree);
     }
 
-    /// <summary>Active source editor for workspace actions. 供工作区操作使用的源码编辑器。</summary>
+    /// <summary>
+    /// Active source editor for workspace actions.
+    /// <para>供工作区操作使用的源码编辑器。</para>
+    /// </summary>
     internal AvaloniaEdit.TextEditor? Editor { get; set; }
 
     /// <inheritdoc/>
@@ -247,8 +250,8 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     }
 
     /// <summary>
-    /// <para>保存：解析 DTS 源码 → 校验 → 回编译为 DTB 字节 → 写回原文件并刷新。</para>
     /// Saves: parses the DTS source, validates it, recompiles to DTB bytes, writes back to the file and refreshes.
+    /// <para>保存：解析 DTS 源码 → 校验 → 回编译为 DTB 字节 → 写回原文件并刷新。</para>
     /// </summary>
     public async Task SaveAsync()
     {
@@ -283,12 +286,12 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     }
 
     /// <summary>
-    /// <para>按节点完整路径展开并选中左栏树中的节点（右栏光标联动）。</para>
     /// Expands and selects the node with the given full path in the left tree (source-caret linkage).
+    /// <para>按节点完整路径展开并选中左栏树中的节点（右栏光标联动）。</para>
     /// </summary>
     /// <param name="fullPath">
-    /// <para>节点完整路径，如 /soc/i2c@0。</para>
     /// The node full path, e.g. /soc/i2c@0.
+    /// <para>节点完整路径，如 /soc/i2c@0。</para>
     /// </param>
     public void TrySelectNode(string fullPath)
     {
@@ -318,23 +321,23 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     }
 
     /// <summary>
-    /// <para>获取节点完整路径对应的 DTS 源码起始行（-1 表示未找到）。</para>
     /// Gets the DTS source start line for a node's full path (-1 if not found).
+    /// <para>获取节点完整路径对应的 DTS 源码起始行（-1 表示未找到）。</para>
     /// </summary>
     /// <param name="fullPath">
-    /// <para>节点完整路径。</para>
     /// The node full path.
+    /// <para>节点完整路径。</para>
     /// </param>
     public int GetNodeSourceLine(string fullPath) =>
         _lineMap.TryGetValue(fullPath, out var line) ? line : -1;
 
     /// <summary>
-    /// <para>由源码行号反查所在节点（返回其完整路径；未命中返回 null）。</para>
     /// Maps a source line back to its owning node (returns the full path; null when unmatched).
+    /// <para>由源码行号反查所在节点（返回其完整路径；未命中返回 null）。</para>
     /// </summary>
     /// <param name="line">
-    /// <para>1 基源码行号。</para>
     /// The 1-based source line.
+    /// <para>1 基源码行号。</para>
     /// </param>
     public string? FindNodePathForLine(int line)
     {
@@ -366,14 +369,14 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     }
 
     /// <summary>
-    /// <para>递归统计设备树节点总数，并提取根节点的 <c>compatible</c> / <c>#address-cells</c> /
-    /// <c>#size-cells</c> 与内存保留条目数。</para>
     /// Recursively counts device-tree nodes and extracts the root's <c>compatible</c>,
     /// <c>#address-cells</c>, <c>#size-cells</c> plus memory-reservation count.
+    /// <para>递归统计设备树节点总数，并提取根节点的 <c>compatible</c> / <c>#address-cells</c> /
+    /// <c>#size-cells</c> 与内存保留条目数。</para>
     /// </summary>
     /// <param name="tree">
-    /// <para>已解析的设备树。</para>
     /// The parsed device tree.
+    /// <para>已解析的设备树。</para>
     /// </param>
     private void UpdateTreeStatistics(DeviceTree tree)
     {
@@ -392,8 +395,8 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     }
 
     /// <summary>
-    /// <para>递归统计节点数（含 <paramref name="node"/> 自身）。</para>
     /// Recursively counts nodes including <paramref name="node"/> itself.
+    /// <para>递归统计节点数（含 <paramref name="node"/> 自身）。</para>
     /// </summary>
     private static void CountNodes(DeviceTreeNode node, ref int total)
     {
@@ -405,10 +408,10 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     }
 
     /// <summary>
-    /// <para>读取节点上指定属性的字符串值；属性缺失或为空时返回空字符串。
-    /// 多个以 NUL 分隔的字符串值会用逗号重新连接。</para>
     /// Reads the named property as a string from the node; returns empty string when absent or empty.
     /// Multiple NUL-separated string values are rejoined with commas.
+    /// <para>读取节点上指定属性的字符串值；属性缺失或为空时返回空字符串。
+    /// 多个以 NUL 分隔的字符串值会用逗号重新连接。</para>
     /// </summary>
     private static string GetPropertyAsString(DeviceTreeNode node, string name)
     {
@@ -450,11 +453,11 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     }
 
     /// <summary>
-    /// <para>读取节点上 32 位大端 cell 类型的属性并返回其首个 cell 的十进制字符串；
-    /// 属性缺失、为空或不足 4 字节时返回空字符串。用于 <c>#address-cells</c> / <c>#size-cells</c> 等。</para>
     /// Reads a 32-bit big-endian cell property on the node and returns its first cell as a decimal string;
     /// returns empty string when the property is absent, empty, or shorter than 4 bytes. Used for
     /// <c>#address-cells</c> / <c>#size-cells</c>.
+    /// <para>读取节点上 32 位大端 cell 类型的属性并返回其首个 cell 的十进制字符串；
+    /// 属性缺失、为空或不足 4 字节时返回空字符串。用于 <c>#address-cells</c> / <c>#size-cells</c> 等。</para>
     /// </summary>
     private static string GetPropertyCellAsString(DeviceTreeNode node, string name)
     {
@@ -468,8 +471,8 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     }
 
     /// <summary>
-    /// <para>释放文档持有的状态（文档关闭时调用）。</para>
     /// Releases the state held by this document (called when the document is closed).
+    /// <para>释放文档持有的状态（文档关闭时调用）。</para>
     /// </summary>
     public void Cleanup()
     {

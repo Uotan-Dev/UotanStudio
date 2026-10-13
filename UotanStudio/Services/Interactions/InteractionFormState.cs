@@ -2,7 +2,8 @@ using UotanStudio.Projects.Interactions;
 
 namespace UotanStudio.Services.Interactions;
 
-/// <summary>Validates bounded form schemas and owns one invocation's mutable values.</summary>
+/// <summary>Validates bounded form schemas and owns one invocation's mutable values.
+/// <para>校验有界的表单模式，并持有一次调用的可变值。</para></summary>
 public sealed class InteractionFormState
 {
     private readonly Dictionary<string, InteractionValue> _values = new(StringComparer.Ordinal);

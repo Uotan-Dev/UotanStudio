@@ -11,10 +11,16 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 /// </summary>
 public sealed class HdcConnection : IDisposable
 {
-    /// <summary>Default I/O timeout in milliseconds. 默认 I/O 超时（毫秒）。</summary>
+    /// <summary>
+    /// Default I/O timeout in milliseconds.
+    /// <para>默认 I/O 超时（毫秒）。</para>
+    /// </summary>
     private const int DefaultTimeoutMs = 5000;
 
-    /// <summary>Timeout for channel-open acknowledgment in milliseconds. 通道打开确认超时（毫秒）。</summary>
+    /// <summary>
+    /// Timeout for channel-open acknowledgment in milliseconds.
+    /// <para>通道打开确认超时（毫秒）。</para>
+    /// </summary>
     private const int ChannelOpenTimeoutMs = 10000;
 
     /// <summary>

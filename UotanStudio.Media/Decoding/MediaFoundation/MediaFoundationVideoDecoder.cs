@@ -58,11 +58,8 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
     public bool IsInitialized => _transform != 0;
 
     /// <summary>
-    /// Initializes COM and Media Foundation on the calling thread, then activates the first synchronous
-    /// transform that accepts the codec and negotiates NV12 output; the decoded geometry and color metadata
-    /// come from the selected output type. Any previous transform is released first.
-    /// <para>在调用线程上初始化 COM 与 Media Foundation，然后激活第一个接受该编码并协商出 NV12 输出的同步
-    /// 变换；解码后的几何与色彩元数据取自所选输出类型。既有变换会先行释放。</para>
+    /// Creates the synchronous Media Foundation decode pipeline and registers the frame callback.
+    /// <para>创建同步 Media Foundation 解码管线并登记帧回调。</para>
     /// </summary>
     /// <param name="codec">Compressed codec of the incoming access units. <para>输入访问单元的压缩编码格式。</para></param>
     /// <param name="width">
@@ -314,11 +311,13 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
     private VideoColorMatrix _colorMatrix;
     private VideoColorRange _colorRange;
 
-    /// <summary>Gets the color metadata negotiated on the output type; Auto while uninitialized.</summary>
-    /// <summary>获取输出类型上协商出的色彩元数据；未初始化时为 Auto。</summary>
+    /// <summary>Gets the color metadata negotiated on the output type; Auto while uninitialized.
+    /// <para>获取输出类型上协商出的色彩元数据；未初始化时为 Auto。</para>
+    /// </summary>
     internal VideoColorMatrix NegotiatedColorMatrix => _colorMatrix;
-    /// <summary>Gets the nominal range negotiated on the output type; Auto while uninitialized.</summary>
-    /// <summary>获取输出类型上协商出的数值范围；未初始化时为 Auto。</summary>
+    /// <summary>Gets the nominal range negotiated on the output type; Auto while uninitialized.
+    /// <para>获取输出类型上协商出的数值范围；未初始化时为 Auto。</para>
+    /// </summary>
     internal VideoColorRange NegotiatedColorRange => _colorRange;
 
     private bool SelectOutputType() => SelectOutputType(applyOverrides: true) || SelectOutputType(applyOverrides: false);
@@ -352,8 +351,9 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
         return false;
     }
 
-    /// <summary>Writes the session color overrides onto a candidate output type; fails when the MFT rejects them.</summary>
-    /// <summary>把会话色彩覆盖写入候选输出类型；MFT 拒绝时失败。</summary>
+    /// <summary>Writes the session color overrides onto a candidate output type; fails when the MFT rejects them.
+    /// <para>把会话色彩覆盖写入候选输出类型；MFT 拒绝时失败。</para>
+    /// </summary>
     internal static bool ApplyColorOverrides(nint type, VideoColorMatrix matrix, VideoColorRange range)
     {
         if (matrix != VideoColorMatrix.Auto

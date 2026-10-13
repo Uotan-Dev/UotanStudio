@@ -207,19 +207,17 @@ public class WorkspaceDockFactory : Factory
         return rootDock;
     }
 
-    /// <summary>Stops all terminal processes owned by this workspace. 停止工作区拥有的全部终端进程。</summary>
+    /// <summary>
+    /// Stops all terminal processes owned by this workspace.
+    /// <para>停止工作区拥有的全部终端进程。</para>
+    /// </summary>
     public void DisposeTerminal() => _terminals?.Dispose();
 
     /// <summary>
-    /// <para>关闭工作区全部文档型面板（文本/Hex/DTB/固件信息等，与工作区会话快照的文档口径一致）。
-    /// 供工程切换前清理使用：脏文档已在会话操作门的确认阶段处理完毕，这里直接移除并复用
-    /// <see cref="SafeRemoveDockable"/> 的释放逻辑，不再逐一询问。</para>
-    /// Closes every document-kind dockable in the workspace (text/Hex/DTB/firmware info etc., matching
-    /// the workspace session snapshot document scope). Used to clear documents before a project switch:
-    /// dirty documents were already confirmed in the session gate, so this removes them directly and
-    /// reuses the <see cref="SafeRemoveDockable"/> release logic without asking again.
+    /// Closes every document dockable in the workspace, clearing documents before a project switch.
+    /// <para>关闭工作区全部文档型面板，用于工程切换前清理文档。</para>
     /// </summary>
-    /// <param name="layout"><para>布局根（工作区 <c>Layout</c>）。</para>The layout root (workspace <c>Layout</c>).</param>
+    /// <param name="layout">The layout root (workspace <c>Layout</c>). <para>布局根（工作区 <c>Layout</c>）。</para></param>
     public void CloseAllDocuments(IDockable? layout)
     {
         var documents = WorkspaceSessionCapture.Enumerate(layout)

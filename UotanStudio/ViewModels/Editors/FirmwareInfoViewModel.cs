@@ -8,149 +8,149 @@ using UotanStudio.Services;
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
-/// <para>固件元数据面板视图模型：以只读 Dock 文档展示固件文件的格式名、摘要、
-/// 元数据键值对与条目列表，数据来自 <see cref="FormatDetector"/> + <see cref="IFormatHandler.ReadMetadataAsync"/>。</para>
 /// Firmware metadata panel view model: a read-only Dock document showing a firmware file's format name,
 /// summary, metadata key-value pairs and entry list, populated from <see cref="FormatDetector"/> plus
 /// <see cref="IFormatHandler.ReadMetadataAsync"/>.
+/// <para>固件元数据面板视图模型：以只读 Dock 文档展示固件文件的格式名、摘要、
+/// 元数据键值对与条目列表，数据来自 <see cref="FormatDetector"/> + <see cref="IFormatHandler.ReadMetadataAsync"/>。</para>
 /// </summary>
 public partial class FirmwareInfoViewModel : Document
 {
     /// <summary>
-    /// <para>面板标题的本地化文本。</para>
     /// The localized panel title.
+    /// <para>面板标题的本地化文本。</para>
     /// </summary>
     public static string TitleLabel => LanguageService.Instance.GetString("FirmwareInfo_Title");
 
     /// <summary>
-    /// <para>「格式名」字段标签的本地化文本。</para>
     /// The localized "format name" field label.
+    /// <para>「格式名」字段标签的本地化文本。</para>
     /// </summary>
     public static string FormatNameLabel => LanguageService.Instance.GetString("FirmwareInfo_FormatName");
 
     /// <summary>
-    /// <para>「摘要」字段标签的本地化文本。</para>
     /// The localized "summary" field label.
+    /// <para>「摘要」字段标签的本地化文本。</para>
     /// </summary>
     public static string SummaryLabel => LanguageService.Instance.GetString("FirmwareInfo_Summary");
 
     /// <summary>
-    /// <para>「元数据」分区标题的本地化文本。</para>
     /// The localized "metadata" section title.
+    /// <para>「元数据」分区标题的本地化文本。</para>
     /// </summary>
     public static string MetadataLabel => LanguageService.Instance.GetString("FirmwareInfo_Metadata");
 
     /// <summary>
-    /// <para>「条目」分区标题的本地化文本。</para>
     /// The localized "entries" section title.
+    /// <para>「条目」分区标题的本地化文本。</para>
     /// </summary>
     public static string EntriesLabel => LanguageService.Instance.GetString("FirmwareInfo_Entries");
 
     /// <summary>
-    /// <para>「组件」分区标题的本地化文本。</para>
     /// The localized "components" section title.
+    /// <para>「组件」分区标题的本地化文本。</para>
     /// </summary>
     public static string ComponentsLabel => LanguageService.Instance.GetString("FirmwareInfo_Components");
 
     /// <summary>
-    /// <para>加载中提示的本地化文本。</para>
     /// The localized loading hint.
+    /// <para>加载中提示的本地化文本。</para>
     /// </summary>
     public static string LoadingLabel => LanguageService.Instance.GetString("FirmwareInfo_Loading");
 
     /// <summary>
-    /// <para>失败错误区标题的本地化文本。</para>
     /// The localized failure error header.
+    /// <para>失败错误区标题的本地化文本。</para>
     /// </summary>
     public static string ErrorLabel => LanguageService.Instance.GetString("FirmwareInfo_Error");
 
     /// <summary>
-    /// <para>无法识别格式时的本地化错误文本。</para>
     /// The localized error text for an unrecognized format.
+    /// <para>无法识别格式时的本地化错误文本。</para>
     /// </summary>
     public static string UnrecognizedLabel => LanguageService.Instance.GetString("FirmwareInfo_Unrecognized");
 
     /// <summary>
-    /// <para>文档对应的文件路径。</para>
     /// The file path of the document.
+    /// <para>文档对应的文件路径。</para>
     /// </summary>
     [ObservableProperty] private string? _filePath;
 
     /// <summary>
-    /// <para>是否正在后台读取元数据（驱动加载中提示）。</para>
     /// Whether metadata is being read in the background (drives the loading hint).
+    /// <para>是否正在后台读取元数据（驱动加载中提示）。</para>
     /// </summary>
     [ObservableProperty] private bool _isBusy;
 
     /// <summary>
-    /// <para>检测到的固件格式名称；未识别时为空字符串。</para>
     /// The detected firmware format name; empty when unrecognized.
+    /// <para>检测到的固件格式名称；未识别时为空字符串。</para>
     /// </summary>
     [ObservableProperty] private string _formatName = string.Empty;
 
     /// <summary>
-    /// <para>读取摘要文本。</para>
     /// The read summary text.
+    /// <para>读取摘要文本。</para>
     /// </summary>
     [ObservableProperty] private string _summary = string.Empty;
 
     /// <summary>
-    /// <para>错误信息文本；无错误时为空字符串。</para>
     /// The error message text; empty when there is no error.
+    /// <para>错误信息文本；无错误时为空字符串。</para>
     /// </summary>
     [ObservableProperty] private string _errorMessage = string.Empty;
 
     /// <summary>
-    /// <para>是否存在错误（驱动错误区显示）。</para>
     /// Whether an error is present (drives the error-section visibility).
+    /// <para>是否存在错误（驱动错误区显示）。</para>
     /// </summary>
     [ObservableProperty] private bool _hasError;
 
     /// <summary>
-    /// <para>是否已识别出格式处理器（驱动格式名显示）。</para>
     /// Whether a format handler was detected (drives the format-name visibility).
+    /// <para>是否已识别出格式处理器（驱动格式名显示）。</para>
     /// </summary>
     [ObservableProperty] private bool _isRecognized;
 
     /// <summary>
-    /// <para>元数据分区是否非空（驱动分区显示）。</para>
     /// Whether the metadata section is non-empty (drives its visibility).
+    /// <para>元数据分区是否非空（驱动分区显示）。</para>
     /// </summary>
     [ObservableProperty] private bool _hasMetadata;
 
     /// <summary>
-    /// <para>条目分区是否非空（驱动分区显示）。</para>
     /// Whether the entries section is non-empty (drives its visibility).
+    /// <para>条目分区是否非空（驱动分区显示）。</para>
     /// </summary>
     [ObservableProperty] private bool _hasEntries;
 
     /// <summary>
-    /// <para>组件分区是否非空（驱动分区显示）。</para>
     /// Whether the components section is non-empty (drives its visibility).
+    /// <para>组件分区是否非空（驱动分区显示）。</para>
     /// </summary>
     [ObservableProperty] private bool _hasComponents;
 
     /// <summary>
-    /// <para>元数据键值对列表（UI 绑定）。</para>
     /// The metadata key-value list (bound by the UI).
+    /// <para>元数据键值对列表（UI 绑定）。</para>
     /// </summary>
     public ObservableCollection<PropertyRow> Metadata { get; } = [];
 
     /// <summary>
-    /// <para>条目名称列表（UI 绑定）。</para>
     /// The entry-name list (bound by the UI).
+    /// <para>条目名称列表（UI 绑定）。</para>
     /// </summary>
     public ObservableCollection<string> Entries { get; } = [];
 
     /// <summary>
-    /// <para>组件名称-大小行列表（UI 绑定）。</para>
     /// The component name-size row list (bound by the UI).
+    /// <para>组件名称-大小行列表（UI 绑定）。</para>
     /// </summary>
     public ObservableCollection<PropertyRow> Components { get; } = [];
 
     /// <summary>
-    /// <para>创建固件元数据面板视图模型。</para>
     /// Creates the firmware metadata panel view model.
+    /// <para>创建固件元数据面板视图模型。</para>
     /// </summary>
     public FirmwareInfoViewModel()
     {
@@ -158,15 +158,15 @@ public partial class FirmwareInfoViewModel : Document
     }
 
     /// <summary>
-    /// <para>异步读取固件元数据：幂等注册全部格式处理器 → <see cref="FormatDetector.Detect"/> 识别格式 →
-    /// <see cref="IFormatHandler.ReadMetadataAsync"/> 读取元数据，随后填充展示属性。</para>
     /// Asynchronously reads firmware metadata: idempotently registers all format handlers, detects the
     /// format via <see cref="FormatDetector.Detect"/>, reads metadata via
     /// <see cref="IFormatHandler.ReadMetadataAsync"/>, then populates the display properties.
+    /// <para>异步读取固件元数据：幂等注册全部格式处理器 → <see cref="FormatDetector.Detect"/> 识别格式 →
+    /// <see cref="IFormatHandler.ReadMetadataAsync"/> 读取元数据，随后填充展示属性。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>固件文件路径。</para>
     /// The firmware file path.
+    /// <para>固件文件路径。</para>
     /// </param>
     public async Task LoadAsync(string path, FormatDetectionResult? detection = null, CancellationToken cancellationToken = default)
     {
@@ -280,9 +280,9 @@ public partial class FirmwareInfoViewModel : Document
     }
 
     /// <summary>
-    /// <para>释放文档持有的数据（文档关闭时调用），让 GC 回收不再引用的大对象。</para>
     /// Releases the data held by this document (called when the document is closed) so the GC can
     /// reclaim the no-longer-referenced large objects.
+    /// <para>释放文档持有的数据（文档关闭时调用），让 GC 回收不再引用的大对象。</para>
     /// </summary>
     public void Cleanup()
     {
@@ -308,8 +308,8 @@ public partial class FirmwareInfoViewModel : Document
     }
 
     /// <summary>
-    /// <para>将字节数格式化为可读大小文本（如 "1.5 MB"）；0 字节显示 "0 B"。</para>
     /// Formats a byte count into a human-readable size string (e.g. "1.5 MB"); 0 bytes shows "0 B".
+    /// <para>将字节数格式化为可读大小文本（如 "1.5 MB"）；0 字节显示 "0 B"。</para>
     /// </summary>
     private static string FormatSize(long bytes) => SizeFormatter.Format(bytes);
 }

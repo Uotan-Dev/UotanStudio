@@ -2,7 +2,11 @@ using System.Collections.Frozen;
 
 namespace UotanStudio.Services.Firmware;
 
-/// <summary>Captures paths before an asynchronous image operation. 在异步镜像操作前固定路径。</summary>
+/// <summary>Captures paths before an asynchronous image operation.<para>在异步镜像操作前固定路径。</para></summary>
+/// <param name="Source">Source file or directory path.<para>源文件或目录路径。</para></param>
+/// <param name="IsDirectory">Whether the source is a directory.<para>源是否为目录。</para></param>
+/// <param name="Root">Sub-project root path.<para>子项目根路径。</para></param>
+/// <param name="OutputRoot">Output root path.<para>输出根路径。</para></param>
 internal sealed record ImageOperationPaths(string Source, bool IsDirectory, string Root, string OutputRoot)
 {
     private static readonly FrozenSet<string> ReservedNames =
@@ -18,9 +22,6 @@ internal sealed record ImageOperationPaths(string Source, bool IsDirectory, stri
             if (Name is "" or "." or "..")
                 throw new IOException("The unpacked directory must be a non-reserved child of the sub-project root.");
 
-            // images/ 内的文件解包到子项目根目录（与 images/ 同级）；其余位置一律本地解包到源文件所在目录。
-            // Files under images/ unpack to the sub-project root (beside images/); anything else unpacks
-            // locally into the directory containing the source file.
             var sourceDir = Path.GetDirectoryName(Path.GetFullPath(Source));
             var parent = IsDirectory || IsUnderImagesDirectory(sourceDir, Root)
                 ? Path.GetFullPath(Root)
@@ -37,7 +38,10 @@ internal sealed record ImageOperationPaths(string Source, bool IsDirectory, stri
         }
     }
 
-    /// <summary>Determines whether the source directory is the sub-project <c>images/</c> directory or inside it. 判断源目录是否为子项目 <c>images/</c> 目录或其子目录。</summary>
+    /// <summary>Determines whether the source directory is the <c>images/</c> directory or inside it.<para>判断源目录是否为 <c>images/</c> 目录或其子目录。</para></summary>
+    /// <param name="sourceDirectory">Directory to test.<para>待测试的目录。</para></param>
+    /// <param name="root">Sub-project root path.<para>子项目根路径。</para></param>
+    /// <returns>True when the directory is inside the images directory.<para>目录位于 images 目录内时为真。</para></returns>
     private static bool IsUnderImagesDirectory(string? sourceDirectory, string root)
     {
         if (string.IsNullOrEmpty(sourceDirectory)) return false;

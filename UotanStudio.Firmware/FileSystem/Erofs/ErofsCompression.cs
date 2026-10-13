@@ -585,8 +585,8 @@ internal static class ErofsCompression
         => Math.Clamp(LzmaNumFastBytesByLevel[Math.Clamp(compressionLevel, 1, 9) - 1], 5, 273);
 
     /// <summary>
-    /// DEFLATE compression producing a raw DEFLATE stream (no zlib header/footer, RFC 1951, matching the kernel's negative-windowBits deflateInit2 semantics).
-    /// <para>DEFLATE 压缩，输出原始 DEFLATE 流（无 zlib 头/尾，RFC 1951，与 erofs 内核 deflateInit2 的 负 windowBits 语义一致）。</para>
+    /// DEFLATE compression producing a raw DEFLATE stream (no zlib header/footer, RFC 1951, negative-window semantics).
+    /// <para>DEFLATE 压缩，输出原始 DEFLATE 流（无 zlib 头/尾，RFC 1951，负 windowBits 语义）。</para>
     /// </summary>
     private static int CompressDeflate(
         byte[] source,
@@ -614,9 +614,9 @@ internal static class ErofsCompression
     }
 
     /// <summary>
-    /// Builds the raw DEFLATE encoder options: the clamped level plus the Huffman-only strategy the kernel
-    /// requests by passing a reduced window size for ZLIB4C semi-compressed pclusters.
-    /// <para>构建原始 DEFLATE 编码器选项：截断后的等级，以及内核为 ZLIB4C 半压缩 pcluster 传入缩小窗口时
+    /// Builds the raw DEFLATE encoder options: the clamped level plus the Huffman-only strategy used for
+    /// ZLIB4C semi-compressed pclusters, which request a reduced window size.
+    /// <para>构建原始 DEFLATE 编码器选项：截断后的等级，以及 ZLIB4C 半压缩 pcluster 传入缩小窗口时
     /// 请求的 Huffman-only 策略。</para>
     /// </summary>
     /// <param name="compressionLevel">Requested level, clamped to the 0-9 range the encoder accepts.
@@ -788,9 +788,9 @@ internal static class ErofsCompression
     }
 
     /// <summary>
-    /// Routes the buffer-range bounds check through the shared kernel validator and translates the failure into
+    /// Routes the buffer-range bounds check through the shared range validator and translates the failure into
     /// <see cref="ArgumentOutOfRangeException"/> so the codec entry points keep their documented parameter contract.
-    /// <para>将缓冲区范围校验交由共享内核校验器完成，并把失败转换为 <see cref="ArgumentOutOfRangeException"/>，
+    /// <para>将缓冲区范围校验交由共享范围校验器完成，并把失败转换为 <see cref="ArgumentOutOfRangeException"/>，
     /// 使编解码入口保持其文档化的参数契约。</para>
     /// </summary>
     private static void ValidateRange(byte[] buffer, int offset, int length, string paramName)

@@ -3,14 +3,10 @@ using System.Collections.Concurrent;
 namespace UotanStudio.Comm.Devices.Services;
 
 /// <summary>
-/// Cache for per-device parameters that do not change while a physical device exists
-/// (model, brand, kernel version, protocol-reported hardware identity). Entries are keyed by
-/// the normalized device identity and are invalidated when the device is removed or the user
-/// explicitly refreshes; a mode switch (adb → fastboot) keeps the entry because the physical
-/// device identity persists.
-/// <para>缓存设备存在期间不会变动的参数（机型、品牌、内核版本、协议报告的硬件身份）。
-/// 条目按规范化设备身份键控，仅在设备移除或用户显式刷新时失效；模式切换（adb → fastboot）
-/// 保留条目，因为物理设备身份未变。</para>
+/// Cache for per-device parameters that stay stable while a physical device exists (model, brand,
+/// kernel version, protocol-reported hardware identity), keyed by the normalized device identity.
+/// <para>缓存设备存在期间保持稳定的参数（机型、品牌、内核版本、协议报告的硬件身份），
+/// 按规范化的设备身份键控。</para>
 /// </summary>
 public sealed class DevicePropertyCache
 {
@@ -40,7 +36,7 @@ public sealed class DevicePropertyCache
     /// <para>把属性合并进缓存；已有键不被覆盖，后续探测不会用较劣的值替换已验证的值。</para>
     /// </summary>
     /// <param name="identityKey">Normalized device identity key. <para>规范化的设备身份键。</para></param>
-    /// <param name="properties">Properties added for keys that are not cached yet; under concurrent updates the sequence may be enumerated more than once. <para>为尚未缓存的键新增的属性；并发更新时该序列可能被枚举多次。</para></param>
+    /// <param name="properties">Properties added only for keys not cached yet; may be enumerated more than once. <para>仅为尚未缓存的键新增的属性；可能被枚举多次。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="identityKey"/> or <paramref name="properties"/> is <see langword="null"/>. <para><paramref name="identityKey"/> 或 <paramref name="properties"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="identityKey"/> is empty or whitespace. <para><paramref name="identityKey"/> 为空或仅包含空白。</para></exception>
     public void Store(string identityKey, IEnumerable<KeyValuePair<string, string>> properties)

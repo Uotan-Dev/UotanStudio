@@ -14,8 +14,8 @@ using UotanStudio.Views.Workspace;
 
 namespace UotanStudio.Benchmarks.Performance;
 
-/// <summary>Steady-state cost of building shell/VM components on the Avalonia headless UI dispatcher.</summary>
-/// <remarks>BenchmarkDotNet measures warm steady-state; the original cold-start pass is not reproducible here.</remarks>
+/// <summary>Steady-state cost of building shell/VM components on the Avalonia headless UI dispatcher.
+/// <para>在 Avalonia 无头 UI 调度器上构建外壳/VM 组件的稳态开销。</para></summary>
 [MemoryDiagnoser]
 public class StartupBenchmarks
 {

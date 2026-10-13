@@ -7,13 +7,6 @@ using static UotanStudio.Comm.Transports.Usb.Backend.HarmonyOS.HarmonyOSUsbDDK;
 namespace UotanStudio.Comm.Transports.Usb.Backend.HarmonyOS;
 
 /// <summary>
-/// <para>HarmonyOS 拓扑后端：由 USB DDK 的设备清单给出设备与接口节点。该 DDK 不暴露父子链、
-/// 驱动绑定或故障码，因此这里只能提供扁平的设备/接口列表，共享树会把它们全部显示为根。</para>
-/// <para>本类是唯一的原生层，镜像 <c>HarmonyOSUsbFinder</c> 的发现方式：只按设备 ID 探测
-/// <c>OH_Usb_GetDeviceDescriptor</c> 与 <c>OH_Usb_GetConfigDescriptor</c>，不声明接口、不发起传输，
-/// 塑形完全交给纯的 <see cref="HarmonyTopologyGraph"/>。与 <see cref="HarmonyOSUsbApiProvider"/> 使用同一
-/// 环境变量门（<c>FIRMWAREKIT_USB_ENABLE_HARMONY</c>）：门未满足时 <see cref="IsAvailable"/> 为
-/// <see langword="false"/>，默认不会尝试加载 <c>libusb_ndk.z.so</c>。</para>
 /// The HarmonyOS topology backend: yields device and interface nodes from the USB DDK device list. That
 /// DDK exposes no parentage, driver binding or problem codes, so only a flat device/interface list is
 /// possible here and the shared tree shows every node as a root. This class is the only native layer and
@@ -24,6 +17,13 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.HarmonyOS;
 /// <see cref="HarmonyOSUsbApiProvider"/> (<c>FIRMWAREKIT_USB_ENABLE_HARMONY</c>): until that gate is
 /// satisfied <see cref="IsAvailable"/> reports <see langword="false"/> and nothing attempts to load
 /// <c>libusb_ndk.z.so</c>.
+/// <para>HarmonyOS 拓扑后端：由 USB DDK 的设备清单给出设备与接口节点。该 DDK 不暴露父子链、
+/// 驱动绑定或故障码，因此这里只能提供扁平的设备/接口列表，共享树会把它们全部显示为根。</para>
+/// <para>本类是唯一的原生层，镜像 <c>HarmonyOSUsbFinder</c> 的发现方式：只按设备 ID 探测
+/// <c>OH_Usb_GetDeviceDescriptor</c> 与 <c>OH_Usb_GetConfigDescriptor</c>，不声明接口、不发起传输，
+/// 塑形完全交给纯的 <see cref="HarmonyTopologyGraph"/>。与 <see cref="HarmonyOSUsbApiProvider"/> 使用同一
+/// 环境变量门（<c>FIRMWAREKIT_USB_ENABLE_HARMONY</c>）：门未满足时 <see cref="IsAvailable"/> 为
+/// <see langword="false"/>，默认不会尝试加载 <c>libusb_ndk.z.so</c>。</para>
 /// </summary>
 internal sealed class HarmonyUsbTopologyProvider : IUsbTopologyProvider
 {

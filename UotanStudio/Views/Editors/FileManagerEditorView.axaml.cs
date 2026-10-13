@@ -8,8 +8,8 @@ using UotanStudio.ViewModels.Editors;
 namespace UotanStudio.Views.Editors;
 
 /// <summary>
-/// <para>可调整大小的目录树与文件列表，窄面板下使用上下布局。</para>
 /// A resizable directory tree and file list, stacked vertically in narrow panels.
+/// <para>可调整大小的目录树与文件列表，窄面板下使用上下布局。</para>
 /// </summary>
 public partial class FileManagerEditorView : UserControl
 {
@@ -20,8 +20,8 @@ public partial class FileManagerEditorView : UserControl
     private GridLength _listHeight = new(3, GridUnitType.Star);
 
     /// <summary>
-    /// <para>创建文件管理器编辑器视图。</para>
     /// Creates the file-manager editor view.
+    /// <para>创建文件管理器编辑器视图。</para>
     /// </summary>
     public FileManagerEditorView()
     {

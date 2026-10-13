@@ -7,16 +7,8 @@ using UotanStudio.Firmware.FileSystem.Rebuilding;
 namespace UotanStudio.Firmware.FileSystem.Ext4;
 
 /// <summary>
-/// Format handler that exposes raw EXT4 images to the generic unpack/pack pipeline, bridging
-/// <see cref="Ext4Parser"/> and <see cref="Ext4Builder"/>, and additionally publishes the
-/// <see cref="IStreamUnpackableFormatHandler"/> capability so container formats can cascade-unpack an
-/// EXT4 payload from an already-resolved logical stream. File-path parse and build failures are reported
-/// as failed <see cref="FirmwareOpResult"/> values with only cancellation propagating; the container-facing
-/// stream path propagates every error to the container's own failure channel.
-/// <para>将 ext4 原始镜像接入通用解包/打包流水线的格式处理器，桥接 <see cref="Ext4Parser"/> 与
-/// <see cref="Ext4Builder"/>，并发布 <see cref="IStreamUnpackableFormatHandler"/> 能力，供容器格式对
-/// 已解析逻辑流级联解包 ext4 载荷。文件路径操作的解析与构建失败以失败的 <see cref="FirmwareOpResult"/>
-/// 返回、仅取消会抛出；面向容器的流路径则把所有错误交由容器自身的失败通道报告。</para>
+/// Format handler exposing raw EXT4 images to the generic unpack and pack pipeline, and publishing the stream-unpack capability so container formats can cascade-unpack an EXT4 payload from an already-resolved logical stream.
+/// <para>把原始 EXT4 镜像暴露给通用解包/打包流水线的格式处理器，并发布流式解包能力，使容器格式可从已解析的逻辑流级联解包 EXT4 载荷。</para>
 /// </summary>
 public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider, IStreamUnpackableFormatHandler
 {
@@ -69,11 +61,8 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
     }
 
     /// <summary>
-    /// Determines whether a logical stream carries a raw EXT4 image by probing only the layout-defined
-    /// superblock magic: the two little-endian bytes at logical offset 1080 must equal <c>0xEF53</c> within a
-    /// stream of at least 1082 bytes. The stream position is restored before returning.
-    /// <para>仅按布局定义的超级块魔数判断逻辑流是否承载 ext4 原始镜像：长度至少 1082 字节的流中，逻辑偏移
-    /// 1080 处的两个小端字节必须等于 <c>0xEF53</c>。返回前会恢复流位置。</para>
+    /// Determines whether a logical stream carries a raw EXT4 image by probing the superblock magic.
+    /// <para>通过探测超级块魔数判断逻辑流是否承载 ext4 原始镜像。</para>
     /// </summary>
     /// <param name="logical">Seekable logical stream positioned by the container caller; read errors are
     /// swallowed and reported as a non-match. <para>由容器调用方定位好的可寻址逻辑流；读取错误被吞掉并按不匹配处理。</para></param>
@@ -113,15 +102,8 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
     }
 
     /// <summary>
-    /// Unpacks a raw EXT4 image carried by an already-resolved logical stream into the output directory,
-    /// the container-facing counterpart of <see cref="UnpackAsync"/>. Parse, extraction and cancellation
-    /// errors propagate so the container caller reports them through its own failure channel; the result
-    /// carries the extracted entry paths plus the <c>InnerFormat</c> and <c>FilesystemBlockSize</c> metadata
-    /// the sparse container cascade expects (EXT4 emits no <c>VolumeName</c> key on this path).
-    /// <para>把已解析逻辑流承载的 ext4 原始镜像解包到输出目录，是 <see cref="UnpackAsync"/> 的面向容器版本。
-    /// 解析、提取与取消错误向上传播，由容器调用方经其自身的失败通道报告；结果携带解出的条目路径，以及稀疏容器
-    /// 级联解包所期望的 <c>InnerFormat</c> 与 <c>FilesystemBlockSize</c> 元数据（此路径下 EXT4 不输出
-    /// <c>VolumeName</c> 键）。</para>
+    /// Unpacks a raw EXT4 image carried by an already-resolved logical stream into the output directory.
+    /// <para>把已解析逻辑流承载的 ext4 原始镜像解包到输出目录。</para>
     /// </summary>
     /// <param name="logical">Seekable logical stream positioned at the start of the image; ownership stays with
     /// the caller, which disposes it after the returned task completes.

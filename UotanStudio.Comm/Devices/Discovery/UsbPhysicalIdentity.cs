@@ -55,13 +55,10 @@ public static class UsbPhysicalIdentity
     }
 
     /// <summary>
-    /// Resolves the single physical identity that a server serial maps to across the observed USB nodes,
-    /// matching by exact serial, a PnP instance-id tail, or a case-only serial difference (some
-    /// devices report different casing over the protocol than in the descriptor); returns
-    /// <c>null</c> unless exactly one candidate remains, so case folding can never merge two devices.
-    /// <para>在观测到的 USB 节点中解析某个 server 序列号映射到的唯一物理标识，按精确序列号、
-    /// PnP 实例 ID 尾部或仅大小写差异匹配（部分设备经协议上报与描述符中的大小写不同）；
-    /// 仅当恰好剩一个候选时返回，否则返回 <c>null</c>，因此大小写折叠绝不可能合并两台设备。</para>
+    /// Resolves the single physical identity a server serial maps to across the observed USB nodes,
+    /// matching by exact serial, a PnP instance-id tail, or a case-only serial difference.
+    /// <para>在观测到的 USB 节点中解析 server 序列号映射到的唯一物理标识，按精确序列号、
+    /// PnP 实例 ID 尾部或仅大小写差异匹配。</para>
     /// </summary>
     /// <param name="infos">
     /// The observed USB nodes. <para>观测到的 USB 节点集合。</para>

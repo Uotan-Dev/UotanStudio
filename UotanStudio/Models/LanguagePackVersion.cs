@@ -1,48 +1,51 @@
 namespace UotanStudio.Models;
 
 /// <summary>
-/// <para>表示语言包的语义化版本号，支持 Major.Minor.Revision 格式的比较。</para>
-/// Represents a semantic version number for a language pack, supporting Major.Minor.Revision format comparison.
+/// Represents a version number made of major, minor, and revision parts.
+/// <para>表示由主版本号、次版本号与修订号组成的版本号。</para>
 /// </summary>
 public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEquatable<LanguagePackVersion>
 {
     /// <summary>
-    /// <para>获取主版本号。</para>
     /// Gets the major version number.
+    /// <para>获取主版本号。</para>
     /// </summary>
+    /// <value>The major version number.<para>主版本号。</para></value>
     public int Major { get; }
 
     /// <summary>
-    /// <para>获取次版本号。</para>
     /// Gets the minor version number.
+    /// <para>获取次版本号。</para>
     /// </summary>
+    /// <value>The minor version number.<para>次版本号。</para></value>
     public int Minor { get; }
 
     /// <summary>
-    /// <para>获取修订号。</para>
     /// Gets the revision number.
+    /// <para>获取修订号。</para>
     /// </summary>
+    /// <value>The revision number.<para>修订号。</para></value>
     public int Revision { get; }
 
     /// <summary>
-    /// <para>初始化 <see cref="LanguagePackVersion"/> 类的新实例。</para>
     /// Initializes a new instance of the <see cref="LanguagePackVersion"/> class.
+    /// <para>初始化 <see cref="LanguagePackVersion"/> 类的新实例。</para>
     /// </summary>
     /// <param name="major">
-    /// <para>主版本号。</para>
     /// The major version number.
+    /// <para>主版本号。</para>
     /// </param>
     /// <param name="minor">
-    /// <para>次版本号。</para>
     /// The minor version number.
+    /// <para>次版本号。</para>
     /// </param>
     /// <param name="revision">
-    /// <para>修订号。</para>
     /// The revision number.
+    /// <para>修订号。</para>
     /// </param>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// <para>当版本号任一部分为负数时抛出。</para>
     /// Thrown when any part of the version number is negative.
+    /// <para>当版本号任一部分为负数时抛出。</para>
     /// </exception>
     public LanguagePackVersion(int major, int minor, int revision)
     {
@@ -55,26 +58,27 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
     }
 
     /// <summary>
-    /// <para>获取默认版本号（1.0.0）。</para>
-    /// Gets the default version (1.0.0).
+    /// Gets the default version.
+    /// <para>获取默认版本号。</para>
     /// </summary>
+    /// <value>The version with major part 1 and zero other parts.<para>主版本号为 1、其余部分为 0 的版本。</para></value>
     public static LanguagePackVersion Default { get; } = new(1, 0, 0);
 
     /// <summary>
-    /// <para>将版本字符串（如 "1.2.3"）解析为 <see cref="LanguagePackVersion"/> 实例。</para>
-    /// Parses a version string (e.g., "1.2.3") into a <see cref="LanguagePackVersion"/> instance.
+    /// Parses a version string into a <see cref="LanguagePackVersion"/> instance.
+    /// <para>将版本字符串解析为 <see cref="LanguagePackVersion"/> 实例。</para>
     /// </summary>
     /// <param name="versionString">
-    /// <para>要解析的版本字符串。</para>
     /// The version string to parse.
+    /// <para>要解析的版本字符串。</para>
     /// </param>
     /// <returns>
-    /// <para>解析后的 <see cref="LanguagePackVersion"/> 实例。</para>
     /// The parsed <see cref="LanguagePackVersion"/> instance.
+    /// <para>解析后的 <see cref="LanguagePackVersion"/> 实例。</para>
     /// </returns>
     /// <exception cref="ArgumentException">
-    /// <para>当版本字符串格式无效时抛出。</para>
     /// Thrown when the version string format is invalid.
+    /// <para>当版本字符串格式无效时抛出。</para>
     /// </exception>
     public static LanguagePackVersion Parse(string versionString)
     {
@@ -90,20 +94,20 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
     }
 
     /// <summary>
-    /// <para>尝试将版本字符串解析为 <see cref="LanguagePackVersion"/> 实例。</para>
     /// Attempts to parse a version string into a <see cref="LanguagePackVersion"/> instance.
+    /// <para>尝试将版本字符串解析为 <see cref="LanguagePackVersion"/> 实例。</para>
     /// </summary>
     /// <param name="versionString">
-    /// <para>要解析的版本字符串。</para>
     /// The version string to parse.
+    /// <para>要解析的版本字符串。</para>
     /// </param>
     /// <param name="result">
-    /// <para>解析成功时包含结果；否则为 null。</para>
     /// Contains the result on success; otherwise, null.
+    /// <para>解析成功时包含结果；否则为 null。</para>
     /// </param>
     /// <returns>
-    /// <para>解析成功返回 true；否则返回 false。</para>
     /// True if parsing succeeded; otherwise, false.
+    /// <para>解析成功返回 true；否则返回 false。</para>
     /// </returns>
     public static bool TryParse(string? versionString, out LanguagePackVersion? result)
     {
@@ -126,16 +130,16 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
     }
 
     /// <summary>
-    /// <para>将当前版本与另一个版本进行比较。</para>
     /// Compares the current version with another version.
+    /// <para>将当前版本与另一个版本进行比较。</para>
     /// </summary>
     /// <param name="other">
-    /// <para>要比较的另一个版本。</para>
     /// The other version to compare.
+    /// <para>要比较的另一个版本。</para>
     /// </param>
     /// <returns>
-    /// <para>小于零表示当前版本较低；零表示相等；大于零表示当前版本较高。</para>
     /// Less than zero if the current version is lower; zero if equal; greater than zero if higher.
+    /// <para>小于零表示当前版本较低；零表示相等；大于零表示当前版本较高。</para>
     /// </returns>
     public int CompareTo(LanguagePackVersion? other)
     {
@@ -149,35 +153,41 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
     }
 
     /// <summary>
-    /// <para>判断当前版本是否与另一个版本相等。</para>
     /// Determines whether the current version is equal to another version.
+    /// <para>判断当前版本是否与另一个版本相等。</para>
     /// </summary>
+    /// <param name="other">The version to compare. <para>要比较的版本。</para></param>
+    /// <returns>True if equal; otherwise, false.<para>如果相等则为 true；否则为 false。</para></returns>
     public bool Equals(LanguagePackVersion? other)
     {
         return other is null ? false : Major == other.Major && Minor == other.Minor && Revision == other.Revision;
     }
 
     /// <summary>
-    /// <para>判断当前版本是否与指定对象相等。</para>
     /// Determines whether the current version is equal to the specified object.
+    /// <para>判断当前版本是否与指定对象相等。</para>
     /// </summary>
+    /// <param name="obj">The object to compare. <para>要比较的对象。</para></param>
+    /// <returns>True if equal; otherwise, false.<para>如果相等则为 true；否则为 false。</para></returns>
     public override bool Equals(object? obj) => Equals(obj as LanguagePackVersion);
 
     /// <summary>
-    /// <para>获取哈希代码。</para>
     /// Gets the hash code.
+    /// <para>获取哈希代码。</para>
     /// </summary>
+    /// <returns>The hash code for this instance.<para>当前实例的哈希代码。</para></returns>
     public override int GetHashCode() => HashCode.Combine(Major, Minor, Revision);
 
     /// <summary>
-    /// <para>返回版本号的字符串表示（如 "1.2.3"）。</para>
-    /// Returns the string representation of the version (e.g., "1.2.3").
+    /// Returns the string representation of the version.
+    /// <para>返回版本号的字符串表示。</para>
     /// </summary>
+    /// <returns>The major, minor, and revision parts joined by dots.<para>以点号连接主版本号、次版本号与修订号。</para></returns>
     public override string ToString() => $"{Major}.{Minor}.{Revision}";
 
     /// <summary>
-    /// <para>比较运算符。</para>
     /// Comparison operators.
+    /// <para>比较运算符。</para>
     /// </summary>
     public static bool operator <(LanguagePackVersion left, LanguagePackVersion right) => left.CompareTo(right) < 0;
     public static bool operator >(LanguagePackVersion left, LanguagePackVersion right) => left.CompareTo(right) > 0;

@@ -190,10 +190,10 @@ public sealed partial class FastbootSession : IProtocolSession
 
     /// <summary>
     /// Queries all device variables via getvar:all and returns them as a dictionary.
-    /// Variables are reported as INFO lines of the form "key: value"; the parsed values
-    /// are also stored in the getvar cache.
-    /// <para>通过 getvar:all 查询所有设备变量并以字典形式返回。变量以 "key: value" 形式的
-    /// INFO 行上报；解析结果同时写入 getvar 缓存。</para>
+    /// <para>通过 getvar:all 查询所有设备变量并以字典形式返回。</para>
+    /// Variables are reported as INFO lines of the form "key: value"; the parsed values are also stored
+    /// in the getvar cache.
+    /// <para>变量以 "key: value" 形式的 INFO 行上报；解析结果同时写入 getvar 缓存。</para>
     /// </summary>
     /// <returns>Case-sensitive dictionary of every reported variable; on duplicate keys the first occurrence wins.
     /// <para>大小写敏感的变量字典；重复键以首次出现的值为准。</para>

@@ -3,14 +3,8 @@ using System.Text.Json;
 namespace UotanStudio.Services.Delivery;
 
 /// <summary>
-/// Public, reflection-free entry point that lets hosts and headless consumers drive delivery
-/// validation, output listing, tool preparation and builds from a serialized <see cref="DeliveryPlan"/>
-/// JSON contract. Only plain types cross the assembly boundary; the internal plan and build records stay
-/// inside this assembly, so consumers that need validation details or naming helpers still reach them
-/// through the <c>InternalsVisibleTo</c> grants listed in the assembly info.
-/// <para>公共无反射入口：以交付计划 JSON 契约驱动校验、输出列举、工具准备与构建。跨程序集边界只暴露普通类型，
-/// 内部计划与构建记录留在本子项目内；需要校验细节或命名辅助的调用方仍按程序集信息里的
-/// <c>InternalsVisibleTo</c> 授权直接访问。</para>
+/// Reflection-free entry point that lets hosts and headless consumers drive delivery validation, output listing, tool preparation and builds from a serialized JSON contract; only plain types cross the assembly boundary.
+/// <para>无反射的公开入口，使宿主与无头消费者能通过序列化 JSON 契约驱动交付校验、输出列表、工具准备与构建；跨越程序集边界的都是普通类型。</para>
 /// </summary>
 /// <param name="httpClient">
 /// HTTP client used to download the pinned platform-tools and zstd during tool preparation and builds; validation and output listing ignore it.
@@ -44,11 +38,11 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
     private readonly IDeliveryTools? toolOverride;
 
     /// <summary>
-    /// <para>以注入的工具替身构造门面，用于在无网络条件下验证构建与签名链路。</para>
     /// Builds the facade over an injected tool stand-in so the build and signing paths can be verified without network.
+    /// <para>以注入的工具替身构造门面，用于在无网络条件下验证构建与签名链路。</para>
     /// </summary>
-    /// <param name="tools"><para>工具准备替身。</para>The tool-preparation stand-in.</param>
-    /// <param name="signingKeys"><para>签名密钥供应器，可为 null。</para>Optional signing key provider.</param>
+    /// <param name="tools">The tool-preparation stand-in. <para>工具准备替身。</para></param>
+    /// <param name="signingKeys">Optional signing key provider. <para>签名密钥供应器，可为 null。</para></param>
     internal DeliveryService(IDeliveryTools tools, IDeliverySigningKeyProvider? signingKeys = null)
         : this(httpClient: null!, toolCacheDirectory: null, signingKeys: signingKeys)
     {
@@ -62,11 +56,11 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UotanStudio", "delivery-tools");
 
     /// <summary>
-    /// <para>校验交付计划；合法返回 <see langword="null"/>，否则返回首条错误消息。</para>
     /// Validates a delivery plan; returns <see langword="null"/> when valid, otherwise the first error message.
+    /// <para>校验交付计划；合法返回 <see langword="null"/>，否则返回首条错误消息。</para>
     /// </summary>
-    /// <param name="planJson"><para>序列化后的 <c>DeliveryPlan</c> JSON。</para>Serialized <c>DeliveryPlan</c> JSON.</param>
-    /// <param name="checkSources"><para>是否检查源镜像存在。</para>Whether source images must exist.</param>
+    /// <param name="planJson">Serialized <c>DeliveryPlan</c> JSON. <para>序列化后的 <c>DeliveryPlan</c> JSON。</para></param>
+    /// <param name="checkSources">Whether source images must exist. <para>是否检查源镜像存在。</para></param>
     /// <returns>The first validation error message, or <see langword="null"/> when the plan is valid.
     /// <para>首条校验错误消息；计划合法时返回 <see langword="null"/>。</para></returns>
     /// <exception cref="System.ArgumentException"><paramref name="planJson"/> is null, empty or whitespace.
@@ -88,8 +82,8 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
     }
 
     /// <summary>
-    /// <para>返回计划将产出的输出路径及其中已存在于磁盘的子集。</para>
     /// Returns the planned output paths and the subset that already exists on disk.
+    /// <para>返回计划将产出的输出路径及其中已存在于磁盘的子集。</para>
     /// </summary>
     /// <param name="planJson">Serialized <c>DeliveryPlan</c> JSON describing the intended outputs.
     /// <para>描述预期输出的序列化 <c>DeliveryPlan</c> JSON。</para></param>
@@ -106,10 +100,10 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
     }
 
     /// <summary>
-    /// <para>把交付所需工具下载到可写缓存并物化到 <paramref name="directory"/> 下的 <c>bin/</c> 布局；
-    /// 目录为空时回退到计划的输出目录。此操作需要网络。</para>
     /// Downloads the delivery tools into a writable cache and materializes them under <c>bin/</c> beneath
     /// <paramref name="directory"/> (falling back to the plan's output directory when blank). Network-bound.
+    /// <para>把交付所需工具下载到可写缓存并物化到 <paramref name="directory"/> 下的 <c>bin/</c> 布局；
+    /// 目录为空时回退到计划的输出目录。此操作需要网络。</para>
     /// </summary>
     /// <param name="planJson">Serialized <c>DeliveryPlan</c> JSON; the plan is validated before any download.
     /// <para>序列化 <c>DeliveryPlan</c> JSON；下载前会先校验计划。</para></param>
@@ -138,9 +132,9 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
     }
 
     /// <summary>
-    /// <para>按已校验的计划执行完整构建，返回产出的输出路径；内部会准备平台工具。此操作需要网络。</para>
     /// Runs a full build from a validated plan and returns the produced output paths; it prepares the
     /// platform tools internally. Network-bound.
+    /// <para>按已校验的计划执行完整构建，返回产出的输出路径；内部会准备平台工具。此操作需要网络。</para>
     /// </summary>
     /// <param name="planJson">Serialized <c>DeliveryPlan</c> JSON to build from.
     /// <para>用于构建的序列化 <c>DeliveryPlan</c> JSON。</para></param>

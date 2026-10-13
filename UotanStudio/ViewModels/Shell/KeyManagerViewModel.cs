@@ -45,21 +45,26 @@ public partial class KeyManagerViewModel : ViewModelBase
     [ObservableProperty][NotifyPropertyChangedFor(nameof(IsSelectedDefault), nameof(CanSetCurrentDefault))] private string _defaultSignatureIds = "";
     public bool IsIdle => !IsBusy;
     public bool IsPayload => KindIndex == (int)ManagedKeyKind.Payload;
-    /// <summary>当前是否选择了 APK 密钥用途。</summary>
-    /// <summary>Whether the UI is showing the APK certificate purpose.</summary>
+    /// <summary>Whether the UI is showing the APK certificate purpose.
+    /// <para>当前是否选择了 APK 密钥用途。</para>
+    /// </summary>
     /// <summary>当前是否选择了 APK 证书用途。</summary>
     public bool IsApkCertificate => KindIndex == (int)ManagedKeyKind.Apk;
-    /// <summary>Whether the UI is showing the JAR purpose (library-backed, 2048/4096 bits).</summary>
-    /// <summary>当前是否选择了 JAR 用途（库后端支持，2048/4096 位）。</summary>
+    /// <summary>Whether the UI is showing the JAR purpose (library-backed, 2048/4096 bits).
+    /// <para>当前是否选择了 JAR 用途（库后端支持，2048/4096 位）。</para>
+    /// </summary>
     public bool IsJar => KindIndex == (int)ManagedKeyKind.Jar;
-    /// <summary>当前是否选择了 ZIP（OTA 包签名）用途。</summary>
-    /// <summary>Whether the UI is showing the ZIP (OTA package signing) purpose.</summary>
+    /// <summary>Whether the UI is showing the ZIP (OTA package signing) purpose.
+    /// <para>当前是否选择了 ZIP（OTA 包签名）用途。</para>
+    /// </summary>
     public bool IsZip => KindIndex == (int)ManagedKeyKind.Zip;
-    /// <summary>Whether the selected purpose is backed by the managed key library.</summary>
-    /// <summary>当前用途是否由密钥库后端支持。</summary>
+    /// <summary>Whether the selected purpose is backed by the managed key library.
+    /// <para>当前用途是否由密钥库后端支持。</para>
+    /// </summary>
     public bool IsLibraryPurpose => KindIndex is (int)ManagedKeyKind.Zip or < (int)ManagedKeyKind.Apk;
-    /// <summary>Whether the key-size selector can be changed for the selected purpose.</summary>
-    /// <summary>当前用途是否允许调整密钥位数。</summary>
+    /// <summary>Whether the key-size selector can be changed for the selected purpose.
+    /// <para>当前用途是否允许调整密钥位数。</para>
+    /// </summary>
     public bool IsBitsEditable => IsPayload || IsJar || IsZip;
 
     [ObservableProperty]
@@ -77,11 +82,13 @@ public partial class KeyManagerViewModel : ViewModelBase
     [ObservableProperty] private int _keySizeIndex;
     [ObservableProperty] private int _formatIndex;
     [ObservableProperty] private string _outputDirectory = "";
-    /// <summary>Size/curve options for the selected algorithm; EC curves are dynamically expanded.</summary>
-    /// <summary>当前算法可选的位数/曲线；EC 曲线动态扩展。</summary>
+    /// <summary>Size/curve options for the selected algorithm; EC curves are dynamically expanded.
+    /// <para>当前算法可选的位数/曲线；EC 曲线动态扩展。</para>
+    /// </summary>
     public int[] ApkKeySizes => AlgorithmIndex == 1 ? [256, 384, 521] : [2048, 3072, 4096];
-    /// <summary>Currently selected key size / curve for the APK certificate form.</summary>
-    /// <summary>APK 证书表单当前选中的位数/曲线。</summary>
+    /// <summary>Currently selected key size / curve for the APK certificate form.
+    /// <para>APK 证书表单当前选中的位数/曲线。</para>
+    /// </summary>
     public int SelectedApkKeySize
     {
         get => KeySizeIndex >= 0 && KeySizeIndex < ApkKeySizes.Length ? ApkKeySizes[KeySizeIndex] : ApkKeySizes[0];
@@ -91,20 +98,23 @@ public partial class KeyManagerViewModel : ViewModelBase
             if (index >= 0) KeySizeIndex = index;
         }
     }
-    /// <summary>Two-way bindings for the RSA/EC radio pair.</summary>
-    /// <summary>RSA/EC 单选按钮的双向绑定属性。</summary>
+    /// <summary>Two-way bindings for the RSA/EC radio pair.
+    /// <para>RSA/EC 单选按钮的双向绑定属性。</para>
+    /// </summary>
     public bool IsRsaAlgorithm { get => AlgorithmIndex == 0; set { if (value) AlgorithmIndex = 0; } }
     public bool IsEcAlgorithm { get => AlgorithmIndex == 1; set { if (value) AlgorithmIndex = 1; } }
-    /// <summary>Two-way bindings for the size/curve radio options.</summary>
-    /// <summary>位数/曲线单选项的双向绑定属性。</summary>
+    /// <summary>Two-way bindings for the size/curve radio options.
+    /// <para>位数/曲线单选项的双向绑定属性。</para>
+    /// </summary>
     public bool IsKeySize2048 { get => SelectedApkKeySize == 2048; set { if (value) SelectedApkKeySize = 2048; } }
     public bool IsKeySize3072 { get => SelectedApkKeySize == 3072; set { if (value) SelectedApkKeySize = 3072; } }
     public bool IsKeySize4096 { get => SelectedApkKeySize == 4096; set { if (value) SelectedApkKeySize = 4096; } }
     public bool IsKeySizeP256 { get => SelectedApkKeySize == 256; set { if (value) SelectedApkKeySize = 256; } }
     public bool IsKeySizeP384 { get => SelectedApkKeySize == 384; set { if (value) SelectedApkKeySize = 384; } }
     public bool IsKeySizeP521 { get => SelectedApkKeySize == 521; set { if (value) SelectedApkKeySize = 521; } }
-    /// <summary>Two-way bindings for the four output-format radio buttons.</summary>
-    /// <summary>四个输出格式单选按钮的双向绑定属性。</summary>
+    /// <summary>Two-way bindings for the four output-format radio buttons.
+    /// <para>四个输出格式单选按钮的双向绑定属性。</para>
+    /// </summary>
     public bool IsFormatAll { get => FormatIndex == 0; set { if (value) FormatIndex = 0; } }
     public bool IsFormatJks { get => FormatIndex == 1; set { if (value) FormatIndex = 1; } }
     public bool IsFormatPkcs12 { get => FormatIndex == 2; set { if (value) FormatIndex = 2; } }
@@ -112,16 +122,16 @@ public partial class KeyManagerViewModel : ViewModelBase
     public bool IsOutputDirectoryRequired => IsApkCertificate;
     public bool HasSelection => SelectedKey is not null;
     /// <summary>
-    /// <para>「生成密钥对」的必要条件：普通用途需要名称，APK 证书需要别名（或名称）；未填写完整时按钮禁用。</para>
     /// Required inputs for Generate: a name for library purposes, the alias (or name) for APK certificates.
     /// The button stays disabled until those are present.
+    /// <para>「生成密钥对」的必要条件：普通用途需要名称，APK 证书需要别名（或名称）；未填写完整时按钮禁用。</para>
     /// </summary>
     public bool CanGenerate => IsApkCertificate
         ? !string.IsNullOrWhiteSpace(CertificateAlias) || !string.IsNullOrWhiteSpace(Name)
         : !string.IsNullOrWhiteSpace(Name);
     /// <summary>
-    /// <para>「导入」的必要条件：用途由密钥库支持且已填写名称；未填写完整时按钮禁用。</para>
     /// Required inputs for Import: a library-backed purpose and a non-empty name.
+    /// <para>「导入」的必要条件：用途由密钥库支持且已填写名称；未填写完整时按钮禁用。</para>
     /// </summary>
     public bool CanImport => IsLibraryPurpose && !string.IsNullOrWhiteSpace(Name);
     public string SelectedPath => SelectedKey is { } key ? _library.PrivatePath(key) : "";
@@ -137,8 +147,9 @@ public partial class KeyManagerViewModel : ViewModelBase
         RebuildDefaultIds();
     }
 
-    /// <summary>Test-only constructor with isolated settings delegates.</summary>
-    /// <summary>仅供测试的构造函数，注入隔离的设置委托。</summary>
+    /// <summary>Test-only constructor with isolated settings delegates.
+    /// <para>仅供测试的构造函数，注入隔离的设置委托。</para>
+    /// </summary>
     internal KeyManagerViewModel(KeyLibraryService library, Func<AppSettings> loadSettings,
         Func<string, string?, bool> updateDefaultKeyId, Func<ManagedKeyKind, string?>? runtimeFingerprint = null)
     {
@@ -149,8 +160,9 @@ public partial class KeyManagerViewModel : ViewModelBase
         RebuildDefaultIds();
     }
 
-    /// <summary>Re-reads the persisted default key ids and refreshes the badge binding source. A persisted id that is empty or absent from the library falls back to the runtime identity matched by fingerprint, so the auto-imported entry is shown as in use.</summary>
-    /// <summary>重新读取已持久化的默认密钥标识并刷新徽标绑定源。持久化 Id 为空或已不存在于库中时回退按指纹匹配运行时身份，使自动导入的条目显示为当前使用。</summary>
+    /// <summary>Re-reads the persisted default key ids and refreshes the badge binding source. A persisted id that is empty or absent from the library falls back to the runtime identity matched by fingerprint, so the auto-imported entry is shown as in use.
+    /// <para>重新读取已持久化的默认密钥标识并刷新徽标绑定源。持久化 Id 为空或已不存在于库中时回退按指纹匹配运行时身份，使自动导入的条目显示为当前使用。</para>
+    /// </summary>
     private void RebuildDefaultIds()
     {
         var settings = _loadSettings();
@@ -167,8 +179,9 @@ public partial class KeyManagerViewModel : ViewModelBase
             [.. new[] { Resolve("Adb", settings.AdbDefaultKeyId), Resolve("Hdc", settings.HdcDefaultKeyId) }.Where(part => part is not null)]);
     }
 
-    /// <summary>True when the key is the current default signature for its ADB/HDC purpose.</summary>
-    /// <summary>当密钥是其 ADB/HDC 用途的当前默认签名时返回 true。</summary>
+    /// <summary>True when the key is the current default signature for its ADB/HDC purpose.
+    /// <para>当密钥是其 ADB/HDC 用途的当前默认签名时返回 true。</para>
+    /// </summary>
     private bool IsDefault(ManagedKey key) =>
         key.Kind is ManagedKeyKind.Adb or ManagedKeyKind.Hdc &&
         DefaultSignatureIds.Split(' ', StringSplitOptions.RemoveEmptyEntries)
@@ -361,8 +374,9 @@ public partial class KeyManagerViewModel : ViewModelBase
         RebuildDefaultIds();
     });
 
-    /// <summary>Publishes the selected ADB/HDC key as the current runtime default signature.</summary>
-    /// <summary>将选中的 ADB/HDC 密钥发布为当前运行时默认签名。</summary>
+    /// <summary>Publishes the selected ADB/HDC key as the current runtime default signature.
+    /// <para>将选中的 ADB/HDC 密钥发布为当前运行时默认签名。</para>
+    /// </summary>
     [RelayCommand]
     private Task SetCurrentDefaultAsync()
     {
@@ -377,8 +391,9 @@ public partial class KeyManagerViewModel : ViewModelBase
         });
     }
 
-    /// <summary>Localized string with an English fallback when the resource key is missing.</summary>
-    /// <summary>本地化字符串；资源缺失时回退英文。</summary>
+    /// <summary>Localized string with an English fallback when the resource key is missing.
+    /// <para>本地化字符串；资源缺失时回退英文。</para>
+    /// </summary>
     private static string GetStringOrFallback(string key, string fallback)
     {
         var value = LanguageService.Instance.GetString(key);

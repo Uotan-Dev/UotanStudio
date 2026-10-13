@@ -4,17 +4,17 @@ using UotanStudio.Services.Compare;
 namespace UotanStudio.ViewModels.Compare;
 
 /// <summary>
-/// <para>对比状态配色：相同=绿、不同=印度红、仅左=橙、仅右=道奇蓝，其余灰。对比结果行与
-/// 目录树节点的状态标记共用同一份映射，避免两处各写一遍。</para>
-/// Comparison-status colours: equal=green, different=indian red, left-only=orange, right-only=dodger
-/// blue, anything else gray. The result rows and the directory-tree status markers share this single
-/// mapping instead of writing it twice.
+/// Status colour palette for comparison rows: equal, different, left-only, right-only, and an unrecognised fallback.
+/// <para>对比行的状态配色：相同、不同、仅左、仅右以及未知状态的兜底颜色。</para>
 /// </summary>
 internal static class CompareStatusBrushes
 {
-    /// <summary>按条目状态取状态色；未知状态返回灰色。</summary>
-    /// <param name="status"><para>条目状态。</para>The item status.</param>
-    /// <returns><para>该状态对应的画刷。</para>The brush for the status.</returns>
+    /// <summary>
+    /// Returns the status colour for an item state, falling back to gray.
+    /// <para>按条目状态取对应颜色，未知状态回退为灰色。</para>
+    /// </summary>
+    /// <param name="status">The item status.<para>条目状态。</para></param>
+    /// <returns>The brush for that status.<para>该状态对应的画刷。</para></returns>
     internal static IBrush For(FolderItemStatus status) => status switch
     {
         FolderItemStatus.Equal => Brushes.Green,

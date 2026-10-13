@@ -427,11 +427,8 @@ public static class OtaZipPatchService
     }
 
     /// <summary>
-    /// Patches selected ZIP members and atomically publishes the new archive. Members are rewritten
-    /// unstored in the source order, replacement entries absent from the source are appended, and the outer
-    /// OTA signature is therefore always invalidated.
-    /// <para>修补选定的 ZIP 成员并原子发布新归档。成员按源顺序以不压缩方式重写，源中不存在的替换条目会被追加，
-    /// 因此外层 OTA 签名总是失效。</para>
+    /// Patches selected ZIP members and atomically publishes the new archive.
+    /// <para>修补选定的 ZIP 成员并原子发布新归档。</para>
     /// </summary>
     /// <param name="inputPath">
     /// Source OTA ZIP read through <see cref="ZipFile.OpenRead(string)"/>; it stays open for reading only and
@@ -554,14 +551,8 @@ public static class OtaZipPatchService
     }
 
     /// <summary>
-    /// Verifies ZIP structure, A/B payload members and payload properties. Duplicate or oversized entries, a
-    /// missing <c>payload_properties.txt</c>, an invalid <c>CrAU</c> magic, and <c>FILE_HASH</c>,
-    /// <c>FILE_SIZE</c>, <c>METADATA_HASH</c> or <c>METADATA_SIZE</c> disagreements with the stored Payload are
-    /// reported as errors; SHA-256 digests are compared as the Base64 text written in the properties file.
-    /// <para>校验 ZIP 结构、A/B payload 成员以及 payload 属性。条目重复或过大、缺少
-    /// <c>payload_properties.txt</c>、<c>CrAU</c> 魔数无效，以及与归档内 Payload 不符的 <c>FILE_HASH</c>、
-    /// <c>FILE_SIZE</c>、<c>METADATA_HASH</c> 或 <c>METADATA_SIZE</c> 都作为错误上报；SHA-256 摘要按属性文件中
-    /// 记录的 Base64 文本进行比较。</para>
+    /// Verifies ZIP structure, A/B payload members and payload properties.
+    /// <para>校验 ZIP 结构、A/B payload 成员以及 payload 属性。</para>
     /// </summary>
     /// <param name="zipPath">
     /// Archive opened for reading only. A missing or unreadable file is reported through

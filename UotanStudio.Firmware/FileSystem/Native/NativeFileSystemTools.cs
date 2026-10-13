@@ -19,8 +19,8 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
     private const int MaximumOutputChars = 16 * 1024;
 
     /// <summary>
-    /// Translates a host path into the form the native tools see: plain full-path resolution outside Windows, a synchronous one-shot <c>wslpath</c> process inside the configured WSL distribution on Windows. Asynchronous callers on Windows should prefer <see cref="PathForToolAsync"/> so the WSL round trip does not occupy a thread.
-    /// <para>将主机路径转换为本机工具可见的形式：非 Windows 平台直接解析完整路径；Windows 在已配置的 WSL 发行版内以一次性同步进程运行 <c>wslpath</c>。Windows 上的异步调用方应优先使用 <see cref="PathForToolAsync"/>，避免 WSL 往返占用线程。</para>
+    /// Translates a host path into the form the native tools see.
+    /// <para>把主机路径转换为本机工具可见的形式。</para>
     /// </summary>
     /// <param name="path">Host path resolved with <c>Path.GetFullPath</c> before translation.
     /// <para>转换前先经 <c>Path.GetFullPath</c> 解析的主机路径。</para></param>
@@ -169,8 +169,8 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
     }
 
     /// <summary>
-    /// Starts one tool process without a shell, merging stdout and stderr into a single capture bounded at 16384 characters. On Windows the tool runs through <c>wsl.exe -d &lt;distribution&gt; -- &lt;tool&gt;</c>; elsewhere it is started directly. Cancellation kills the whole process tree and waits for the process to exit before rethrowing.
-    /// <para>以无 shell 方式启动一个工具进程，并把 stdout 与 stderr 合并捕获、上限 16384 字符。Windows 下工具通过 <c>wsl.exe -d &lt;发行版&gt; -- &lt;工具&gt;</c> 运行；其他平台直接启动。取消时终止整个进程树，并等待进程退出后再重新抛出。</para>
+    /// Starts one tool process without a shell and captures its merged output.
+    /// <para>以无 shell 方式启动一个工具进程并捕获其合并输出。</para>
     /// </summary>
     /// <param name="tool">Executable name started directly on Linux, or the command run inside the WSL distribution on Windows.
     /// <para>Linux 下直接启动的可执行文件名；Windows 下为在 WSL 发行版内执行的命令。</para></param>
@@ -262,20 +262,8 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
     }
 
     /// <summary>
-    /// Builds an ext4 image from a staging directory with <c>make_ext4fs</c>, the image tool used for Android
-    /// 5.0 through 8.1 in the reference repack pipelines. The invocation is
-    /// <c>make_ext4fs -l [-a mount_point] [-T timestamp] [-b block_size] [-f fs_config] [-S file_contexts] [-L label] [-s partition_size] output_image source_dir</c>;
-    /// the option record maps one property per flag and the flag semantics follow the tool's own convention:
-    /// <c>-l</c> selects the labeled image mode the reference pipelines always pass, <c>-f</c> carries the Android
-    /// <c>fs_config</c> override file, and <c>-S</c> carries <c>file_contexts</c>. Work happens in a temporary file
-    /// next to <paramref name="outputPath"/>; the destination is replaced atomically only after the tool succeeded
-    /// and the produced image carries the EXT4 superblock magic at offset 1080.
-    /// <para>使用 <c>make_ext4fs</c>（参照重打包流水线在 Android 5.0–8.1 使用的镜像工具）从暂存目录构建 ext4 镜像。
-    /// 调用形式为 <c>make_ext4fs -l [-a 挂载点] [-T 时间戳] [-b 块大小] [-f fs_config] [-S file_contexts] [-L 标签] [-s 分区大小] 输出镜像 源目录</c>；
-    /// 选项记录按每个开关一个属性映射，开关语义以工具自身约定为准：<c>-l</c> 选择参照流水线始终传入的带标签镜像模式，
-    /// <c>-f</c> 传入 Android <c>fs_config</c> 覆盖文件，<c>-S</c> 传入 <c>file_contexts</c>。写入发生在
-    /// <paramref name="outputPath"/> 旁边的临时文件中；仅当工具成功且产出的镜像在偏移 1080 处携带 EXT4 超级块魔数时，
-    /// 才会原子替换目标文件。</para>
+    /// Builds an ext4 image from a staging directory with <c>make_ext4fs</c>.
+    /// <para>使用 <c>make_ext4fs</c> 从暂存目录构建 ext4 镜像。</para>
     /// </summary>
     /// <param name="sourceDir">Staging directory tree loaded into the image; must exist.
     /// <para>要装入镜像的暂存目录树；必须存在。</para></param>
@@ -396,17 +384,8 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
     }
 
     /// <summary>
-    /// Builds an ext4 image with the Android 9.0+ two-stage pipeline: <c>mke2fs -T android</c> (or the configured
-    /// type and profile) formats a pre-sized image file, then <c>e2fsdroid</c> injects content and metadata with
-    /// <c>-e fs_config -S file_contexts -a mount_point [-t sdk_version] [-T timestamp] [-u]</c>, matching the AOSP
-    /// <c>build_image</c> convention. Returns the <c>e2fsdroid</c> <see cref="NativeToolResult"/> after every stage
-    /// passed <see cref="RequireSuccess"/> and the image carries the EXT4 superblock magic at offset 1080; the
-    /// destination is replaced atomically from a temporary file only at that point.
-    /// <para>使用 Android 9.0+ 的两阶段流水线构建 ext4 镜像：<c>mke2fs -T android</c>（或配置的类型与配置文件模板）
-    /// 格式化预分配的镜像文件，随后 <c>e2fsdroid</c> 以 <c>-e fs_config -S file_contexts -a 挂载点 [-t sdk_version]
-    /// [-T 时间戳] [-u]</c> 注入内容与元数据，与 AOSP <c>build_image</c> 约定一致。每个阶段都通过
-    /// <see cref="RequireSuccess"/> 且镜像在偏移 1080 处携带 EXT4 超级块魔数后才返回 <c>e2fsdroid</c> 的
-    /// <see cref="NativeToolResult"/>；此时才用临时文件原子替换目标。</para>
+    /// Builds an ext4 image from a staging directory with the Android 9.0+ <c>mke2fs</c> and <c>e2fsdroid</c> pipeline.
+    /// <para>使用 Android 9.0+ 的 <c>mke2fs</c> 与 <c>e2fsdroid</c> 两阶段流水线从暂存目录构建 ext4 镜像。</para>
     /// </summary>
     /// <param name="sourceDir">Staging directory tree loaded by <c>e2fsdroid</c>; must exist.
     /// <para>由 <c>e2fsdroid</c> 装载的暂存目录树；必须存在。</para></param>

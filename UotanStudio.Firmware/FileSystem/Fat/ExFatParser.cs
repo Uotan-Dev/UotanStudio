@@ -6,17 +6,8 @@ using UotanStudio.Firmware.Core;
 namespace UotanStudio.Firmware.FileSystem.Fat;
 
 /// <summary>
-/// Read-only view over an exFAT volume image. The on-disk decoding is delegated to the managed
-/// DiscUtils exFAT implementation; this type adds the bounded-input guards the firmware pipeline
-/// requires: a structural boot-record check before the library is engaged, ceiling checks on the
-/// declared sector geometry and the in-memory allocation table, and the shared entry-count and depth
-/// limits of the directory walk. A vendor volume whose declared capacity exceeds the file it ships in
-/// still yields every entry the image genuinely backs; the entries past the end are reported instead of
-/// failing the whole image.
-/// <para>exFAT 卷镜像的只读视图。磁盘解码交给托管的 DiscUtils exFAT 实现，本类型补上固件流水线面对不可信
-/// 输入时的约束：调用库之前先做结构化引导记录校验、对声明的扇区几何与内存中的文件分配表大小设置上限，并复用
-/// 目录遍历共用的条目数与深度上限。声明容量大于实际文件长度的厂商卷仍能解出镜像真实覆盖的条目，超出镜像末尾
-/// 的条目只做报告，不会让整张镜像失败。</para>
+/// Read-only view over an exFAT volume image, decoding through the managed DiscUtils exFAT implementation behind bounded-input guards: a structural boot-record check, ceilings on the sector geometry and the allocation table, and the shared entry-count and depth limits of the directory walk.
+/// <para>exFAT 卷镜像的只读视图，磁盘解码委托给托管的 DiscUtils exFAT 实现，并加有不可信输入约束：结构化引导记录校验、扇区几何与文件分配表上限，以及目录遍历共用的条目数与深度上限。</para>
 /// </summary>
 public sealed class ExFatParser : IDisposable
 {

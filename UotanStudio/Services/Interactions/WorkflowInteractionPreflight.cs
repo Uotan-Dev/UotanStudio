@@ -5,7 +5,8 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.Interactions;
 
-/// <summary>Checks the complete graph before any file, device or interaction effect is executed.</summary>
+/// <summary>Checks the complete graph before any file, device or interaction effect is executed.
+/// <para>在执行任何文件、设备或交互效果之前检查完整的图。</para></summary>
 internal static class WorkflowInteractionPreflight
 {
     internal static string? Validate(IReadOnlyList<FlowNodeViewModel> nodes, IWorkflowInteractionService host, bool supportsDocuments = false)
@@ -29,10 +30,17 @@ internal static class WorkflowInteractionPreflight
     }
 
     /// <summary>
-    /// <para>图内存在破坏性设备操作时请求用户显式确认；未获同意或宿主不支持交互时返回拒绝原因，否则返回 <c>null</c>。</para>
-    /// Asks for explicit user consent when the graph contains destructive device operations; returns a rejection
-    /// reason when consent is missing or the host cannot ask, otherwise <c>null</c>.
+    /// Asks for explicit user consent when the graph contains destructive device operations and returns a
+    /// rejection reason when consent is missing or interaction requests are unsupported.
+    /// <para>图内存在破坏性设备操作时请求用户显式确认；未获同意或不支持交互请求时返回拒绝原因。</para>
     /// </summary>
+    /// <param name="nodes">The graph nodes to inspect. <para>待检查的图节点。</para></param>
+    /// <param name="host">The interaction service that presents the consent request.
+    /// <para>用于呈现确认请求的交互服务。</para></param>
+    /// <param name="cancellationToken">Cancellation for the consent request.
+    /// <para>确认请求的取消令牌。</para></param>
+    /// <returns>The rejection reason, or <c>null</c> when consent was obtained or none is needed.
+    /// <para>拒绝原因；已获同意或无需同意时为 <c>null</c>。</para></returns>
     internal static async Task<string?> ConfirmDestructiveAsync(
         IReadOnlyList<FlowNodeViewModel> nodes, IWorkflowInteractionService host, CancellationToken cancellationToken)
     {

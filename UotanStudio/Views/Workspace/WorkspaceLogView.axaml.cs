@@ -6,7 +6,10 @@ using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Views.Workspace;
 
-/// <summary>Displays workspace log entries with shared incremental rendering and scrolling.</summary>
+/// <summary>
+/// Displays workspace log entries with shared incremental rendering and scrolling.
+/// <para>以共享的增量渲染与滚动方式显示工作区日志条目。</para>
+/// </summary>
 public partial class WorkspaceLogView : UserControl
 {
     private readonly LogTextPresenter<WorkspaceLogViewModel.LogEntryViewModel> _presenter;

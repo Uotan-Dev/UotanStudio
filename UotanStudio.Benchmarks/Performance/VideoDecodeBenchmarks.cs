@@ -6,27 +6,10 @@ using UotanStudio.Media.Decoding;
 namespace UotanStudio.Benchmarks.Performance;
 
 /// <summary>
-/// Decode-rate baseline for the screen-mirroring video path. The GPU backends are measured with both
-/// readback shapes so the cost of the host-memory round trip is visible: NV12 planes (the presenter and
-/// the bitmap fallback both consume them) versus a GPU color convert to BGRA.
-/// <para>投屏视频路径的解码速率基线。GPU 后端按两种回读形态测量，使宿主内存往返的代价可见：
-/// NV12 平面（呈现器与位图回退都可消费）对比先在 GPU 转成 BGRA。</para>
+/// Decode-rate baseline for the screen-mirroring video path, comparing NV12 plane readback with a
+/// GPU color convert to BGRA.
+/// <para>投屏视频路径的解码速率基线，比较 NV12 平面回读与 GPU 色彩转换到 BGRA。</para>
 /// </summary>
-/// <remarks>
-/// <para>
-/// Requires a captured Annex-B elementary stream plus its coded size, because this repository carries no
-/// video corpus and no decoder here can synthesize a bitstream: set <c>UOTAN_BENCH_H264=&lt;path&gt;</c>
-/// and <c>UOTAN_BENCH_H264_SIZE=1600x896</c>, then run
-/// <c>dotnet run -c Release --project UotanStudio.Benchmarks -- --filter *VideoDecode*</c>.
-/// Each console line reports decoded frames divided by the measured duration of the last pass.
-/// </para>
-/// <para>
-/// 需要一段已抓取的 Annex-B 裸流及编码尺寸：本仓库不含视频语料，也没有可生成码流的路径。
-/// 设置 <c>UOTAN_BENCH_H264=&lt;路径&gt;</c> 与 <c>UOTAN_BENCH_H264_SIZE=1600x896</c> 后运行
-/// <c>dotnet run -c Release --project UotanStudio.Benchmarks -- --filter *VideoDecode*</c>。
-/// 控制台每行为解码帧数除以最近一次遍历的实测耗时。
-/// </para>
-/// </remarks>
 [MemoryDiagnoser]
 public class VideoDecodeBenchmarks
 {

@@ -11,24 +11,24 @@ using UotanStudio.Services.Compare;
 namespace UotanStudio.ViewModels.Compare;
 
 /// <summary>
-/// <para>对比文档：以「文件列」的形式并排展示目录树 / 文件内容，既可作为普通文件浏览器使用，也可以
-/// 在其中两列之间开启对比。列数不设上限（浏览用），开启对比后只使用其中两列。</para>
-/// <para>对比逻辑与 Beyond Compare 一致：目录对比把两侧压平成**同一份对齐行列表**——同名条目落在同一行、
-/// 单侧条目在另一侧自动留空、差异行整行变色、两侧共用一套展开状态（一侧展开即两侧同步展开），两栏并排
-/// 滚动；双击文件不占用当前视图，而是在新标签打开文件对比。</para>
 /// Compare document: file columns laid out side by side, each showing a directory tree or a file's content,
 /// so it doubles as a plain file browser while any two columns can be compared. The comparison follows
 /// Beyond Compare's logic: a folder comparison flattens both sides into one aligned row list — same-name
 /// entries share a row, single-side entries stay blank on the other side, differing rows are coloured as a
 /// whole, both sides share one expansion state (expanding one side expands the other) and the panes scroll
 /// together; double-clicking a file opens its comparison in a new tab instead of taking over this view.
+/// <para>对比文档：以「文件列」的形式并排展示目录树 / 文件内容，既可作为普通文件浏览器使用，也可以
+/// 在其中两列之间开启对比。列数不设上限（浏览用），开启对比后只使用其中两列。</para>
+/// <para>对比逻辑与 Beyond Compare 一致：目录对比把两侧压平成**同一份对齐行列表**——同名条目落在同一行、
+/// 单侧条目在另一侧自动留空、差异行整行变色、两侧共用一套展开状态（一侧展开即两侧同步展开），两栏并排
+/// 滚动；双击文件不占用当前视图，而是在新标签打开文件对比。</para>
 /// </summary>
 public sealed partial class CompareViewModel : Document
 {
     /// <summary>
-    /// <para>文档打开时的默认列数：两列既是最常见的浏览布局，也是对比所需的列数。</para>
     /// Columns created when the document opens: two columns is both the common browsing layout and the number
     /// a comparison needs.
+    /// <para>文档打开时的默认列数：两列既是最常见的浏览布局，也是对比所需的列数。</para>
     /// </summary>
     private const int DefaultColumnCount = 2;
 
@@ -80,109 +80,109 @@ public sealed partial class CompareViewModel : Document
     private const long MaxTextUndoBytes = 24L * 1024 * 1024;
 
     /// <summary>
-    /// <para>文档中的文件列；可以任意追加，对比只使用其中两列。</para>
     /// The document's file columns; any number can be appended and a comparison uses two of them.
+    /// <para>文档中的文件列；可以任意追加，对比只使用其中两列。</para>
     /// </summary>
     public ObservableCollection<CompareColumnViewModel> Columns { get; } = [];
 
     /// <summary>
-    /// <para>对比后端：列内容读取（文本/元数据）、目录比对与文件复制的边界。</para>
     /// The comparison backend: the boundary for column content reads (text/metadata), directory comparison and
     /// file copy.
+    /// <para>对比后端：列内容读取（文本/元数据）、目录比对与文件复制的边界。</para>
     /// </summary>
     internal IComparisonService Comparison => _comparison;
 
     /// <summary>
-    /// <para>左侧列路径：对比中为左列路径，否则为第一个文件列的路径（供会话快照持久化）。</para>
     /// The left column's path: the compare left column while comparing, otherwise the first file column (used
     /// by the session snapshot).
+    /// <para>左侧列路径：对比中为左列路径，否则为第一个文件列的路径（供会话快照持久化）。</para>
     /// </summary>
     public string LeftPath => (_leftColumn ?? Columns.ElementAtOrDefault(0))?.Path ?? string.Empty;
 
     /// <summary>
-    /// <para>右侧列路径：对比中为右列路径，否则为第二个文件列的路径（供会话快照持久化）。</para>
     /// The right column's path: the compare right column while comparing, otherwise the second file column
     /// (used by the session snapshot).
+    /// <para>右侧列路径：对比中为右列路径，否则为第二个文件列的路径（供会话快照持久化）。</para>
     /// </summary>
     public string RightPath => (_rightColumn ?? Columns.ElementAtOrDefault(1))?.Path ?? string.Empty;
 
     /// <summary>
-    /// <para>文档中是否还没有任何内容（驱动拖入提示的显示）。</para>
     /// Whether the document holds no content yet (drives the drop hint).
+    /// <para>文档中是否还没有任何内容（驱动拖入提示的显示）。</para>
     /// </summary>
     public bool IsEmptyDocument => Columns.All(column => !column.HasPath);
 
     /// <summary>
-    /// <para>是否正在对比：目录对比时两列显示同一份对齐的目录树行，文件对比时显示对齐的差异行。</para>
     /// Whether a comparison is active: a folder comparison shows both columns the same aligned tree rows, and a
     /// file comparison shows aligned diff rows.
+    /// <para>是否正在对比：目录对比时两列显示同一份对齐的目录树行，文件对比时显示对齐的差异行。</para>
     /// </summary>
     [ObservableProperty] private bool _isComparing;
 
     /// <summary>
-    /// <para>当前选中行在 <see cref="Rows"/> 中的索引；无选中时重置为 -1。两栏共享同一份行列表，
-    /// 因此选中索引就是两侧共同的行号。</para>
     /// The index of the selected row within <see cref="Rows"/>; -1 when nothing is selected. Both panes share
     /// one row list, so the selection index is the row number on both sides.
+    /// <para>当前选中行在 <see cref="Rows"/> 中的索引；无选中时重置为 -1。两栏共享同一份行列表，
+    /// 因此选中索引就是两侧共同的行号。</para>
     /// </summary>
     [ObservableProperty] private int _selectedIndex = -1;
 
     /// <summary>
-    /// <para>差异导航滚动请求：由上一处/下一处差异命令写入目标行索引，视图据此把两列
-    /// 顶部对齐滚动到该行；普通点选不写此属性（不触发滚动）。先写 -1 再写目标值以保证
-    /// 同一索引重复导航也能再次触发属性通知。</para>
     /// Diff-navigation scroll request: written by the prev/next-diff commands with the target row index; the
     /// view top-aligns both columns to that row. Plain clicks never write it (no scroll happens). Written as
     /// -1 first, then the target, so re-navigating to the same index still raises a property-change
     /// notification.
+    /// <para>差异导航滚动请求：由上一处/下一处差异命令写入目标行索引，视图据此把两列
+    /// 顶部对齐滚动到该行；普通点选不写此属性（不触发滚动）。先写 -1 再写目标值以保证
+    /// 同一索引重复导航也能再次触发属性通知。</para>
     /// </summary>
     [ObservableProperty] private int _scrollToIndex = -1;
 
     /// <summary>
-    /// <para>是否正在后台加载/比对（驱动忙碌指示）。</para>
     /// Whether a background load/comparison is running (drives the busy indicator).
+    /// <para>是否正在后台加载/比对（驱动忙碌指示）。</para>
     /// </summary>
     [ObservableProperty] private bool _isBusy;
 
     /// <summary>
-    /// <para>是否存在错误（驱动错误区显示）。</para>
     /// Whether an error is present (drives the error-section visibility).
+    /// <para>是否存在错误（驱动错误区显示）。</para>
     /// </summary>
     [ObservableProperty] private bool _hasError;
 
     /// <summary>
-    /// <para>最后一次操作错误文本；为空表示无错误。</para>
     /// The last operation error text; empty means no error.
+    /// <para>最后一次操作错误文本；为空表示无错误。</para>
     /// </summary>
     [ObservableProperty] private string _errorMessage = string.Empty;
 
     /// <summary>
-    /// <para>相同条目数（文件夹对比）。</para>
     /// Count of equal items (folder comparison).
+    /// <para>相同条目数（文件夹对比）。</para>
     /// </summary>
     [ObservableProperty] private int _equalCount;
 
     /// <summary>
-    /// <para>不同条目数（文件夹对比）。</para>
     /// Count of different items (folder comparison).
+    /// <para>不同条目数（文件夹对比）。</para>
     /// </summary>
     [ObservableProperty] private int _differentCount;
 
     /// <summary>
-    /// <para>仅左侧条目数（文件夹对比）。</para>
     /// Count of left-only items (folder comparison).
+    /// <para>仅左侧条目数（文件夹对比）。</para>
     /// </summary>
     [ObservableProperty] private int _leftOnlyCount;
 
     /// <summary>
-    /// <para>仅右侧条目数（文件夹对比）。</para>
     /// Count of right-only items (folder comparison).
+    /// <para>仅右侧条目数（文件夹对比）。</para>
     /// </summary>
     [ObservableProperty] private int _rightOnlyCount;
 
     /// <summary>
-    /// <para>当前对比模式；未对比时为 <see cref="CompareMode.None"/>。</para>
     /// The active comparison mode; <see cref="CompareMode.None"/> while not comparing.
+    /// <para>当前对比模式；未对比时为 <see cref="CompareMode.None"/>。</para>
     /// </summary>
     public CompareMode Mode
     {
@@ -206,8 +206,8 @@ public sealed partial class CompareViewModel : Document
     private CompareMode _mode;
 
     /// <summary>
-    /// <para>二进制模式的当前视图（元数据或十六进制）。</para>
     /// The binary mode's active view (metadata or hex).
+    /// <para>二进制模式的当前视图（元数据或十六进制）。</para>
     /// </summary>
     public BinaryViewKind BinaryViewKind
     {
@@ -227,11 +227,11 @@ public sealed partial class CompareViewModel : Document
     private BinaryViewKind _binaryViewKind = BinaryViewKind.Metadata;
 
     /// <summary>
-    /// <para>当前对比结果行；两栏共享同一份列表（分别渲染左侧/右侧单元格），因此同名条目落在同一行、
-    /// 单侧条目在另一侧留空。目录对比给的是压平后的目录树行，文件对比给的是差异行。</para>
     /// The current comparison rows; both panes share one list (rendering the left/right cells respectively), so
     /// same-name entries share a row and single-side entries stay blank on the other side. A folder comparison
     /// supplies flattened tree rows and a file comparison supplies diff rows.
+    /// <para>当前对比结果行；两栏共享同一份列表（分别渲染左侧/右侧单元格），因此同名条目落在同一行、
+    /// 单侧条目在另一侧留空。目录对比给的是压平后的目录树行，文件对比给的是差异行。</para>
     /// </summary>
     public IReadOnlyList<CompareRowViewModel>? Rows
     {
@@ -260,21 +260,21 @@ public sealed partial class CompareViewModel : Document
     private IReadOnlyList<CompareRowViewModel>? _rows;
 
     /// <summary>
-    /// <para>是否处于文件夹对比模式。</para>
     /// Whether folder-compare mode is active.
+    /// <para>是否处于文件夹对比模式。</para>
     /// </summary>
     public bool IsFolderMode => Mode == CompareMode.Folder;
 
     /// <summary>
-    /// <para>是否处于文本对比模式。</para>
     /// Whether text-compare mode is active.
+    /// <para>是否处于文本对比模式。</para>
     /// </summary>
     public bool IsTextMode => Mode == CompareMode.Text;
 
     /// <summary>
-    /// <para>文本对比是否使用项目文本编辑器（两侧各一个编辑器，行=对齐槽，填充槽显示斜杠）。</para>
     /// Whether the text comparison uses the project's text editors (one per side, one line per aligned slot with slashes for
     /// fillers).
+    /// <para>文本对比是否使用项目文本编辑器（两侧各一个编辑器，行=对齐槽，填充槽显示斜杠）。</para>
     /// </summary>
     public bool IsTextEditorMode => IsComparing && Mode == CompareMode.Text && _textModel is not null;
 
@@ -288,19 +288,19 @@ public sealed partial class CompareViewModel : Document
     internal List<string> RealLines(bool leftSide) => _textModel?.RealLines(leftSide) ?? [];
 
     /// <summary>
-    /// <para>把编辑器的一次改动翻译成槽操作：编辑涉及的整行范围由视图换算成「起始槽号 + 原槽数 + 替换后的行」，
-    /// 这里统一落到模型上——行数不变时只改该侧内容；行数变化时按「本侧加行→对侧补填充槽 / 本侧删行→本侧留填充槽」
-    /// 维护两侧等长，并重建行投影、标记该侧已修改。</para>
     /// Translates one editor change into slot operations: the view converts the affected line range into "first slot + removed
     /// slots + replacement lines", and this applies it to the model — an unchanged line count only touches that side's
     /// content, while a changed count keeps both sides equal (a new line adds a filler on the other side, a deleted line
     /// leaves a filler on this side) and rebuilds the row projection and the modified flag.
+    /// <para>把编辑器的一次改动翻译成槽操作：编辑涉及的整行范围由视图换算成「起始槽号 + 原槽数 + 替换后的行」，
+    /// 这里统一落到模型上——行数不变时只改该侧内容；行数变化时按「本侧加行→对侧补填充槽 / 本侧删行→本侧留填充槽」
+    /// 维护两侧等长，并重建行投影、标记该侧已修改。</para>
     /// </summary>
-    /// <param name="leftSide"><para>是否为左侧。</para>Whether the left side changed.</param>
-    /// <param name="startSlot"><para>起始槽号（0 起）。</para>The first slot index (0-based).</param>
-    /// <param name="removedSlots"><para>被替换掉的槽数。</para>The number of replaced slots.</param>
-    /// <param name="lines"><para>替换后的行。</para>The replacement lines.</param>
-    /// <returns><para>光标应回到的槽号（0 起）与列。</para>The slot index and column the caret should return to.</returns>
+    /// <param name="leftSide">Whether the left side changed. <para>是否为左侧。</para></param>
+    /// <param name="startSlot">The first slot index (0-based). <para>起始槽号（0 起）。</para></param>
+    /// <param name="removedSlots">The number of replaced slots. <para>被替换掉的槽数。</para></param>
+    /// <param name="lines">The replacement lines. <para>替换后的行。</para></param>
+    /// <returns>The slot index and column the caret should return to. <para>光标应回到的槽号（0 起）与列。</para></returns>
     internal (int Slot, int Column) ApplyEditorLines(bool leftSide, int startSlot, int removedSlots, IReadOnlyList<string> lines)
     {
         if (_textModel is null)
@@ -328,13 +328,13 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>把一侧编辑器中选中的整行复制到另一侧相同的槽范围（Beyond Compare 的「复制到另一侧」）。</para>
     /// Copies the whole lines selected in one side's editor to the same slot range on the other side (Beyond Compare's "copy
     /// to other side").
+    /// <para>把一侧编辑器中选中的整行复制到另一侧相同的槽范围（Beyond Compare 的「复制到另一侧」）。</para>
     /// </summary>
-    /// <param name="fromLeftToRight"><para>是否从左复制到右。</para>Whether to copy from left to right.</param>
-    /// <param name="startSlot"><para>起始槽号（0 起）。</para>The first slot index (0-based).</param>
-    /// <param name="count"><para>复制的行数。</para>The number of lines to copy.</param>
+    /// <param name="fromLeftToRight">Whether to copy from left to right. <para>是否从左复制到右。</para></param>
+    /// <param name="startSlot">The first slot index (0-based). <para>起始槽号（0 起）。</para></param>
+    /// <param name="count">The number of lines to copy. <para>复制的行数。</para></param>
     internal void CopySlots(bool fromLeftToRight, int startSlot, int count)
     {
         if (_textModel is null || count <= 0)
@@ -402,10 +402,10 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>文本对比的一个撤销点：槽状态快照 + 两侧光标所在槽号。两侧编辑器共享同一份撤销历史，
-    /// 因此一次「两侧各改一处」的结构编辑永远一起撤销/重做，不会把两侧弄错位。</para>
     /// One undo point of a text comparison: a slot-state snapshot plus both sides' caret slots. Both editors share this single
     /// history, so a structural edit that touched both sides is always undone/redone as a unit and the panes can never drift.
+    /// <para>文本对比的一个撤销点：槽状态快照 + 两侧光标所在槽号。两侧编辑器共享同一份撤销历史，
+    /// 因此一次「两侧各改一处」的结构编辑永远一起撤销/重做，不会把两侧弄错位。</para>
     /// </summary>
     private sealed record TextUndoEntry(
         List<CompareTextSlotModel.SlotState> Slots,
@@ -419,14 +419,14 @@ public sealed partial class CompareViewModel : Document
     internal bool CanRedoText => _textRedo.Count > 0;
 
     /// <summary>
-    /// <para>记录一个撤销点（在把编辑器改动落到槽模型之前调用）：连续的行内输入在 600ms 内合并成一个撤销点，
-    /// 结构化操作（改行数）每次都单独成点。</para>
     /// Records an undo point (called before the editor change is applied to the slot model): consecutive in-line typing within
     /// 600 ms coalesces into one point, while a structural change (line count touched) always gets its own point.
+    /// <para>记录一个撤销点（在把编辑器改动落到槽模型之前调用）：连续的行内输入在 600ms 内合并成一个撤销点，
+    /// 结构化操作（改行数）每次都单独成点。</para>
     /// </summary>
-    /// <param name="structural"><para>是否改变了行数。</para>Whether the line count changed.</param>
-    /// <param name="leftSlot"><para>左侧光标槽号。</para>The left caret slot.</param>
-    /// <param name="rightSlot"><para>右侧光标槽号。</para>The right caret slot.</param>
+    /// <param name="structural">Whether the line count changed. <para>是否改变了行数。</para></param>
+    /// <param name="leftSlot">The left caret slot. <para>左侧光标槽号。</para></param>
+    /// <param name="rightSlot">The right caret slot. <para>右侧光标槽号。</para></param>
     internal void RecordTextUndoPoint(bool structural, int leftSlot, int rightSlot)
     {
         if (_textModel is null)
@@ -470,9 +470,9 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>撤销一次文本对比编辑：恢复上一个槽状态快照（当前状态进入重做栈），返回两侧光标应回到的槽号。</para>
     /// Undoes one text-comparison edit: restores the previous slot snapshot (the current state moves to the redo stack) and
     /// returns the slots both carets should return to.
+    /// <para>撤销一次文本对比编辑：恢复上一个槽状态快照（当前状态进入重做栈），返回两侧光标应回到的槽号。</para>
     /// </summary>
     internal (int LeftSlot, int RightSlot)? UndoText()
     {
@@ -511,17 +511,17 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>把编辑器里选中的内容复制到另一侧的相同位置：整行选中时复制这些槽；只选中一行里的一段文字时，
-    /// 用选中的文字替换对侧同一行相同列范围的内容（其余部分保留）。</para>
     /// Copies the editor selection to the same place on the other side: a whole-line selection copies those slots, while a partial
     /// selection inside one line replaces the counterpart's same column range with the selected text (the rest of the line is kept).
+    /// <para>把编辑器里选中的内容复制到另一侧的相同位置：整行选中时复制这些槽；只选中一行里的一段文字时，
+    /// 用选中的文字替换对侧同一行相同列范围的内容（其余部分保留）。</para>
     /// </summary>
-    /// <param name="fromLeftToRight"><para>是否从左复制到右。</para>Whether to copy from left to right.</param>
-    /// <param name="startSlot"><para>选区起始槽号（0 起）。</para>The selection's first slot (0-based).</param>
-    /// <param name="endSlot"><para>选区结束槽号（0 起）。</para>The selection's last slot (0-based).</param>
-    /// <param name="selectedText"><para>仅单行内部分选中时给出的选中文字；整行选中时为 <c>null</c>。</para>The selected text for a partial single-line selection; <c>null</c> for whole-line selections.</param>
-    /// <param name="startColumn"><para>部分选中的起始列（0 起）。</para>The partial selection's start column (0-based).</param>
-    /// <param name="endColumn"><para>部分选中的结束列（0 起）。</para>The partial selection's end column (0-based).</param>
+    /// <param name="fromLeftToRight">Whether to copy from left to right. <para>是否从左复制到右。</para></param>
+    /// <param name="startSlot">The selection's first slot (0-based). <para>选区起始槽号（0 起）。</para></param>
+    /// <param name="endSlot">The selection's last slot (0-based). <para>选区结束槽号（0 起）。</para></param>
+    /// <param name="selectedText">The selected text for a partial single-line selection; <c>null</c> for whole-line selections. <para>仅单行内部分选中时给出的选中文字；整行选中时为 <c>null</c>。</para></param>
+    /// <param name="startColumn">The partial selection's start column (0-based). <para>部分选中的起始列（0 起）。</para></param>
+    /// <param name="endColumn">The partial selection's end column (0-based). <para>部分选中的结束列（0 起）。</para></param>
     internal void CopyEditorSelection(
         bool fromLeftToRight,
         int startSlot,
@@ -552,21 +552,21 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>是否处于二进制对比模式。</para>
     /// Whether binary-compare mode is active.
+    /// <para>是否处于二进制对比模式。</para>
     /// </summary>
     public bool IsBinaryMode => Mode == CompareMode.Binary;
 
     /// <summary>
-    /// <para>是否具备打开十六进制差异视图的条件：两侧都有文件（单侧文件没有可比对的差异区间）。</para>
     /// Whether the hex-diff view is available: both sides must have a file (a single side has no diffable
     /// ranges).
+    /// <para>是否具备打开十六进制差异视图的条件：两侧都有文件（单侧文件没有可比对的差异区间）。</para>
     /// </summary>
     public bool CanShowHexView => _fileLeftPath.Length > 0 && _fileRightPath.Length > 0;
 
     /// <summary>
-    /// <para>状态栏汇总文本（目录对比的状态计数，或文件对比的差异汇总）。</para>
     /// The status-bar summary text (folder-status counts, or a file-diff summary).
+    /// <para>状态栏汇总文本（目录对比的状态计数，或文件对比的差异汇总）。</para>
     /// </summary>
     public string StatsText
     {
@@ -594,12 +594,12 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>把一个路径加入对比文档：优先复用还没有内容的文件列，不足时在末尾追加新列，
-    /// 并按其类型显示目录树或文件内容（不做对比）。</para>
     /// Adds a path to the compare document: reuses the first empty file column, appends a new column when none
     /// is free, and shows a directory tree or the file's content (no comparison runs).
+    /// <para>把一个路径加入对比文档：优先复用还没有内容的文件列，不足时在末尾追加新列，
+    /// 并按其类型显示目录树或文件内容（不做对比）。</para>
     /// </summary>
-    /// <param name="path"><para>选中的文件或目录路径。</para>The selected file or directory path.</param>
+    /// <param name="path">The selected file or directory path. <para>选中的文件或目录路径。</para></param>
     public Task AddComparisonPathAsync(string path)
     {
         var fullPath = Path.GetFullPath(path);
@@ -615,36 +615,36 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>打开文件比较：两个文件分别放入前两个文件列并立即开始对比（一侧留空时该侧留白，
-    /// 用于「在新标签打开单侧文件对比」）。</para>
     /// Opens a file comparison: the two files fill the first two file columns and the comparison starts
     /// immediately (an empty side stays blank, which is how a single-side file comparison is opened in a new
     /// tab).
+    /// <para>打开文件比较：两个文件分别放入前两个文件列并立即开始对比（一侧留空时该侧留白，
+    /// 用于「在新标签打开单侧文件对比」）。</para>
     /// </summary>
-    /// <param name="leftPath"><para>左文件路径；可留空。</para>Left file path; may be empty.</param>
-    /// <param name="rightPath"><para>右文件路径；可留空。</para>Right file path; may be empty.</param>
+    /// <param name="leftPath">Left file path; may be empty. <para>左文件路径；可留空。</para></param>
+    /// <param name="rightPath">Right file path; may be empty. <para>右文件路径；可留空。</para></param>
     public Task OpenCompareFilesAsync(string leftPath, string rightPath)
         => OpenComparePairAsync(leftPath, rightPath);
 
     /// <summary>
-    /// <para>打开文件夹比较：两个目录分别放入前两个文件列并立即开始对比。</para>
     /// Opens a folder comparison: the two directories fill the first two file columns and the comparison
     /// starts immediately.
+    /// <para>打开文件夹比较：两个目录分别放入前两个文件列并立即开始对比。</para>
     /// </summary>
-    /// <param name="leftDirectory"><para>左目录路径。</para>Left directory path.</param>
-    /// <param name="rightDirectory"><para>右目录路径。</para>Right directory path.</param>
+    /// <param name="leftDirectory">Left directory path. <para>左目录路径。</para></param>
+    /// <param name="rightDirectory">Right directory path. <para>右目录路径。</para></param>
     public Task OpenCompareFoldersAsync(string leftDirectory, string rightDirectory)
         => OpenComparePairAsync(leftDirectory, rightDirectory);
 
     /// <summary>
-    /// <para>按路径加载文件列（拖入的文件/文件夹与「添加文件夹」对话框共用）：每个路径占用一个文件列
-    /// （优先复用空列），不做自动对比——需要对比时由「开启对比」按钮明确触发。</para>
     /// Loads columns from paths (shared by dropped files/folders and the "add folder" dialog): each path takes
     /// one file column (reusing empty columns first) without starting a comparison; the compare button triggers
     /// that explicitly.
+    /// <para>按路径加载文件列（拖入的文件/文件夹与「添加文件夹」对话框共用）：每个路径占用一个文件列
+    /// （优先复用空列），不做自动对比——需要对比时由「开启对比」按钮明确触发。</para>
     /// </summary>
-    /// <param name="paths"><para>待加载的路径列表。</para>The paths to load.</param>
-    /// <returns><para>是否消费了全部路径（路径全部存在且至少一个）。</para>Whether every path was consumed (all exist and at least one).</returns>
+    /// <param name="paths">The paths to load. <para>待加载的路径列表。</para></param>
+    /// <returns>Whether every path was consumed (all exist and at least one). <para>是否消费了全部路径（路径全部存在且至少一个）。</para></returns>
     public async Task<bool> TryAddPathsAsync(IReadOnlyList<string> paths)
     {
         if (IsComparing)
@@ -678,10 +678,10 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>关闭文档时释放列与对比状态（文档关闭事件调用），取消进行中的加载并回收懒加载的
-    /// 十六进制集合。</para>
     /// Releases the columns and comparison state when the document closes (called by the document-close event),
     /// cancelling in-flight loads and disposing the lazily-loaded hex collection.
+    /// <para>关闭文档时释放列与对比状态（文档关闭事件调用），取消进行中的加载并回收懒加载的
+    /// 十六进制集合。</para>
     /// </summary>
     public void Cleanup()
     {
@@ -709,11 +709,11 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>开启/结束对比命令：浏览状态校验两列后开始对比，对比中再次点击结束对比并把两列还原为浏览
-    /// 状态（目录重新折叠为普通浏览树）。</para>
     /// Start/stop-compare command: validates the two columns and starts the comparison while browsing, and ends
     /// it (restoring both columns to browsing, with directories collapsed back into plain browsing trees) when
     /// pressed again.
+    /// <para>开启/结束对比命令：浏览状态校验两列后开始对比，对比中再次点击结束对比并把两列还原为浏览
+    /// 状态（目录重新折叠为普通浏览树）。</para>
     /// </summary>
     [RelayCommand]
     private async Task ToggleCompareAsync()
@@ -728,9 +728,9 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>下一处差异命令：在文本/十六进制模式下从选中行之后查找差异行并选中，绕回循环。</para>
     /// Next-diff command: in text/hex mode finds the next diff row after the selected one and selects it,
     /// wrapping around.
+    /// <para>下一处差异命令：在文本/十六进制模式下从选中行之后查找差异行并选中，绕回循环。</para>
     /// </summary>
     [RelayCommand]
     private void NextDiff()
@@ -754,9 +754,9 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>上一处差异命令：在文本/十六进制模式下从选中行之前查找差异行并选中，绕回循环。</para>
     /// Previous-diff command: in text/hex mode finds the previous diff row before the selected one and selects
     /// it, wrapping around.
+    /// <para>上一处差异命令：在文本/十六进制模式下从选中行之前查找差异行并选中，绕回循环。</para>
     /// </summary>
     [RelayCommand]
     private void PrevDiff()
@@ -780,11 +780,11 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>切换二进制视图命令：在元数据与十六进制差异视图间切换并重建行；
-    /// 切换前释放旧十六进制集合，切回元数据时使用缓存结果避免重复读取。</para>
     /// Toggle-binary-view command: switches between the metadata and hex-diff views and rebuilds the rows; the
     /// old hex collection is disposed first and switching back to metadata reuses the cached metadata to avoid
     /// re-reading.
+    /// <para>切换二进制视图命令：在元数据与十六进制差异视图间切换并重建行；
+    /// 切换前释放旧十六进制集合，切回元数据时使用缓存结果避免重复读取。</para>
     /// </summary>
     [RelayCommand]
     private async Task ToggleHexView()
@@ -855,10 +855,10 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>在文档末尾追加一个空文件列。</para>
     /// Appends an empty file column to the document.
+    /// <para>在文档末尾追加一个空文件列。</para>
     /// </summary>
-    /// <returns><para>新建的文件列。</para>The new file column.</returns>
+    /// <returns>The new file column. <para>新建的文件列。</para></returns>
     internal CompareColumnViewModel AddColumn()
     {
         var column = new CompareColumnViewModel(this);
@@ -867,12 +867,12 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>移除一个文件列；关闭参与对比的列会先结束对比（并等待两列的浏览内容载入完成，避免移除后仍有
-    /// 后台读取在跑），最后一列不会被移除。</para>
     /// Removes a file column; closing a compare column ends the comparison first (awaiting the columns' browsing
     /// reload so no background read outlives the removal), and the last remaining column is never removed.
+    /// <para>移除一个文件列；关闭参与对比的列会先结束对比（并等待两列的浏览内容载入完成，避免移除后仍有
+    /// 后台读取在跑），最后一列不会被移除。</para>
     /// </summary>
-    /// <param name="column"><para>被移除的文件列。</para>The column to remove.</param>
+    /// <param name="column">The column to remove. <para>被移除的文件列。</para></param>
     internal async Task RemoveColumnAsync(CompareColumnViewModel column)
     {
         if (!Columns.Contains(column) || Columns.Count <= 1)
@@ -890,11 +890,11 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>用当前两列重新执行当前对比（目录对比重新比对目录并重建对齐行列表，文件对比重新读取该文件对）。
-    /// 对比中任一侧点击刷新都会走这里，因此左右两侧同时刷新。</para>
     /// Re-runs the active comparison with the current two columns (a folder comparison re-compares the
     /// directories and rebuilds the aligned rows, a file comparison re-reads the pair). Refreshing either side
     /// lands here, so both sides refresh together.
+    /// <para>用当前两列重新执行当前对比（目录对比重新比对目录并重建对齐行列表，文件对比重新读取该文件对）。
+    /// 对比中任一侧点击刷新都会走这里，因此左右两侧同时刷新。</para>
     /// </summary>
     internal async Task RefreshCompareAsync()
     {
@@ -917,10 +917,10 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>对比中「返回上一级」：把左右两侧同时切到各自的父目录并重新比对（一侧已在根目录时整体不动作）。
-    /// 两侧同时操作，保证对齐关系不被破坏。</para>
     /// "Go up" while comparing: moves both sides to their parent directories at once and re-compares (a side
     /// already at a root aborts the whole move). Both sides move together so the alignment stays intact.
+    /// <para>对比中「返回上一级」：把左右两侧同时切到各自的父目录并重新比对（一侧已在根目录时整体不动作）。
+    /// 两侧同时操作，保证对齐关系不被破坏。</para>
     /// </summary>
     internal async Task GoUpCompareAsync()
     {
@@ -954,12 +954,12 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>展开/折叠文件夹对比中的节点：两侧共享同一节点，因此一侧展开即两侧同步展开，
-    /// 并立即重建对齐行列表（子项紧跟在父项后面）。</para>
     /// Expands or collapses a node of the folder comparison: both sides share one node, so expanding on one
     /// side expands the other, and the aligned row list is rebuilt immediately (children follow their parent).
+    /// <para>展开/折叠文件夹对比中的节点：两侧共享同一节点，因此一侧展开即两侧同步展开，
+    /// 并立即重建对齐行列表（子项紧跟在父项后面）。</para>
     /// </summary>
-    /// <param name="node"><para>被展开/折叠的对比节点。</para>The comparison node to expand or collapse.</param>
+    /// <param name="node">The comparison node to expand or collapse. <para>被展开/折叠的对比节点。</para></param>
     internal async Task ToggleTreeExpansionAsync(CompareTreeNodeViewModel node)
     {
         if (!IsComparing || _compareTreeRoot is null)
@@ -977,13 +977,13 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>文件夹对比中双击文件：按相对路径解析两侧的完整路径（对侧不存在时留空），并请求在新标签中
-    /// 打开该文件的对比——当前视图保持目录对比不被打断。</para>
     /// Double-clicking a file in a folder comparison: resolves both sides' full paths from the relative path
     /// (empty when the counterpart is missing) and asks for the file comparison to open in a new tab, leaving
     /// the current view's folder comparison untouched.
+    /// <para>文件夹对比中双击文件：按相对路径解析两侧的完整路径（对侧不存在时留空），并请求在新标签中
+    /// 打开该文件的对比——当前视图保持目录对比不被打断。</para>
     /// </summary>
-    /// <param name="node"><para>被双击的文件节点。</para>The double-clicked file node.</param>
+    /// <param name="node">The double-clicked file node. <para>被双击的文件节点。</para></param>
     internal void OpenFileComparisonInNewTab(CompareTreeNodeViewModel node)
     {
         if (!IsComparing || Mode != CompareMode.Folder || node.IsDirectory)
@@ -1010,10 +1010,10 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>记录一条操作错误（列加载、路径校验、对比失败等）。</para>
     /// Records an operation error (column load, path validation, comparison failure).
+    /// <para>记录一条操作错误（列加载、路径校验、对比失败等）。</para>
     /// </summary>
-    /// <param name="message"><para>错误文本。</para>The error text.</param>
+    /// <param name="message">The error text. <para>错误文本。</para></param>
     internal void ReportError(string message)
     {
         HasError = true;
@@ -1031,11 +1031,11 @@ public sealed partial class CompareViewModel : Document
     internal void NotifyColumnsChanged() => OnPropertyChanged(nameof(IsEmptyDocument));
 
     /// <summary>
-    /// <para>某一侧的文件是否被编辑过（文本对比中修改文本或「复制到另一侧」之后置位，保存后清除）。</para>
     /// Whether one side's file has been edited (set after text edits or "copy to the other side" in a text comparison,
     /// cleared by saving).
+    /// <para>某一侧的文件是否被编辑过（文本对比中修改文本或「复制到另一侧」之后置位，保存后清除）。</para>
     /// </summary>
-    /// <param name="side"><para>列的角色（左/右）。</para>The column's role (left/right).</param>
+    /// <param name="side">The column's role (left/right). <para>列的角色（左/右）。</para></param>
     internal bool IsFileDirty(CompareColumnSide side) => side == CompareColumnSide.Right ? _dirtyRight : _dirtyLeft;
 
     /// <summary>记录文本编辑（文本对比中任一侧文本被修改时由行模型回调）。</summary>
@@ -1081,23 +1081,23 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>记录两栏当前选中的行索引（视图在选中变化时写回）：文本对比的「复制到另一侧」按这些行执行；
-    /// 目录对比的复制按钮按行列表自身的选中项定位条目。</para>
     /// Records the currently selected row indices (written back by the view on selection changes): "copy to the other
     /// side" in a text comparison acts on them, while the folder comparison's copy button locates its entry through the
     /// row list's own selection.
+    /// <para>记录两栏当前选中的行索引（视图在选中变化时写回）：文本对比的「复制到另一侧」按这些行执行；
+    /// 目录对比的复制按钮按行列表自身的选中项定位条目。</para>
     /// </summary>
-    /// <param name="indices"><para>选中的行索引。</para>The selected row indices.</param>
+    /// <param name="indices">The selected row indices. <para>选中的行索引。</para></param>
     internal void UpdateRowSelection(IEnumerable<int> indices) => _selectedRowIndices = [.. indices];
 
     /// <summary>
-    /// <para>把选中行在某一侧的文本复制到同一行的另一侧（文本对比专用）：目标侧没有该行时补出一行，
-    /// 源侧没有该行时把目标侧该行删除（与 Beyond Compare 的「复制到另一侧」一致），并标记目标侧文件已修改。</para>
     /// Copies the selected rows' text from one side to the same rows on the other side (text comparisons only): a target
     /// side without the row gains one, and a source side without the row deletes the target's row (matching Beyond
     /// Compare's "copy to other side"), marking the target file modified.
+    /// <para>把选中行在某一侧的文本复制到同一行的另一侧（文本对比专用）：目标侧没有该行时补出一行，
+    /// 源侧没有该行时把目标侧该行删除（与 Beyond Compare 的「复制到另一侧」一致），并标记目标侧文件已修改。</para>
     /// </summary>
-    /// <param name="fromLeftToRight"><para>是否从左复制到右。</para>Whether to copy left to right.</param>
+    /// <param name="fromLeftToRight">Whether to copy left to right. <para>是否从左复制到右。</para></param>
     internal void CopySelectedTextRows(bool fromLeftToRight)
     {
         if (_textModel is null || _selectedRowIndices.Count == 0)
@@ -1112,16 +1112,16 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>把某一行在某一侧断开成两行（行内回车）：光标前留在原行，光标后成为紧随其后的新行，
-    /// 另一侧内容留在原行，因此新行只存在于被编辑的一侧。</para>
     /// Splits one row into two on the edited side (Enter inside a line): the text before the caret stays in the row and
     /// the text after it becomes the immediately following row, while the other side's line stays with the original row —
     /// so the new row exists only on the edited side.
+    /// <para>把某一行在某一侧断开成两行（行内回车）：光标前留在原行，光标后成为紧随其后的新行，
+    /// 另一侧内容留在原行，因此新行只存在于被编辑的一侧。</para>
     /// </summary>
-    /// <param name="row"><para>被断开的行。</para>The row being split.</param>
-    /// <param name="leftSide"><para>是否为左侧。</para>Whether the left side is edited.</param>
-    /// <param name="caretIndex"><para>光标位置。</para>The caret position.</param>
-    /// <returns><para>新行的索引与应放置的光标位置。</para>The new row's index and the caret position to restore.</returns>
+    /// <param name="row">The row being split. <para>被断开的行。</para></param>
+    /// <param name="leftSide">Whether the left side is edited. <para>是否为左侧。</para></param>
+    /// <param name="caretIndex">The caret position. <para>光标位置。</para></param>
+    /// <returns>The new row's index and the caret position to restore. <para>新行的索引与应放置的光标位置。</para></returns>
     internal (int Index, int Caret) SplitTextRow(CompareRowViewModel row, bool leftSide, int caretIndex)
     {
         if (_textRows is null)
@@ -1144,14 +1144,14 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>把某一行与下一行合并（行尾 Delete）：下一行在编辑侧的文本接到本行末尾；下一行在两侧都没有内容时
-    /// 整行移除。</para>
     /// Joins a row with the next one (Delete at the end of a line): the next row's text on the edited side is appended and
     /// the next row is removed entirely once it has no content on either side.
+    /// <para>把某一行与下一行合并（行尾 Delete）：下一行在编辑侧的文本接到本行末尾；下一行在两侧都没有内容时
+    /// 整行移除。</para>
     /// </summary>
-    /// <param name="row"><para>合并的起始行。</para>The row the join starts from.</param>
-    /// <param name="leftSide"><para>是否为左侧。</para>Whether the left side is edited.</param>
-    /// <returns><para>光标应回到的行索引与位置。</para>The row index and caret position to restore.</returns>
+    /// <param name="row">The row the join starts from. <para>合并的起始行。</para></param>
+    /// <param name="leftSide">Whether the left side is edited. <para>是否为左侧。</para></param>
+    /// <returns>The row index and caret position to restore. <para>光标应回到的行索引与位置。</para></returns>
     internal (int Index, int Caret) JoinTextRowWithNext(CompareRowViewModel row, bool leftSide)
     {
         if (_textRows is null)
@@ -1173,14 +1173,14 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>把某一行并入上一行（行首 Backspace）：本行在编辑侧的文本接到上一行末尾；本行在两侧都没有内容时
-    /// 整行移除。</para>
     /// Merges a row into the previous one (Backspace at the start of a line): this row's text on the edited side is
     /// appended to the previous row, and this row is removed entirely once it has no content on either side.
+    /// <para>把某一行并入上一行（行首 Backspace）：本行在编辑侧的文本接到上一行末尾；本行在两侧都没有内容时
+    /// 整行移除。</para>
     /// </summary>
-    /// <param name="row"><para>被合并的行。</para>The row being merged.</param>
-    /// <param name="leftSide"><para>是否为左侧。</para>Whether the left side is edited.</param>
-    /// <returns><para>光标应回到的行索引与位置。</para>The row index and caret position to restore.</returns>
+    /// <param name="row">The row being merged. <para>被合并的行。</para></param>
+    /// <param name="leftSide">Whether the left side is edited. <para>是否为左侧。</para></param>
+    /// <returns>The row index and caret position to restore. <para>光标应回到的行索引与位置。</para></returns>
     internal (int Index, int Caret) JoinTextRowWithPrevious(CompareRowViewModel row, bool leftSide)
     {
         if (_textRows is null)
@@ -1202,12 +1202,12 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>删除选中的行（在该侧清空这些行）：该侧的行被移除，另一侧仍有内容的行保留自己的内容；
-    /// 两侧都没有内容的行整行移除。</para>
     /// Deletes the selected rows on the edited side: that side's lines disappear while the other side keeps its content,
     /// and a row that loses its content on both sides is removed entirely.
+    /// <para>删除选中的行（在该侧清空这些行）：该侧的行被移除，另一侧仍有内容的行保留自己的内容；
+    /// 两侧都没有内容的行整行移除。</para>
     /// </summary>
-    /// <param name="leftSide"><para>是否为左侧。</para>Whether the left side is edited.</param>
+    /// <param name="leftSide">Whether the left side is edited. <para>是否为左侧。</para></param>
     internal void DeleteSelectedTextRows(bool leftSide)
     {
         if (_textModel is null || _selectedRowIndices.Count == 0)
@@ -1245,12 +1245,12 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>保存某一侧文本对比的编辑：把该侧当前的所有行按顺序写回文件（保留原编码与换行风格），
-    /// 完成后清除「已修改」标记。</para>
     /// Saves one side's text-comparison edits: writes that side's current lines back to the file in order (preserving the
     /// original encoding and line ending) and clears the modified flag afterwards.
+    /// <para>保存某一侧文本对比的编辑：把该侧当前的所有行按顺序写回文件（保留原编码与换行风格），
+    /// 完成后清除「已修改」标记。</para>
     /// </summary>
-    /// <param name="column"><para>发起保存的列。</para>The column that raised the save.</param>
+    /// <param name="column">The column that raised the save. <para>发起保存的列。</para></param>
     internal async Task SaveSideAsync(CompareColumnViewModel column)
     {
         if (!IsComparing || !column.IsCompareSide || Rows is null)
@@ -1287,15 +1287,15 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>构建浏览一个文件所需的行：文本文件按行（1 起行号），二进制文件按固件元数据（单侧）。</para>
     /// Builds the rows for browsing one file: text files by line (1-based numbers), binary files by firmware
     /// metadata (single side).
+    /// <para>构建浏览一个文件所需的行：文本文件按行（1 起行号），二进制文件按固件元数据（单侧）。</para>
     /// </summary>
-    /// <param name="path"><para>文件路径。</para>The file path.</param>
-    /// <param name="cancellationToken"><para>取消令牌。</para>The cancellation token.</param>
+    /// <param name="path">The file path. <para>文件路径。</para></param>
+    /// <param name="cancellationToken">The cancellation token. <para>取消令牌。</para></param>
     /// <param name="edited">文本被编辑时的回调（浏览列用它把自己的文件标记为已修改）。
     /// <para>Callback invoked when the text is edited (a browsing column uses it to mark its own file modified).</para></param>
-    /// <returns><para>该文件的展示行（可结构编辑的可观察集合）。</para>The rows that display the file (an observable collection that supports structural editing).</returns>
+    /// <returns>The rows that display the file (an observable collection that supports structural editing). <para>该文件的展示行（可结构编辑的可观察集合）。</para></returns>
     internal async Task<ObservableCollection<CompareRowViewModel>> BuildFileRowsAsync(
         string path,
         CancellationToken cancellationToken,
@@ -1317,14 +1317,14 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>读取一个文本文件的行；文件不是文本（固件扩展名或含 NUL）时返回 <c>null</c>，调用方改用元数据视图。
-    /// 浏览列的文本编辑直接使用项目文本编辑器，因此只需要行内容。</para>
     /// Reads a text file's lines; returns <c>null</c> when the file is not textual (firmware extension or NUL bytes) so the
     /// caller falls back to the metadata view. A browsing column edits text with the project's text editor, so the lines are
     /// all it needs.
+    /// <para>读取一个文本文件的行；文件不是文本（固件扩展名或含 NUL）时返回 <c>null</c>，调用方改用元数据视图。
+    /// 浏览列的文本编辑直接使用项目文本编辑器，因此只需要行内容。</para>
     /// </summary>
-    /// <param name="path"><para>文件路径。</para>The file path.</param>
-    /// <param name="cancellationToken"><para>取消令牌。</para>The cancellation token.</param>
+    /// <param name="path">The file path. <para>文件路径。</para></param>
+    /// <param name="cancellationToken">The cancellation token. <para>取消令牌。</para></param>
     internal async Task<IReadOnlyList<string>?> ReadTextLinesAsync(string path, CancellationToken cancellationToken)
     {
         var isText = await _comparison.IsTextLikeFileAsync(path, cancellationToken);
@@ -1333,9 +1333,9 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>取路径的父目录：目录取其父目录，文件取所在目录的父目录；已在根目录时返回 <c>null</c>。</para>
     /// Returns the parent directory of a path: for a directory its parent, for a file the parent of its
     /// directory; <c>null</c> at a root.
+    /// <para>取路径的父目录：目录取其父目录，文件取所在目录的父目录；已在根目录时返回 <c>null</c>。</para>
     /// </summary>
     private static string? ParentDirectoryOf(string path)
     {
@@ -1349,9 +1349,9 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>把两个路径放入前两个文件列并开始对比（一侧留空表示单侧文件对比）。</para>
     /// Places the two paths into the first two file columns and starts the comparison (an empty side means a
     /// single-side file comparison).
+    /// <para>把两个路径放入前两个文件列并开始对比（一侧留空表示单侧文件对比）。</para>
     /// </summary>
     private async Task OpenComparePairAsync(string leftPath, string rightPath)
     {
@@ -1378,13 +1378,13 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>开启对比：要求两个文件列有内容，两侧同为目录时保持目录树外观并逐行对齐，同为文件时直接对比；
-    /// 一侧为文件一侧为目录会被拒绝。只有「对比指定路径」（在新标签打开文件对比等）允许单侧留空。</para>
     /// Starts the comparison: two columns must hold content; two directories keep the tree look with aligned rows,
     /// two files are compared directly, and a file against a directory is rejected. Only an explicit "compare
     /// these paths" request (opening a file comparison in a new tab) may leave one side empty.
+    /// <para>开启对比：要求两个文件列有内容，两侧同为目录时保持目录树外观并逐行对齐，同为文件时直接对比；
+    /// 一侧为文件一侧为目录会被拒绝。只有「对比指定路径」（在新标签打开文件对比等）允许单侧留空。</para>
     /// </summary>
-    /// <param name="allowSingleSide"><para>是否允许单侧文件对比（对侧留空）。</para>Whether a single-side file comparison (an empty counterpart) is allowed.</param>
+    /// <param name="allowSingleSide">Whether a single-side file comparison (an empty counterpart) is allowed. <para>是否允许单侧文件对比（对侧留空）。</para></param>
     private async Task StartCompareAsync(bool allowSingleSide)
     {
         var loaded = Columns.Where(column => column.HasPath).ToList();
@@ -1455,9 +1455,9 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>结束对比：释放对比结果与懒加载集合，并把两列还原为浏览状态（目录重新折叠为普通浏览树）。</para>
     /// Ends the comparison: releases the result and lazily-loaded collections, and restores both columns to
     /// browsing (directories collapse back into plain browsing trees).
+    /// <para>结束对比：释放对比结果与懒加载集合，并把两列还原为浏览状态（目录重新折叠为普通浏览树）。</para>
     /// </summary>
     private async Task EndCompareAsync()
     {
@@ -1490,9 +1490,9 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>按当前两侧路径执行对比：两个目录走文件夹对比，其余按文件对比（含单侧）。</para>
     /// Runs the comparison for the current pair of paths: two directories use the folder comparison and anything
     /// else uses the file comparison (including a single side).
+    /// <para>按当前两侧路径执行对比：两个目录走文件夹对比，其余按文件对比（含单侧）。</para>
     /// </summary>
     private async Task LoadCompareAsync()
     {
@@ -1515,11 +1515,11 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>加载文件对比：嗅探两侧文件选择文本/二进制模式并构建对应行与状态；对侧没有对应文件时
-    /// 只读取存在的一侧，另一侧整列留空（对齐行号仍逐行对应）。</para>
     /// Loads a file comparison: sniffs both files to pick text/binary mode and builds the matching rows and
     /// status; when a side has no counterpart only the existing side is read and the other column stays empty
     /// (row numbers still line up).
+    /// <para>加载文件对比：嗅探两侧文件选择文本/二进制模式并构建对应行与状态；对侧没有对应文件时
+    /// 只读取存在的一侧，另一侧整列留空（对齐行号仍逐行对应）。</para>
     /// </summary>
     private async Task LoadFilesAsync()
     {
@@ -1587,13 +1587,13 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>加载单侧文件内容：文本按行、二进制按固件元数据，内容落在存在的一侧，另一侧留空。</para>
     /// Loads a single side's file content: text by line, binary by firmware metadata, with the content on the
     /// side that has the file and the other side left empty.
+    /// <para>加载单侧文件内容：文本按行、二进制按固件元数据，内容落在存在的一侧，另一侧留空。</para>
     /// </summary>
-    /// <param name="useLeftSide"><para>文件是否在左侧。</para>Whether the file is on the left.</param>
-    /// <param name="isText"><para>是否为文本文件。</para>Whether the file is textual.</param>
-    /// <param name="ct"><para>取消令牌。</para>The cancellation token.</param>
+    /// <param name="useLeftSide">Whether the file is on the left. <para>文件是否在左侧。</para></param>
+    /// <param name="isText">Whether the file is textual. <para>是否为文本文件。</para></param>
+    /// <param name="ct">The cancellation token. <para>取消令牌。</para></param>
     private async Task LoadSingleSideAsync(bool useLeftSide, bool isText, CancellationToken ct)
     {
         var path = useLeftSide ? _fileLeftPath : _fileRightPath;
@@ -1630,8 +1630,8 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>加载双侧文本比较：流式 DiffPlex 行差异并生成对比行与差异汇总。</para>
     /// Loads a two-sided text comparison: a streamed DiffPlex line diff producing rows and a diff summary.
+    /// <para>加载双侧文本比较：流式 DiffPlex 行差异并生成对比行与差异汇总。</para>
     /// </summary>
     private async Task LoadTextBothSidesAsync(CancellationToken ct)
     {
@@ -1652,10 +1652,10 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>加载双侧二进制比较：识别并读取两侧元数据生成元数据行（差异统计仅在切换十六进制
-    /// 原始视图时计算）。</para>
     /// Loads a two-sided binary comparison: detects and reads both sides' metadata into metadata rows (diff
     /// stats are computed only when switching to the hex-raw view).
+    /// <para>加载双侧二进制比较：识别并读取两侧元数据生成元数据行（差异统计仅在切换十六进制
+    /// 原始视图时计算）。</para>
     /// </summary>
     private async Task LoadBinaryBothSidesAsync(CancellationToken ct)
     {
@@ -1682,8 +1682,8 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>清空一次对比的全部派生状态（路径、对比树、元数据缓存、计数与行）。</para>
     /// Clears every derived state of one comparison (paths, compare tree, metadata caches, counts and rows).
+    /// <para>清空一次对比的全部派生状态（路径、对比树、元数据缓存、计数与行）。</para>
     /// </summary>
     private void ResetCompareState()
     {
@@ -1716,8 +1716,8 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>取消并重建加载令牌，返回新令牌。</para>
     /// Cancels and rebuilds the load cancellation-token source, returning the new token.
+    /// <para>取消并重建加载令牌，返回新令牌。</para>
     /// </summary>
     private CancellationToken BeginLoad()
     {
@@ -1728,8 +1728,8 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>取第一个还没有内容的文件列，没有空列时在末尾追加。</para>
     /// Returns the first file column without content, appending a new one when none is free.
+    /// <para>取第一个还没有内容的文件列，没有空列时在末尾追加。</para>
     /// </summary>
     private CompareColumnViewModel ReserveColumn()
     {

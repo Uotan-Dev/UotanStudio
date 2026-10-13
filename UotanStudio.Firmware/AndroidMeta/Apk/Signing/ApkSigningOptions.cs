@@ -25,8 +25,8 @@ public sealed class ApkSigningOptions
     public bool EnableV3 { get; set; } = true;
 
     /// <summary>
-    /// Assumed minimum SDK passed to algorithm selection. RSA/EC choices follow apksig key-size defaults.
-    /// <para>传给算法选择器的假定最低 SDK；RSA/EC 的算法按 apksig 密钥位数默认策略选择。</para>
+    /// Assumed minimum SDK passed to algorithm selection; RSA/EC choices follow key-size defaults.
+    /// <para>传给算法选择器的假定最低 SDK；RSA/EC 的算法按密钥位数默认策略选择。</para>
     /// </summary>
     /// <value>Defaults to 24; forwarded to the algorithm selector, which keys off key size.
     /// <para>默认 24；传给算法选择器，但选择器实际按密钥位数决策。</para></value>

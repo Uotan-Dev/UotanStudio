@@ -5,8 +5,8 @@ using UotanStudio.Views.Controls;
 namespace UotanStudio.Views.Editors;
 
 /// <summary>
-/// <para>文件文档视图，承载文本编辑器与二进制 16 进制查看器。</para>
 /// File document view, hosting the text editor and the binary hex viewer.
+/// <para>文件文档视图，承载文本编辑器与二进制 16 进制查看器。</para>
 /// </summary>
 public partial class FileView : UserControl
 {
@@ -14,8 +14,8 @@ public partial class FileView : UserControl
         new(static model => model.Editor, static (model, editor) => model.Editor = editor);
 
     /// <summary>
-    /// <para>构造文件文档视图并初始化组件。</para>
     /// Creates the file document view and initializes its components.
+    /// <para>构造文件文档视图并初始化组件。</para>
     /// </summary>
     public FileView()
     {

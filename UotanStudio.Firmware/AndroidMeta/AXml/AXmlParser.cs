@@ -3,8 +3,8 @@ using System.Buffers.Binary;
 namespace UotanStudio.Firmware.AndroidMeta.AXml;
 
 /// <summary>
-/// Reads Android binary XML (AXML) from an in-memory byte buffer into an <see cref="AXmlDocument"/>. Every chunk offset and length is validated against the buffer before it is read; the parser holds the whole image at once and supports neither streaming nor cancellation.
-/// <para>从内存字节缓冲区读取 Android 二进制 XML（AXML）并生成 <see cref="AXmlDocument"/>。每个数据块的偏移与长度都在读取前对照缓冲区校验；解析器一次性持有整个镜像，既不支持流式处理，也不支持取消。</para>
+/// Reads Android binary XML (AXML) from an in-memory byte buffer into an <see cref="AXmlDocument"/>, validating every chunk offset and length before reading.
+/// <para>从内存字节缓冲区读取 Android 二进制 XML（AXML）并生成 <see cref="AXmlDocument"/>，读取前校验每个数据块的偏移与长度。</para>
 /// </summary>
 public static class AXmlParser
 {
@@ -26,25 +26,25 @@ public static class AXmlParser
     /// <para>解析 AXML 字节为文档模型。</para>
     /// </summary>
     /// <param name="data">
-    /// Full contents of an AXML file. The declared file size must not exceed <paramref name="data"/>, and each chunk header and body is bounds-checked against it before reading.
-    /// <para>AXML 文件的完整内容。声明的文件大小不得超过 <paramref name="data"/>，且每个数据块的头与正文在读取前都按其做边界校验。</para>
+    /// Full contents of an AXML file; every chunk is bounds-checked against it before reading.
+    /// <para>AXML 文件的完整内容；读取前每个数据块都按其做边界校验。</para>
     /// </param>
     /// <returns>
-    /// The parsed document with root element, string pool, resource map and namespaces populated. Attribute values remain encoded as their raw <see cref="AXmlValueType"/> and data until formatted.
-    /// <para>解析后的文档，已填充根元素、字符串池、资源映射与命名空间。属性值在格式化前仍保留其原始 <see cref="AXmlValueType"/> 与数据编码。</para>
+    /// The parsed document with root element, string pool, resource map and namespaces populated.
+    /// <para>解析后的文档，已填充根元素、字符串池、资源映射与命名空间。</para>
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>. <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="AXmlException">
-    /// The buffer is shorter than the 8-byte header, the root chunk type is not <c>0x0003</c>, the declared file size exceeds the buffer, a chunk is smaller than its header or runs past the file size, the string-pool layout is invalid, or elements are left unbalanced at end of input.
-    /// <para>缓冲区短于 8 字节头部、根块类型不是 <c>0x0003</c>、声明的文件大小超出缓冲区、某个数据块小于其头部或越过文件大小、字符串池布局无效，或输入结束时元素未配平。</para>
+    /// The header is missing, the root chunk type is not <c>0x0003</c>, a chunk is out of bounds, or elements are unbalanced.
+    /// <para>头部缺失、根块类型不是 <c>0x0003</c>、数据块越界或元素未配平。</para>
     /// </exception>
     /// <exception cref="OverflowException">
     /// A declared file or chunk size exceeds <see cref="System.Int32.MaxValue"/>. <para>声明的文件或数据块大小超过 <see cref="System.Int32.MaxValue"/>。</para></exception>
     /// <example>
-    /// <code>
-    /// var doc = AXmlParser.Parse(File.ReadAllBytes("AndroidManifest.xml"));
-    /// Console.WriteLine(doc.Root.Name);
+    /// <code language="csharp">
+    /// var doc = AXmlParser.Parse(data);
     /// </code>
+    /// <para>解析二进制清单的字节内容。</para>
     /// </example>
     public static AXmlDocument Parse(byte[] data)
     {
@@ -159,11 +159,11 @@ public static class AXmlParser
     /// <para>判断头部是否为 AXML 魔数（用于内容探测）。</para>
     /// </summary>
     /// <param name="data">
-    /// Candidate bytes, typically the first bytes of a file; only the first 8 bytes are inspected. A <see langword="null"/> or short buffer simply fails the check.
-    /// <para>候选字节，通常为文件的前若干字节；仅检查前 8 个字节。<see langword="null"/> 或过短的缓冲区只会导致检查失败。</para>
+    /// Candidate bytes, typically the start of a file; only the first 8 bytes are inspected.
+    /// <para>候选字节，通常为文件开头若干字节；仅检查前 8 个字节。</para>
     /// </param>
-    /// <returns><see langword="true"/> when the root type is <c>0x0003</c> and the header size is <c>8</c>; <see langword="false"/> otherwise. This is a shallow sniff and does not validate the body.
-    /// <para>当根类型为 <c>0x0003</c> 且头部大小为 <c>8</c> 时返回 <see langword="true"/>，否则为 <see langword="false"/>。这只是浅层探测，不校验正文。</para></returns>
+    /// <returns><see langword="true"/> when the root type is <c>0x0003</c> and the header size is <c>8</c>; a shallow sniff only.
+    /// <para>根类型为 <c>0x0003</c> 且头部大小为 <c>8</c> 时为 <see langword="true"/>；仅为浅层探测。</para></returns>
     public static bool IsAxml(byte[] data)
     {
         if (data is null || data.Length < 8) return false;
@@ -271,6 +271,6 @@ internal sealed class AXmlException : Exception
     /// Creates an AXML exception.
     /// <para>创建 AXML 异常。</para>
     /// </summary>
-    /// <param name="message">Description of the failed validation, surfaced to the caller. <para>对所失败校验的描述，会呈现给调用方。</para></param>
+    /// <param name="message">Description of the failed validation. <para>对所失败校验的描述。</para></param>
     public AXmlException(string message) : base(message) { }
 }

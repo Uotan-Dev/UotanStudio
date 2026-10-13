@@ -263,12 +263,10 @@ public sealed class MetadataBuilder
 
     /// <summary>
     /// Rejects a name the 36-byte LP name field cannot carry: an empty value, a value wider than the
-    /// field in UTF-8 bytes, an embedded NUL, or any character outside ASCII. Upstream
-    /// <c>liblp</c>, <c>fastboot</c> and the kernel treat these names as ASCII, so a non-ASCII name
+    /// field in UTF-8 bytes, an embedded NUL, or any character outside ASCII, because a non-ASCII name
     /// would be unreadable on the device even though its bytes would fit the field.
     /// <para>拒绝 36 字节 LP 名称字段无法承载的名称：空值、UTF-8 字节宽度超出字段、内嵌 NUL，以及任何
-    /// 非 ASCII 字符。上游 <c>liblp</c>、<c>fastboot</c> 与内核都把这些名称当作 ASCII，因此即使字节数
-    /// 放得下，非 ASCII 名称在设备上也无法识别。</para>
+    /// 非 ASCII 字符——即使字节数放得下，非 ASCII 名称在设备上也无法识别。</para>
     /// </summary>
     /// <param name="name">
     /// The candidate partition or group name.

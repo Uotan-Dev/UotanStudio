@@ -13,19 +13,24 @@ public partial class NodeEditorViewModel
     /// <summary>
     /// Gets whether the most recent edit expanded a composite and can therefore be restored without
     /// discarding any subsequent graph changes.
+    /// <para>最近一次编辑是否展开了组合节点，因而可在不丢弃后续图改动的情况下恢复。</para>
     /// </summary>
+    /// <value>True when the tracked expansion is still the most recent edit.<para>被跟踪的展开仍是最近一次编辑时为 True。</para></value>
     public bool CanCollapseExpandedComposite => !IsExecuting
         && _expandedCompositeCommand is not null
         && _undoStack.TryPeek(out var command)
         && ReferenceEquals(command, _expandedCompositeCommand);
 
-    /// <summary>Discovers the selected subgraph's public interface without changing the document.</summary>
+    /// <summary>Discovers the selected subgraph's public interface without changing the document.<para>发现所选子图的公共接口，不修改文档。</para></summary>
+    /// <returns>The boundary analysis of the current selection.<para>当前选区的边界分析结果。</para></returns>
     public CompositeBoundaryAnalysis AnalyzeSelection()
     {
         return CompositeBoundaryAnalyzer.Analyze([.. SelectedNodes], [.. Connections]);
     }
 
-    /// <summary>Encapsulates the selection as a single undoable document operation.</summary>
+    /// <summary>Encapsulates the selection as a single undoable document operation.<para>将选区封装为单个可撤销的文档操作。</para></summary>
+    /// <param name="name">Display name for the new composite.<para>新组合节点的显示名称。</para></param>
+    /// <param name="boundary">Public interface the composite must expose.<para>组合节点须暴露的公共接口。</para></param>
     public void EncapsulateSelection(string name, CompositeBoundaryAnalysis boundary)
     {
         if (IsExecuting)
@@ -37,7 +42,7 @@ public partial class NodeEditorViewModel
         ApplyCompositePlan(plan);
     }
 
-    /// <summary>Restores an embedded graph and its external wiring as one undoable operation.</summary>
+    /// <summary>Restores an embedded graph and its external connections as one undoable operation.<para>将内嵌图及其外部连接作为单个可撤销操作恢复。</para></summary>
     public void ExpandSelectedComposite()
     {
         if (IsExecuting || SelectedNode is not CompositeNodeViewModel composite)
@@ -49,7 +54,7 @@ public partial class NodeEditorViewModel
         OnPropertyChanged(nameof(CanCollapseExpandedComposite));
     }
 
-    /// <summary>Restores the composite most recently expanded by this editor.</summary>
+    /// <summary>Restores the composite most recently expanded by this editor.<para>恢复最近一次展开的那个组合节点。</para></summary>
     public void CollapseExpandedComposite()
     {
         if (!CanCollapseExpandedComposite)
@@ -60,7 +65,9 @@ public partial class NodeEditorViewModel
         Undo();
     }
 
-    /// <summary>Publishes an edited local composite while retaining stable outside wiring.</summary>
+    /// <summary>Publishes an edited local composite while retaining its stable outside connections.<para>发布已编辑的本地组合节点，同时保留其稳定的外部连接。</para></summary>
+    /// <param name="previous">The composite node instance being replaced.<para>被替换的组合节点实例。</para></param>
+    /// <param name="package">The edited package definition to publish.<para>要发布的已编辑软件包定义。</para></param>
     public void ReplaceComposite(CompositeNodeViewModel previous, VisualPluginPackage package)
     {
         if (IsExecuting || !Nodes.Contains(previous))

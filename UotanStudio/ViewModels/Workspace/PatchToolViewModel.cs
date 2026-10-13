@@ -8,7 +8,7 @@ using UotanStudio.Services.VisualPlugins;
 
 namespace UotanStudio.ViewModels.Workspace;
 
-/// <summary>Workspace catalog of installed workflow templates that can be applied to the node canvas.</summary>
+/// <summary>Workspace catalog of installed workflow templates that can be applied to the node canvas.<para>可应用到节点画布的已安装工作流模板工作区目录。</para></summary>
 public sealed partial class PluginToolViewModel : Tool, IDisposable
 {
     private readonly VisualPluginManager _manager;
@@ -20,7 +20,8 @@ public sealed partial class PluginToolViewModel : Tool, IDisposable
     [ObservableProperty]
     private string _status = string.Empty;
 
-    /// <summary>Installed, compatible workflow templates available for one-click application.</summary>
+    /// <summary>Installed, compatible workflow templates available for one-click application.<para>可一键应用的已安装且兼容的工作流模板。</para></summary>
+    /// <value>The collection of applicable workflow templates.<para>可应用工作流模板的集合。</para></value>
     public ObservableCollection<VisualPluginRegistration> Plugins { get; } = [];
 
     public PluginToolViewModel() : this(VisualPluginManager.Instance)

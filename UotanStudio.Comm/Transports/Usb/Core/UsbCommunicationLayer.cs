@@ -26,17 +26,8 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
     private DeviceCommunicationConfiguration Configuration => configuration ?? DeviceCommunicationConfiguration.Current;
 
     /// <summary>
-    /// Configures the absolute path to the native libusb runtime for the libusb
-    /// backend (e.g. <c>/opt/homebrew/lib/libusb-1.0.dylib</c> on macOS or a
-    /// vendored <c>libusb-1.0.dll</c> on Windows). Must be called BEFORE the first
-    /// enumeration or session open. The library is pre-loaded by absolute path so
-    /// the bare SONAME <c>libusb-1.0</c> resolves without relying on the loader's
-    /// default search path (no process restart / execve involved).
-    /// <para>为 libusb 后端配置原生 libusb 运行时的绝对路径（例如 macOS 上
-    /// <c>/opt/homebrew/lib/libusb-1.0.dylib</c>，或 Windows 上随附的
-    /// <c>libusb-1.0.dll</c>）。必须在首次枚举或打开会话之前调用。库按绝对路径
-    /// 预加载，使裸 SONAME <c>libusb-1.0</c> 无需依赖加载器默认搜索路径即可解析
-    /// （不涉及进程重启 / execve）。</para>
+    /// Configures the absolute path to the native libusb runtime for the libusb backend. Must be called before the first enumeration or session open; the library is pre-loaded by absolute path so the bare SONAME resolves without relying on the loader's default search path.
+    /// <para>为 libusb 后端配置原生 libusb 运行库的绝对路径。必须在首次枚举或会话打开之前调用；通过绝对路径预加载，使裸 SONAME 的解析不依赖加载器的默认搜索路径。</para>
     /// </summary>
     /// <param name="libraryPath">Absolute path to the native libusb runtime.
     /// <para>原生 libusb 运行时的绝对路径。</para></param>
@@ -637,13 +628,8 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
     };
 
     /// <summary>
-    /// Returns a compact diagnostic summary of the last enumeration on the current platform,
-    /// exposing the per-backend observability state (SetupDi succeeded, IOKit matching
-    /// succeeded, usbfs root present, scanned node counts) so device-less CI can assert that
-    /// the enumeration mechanism actually ran instead of silently returning empty.
-    /// <para>返回当前平台上次枚举的紧凑诊断摘要，暴露各后端可观测状态
-    /// （SetupDi 成功、IOKit 匹配成功、usbfs 根存在、扫描节点数），
-    /// 使无设备 CI 能断言枚举机制确实运行，而非静默返回空。</para>
+    /// Returns a compact diagnostic summary of the last enumeration on the current platform, exposing per-backend observability state so a device-less environment can assert that enumeration actually ran instead of silently returning empty.
+    /// <para>返回当前平台最近一次枚举的紧凑诊断摘要，暴露各后端的可观测状态，使无设备环境可断言枚举确实执行过，而非静默返回空。</para>
     /// </summary>
     /// <returns>A <c>key=value; ...</c> diagnostic string. <para><c>key=value; ...</c> 形式的诊断字符串。</para></returns>
     public string GetEnumerationDiagnostics()

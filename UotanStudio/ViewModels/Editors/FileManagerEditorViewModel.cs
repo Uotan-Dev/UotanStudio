@@ -10,169 +10,169 @@ using UotanStudio.Services.FileManagement;
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
-/// <para>文件管理器文档编辑器视图模型：以 Dock 文档展示支持文件系统格式的 raw img
-/// （ext4/EROFS/F2FS）内部的目录树，提供目录导航、文件列表与选中条目提取。</para>
-/// File-manager document editor view model: a Dock document showing the internal directory tree of
-/// raw filesystem images (ext4/EROFS/F2FS), with directory navigation, file lists and selected-entry
-/// extraction.
+/// File-manager document showing the internal directory tree of raw filesystem images
+/// (ext4/EROFS/F2FS), with directory navigation, file lists and selected-entry extraction.
+/// <para>文件管理器文档，展示 raw 镜像（ext4/EROFS/F2FS）内部的目录树，
+/// 提供目录导航、文件列表与选中条目提取。</para>
 /// </summary>
 public partial class FileManagerEditorViewModel : Document
 {
     /// <summary>
-    /// <para>当前加载任务的取消源；触发新的加载或关闭文档时取消旧任务。</para>
     /// Cancellation source of the current load; cancelled when a new load starts or the document closes.
+    /// <para>当前加载任务的取消源；触发新的加载或关闭文档时取消旧任务。</para>
     /// </summary>
     private CancellationTokenSource? _loadCts;
 
     private ImageBrowserSession? _session;
 
     /// <summary>
-    /// <para>文档对应的镜像文件路径。</para>
     /// The image file path of the document.
+    /// <para>文档对应的镜像文件路径。</para>
     /// </summary>
     [ObservableProperty] private string? _filePath;
 
     /// <summary>
-    /// <para>是否正在后台解析镜像（驱动加载进度指示）。</para>
     /// Whether the image is being parsed in the background (drives the loading indicator).
+    /// <para>是否正在后台解析镜像（驱动加载进度指示）。</para>
     /// </summary>
     [ObservableProperty] private bool _isLoading;
 
     /// <summary>
-    /// <para>识别出的文件系统格式名称（EXT4 / EROFS / F2FS）；未加载时为空。</para>
     /// The detected filesystem format name (EXT4 / EROFS / F2FS); empty when not loaded.
+    /// <para>识别出的文件系统格式名称（EXT4 / EROFS / F2FS）；未加载时为空。</para>
     /// </summary>
     [ObservableProperty] private string _formatName = string.Empty;
 
     /// <summary>
-    /// <para>镜像文件大小（字节）。</para>
     /// The image file size in bytes.
+    /// <para>镜像文件大小（字节）。</para>
     /// </summary>
     [ObservableProperty] private long _imageSize;
 
     /// <summary>
-    /// <para>镜像内文件（含符号链接）总数。</para>
     /// Total number of files (including symlinks) inside the image.
+    /// <para>镜像内文件（含符号链接）总数。</para>
     /// </summary>
     [ObservableProperty] private int _fileCount;
 
     /// <summary>
-    /// <para>镜像内目录总数。</para>
     /// Total number of directories inside the image.
+    /// <para>镜像内目录总数。</para>
     /// </summary>
     [ObservableProperty] private int _directoryCount;
 
     /// <summary>
-    /// <para>当前选中的文件列表条目，用于路径显示和提取。</para>
     /// The selected file-list entry, used for path display and extraction.
+    /// <para>当前选中的文件列表条目，用于路径显示和提取。</para>
     /// </summary>
     [ObservableProperty] private FileManagerEntryViewModel? _selectedEntry;
 
     /// <summary>
-    /// <para>多选条目集合，由 View 的 SelectionChanged 事件同步。</para>
-    /// Multi-select entry collection, synced by the View's SelectionChanged event.
+    /// Multi-select entry collection kept in sync with the current selection.
+    /// <para>多选条目集合，与当前选中状态保持同步。</para>
     /// </summary>
+    /// <value>The entries currently multi-selected.<para>当前处于多选状态的条目。</para></value>
     public ObservableCollection<FileManagerEntryViewModel> SelectedEntries { get; } = [];
 
     /// <summary>
-    /// <para>当前浏览目录，同时绑定左侧目录树选中项。</para>
     /// The current directory, also bound to the navigation tree selection.
+    /// <para>当前浏览目录，同时绑定左侧目录树选中项。</para>
     /// </summary>
     [ObservableProperty] private FileManagerEntryViewModel? _currentDirectory;
 
     /// <summary>
-    /// <para>当前目录的直接子条目。</para>
     /// The immediate entries of the current directory.
+    /// <para>当前目录的直接子条目。</para>
     /// </summary>
     [ObservableProperty] private IReadOnlyList<FileManagerEntryViewModel> _currentEntries = [];
 
     /// <summary>
-    /// <para>是否使用方形图标网格；切换布局保留目录和选中项。</para>
     /// Whether to use square icon tiles; changing layouts preserves the directory and selection.
+    /// <para>是否使用方形图标网格；切换布局保留目录和选中项。</para>
     /// </summary>
     [ObservableProperty] private bool _isGridView = true;
 
     /// <summary>
-    /// <para>目录树根节点，包含镜像根目录。</para>
     /// Navigation tree roots, including the image root directory.
+    /// <para>目录树根节点，包含镜像根目录。</para>
     /// </summary>
     public ObservableCollection<FileManagerEntryViewModel> DirectoryRoots { get; } = [];
 
     /// <summary>
-    /// <para>当前目录的镜像内绝对路径。</para>
     /// The current directory's absolute path inside the image.
+    /// <para>当前目录的镜像内绝对路径。</para>
     /// </summary>
     public string CurrentPath => "/" + CurrentDirectory?.Path;
 
     /// <summary>
-    /// <para>已加载的当前目录是否为空。</para>
     /// Whether the loaded current directory is empty.
+    /// <para>已加载的当前目录是否为空。</para>
     /// </summary>
     public bool IsDirectoryEmpty => !IsLoading && !HasError && CurrentDirectory is not null && CurrentEntries.Count == 0;
 
     /// <summary>
-    /// <para>最后一次错误文本；为空表示无错误。</para>
     /// The last error text; empty means no error.
+    /// <para>最后一次错误文本；为空表示无错误。</para>
     /// </summary>
     [ObservableProperty] private string _errorMessage = string.Empty;
 
     /// <summary>
-    /// <para>是否存在错误（驱动错误区显示）。</para>
     /// Whether an error is present (drives the error-section visibility).
+    /// <para>是否存在错误（驱动错误区显示）。</para>
     /// </summary>
     [ObservableProperty] private bool _hasError;
 
     /// <summary>
-    /// <para>镜像文件路径（详情区绑定显示）。</para>
     /// The image file path (display binding for the toolbar).
+    /// <para>镜像文件路径（详情区绑定显示）。</para>
     /// </summary>
     public string ImagePath => FilePath ?? string.Empty;
 
     /// <summary>
-    /// <para>文件总数的本地化统计文本。</para>
     /// The localized file-count statistics text.
+    /// <para>文件总数的本地化统计文本。</para>
     /// </summary>
     public string FileCountText => string.Format(LanguageService.Instance.GetString("FileManager_FileCount"), FileCount);
 
     /// <summary>
-    /// <para>目录总数的本地化统计文本。</para>
     /// The localized directory-count statistics text.
+    /// <para>目录总数的本地化统计文本。</para>
     /// </summary>
     public string DirectoryCountText => string.Format(LanguageService.Instance.GetString("FileManager_DirectoryCount"), DirectoryCount);
 
     /// <summary>
-    /// <para>镜像大小的本地化统计文本。</para>
     /// The localized image-size statistics text.
+    /// <para>镜像大小的本地化统计文本。</para>
     /// </summary>
     public string ImageSizeText => string.Format(LanguageService.Instance.GetString("FileManager_ImageSize"), FormatSize(ImageSize));
 
     /// <summary>
-    /// <para>根层条目集合（TreeView 绑定）。</para>
     /// The root-level entry collection (tree-view binding).
+    /// <para>根层条目集合（TreeView 绑定）。</para>
     /// </summary>
     public ObservableCollection<FileManagerEntryViewModel> Entries { get; } = [];
 
     /// <summary>
-    /// <para>重新加载命令：按当前镜像路径重建文件树。</para>
     /// Reload command: rebuilds the file tree from the current image path.
+    /// <para>重新加载命令：按当前镜像路径重建文件树。</para>
     /// </summary>
     public IAsyncRelayCommand RefreshCommand { get; }
 
     /// <summary>
-    /// <para>提取选中条目命令：将选中的文件/目录提取到用户选择的目录。</para>
     /// Extract-selected command: extracts the selected file/directory to a user-chosen directory.
+    /// <para>提取选中条目命令：将选中的文件/目录提取到用户选择的目录。</para>
     /// </summary>
     public IAsyncRelayCommand ExtractSelectedCommand { get; }
 
     /// <summary>
-    /// <para>返回上级目录。</para>
     /// Navigates to the parent directory.
+    /// <para>返回上级目录。</para>
     /// </summary>
     public IRelayCommand NavigateUpCommand { get; }
 
     /// <summary>
-    /// <para>创建文件管理器编辑器视图模型并初始化命令。</para>
     /// Creates the file-manager editor view model and initializes its commands.
+    /// <para>创建文件管理器编辑器视图模型并初始化命令。</para>
     /// </summary>
     public FileManagerEditorViewModel()
     {
@@ -228,8 +228,8 @@ public partial class FileManagerEditorViewModel : Document
     partial void OnHasErrorChanged(bool value) => OnPropertyChanged(nameof(IsDirectoryEmpty));
 
     /// <summary>
-    /// <para>进入目录；文件和符号链接保持选中，不作为目录跟随。</para>
     /// Enters a directory; files and symbolic links stay selected and are not followed as directories.
+    /// <para>进入目录；文件和符号链接保持选中，不作为目录跟随。</para>
     /// </summary>
     public void OpenEntry(FileManagerEntryViewModel entry)
     {
@@ -261,13 +261,13 @@ public partial class FileManagerEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>异步加载镜像：识别文件系统格式 → 流式解析条目 → 构建文件树与统计。</para>
     /// Asynchronously loads an image: detect the filesystem format, stream-parse the entries, and
     /// build the file tree and statistics.
+    /// <para>异步加载镜像：识别文件系统格式 → 流式解析条目 → 构建文件树与统计。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>镜像文件路径。</para>
     /// The image file path.
+    /// <para>镜像文件路径。</para>
     /// </param>
     public async Task LoadFromImageAsync(string path)
     {
@@ -326,9 +326,9 @@ public partial class FileManagerEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>释放文档持有的解析器与树数据（文档关闭时调用），让 GC 回收不再引用的大对象。</para>
     /// Releases the parser and tree data held by this document (called when the document is closed) so
     /// the GC can reclaim the no-longer-referenced large objects.
+    /// <para>释放文档持有的解析器与树数据（文档关闭时调用），让 GC 回收不再引用的大对象。</para>
     /// </summary>
     public void Cleanup()
     {
@@ -352,8 +352,8 @@ public partial class FileManagerEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>重新加载当前镜像。</para>
     /// Reloads the current image.
+    /// <para>重新加载当前镜像。</para>
     /// </summary>
     private async Task RefreshAsync()
     {
@@ -387,9 +387,9 @@ public partial class FileManagerEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>将选中的条目提取到用户选择的目录；目录选择经系统目录选择器完成。</para>
     /// Extracts the selected entry to a user-chosen directory; the directory is picked via the system
     /// folder picker.
+    /// <para>将选中的条目提取到用户选择的目录；目录选择经系统目录选择器完成。</para>
     /// </summary>
     private async Task ExtractSelectedAsync()
     {
@@ -456,8 +456,8 @@ public partial class FileManagerEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>应用后台加载结果到 UI 线程可见属性。</para>
     /// Applies the background load result to the UI-visible properties.
+    /// <para>应用后台加载结果到 UI 线程可见属性。</para>
     /// </summary>
     private void ApplyLoadResult(ImageBrowserSession session, IReadOnlyList<FileManagerEntryViewModel> tree)
     {
@@ -501,8 +501,8 @@ public partial class FileManagerEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>遍历树统计文件（含符号链接）与目录总数。</para>
     /// Walks the tree to count files (including symlinks) and directories.
+    /// <para>遍历树统计文件（含符号链接）与目录总数。</para>
     /// </summary>
     private static (int Files, int Directories) CountEntries(IReadOnlyList<FileManagerEntryViewModel> roots)
     {
@@ -536,8 +536,8 @@ public partial class FileManagerEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>重置文档展示状态（加载开始时清空上一次结果）。</para>
     /// Resets the document display state (clears the previous result when a load starts).
+    /// <para>重置文档展示状态（加载开始时清空上一次结果）。</para>
     /// </summary>
     private void ResetState()
     {
@@ -557,8 +557,8 @@ public partial class FileManagerEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>将字节数格式化为可读大小文本（如 "1.5 MB"）；0 字节显示 "0 B"。</para>
     /// Formats a byte count into a human-readable size string (e.g. "1.5 MB"); 0 bytes shows "0 B".
+    /// <para>将字节数格式化为可读大小文本（如 "1.5 MB"）；0 字节显示 "0 B"。</para>
     /// </summary>
     private static string FormatSize(long bytes) => SizeFormatter.Format(bytes);
 

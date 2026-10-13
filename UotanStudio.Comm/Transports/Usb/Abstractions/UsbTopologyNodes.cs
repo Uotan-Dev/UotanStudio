@@ -3,14 +3,8 @@ using UotanStudio.Comm.Devices.Discovery;
 namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 
 /// <summary>
-/// <para>把各后端读到的原始字段补齐成统一节点形状的唯一入口：厂商/产品/版本/接口号从实例标识推导，
-/// 接口三元组优先取显式值、否则回退到兼容 ID 里的 <c>Class_xx&amp;SubClass_yy&amp;Prot_zz</c>，协议名一律
-/// 交给 <see cref="UsbProtocolClassifier"/>。平台后端因此不需要各自实现一份解析与分类规则。</para>
-/// The single entry point that turns raw backend fields into the shared node shape: vendor, product,
-/// revision and interface number are derived from the instance id; the interface triple prefers explicit
-/// values and falls back to <c>Class_xx&amp;SubClass_yy&amp;Prot_zz</c> in the compatible ids; protocol naming is
-/// always delegated to <see cref="UsbProtocolClassifier"/>. Platform backends therefore do not each
-/// re-implement parsing and classification.
+/// Single entry point turning raw backend fields into the shared node shape: vendor, product, revision and interface number are derived from the instance id, the interface triple prefers explicit values with compatible-id fallback, and protocol naming is always delegated.
+/// <para>把后端原始字段转换为共享节点形状的唯一入口：厂商、产品、修订号与接口号由实例 id 派生，接口三元组优先取显式值并以 compatible id 回退，协议命名一律委托。</para>
 /// </summary>
 public static class UsbTopologyNodes
 {

@@ -6,8 +6,8 @@ using UotanStudio.ViewModels.Nodes;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>待处理连接视图模型，管理拖拽连接时的状态。</para>
 /// View model for pending connections, managing the state during drag-connection.
+/// <para>待处理连接视图模型，管理拖拽连接时的状态。</para>
 /// </summary>
 public class PendingConnectionViewModel
 {
@@ -17,8 +17,8 @@ public class PendingConnectionViewModel
     private string? _previewText;
 
     /// <summary>
-    /// <para>获取或设置源连接器（输出端口）。</para>
     /// Gets or sets the source connector (output port).
+    /// <para>获取或设置源连接器（输出端口）。</para>
     /// </summary>
     public ConnectorViewModelBase? Source
     {
@@ -27,8 +27,8 @@ public class PendingConnectionViewModel
     }
 
     /// <summary>
-    /// <para>获取或设置预览目标连接器。</para>
     /// Gets or sets the preview target connector.
+    /// <para>获取或设置预览目标连接器。</para>
     /// </summary>
     public object? PreviewTarget
     {
@@ -37,8 +37,8 @@ public class PendingConnectionViewModel
     }
 
     /// <summary>
-    /// <para>获取或设置预览文本。</para>
     /// Gets or sets the preview text.
+    /// <para>获取或设置预览文本。</para>
     /// </summary>
     public string? PreviewText
     {
@@ -47,24 +47,24 @@ public class PendingConnectionViewModel
     }
 
     /// <summary>
-    /// <para>获取开始连接命令，当从连接器拖出连线时触发。</para>
     /// Gets the start connection command, triggered when dragging from a connector.
+    /// <para>获取开始连接命令，当从连接器拖出连线时触发。</para>
     /// </summary>
     public ICommand StartCommand { get; }
 
     /// <summary>
-    /// <para>获取完成连接命令，当连线拖到目标连接器时触发。</para>
     /// Gets the finish connection command, triggered when the connection is dropped on a target connector.
+    /// <para>获取完成连接命令，当连线拖到目标连接器时触发。</para>
     /// </summary>
     public ICommand FinishCommand { get; }
 
     /// <summary>
-    /// <para>创建待处理连接视图模型。</para>
     /// Creates a pending connection view model.
+    /// <para>创建待处理连接视图模型。</para>
     /// </summary>
     /// <param name="editor">
-    /// <para>节点编辑器视图模型。</para>
     /// The node editor view model.
+    /// <para>节点编辑器视图模型。</para>
     /// </param>
     public PendingConnectionViewModel(NodeEditorViewModel editor)
     {

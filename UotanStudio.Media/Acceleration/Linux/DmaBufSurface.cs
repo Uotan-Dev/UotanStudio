@@ -206,9 +206,8 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
 
     /// <summary>
     /// Creates a GL texture in the current context, binds this image to it, and returns the binding
-    /// for Skia texture adoption. Desktop GL binds <c>GL_TEXTURE_2D</c>; GLES binds
-    /// <c>GL_TEXTURE_EXTERNAL_OES</c>. Linear filtering is configured on the new texture.
-    /// <para>在当前上下文中创建 GL 纹理并绑定此图像，返回供 Skia 纹理采纳的绑定。桌面 GL 绑定 <c>GL_TEXTURE_2D</c>；GLES 绑定 <c>GL_TEXTURE_EXTERNAL_OES</c>。新纹理配置为线性过滤。</para>
+    /// for Skia texture adoption.
+    /// <para>在当前上下文中创建 GL 纹理并绑定此图像，返回供 Skia 纹理采纳的绑定。</para>
     /// </summary>
     /// <param name="externalOes">
     /// <see langword="true"/> for a GLES <c>GL_TEXTURE_EXTERNAL_OES</c> binding; <see langword="false"/> for desktop GL <c>GL_TEXTURE_2D</c>.

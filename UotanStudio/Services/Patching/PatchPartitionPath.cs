@@ -1,9 +1,14 @@
 namespace UotanStudio.Services.Patching;
 
-/// <summary>Explicit directory-layout mapping; it does not infer partition identity from filenames.</summary>
+/// <summary>Explicit directory-layout mapping; it does not infer partition identity from filenames.<para>显式的目录布局映射，不从文件名推断分区身份。</para></summary>
 public static class PatchPartitionPath
 {
-    /// <summary>Resolves a partition-local file into the selected workspace without following links.</summary>
+    /// <summary>Resolves a partition-local file into the selected workspace without following links.<para>将分区内文件解析到所选工作区，且不跟随链接。</para></summary>
+    /// <param name="workspace">The selected workspace directory.<para>所选工作区目录。</para></param>
+    /// <param name="partition">The partition name to map.<para>要映射的分区名。</para></param>
+    /// <param name="layout">The directory layout selector.<para>目录布局选择器。</para></param>
+    /// <param name="path">The partition-local file path.<para>分区内的文件路径。</para></param>
+    /// <returns>The mapped workspace-relative path.<para>映射后的工作区相对路径。</para></returns>
     public static string Resolve(PatchWorkspace workspace, string partition, string layout, string path)
     {
         ArgumentNullException.ThrowIfNull(workspace);
@@ -17,7 +22,6 @@ public static class PatchPartitionPath
             throw new InvalidDataException(LanguageService.Instance.GetString("Node_Patch_InvalidPartitionPath"));
         }
         var relative = path.StartsWith('/') ? path[1..] : path;
-        // Validate before adding a prefix so an absolute path cannot become an apparently relative one.
         PatchPath.ValidateRelative(relative);
         var mapped = layout switch
         {

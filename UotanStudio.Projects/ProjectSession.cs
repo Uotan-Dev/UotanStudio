@@ -34,9 +34,9 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>宿主钩子：持久化解决方案前捕获扩展状态（如交付计划、面板可见性）。返回 null 表示无状态。</para>
     /// Host hook: captures the extension state (e.g. delivery plan, panel visibility) before the
     /// solution file is persisted. Returning null means there is no state to store.
+    /// <para>宿主钩子：持久化解决方案前捕获扩展状态（如交付计划、面板可见性）。返回 null 表示无状态。</para>
     /// </summary>
     /// <value>
     /// The host hook invoked before each solution write, or <see langword="null"/> when the host supplies
@@ -47,9 +47,9 @@ public sealed partial class ProjectSession
     public Func<Dictionary<string, JsonElement>?>? CaptureState { get; set; }
 
     /// <summary>
-    /// <para>最近一次打开/另存的解决方案文件携带的扩展状态；未打开或解决方案未包含状态时为 null。</para>
     /// Extension state carried by the most recently opened/saved solution file; null when no solution
     /// is open or the file contains no state.
+    /// <para>最近一次打开/另存的解决方案文件携带的扩展状态；未打开或解决方案未包含状态时为 null。</para>
     /// </summary>
     /// <value>
     /// The extension state dictionary of the open solution, or <see langword="null"/> when none applies.
@@ -58,20 +58,20 @@ public sealed partial class ProjectSession
     public Dictionary<string, JsonElement>? SolutionState { get; private set; }
 
     /// <summary>
-    /// <para>最近一次打开尝试的失败原因；成功后为 <see cref="ProjectOpenFailure.None"/>。宿主据此弹出
-    /// 明确的失败提示，而不是只写日志。</para>
     /// The failure reason of the most recent open attempt, or <see cref="ProjectOpenFailure.None"/> after a
     /// successful open; hosts surface an explicit dialog from it instead of relying on log output alone.
+    /// <para>最近一次打开尝试的失败原因；成功后为 <see cref="ProjectOpenFailure.None"/>。宿主据此弹出
+    /// 明确的失败提示，而不是只写日志。</para>
     /// </summary>
     /// <value>Set by <see cref="OpenProjectFromPathAsync"/> and cleared on success.
     /// <para>由 <see cref="OpenProjectFromPathAsync"/> 设置，成功时清除。</para></value>
     public ProjectOpenFailure OpenFailure { get; private set; }
 
     /// <summary>
-    /// <para>最近一次打开失败时，磁盘文件里读到的 <c>FormatVersion</c>；文件不可解析或非格式版本问题时为
-    /// <see langword="null"/>。</para>
     /// The <c>FormatVersion</c> read from the offending file when the most recent open failed, or
     /// <see langword="null"/> when the file is unparseable or the failure is not a version mismatch.
+    /// <para>最近一次打开失败时，磁盘文件里读到的 <c>FormatVersion</c>；文件不可解析或非格式版本问题时为
+    /// <see langword="null"/>。</para>
     /// </summary>
     /// <value>Populated for <see cref="ProjectOpenFailure.InvalidSolution"/> and
     /// <see cref="ProjectOpenFailure.InvalidNodeProject"/> when the stored version can be read.
@@ -80,19 +80,19 @@ public sealed partial class ProjectSession
     public int? OpenFailureStoredVersion { get; private set; }
 
     /// <summary>
-    /// <para>最近一次打开失败时真正读不到的那个文件：解决方案文件或节点项目文件；缺失文件类失败为发起打开的
-    /// 路径。</para>
     /// The file that actually could not be read during the most recent failed open — the solution file or a
     /// node project file — or the requested path for a missing-file failure.
+    /// <para>最近一次打开失败时真正读不到的那个文件：解决方案文件或节点项目文件；缺失文件类失败为发起打开的
+    /// 路径。</para>
     /// </summary>
     /// <value>Set alongside <see cref="OpenFailure"/>; <see langword="null"/> before the first attempt.
     /// <para>与 <see cref="OpenFailure"/> 一同设置；首次尝试之前为 <see langword="null"/>。</para></value>
     public string? OpenFailurePath { get; private set; }
 
     /// <summary>
-    /// <para>仅重写解决方案文件以保存扩展状态（不动 <c>.uotanfw</c>/<c>.uotannode</c>）；经既有会话操作门串行化。</para>
     /// Rewrites only the solution file to persist extension state (leaving <c>.uotanfw</c>/<c>.uotannode</c>
     /// untouched); serialized through the existing session operation gate.
+    /// <para>仅重写解决方案文件以保存扩展状态（不动 <c>.uotanfw</c>/<c>.uotannode</c>）；经既有会话操作门串行化。</para>
     /// </summary>
     /// <param name="cancellationToken">
     /// Cancels waiting for the operation gate and the solution rewrite.
@@ -225,8 +225,8 @@ public sealed partial class ProjectSession
         finally { _operationGate.Release(); }
     }
     /// <summary>
-    /// <para>当前工程文件路径，由保存/打开操作填充。</para>
     /// Current project file path, populated by save/open operations.
+    /// <para>当前工程文件路径，由保存/打开操作填充。</para>
     /// </summary>
     /// <value>
     /// The full path of the open solution file, or <see langword="null"/> when no solution is open.
@@ -235,10 +235,10 @@ public sealed partial class ProjectSession
     public string? CurrentProjectPath { get => Context.CurrentSolutionPath; internal set => Context.SetCompatibilitySolutionPath(value); }
 
     /// <summary>
-    /// <para>在指定路径创建并持久化一个空解决方案（固件项目 + 状态目录）。节点项目不会被自动创建，
-    /// 需要时经 <see cref="CreateNodeProjectAsync"/> 显式登记。</para>
     /// Creates and persists an empty solution (firmware project + state directory) at the specified path.
     /// No node project is created; register one with <see cref="CreateNodeProjectAsync"/> when needed.
+    /// <para>在指定路径创建并持久化一个空解决方案（固件项目 + 状态目录）。节点项目不会被自动创建，
+    /// 需要时经 <see cref="CreateNodeProjectAsync"/> 显式登记。</para>
     /// </summary>
     /// <param name="path">Solution file path to create; missing parent directories are created.
     /// <para>要创建的解决方案文件路径；缺失的父目录会被创建。</para></param>
@@ -301,10 +301,10 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>从指定路径打开解决方案：加载固件项目与节点项目，重建镜像清单、打包设置、
-    /// 画布与操作历史。返回是否成功。</para>
     /// Opens the solution at the specified path: loads the firmware and node projects, rebuilding the
     /// image list, packing settings, canvas and operation history. Returns whether the open succeeded.
+    /// <para>从指定路径打开解决方案：加载固件项目与节点项目，重建镜像清单、打包设置、
+    /// 画布与操作历史。返回是否成功。</para>
     /// </summary>
     /// <param name="path">Solution file to open; a missing file aborts without touching session state.
     /// <para>要打开的解决方案文件；文件缺失时中止且不影响现有会话状态。</para></param>
@@ -433,10 +433,10 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>保存当前项目：先尝试保存当前活动的文档编辑器，再持久化工程快照。
-    /// 若无路径则返回 false 以便调用方触发另存流程。</para>
     /// Saves the current project: first tries to save the active document editor, then persists the
     /// project snapshot. Returns false when there is no path so the caller can trigger Save As.
+    /// <para>保存当前项目：先尝试保存当前活动的文档编辑器，再持久化工程快照。
+    /// 若无路径则返回 false 以便调用方触发另存流程。</para>
     /// </summary>
     /// <param name="saveActiveDocument">When <see langword="false"/>, the active editor is not flushed
     /// before the snapshot is persisted. <para>为 <see langword="false"/> 时，持久化快照前不保存当前活动编辑器。</para></param>
@@ -461,8 +461,8 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>另存为：准备完整项目副本与快照，发布成功后切换上下文。</para>
     /// Saves a prepared project copy under a new path, switching context only after publication succeeds.
+    /// <para>另存为：准备完整项目副本与快照，发布成功后切换上下文。</para>
     /// </summary>
     /// <param name="path">Destination solution file path; a destination identical to the open solution
     /// performs an in-place save instead of a copy.
@@ -483,8 +483,8 @@ public sealed partial class ProjectSession
     public Task SaveAsAsync(string path, CancellationToken cancellationToken = default) => RunOperationAsync(() => SaveAsCoreAsync(path, cancellationToken), true, cancellationToken);
 
     /// <summary>
-    /// <para>将若干文件导入当前解决方案的镜像清单。</para>
     /// Imports the given files into the current solution's image list.
+    /// <para>将若干文件导入当前解决方案的镜像清单。</para>
     /// </summary>
     /// <param name="paths">Files to import; <see langword="null"/> or an empty array is a no-op.
     /// <para>要导入的文件；为 <see langword="null"/> 或空数组时不执行任何操作。</para></param>
@@ -501,8 +501,8 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>向当前解决方案添加新子项目。</para>
     /// Adds a new sub-project to the current solution.
+    /// <para>向当前解决方案添加新子项目。</para>
     /// </summary>
     /// <param name="fwPath">Path of the new <c>.uotanfw</c> file inside a direct child directory of the
     /// solution root. <para>解决方案根的直接子目录下新 <c>.uotanfw</c> 文件的路径。</para></param>
@@ -560,14 +560,14 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>将现有目录作为子项目导入当前解决方案：扫描目录中已有的镜像文件并注册，
-    /// 若目录下无 <c>.uotanfw</c> 文件则自动创建，<c>images/</c> 和 <c>output/</c>
-    /// 目录已存在时保留原内容。</para>
     /// Imports an existing directory as a sub-project into the current solution: scans for existing
     /// image files and registers them; creates a <c>.uotanfw</c> file if missing, preserving
     /// existing <c>images/</c> and <c>output/</c> directories.
+    /// <para>将现有目录作为子项目导入当前解决方案：扫描目录中已有的镜像文件并注册，
+    /// 若目录下无 <c>.uotanfw</c> 文件则自动创建，<c>images/</c> 和 <c>output/</c>
+    /// 目录已存在时保留原内容。</para>
     /// </summary>
-    /// <param name="dirPath"><para>要导入的目录绝对路径。</para>Absolute path of the directory to import.</param>
+    /// <param name="dirPath">Absolute path of the directory to import. <para>要导入的目录绝对路径。</para></param>
     /// <param name="cancellationToken">Cancels staging and the solution rewrite.
     /// <para>取消暂存与解决方案重写。</para></param>
     /// <returns>Completes after the sub-project is registered and the solution is reloaded; does nothing
@@ -661,16 +661,16 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>若当前活动文档具有 SaveCommand 且 IsDirty，则执行保存。</para>
     /// If the active document has a SaveCommand and IsDirty, executes it.
+    /// <para>若当前活动文档具有 SaveCommand 且 IsDirty，则执行保存。</para>
     /// </summary>
     /// <returns>Completes after the workspace has saved the active document, if applicable.
     /// <para>工作区完成活动文档保存（如适用）后返回。</para></returns>
     public Task SaveActiveDocumentAsync() => _workspace.SaveActiveDocumentAsync();
 
     /// <summary>
-    /// <para>将当前工程完整快照写入指定路径。</para>
     /// Writes the complete project snapshot to the specified path.
+    /// <para>将当前工程完整快照写入指定路径。</para>
     /// </summary>
     /// <param name="path">Solution file to overwrite; must identify the active solution.
     /// <para>要覆写的解决方案文件；必须指向当前活动解决方案。</para></param>
@@ -786,10 +786,10 @@ public sealed partial class ProjectSession
         => openNames.Any(open => string.Equals(open, name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// <para>只读取磁盘文件里的 <c>FormatVersion</c> 数值，用于在打开失败时给出可判读的迁移提示；解析失败
-    /// 返回 null，不抛出异常。</para>
     /// Reads only the <c>FormatVersion</c> number from a file on disk so a failed open can report an
     /// actionable migration hint; returns null when the file cannot be parsed and never throws.
+    /// <para>只读取磁盘文件里的 <c>FormatVersion</c> 数值，用于在打开失败时给出可判读的迁移提示；解析失败
+    /// 返回 null，不抛出异常。</para>
     /// </summary>
     /// <param name="path">Candidate project file. <para>待判读的工程文件。</para></param>
     /// <returns>The stored version, or <see langword="null"/> when the file is absent, larger than 32 MiB,

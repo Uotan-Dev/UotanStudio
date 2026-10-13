@@ -56,13 +56,8 @@ internal static class PrivAppPermissionsPatch
     private const int MaximumEntries = 100_000;
 
     /// <summary>
-    /// Enumerates every recognised allow entry in the document. Root elements other than <c>permissions</c>,
-    /// recognised entries missing the <c>name</c> or <c>package</c> attribute, blank or over-long identifiers,
-    /// and control characters are malformed input and rejected; unknown sibling elements are simply not entries
-    /// and remain untouched in the document.
-    /// <para>枚举文档中所有可识别的授权条目。根元素不是 <c>permissions</c>、可识别条目缺少 <c>name</c> 或
-    /// <c>package</c> 属性、标识为空或超长、含控制字符，均视为畸形输入并被拒绝；未识别的同级元素不算条目，
-    /// 在文档中原样保留。</para>
+    /// Enumerates every recognised allow entry in the document and rejects malformed input.
+    /// <para>枚举文档中所有可识别的授权条目，并拒绝畸形输入。</para>
     /// </summary>
     /// <param name="text">XML document text, bounded by <see cref="TextPatch.MaxCharacters"/>.
     /// <para>XML 文档文本，大小受 <see cref="TextPatch.MaxCharacters"/> 限制。</para></param>
@@ -84,13 +79,8 @@ internal static class PrivAppPermissionsPatch
     }
 
     /// <summary>
-    /// Adds one package/permission allow entry. When the package already has a nested container the permission is
-    /// appended to it; otherwise the document's dominant flat shape (<c>permission</c> or <c>allow</c>) is reused,
-    /// falling back to a fresh nested container for an empty document. Re-adding an entry that already exists in
-    /// any shape returns the untouched input with <see cref="TextPatchResult.Changed"/> cleared.
-    /// <para>添加一条包名/权限授权条目。若该包已有嵌套容器，则把权限追加到容器内；否则沿用文档中占主导的扁平形态
-    /// （<c>permission</c> 或 <c>allow</c>），空文档则回退为新建嵌套容器。重复添加任意形态下已存在的条目时，
-    /// 原样返回输入且不置位 <see cref="TextPatchResult.Changed"/>。</para>
+    /// Adds one package and permission allow entry to the document.
+    /// <para>向文档添加一条包名与权限授权条目。</para>
     /// </summary>
     /// <param name="text">XML document text, bounded by <see cref="TextPatch.MaxCharacters"/>.
     /// <para>XML 文档文本，大小受 <see cref="TextPatch.MaxCharacters"/> 限制。</para></param>
@@ -144,13 +134,8 @@ internal static class PrivAppPermissionsPatch
     }
 
     /// <summary>
-    /// Removes every allow entry matching the package/permission pair in any supported shape. A nested container
-    /// left without <c>permission</c> children is removed together with its entries; unrelated containers,
-    /// elements and comments are untouched. Removing an absent entry returns the untouched input with
-    /// <see cref="TextPatchResult.Changed"/> cleared.
-    /// <para>移除所有匹配该包名/权限对的授权条目，支持任意形态。不再含 <c>permission</c> 子节点的嵌套容器会随条目
-    /// 一并移除；无关容器、元素与注释保持不变。移除不存在的条目时，原样返回输入且不置位
-    /// <see cref="TextPatchResult.Changed"/>。</para>
+    /// Removes every allow entry matching the package and permission pair in any supported shape.
+    /// <para>移除所有匹配该包名与权限对的授权条目，支持任意形态。</para>
     /// </summary>
     /// <param name="text">XML document text, bounded by <see cref="TextPatch.MaxCharacters"/>.
     /// <para>XML 文档文本，大小受 <see cref="TextPatch.MaxCharacters"/> 限制。</para></param>

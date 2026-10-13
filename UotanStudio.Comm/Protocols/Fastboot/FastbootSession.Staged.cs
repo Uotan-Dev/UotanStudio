@@ -29,11 +29,13 @@ public sealed partial class FastbootSession
         => UploadData(FastbootConstants.CommandGetStaged, output, progress, cancellationToken);
 
     /// <summary>
-    /// Retrieves staged data from the device and writes it to a file. The terminal response is
-    /// returned rather than discarded: the destination file exists and holds whatever the device
-    /// streamed, so a FAIL after a partial payload would otherwise leave a silently truncated file.
-    /// <para>从设备获取暂存数据并写入文件。终止响应被返回而非丢弃：目标文件已经存在并保存了设备流式
-    /// 送出的内容，因此负载中途出现 FAIL 时，否则会留下一个被静默截断的文件。</para>
+    /// Retrieves staged data from the device and writes it to a file.
+    /// <para>从设备获取暂存数据并写入文件。</para>
+    /// The terminal response is returned rather than discarded: the destination file exists and holds
+    /// whatever the device streamed, so a FAIL after a partial payload would otherwise leave a silently
+    /// truncated file.
+    /// <para>终止响应被返回而非丢弃：目标文件已经存在并保存了设备流式送出的内容，因此负载中途出现 FAIL
+    /// 时，否则会留下一个被静默截断的文件。</para>
     /// </summary>
     /// <param name="outputPath">Destination file path, created (or truncated) and closed when the call returns.
     /// <para>目标文件路径；调用返回时已创建（或截断）并关闭。</para></param>
@@ -54,13 +56,13 @@ public sealed partial class FastbootSession
     }
 
     /// <summary>
-    /// Waits for a snapshot merge operation to complete within the specified timeout. Every poll
-    /// forces a fresh <c>getvar</c> round trip — a cached status would freeze the first answer and
-    /// make the wait unable to ever observe completion — and a timeout or unrecognized status
-    /// throws instead of returning silently, so callers never flash over an in-progress merge.
-    /// <para>在指定超时时间内等待快照合并操作完成。每次轮询都强制重新执行 <c>getvar</c> ——
-    /// 缓存会冻结首次应答，使等待永远无法观察到完成 —— 超时或无法识别的状态会抛出异常而非
-    /// 静默返回，以免调用方在合并进行中时继续刷写。</para>
+    /// Waits for a snapshot merge operation to complete within the specified timeout.
+    /// <para>在指定超时时间内等待快照合并操作完成。</para>
+    /// Every poll forces a fresh <c>getvar</c> round trip — a cached status would freeze the first answer
+    /// and make the wait unable to ever observe completion — and a timeout or unrecognized status throws
+    /// instead of returning silently, so callers never flash over an in-progress merge.
+    /// <para>每次轮询都强制重新执行 <c>getvar</c>——缓存会冻结首次应答，使等待永远无法观察到完成——
+    /// 超时或无法识别的状态会抛出异常而非静默返回，以免调用方在合并进行中时继续刷写。</para>
     /// </summary>
     /// <param name="timeoutSeconds">
     /// Maximum seconds to poll the snapshot-update-status variable; merges are re-checked every two seconds.
@@ -94,17 +96,20 @@ public sealed partial class FastbootSession
     }
 
     /// <summary>
-    /// Cancels a pending snapshot update if one is in progress. Only the status query is treated as
-    /// best-effort; when the device confirms a pending merge, a failing <c>snapshot-update:cancel</c>
-    /// propagates instead of being swallowed, because an uncancelled merge rewrites partitions at
-    /// the next boot. This never reboots the device: some bootloaders can only cancel a merge from
-    /// fastbootd and say so in free-form text, and rebooting would invalidate the caller's session,
-    /// so that request is reported back for the caller to honor explicitly.
-    /// <para>如果正在进行快照更新则将其取消。仅状态查询按尽力而为处理；当设备确认存在挂起合并时，
-    /// <c>snapshot-update:cancel</c> 失败会向上传播而非被吞掉，因为未取消的合并会在下次重启时改写分区。
-    /// 本方法绝不重启设备：某些 bootloader 只能在 fastbootd 中取消合并并以自由文本如此说明，而重启会使
-    /// 调用方的会话失效，因此该请求被回报给调用方由其显式执行。</para>
+    /// Cancels a pending snapshot update if one is in progress.
+    /// <para>如果正在进行快照更新则将其取消。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>Only the status query is treated as best-effort; when the device confirms a pending merge, a
+    /// failing <c>snapshot-update:cancel</c> propagates instead of being swallowed, because an uncancelled
+    /// merge rewrites partitions at the next boot. This never reboots the device: some bootloaders can only
+    /// cancel a merge from fastbootd and say so in free-form text, and rebooting would invalidate the
+    /// caller's session, so that request is reported back for the caller to honor explicitly.</para>
+    /// <para>仅状态查询按尽力而为处理；当设备确认存在挂起合并时，<c>snapshot-update:cancel</c> 失败会向
+    /// 上传播而非被吞掉，因为未取消的合并会在下次重启时改写分区。本方法绝不重启设备：某些 bootloader 只能
+    /// 在 fastbootd 中取消合并并以自由文本如此说明，而重启会使调用方的会话失效，因此该请求被回报给调用方
+    /// 由其显式执行。</para>
+    /// </remarks>
     /// <returns><see langword="true"/> when a pending merge was found and the device answered that it
     /// needs a fastbootd reboot before the cancel takes effect, in which case the caller must issue
     /// <c>reboot-fastboot</c> itself; <see langword="false"/> when no merge was pending, the status
@@ -137,11 +142,12 @@ public sealed partial class FastbootSession
     }
 
     /// <summary>
-    /// Wipes user data by erasing and formatting userdata, cache, and metadata partitions. Every
-    /// erase/format response is checked: this is the destructive factory-wipe equivalent, so a
+    /// Wipes user data by erasing and formatting userdata, cache, and metadata partitions.
+    /// <para>通过擦除并格式化 userdata、cache 和 metadata 分区来清除用户数据。</para>
+    /// Every erase/format response is checked: this is the destructive factory-wipe equivalent, so a
     /// skipped or failed partition surfaces as an exception instead of a silent partial wipe.
-    /// <para>通过擦除并格式化 userdata、cache 和 metadata 分区来清除用户数据。每个擦除/格式化
-    /// 响应都会被检查：这是破坏性的恢复出厂等价操作，被跳过或失败的分区会以异常呈现而非静默的部分清除。</para>
+    /// <para>每个擦除/格式化响应都会被检查：这是破坏性的恢复出厂等价操作，被跳过或失败的分区会以异常
+    /// 呈现而非静默的部分清除。</para>
     /// </summary>
     /// <exception cref="FastbootException">A partition could not be erased or formatted.
     /// <para>某分区无法擦除或格式化。</para></exception>

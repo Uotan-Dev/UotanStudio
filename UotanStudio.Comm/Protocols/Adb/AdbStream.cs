@@ -9,26 +9,12 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// A single ADB service stream implementing the OPEN / OKAY / WRTE / CLSE state machine.
 /// <para>单条 ADB 服务流，实现 OPEN / OKAY / WRTE / CLSE 状态机。</para>
 /// </summary>
-/// <remarks>
-/// <para>
-/// Inbound payloads are bounded by <paramref name="receiveBudgetBytes"/> and by <see cref="MaxQueuedChunks"/>.
-/// A breach faults only this stream and never throws from <see cref="EnqueueData"/>, which runs on the
-/// connection's message loop: throwing there would fault every stream multiplexed over that connection. The
-/// queued payloads stay readable after the fault, so a mid-transfer failure still delivers the tail of a sync
-/// reply or a scrcpy log instead of discarding it.
-/// </para>
-/// <para>
-/// 入站负载受 <paramref name="receiveBudgetBytes"/> 与 <see cref="MaxQueuedChunks"/> 限制。超限只使本流故障，且绝不让
-/// <see cref="EnqueueData"/> 抛出——它运行在连接的消息循环上，一旦抛出会把该连接复用的所有流一起判死。故障后已入队负载仍可读完，
-/// 因此传输中途失败时 sync 应答尾部或 scrcpy 日志不会丢失。
-/// </para>
-/// </remarks>
-/// <param name="connection">The owning ADB connection. 所属的 ADB 连接。</param>
-/// <param name="localId">The local stream identifier. 本地流标识。</param>
+/// <param name="connection">The owning ADB connection.<para>所属的 ADB 连接。</para></param>
+/// <param name="localId">The local stream identifier.<para>本地流标识。</para></param>
 /// <param name="receiveBudgetBytes">Maximum queued payload bytes before the stream faults.
-/// 队列负载达到该字节数后判定流故障。</param>
+/// <para>队列负载达到该字节数后判定流故障。</para></param>
 /// <param name="writePermitWaitMs">Milliseconds a write waits for the peer to acknowledge the previous chunk.
-/// 写入等待对端确认上一块的毫秒数。</param>
+/// <para>写入等待对端确认上一块的毫秒数。</para></param>
 internal sealed class AdbStream(AdbConnection connection, uint localId,
     int receiveBudgetBytes = AdbStream.ProtocolReceiveBudgetBytes,
     int writePermitWaitMs = AdbStream.DefaultWritePermitWaitMs) : IAdbStream
@@ -37,9 +23,8 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// <para>shell、sync 与设备服务等协议客户端所开流使用的接收预算。</para></summary>
     internal const int ProtocolReceiveBudgetBytes = 4 * 1024 * 1024;
 
-    /// <summary>Receive budget for raw service streams, which carry sustained producer output such as the
-    /// scrcpy sockets relayed while mirroring.
-    /// <para>裸服务流使用的接收预算，用于承载持续产出的数据，例如投屏期间转发的 scrcpy socket。</para></summary>
+    /// <summary>Receive budget for raw service streams, which carry sustained producer output.
+    /// <para>裸服务流使用的接收预算，用于承载持续产出的数据。</para></summary>
     internal const int RawServiceReceiveBudgetBytes = 16 * 1024 * 1024;
 
     /// <summary>Upper bound on queued chunks, applied together with the byte budget so many small chunks
@@ -80,16 +65,10 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Initializes a server-mediated stream that relays an already established adb-server socket.
     /// <para>初始化转发已建立 adb server socket 的流。</para>
     /// </summary>
-    /// <param name="connection">The owning ADB connection. 所属的 ADB 连接。</param>
-    /// <param name="localId">The local stream identifier. 本地流标识。</param>
+    /// <param name="connection">The owning ADB connection.<para>所属的 ADB 连接。</para></param>
+    /// <param name="localId">The local stream identifier.<para>本地流标识。</para></param>
     /// <param name="serverStream">The server socket to relay; the stream owns and disposes it.
-    /// 待转发的 server socket；本流持有并负责释放。</param>
-    /// <remarks>The relay buffer is sized by the negotiated payload limit when the connection has one, and it is
-    /// never larger than <see cref="ServerReadChunkBytes"/>; an adb-server-mediated connection negotiates nothing
-    /// because the server owns the device link, so it keeps the 64 KiB ceiling.
-    /// <para>转发缓冲区在连接已协商负载上限时按该上限分配，且永不超过 <see cref="ServerReadChunkBytes"/>；
-    /// 经 adb server 的转发不协商任何上限，因为设备链路归 server 持有，因此保持 64 KiB 的封顶值。</para>
-    /// </remarks>
+    /// <para>待转发的 server socket；本流持有并负责释放。</para></param>
     internal AdbStream(AdbConnection connection, uint localId, Stream serverStream)
         : this(connection, localId, RawServiceReceiveBudgetBytes)
     {
@@ -105,12 +84,14 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Gets the local stream identifier.
     /// <para>获取本地流标识。</para>
     /// </summary>
+    /// <value>The local id used in stream messages.<para>流消息中使用的本地标识。</para></value>
     public uint LocalId { get; } = localId;
 
     /// <summary>
     /// Gets the remote stream identifier, or 0 until peer acknowledges.
     /// <para>获取远端流标识，对端确认前为 0。</para>
     /// </summary>
+    /// <value>The peer-assigned stream id, or 0 before the OKAY reply.<para>对端分配的流标识，OKAY 应答前为 0。</para></value>
     public uint RemoteId { get; internal set; }
 
     /// <summary>
@@ -153,7 +134,7 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Sets the remote id and signals readiness.
     /// <para>设置远端 ID 并触发就绪信号。</para>
     /// </summary>
-    /// <param name="remoteId">The remote stream identifier. 远端流标识。</param>
+    /// <param name="remoteId">The remote stream identifier.<para>远端流标识。</para></param>
     internal void SetRemoteId(uint remoteId)
     {
         lock (_lock)
@@ -170,17 +151,16 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Blocks until the stream is ready (OKAY received).
     /// <para>阻塞至流就绪（收到 OKAY）。</para>
     /// </summary>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <returns><c>true</c> if the stream became ready; otherwise, <c>false</c>. 流是否就绪。</returns>
+    /// <param name="timeoutMs">Timeout in milliseconds.<para>超时（毫秒）。</para></param>
+    /// <returns><c>true</c> if the stream became ready; otherwise, <c>false</c>.
+    /// <para>流就绪时为 <c>true</c>，否则为 <c>false</c>。</para></returns>
     internal bool WaitReady(int timeoutMs) => _ready.Wait(timeoutMs);
 
     /// <summary>
     /// Waits until the stream is ready (OKAY received) without holding a thread.
     /// <para>异步等待流就绪（收到 OKAY），等待期间不占用线程。</para>
     /// </summary>
-    /// <param name="cancellationToken">Cancels the readiness wait. 取消就绪等待。</param>
-    /// <returns>A task whose result reports whether the stream became ready.
-    /// <para>结果指示流是否就绪。</para></returns>
+    /// <param name="cancellationToken">Cancels the readiness wait.<para>取消就绪等待。</para></param>
     internal async ValueTask WaitReadyAsync(CancellationToken cancellationToken)
     {
         try
@@ -196,10 +176,7 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Enqueues incoming data from the peer.
     /// <para>将来自对端的数据入队。</para>
     /// </summary>
-    /// <param name="payload">The data payload. 数据负载。</param>
-    /// <remarks>Never throws: the caller is the message loop, where an exception faults every stream on the
-    /// connection. <para>绝不抛出：调用方是消息循环，在那里抛出会连带判定连接上所有流故障。</para>
-    /// </remarks>
+    /// <param name="payload">The data payload.<para>数据负载。</para></param>
     internal void EnqueueData(byte[] payload)
     {
         lock (_lock)
@@ -246,11 +223,7 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Marks the stream as faulted, stores the exception, and releases waiting threads.
     /// <para>将流标记为故障，保存异常并释放等待线程。</para>
     /// </summary>
-    /// <param name="ex">The exception that caused the fault. 导致故障的异常。</param>
-    /// <remarks>The already queued payloads are deliberately kept: reads drain them before the fault is raised,
-    /// unlike the HDC channel which clears its queue immediately.
-    /// <para>刻意保留已入队负载：读取会先排空队列再抛故障，与立即清空队列的 HDC 通道不同。</para>
-    /// </remarks>
+    /// <param name="ex">The exception that caused the fault.<para>导致故障的异常。</para></param>
     internal void MarkFaulted(Exception ex)
     {
         lock (_lock)
@@ -272,13 +245,7 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Writes data to the peer on a caller thread that already owns the stream.
     /// <para>在已持有该流的调用线程上同步向对端写入数据。</para>
     /// </summary>
-    /// <param name="data">The data to write. 要写入的数据。</param>
-    /// <remarks>Synchronous counterpart of <see cref="WriteAsync"/> kept for the byte-oriented
-    /// <see cref="AdbServiceStream"/> façade and the one-shot device services, both of which expose a blocking
-    /// API; it parks the calling thread while it waits for the peer to acknowledge a chunk.
-    /// <para>本方法是 <see cref="WriteAsync"/> 的同步对应实现，仅供面向字节的 <see cref="AdbServiceStream"/>
-    /// 门面与一次性设备服务使用，两者都暴露阻塞 API；等待对端确认某一块时它会占用调用线程。</para>
-    /// </remarks>
+    /// <param name="data">The data to write.<para>要写入的数据。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidOperationException">The stream is closed. <para>流已关闭。</para></exception>
@@ -334,11 +301,9 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Writes a payload to the peer without holding a thread while the peer acknowledges each chunk.
     /// <para>向对端写入负载，等待每块确认时不占用线程。</para>
     /// </summary>
-    /// <param name="data">Bytes to send, split by the negotiated payload limit. 待发送字节，按协商的负载上限分块。</param>
+    /// <param name="data">Bytes to send, split by the negotiated payload limit.<para>待发送字节，按协商的负载上限分块。</para></param>
     /// <param name="cancellationToken">Cancels a permit wait without consuming the peer acknowledgement.
     /// <para>取消某次许可等待，且不会吞掉对端确认。</para></param>
-    /// <returns>A task that completes once every chunk has been handed to the transport.
-    /// <para>全部负载块都已交给传输后完成的任务。</para></returns>
     /// <exception cref="InvalidOperationException">The stream is closed. <para>流已关闭。</para></exception>
     /// <exception cref="TimeoutException">The peer did not acknowledge the previous chunk within the write permit
     /// wait while <paramref name="cancellationToken"/> stayed unset.
@@ -394,14 +359,10 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// <para>读取下一块数据；流已关闭且队列读空时返回 <see langword="null"/>。</para>
     /// </summary>
     /// <param name="timeoutMs">Per-read wait in milliseconds; <see cref="Timeout.Infinite"/> waits until data
-    /// arrives or the stream closes, and <c>0</c> polls. <para>单次读取等待毫秒数；
+    /// arrives or the stream closes, and <c>0</c> polls.<para>单次读取等待毫秒数；
     /// <see cref="Timeout.Infinite"/> 等待至数据到达或流关闭，<c>0</c> 表示轮询。</para></param>
     /// <returns>The next queued payload, or <see langword="null"/> when the read timed out or the stream closed
     /// with an empty queue. <para>下一个排队负载；读取超时或流已关闭且无排队数据时返回 <see langword="null"/>。</para></returns>
-    /// <remarks>Synchronous form reserved for the <see cref="AdbServiceStream"/> byte façade and the one-shot
-    /// device services, both of which expose a blocking API.
-    /// <para>该同步形式仅供 <see cref="AdbServiceStream"/> 字节门面与一次性设备服务使用，两者都暴露阻塞 API。</para>
-    /// </remarks>
     /// <exception cref="IOException">The stream is faulted and its queue has drained.
     /// <para>流已故障且队列已读完。</para></exception>
     internal byte[]? Read(int timeoutMs = Timeout.Infinite)
@@ -434,7 +395,7 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Reads the next chunk asynchronously, or <see langword="null"/> once the stream is closed and drained.
     /// <para>异步读取下一块数据；流已关闭且队列读空时返回 <see langword="null"/>。</para>
     /// </summary>
-    /// <param name="cancellationToken">Bounds the wait for inbound data. 限制入站数据的等待。</param>
+    /// <param name="cancellationToken">Bounds the wait for inbound data.<para>限制入站数据的等待。</para></param>
     /// <returns>The next queued payload, or <see langword="null"/> when the stream closed with an empty queue.
     /// <para>下一个排队负载；流关闭且队列为空时返回 <see langword="null"/>。</para></returns>
     /// <exception cref="IOException">The stream is faulted and its queue has drained.
@@ -481,13 +442,9 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// <para>非阻塞地取出已排队的负载。</para>
     /// </summary>
     /// <param name="chunk">The queued payload when <see langword="true"/> is returned.
-    /// 返回 <see langword="true"/> 时的排队负载。</param>
+    /// <para>返回 <see langword="true"/> 时的排队负载。</para></param>
     /// <returns><see langword="true"/> when a payload was already queued; otherwise <see langword="false"/>.
     /// <para>队列已有负载时返回 <see langword="true"/>；否则返回 <see langword="false"/>。</para></returns>
-    /// <remarks>An empty queue is reported without a fault or close check, so polling a stream that has just
-    /// failed still yields its buffered payloads.
-    /// <para>空队列不会触发故障或关闭检查，因此轮询刚刚失败的流仍能读出其缓冲负载。</para>
-    /// </remarks>
     public bool TryRead([NotNullWhen(true)] out byte[]? chunk)
     {
         if (_serverStream is not null)
@@ -525,8 +482,6 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Closes the stream and notifies the peer without blocking a thread on the close frame.
     /// <para>关闭流并通知对端，等待关闭帧时不占用线程。</para>
     /// </summary>
-    /// <returns>A task that completes once the close frame has been handed to the transport.
-    /// <para>关闭帧已交给传输后完成的任务。</para></returns>
     public async Task CloseAsync()
     {
         bool shouldNotify;
@@ -556,8 +511,8 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     }
 
     /// <summary>
-    /// Releases all resources used by the stream.
-    /// <para>释放流使用的所有资源。</para>
+    /// Releases the resources held by the stream.
+    /// <para>释放流持有的资源。</para>
     /// </summary>
     public void Dispose()
     {
@@ -585,8 +540,6 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Releases the stream asynchronously.
     /// <para>异步释放流。</para>
     /// </summary>
-    /// <returns>A task that completes once the stream resources are released.
-    /// <para>流资源释放完成后结束的任务。</para></returns>
     public async ValueTask DisposeAsync()
     {
         if (!_disposed)
@@ -642,7 +595,7 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// acknowledgement or close can produce.
     /// <para>触发该流的某个计数原语一次，并忽略重复确认或重复关闭可能造成的饱和多余信号。</para>
     /// </summary>
-    /// <param name="signal">The primitive to signal. 待触发的原语。</param>
+    /// <param name="signal">The primitive to signal.<para>待触发的原语。</para></param>
     private static void Release(SemaphoreSlim signal)
     {
         try
@@ -656,11 +609,11 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
 
     /// <summary>
     /// Waits for the write permit, converting the internal deadline into <see cref="TimeoutException"/> while
-    /// preserving the caller's cancellation and leaving the permit available when the wait ends without one.
-    /// <para>等待写入许可；把内部期限转为 <see cref="TimeoutException"/>，同时保留调用方的取消语义，并在未获得许可时
+    /// preserving external cancellation and leaving the permit available when the wait ends without one.
+    /// <para>等待写入许可；把内部期限转为 <see cref="TimeoutException"/>，同时保留外部取消语义，并在未获得许可时
     /// 保持许可可被后续写入使用。</para>
     /// </summary>
-    /// <param name="cancellationToken">The caller's token. 调用方令牌。</param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <exception cref="TimeoutException">The deadline expired while <paramref name="cancellationToken"/> stayed
     /// unset. <para>期限已到而 <paramref name="cancellationToken"/> 未触发。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
@@ -687,6 +640,7 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Resolves the payload size for one WRTE frame from the peer-advertised limit.
     /// <para>按对端通告的上限确定单个 WRTE 帧的负载大小。</para>
     /// </summary>
+    /// <returns>The payload size for one WRTE frame.<para>单个 WRTE 帧的负载大小。</para></returns>
     /// <exception cref="IOException">The peer did not advertise a payload limit. <para>对端未通告负载上限。</para></exception>
     private int ChunkSize()
     {
@@ -699,7 +653,7 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Takes the next queued payload, clearing the data signal only once the queue has emptied.
     /// <para>取出下一个排队负载，仅在队列已空时清除数据信号。</para>
     /// </summary>
-    /// <param name="chunk">The payload taken from the queue. 从队列取出的负载。</param>
+    /// <param name="chunk">The payload taken from the queue.<para>从队列取出的负载。</para></param>
     /// <returns><see langword="true"/> when a payload was queued. <para>队列中存在负载时为
     /// <see langword="true"/>。</para></returns>
     private bool TryDequeue(out byte[]? chunk)
@@ -722,7 +676,9 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Reads one chunk from the relayed adb-server socket on a caller thread that already owns the stream.
     /// <para>在已持有该流的调用线程上从转发的 adb server socket 读取一块数据。</para>
     /// </summary>
-    /// <param name="timeoutMs">Per-read wait in milliseconds. 单次读取等待毫秒数。</param>
+    /// <param name="timeoutMs">Per-read wait in milliseconds.<para>单次读取等待毫秒数。</para></param>
+    /// <returns>The chunk read from the relayed socket, or <see langword="null"/> on timeout, close, or an
+    /// already closed stream. <para>从转发 socket 读到的块；超时、关闭或流已关闭时返回 <see langword="null"/>。</para></returns>
     /// <exception cref="IOException">The relayed socket failed. <para>被转发的 socket 失败。</para></exception>
     private byte[]? ReadServerStream(int timeoutMs)
     {
@@ -759,7 +715,9 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     /// Reads one chunk from the relayed adb-server socket without blocking a thread.
     /// <para>从转发的 adb server socket 异步读取一块数据，不阻塞线程。</para>
     /// </summary>
-    /// <param name="cancellationToken">Bounds the wait for inbound bytes. 限制入站字节的等待。</param>
+    /// <param name="cancellationToken">Bounds the wait for inbound bytes.<para>限制入站字节的等待。</para></param>
+    /// <returns>The chunk read from the relayed socket, or <see langword="null"/> when cancelled, closed, or an
+    /// already closed stream. <para>从转发 socket 读到的块；取消、关闭或流已关闭时返回 <see langword="null"/>。</para></returns>
     /// <exception cref="IOException">The relayed socket failed. <para>被转发的 socket 失败。</para></exception>
     private async ValueTask<byte[]?> ReadServerStreamAsync(CancellationToken cancellationToken)
     {
@@ -802,15 +760,15 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     }
 
     /// <summary>
-    /// Projects one chunk of the caller payload. An exact-size caller array is handed over as is, because a wire
+    /// Projects one chunk of the payload buffer. An exact-size array is handed over as is, because a wire
     /// message carries its payload as a whole array whose length is the frame length.
-    /// <para>取出调用方负载中的一块。尺寸与该块恰好相同的数组会直接转交，因为线上消息以整个数组承载负载，
+    /// <para>取出负载缓冲区中的一块。尺寸与该块恰好相同的数组会直接转交，因为线上消息以整个数组承载负载，
     /// 而数组长度即为帧长度。</para>
     /// </summary>
-    /// <param name="data">The caller payload. 调用方负载。</param>
-    /// <param name="offset">Chunk start. 块起始位置。</param>
-    /// <param name="length">Chunk length. 块长度。</param>
-    /// <returns>The payload array for one frame. 单帧的负载数组。</returns>
+    /// <param name="data">The payload buffer.<para>负载缓冲区。</para></param>
+    /// <param name="offset">Chunk start.<para>块起始位置。</para></param>
+    /// <param name="length">Chunk length.<para>块长度。</para></param>
+    /// <returns>The payload array for one frame.<para>单帧的负载数组。</para></returns>
     private static byte[] Exact(ReadOnlyMemory<byte> data, int offset, int length) =>
         MemoryMarshal.TryGetArray(data, out var segment) && offset == 0 && length == segment.Array!.Length
             ? segment.Array

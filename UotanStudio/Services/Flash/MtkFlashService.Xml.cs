@@ -3,15 +3,8 @@ using UotanStudio.Comm.Transports.Serial;
 
 namespace UotanStudio.Services.Flash;
 
-/// <summary>Host orchestration for the MediaTek XML download agent family.
-/// <para>面向联发科 XML 下载代理家族的宿主编排。</para></summary>
-/// <remarks>
-/// <para>The XML agent transfers raw, block-aligned ranges of a named physical region only. Preparation boots
-/// the agent, reads that region's GPT and reconciles the requested partition names with the live table before
-/// any source is opened; nothing here erases, pads or writes until execution is confirmed separately.</para>
-/// <para>XML 代理只传输命名区域中按块对齐的原始范围。准备阶段启动代理、读取该区域的 GPT，
-/// 并在打开任何源之前把请求的分区名与该实时表核对；在单独确认执行之前，本流程不会擦除、填充或写入。</para>
-/// </remarks>
+/// <summary>Operations for the MediaTek XML download agent family.
+/// <para>面向联发科 XML 下载代理家族的操作。</para></summary>
 public static partial class MtkFlashService
 {
     /// <summary>Boots an XML agent on a leased session and previews GPT-named operations.
@@ -64,8 +57,8 @@ public static partial class MtkFlashService
             regionName, steps, cancellationToken);
     }
 
-    /// <summary>Previews GPT-named XML operations through a caller-supplied session connector.
-    /// <para>经调用方提供的会话连接器预览按 GPT 名寻址的 XML 操作。</para></summary>
+    /// <summary>Previews GPT-named XML operations through a supplied session connector.
+    /// <para>经传入的会话连接器预览按 GPT 名寻址的 XML 操作。</para></summary>
     /// <param name="connect">Connector returning a storage-ready XML session; ownership transfers to the
     /// returned preview. <para>返回存储就绪 XML 会话的连接器；所有权转移给返回的预览对象。</para></param>
     /// <param name="regionName">Explicit XML region token holding the GPT.
@@ -122,11 +115,6 @@ public static partial class MtkFlashService
 
 /// <summary>Owns a previewed XML plan and its live session.
 /// <para>持有已预览的 XML 计划与其活动会话。</para></summary>
-/// <remarks>
-/// <para>Abandoning a preview requires disposal. Disposal while execution is running is rejected so an active
-/// transfer keeps its source handles alive.</para>
-/// <para>放弃预览必须释放。执行期间拒绝释放，使进行中的传输仍能持有源句柄。</para>
-/// </remarks>
 public sealed class MtkXmlFlashPreparation : IMtkFlashPlanPreview
 {
     private readonly MtkSession _session;
@@ -149,21 +137,36 @@ public sealed class MtkXmlFlashPreparation : IMtkFlashPlanPreview
     /// <value>One entry per extent. <para>每个范围对应一项。</para></value>
     public IReadOnlyList<MtkXmlFlashOperation> Operations => _plan.Operations;
 
-    /// <inheritdoc />
+    /// <summary>Gets the number of executable extents in the plan.
+    /// <para>获取计划中可执行范围的数量。</para></summary>
+    /// <value>The extent count after preparation. <para>准备完成后的范围数量。</para></value>
     public int OperationCount => _plan.Operations.Count;
 
-    /// <inheritdoc />
+    /// <summary>Gets the planned write and erase bytes, excluding readback.
+    /// <para>获取计划的写入与擦除字节数，不含回读。</para></summary>
+    /// <value>The checked total. <para>防溢出累加的总量。</para></value>
     public long TotalBytes => _plan.TotalBytes;
 
-    /// <inheritdoc />
+    /// <summary>Gets the plan's one-shot lifecycle state.
+    /// <para>获取计划的单次生命周期状态。</para></summary>
+    /// <value>The current state. <para>当前状态。</para></value>
     public MtkFlashPlanState State => _plan.State;
 
-    /// <inheritdoc />
+    /// <summary>Executes the plan only after explicit confirmation.
+    /// <para>仅在显式确认后执行计划。</para></summary>
+    /// <param name="progress">Optional phase-local progress reporter.
+    /// <para>可选的阶段内进度报告器。</para></param>
+    /// <param name="eraseTimeoutMs">The deadline for each erase range.
+    /// <para>每个擦除范围的截止时间。</para></param>
+    /// <param name="cancellationToken">The execution cancellation token.
+    /// <para>执行取消令牌。</para></param>
+    /// <returns>Completion totals. <para>完成总量。</para></returns>
     public Task<MtkFlashPlanResult> ExecuteAsync(IProgress<MtkFlashPlanProgress>? progress = null,
         int eraseTimeoutMs = 120000, CancellationToken cancellationToken = default) =>
         _session.ExecuteXmlPlanAsync(_plan, progress, eraseTimeoutMs, cancellationToken);
 
-    /// <inheritdoc />
+    /// <summary>Releases the plan and the session.
+    /// <para>释放计划与会话。</para></summary>
     public void Dispose()
     {
         _plan.Dispose();

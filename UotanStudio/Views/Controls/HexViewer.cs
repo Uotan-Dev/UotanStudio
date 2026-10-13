@@ -185,9 +185,9 @@ public class HexViewer : Grid
         private System.Text.Encoding _textEncoding = System.Text.Encoding.ASCII;
 
         /// <summary>
-        /// <para>文本列表头显示的编码标签，与属性面板选择的编码保持一致；默认纯 ASCII。</para>
         /// Encoding label drawn in the text-column header, kept in sync with the encoding chosen in the
         /// properties panel; plain ASCII by default.
+        /// <para>文本列表头显示的编码标签，与属性面板选择的编码保持一致；默认纯 ASCII。</para>
         /// </summary>
         private string _encodingLabel = "ASCII";
 
@@ -224,10 +224,10 @@ public class HexViewer : Grid
         }
 
         /// <summary>
-        /// <para>进入可视树时订阅主题变更：LightColors/DarkColors 字典替换后强制重绘，
-        /// 否则 Render 内解析的 Hex* 画刷不会自动刷新。</para>
         /// Subscribes to theme changes while attached to the visual tree so the custom-rendered
         /// brushes (resolved inside Render) refresh after LightColors/DarkColors dictionary swaps.
+        /// <para>进入可视树时订阅主题变更：LightColors/DarkColors 字典替换后强制重绘，
+        /// 否则 Render 内解析的 Hex* 画刷不会自动刷新。</para>
         /// </summary>
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
@@ -236,9 +236,9 @@ public class HexViewer : Grid
         }
 
         /// <summary>
-        /// <para>离开可视树时退订主题变更，避免静态事件持有已卸载控件导致内存泄漏。</para>
         /// Unsubscribes from theme changes when detached, so the static event does not keep
         /// unloaded controls (and their data) alive.
+        /// <para>离开可视树时退订主题变更，避免静态事件持有已卸载控件导致内存泄漏。</para>
         /// </summary>
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
@@ -264,9 +264,9 @@ public class HexViewer : Grid
         }
 
         /// <summary>
-        /// <para>设置文本列与文本输入的编码，并同步列表头标签；未知名称回落为 ASCII。</para>
         /// Sets the encoding for the text column and text input and updates the column-header label;
         /// unknown names fall back to ASCII.
+        /// <para>设置文本列与文本输入的编码，并同步列表头标签；未知名称回落为 ASCII。</para>
         /// </summary>
         public void SetEncodingName(string? name)
         {
@@ -282,11 +282,11 @@ public class HexViewer : Grid
         }
 
         /// <summary>
-        /// <para>解析属性面板使用的编码名称（与 <c>FileViewModel.SupportedEncodings</c> 同一套取值），
-        /// 返回实际生效的 .NET 编码与应显示在列表头上的标签；无法解析时回落为 ASCII。</para>
         /// Resolves a properties-panel encoding name (the same set as <c>FileViewModel.SupportedEncodings</c>)
         /// into the effective .NET encoding plus the label shown in the column header, falling back to ASCII
         /// when the name cannot be resolved.
+        /// <para>解析属性面板使用的编码名称（与 <c>FileViewModel.SupportedEncodings</c> 同一套取值），
+        /// 返回实际生效的 .NET 编码与应显示在列表头上的标签；无法解析时回落为 ASCII。</para>
         /// </summary>
         private static (System.Text.Encoding Encoding, string Label) ResolveTextEncoding(string? name)
         {
@@ -906,9 +906,9 @@ public class HexViewer : Grid
         }
 
         /// <summary>
-        /// <para>按当前编码把单字节解码为文本列显示字符；不可打印/无法解码时显示 "."。</para>
         /// Decodes one byte to a text-column character using the current encoding; non-printable or
         /// undecodable bytes render as ".".
+        /// <para>按当前编码把单字节解码为文本列显示字符；不可打印/无法解码时显示 "."。</para>
         /// </summary>
         private string DecodeByte(byte value)
         {

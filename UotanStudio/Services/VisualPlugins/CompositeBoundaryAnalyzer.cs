@@ -4,17 +4,54 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.VisualPlugins;
 
-/// <summary>Public and optional interfaces discovered without modifying a canvas.</summary>
+/// <summary>
+/// Public and optional interfaces discovered from a selected subgraph.
+/// <para>从选中的子图发现的公开接口与可选接口。</para>
+/// </summary>
+/// <param name="Inputs">
+/// Ports that receive values from outside the selection.
+/// <para>从选中范围之外接收值的端口。</para>
+/// </param>
+/// <param name="Outputs">
+/// Ports whose values leave the selection.
+/// <para>其值流出选中范围的端口。</para>
+/// </param>
+/// <param name="InputCandidates">
+/// Optional input ports not required by the crossing edges.
+/// <para>并非跨界连线所必需的可选输入端口。</para>
+/// </param>
+/// <param name="OutputCandidates">
+/// Optional output ports not required by the crossing edges.
+/// <para>并非跨界连线所必需的可选输出端口。</para>
+/// </param>
 public sealed record CompositeBoundaryAnalysis(
     IReadOnlyList<VisualPluginPortDefinition> Inputs,
     IReadOnlyList<VisualPluginPortDefinition> Outputs,
     IReadOnlyList<VisualPluginPortDefinition> InputCandidates,
     IReadOnlyList<VisualPluginPortDefinition> OutputCandidates);
 
-/// <summary>Derives interfaces from actual graph crossings, never from coincident port names.</summary>
+/// <summary>
+/// Derives interfaces from actual graph crossings, never from coincident port names.
+/// <para>依据真实的图跨界关系推导接口，绝不依据同名端口。</para>
+/// </summary>
 public static class CompositeBoundaryAnalyzer
 {
-    /// <summary>Finds crossing edges, missing required inputs, and optional literal/output candidates.</summary>
+    /// <summary>
+    /// Finds crossing edges, missing required inputs, and optional literal/output candidates.
+    /// <para>查找跨界连线、缺失的必需输入，以及可选的字面量与输出候选。</para>
+    /// </summary>
+    /// <param name="nodes">
+    /// Nodes of the subgraph to inspect.
+    /// <para>要检查的子图中的节点。</para>
+    /// </param>
+    /// <param name="connections">
+    /// Connections of the whole graph.
+    /// <para>整个图的连线。</para>
+    /// </param>
+    /// <returns>
+    /// The discovered public and optional interfaces.
+    /// <para>发现的公开接口与可选接口。</para>
+    /// </returns>
     public static CompositeBoundaryAnalysis Analyze(IReadOnlyList<FlowNodeViewModel> nodes,
         IReadOnlyList<NodeConnectionViewModel> connections)
     {
@@ -91,7 +128,6 @@ public static class CompositeBoundaryAnalyzer
 
     private static VisualPluginPortDefinition Define(FlowNodeViewModel node, NodeConnectorViewModel port, bool input)
     {
-        // Identity follows endpoints, not list positions or translated titles.
         var identity = $"{node.InstanceId}:{port.StableId}:{input}";
         var digest = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(identity));
         return new VisualPluginPortDefinition

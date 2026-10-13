@@ -13,9 +13,9 @@ public sealed class PathSandbox
     private readonly string? _root;
 
     /// <summary>
-    /// <para>不受限沙箱：接受任意路径，供桌面宿主启用的本地 MCP 暴露使用（监听回环地址、由用户显式开启）。</para>
     /// Unrestricted sandbox: accepts any path; used by the local MCP exposure the desktop host starts
     /// when the user turns it on (loopback listener, explicit opt-in).
+    /// <para>不受限沙箱：接受任意路径，供桌面宿主启用的本地 MCP 暴露使用（监听回环地址、由用户显式开启）。</para>
     /// </summary>
     /// <value>A shared instance whose <see cref="Root"/> is <see langword="null"/> and whose containment checks always pass.
     /// <para>共享实例：其 <see cref="Root"/> 为 <see langword="null"/>，包含性检查恒通过。</para></value>

@@ -13,7 +13,10 @@ using UotanStudio.Services.Projects;
 
 namespace UotanStudio.Services.Firmware;
 
-/// <summary>Bounded, source-generated project configuration storage for Super and Payload.</summary>
+/// <summary>
+/// Bounded, source-generated project configuration storage for Super and Payload containers.
+/// <para>面向 Super 与 Payload 容器的有界源生成工程配置存储。</para>
+/// </summary>
 internal static class SourceContainerMetadataService
 {
     private const long MaximumBytes = 32 * 1024 * 1024;
@@ -32,11 +35,12 @@ internal static class SourceContainerMetadataService
     }
 
     /// <summary>
-    /// <para>把旧配置里缺失的字符串字段缺口补成空字符串。源生成序列化器对 JSON 中不存在的引用类型属性写入
-    /// <c>null</c>（不保留属性初始化器），不归一化会让交付面板回填时空引用。</para>
-    /// Fills string fields missing from legacy configurations with empty strings. The source-generated serializer
-    /// writes <c>null</c> for reference properties absent from JSON (initializers are not preserved), and using
-    /// them unnormalized throws when the delivery panel backfills.</summary>
+    /// Replaces the null string and list fields a deserialized configuration can carry with empty or
+    /// default values.
+    /// <para>把反序列化配置中可能为 null 的字符串与列表字段替换为空值或默认值。</para>
+    /// </summary>
+    /// <param name="settings">The deserialized configuration to normalize. <para>待归一化的反序列化配置。</para></param>
+    /// <returns>A configuration whose reference fields are safe to read. <para>引用字段可安全读取的配置。</para></returns>
     private static DeliverySourceContainerSettings Normalize(DeliverySourceContainerSettings settings) => settings with
     {
         SourceName = settings.SourceName ?? string.Empty,
@@ -86,10 +90,7 @@ internal static class SourceContainerMetadataService
         }
 
         var payload = PayloadParser.GetPayloadMetadata(source);
-        // OTA 元数据只在 ZIP 包裹的来源里存在；原始 payload.bin 没有构建身份，置空而不是猜测。
-        // OTA metadata only exists in ZIP-wrapped sources; a raw payload.bin has no build identity, so leave it empty.
         var ota = TryReadOtaMetadata(source);
-        // Save configuration, not the potentially enormous per-operation delta manifest.
         return new DeliverySourceContainerSettings
         {
             SourceName = Path.GetFileName(source),
@@ -111,11 +112,13 @@ internal static class SourceContainerMetadataService
     }
 
     /// <summary>
-    /// <para>从 ZIP 包裹的 payload 来源读取 <c>META-INF/com/android/metadata</c>；
-    /// 原始 payload、缺失成员、超限元数据或无法读取的归档返回空字典。</para>
     /// Reads <c>META-INF/com/android/metadata</c> from a ZIP-wrapped payload source; returns an empty
     /// dictionary for raw payloads, missing members, oversized metadata or unreadable archives.
+    /// <para>从 ZIP 包裹的 payload 来源读取 <c>META-INF/com/android/metadata</c>；
+    /// 原始 payload、缺失成员、超限元数据或无法读取的归档返回空字典。</para>
     /// </summary>
+    /// <param name="source">Path of the payload or archive source. <para>payload 或归档来源的路径。</para></param>
+    /// <returns>The parsed key-value metadata, empty when unavailable. <para>解析出的键值元数据，不可用时为空。</para></returns>
     private static Dictionary<string, string> TryReadOtaMetadata(string source)
     {
         try
@@ -125,8 +128,6 @@ internal static class SourceContainerMetadataService
             if (stream.Length < magic.Length) return [];
             stream.ReadExactly(magic);
             stream.Position = 0;
-            // 仅 ZIP（PK）包含 OTA 元数据；原始 payload.bin 直接返回空。
-            // Only ZIP (PK) sources carry OTA metadata; a raw payload.bin returns empty.
             if (magic[0] != 0x50 || magic[1] != 0x4B) return [];
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
             var entry = archive.Entries.FirstOrDefault(e => string.Equals(

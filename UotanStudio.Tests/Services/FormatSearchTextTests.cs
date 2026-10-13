@@ -11,11 +11,11 @@ using Xunit;
 namespace UotanStudio.Tests.Services;
 
 /// <summary>
-/// <para>项目范围格式适配层测试：验证 DTB/ARSC/AXML/DEX 的文本化、锚点映射、取消与跳过语义，
-/// 以及 XML→AXML 重编译在编辑字符串值后保留强类型属性的字节语义。</para>
 /// Format-adapter tests for project-scope search: DTB/ARSC/AXML/DEX text-ification, anchor mapping,
 /// cancellation and skip semantics, plus XML→AXML recompilation preserving the byte semantics of
 /// typed attributes after a string-value edit.
+/// <para>项目范围格式适配层测试：验证 DTB/ARSC/AXML/DEX 的文本化、锚点映射、取消与跳过语义，
+/// 以及 XML→AXML 重编译在编辑字符串值后保留强类型属性的字节语义。</para>
 /// </summary>
 public class FormatSearchTextTests
 {

@@ -6,7 +6,7 @@ using UotanStudio.Firmware.Infrastructure.Downloads;
 
 namespace UotanStudio.Services.Delivery;
 
-/// <summary><para>钉住的工具发布产物：zip 归档或原始单文件二进制。</para>Pinned tool artifact: a zip archive or a raw single-file binary.</summary>
+/// <summary>Pinned tool artifact: a zip archive or a raw single-file binary. <para>钉住的工具发布产物：zip 归档或原始单文件二进制。</para></summary>
 internal sealed record DeliveryToolPackage(string Name, string Url, string Sha256, string Prefix, bool Raw = false, string? Member = null);
 
 /// <summary><para>把钉住的工具发布产物下载到可校验的归档缓存，并把选中的平台物化到 staging 目录。
@@ -70,13 +70,8 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
         "D81BE8618553D7D658E09DA669FFD68EC76D8095161A590C9B8A1A99FCE67CA8", "", Raw: true);
 
     /// <summary>
-    /// <para>为启用的平台准备 platform-tools 与（选择压缩镜像时）zstd，裁掉不用的二进制，
-    /// 并按 Recovery/组织式 Super 的约定把所需 Linux 静态 zstd 别名物化到 bin/android。平台条目按
-    /// <see cref="MaximumConcurrentPlatforms"/> 有界并发暂存，每个条目内部的下载、解压、zstd 准备与裁剪仍按顺序执行。</para>
-    /// Prepares platform-tools and, when compressed images are selected, zstd for each enabled platform, trims unused
-    /// binaries, and materializes the Linux static zstd aliases into bin/android per the Recovery/organized Super
-    /// convention. Platform entries are staged concurrently up to <see cref="MaximumConcurrentPlatforms"/> while the
-    /// download, extraction, zstd preparation and trimming inside one entry stay sequential.
+    /// Prepares the platform tools and zstd binaries for the enabled platforms.
+    /// <para>为启用的平台准备平台工具与 zstd 二进制。</para>
     /// </summary>
     /// <param name="plan">
     /// Plan selecting the enabled platforms and deciding whether zstd is needed: files ending in
@@ -247,13 +242,13 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
     }
 
     /// <summary>
-    /// <para>取得（必要时下载并校验 SHA-256）指定工具包在缓存中的路径。源的选择与测速由
-    /// Firmware.Core 的 <c>HttpDownload</c> 负责，从快到慢依次尝试，SHA-256 校验兜底。同一包名的并发调用被
-    /// <see cref="CacheGates"/> 串行，不同包名互不阻塞。</para>
     /// Returns the cached path for a tool package, downloading and verifying its SHA-256 when needed. Source selection
     /// and speed probing are handled by <c>HttpDownload</c> in Firmware.Core; sources are tried fastest-first with a
     /// SHA-256 check as the final guard. Concurrent calls for one package name are serialized by
     /// <see cref="CacheGates"/> while different package names never wait on each other.
+    /// <para>取得（必要时下载并校验 SHA-256）指定工具包在缓存中的路径。源的选择与测速由
+    /// Firmware.Core 的 <c>HttpDownload</c> 负责，从快到慢依次尝试，SHA-256 校验兜底。同一包名的并发调用被
+    /// <see cref="CacheGates"/> 串行，不同包名互不阻塞。</para>
     /// </summary>
     internal async Task<string> AcquireAsync(DeliveryToolPackage package, IProgress<DeliveryProgress>? progress, CancellationToken token)
     {

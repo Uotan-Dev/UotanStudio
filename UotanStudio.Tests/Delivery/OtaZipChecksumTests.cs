@@ -95,12 +95,12 @@ public sealed class OtaZipChecksumTests : IDisposable
     }
 
     /// <summary>
-    /// <para>手写的 ZIP64 stored 条目归档：中央目录记录的大小与本地头偏移都是占位值，真实值只存在于 ZIP64 扩展字段，
-    /// 经典结束记录的大小/偏移/条目数同样置为占位值以迫使解析走 ZIP64 结束记录，两个头部的 CRC 先写成给定过期值。</para>
     /// A hand-authored ZIP64 stored-entry archive whose central directory size and local-offset fields hold
     /// placeholders with the real values only in the ZIP64 extra field, whose classic end record also carries
     /// placeholders so resolution must go through the ZIP64 end-of-central-directory record, and whose two CRC
     /// fields start at the given stale value.
+    /// <para>手写的 ZIP64 stored 条目归档：中央目录记录的大小与本地头偏移都是占位值，真实值只存在于 ZIP64 扩展字段，
+    /// 经典结束记录的大小/偏移/条目数同样置为占位值以迫使解析走 ZIP64 结束记录，两个头部的 CRC 先写成给定过期值。</para>
     /// </summary>
     private static (byte[] Bytes, int LocalHeaderStart, int CentralRecordStart) BuildZip64StoredArchive(uint staleChecksum)
     {

@@ -3,7 +3,7 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.Projects;
 
-/// <summary>Desktop node-to-data conversion; file persistence is provided by the project library.</summary>
+/// <summary>Converts workflow nodes and connections into persistence DTOs.<para>把工作流节点与连接转换为持久化用的 DTO。</para></summary>
 public static class WorkflowPersistenceService
 {
     internal static WorkflowSnapshot CloneForEditing(WorkflowSnapshot snapshot)
@@ -23,7 +23,6 @@ public static class WorkflowPersistenceService
             {
                 continue;
             }
-            // These capabilities come only from already loaded objects, never from serialized input.
             copy.BundlePath = original.BundlePath;
             copy.BundleRoot = original.BundleRoot;
             copy.Assets = [.. original.Assets.Select(asset => asset.Snapshot())];
@@ -68,7 +67,6 @@ public static class WorkflowPersistenceService
         Dictionary<string, string>? map = null;
         foreach (var connector in node.Input)
         {
-            // Membership in Input is authoritative even before the node view initializes IsInput.
             if (connector.IsSensitive || connector.InitialValue is null
                 || !node.IsUnavailable && connector.PortType is not (NodePortType.Path or NodePortType.Text or NodePortType.Number or NodePortType.Boolean))
             {
@@ -100,10 +98,13 @@ public static class WorkflowPersistenceService
         })];
 
     /// <summary>
-    /// <para>由节点与连接集合构建连接 DTO 列表，解析每个连接器所属节点以持久化源/目标实例 ID（供无头执行等场景可靠重建拓扑）。</para>
-    /// Builds connection DTOs from node and connection collections, resolving each connector's owning node so that
-    /// source/target instance IDs can be persisted (reliable topology rebuild for headless execution and similar).
+    /// Builds connection DTOs from node and connection collections, resolving each connector's owning node
+    /// into the persisted source and target instance IDs.
+    /// <para>由节点与连接集合构建连接 DTO，解析每个连接器的所属节点作为持久化的源与目标实例 ID。</para>
     /// </summary>
+    /// <param name="nodes">The nodes owning the connectors. <para>持有这些连接器的节点。</para></param>
+    /// <param name="connections">The connections to convert. <para>待转换的连接。</para></param>
+    /// <returns>The built connection DTO list. <para>构建出的连接 DTO 列表。</para></returns>
     public static List<ConnectionDto> BuildConnectionDtos(IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnectionViewModel> connections)
     {
         var result = new List<ConnectionDto>(connections.Count);
@@ -124,9 +125,12 @@ public static class WorkflowPersistenceService
     }
 
     /// <summary>
-    /// <para>按引用扫描查找连接器所属节点实例 ID；未找到返回 <c>null</c>。</para>
     /// Finds the owning node instance ID of a connector by reference scan; returns <c>null</c> if not found.
+    /// <para>按引用扫描查找连接器所属节点实例 ID；未找到返回 <c>null</c>。</para>
     /// </summary>
+    /// <param name="nodes">The nodes to scan. <para>待扫描的节点。</para></param>
+    /// <param name="connector">The connector whose owner is sought. <para>需要确定所属节点的连接器。</para></param>
+    /// <returns>The owning node instance ID, or <c>null</c>. <para>所属节点的实例 ID，或 <c>null</c>。</para></returns>
     private static string? FindOwnerNodeId(IReadOnlyList<FlowNodeViewModel> nodes, NodeConnectorViewModel connector)
     {
         foreach (var n in nodes)

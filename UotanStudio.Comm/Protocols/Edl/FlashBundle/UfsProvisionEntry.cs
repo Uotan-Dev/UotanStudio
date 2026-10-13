@@ -49,31 +49,58 @@ internal abstract class UfsProvisionEntryState
 /// </summary>
 internal sealed class UfsProvisionCommon : UfsProvisionEntryState
 {
-    /// <summary>Gets or sets the number of logical units (LUNs). 逻辑单元（LUN）的数量。</summary>
+    /// <summary>
+    /// Gets or sets the number of logical units (LUNs).
+    /// <para>逻辑单元（LUN）的数量。</para>
+    /// </summary>
     public int BNumberLU { get; set; }
 
-    /// <summary>Gets or sets a value indicating whether boot is enabled. 是否启用启动。</summary>
+    /// <summary>
+    /// Gets or sets a value indicating whether boot is enabled.
+    /// <para>是否启用启动。</para>
+    /// </summary>
     public int BBootEnable { get; set; }
 
-    /// <summary>Gets or sets the descriptor access enable value. 描述符访问使能值。</summary>
+    /// <summary>
+    /// Gets or sets the descriptor access enable value.
+    /// <para>描述符访问使能值。</para>
+    /// </summary>
     public int BDescrAccessEn { get; set; }
 
-    /// <summary>Gets or sets the initial power mode. 初始电源模式。</summary>
+    /// <summary>
+    /// Gets or sets the initial power mode.
+    /// <para>初始电源模式。</para>
+    /// </summary>
     public int BInitPowerMode { get; set; }
 
-    /// <summary>Gets or sets the high priority LUN index. 高优先级 LUN 索引。</summary>
+    /// <summary>
+    /// Gets or sets the high priority LUN index.
+    /// <para>高优先级 LUN 索引。</para>
+    /// </summary>
     public int BHighPriorityLUN { get; set; }
 
-    /// <summary>Gets or sets the secure removal type. 安全擦除类型。</summary>
+    /// <summary>
+    /// Gets or sets the secure removal type.
+    /// <para>安全擦除类型。</para>
+    /// </summary>
     public int BSecureRemovalType { get; set; }
 
-    /// <summary>Gets or sets the initial active ICC level. 初始活跃 ICC 等级。</summary>
+    /// <summary>
+    /// Gets or sets the initial active ICC level.
+    /// <para>初始活跃 ICC 等级。</para>
+    /// </summary>
     public int BInitActiveICCLevel { get; set; }
 
-    /// <summary>Gets or sets the periodic RTC update value. 周期性 RTC 更新值。</summary>
+    /// <summary>
+    /// Gets or sets the periodic RTC update value.
+    /// <para>周期性 RTC 更新值。</para>
+    /// </summary>
     public int WPeriodicRTCUpdate { get; set; }
 
-    /// <summary>Gets or sets the configuration descriptor lock value. 配置描述符锁定值。</summary>
+    /// <summary>
+    /// Gets or sets the configuration descriptor lock value.
+    /// <para>配置描述符锁定值。</para>
+    /// </summary>
     public int BConfigDescrLock { get; set; }
 }
 
@@ -83,37 +110,61 @@ internal sealed class UfsProvisionCommon : UfsProvisionEntryState
 /// </summary>
 internal sealed class UfsProvisionBody : UfsProvisionEntryState
 {
-    /// <summary>Gets or sets the LUN number for this body entry. 此 body 条目的 LUN 编号。</summary>
+    /// <summary>
+    /// Gets or sets the LUN number for this body entry.
+    /// <para>此 body 条目的 LUN 编号。</para>
+    /// </summary>
     public int LUNum { get; set; }
 
     /// <summary>Gets or sets a value indicating whether the LUN is enabled. LUN 是否启用。</summary>
     public int BLUEnable { get; set; }
 
-    /// <summary>Gets or sets the boot LUN ID. 启动 LUN ID。</summary>
+    /// <summary>
+    /// Gets or sets the boot LUN ID.
+    /// <para>启动 LUN ID。</para>
+    /// </summary>
     public int BBootLUNID { get; set; }
 
     /// <summary>Gets or sets the size of the LUN in kilobytes. LUN 大小（千字节）。</summary>
     public long SizeInKb { get; set; }
 
-    /// <summary>Gets or sets the data reliability value. 数据可靠性值。</summary>
+    /// <summary>
+    /// Gets or sets the data reliability value.
+    /// <para>数据可靠性值。</para>
+    /// </summary>
     public int BDataReliability { get; set; }
 
     /// <summary>Gets or sets the LU write protect value. LU 写保护值。</summary>
     public int BLUWriteProtect { get; set; }
 
-    /// <summary>Gets or sets the memory type. 内存类型。</summary>
+    /// <summary>
+    /// Gets or sets the memory type.
+    /// <para>内存类型。</para>
+    /// </summary>
     public int BMemoryType { get; set; }
 
-    /// <summary>Gets or sets the logical block size. 逻辑块大小。</summary>
+    /// <summary>
+    /// Gets or sets the logical block size.
+    /// <para>逻辑块大小。</para>
+    /// </summary>
     public int BLogicalBlockSize { get; set; }
 
-    /// <summary>Gets or sets the provisioning type. 供应类型。</summary>
+    /// <summary>
+    /// Gets or sets the provisioning type.
+    /// <para>供应类型。</para>
+    /// </summary>
     public int BProvisioningType { get; set; }
 
-    /// <summary>Gets or sets the context capacities value. 上下文容量值。</summary>
+    /// <summary>
+    /// Gets or sets the context capacities value.
+    /// <para>上下文容量值。</para>
+    /// </summary>
     public int WContextCapacities { get; set; }
 
-    /// <summary>Gets or sets the description of this LUN. 此 LUN 的描述。</summary>
+    /// <summary>
+    /// Gets or sets the description of this LUN.
+    /// <para>此 LUN 的描述。</para>
+    /// </summary>
     public string Desc { get; set; } = string.Empty;
 }
 
@@ -123,10 +174,16 @@ internal sealed class UfsProvisionBody : UfsProvisionEntryState
 /// </summary>
 internal sealed class UfsProvisionEpilogue : UfsProvisionEntryState
 {
-    /// <summary>Gets or sets the number of LUNs to grow. 待扩容的 LUN 数量。</summary>
+    /// <summary>
+    /// Gets or sets the number of LUNs to grow.
+    /// <para>待扩容的 LUN 数量。</para>
+    /// </summary>
     public int LUNumToGrow { get; set; }
 
-    /// <summary>Gets or sets a value indicating whether to commit the provisioning changes. 是否提交配置更改。</summary>
+    /// <summary>
+    /// Gets or sets a value indicating whether to commit the provisioning changes.
+    /// <para>是否提交配置更改。</para>
+    /// </summary>
     public int Commit { get; set; }
 }
 
@@ -165,15 +222,24 @@ internal sealed class UfsProvisionEntry
     /// <value>The held case instance. <para>持有的分支实例。</para></value>
     internal object Value { get; }
 
-    /// <summary>Creates an entry holding a common case. 创建持有 common 分支的条目。</summary>
+    /// <summary>
+    /// Creates an entry holding a common case.
+    /// <para>创建持有 common 分支的条目。</para>
+    /// </summary>
     /// <param name="common">The common case. <para>common 分支。</para></param>
     public static implicit operator UfsProvisionEntry(UfsProvisionCommon common) => new(common);
 
-    /// <summary>Creates an entry holding a body case. 创建持有 body 分支的条目。</summary>
+    /// <summary>
+    /// Creates an entry holding a body case.
+    /// <para>创建持有 body 分支的条目。</para>
+    /// </summary>
     /// <param name="body">The body case. <para>body 分支。</para></param>
     public static implicit operator UfsProvisionEntry(UfsProvisionBody body) => new(body);
 
-    /// <summary>Creates an entry holding an epilogue case. 创建持有 epilogue 分支的条目。</summary>
+    /// <summary>
+    /// Creates an entry holding an epilogue case.
+    /// <para>创建持有 epilogue 分支的条目。</para>
+    /// </summary>
     /// <param name="epilogue">The epilogue case. <para>epilogue 分支。</para></param>
     public static implicit operator UfsProvisionEntry(UfsProvisionEpilogue epilogue) => new(epilogue);
 

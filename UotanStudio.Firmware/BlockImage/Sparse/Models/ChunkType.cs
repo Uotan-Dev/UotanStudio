@@ -1,8 +1,8 @@
 namespace UotanStudio.Firmware.BlockImage.Sparse.Models;
 
 /// <summary>
-/// AOSP-standard sparse chunk type identifiers stored in the 16-bit chunk header type field.
-/// <para>存于 16 位数据块头部类型字段中的 AOSP 标准稀疏数据块类型标识。</para>
+/// Standard sparse chunk type identifiers stored in the 16-bit chunk header type field.
+/// <para>存于 16 位数据块头部类型字段中的标准稀疏数据块类型标识。</para>
 /// </summary>
 public enum ChunkType : ushort
 {

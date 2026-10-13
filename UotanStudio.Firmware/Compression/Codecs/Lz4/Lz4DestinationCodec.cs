@@ -10,8 +10,6 @@ internal static partial class Lz4DestinationCodec
     private const int MaximumBlockBytes = 256 * 1024 * 1024;
     private const int ALGORITHM_ARCH = 8;
 
-    // The state handle is a void* returned by NativeMemory, so the whole encode
-    // path must stay in an unsafe context before C# 15's relaxed pointer rules.
     internal static unsafe int Encode(ReadOnlySpan<byte> source, Span<byte> target, int algorithm, int level, out int consumed)
     {
         if (source.Length > MaximumBlockBytes || target.Length > MaximumBlockBytes || target.IsEmpty)
@@ -27,7 +25,6 @@ internal static partial class Lz4DestinationCodec
             return 1;
         }
 
-        // sizeof on a custom struct requires an unsafe context before C# 15.
         int stateSize;
         unsafe
         {

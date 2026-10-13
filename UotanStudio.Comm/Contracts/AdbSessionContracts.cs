@@ -5,20 +5,10 @@ using SyncEntry = UotanStudio.Comm.Protocols.Adb.SyncEntry;
 namespace UotanStudio.Comm.Contracts;
 
 /// <summary>
-/// Host-facing ADB protocol session. The concrete protocol implementation is an internal
-/// detail of the communication layer; callers only ever hold this façade.
-/// <para>面向宿主的 ADB 协议会话。具体协议实现是通信层的内部细节，调用方只持有此门面。</para>
+/// Façade for an ADB protocol session. The concrete protocol implementation stays internal to
+/// the communication layer and is never exposed through this interface.
+/// <para>ADB 协议会话的门面接口。具体协议实现保持在通信层内部，不经本接口暴露。</para>
 /// </summary>
-/// <remarks>
-/// The result carriers this façade returns (<see cref="ShellResult"/> and <see cref="SyncEntry"/>)
-/// still live in the protocol layer, so they are named here by explicit type alias. A namespace-wide
-/// import of <c>UotanStudio.Comm.Protocols.Adb</c> is deliberately absent: it would let any later
-/// protocol-layer type resolve silently inside the contract surface and widen the façade without a
-/// reviewable change.
-/// <para>本门面返回的结果类型（<see cref="ShellResult"/> 与 <see cref="SyncEntry"/>）仍位于协议层，
-/// 因此在此以显式类型别名引用。这里刻意不导入 <c>UotanStudio.Comm.Protocols.Adb</c> 整个命名空间：
-/// 一旦导入，后续任何协议层类型都可能在门面契约中悄然被解析出来，使门面在无可见改动的情况下被扩大。</para>
-/// </remarks>
 public interface IAdbDeviceSession : IDisposable
 {
     /// <summary>Gets the protocol name. <para>获取协议名称。</para></summary>
@@ -51,8 +41,6 @@ public interface IAdbDeviceSession : IDisposable
     /// <para>异步连接并认证。</para></summary>
     /// <param name="cancellationToken">Cancels the connect attempt and the peer handshake wait.
     /// <para>取消连接尝试与对端握手等待。</para></param>
-    /// <returns>A task that completes once the peer handshake has finished.
-    /// <para>对端握手完成后完成的任务。</para></returns>
     /// <exception cref="ObjectDisposedException">The session has been disposed.
     /// <para>会话已被释放。</para></exception>
     /// <exception cref="TimeoutException">The peer did not complete the connection handshake
@@ -60,18 +48,18 @@ public interface IAdbDeviceSession : IDisposable
     Task ConnectAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Opens a raw packet stream to a service. <para>打开到服务的原始数据包流。</para></summary>
-    /// <param name="service">The service destination string, such as <c>shell:...</c> or
-    /// <c>sync:</c>. <para>服务目标字符串，如 <c>shell:...</c>、<c>sync:</c>。</para></param>
-    /// <returns>A caller-owned packet stream; the caller must dispose it.
-    /// <para>由调用方持有的数据包流，调用方须自行释放。</para></returns>
+    /// <param name="service">The service destination string, such as a shell or sync target.
+    /// <para>服务目标字符串，例如 shell 或 sync 目标。</para></param>
+    /// <returns>A packet stream owned by the recipient, which must dispose it.
+    /// <para>由接收方持有的数据包流，接收方须自行释放。</para></returns>
     /// <exception cref="ObjectDisposedException">The session has been disposed.
     /// <para>会话已被释放。</para></exception>
     IAdbStream OpenStream(string service);
 
     /// <summary>Opens a byte-oriented stream to a service, ready to be copied or wrapped.
-    /// <para>打开面向字节的服務流，可直接拷贝或包装。</para></summary>
-    /// <param name="service">The service destination string, such as <c>shell:...</c> or
-    /// <c>sync:</c>. <para>服务目标字符串，如 <c>shell:...</c>、<c>sync:</c>。</para></param>
+    /// <para>打开面向字节的服务流，可直接拷贝或包装。</para></summary>
+    /// <param name="service">The service destination string, such as a shell or sync target.
+    /// <para>服务目标字符串，例如 shell 或 sync 目标。</para></param>
     /// <returns>A seek-ineligible byte view over the packet stream; disposing it closes the
     /// underlying stream. <para>数据包流上不可寻址的字节视图；释放它即关闭底层流。</para></returns>
     /// <exception cref="ObjectDisposedException">The session has been disposed.
@@ -93,8 +81,8 @@ public interface IAdbDeviceSession : IDisposable
     /// <summary>Creates a sync client for file transfer. <para>创建用于文件传输的 sync 客户端。</para></summary>
     /// <param name="maxChunk">Maximum file bytes carried in each sync data packet.
     /// <para>每个 sync 数据包承载的最大文件字节数。</para></param>
-    /// <returns>A sync client that opens the <c>sync:</c> stream lazily; the caller must dispose
-    /// it. <para>懒打开 <c>sync:</c> 流的 sync 客户端，调用方须自行释放。</para></returns>
+    /// <returns>A sync client that opens the <c>sync:</c> stream lazily; the recipient must
+    /// dispose it. <para>懒打开 <c>sync:</c> 流的 sync 客户端，接收方须自行释放。</para></returns>
     /// <exception cref="ObjectDisposedException">The session has been disposed.
     /// <para>会话已被释放。</para></exception>
     IAdbSyncClient CreateSyncClient(uint maxChunk = 64 * 1024);
@@ -108,13 +96,6 @@ public interface IAdbDeviceSession : IDisposable
     IAdbDeviceServices CreateDeviceServices();
 
     /// <summary>Executes a shell command and returns the result. <para>执行 shell 命令并返回结果。</para></summary>
-    /// <remarks>
-    /// This is the blocking form of <see cref="ExecuteCommandAsync"/>: it parks the calling thread for the
-    /// whole command, so it belongs on a worker thread that already owns the ADB transaction, never on a UI
-    /// or request thread.
-    /// <para>本方法是 <see cref="ExecuteCommandAsync"/> 的阻塞形式：整个命令期间都会占用调用线程，因此只允许用于已持有该
-    /// ADB 事务的工作线程，不得在 UI 线程或请求线程上调用。</para>
-    /// </remarks>
     /// <param name="command">The command line for the device shell. <para>设备 shell 的命令行。</para></param>
     /// <param name="timeoutMs">Per-read wait in milliseconds before the command is considered
     /// stuck. <para>单次读取的等待毫秒数，超时即判定命令卡住。</para></param>
@@ -139,32 +120,16 @@ public interface IAdbDeviceSession : IDisposable
 }
 
 /// <summary>
-/// Host-facing raw ADB stream. Every read and write is asynchronous, so waiting for a peer
-/// acknowledgement or for inbound data never parks a thread.
-/// <para>面向宿主的 ADB 原始流。读写全部异步，等待对端确认或等待入站数据时不会占用线程。</para>
+/// Raw ADB stream. Every read and write is asynchronous, so waiting for a peer acknowledgement
+/// or for inbound data never parks a thread.
+/// <para>ADB 原始流。读写全部异步，等待对端确认或等待入站数据时不会占用线程。</para>
 /// </summary>
-/// <remarks>The inherited <c>DisposeAsync</c> is the preferred teardown for asynchronous callers; the inherited
-/// <c>Dispose</c> stays so byte-oriented adapters can still release the stream synchronously.
-/// <para>继承的 <c>DisposeAsync</c> 是异步调用方的首选拆除方式；继承的 <c>Dispose</c> 予以保留，使面向字节的适配器仍能同步释放流。</para>
-/// </remarks>
-/// <remarks>
-/// <para>
-/// Fault handling deliberately differs from the HDC channel: a faulted ADB stream keeps the payloads it
-/// already queued readable, and only a read that finds the queue empty raises <see cref="IOException"/>.
-/// Draining before failing is what preserves the scrcpy server log and the trailing sync DONE frame when
-/// the transport dies in the middle of a transfer.
-/// </para>
-/// <para>
-/// 故障处理有意与 HDC 通道不同：故障的 ADB 流仍允许读完已入队的负载，只有在队列已空的读取上才抛
-/// <see cref="IOException"/>。先读完再失败，正是传输在传送途中断开时保留 scrcpy 服务端日志与 sync 尾部 DONE 帧的条件。
-/// </para>
-/// </remarks>
 public interface IAdbStream : IDisposable, IAsyncDisposable
 {
     /// <summary>Gets whether the stream is closed. <para>获取流是否已关闭。</para></summary>
-    /// <value><see langword="true"/> after a local close, a peer close or a fault. A faulted stream is
-    /// closed as well, yet its queued payloads stay readable.
-    /// <para>本地关闭、对端关闭或故障后为 <see langword="true"/>。故障流同样处于关闭状态，但其已入队负载仍可读完。</para></value>
+    /// <value><see langword="true"/> after a local close, a peer close or a fault, with a faulted
+    /// stream keeping its queued payloads readable.
+    /// <para>本地关闭、对端关闭或故障后为 <see langword="true"/>，故障流仍可读完其已入队负载。</para></value>
     bool IsClosed { get; }
 
     /// <summary>Gets whether the stream has faulted. <para>获取流是否已故障。</para></summary>
@@ -178,14 +143,11 @@ public interface IAdbStream : IDisposable, IAsyncDisposable
     Exception? Fault { get; }
 
     /// <summary>Writes a payload to the stream. <para>向流异步写入负载。</para></summary>
-    /// <param name="data">Bytes to send; split into chunks sized by the peer maximum payload and sent one
-    /// acknowledged chunk at a time, awaiting each acknowledgement without holding a thread.
-    /// <para>待发送字节；按对端最大负载分块，逐块等待确认后发送，等待期间不占用线程。</para></param>
-    /// <param name="cancellationToken">Cancels a chunk wait; the cancellation never consumes the peer's
-    /// acknowledgement permit, so a later write can still proceed.
-    /// <para>取消某一块的等待；取消不会吞掉对端的确认许可，因此后续写入仍可继续。</para></param>
-    /// <returns>A task that completes once every chunk has been handed to the transport.
-    /// <para>全部负载块都已交给传输后完成的任务。</para></returns>
+    /// <param name="data">Bytes to send, split into chunks sized by the peer maximum payload and
+    /// sent one acknowledged chunk at a time.
+    /// <para>待发送字节；按对端最大负载分块，逐块等待确认后发送。</para></param>
+    /// <param name="cancellationToken">Cancels a chunk wait without consuming the peer's
+    /// acknowledgement permit. <para>取消某一块的等待，不消耗对端的确认许可。</para></param>
     /// <exception cref="InvalidOperationException">The stream is closed. <para>流已关闭。</para></exception>
     /// <exception cref="TimeoutException">The peer did not acknowledge the previous chunk within 10 seconds
     /// while <paramref name="cancellationToken"/> stayed unset. <para>对端未在 10 秒内确认上一块，且
@@ -197,11 +159,9 @@ public interface IAdbStream : IDisposable, IAsyncDisposable
     ValueTask WriteAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default);
 
     /// <summary>Reads the next payload chunk asynchronously. <para>异步读取下一个负载块。</para></summary>
-    /// <param name="cancellationToken">Bounds the wait for inbound data; cancellation surfaces as
-    /// <see cref="OperationCanceledException"/> rather than a timeout value, so callers express deadlines
-    /// with <c>CancellationTokenSource.CancelAfter</c>.
-    /// <para>限制入站数据的等待；取消表现为 <see cref="OperationCanceledException"/> 而非超时返回值，因此调用方用
-    /// <c>CancellationTokenSource.CancelAfter</c> 表达期限。</para></param>
+    /// <param name="cancellationToken">Bounds the wait for inbound data, surfacing cancellation
+    /// as <see cref="OperationCanceledException"/>.
+    /// <para>限制入站数据的等待，取消时抛出 <see cref="OperationCanceledException"/>。</para></param>
     /// <returns>The next queued payload, or <see langword="null"/> when the stream is closed with no queued
     /// data. <para>下一个排队的负载；流已关闭且无排队数据时返回 <see langword="null"/>。</para></returns>
     /// <exception cref="IOException">The stream is faulted and its queue has been drained; the stored fault
@@ -221,17 +181,12 @@ public interface IAdbStream : IDisposable, IAsyncDisposable
 
     /// <summary>Closes the stream and notifies the peer asynchronously.
     /// <para>关闭流并异步通知对端。</para></summary>
-    /// <remarks>Unlike a synchronous close, a failed close frame is not reported: the stream is closed either
-    /// way, because a peer that stops answering must never block local teardown.
-    /// <para>与同步关闭不同，关闭帧发送失败不会上报：无论成败流都已关闭，因为对端停止响应时不得阻塞本地拆除。</para></remarks>
-    /// <returns>A task that completes once the close frame has been handed to the transport.
-    /// <para>关闭帧已交给传输后完成的任务。</para></returns>
     Task CloseAsync();
 
 }
 
 /// <summary>
-/// Host-facing ADB shell client. <para>面向宿主的 ADB shell 客户端。</para>
+/// ADB shell client. <para>ADB shell 客户端。</para>
 /// </summary>
 public interface IAdbShellClient
 {
@@ -266,14 +221,10 @@ public interface IAdbShellClient
 }
 
 /// <summary>
-/// Host-facing ADB sync (file transfer) client. Every transfer is asynchronous and reports progress
+/// ADB sync (file transfer) client. Every transfer is asynchronous and reports progress
 /// between packets rather than by holding a thread.
-/// <para>面向宿主的 ADB sync（文件传输）客户端。全部传输均为异步，并在数据包之间响应取消而不是占用线程。</para>
+/// <para>ADB sync（文件传输）客户端。全部传输均为异步，并在数据包之间响应取消而不是占用线程。</para>
 /// </summary>
-/// <remarks>The inherited <c>DisposeAsync</c> sends the sync QUIT marker and releases the sync stream; a device
-/// that rejects the marker is ignored, so disposing a finished transfer never fails.
-/// <para>继承的 <c>DisposeAsync</c> 会发送 sync QUIT 标记并释放 sync 流；设备拒绝标记时被忽略，因此释放已完成的传输永不失败。</para>
-/// </remarks>
 public interface IAdbSyncClient : IAsyncDisposable
 {
     /// <summary>Stats a remote path. <para>异步查询远程路径信息。</para></summary>
@@ -328,8 +279,8 @@ public interface IAdbSyncClient : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     /// <summary>Pushes a stream to the device. <para>异步推送流到设备。</para></summary>
-    /// <param name="source">Read to end-of-stream in client chunk sizes; the caller keeps
-    /// ownership. <para>按客户端块大小读至流末尾；所有权仍归调用方。</para></param>
+    /// <param name="source">Read to end-of-stream in client chunk sizes; ownership stays
+    /// external. <para>按客户端块大小读至流末尾；所有权保持归属外部。</para></param>
     /// <param name="remotePath">Destination path on the device. <para>设备上的目标路径。</para></param>
     /// <param name="mode">Unix permission bits encoded in the sync request as octal; the default
     /// <c>0x81A4</c> is regular-file <c>0644</c>. <para>以八进制编码进 sync 请求的 Unix 权限位；默认 <c>0x81A4</c> 即普通文件 <c>0644</c>。</para></param>
@@ -363,8 +314,8 @@ public interface IAdbSyncClient : IAsyncDisposable
 
     /// <summary>Pulls a remote file into a stream. <para>异步拉取远程文件到流。</para></summary>
     /// <param name="remotePath">Device-side source file. <para>设备侧源文件。</para></param>
-    /// <param name="destination">Written sequentially from the current position; the caller keeps
-    /// ownership. <para>从当前位置顺序写入；所有权仍归调用方。</para></param>
+    /// <param name="destination">Written sequentially from the current position; ownership stays
+    /// external. <para>从当前位置顺序写入；所有权保持归属外部。</para></param>
     /// <param name="cancellationToken">Checked before each device chunk is written; cancellation stops
     /// the pull between packets. <para>在写入每个设备数据块前检查；取消会在数据包之间停止拉取。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> or
@@ -379,7 +330,7 @@ public interface IAdbSyncClient : IAsyncDisposable
 }
 
 /// <summary>
-/// Host-facing one-shot ADB device services. <para>面向宿主的一次性 ADB 设备服务。</para>
+/// One-shot ADB device services. <para>一次性 ADB 设备服务。</para>
 /// </summary>
 public interface IAdbDeviceServices
 {

@@ -5,13 +5,13 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 namespace UotanStudio.Comm.Transports.Usb.Backend.Linux;
 
 /// <summary>
-/// <para>一个 sysfs 目录（USB 根集线器、USB 设备、接口功能或 PCI 主机控制器）读到的原始文本。属性名沿用
-/// sysfs 文件名，取值保持文件里的文本形式，直到 <see cref="LinuxSysfsTopology.Shape"/> 才解析；读不到或
-/// 不可解析的属性一律保持 <see langword="null"/>，不伪造默认值。</para>
 /// The raw text read from one sysfs directory (a USB root hub, USB device, interface function or PCI host
 /// controller). Property names follow the sysfs file names and every value keeps the text found in the file
 /// until <see cref="LinuxSysfsTopology.Shape"/> parses it; attributes that cannot be read or parsed stay
 /// <see langword="null"/> instead of being invented.
+/// <para>一个 sysfs 目录（USB 根集线器、USB 设备、接口功能或 PCI 主机控制器）读到的原始文本。属性名沿用
+/// sysfs 文件名，取值保持文件里的文本形式，直到 <see cref="LinuxSysfsTopology.Shape"/> 才解析；读不到或
+/// 不可解析的属性一律保持 <see langword="null"/>，不伪造默认值。</para>
 /// </summary>
 internal sealed record LinuxSysfsEntry
 {
@@ -96,12 +96,6 @@ internal sealed record LinuxSysfsEntry
 }
 
 /// <summary>
-/// <para>sysfs 目录到统一拓扑节点的读取与塑形层。目录名规则（<c>usbN</c> 根集线器、<c>N-M</c> 与
-/// <c>N-M.M</c> 端口链设备、<c>N-M:1.K</c> 接口功能、<c>0000:00:14.0</c> PCI 功能）、属性文本解析、速度阈值、
-/// 驱动绑定与父链推导都集中在这里，因此临时目录里的普通文件即可完整验证，无需真实 <c>/sys</c>。
-/// 本层只读属性文件：不打开设备节点、不执行 ioctl、不挂载任何文件系统；缺失或不可读的属性降级为
-/// <see langword="null"/> 而不抛异常。厂商/产品/版本/接口三元组、角色兜底与协议分类仍由
-/// <see cref="UsbTopologyNodes.Create"/> 统一补齐，本层只写自己读到的原始值并显式标注已确定的角色。</para>
 /// The sysfs directory to shared topology node read and shaping layer. The directory naming rules
 /// (<c>usbN</c> root hubs, <c>N-M</c> and <c>N-M.M</c> port-chain devices, <c>N-M:1.K</c> interface
 /// functions, <c>0000:00:14.0</c> PCI functions), attribute text parsing, the speed thresholds, driver
@@ -111,6 +105,12 @@ internal sealed record LinuxSysfsEntry
 /// to <see langword="null"/> instead of throwing. Vendor, product, release, the interface triple, the
 /// fallback role and protocol classification are still unified by <see cref="UsbTopologyNodes.Create"/>;
 /// this layer writes only the values it read and marks the role explicitly where sysfs already states it.
+/// <para>sysfs 目录到统一拓扑节点的读取与塑形层。目录名规则（<c>usbN</c> 根集线器、<c>N-M</c> 与
+/// <c>N-M.M</c> 端口链设备、<c>N-M:1.K</c> 接口功能、<c>0000:00:14.0</c> PCI 功能）、属性文本解析、速度阈值、
+/// 驱动绑定与父链推导都集中在这里，因此临时目录里的普通文件即可完整验证，无需真实 <c>/sys</c>。
+/// 本层只读属性文件：不打开设备节点、不执行 ioctl、不挂载任何文件系统；缺失或不可读的属性降级为
+/// <see langword="null"/> 而不抛异常。厂商/产品/版本/接口三元组、角色兜底与协议分类仍由
+/// <see cref="UsbTopologyNodes.Create"/> 统一补齐，本层只写自己读到的原始值并显式标注已确定的角色。</para>
 /// </summary>
 internal static class LinuxSysfsTopology
 {
@@ -553,11 +553,11 @@ internal static class LinuxSysfsTopology
     }
 
     /// <summary>
-    /// <para>sysfs 里根集线器的接口目录以裸总线号命名，而 USB 总线号从 1 开始；把它限制成非零数值可以
-    /// 排除 PCI 功能名（如 <c>00:14.0</c>）被误判成接口。</para>
     /// Root-hub interface directories in sysfs are named with a bare bus number, and USB bus numbers start
     /// at 1; requiring a non-zero value keeps PCI function names such as <c>00:14.0</c> from being read as
     /// interfaces.
+    /// <para>sysfs 里根集线器的接口目录以裸总线号命名，而 USB 总线号从 1 开始；把它限制成非零数值可以
+    /// 排除 PCI 功能名（如 <c>00:14.0</c>）被误判成接口。</para>
     /// </summary>
     /// <param name="text">
     /// The candidate bus number. <para>候选总线号。</para>
@@ -570,11 +570,11 @@ internal static class LinuxSysfsTopology
         => IsDigits(text, 1, 3) && int.TryParse(text, out var value) && value >= 1;
 
     /// <summary>
-    /// <para>接口目录冒号后的段是配置值，USB 配置值从 1 开始；因此 <c>00</c> 段一定不是 USB 接口，
-    /// 而是 PCI 的 device.function。</para>
     /// The segment after the colon in an interface directory is the configuration value, and USB
     /// configuration values start at 1, so a <c>00</c> segment is a PCI device.function rather than a USB
     /// interface.
+    /// <para>接口目录冒号后的段是配置值，USB 配置值从 1 开始；因此 <c>00</c> 段一定不是 USB 接口，
+    /// 而是 PCI 的 device.function。</para>
     /// </summary>
     /// <param name="text">
     /// The candidate configuration value. <para>候选配置值。</para>

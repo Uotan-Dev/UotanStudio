@@ -5,7 +5,7 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.Patching;
 
-/// <summary>Requires mutations in a gated graph to be exclusively controlled by an Apply edge.</summary>
+/// <summary>Requires mutations in a gated graph to be exclusively controlled by an Apply edge.<para>要求受门控图中的变更全部由 Apply 边控制。</para></summary>
 internal static class PatchGatePolicy
 {
     internal static string? Validate(IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnection>? connections,

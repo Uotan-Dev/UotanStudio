@@ -2,7 +2,7 @@ using Avalonia.Controls;
 
 namespace UotanStudio.ViewModels.Nodes;
 
-/// <summary>Indexes bundled node labels in both languages without changing the active application locale.</summary>
+/// <summary>Indexes bundled node labels in both languages without changing the active application locale.<para>在不改变当前应用程序区域设置的情况下，为两种语言的内置节点标签建立索引。</para></summary>
 internal static class NodeSearchIndex
 {
     private static readonly Lazy<IReadOnlyDictionary<string, IReadOnlyList<string>>> Labels = new(LoadLabels);

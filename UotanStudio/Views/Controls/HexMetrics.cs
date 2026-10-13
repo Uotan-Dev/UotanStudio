@@ -76,6 +76,8 @@ public static class HexMetrics
     /// retain the minimum and are handled by horizontal scrolling.
     /// <para>根据可用宽度创建三栏几何；宽度不足时保留可读最小宽度并交由水平滚动处理。</para>
     /// </summary>
+    /// <param name="availableWidth">Width to fit; below the readable minimum the minimum is used.<para>要容纳的宽度；低于可读最小值时采用该最小值。</para></param>
+    /// <returns>The computed three-column geometry.<para>计算得到的三栏几何。</para></returns>
     public static HexColumnLayout CreateLayout(double availableWidth)
     {
         var contentWidth = double.IsFinite(availableWidth) && availableWidth > 0
@@ -103,6 +105,9 @@ public static class HexMetrics
     /// Returns the number of lines needed for a data length.
     /// <para>返回容纳指定数据长度所需的行数。</para>
     /// </summary>
+    /// <param name="dataLength">Length of the data to render.<para>要渲染的数据长度。</para></param>
+    /// <param name="bytesPerLine">Bytes rendered on each line.<para>每行渲染的字节数。</para></param>
+    /// <returns>The number of lines needed.<para>所需行数。</para></returns>
     public static int TotalLines(long dataLength, int bytesPerLine = BytesPerLine) =>
         dataLength <= 0 ? 0 : (int)((dataLength + bytesPerLine - 1) / bytesPerLine);
 
@@ -110,18 +115,26 @@ public static class HexMetrics
     /// Returns the line index containing the byte offset.
     /// <para>返回字节偏移所在的行索引。</para>
     /// </summary>
+    /// <param name="offset">Byte offset within the data.<para>数据内的字节偏移。</para></param>
+    /// <param name="bytesPerLine">Bytes rendered on each line.<para>每行渲染的字节数。</para></param>
+    /// <returns>The zero-based index of the line containing the offset.<para>包含该偏移的行索引（从零起）。</para></returns>
     public static long LineFromOffset(long offset, int bytesPerLine = BytesPerLine) => offset / bytesPerLine;
 
     /// <summary>
-    /// Returns the byte position within its line (0..<see cref="BytesPerLine"/>-1).
-    /// <para>返回字节在其行内的位置（0..<see cref="BytesPerLine"/>-1）。</para>
+    /// Returns the byte position within its line.
+    /// <para>返回字节在其行内的位置。</para>
     /// </summary>
+    /// <param name="offset">Byte offset within the data.<para>数据内的字节偏移。</para></param>
+    /// <param name="bytesPerLine">Bytes rendered on each line.<para>每行渲染的字节数。</para></param>
+    /// <returns>The zero-based position of the byte within its line.<para>字节在行内的位置（从零起）。</para></returns>
     public static int ByteInLineFromOffset(long offset, int bytesPerLine = BytesPerLine) => (int)(offset % bytesPerLine);
 
     /// <summary>
     /// Returns the data-row index at a viewport Y coordinate (accounts for the header); may be negative.
     /// <para>返回视口 Y 坐标对应的数据行索引（扣除表头）；可能为负。</para>
     /// </summary>
+    /// <param name="y">Viewport Y coordinate in pixels.<para>以像素为单位的视口 Y 坐标。</para></param>
+    /// <returns>The data-row index, or -1 for coordinates above the data area.<para>数据行索引；数据区之上的坐标为 -1。</para></returns>
     public static int LineFromY(double y) =>
         y < HeaderHeight ? -1 : (int)((y - HeaderHeight) / LineHeight);
 
@@ -129,6 +142,8 @@ public static class HexMetrics
     /// Returns the top pixel of a data row.
     /// <para>返回数据行顶部像素。</para>
     /// </summary>
+    /// <param name="line">Zero-based data-row index.<para>数据行索引（从零起）。</para></param>
+    /// <returns>The top pixel of the data row.<para>数据行的顶部像素。</para></returns>
     public static double YFromLine(int line) => HeaderHeight + ((long)line * LineHeight);
 
 }
@@ -150,27 +165,36 @@ public readonly record struct HexColumnLayout(
     int BytesPerLine)
 {
     /// <summary>Left edge of the hexadecimal column.<para>十六进制列左边缘。</para></summary>
+    /// <value>The left edge coordinate.<para>左边缘坐标。</para></value>
     public double HexZoneStart => OffsetWidth;
 
     /// <summary>Right edge of the hexadecimal column.<para>十六进制列右边缘。</para></summary>
+    /// <value>The right edge coordinate.<para>右边缘坐标。</para></value>
     public double HexZoneEnd => OffsetWidth + HexWidth;
 
     /// <summary>Left edge of the ASCII column.<para>ASCII 列左边缘。</para></summary>
+    /// <value>The left edge coordinate.<para>左边缘坐标。</para></value>
     public double AsciiZoneStart => HexZoneEnd;
 
     /// <summary>Right edge of the ASCII column.<para>ASCII 列右边缘。</para></summary>
+    /// <value>The right edge coordinate.<para>右边缘坐标。</para></value>
     public double AsciiZoneEnd => ContentWidth;
 
     /// <summary>Width of one hexadecimal byte cell.<para>单个十六进制字节单元宽度。</para></summary>
+    /// <value>The hexadecimal cell width.<para>十六进制单元宽度。</para></value>
     public double HexCellWidth => HexWidth / BytesPerLine;
 
     /// <summary>Width of one ASCII byte cell.<para>单个 ASCII 字节单元宽度。</para></summary>
+    /// <value>The ASCII cell width.<para>ASCII 单元宽度。</para></value>
     public double AsciiCellWidth => AsciiWidth / BytesPerLine;
 
     /// <summary>
     /// Returns the byte position within its line for an X coordinate, or -1 outside the requested column.
     /// <para>返回 X 坐标对应的行内字节位置；位于指定列之外时返回 -1。</para>
     /// </summary>
+    /// <param name="x">Horizontal coordinate in pixels.<para>以像素为单位的水平坐标。</para></param>
+    /// <param name="hexZone">True to measure the hexadecimal column, false for the ASCII column.<para>为 true 度量十六进制列，false 度量 ASCII 列。</para></param>
+    /// <returns>The byte position within the row, or -1 outside the column.<para>行内字节位置；位于列外时为 -1。</para></returns>
     public int ByteIndexFromX(double x, bool hexZone)
     {
         var start = hexZone ? HexZoneStart : AsciiZoneStart;
@@ -189,6 +213,9 @@ public readonly record struct HexColumnLayout(
     /// Returns the left pixel of the cell for a byte position.
     /// <para>返回指定行内字节单元的左侧像素。</para>
     /// </summary>
+    /// <param name="byteIndex">Zero-based byte position within the row.<para>行内字节位置（从零起）。</para></param>
+    /// <param name="hexZone">True for the hexadecimal column, false for the ASCII column.<para>为 true 取十六进制列，false 取 ASCII 列。</para></param>
+    /// <returns>The left pixel of the byte cell.<para>字节单元的左侧像素。</para></returns>
     public double XFromByteIndex(int byteIndex, bool hexZone)
     {
         byteIndex = Math.Clamp(byteIndex, 0, BytesPerLine - 1);
@@ -201,5 +228,7 @@ public readonly record struct HexColumnLayout(
     /// Determines whether an X coordinate falls inside the hexadecimal column.
     /// <para>判断 X 坐标是否位于十六进制列内。</para>
     /// </summary>
+    /// <param name="x">Horizontal coordinate in pixels.<para>以像素为单位的水平坐标。</para></param>
+    /// <returns>True when the coordinate lies inside the hexadecimal column.<para>坐标位于十六进制列内时为 true。</para></returns>
     public bool IsHexZone(double x) => x >= HexZoneStart && x < HexZoneEnd;
 }

@@ -3,7 +3,8 @@ using UotanStudio.Firmware.BlockImage.Sparse.Models;
 
 namespace UotanStudio.Services.Flash;
 
-/// <summary>Builds a fully zero-filled physical Super image with the validated empty LP metadata.</summary>
+/// <summary>Builds a fully zero-filled physical Super image with the validated empty LP metadata.
+/// <para>以已校验的空 LP 元数据构建全零填充的物理 Super 镜像。</para></summary>
 internal static class FlashSuperEmptySparse
 {
     private const int BlockSize = 4096;

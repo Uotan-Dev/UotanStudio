@@ -25,13 +25,8 @@ public static class TempFileHelper
     }
 
     /// <summary>
-    /// Builds a unique sibling path next to <paramref name="targetPath"/> in the repo-wide
-    /// <c>&lt;target&gt;.tmp-&lt;guid&gt;</c> convention, typically for staged publication (write the
-    /// staged file first, then move it over <paramref name="targetPath"/>) or for a sibling scratch
-    /// directory. Keep the <c>.tmp-</c> infix: the test suite detects leftovers with the <c>*.tmp-*</c> glob.
-    /// <para>按仓库统一的 <c>&lt;target&gt;.tmp-&lt;guid&gt;</c> 约定在 <paramref name="targetPath"/>
-    /// 旁构造唯一暂存路径，典型用途是先写暂存再原子发布覆盖 <paramref name="targetPath"/>，或作为同目录
-    /// 的刮擦临时目录。不要改动 <c>.tmp-</c> 中缀：测试套件以 <c>*.tmp-*</c> 通配符检测残留。</para>
+    /// Builds a unique sibling temporary path next to the target path.
+    /// <para>在目标路径旁构造唯一的同目录临时路径。</para>
     /// </summary>
     /// <param name="targetPath">Destination path the staged file sits next to; it is used verbatim as the
     /// prefix and does not have to exist. <para>暂存文件所相邻的目标路径；原样作为前缀使用，不要求已经存在。</para></param>

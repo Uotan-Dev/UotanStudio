@@ -5,24 +5,16 @@ using Dock.Settings;
 
 namespace UotanStudio.Desktop;
 
-/// <summary>
-/// Desktop application entry point: host process bootstrap and startup-mode dispatch.
-/// <para>桌面应用入口：宿主进程引导与启动模式分发。</para>
-/// </summary>
+/// <summary>Desktop application entry point: process bootstrap and startup-mode dispatch.<para>桌面应用入口：进程引导与启动模式分发。</para></summary>
 sealed class Program
 {
     /// <summary>
-    /// Process entry point that dispatches startup mode (headless MCP, CLI, companion MCP, GUI).
-    /// <para>进程入口，分发启动模式（无头 MCP、CLI、伴随 MCP、GUI）。</para>
+    /// Process entry point that dispatches the startup mode.
+    /// <para>进程入口，分发启动模式。</para>
     /// </summary>
     /// <param name="args">
-    /// Launch arguments; an empty array starts the GUI. Recognized forms are
-    /// <c>--managed-device-shell &lt;protocol&gt; &lt;serial&gt;</c>, <c>--mcp-headless</c>,
-    /// <c>--mcp</c>, <c>--open-screen-mirror &lt;serial&gt;</c>, and existing file paths, which the GUI
-    /// opens on startup.
-    /// <para>启动参数；空数组直接启动图形界面。可识别的形式包括
-    /// <c>--managed-device-shell &lt;协议&gt; &lt;序列号&gt;</c>、<c>--mcp-headless</c>、<c>--mcp</c>、
-    /// <c>--open-screen-mirror &lt;序列号&gt;</c>，以及由图形界面在启动时打开的既有文件路径。</para>
+    /// Launch arguments; an empty array starts the desktop application, other switches select headless modes.
+    /// <para>启动参数；空数组启动桌面应用，其他开关选择无头模式。</para>
     /// </param>
     /// <returns>
     /// 0 when the selected mode finishes or is cancelled, and 1 when a managed device-shell request fails.
@@ -122,10 +114,13 @@ sealed class Program
         return builder;
     }
 
-    /// <summary>Writes warnings to Trace while filtering known empty-Dock binding noise.</summary>
+    /// <summary>Writes warnings to Trace while filtering known empty-Dock binding noise.<para>把警告写入 Trace，并过滤已知的空 Dock 绑定噪声。</para></summary>
     private sealed class FilteredTraceLogSink : ILogSink
     {
-        /// <inheritdoc />
+        /// <summary>Reports whether an event in this area should be recorded.<para>报告该区域的事件是否应被记录。</para></summary>
+        /// <param name="level">Severity level of the event. <para>事件的严重级别。</para></param>
+        /// <param name="area">Logging area of the event. <para>事件所属的日志区域。</para></param>
+        /// <returns>True when the event should be written. <para>需要写入该事件时为 true。</para></returns>
         public bool IsEnabled(LogEventLevel level, string area)
         {
             if (level <= LogEventLevel.Warning && string.Equals(area, LogArea.Binding, StringComparison.Ordinal))
@@ -136,7 +131,11 @@ sealed class Program
             return level >= LogEventLevel.Warning;
         }
 
-        /// <inheritdoc />
+        /// <summary>Writes one log event to the trace listener when it passes the filter.<para>事件通过筛选时把它写入跟踪监听器。</para></summary>
+        /// <param name="level">Severity level of the event. <para>事件的严重级别。</para></param>
+        /// <param name="area">Logging area of the event. <para>事件所属的日志区域。</para></param>
+        /// <param name="source">Source object of the event, unused here. <para>事件的来源对象，此处不使用。</para></param>
+        /// <param name="messageTemplate">Message template of the event. <para>事件的消息模板。</para></param>
         public void Log(LogEventLevel level, string area, object? source, string messageTemplate)
         {
             if (!IsEnabled(level, area))
@@ -147,7 +146,12 @@ sealed class Program
             System.Diagnostics.Trace.WriteLine($"{area}: {messageTemplate}");
         }
 
-        /// <inheritdoc />
+        /// <summary>Writes one parameterised log event to the trace listener when it passes the filter.<para>带参数的事件通过筛选时把它写入跟踪监听器。</para></summary>
+        /// <param name="level">Severity level of the event. <para>事件的严重级别。</para></param>
+        /// <param name="area">Logging area of the event. <para>事件所属的日志区域。</para></param>
+        /// <param name="source">Source object of the event, unused here. <para>事件的来源对象，此处不使用。</para></param>
+        /// <param name="messageTemplate">Message template of the event. <para>事件的消息模板。</para></param>
+        /// <param name="propertyValues">Values substituted into the template placeholders. <para>代入模板占位符的参数值。</para></param>
         public void Log(LogEventLevel level, string area, object? source, string messageTemplate, object?[] propertyValues)
         {
             if (!IsEnabled(level, area))
@@ -162,14 +166,12 @@ sealed class Program
         }
 
         /// <summary>
-        /// <para>安全格式化日志模板：Avalonia 模板可能使用命名占位符（如 <c>{Binding}</c>），
-        /// 与 <see cref="string.Format(string, object?[])"/> 的索引占位符不兼容，解析会抛
-        /// <see cref="FormatException"/>；失败时回退为模板原文拼接参数值，保证不崩溃。</para>
-        /// Formats a log template safely: Avalonia templates may use named placeholders
-        /// (e.g. <c>{Binding}</c>) that are incompatible with <see cref="string.Format(string, object?[])"/>
-        /// index placeholders and would throw <see cref="FormatException"/>; on failure the raw
-        /// template plus its property values are emitted instead so logging never crashes.
+        /// Formats a log template, falling back to the raw template with appended values when named placeholders make indexed formatting fail.
+        /// <para>格式化日志模板；当命名占位符使索引格式化失败时，回退为模板原文并追加参数值。</para>
         /// </summary>
+        /// <param name="template">Message template, possibly with named placeholders. <para>可能带命名占位符的消息模板。</para></param>
+        /// <param name="values">Property values referenced by the template. <para>模板引用的属性值。</para></param>
+        /// <returns>The formatted message, or the template plus values on failure. <para>格式化后的消息，失败时为模板与参数值。</para></returns>
         private static string FormatTemplateSafely(string template, object?[] values)
         {
             try

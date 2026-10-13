@@ -1,16 +1,8 @@
 namespace UotanStudio.Firmware.Core;
 
 /// <summary>
-/// Optional capability a format handler can publish so the registry can make a low-cost structural
-/// magic confirmation beyond its extension candidates. Unlike <see cref="IReadonlyFormatHandler.CanHandle"/>,
-/// which re-opens the file, this checks a header the caller already read with
-/// <see cref="FormatDetector.ReadHeader(string, int)"/>; that header can be shorter than the offset where
-/// a magic sits, so an implementation must return <see langword="false"/> for any length (including zero)
-/// it cannot confidently confirm and must never perform IO.
-/// <para>格式处理器可选发布的能力，供注册表在扩展名候选之外做低成本的结构性魔数确认。与会重新打开文件的
-/// <see cref="IReadonlyFormatHandler.CanHandle"/> 不同，本方法只检查调用方经 <see cref="FormatDetector.ReadHeader(string, int)"/>
-/// 读好的头部；该头部可能短于魔数所在偏移，因此实现必须对任意长度（含 0）在无法确信时返回 <see langword="false"/>，
-/// 且绝不执行 IO。</para>
+/// Optional capability a format handler publishes so the registry can make a low-cost structural magic confirmation beyond extension candidates, checking a header the caller already read instead of re-opening the file.
+/// <para>格式处理器可选发布的能力，使注册表能在扩展名候选之外做一次低成本的结构性魔数确认；它检查调用方已读入的头部，而不重新打开文件。</para>
 /// </summary>
 public interface IFormatProbeHints
 {

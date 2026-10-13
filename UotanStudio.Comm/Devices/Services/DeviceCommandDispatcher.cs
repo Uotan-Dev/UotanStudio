@@ -3,20 +3,12 @@ using System.Threading.Channels;
 namespace UotanStudio.Comm.Devices.Services;
 
 /// <summary>
-/// Per-device command pool: submitted commands are executed one at a time in FIFO order and
-/// each result (or exception) is returned to its submitter through the returned task.
-/// Long-running operations (flashing, large transfers) hold the queue until they finish;
-/// cancelling a submission only affects that command, never the queue itself.
-/// <para>每设备指令池：提交的指令按 FIFO 逐个执行，结果（或异常）经返回的 Task 回传给提交方。
-/// 长操作（刷写、大文件传输）执行期间独占队列；取消某次提交只影响该指令，不影响队列本身。</para>
+/// Per-device command pool: commands run one at a time in FIFO order and their results reach
+/// submitters through the returned task. Cancelling a submission affects only that command,
+/// never the queue.
+/// <para>每设备指令池：指令按 FIFO 逐个执行，结果经返回的任务回传给提交方。取消某次提交只影响
+/// 该指令，不影响队列。</para>
 /// </summary>
-/// <remarks>
-/// Streaming work (logcat, shell streaming, mirroring) must not go through the pool; it opens
-/// its stream directly on the session. Protocol-internal mutexes stay in place as a second
-/// line of defence.
-/// <para>流式工作（logcat、shell 流、投屏流）不得经过指令池，应直接在会话上打开流。
-/// 协议内部互斥保留为第二道防线。</para>
-/// </remarks>
 public sealed class DeviceCommandDispatcher : IAsyncDisposable
 {
     private sealed record Invocation(Func<CancellationToken, Task> Run, CancellationTokenSource Linked);
@@ -56,15 +48,6 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
     /// </param>
     /// <returns>A task that completes with the command result, or faults or cancels with it.
     /// <para>随指令结果完成、或随之失败/取消的任务。</para></returns>
-    /// <remarks>
-    /// The returned task is reported as cancelled only when the command's own linked token is
-    /// cancelled (caller token or dispatcher lifetime). An <see cref="OperationCanceledException"/>
-    /// raised with an unrelated token, including a bare one from the device layer, is surfaced as a
-    /// fault carrying the original exception instead of being mistaken for user cancellation.
-    /// <para>仅当指令自身的链接标记被取消（调用方标记或调度器生命周期）时，返回的任务才报告为已取消。
-    /// 携带无关标记抛出的 <see cref="OperationCanceledException"/>（包括设备层抛出的裸异常）会以保留原异常的
-    /// 失败形式呈现，而不会被误当成用户取消。</para>
-    /// </remarks>
     /// <exception cref="ArgumentException">
     /// <paramref name="name"/> is null, empty, or whitespace. <para><paramref name="name"/> 为 null、空白或仅含空白字符。</para></exception>
     /// <exception cref="ArgumentNullException">
@@ -135,8 +118,6 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
     /// <param name="cancellationToken">
     /// Cancels only this command, never the queue. <para>仅取消该指令，绝不影响队列。</para>
     /// </param>
-    /// <returns>A task that completes when the command finishes, faults or is cancelled.
-    /// <para>随指令完成、失败或取消而结束的任务。</para></returns>
     public Task EnqueueAsync(string name, Func<CancellationToken, Task> work, CancellationToken cancellationToken = default)
         => EnqueueAsync<object?>(name, async token => { await work(token).ConfigureAwait(false); return null; }, cancellationToken);
 
@@ -145,8 +126,6 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
     /// command to settle before returning.
     /// <para>停止接收新指令，取消仍在排队的指令，并等待正在执行的指令结束后返回。</para>
     /// </summary>
-    /// <returns>A task that completes once the worker has drained and stopped.
-    /// <para>工作任务消费完队列并停止后完成的任务。</para></returns>
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)

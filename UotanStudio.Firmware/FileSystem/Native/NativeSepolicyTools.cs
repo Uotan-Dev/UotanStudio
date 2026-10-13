@@ -24,14 +24,8 @@ internal sealed class NativeSepolicyTools(NativeFileSystemTools tools)
     private const int MaximumSelectorLength = 128;
 
     /// <summary>
-    /// Runs <c>sesearch -A</c> against a binary policy file plus the optional <c>-s</c>, <c>-t</c>, <c>-c</c> and
-    /// <c>-x</c> selectors, then parses the printed <c>allow</c>, <c>audit_allow</c> and <c>dontaudit</c> lines into
-    /// rules. Selector values are validated as bare type tokens before the process starts; untrusted selectors
-    /// containing control characters, whitespace or path syntax are rejected. The tool is read-only by design and
-    /// this wrapper never passes a writable policy path.
-    /// <para>针对二进制策略文件运行 <c>sesearch -A</c>，附带可选的 <c>-s</c>、<c>-t</c>、<c>-c</c>、<c>-x</c> 选择器，
-    /// 然后把打印出的 <c>allow</c>、<c>audit_allow</c> 与 <c>dontaudit</c> 行解析为规则。选择器值在进程启动前按裸类型
-    /// 令牌校验；含控制字符、空白或路径语法的不可信选择器会被拒绝。该工具在设计上只读，本包装从不传入可写的策略路径。</para>
+    /// Runs <c>sesearch -A</c> against a binary policy file and parses the printed rules.
+    /// <para>针对二进制策略文件运行 <c>sesearch -A</c> 并把打印出的规则解析为条目。</para>
     /// </summary>
     /// <param name="policyPath">Host path of the binary policy file (for example a pre-CIL <c>sepolicy</c>); the file must exist.
     /// <para>二进制策略文件的宿主路径（例如 pre-CIL 的 <c>sepolicy</c>）；文件必须存在。</para></param>
@@ -84,15 +78,8 @@ internal sealed class NativeSepolicyTools(NativeFileSystemTools tools)
     }
 
     /// <summary>
-    /// Runs the read-only <c>seinfo -a</c> summary (types, attributes, roles and users) over a binary policy file
-    /// and returns the raw <see cref="NativeToolResult"/> without interpretation. When <c>seinfo</c> is not
-    /// installed the tool run ends with a non-zero exit code (typically 127) and this method surfaces it through
-    /// <see cref="NativeFileSystemTools.RequireSuccess"/>; callers on distributions without the package should
-    /// treat that as an unsupported environment, not as policy corruption.
-    /// <para>对二进制策略文件运行只读的 <c>seinfo -a</c> 汇总（类型、属性、角色与用户），原样返回
-    /// <see cref="NativeToolResult"/>，不做解释。未安装 <c>seinfo</c> 时工具以非零退出码结束（通常为 127），
-    /// 本方法经 <see cref="NativeFileSystemTools.RequireSuccess"/> 抛出；在未装该包的发行版上调用方应把它视为
-    /// 环境不支持，而不是策略损坏。</para>
+    /// Runs the read-only <c>seinfo -a</c> summary over a binary policy file and returns the raw result.
+    /// <para>对二进制策略文件运行只读的 <c>seinfo -a</c> 汇总，原样返回运行结果。</para>
     /// </summary>
     /// <param name="policyPath">Host path of the binary policy file; the file must exist.
     /// <para>二进制策略文件的宿主路径；文件必须存在。</para></param>

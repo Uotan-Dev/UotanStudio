@@ -5,8 +5,8 @@ using Avalonia.Input;
 namespace UotanStudio.Views.Shell;
 
 /// <summary>
-/// <para>本地化 Avalonia 提供的应用菜单，保留原生系统动作并替换框架关于窗口。</para>
 /// Localizes Avalonia's application menu, retaining native system actions and replacing its About dialog.
+/// <para>本地化 Avalonia 提供的应用菜单，保留原生系统动作并替换框架关于窗口。</para>
 /// </summary>
 internal sealed class MacOSApplicationMenu : IDisposable
 {

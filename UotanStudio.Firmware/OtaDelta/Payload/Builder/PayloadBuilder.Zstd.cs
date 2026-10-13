@@ -11,18 +11,18 @@ public sealed partial class PayloadBuilder
     /// </summary>
     /// <remarks>
     /// Dictionary-free frames rebuild through this repository's extractor. Frames that use an external
-    /// dictionary additionally require the consumer to hold the exact dictionary bytes and honor the AOSP
+    /// dictionary additionally require the consumer to hold the exact dictionary bytes and honor the
     /// gating keys <c>max_zstd_dict_raw_size</c> and <c>max_zstd_dict_trust</c> from
     /// <c>payload_properties.txt</c>; <see cref="PayloadExtractor"/> takes the per-partition dictionary and the
     /// raw-size ceiling, so dictionary frames rebuild through the same extractor path.
     /// <para>无字典帧可经本仓库提取器重建。使用外部字典的帧还要求消费方持有完全一致的字典字节，并遵守
-    /// <c>payload_properties.txt</c> 中 AOSP 管控键 <c>max_zstd_dict_raw_size</c> 与 <c>max_zstd_dict_trust</c>；
+    /// <c>payload_properties.txt</c> 中的管控键 <c>max_zstd_dict_raw_size</c> 与 <c>max_zstd_dict_trust</c>；
     /// <see cref="PayloadExtractor"/> 接收按分区字典与原始大小上限，因此字典帧同样经该提取器路径重建。</para>
     /// </remarks>
     /// <remarks>
-    /// Adding a REPLACE_ZSTD partition raises the manifest minor version to 10, matching the upstream rule
-    /// that permits REPLACE_ZSTD only from minor version 10 on.
-    /// <para>添加 REPLACE_ZSTD 分区会把清单 minor 版本提升到 10，与上游"仅 minor 10 起允许 REPLACE_ZSTD"的规则一致。</para>
+    /// Adding a REPLACE_ZSTD partition raises the manifest minor version to 10, which
+    /// permits REPLACE_ZSTD operations.
+    /// <para>添加 REPLACE_ZSTD 分区会把清单 minor 版本提升到 10，该版本起才允许 REPLACE_ZSTD 操作。</para>
     /// </remarks>
     /// <param name="partitionName">
     /// Partition written by this update; must not be empty or whitespace and must be unique within the builder.
@@ -143,9 +143,9 @@ public sealed partial class PayloadBuilder
     }
 
     /// <summary>
-    /// Raises the manifest minor version to 10, the upstream minimum that permits REPLACE_ZSTD operations,
+    /// Raises the manifest minor version to 10, the minimum that permits REPLACE_ZSTD operations,
     /// mirroring how incremental partitions raise it to 2.
-    /// <para>把清单 minor 版本提升到 10（上游允许 REPLACE_ZSTD 操作的最低版本），与增量分区提升到 2 的做法一致。</para>
+    /// <para>把清单 minor 版本提升到 10（允许 REPLACE_ZSTD 操作的最低版本），与增量分区提升到 2 的做法一致。</para>
     /// </summary>
     private void RequireZstdMinorVersion()
     {

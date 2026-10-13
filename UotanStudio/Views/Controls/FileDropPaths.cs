@@ -4,10 +4,13 @@ using UotanStudio.Services;
 
 namespace UotanStudio.Views.Controls;
 
-/// <summary>Reads a local drag payload synchronously before an asynchronous operation consumes its paths.</summary>
+/// <summary>Reads a local drag payload synchronously before an asynchronous operation consumes its paths.<para>在异步操作消费路径之前同步读取本地拖放载荷。</para></summary>
 internal static class FileDropPaths
 {
-    /// <summary>Preserves universal and platform file-drop format handling.</summary>
+    /// <summary>Preserves universal and platform file-drop format handling.<para>保留通用与平台两种文件拖放格式的处理。</para></summary>
+    /// <param name="transfer">The drag payload to probe.<para>要探测的拖放数据。</para></param>
+    /// <param name="logSource">Source label recorded with error log entries.<para>写入错误日志条目的来源标签。</para></param>
+    /// <returns>True when the payload carries a file-drop format; otherwise false.<para>载荷带有文件拖放格式时为 true，否则为 false。</para></returns>
     internal static bool HasFilePayload(IDataTransfer transfer, string logSource)
     {
         if (transfer.Contains(DataFormat.File))
@@ -38,7 +41,10 @@ internal static class FileDropPaths
         return false;
     }
 
-    /// <summary>Preserves universal and platform file-drop format handling.</summary>
+    /// <summary>Preserves universal and platform file-drop format handling.<para>保留通用与平台两种文件拖放格式的处理。</para></summary>
+    /// <param name="transfer">The drag payload to read.<para>要读取的拖放数据。</para></param>
+    /// <param name="logSource">Source label recorded with error log entries.<para>写入错误日志条目的来源标签。</para></param>
+    /// <returns>The local paths found, or an empty list when none are present.<para>找到的本地路径；没有时为空列表。</para></returns>
     internal static IReadOnlyList<string> TryExtractPaths(IDataTransfer transfer, string logSource)
     {
         var items = transfer.TryGetFiles();

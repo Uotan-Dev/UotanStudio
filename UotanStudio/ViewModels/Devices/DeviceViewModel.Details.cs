@@ -7,14 +7,14 @@ namespace UotanStudio.ViewModels.Devices;
 public partial class DeviceViewModel
 {
     /// <summary>
-    /// <para>MTK 只读身份查询的协作式时限；到点即放弃，不让一次扫描被设备拖住。</para>
     /// Cooperative bound for the MTK read-only identity query, so one scan is never held up by a device.
+    /// <para>MTK 只读身份查询的协作式时限；到点即放弃，不让一次扫描被设备拖住。</para>
     /// </summary>
     private const int MtkIdentityTimeoutMs = 5000;
 
     /// <summary>
-    /// <para>按设备协议分发到对应的信息丰富方法。</para>
     /// Dispatches to the mode-specific enrichment method based on the device protocol.
+    /// <para>按设备协议分发到对应的信息丰富方法。</para>
     /// </summary>
     private Task EnrichDeviceInfoAsync(DeviceInfo device) => device.Protocol switch
     {
@@ -35,8 +35,8 @@ public partial class DeviceViewModel
     /// watchdog, writes no memory, bypasses no authentication and resets nothing; targets already
     /// queried or in any other state are skipped.
     /// </summary>
-    /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</param>
-    /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</returns>
+    /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</para></param>
+    /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</para></returns>
     private async Task EnrichMtkInfoAsync(DeviceInfo device)
     {
         if (!ShouldQueryMtkIdentity(device.Device.State, device.HasMtkInfo))
@@ -69,9 +69,9 @@ public partial class DeviceViewModel
     /// states Boot ROM or preloader, and only before a successful query; DA-runtime, logging and adb
     /// states never receive protocol bytes.
     /// </summary>
-    /// <param name="state">The descriptor-derived state reported by discovery. <para>发现层给出的描述符状态。</param>
-    /// <param name="hasMtkInfo">Whether identity info was already recorded. <para>身份信息是否已记录。</param>
-    /// <returns><see langword="true"/> when the handshake may run. <para>可以握手时为 true。</returns>
+    /// <param name="state">The descriptor-derived state reported by discovery. <para>发现层给出的描述符状态。</para></param>
+    /// <param name="hasMtkInfo">Whether identity info was already recorded. <para>身份信息是否已记录。</para></param>
+    /// <returns><see langword="true"/> when the handshake may run. <para>可以握手时为 true。</para></returns>
     internal static bool ShouldQueryMtkIdentity(string state, bool hasMtkInfo)
         => !hasMtkInfo && state is "brom" or "preloader";
 
@@ -98,13 +98,13 @@ public partial class DeviceViewModel
         }
     }
     /// <summary>
-    /// <para>拉取 ADB 设备扩展信息（getprop / 系统级 / 电池 / 内存 / 存储）。官方 adb server 会枚举
-    /// USB 与网络设备，因此无论传输类型都优先经 Comm 的 adb server 服务执行 shell；
-    /// 仅在 server 连接被拒绝时使用统一会话入口解析 USB 直连。</para>
     /// Retrieves extended ADB device info (getprop / system-level / battery / memory / storage).
     /// The official adb server enumerates both USB and network devices, so regardless of transport
     /// the shell runs via Comm's adb server service first; only when the server
     /// connection is refused does the shared session route resolve direct USB.
+    /// <para>拉取 ADB 设备扩展信息（getprop / 系统级 / 电池 / 内存 / 存储）。官方 adb server 会枚举
+    /// USB 与网络设备，因此无论传输类型都优先经 Comm 的 adb server 服务执行 shell；
+    /// 仅在 server 连接被拒绝时使用统一会话入口解析 USB 直连。</para>
     /// </summary>
     private async Task EnrichAdbInfoAsync(DeviceInfo device)
     {
@@ -139,10 +139,10 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>经 Comm 的 adb server 服务通过官方 adb server（127.0.0.1:5037）按序列号匹配设备并拉取属性；
-    /// 仅 server 连接被拒绝时返回 null；缺失目标必须报错。</para>
     /// Queries device properties via Comm's adb server service against the official adb server
     /// (127.0.0.1:5037), matching the device by serial; returns null only when the server connection is refused.
+    /// <para>经 Comm 的 adb server 服务通过官方 adb server（127.0.0.1:5037）按序列号匹配设备并拉取属性；
+    /// 仅 server 连接被拒绝时返回 null；缺失目标必须报错。</para>
     /// </summary>
     private static Dictionary<string, string>? QueryViaAdbServer(DeviceInfo device)
     {
@@ -169,13 +169,13 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>通过 UotanStudio.Comm 原生 USB ADB 会话拉取设备属性；这是尽力而为的查询：
-    /// 端点被 logcat 捕获租用（already leased）、设备正处于重枚举窗口（端点暂不可用）或
-    /// 会话超时都按"暂无信息"处理并返回 null，不向调用方抛错。</para>
     /// Queries device properties via a UotanStudio.Comm native USB ADB session; this is a
     /// best-effort query: the endpoint being leased by a logcat capture (already leased), a
     /// re-enumeration window (endpoint temporarily unavailable) or a session timeout all mean
     /// "no info right now" and return null instead of throwing to the caller.
+    /// <para>通过 UotanStudio.Comm 原生 USB ADB 会话拉取设备属性；这是尽力而为的查询：
+    /// 端点被 logcat 捕获租用（already leased）、设备正处于重枚举窗口（端点暂不可用）或
+    /// 会话超时都按"暂无信息"处理并返回 null，不向调用方抛错。</para>
     /// </summary>
     private static Dictionary<string, string>? QueryViaAdbSession(DeviceInfo device)
     {
@@ -192,8 +192,8 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>通过 UotanStudio.Comm 的 Fastboot 会话查询 getvar 变量丰富设备信息。</para>
     /// Queries fastboot getvar variables via a UotanStudio.Comm session to enrich device info.
+    /// <para>通过 UotanStudio.Comm 的 Fastboot 会话查询 getvar 变量丰富设备信息。</para>
     /// </summary>
     private async Task EnrichFastbootInfoAsync(DeviceInfo device)
     {
@@ -240,15 +240,15 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>执行一条 ADB shell 命令并返回去除空白行与首尾裁剪后的文本。</para>
     /// Runs an ADB shell command and returns the whitespace-collapsed trimmed output.
+    /// <para>执行一条 ADB shell 命令并返回去除空白行与首尾裁剪后的文本。</para>
     /// </summary>
     private static string RunShell(UotanStudio.Comm.Contracts.IAdbDeviceSession session, string command)
         => System.Text.Encoding.UTF8.GetString(session.ExecuteCommand(command).Stdout);
 
     /// <summary>
-    /// <para>将查询到的 ADB 属性应用到设备信息模型。</para>
     /// Applies the queried ADB properties onto the device info model.
+    /// <para>将查询到的 ADB 属性应用到设备信息模型。</para>
     /// </summary>
     private static void ApplyAdbProperties(DeviceInfo device, Dictionary<string, string> info)
     {
@@ -297,8 +297,8 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>将查询到的 Fastboot 属性应用到设备信息模型。</para>
     /// Applies the queried fastboot properties onto the device info model.
+    /// <para>将查询到的 Fastboot 属性应用到设备信息模型。</para>
     /// </summary>
     private static void ApplyFastbootProperties(DeviceInfo device, Dictionary<string, string> info)
     {

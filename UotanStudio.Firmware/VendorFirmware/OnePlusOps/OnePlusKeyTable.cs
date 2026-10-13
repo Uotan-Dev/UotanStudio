@@ -109,12 +109,8 @@ internal static class OnePlusKeyTable
     public static IReadOnlyList<byte[]> GetAllKeys() => Array.AsReadOnly(Keys);
 
     /// <summary>
-    /// Returns the raw artefact at the specified index (AES key or MBox data).
-    /// NOTE: callers that need an AES key should use <see cref="GetAesKey"/>
-    /// instead, to avoid passing MBox data to AES.
-    /// <para>返回指定索引处的原始 artefact（AES 密钥或 MBox 数据）。
-    /// 注意：需要 AES 密钥的调用方应改用 <see cref="GetAesKey"/>，
-    /// 避免将 MBox 数据传给 AES。</para>
+    /// Returns the raw artefact at the specified index.
+    /// <para>返回指定索引处的原始 artefact。</para>
     /// </summary>
     /// <param name="index">Absolute table index between 0 and <see cref="KeyCount"/> - 1.
     /// <para>0 到 <see cref="KeyCount"/> - 1 之间的绝对表索引。</para></param>

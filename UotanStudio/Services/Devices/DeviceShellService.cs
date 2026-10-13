@@ -2,7 +2,10 @@ using UotanStudio.Services.Workspace;
 
 namespace UotanStudio.Services.Devices;
 
-/// <summary>Opens the app's managed shell in the existing terminal dock.</summary>
+/// <summary>
+/// Validates a debug bridge target and opens an interactive shell session for it.
+/// <para>校验调试桥目标，并为该目标打开交互式 shell 会话。</para>
+/// </summary>
 internal static class DeviceShellService
 {
     internal static bool IsAdbReadyState(string state) => state is "device" or "online";

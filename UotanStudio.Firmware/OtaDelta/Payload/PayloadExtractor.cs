@@ -42,9 +42,9 @@ internal class PayloadExtractor
     /// <para>解析某分区 REPLACE_ZSTD 帧压缩时使用的外部原始内容字典。</para>
     /// </summary>
     /// <remarks>
-    /// The AOSP <c>max_zstd_dict_raw_size</c> ceiling arrives as <c>maximumZstdDictBytes</c>; an oversized
+    /// The <c>max_zstd_dict_raw_size</c> ceiling arrives as <c>maximumZstdDictBytes</c>; an oversized
     /// dictionary is rejected here instead of being silently ignored while decoding.
-    /// <para>AOSP 的 <c>max_zstd_dict_raw_size</c> 上限由 <c>maximumZstdDictBytes</c> 传入；超限字典在此直接拒绝，
+    /// <para><c>max_zstd_dict_raw_size</c> 上限由 <c>maximumZstdDictBytes</c> 传入；超限字典在此直接拒绝，
     /// 不会在解码时被静默忽略。</para>
     /// </remarks>
     private ReadOnlyMemory<byte> ZstdDictionaryFor(string partitionName)
@@ -569,11 +569,7 @@ internal class PayloadExtractor
 
     /// <summary>
     /// Extracts all matching partitions from the manifest to the output directory.
-    /// Partitions are processed with bounded parallelism (<see cref="UotanStudio.Firmware.Core.FirmwareParallelism.Workers"/>);
-    /// when <paramref name="byteProgress"/> is supplied, byte-level progress is aggregated across all
-    /// partitions via a thread-safe accumulator (reports throttle to one per 100 ms).
-    /// <para>从清单中提取所有匹配的分区到输出目录。分区按有界并行度（<see cref="UotanStudio.Firmware.Core.FirmwareParallelism.Workers"/>）
-    /// 处理；提供 <paramref name="byteProgress"/> 时，字节级进度通过线程安全累计器跨分区聚合（每 100ms 至多上报一次）。</para>
+    /// <para>从清单中提取所有匹配的分区到输出目录。</para>
     /// </summary>
     /// <param name="manifest">Parsed payload manifest whose partition list is filtered and whose block size bounds every extraction; <see langword="null"/> is rejected.
     /// <para>已解析的载荷清单，其分区列表会被筛选，块大小约束每次提取；不接受 <see langword="null"/>。</para></param>

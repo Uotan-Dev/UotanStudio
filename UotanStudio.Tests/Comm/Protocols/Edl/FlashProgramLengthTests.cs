@@ -4,11 +4,9 @@ using Xunit;
 namespace UotanStudio.Tests.Comm.Protocols.Edl;
 
 /// <summary>
-/// Program sector-count resolution tests using literal byte and sector values: the manifest's
-/// declared count is a capacity ceiling, a shorter source is programmed without implicit
-/// whole-range padding, and only the final sector may be zero-filled.
-/// <para>编程扇区数解析测试，全部使用字面字节与扇区数值：清单声明值是容量上限，较短源文件不会被隐式补齐到整个范围，
-/// 且只有最后一个扇区允许零填充。</para>
+/// Program sector-count resolution tests with literal byte and sector values. A declared count is
+/// a capacity ceiling and only the final sector may be zero-filled.
+/// <para>使用字面字节与扇区数值的编程扇区数解析测试。声明值是容量上限，且只有最后一个扇区允许零填充。</para>
 /// </summary>
 public class FlashProgramLengthTests
 {

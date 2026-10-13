@@ -1,18 +1,8 @@
 namespace UotanStudio.Firmware.OtaDelta.Dat;
 
 /// <summary>
-/// Single source of truth for Android block-OTA DAT/BR file-set naming. One partition contributes a
-/// group that shares a common stem — <c>&lt;stem&gt;.transfer.list</c>, the full-image
-/// <c>&lt;stem&gt;.new.dat</c> (optionally Brotli-compressed to <c>&lt;stem&gt;.new.dat.br</c>), and the
-/// optional incremental <c>&lt;stem&gt;.patch.dat</c> (<c>.patch.dat.br</c>). Every layer that must
-/// recognise, group or strip these suffixes (the firmware <c>DatFormatHandler</c>, the delivery
-/// <c>Package</c> builder and the host explorer) calls into these helpers instead of re-declaring the
-/// suffix list.
-/// <para>Android 块 OTA DAT/BR 文件集命名的唯一权威来源。同一分区共享同一词干构成一组：
-/// <c>&lt;词干&gt;.transfer.list</c>、全量 <c>&lt;词干&gt;.new.dat</c>（可 Brotli 压缩为
-/// <c>&lt;词干&gt;.new.dat.br</c>）以及可选增量 <c>&lt;词干&gt;.patch.dat</c>（<c>.patch.dat.br</c>）。
-/// 凡需识别、分组或剥离这些后缀的层（固件 <c>DatFormatHandler</c>、交付 <c>Package</c> 构建器、
-/// 宿主资源管理器）都调用本类，而不是各自复制后缀列表。</para>
+/// Single source of truth for Android block-OTA DAT/BR file-set naming: <c>&lt;stem&gt;.transfer.list</c>, <c>&lt;stem&gt;.new.dat</c> (optionally <c>&lt;stem&gt;.new.dat.br</c>) and <c>&lt;stem&gt;.patch.dat</c>. Every layer that recognises, groups or strips these suffixes calls these helpers instead of re-declaring the list.
+/// <para>Android 块 OTA DAT/BR 文件集命名的唯一权威来源：<c>&lt;词干&gt;.transfer.list</c>、<c>&lt;词干&gt;.new.dat</c>（可选 <c>&lt;词干&gt;.new.dat.br</c>）与 <c>&lt;词干&gt;.patch.dat</c>。凡需识别、分组或剥离这些后缀的层均调用这些辅助方法，不重复声明后缀表。</para>
 /// </summary>
 public static class DatFileSet
 {

@@ -19,10 +19,16 @@ public class FakeCommTransport : ICommTransport
     private byte[]? _headRemainder;
     private bool _connected = true;
 
-    /// <summary>Gets all bytes written through this transport, in order. 所有写入字节。</summary>
+    /// <summary>
+    /// Gets all bytes written through this transport, in order.
+    /// <para>所有写入字节。</para>
+    /// </summary>
     public List<byte[]> Writes { get; } = [];
 
-    /// <summary>Gets whether the transport reports connected. 是否报告已连接。</summary>
+    /// <summary>
+    /// Gets whether the transport reports connected.
+    /// <para>是否报告已连接。</para>
+    /// </summary>
     public bool IsConnected => _connected;
 
     /// <summary>
@@ -31,7 +37,10 @@ public class FakeCommTransport : ICommTransport
     /// </summary>
     public Func<byte[], IEnumerable<byte[]>>? OnWrite { get; set; }
 
-    /// <summary>When set, writes return 0 (simulating a dead transport). 置位时写入返回 0。</summary>
+    /// <summary>
+    /// When set, writes return 0 (simulating a dead transport).
+    /// <para>置位时写入返回 0。</para>
+    /// </summary>
     public bool FailWrites { get; set; }
 
     /// <inheritdoc />
@@ -50,7 +59,10 @@ public class FakeCommTransport : ICommTransport
     /// <inheritdoc />
     public void Reset() { }
 
-    /// <summary>Enqueues a device response. 入队一条设备响应。</summary>
+    /// <summary>
+    /// Enqueues a device response.
+    /// <para>入队一条设备响应。</para>
+    /// </summary>
     public void Enqueue(byte[] data)
     {
         if (data.Length == 0)
@@ -65,7 +77,10 @@ public class FakeCommTransport : ICommTransport
         }
     }
 
-    /// <summary>Enqueues a UTF-8 text device response. 入队一条 UTF-8 文本设备响应。</summary>
+    /// <summary>
+    /// Enqueues a UTF-8 text device response.
+    /// <para>入队一条 UTF-8 文本设备响应。</para>
+    /// </summary>
     public void Enqueue(string text) => Enqueue(Encoding.UTF8.GetBytes(text));
 
     /// <inheritdoc />
@@ -254,10 +269,16 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
     private readonly List<byte> _recv = new();
     private readonly List<string> _openedServices = [];
 
-    /// <summary>Gets the services the client opened (e.g. "sync:", "reboot:sideload"). 客户端打开的服务列表。</summary>
+    /// <summary>
+    /// Gets the services the client opened (e.g. "sync:", "reboot:sideload").
+    /// <para>客户端打开的服务列表。</para>
+    /// </summary>
     public IReadOnlyList<string> OpenedServices => _openedServices;
 
-    /// <summary>Gets the raw payloads of every WRTE the client sent (sync packets included). 客户端发送的 WRTE 负载。</summary>
+    /// <summary>
+    /// Gets the raw payloads of every WRTE the client sent (sync packets included).
+    /// <para>客户端发送的 WRTE 负载。</para>
+    /// </summary>
     public List<byte[]> WrtePayloads { get; } = [];
 
     public uint PeerMaxPayload { get; init; } = AdbConstants.MaxPayload;
@@ -286,7 +307,10 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
 
     public int CloseCount => Volatile.Read(ref _closeCount);
 
-    /// <summary>Initializes a new ADB device simulator. 初始化 ADB 设备模拟器。</summary>
+    /// <summary>
+    /// Initializes a new ADB device simulator.
+    /// <para>初始化 ADB 设备模拟器。</para>
+    /// </summary>
     public FakeAdbDeviceTransport()
     {
         OnWrite = ProcessClientMessage;

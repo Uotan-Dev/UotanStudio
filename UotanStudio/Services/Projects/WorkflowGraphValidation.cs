@@ -3,7 +3,8 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.Projects;
 
-/// <summary>Shared structural and execution checks for editor and headless workflows.</summary>
+/// <summary>Shared structural and execution checks for editor and headless workflows.
+/// <para>编辑画布与无头工作流共用的结构与执行校验。</para></summary>
 internal static class WorkflowGraphValidation
 {
     internal static string? ValidateConnection(IReadOnlyList<FlowNodeViewModel> nodes,

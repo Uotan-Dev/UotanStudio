@@ -19,19 +19,19 @@ internal sealed record DeliveryProgress(double Percent, string Message,
     IReadOnlyDictionary<string, string>? Metadata = null);
 
 /// <summary>
-/// <para>交付等价门禁关注的维度，与库门面的四个维度一一对应，用于说明某一维度在该输出种类下是否被要求等价。</para>
 /// A dimension the delivery equivalence gate tracks, mirroring the library façade one-to-one, used to state whether the
 /// output kind requires that dimension to be equivalent.
+/// <para>交付等价门禁关注的维度，与库门面的四个维度一一对应，用于说明某一维度在该输出种类下是否被要求等价。</para>
 /// </summary>
 internal enum DeliveryEquivalenceDimension
 {
-    /// <summary><para>字节一致性：暂存副本与所选源镜像是否同一份字节。</para>Byte identity: whether the staged copy and the selected source are the same bytes.</summary>
+    /// <summary>Byte identity: whether the staged copy and the selected source are the same bytes. <para>字节一致性：暂存副本与所选源镜像是否同一份字节。</para></summary>
     Byte,
 
-    /// <summary><para>inode 结构等价性，只能继承自受保留重建的等价元数据。</para>Inode-structure equivalence, inheritable only from preserved-rebuild metadata.</summary>
+    /// <summary>Inode-structure equivalence, inheritable only from preserved-rebuild metadata. <para>inode 结构等价性，只能继承自受保留重建的等价元数据。</para></summary>
     Structure,
 
-    /// <summary><para>文件内容等价性，只能继承自受保留重建的等价元数据。</para>File-content equivalence, inheritable only from preserved-rebuild metadata.</summary>
+    /// <summary>File-content equivalence, inheritable only from preserved-rebuild metadata. <para>文件内容等价性，只能继承自受保留重建的等价元数据。</para></summary>
     Content,
 
     /// <summary><para>容量等价性，交付仅记录不要求，因为重建后的镜像不承诺适合原分区容量。</para>
@@ -40,25 +40,25 @@ internal enum DeliveryEquivalenceDimension
 }
 
 /// <summary>
-/// <para>单个暂存镜像的等价评估结果：四维度报告加上本条输出真正要求等价的维度集合。只有同时出现在要求集合里
-/// 且被判为不等价的维度才会中止交付；不评估的维度既不会中止交付，也绝不被报告成已通过。</para>
 /// The equivalence outcome for one staged image: the four-dimension report plus the set of dimensions this output kind
 /// actually requires. Only a dimension that is both required and judged not equivalent aborts the delivery; an
 /// unevaluated dimension never aborts it and is never reported as verified.
+/// <para>单个暂存镜像的等价评估结果：四维度报告加上本条输出真正要求等价的维度集合。只有同时出现在要求集合里
+/// 且被判为不等价的维度才会中止交付；不评估的维度既不会中止交付，也绝不被报告成已通过。</para>
 /// </summary>
-/// <param name="FileName"><para>暂存镜像的文件名。</para>The staged image filename.</param>
-/// <param name="Report"><para>库门面形式的四维度报告。</para>The four-dimension report in library façade form.</param>
-/// <param name="RequiredDimensions"><para>本条输出要求等价的维度。</para>The dimensions this output kind requires.</param>
+/// <param name="FileName">The staged image filename. <para>暂存镜像的文件名。</para></param>
+/// <param name="Report">The four-dimension report in library façade form. <para>库门面形式的四维度报告。</para></param>
+/// <param name="RequiredDimensions">The dimensions this output kind requires. <para>本条输出要求等价的维度。</para></param>
 internal sealed record DeliveryStagedEquivalence(
     string FileName,
     FilesystemEquivalenceReport Report,
     IReadOnlyList<DeliveryEquivalenceDimension> RequiredDimensions)
 {
     /// <summary>
-    /// <para>返回被要求却判定为不等价的维度文本；没有任何维度要求失败时返回 null。</para>
     /// Returns the failure text of a required dimension judged not equivalent, or null when no required dimension failed.
+    /// <para>返回被要求却判定为不等价的维度文本；没有任何维度要求失败时返回 null。</para>
     /// </summary>
-    /// <value><para>中止交付所用的失败说明，或 null。</para>The abort message for a failed required dimension, or null.</value>
+    /// <value>The abort message for a failed required dimension, or null. <para>中止交付所用的失败说明，或 null。</para></value>
     internal string? RequiredFailure
     {
         get
@@ -74,9 +74,9 @@ internal sealed record DeliveryStagedEquivalence(
     }
 
     /// <summary>
-    /// <para>把四维度状态与要求集合渲染成一行可诊断文本，未评估的维度如实写作 not_evaluated。</para>
     /// Renders the four dimension states plus the requirement set as one diagnostic line, spelling unevaluated
     /// dimensions honestly as not_evaluated.
+    /// <para>把四维度状态与要求集合渲染成一行可诊断文本，未评估的维度如实写作 not_evaluated。</para>
     /// </summary>
     /// <returns><para>形如 <c>byte=equivalent(required); structure=not_evaluated</c> 的单行文本。</para>
     /// A single line such as <c>byte=equivalent(required); structure=not_evaluated</c>.</returns>
@@ -112,12 +112,12 @@ internal sealed record DeliveryStagedEquivalence(
     };
 }
 
-/// <summary><para>按交付计划在暂存目录准备平台工具。</para>Prepares platform tools in a staging directory for a delivery plan.</summary>
+/// <summary>Prepares platform tools in a staging directory for a delivery plan. <para>按交付计划在暂存目录准备平台工具。</para></summary>
 internal interface IDeliveryTools
 {
     /// <summary>
-    /// <para>把交付所需工具（platform-tools 与 zstd）解压/下载到 staging 目录下的 bin 布局。</para>
     /// Prepares the tools a delivery needs (platform-tools and zstd) into the bin layout under the staging directory.
+    /// <para>把交付所需工具（platform-tools 与 zstd）解压/下载到 staging 目录下的 bin 布局。</para>
     /// </summary>
     Task PrepareAsync(DeliveryPlan plan, string directory, IProgress<DeliveryProgress>? progress, CancellationToken token);
 }
@@ -161,8 +161,8 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
-    /// <para>计算单个镜像在组织布局下的相对路径：固件镜像放入 firmware-update/，其余放根目录。</para>
     /// Computes a single image's relative path in the organized layout: firmware images go under firmware-update/, others at the root.
+    /// <para>计算单个镜像在组织布局下的相对路径：固件镜像放入 firmware-update/，其余放根目录。</para>
     /// </summary>
     internal static string OrganizedImageRelativePath(DeliveryFile file)
     {
@@ -171,13 +171,13 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
-    /// <para>在暂存目录中逐一准备每个文件后原子发布到输出目录：覆盖调用方批准的目标，保留其余已有文件。
-    /// 校验在消除误报的同时不允许输出覆盖已选源镜像——输出目录不得等于任一源镜像所在目录（避免 images/images 嵌套），
-    /// 且按组织布局写出的目标路径不得与任一选中源镜像重合。</para>
     /// Prepares every file privately in a staging directory, then atomically publishes to the output: overwrites
     /// caller-approved destinations and keeps the rest. Validation rejects false positives yet forbids the output
     /// from overwriting a selected source image—the output directory must not equal any source's own directory
     /// (avoiding images/images nesting), and no written destination may coincide with a selected source path.
+    /// <para>在暂存目录中逐一准备每个文件后原子发布到输出目录：覆盖调用方批准的目标，保留其余已有文件。
+    /// 校验在消除误报的同时不允许输出覆盖已选源镜像——输出目录不得等于任一源镜像所在目录（避免 images/images 嵌套），
+    /// 且按组织布局写出的目标路径不得与任一选中源镜像重合。</para>
     /// </summary>
     internal async Task<string[]> ExportAsync(DeliveryPlan plan, IProgress<DeliveryProgress>? progress = null, CancellationToken token = default,
         IReadOnlySet<string>? overwrite = null)
@@ -379,19 +379,6 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
-    /// <para>在写校验和之前，逐个校验交付暂存的镜像副本，并把四维度结果按文件汇总进进度元数据。要求矩阵按输出种类划定：</para>
-    /// <para>· 纯拷贝（组织目录输出且未做 Super 展开）：字节维度用源镜像的真实摘要与长度评估并被要求等价；
-    /// 结构、内容与容量在交付路径上没有任何库侧计算，保持不评估。</para>
-    /// <para>· 附带受保留重建等价元数据、且元数据记录的源摘要与长度与磁盘上的源镜像完全一致：结构与内容维度成为要求项，
-    /// 容量只记录不要求——交付不承诺重建后的镜像仍适合原分区容量，Super 的容量由 DeliverySuperCapacity 单独硬校验。</para>
-    /// <para>· 元数据无法与源镜像绑定（缺少记录的源摘要或长度）时不继承任何维度，也不失败，只如实报告不评估；
-    /// 元数据记录的源身份与磁盘上的源镜像不符时说明证据已过期，直接中止交付而不是悄悄降级。</para>
-    /// <para>· Super 打包会把稀疏源展开为逻辑镜像，产出字节本就与源不同，且源侧的重建证据不再描述展开后的产物，
-    /// 因此该模式下四个维度一律不评估，仅在 Details 中保留源侧元数据供诊断。</para>
-    /// <para>· 生成型容器（super.img / super_empty.img / payload.bin / ota.zip / super.zip / recovery.zip）没有源身份，
-    /// 四个维度如实记为不评估，绝不当作已通过。</para>
-    /// <para>只有“被要求且被判定为不等价”的维度才会中止交付；不评估既不会让交付失败，也绝不报告为成功。中止时尚未
-    /// 发布任何文件，暂存目录由调用方的 finally 清理，用户既有输出保持不变。</para>
     /// Verifies every staged image copy through the library's public equivalence façade before checksums are written and
     /// folds the four dimensions into per-file progress metadata. The requirement matrix follows the output kind: a pure
     /// copy requires the byte dimension, which is evaluated for real against the source image's digest and length, while
@@ -408,6 +395,19 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     /// Only a dimension that is both required and judged not equivalent aborts the delivery; an unevaluated dimension
     /// neither fails nor passes. Nothing has been published when that happens, the staging directory is discarded, and
     /// the caller's previous output stays untouched.
+    /// <para>在写校验和之前，逐个校验交付暂存的镜像副本，并把四维度结果按文件汇总进进度元数据。要求矩阵按输出种类划定：</para>
+    /// <para>· 纯拷贝（组织目录输出且未做 Super 展开）：字节维度用源镜像的真实摘要与长度评估并被要求等价；
+    /// 结构、内容与容量在交付路径上没有任何库侧计算，保持不评估。</para>
+    /// <para>· 附带受保留重建等价元数据、且元数据记录的源摘要与长度与磁盘上的源镜像完全一致：结构与内容维度成为要求项，
+    /// 容量只记录不要求——交付不承诺重建后的镜像仍适合原分区容量，Super 的容量由 DeliverySuperCapacity 单独硬校验。</para>
+    /// <para>· 元数据无法与源镜像绑定（缺少记录的源摘要或长度）时不继承任何维度，也不失败，只如实报告不评估；
+    /// 元数据记录的源身份与磁盘上的源镜像不符时说明证据已过期，直接中止交付而不是悄悄降级。</para>
+    /// <para>· Super 打包会把稀疏源展开为逻辑镜像，产出字节本就与源不同，且源侧的重建证据不再描述展开后的产物，
+    /// 因此该模式下四个维度一律不评估，仅在 Details 中保留源侧元数据供诊断。</para>
+    /// <para>· 生成型容器（super.img / super_empty.img / payload.bin / ota.zip / super.zip / recovery.zip）没有源身份，
+    /// 四个维度如实记为不评估，绝不当作已通过。</para>
+    /// <para>只有“被要求且被判定为不等价”的维度才会中止交付；不评估既不会让交付失败，也绝不报告为成功。中止时尚未
+    /// 发布任何文件，暂存目录由调用方的 finally 清理，用户既有输出保持不变。</para>
     /// </summary>
     internal static async Task<IReadOnlyList<DeliveryStagedEquivalence>> VerifyStagedEquivalenceAsync(DeliveryPlan plan, string stage,
         IProgress<DeliveryProgress>? progress, CancellationToken token,
@@ -415,12 +415,12 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         => (await VerifyStagedEquivalenceWithHashesAsync(plan, stage, progress, token, fusedSourceIdentities).ConfigureAwait(false)).Rows;
 
     /// <summary>
-    /// <para>与 <see cref="VerifyStagedEquivalenceAsync"/> 相同的等价校验，同时返回每个已评估字节维度的暂存镜像
-    /// SHA-256（小写十六进制，键为暂存绝对路径），供 checksums.sha256 阶段复用，避免对同一批 GB 级镜像再做一次
-    /// 全量读取。</para>
     /// Performs the same equivalence verification as <see cref="VerifyStagedEquivalenceAsync"/> and additionally returns the
     /// SHA-256 of every staged image whose byte dimension was evaluated (lowercase hexadecimal, keyed by the staged absolute
     /// path) so the checksums.sha256 stage can reuse them instead of re-reading the same multi-gigabyte images.
+    /// <para>与 <see cref="VerifyStagedEquivalenceAsync"/> 相同的等价校验，同时返回每个已评估字节维度的暂存镜像
+    /// SHA-256（小写十六进制，键为暂存绝对路径），供 checksums.sha256 阶段复用，避免对同一批 GB 级镜像再做一次
+    /// 全量读取。</para>
     /// </summary>
     /// <param name="plan">Delivery plan supplying the file set and options under verification.
     /// <para>提供待校验文件集合与选项的交付计划。</para></param>
@@ -428,11 +428,11 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     /// <param name="progress">Optional progress sink; may be <see langword="null"/>. <para>可选进度接收端，可为 <see langword="null"/>。</para></param>
     /// <param name="token">Cancels hashing and verification. <para>取消哈希与校验的令牌。</para></param>
     /// <param name="fusedSourceIdentities">
-    /// <para>暂存复制阶段顺带算出的源镜像身份，键为 <see cref="DeliveryFile.SourcePath"/> 原文；命中时本方法不再对
-    /// 源镜像做第二次全量 SHA-256。只收录逐字节纯拷贝得到的条目，缺少条目的文件仍按原路径重读。</para>
     /// Source image identities folded out of the staging copy pass, keyed by the verbatim
     /// <see cref="DeliveryFile.SourcePath"/>; when an entry is present the source image is not SHA-256ed a second time.
     /// Only pure byte copies are recorded, and files without an entry are still read from disk.
+    /// <para>暂存复制阶段顺带算出的源镜像身份，键为 <see cref="DeliveryFile.SourcePath"/> 原文；命中时本方法不再对
+    /// 源镜像做第二次全量 SHA-256。只收录逐字节纯拷贝得到的条目，缺少条目的文件仍按原路径重读。</para>
     /// </param>
     internal static async Task<(IReadOnlyList<DeliveryStagedEquivalence> Rows, IReadOnlyDictionary<string, string> StagedSha256)>
         VerifyStagedEquivalenceWithHashesAsync(DeliveryPlan plan, string stage,
@@ -475,8 +475,6 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                 }
                 evaluated[slot] = result;
             }).ConfigureAwait(false);
-        // Slots are ordered by plan.Files index, so the first non-null failure is the same one a
-        // sequential pass would have thrown first, preserving fail-fast observable behavior.
         foreach (var failure in failures)
             if (failure is not null) throw failure;
         for (var slot = 0; slot < evaluated.Length; slot++)
@@ -498,16 +496,16 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
-    /// <para>评估单个暂存镜像的四个等价维度并给出本条输出所要求的维度。字节维度只在拷贝未被展开为逻辑镜像时评估，
-    /// 因为该维度衡量的是“暂存副本与所选源是否同一份字节”；结构、内容与容量只能继承自受保留重建的等价元数据，
-    /// 且只有当元数据记录的源摘要与长度与磁盘上的源镜像完全一致时才继承——否则这份证据描述的不是眼前这份文件。
-    /// 继承而来的字节判定保留在 Details 中原文可查，报告的字节维度始终替换为交付自己算出的拷贝校验结果。</para>
     /// Evaluates one staged image across the four dimensions and lists the dimensions this output kind requires. The byte
     /// dimension is evaluated only when the copy was not expanded into its logical image, because it measures whether the
     /// staged copy and the selected source are the same bytes; structure, content and capacity can only be inherited from
     /// preserved-rebuild metadata, and only when that metadata's recorded source digest and length still match the source
     /// on disk, since otherwise the evidence describes a different file. The inherited byte verdict stays readable in
     /// Details, while the report's byte dimension is always replaced by delivery's own copy check.
+    /// <para>评估单个暂存镜像的四个等价维度并给出本条输出所要求的维度。字节维度只在拷贝未被展开为逻辑镜像时评估，
+    /// 因为该维度衡量的是“暂存副本与所选源是否同一份字节”；结构、内容与容量只能继承自受保留重建的等价元数据，
+    /// 且只有当元数据记录的源摘要与长度与磁盘上的源镜像完全一致时才继承——否则这份证据描述的不是眼前这份文件。
+    /// 继承而来的字节判定保留在 Details 中原文可查，报告的字节维度始终替换为交付自己算出的拷贝校验结果。</para>
     /// </summary>
     /// <param name="file">Delivered file entry whose equivalence is evaluated. <para>要评估等价性的交付条目。</para></param>
     /// <param name="stagedPath">Staged copy of the source image. <para>源镜像的暂存副本路径。</para></param>
@@ -515,14 +513,14 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     /// container bytes no longer describe the source. <para>暂存已按稀疏布局展开源数据时为 true，此时容器字节不再等同源字节。</para></param>
     /// <param name="token">Cancels hashing and verification. <para>取消哈希与校验。</para></param>
     /// <param name="fusedIdentity">
-    /// <para>暂存复制阶段顺带算出的同一份源字节摘要与长度；为 null 时本方法自己重读源镜像。它只在逐字节纯拷贝
-    /// （即 <paramref name="expandedToLogicalImage"/> 为 false，拷贝未按稀疏布局展开）时才会被提供，因此描述的就是
-    /// 同一批字节；暂存副本仍会单独读取并哈希，拷贝错误照样能被发现。</para>
     /// The digest and length of the same source bytes folded out of the staging copy pass; when null the source image is
     /// re-read here instead. It is only supplied for a pure byte copy (that is, when
     /// <paramref name="expandedToLogicalImage"/> is <see langword="false"/> and the copy was not expanded through the
     /// sparse layout), so it describes exactly those bytes, and the staged copy is still read and hashed separately so a
     /// botched copy keeps getting caught.
+    /// <para>暂存复制阶段顺带算出的同一份源字节摘要与长度；为 null 时本方法自己重读源镜像。它只在逐字节纯拷贝
+    /// （即 <paramref name="expandedToLogicalImage"/> 为 false，拷贝未按稀疏布局展开）时才会被提供，因此描述的就是
+    /// 同一批字节；暂存副本仍会单独读取并哈希，拷贝错误照样能被发现。</para>
     /// </param>
     /// <returns>The equivalence row plus the staged image's lowercase SHA-256 when the byte dimension was evaluated,
     /// otherwise <see langword="null"/> for the hash.
@@ -587,10 +585,10 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
-    /// <para>读取镜像的 SHA-256 摘要（小写十六进制）与长度，流式有界缓冲，取消令牌逐块观察。暂存复制已经交出过
-    /// 同一批字节时不再走这里，见 <see cref="CopyFileAsync"/>。</para>
     /// Reads an image's lowercase SHA-256 digest and length through a bounded streaming buffer, observing the token per
     /// block. It is skipped when the staging copy already handed over those same bytes; see <see cref="CopyFileAsync"/>.
+    /// <para>读取镜像的 SHA-256 摘要（小写十六进制）与长度，流式有界缓冲，取消令牌逐块观察。暂存复制已经交出过
+    /// 同一批字节时不再走这里，见 <see cref="CopyFileAsync"/>。</para>
     /// </summary>
     private static async Task<(string Hash, long Length)> ReadSourceIdentityAsync(string path, CancellationToken token)
     {
@@ -602,20 +600,20 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
-    /// <para>取出暂存复制阶段为该镜像记下的源身份；没有记录（例如非组织目录布局的调用方或展开过的拷贝）时返回
-    /// <see langword="null"/>，由调用方回退到重读源镜像。</para>
     /// Looks up the source identity the staging copy recorded for this image; returns <see langword="null"/> when nothing
     /// was recorded (a caller outside the organized layout, or an expanded copy) so the caller falls back to re-reading.
+    /// <para>取出暂存复制阶段为该镜像记下的源身份；没有记录（例如非组织目录布局的调用方或展开过的拷贝）时返回
+    /// <see langword="null"/>，由调用方回退到重读源镜像。</para>
     /// </summary>
     private static (string Hash, long Length)? FusedSourceIdentity(
         IReadOnlyDictionary<string, (string Hash, long Length)>? identities, DeliveryFile file)
         => identities is not null && identities.TryGetValue(file.SourcePath, out var identity) ? identity : null;
 
     /// <summary>
-    /// <para>从等价元数据里取出库记录的源摘要与源长度（SourceImageHash、SourceImageLength），用于判断这份证据是否
-    /// 仍描述当前选中的源镜像；两键任一缺失或格式不合法都按“无法绑定”处理，不猜测。</para>
     /// Extracts the source digest and length the library recorded (SourceImageHash, SourceImageLength) to decide whether
     /// the evidence still describes the selected source; a missing or malformed key means "cannot bind" and is never guessed.
+    /// <para>从等价元数据里取出库记录的源摘要与源长度（SourceImageHash、SourceImageLength），用于判断这份证据是否
+    /// 仍描述当前选中的源镜像；两键任一缺失或格式不合法都按“无法绑定”处理，不猜测。</para>
     /// </summary>
     private static bool TryRecordedSourceIdentity(IReadOnlyDictionary<string, string> details, out string hash, out long length)
     {
@@ -634,8 +632,8 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
-    /// <para>返回组织布局下生成的容器文件名（ota.zip / super.zip / super_empty.img / super.img / super.zst / payload.bin）。</para>
     /// Returns the generated container filename in the organized layout (ota.zip / super.zip / super_empty.img / super.img / super.zst / payload.bin).
+    /// <para>返回组织布局下生成的容器文件名（ota.zip / super.zip / super_empty.img / super.img / super.zst / payload.bin）。</para>
     /// </summary>
     internal static string ContainerFileName(DeliveryPlan plan) => plan.PackPayload
         ? (plan.OrganizeDirectory ? ZipFileName(plan, "ota.zip") : "payload.bin")
@@ -675,15 +673,15 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
-    /// <para>流式复制源文件到目标并报告进度；expandSparse 时把稀疏镜像展开（Recovery 按物理块写入桌面暂存目录）。
-    /// 未展开时这份拷贝是逐字节的，因此顺带把读到的源字节并入 SHA-256，返回源身份（小写十六进制摘要与长度），
-    /// 让等价校验不必再对同一批 GB 级源字节做第二次全量读取；展开路径产出的是逻辑镜像而不是源文件的字节，
-    /// 摘要对它没有意义，返回 <see langword="null"/>。</para>
     /// Streams a source file to a destination with progress; when expandSparse is set, sparse images are expanded in the
     /// staging directory. An unexpanded copy is byte for byte, so the bytes read from the source are folded into a SHA-256
     /// on the way through and the source identity (lowercase digest plus length) is returned, which saves equivalence
     /// verification a second full read of the same multi-gigabyte source bytes. The expanded path yields the logical image
     /// rather than the source file's bytes, so a digest would say nothing about them and <see langword="null"/> is returned.
+    /// <para>流式复制源文件到目标并报告进度；expandSparse 时把稀疏镜像展开（Recovery 按物理块写入桌面暂存目录）。
+    /// 未展开时这份拷贝是逐字节的，因此顺带把读到的源字节并入 SHA-256，返回源身份（小写十六进制摘要与长度），
+    /// 让等价校验不必再对同一批 GB 级源字节做第二次全量读取；展开路径产出的是逻辑镜像而不是源文件的字节，
+    /// 摘要对它没有意义，返回 <see langword="null"/>。</para>
     /// </summary>
     /// <returns>The source digest and length for a pure byte copy, or <see langword="null"/> when the copy was expanded.
     /// <para>逐字节拷贝返回源的摘要与长度；展开过的拷贝返回 <see langword="null"/>。</para></returns>
@@ -782,17 +780,17 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
+    /// Walks up to the deepest already existing non-link directory, throwing if any checked component is blocked by a
+    /// file or is a symlink, so the output directory can be created safely. The walk stops there because ancestors above
+    /// it are chosen by the user or the operating system, not by the delivery plan; macOS resolves
+    /// <c>Path.GetTempPath()</c> through the <c>/var</c> to <c>/private/var</c> symbolic link, so an unbounded walk
+    /// rejects every legitimate output directory.
     /// <para>
     /// 沿目录向上逐级检查到已存在的最深非链接目录为止：任一被检查的组件被文件占用或为符号链接则抛错，
     /// 保证输出目录可安全创建。边界以上的祖先由用户或操作系统选定而不受交付计划控制，因此不参与判定；
     /// macOS 上 <c>/var</c> 是指向 <c>/private/var</c> 的符号链接，临时目录必定经由它解析，
     /// 无界遍历会拒绝所有合法的输出目录。
     /// </para>
-    /// Walks up to the deepest already existing non-link directory, throwing if any checked component is blocked by a
-    /// file or is a symlink, so the output directory can be created safely. The walk stops there because ancestors above
-    /// it are chosen by the user or the operating system, not by the delivery plan; macOS resolves
-    /// <c>Path.GetTempPath()</c> through the <c>/var</c> to <c>/private/var</c> symbolic link, so an unbounded walk
-    /// rejects every legitimate output directory.
     /// </summary>
     internal static void CheckDirectory(string path)
     {
@@ -826,13 +824,13 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     /// <summary>
+    /// Returns the deepest existing non-link component. A symbolic link is skipped so the walk can keep searching for a
+    /// real directory boundary above it, while the component walk still inspects every such link and therefore still
+    /// rejects a link planted inside the output root.
     /// <para>
     /// 返回路径上已存在的最深非链接组件。链接本身会被跳过并继续向上寻找真正的目录边界，
     /// 而遍历循环仍会逐级检查这些链接，因此在输出根目录内植入符号链接依然会被拒绝。
     /// </para>
-    /// Returns the deepest existing non-link component. A symbolic link is skipped so the walk can keep searching for a
-    /// real directory boundary above it, while the component walk still inspects every such link and therefore still
-    /// rejects a link planted inside the output root.
     /// </summary>
     private static string DeepestExistingAncestor(string full)
     {

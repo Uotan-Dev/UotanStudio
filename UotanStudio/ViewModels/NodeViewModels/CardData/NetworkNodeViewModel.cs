@@ -7,7 +7,7 @@ using UotanStudio.Services.Network;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
-/// <summary>Downloads a remote artifact to a path-backed, atomically published file.</summary>
+/// <summary>Downloads a remote artifact to a path-backed, atomically published file.<para>下载远程构件到由路径支撑、原子发布的文件。</para></summary>
 public sealed class NetworkNodeViewModel : FlowNodeViewModel
 {
     private static readonly HttpClient SharedHttpClient = new() { Timeout = Timeout.InfiniteTimeSpan };

@@ -9,7 +9,7 @@ using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.ViewModels.Workspace;
 
-/// <summary>Docked AI conversation UI state. 停靠 AI 对话的界面状态。</summary>
+/// <summary>Conversation state for a docked AI assistant.<para>停靠式 AI 助手的会话状态。</para></summary>
 public partial class AiAssistantViewModel : Tool
 {
     public AiSettingsViewModel Settings { get; }
@@ -63,7 +63,8 @@ public partial class AiAssistantViewModel : Tool
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Settings));
 }
 
-/// <summary>Stable, localized mode choice. 实例稳定的本地化模式选项。</summary>
+/// <summary>Stable, localized mode choice.<para>实例稳定的本地化模式选项。</para></summary>
+/// <param name="resourceKey">Key selecting the localized mode label.<para>选择本地化模式文本的键。</para></param>
 public sealed class AiModeOptionViewModel(string resourceKey) : ViewModelBase
 {
     public string DisplayName => LanguageService.Instance.GetString(resourceKey);
@@ -71,7 +72,7 @@ public sealed class AiModeOptionViewModel(string resourceKey) : ViewModelBase
     internal void RefreshDisplayName() => OnPropertyChanged(nameof(DisplayName));
 }
 
-/// <summary>Local conversation draft and display data. 本地会话草稿和显示数据。</summary>
+/// <summary>Local conversation draft and display data.<para>本地会话草稿和显示数据。</para></summary>
 public partial class AiConversationViewModel : ViewModelBase
 {
     [ObservableProperty]
@@ -113,8 +114,12 @@ public partial class AiConversationViewModel : ViewModelBase
     internal void RefreshTitle() => OnPropertyChanged(nameof(Title));
 }
 
-/// <summary>Message display data without transport behavior. 不含传输行为的消息显示数据。</summary>
+/// <summary>Message display data without transport behavior.<para>不含传输行为的消息显示数据。</para></summary>
+/// <param name="Author">Role or identity that produced the message.<para>产生该消息的角色或身份。</para></param>
+/// <param name="Text">Message body text.<para>消息正文文本。</para></param>
 public sealed record AiMessage(string Author, string Text);
 
-/// <summary>Selected file name and location only; no file content. 仅包含所选文件名和位置，不含文件内容。</summary>
+/// <summary>Selected file name and location only; no file content.<para>仅包含所选文件名和位置，不含文件内容。</para></summary>
+/// <param name="Name">Displayed file name.<para>显示用的文件名。</para></param>
+/// <param name="Path">Local path of the selected file.<para>所选文件的本地路径。</para></param>
 public sealed record AiAttachment(string Name, string Path);

@@ -11,16 +11,16 @@ using Ursa.Controls;
 namespace UotanStudio.Views.Shell;
 
 /// <summary>
-/// <para>设置页面视图，提供应用程序设置的交互界面。</para>
 /// Settings page view, providing the interactive interface for application settings.
+/// <para>设置页面视图，提供应用程序设置的交互界面。</para>
 /// </summary>
 public partial class SettingsView : UserControl
 {
     private WindowToastManager? _toastManager;
 
     /// <summary>
-    /// <para>初始化设置页面视图的新实例。</para>
     /// Initializes a new instance of the SettingsView.
+    /// <para>初始化设置页面视图的新实例。</para>
     /// </summary>
     public SettingsView()
     {
@@ -68,11 +68,11 @@ public partial class SettingsView : UserControl
     }
 
     /// <summary>
-    /// <para>用系统默认浏览器打开按钮携带的链接（开发成员的 GitHub / 酷安主页）。</para>
     /// Opens the link carried by the button (developer GitHub / Coolapk profiles) in the default browser.
+    /// <para>用系统默认浏览器打开按钮携带的链接（开发成员的 GitHub / 酷安主页）。</para>
     /// </summary>
-    /// <param name="sender"><para>事件发送者。</para>The event sender.</param>
-    /// <param name="e"><para>事件参数。</para>The event arguments.</param>
+    /// <param name="sender">The event sender. <para>事件发送者。</para></param>
+    /// <param name="e">The event arguments. <para>事件参数。</para></param>
     private void OnOpenLinkClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string url })

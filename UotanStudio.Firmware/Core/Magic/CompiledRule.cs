@@ -2,8 +2,8 @@
 namespace UotanStudio.Firmware.Core.Magic;
 
 /// <summary>
-/// <para>解码后的单条编译型 magic 规则，含子规则树。运行时由 <see cref="CompiledMagicEngine"/> 消费。</para>
 /// A decoded compiled magic rule with its sub-rule tree; consumed by <see cref="CompiledMagicEngine"/>.
+/// <para>解码后的单条编译型 magic 规则，含子规则树。运行时由 <see cref="CompiledMagicEngine"/> 消费。</para>
 /// </summary>
 internal sealed class CompiledRule
 {
@@ -47,7 +47,10 @@ internal sealed class CompiledRule
 
     public readonly List<CompiledRule> Children = new();
 
-    /// <summary>字符类别（string 值中的 [..] 区间），逐字节位置；null 表示该位为普通字节。</summary>
+    /// <summary>
+    /// Character classes covering the [..] ranges inside string values, indexed per byte position; null means that position holds a plain byte.
+    /// <para>字符串值中 [..] 区间对应的字符类别，按字节位置索引；null 表示该位置为普通字节。</para>
+    /// </summary>
     public ulong[]? CharClasses;
 
     public System.Text.RegularExpressions.Regex? CompiledRegex;
@@ -56,8 +59,8 @@ internal sealed class CompiledRule
 }
 
 /// <summary>
-/// <para>编译型魔数识别结果。</para>
 /// Result of a compiled-magic identification.
+/// <para>编译型魔数识别结果。</para>
 /// </summary>
 public sealed class MagicInfo
 {

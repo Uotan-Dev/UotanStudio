@@ -5,26 +5,16 @@ using UotanStudio.Services.Compare;
 namespace UotanStudio.ViewModels.Compare;
 
 /// <summary>
-/// <para>对比文档的文件夹对比部分：把两侧目录压平成同一份对齐行列表（同名条目同一行、单侧条目在另一侧
-/// 留空、差异整行变色），并处理复制。该部分与文档共享同一份状态，不是独立的业务模块。</para>
-/// The compare document's folder-comparison part: flattens both directory sides into one aligned row list
-/// (same-name entries share a row, single-side entries stay blank on the other side, differing rows are coloured
-/// as a whole) and handles copying. It shares the document's state and is not a separate business module.
+/// The compare document's folder part: flattens both directory sides into one aligned row list and
+/// handles copying. Same-name entries share a row; a single-side entry leaves the other side blank.
+/// <para>对比文档的文件夹对比部分：把两侧目录压平成同一份对齐行列表并处理复制。同名条目同一行，单侧条目在另一侧留空。</para>
 /// </summary>
 public sealed partial class CompareViewModel
 {
     /// <summary>
-    /// <para>比对两个目录并把结果装配成一棵对比树，再压平成两栏共享的对齐行列表：</para>
-    /// <para>· 行顺序与缩进由对比树决定，子项紧跟在父项后面，两侧完全一致；</para>
-    /// <para>· 节点记录左右两侧的名称、图标与大小，单侧缺失的那一列自动留空；</para>
-    /// <para>· 状态「不同」的行两侧整行变色，单侧条目按侧加淡色背景；</para>
-    /// <para>· 目录状态按子树聚合（子树里有任何非相同条目即为不同），因此最初始的文件夹也会整行变色。</para>
-    /// Compares the two directories, assembles the result into a comparison tree and flattens it into the aligned
-    /// row list both columns share: the tree defines row order and indentation (children follow their parent,
-    /// identically on both sides), each node records both sides' names, glyphs and sizes so a missing side stays
-    /// blank, "different" rows are coloured as a whole while single-side entries tint their own side, and a
-    /// directory's status is aggregated from its subtree (any non-equal entry below makes it different) so the
-    /// initial folder is colourised too.
+    /// Compares the two directories, builds the comparison tree and flattens it into an aligned row list;
+    /// a directory's status is aggregated from its subtree.
+    /// <para>比对两个目录，构建对比树并压平成对齐行列表；目录状态按其子树聚合。</para>
     /// </summary>
     private async Task CompareFoldersAsync()
     {
@@ -74,15 +64,14 @@ public sealed partial class CompareViewModel
     }
 
     /// <summary>
-    /// <para>由比对结果构建对比树：根节点是最初始的文件夹（左右名称各取各自的目录名），其余节点按相对路径
-    /// 逐级挂载，最后统一排序（目录优先、同级按名称）并自下而上聚合目录状态。</para>
-    /// Builds the comparison tree from the comparison result: the root is the initial folder (each side's own
-    /// directory name), the remaining nodes are attached level by level by relative path, and the tree is then
-    /// sorted (directories first, then by name) and its directory statuses aggregated bottom-up.
+    /// Builds the comparison tree from the result: the root holds each side's own folder name, other nodes
+    /// attach by relative path, children are sorted and directory statuses aggregated bottom-up.
+    /// <para>由比对结果构建对比树：根节点各取本侧目录名，其余节点按相对路径挂载，最后排序并自下而上聚合目录状态。</para>
     /// </summary>
-    /// <param name="result"><para>目录比对结果。</para>The folder-comparison result.</param>
-    /// <param name="leftRoot"><para>左侧对比根目录。</para>The left comparison root.</param>
-    /// <param name="rightRoot"><para>右侧对比根目录。</para>The right comparison root.</param>
+    /// <param name="result">The folder-comparison result. <para>目录比对结果。</para></param>
+    /// <param name="leftRoot">The left comparison root. <para>左侧对比根目录。</para></param>
+    /// <param name="rightRoot">The right comparison root. <para>右侧对比根目录。</para></param>
+    /// <returns>The comparison tree's root node.<para>对比树的根节点。</para></returns>
     private static CompareTreeNodeViewModel BuildCompareTree(FolderCompareResult result, string leftRoot, string rightRoot)
     {
         var root = CompareTreeNodeViewModel.ForComparison(
@@ -124,13 +113,12 @@ public sealed partial class CompareViewModel
     }
 
     /// <summary>
-    /// <para>递归排序子项并聚合目录状态：单侧目录保留单侧状态（整行橙/蓝），两侧都存在的目录只要有任何一个
-    /// 非相同子项就标记为「不同」（整行红），否则为「相同」；文件沿用比对结果的状态。返回本节点的有效状态。</para>
-    /// Recursively sorts children and aggregates directory statuses: a single-side directory keeps its single-side
-    /// status (whole row orange/blue), a directory present on both sides is marked different when any child is not
-    /// equal (whole row red) and equal otherwise, and files keep the comparison result's status. Returns this
-    /// node's effective status.
+    /// Recursively sorts children and aggregates directory statuses: a directory present on both sides is
+    /// different when any descendant differs, and files keep the comparison result's status.
+    /// <para>递归排序子项并聚合目录状态：两侧都存在的目录只要子树中有非相同项即为「不同」，文件沿用比对结果的状态。</para>
     /// </summary>
+    /// <param name="node">The subtree root to process.<para>要处理的子树根节点。</para></param>
+    /// <returns>The node's effective status.<para>本节点的有效状态。</para></returns>
     private static FolderItemStatus AggregateStatus(CompareTreeNodeViewModel node)
     {
         node.SortChildren();
@@ -158,21 +146,27 @@ public sealed partial class CompareViewModel
         return node.Status.Value;
     }
 
-    /// <summary>取相对路径的父级相对路径；顶层条目返回空串。</summary>
+    /// <summary>The parent relative path of a relative path; empty for a top-level entry.<para>取相对路径的父级相对路径；顶层条目返回空串。</para></summary>
+    /// <param name="relativePath">The '/'-separated relative path.<para>'/' 分隔的相对路径。</para></param>
+    /// <returns>The parent's relative path, empty for top-level entries.<para>父级的相对路径；顶层条目为空串。</para></returns>
     private static string ParentRelativePathOf(string relativePath)
     {
         var index = relativePath.LastIndexOf('/');
         return index < 0 ? string.Empty : relativePath[..index];
     }
 
-    /// <summary>取相对路径的最后一段作为名称。</summary>
+    /// <summary>Extracts the last segment of a relative path as the entry name.<para>取相对路径的最后一段作为名称。</para></summary>
+    /// <param name="relativePath">The '/'-separated relative path.<para>'/' 分隔的相对路径。</para></param>
+    /// <returns>The name segment after the last '/'.<para>最后一个 '/' 之后的名称段。</para></returns>
     private static string NameOf(string relativePath)
     {
         var index = relativePath.LastIndexOf('/');
         return index < 0 ? relativePath : relativePath[(index + 1)..];
     }
 
-    /// <summary>取目录的显示名称；根目录（如 <c>C:\</c>）返回路径本身。</summary>
+    /// <summary>Extracts a directory's display name; a root directory returns the path itself.<para>取目录的显示名称；根目录返回路径本身。</para></summary>
+    /// <param name="path">The directory path.<para>目录路径。</para></param>
+    /// <returns>The display name, or the path itself for a root.<para>显示名称；根目录时返回路径本身。</para></returns>
     private static string DisplayNameOf(string path)
     {
         var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
@@ -180,27 +174,25 @@ public sealed partial class CompareViewModel
     }
 
     /// <summary>
-    /// <para>把选中条目从左复制到右命令（复制成功后重新比对以刷新两侧状态）。</para>
     /// Copy-selected-left-to-right command (re-compares afterwards so both sides' statuses refresh).
+    /// <para>把选中条目从左复制到右命令（复制成功后重新比对以刷新两侧状态）。</para>
     /// </summary>
     [RelayCommand]
     private async Task CopyLeftToRightAsync() => await CopyAsync(fromLeftToRight: true);
 
     /// <summary>
-    /// <para>把选中条目从右复制到左命令（复制成功后重新比对以刷新两侧状态）。</para>
     /// Copy-selected-right-to-left command (re-compares afterwards so both sides' statuses refresh).
+    /// <para>把选中条目从右复制到左命令（复制成功后重新比对以刷新两侧状态）。</para>
     /// </summary>
     [RelayCommand]
     private async Task CopyRightToLeftAsync() => await CopyAsync(fromLeftToRight: false);
 
     /// <summary>
-    /// <para>复制按钮：目录对比把源侧选中的文件复制到另一侧（成功后重新比对），文本对比把选中行的文本复制到
-    /// 同一行的另一侧。</para>
-    /// Copy button: a folder comparison copies the file selected on the source side to the other side (and re-compares
-    /// afterwards), while a text comparison copies the selected rows' text to the same rows on the other side.
+    /// Copies the selected entry from the source side to the other side: a folder comparison copies the file
+    /// and re-compares, a text comparison copies the selected rows' text to the other side's same rows.
+    /// <para>把选中条目从源侧复制到另一侧：目录对比复制文件并重新比对，文本对比把选中行的文本复制到另一侧的同行。</para>
     /// </summary>
-    /// <param name="fromLeftToRight">从左复制到右为 true，反之为 false。
-    /// <para>true when copying left to right; false otherwise.</para></param>
+    /// <param name="fromLeftToRight">True when copying left to right; false otherwise.<para>从左复制到右为 true，反之为 false。</para></param>
     private async Task CopyAsync(bool fromLeftToRight)
     {
         if (Mode != CompareMode.Folder)
@@ -213,11 +205,10 @@ public sealed partial class CompareViewModel
     }
 
     /// <summary>
-    /// <para>把源侧选中的文件复制到另一侧，成功后重新比对。</para>
     /// Copies the file selected on the source side to the other side and re-compares afterwards.
+    /// <para>把源侧选中的文件复制到另一侧，成功后重新比对。</para>
     /// </summary>
-    /// <param name="fromLeftToRight">从左复制到右为 true，反之为 false。
-    /// <para>true when copying left to right; false otherwise.</para></param>
+    /// <param name="fromLeftToRight">True when copying left to right; false otherwise.<para>从左复制到右为 true，反之为 false。</para></param>
     private async Task CopyFolderEntryAsync(bool fromLeftToRight)
     {
         if (Mode != CompareMode.Folder || Rows is null

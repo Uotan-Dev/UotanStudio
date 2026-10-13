@@ -93,9 +93,9 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>打开扫码无线配对窗口；配对流程与远程连接互斥，忙碌时禁用入口。</para>
     /// Opens the QR wireless pairing window; pairing and remote connections are mutually
     /// exclusive, so the entry is disabled while busy.
+    /// <para>打开扫码无线配对窗口；配对流程与远程连接互斥，忙碌时禁用入口。</para>
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanOpenQrPairing))]
     private async Task OpenQrPairingAsync()
@@ -217,18 +217,18 @@ public partial class DeviceViewModel
         }
     }
     /// <summary>
-    /// <para>是否可重启选中设备到 fastbootd。ADB 走 <c>reboot fastboot</c>，Fastboot 走
-    /// <c>reboot-fastboot</c>；EDL/RKDL/HDC 没有该模式。</para>
     /// Whether the selected device can reboot into fastbootd: ADB uses <c>reboot fastboot</c>,
     /// Fastboot uses <c>reboot-fastboot</c>, while EDL/RKDL/HDC have no such mode.
+    /// <para>是否可重启选中设备到 fastbootd。ADB 走 <c>reboot fastboot</c>，Fastboot 走
+    /// <c>reboot-fastboot</c>；EDL/RKDL/HDC 没有该模式。</para>
     /// </summary>
     public bool CanRebootToFastbootd => SelectedDevice?.Protocol
         is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot;
 
     /// <summary>
-    /// <para>异步重启选中设备到指定模式（system/bootloader/fastbootd/recovery/edl）。</para>
     /// Asynchronously reboots the selected device to the specified mode
     /// (system/bootloader/fastbootd/recovery/edl).
+    /// <para>异步重启选中设备到指定模式（system/bootloader/fastbootd/recovery/edl）。</para>
     /// </summary>
     /// <param name="mode">重启模式（system/bootloader/fastbootd/recovery/edl）。</param>
     [RelayCommand]

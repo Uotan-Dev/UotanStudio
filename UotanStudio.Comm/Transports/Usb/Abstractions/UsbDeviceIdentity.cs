@@ -146,16 +146,8 @@ internal static class UsbDeviceIdentity
     }
 
     /// <summary>
-    /// Builds a physical identity key that is independent of the backend and the device
-    /// path, so the same physical device is deduplicated across backends (native + libusb)
-    /// in monitoring. Based on VID/PID/interface class+subclass/serial — the interface
-    /// PROTOCOL is deliberately excluded so a mode/protocol change on the same interface
-    /// is reported as a metadata change (Changed) rather than as a remove+add.
-    /// <para>构建与后端和设备路径无关的物理身份键，使同一物理设备在监控中可跨后端
-    /// （native + libusb）去重。仅基于 VID/PID/接口类+子类/序列号——有意排除接口协议号，
-    /// 使同一接口上的模式/协议变化被上报为元数据变化（Changed）而非移除+新增。</para>
-    /// Devices without a reliable serial retain their backend and physical path so
-    /// two identical unlabelled devices cannot collapse onto a single identity.
+    /// Builds a backend-independent physical identity key so the same physical device deduplicates across native and libusb backends. Based on VID/PID, interface class, subclass and serial; the interface protocol is excluded so a mode change reports as metadata changed, not remove and add.
+    /// <para>构建与后端无关的物理标识键，使同一物理设备在 native 与 libusb 后端之间去重。依据 VID/PID、接口 class/subclass 与序列号；排除接口 PROTOCOL，使模式变化报告为元数据变更而非删除加新增。</para>
     /// </summary>
     /// <param name="info">The device metadata. <para>设备元数据。</para></param>
     /// <returns>A backend-independent physical identity string. <para>与后端无关的物理标识字符串。</para></returns>
@@ -211,16 +203,8 @@ internal static class UsbDeviceIdentity
     }
 
     /// <summary>
-    /// Rebuilds a <see cref="UsbDeviceFilter"/> from a <see cref="BuildKey"/>-produced key
-    /// (segments: apiName|apiKind|VID|PID|ifClass|ifSub|ifProt|serial|path), carrying the
-    /// VID/PID and the interface triple forward so a by-key open binds the SAME interface
-    /// the key was produced from. A key whose interface segment is FF|42|01 (an ADB
-    /// interface-filtered enumeration) must not fall back to the first bulk interface
-    /// (FF|FF|00) of a composite device.
-    /// <para>从 <see cref="BuildKey"/> 生成的键（分段：apiName|apiKind|VID|PID|ifClass|ifSub|
-    /// ifProt|serial|path）重建 <see cref="UsbDeviceFilter"/>，携带 VID/PID 与接口三元组，
-    /// 使按键打开时绑定与生成该键时相同的接口。接口段为 FF|42|01 的键（ADB 接口过滤器枚举）
-    /// 不得回退到复合设备第一个 bulk 接口（FF|FF|00）。</para>
+    /// Rebuilds a device filter from a physical key, carrying the VID/PID and the interface triple forward so a by-key open binds the same interface the key was produced from. A key whose interface segment is FF|42|01 must not fall back to the first bulk interface of a composite device.
+    /// <para>由物理键重建设备过滤器，把 VID/PID 与接口三元组原样带上，使按键打开时绑定生成该键的同一接口。接口段为 FF|42|01 的键不得回退到复合设备的首个 bulk 接口。</para>
     /// </summary>
     /// <param name="deviceKey">A key produced by <see cref="BuildKey"/>. <para>由 <see cref="BuildKey"/> 生成的键。</para></param>
     /// <returns>A filter, or <c>null</c> when the key cannot be parsed. <para>过滤器；无法解析时返回 <c>null</c>。</para></returns>

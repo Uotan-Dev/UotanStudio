@@ -7,8 +7,8 @@ namespace UotanStudio.Firmware.AndroidMeta.Apk;
 public sealed class ApkInfo
 {
     /// <summary>
-    /// Path the APK was read from, stored exactly as supplied by the caller.
-    /// <para>读取 APK 时使用的路径，按调用方传入的原样保存。</para>
+    /// Path the APK was read from, stored exactly as supplied.
+    /// <para>读取 APK 时使用的路径，按传入原样保存。</para>
     /// </summary>
     /// <value>The input path; empty until an analysis sets it. <para>输入路径；分析赋值前为空。</para></value>
     public string FilePath { get; set; } = string.Empty;
@@ -29,8 +29,8 @@ public sealed class ApkInfo
 
     /// <summary>APK signature schemes detected in the container (v1, v2 and/or v3).
     /// <para>容器中检测到的 APK 签名方案（v1、v2 和/或 v3）。</para></summary>
-    /// <value>Mutable list of scheme identifiers sorted ordinally: v1 needs both META-INF/MANIFEST.MF and a .SF/.RSA/.DSA/.EC entry, v2/v3 come from signing-block IDs; empty means none of the known schemes was found.
-    /// <para>按序数排序的方案标识可变列表：v1 需同时存在 META-INF/MANIFEST.MF 与 .SF/.RSA/.DSA/.EC 条目，v2/v3 来自签名块 ID；为空表示未发现任何已知方案。</para></value>
+    /// <value>Detected scheme identifiers sorted ordinally; empty when no known scheme was found.
+    /// <para>按序数排序的已检测方案标识；未发现任何已知方案时为空。</para></value>
     public List<string> SigningSchemes { get; } = [];
 
     /// <summary>Known APK hardening marker, when one is detected.
@@ -50,7 +50,7 @@ public sealed class ApkInfo
     /// Human-readable application label.
     /// <para>可读的应用名称。</para>
     /// </summary>
-    /// <value>Preferentially the ARSC-resolved label (localized to the requested language), otherwise the raw manifest <c>label</c> attribute; empty when neither resolves. <para>优先取 ARSC 解析出的标签（按请求语言本地化），否则为清单 <c>label</c> 属性原文；两者皆不可用时为空。</para></value>
+    /// <value>The ARSC-resolved label when available, otherwise the raw manifest <c>label</c> attribute; empty when neither resolves. <para>可用时为 ARSC 解析出的标签，否则为清单 <c>label</c> 属性原文；两者皆不可用时为空。</para></value>
     public string ApplicationName { get; set; } = string.Empty;
 
     internal uint ApplicationLabelReference { get; set; }
@@ -126,11 +126,11 @@ public sealed class ApkInfo
     public uint IconReference { get; set; }
 
     /// <summary>
-    /// Produces a readable description summary (for the properties panel / logs).
-    /// <para>生成可读描述摘要（属性面板/日志用）。</para>
+    /// Produces a readable one-line description of the analyzed package.
+    /// <para>生成所分析包的可读单行描述。</para>
     /// </summary>
-    /// <returns>One line with the container label, then the package, version and the ABI, permission and entry counts; missing package or version segments are omitted.
-    /// <para>一行文本：容器标识后依次是包名、版本以及 ABI、权限、条目数量；缺失的包名或版本段会被省略。</para></returns>
+    /// <returns>One line with the container label, package, version and the ABI, permission and entry counts.
+    /// <para>一行文本：容器标识、包名、版本以及 ABI、权限与条目数量。</para></returns>
     public string Describe()
     {
         var sb = new System.Text.StringBuilder();

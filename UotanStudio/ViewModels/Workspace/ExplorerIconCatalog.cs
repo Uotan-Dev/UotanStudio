@@ -6,21 +6,21 @@ using UotanStudio.Firmware.OtaDelta.Dat;
 namespace UotanStudio.ViewModels.Workspace;
 
 /// <summary>
-/// <para>文件/目录图标目录：把路径映射到 Material 图标与家族配色（凡 Material 图标集提供空心版的
-/// 类型一律使用空心版）。资源管理器树与对比视图的文件列共用同一份映射，避免复制扩展名判断；
-/// 该映射只决定显示的图形与颜色，不参与文件格式判定、打开方式路由或分区归属。</para>
 /// File/directory icon catalog: maps a path to a Material glyph and a family colour (outline variants
 /// are always preferred when the Material set provides one). The explorer tree and the compare view's
 /// file columns share this single mapping instead of duplicating extension tables; it only picks the
 /// glyph and colour shown, and never feeds format detection, open-mode routing or partition ownership.
+/// <para>文件/目录图标目录：把路径映射到 Material 图标与家族配色（凡 Material 图标集提供空心版的
+/// 类型一律使用空心版）。资源管理器树与对比视图的文件列共用同一份映射，避免复制扩展名判断；
+/// 该映射只决定显示的图形与颜色，不参与文件格式判定、打开方式路由或分区归属。</para>
 /// </summary>
 public static class ExplorerIconCatalog
 {
     /// <summary>
-    /// <para>镜像类文件的扩展名（分区镜像与裸镜像）。不含 OTA 产物 <c>.dat</c> 与压缩流 <c>.br</c>：
-    /// 它们与镜像共用磁盘图标，但不是「格式转换」的输入。</para>
     /// Extensions of image files (partition and raw images). OTA artifacts (<c>.dat</c>) and compressed
     /// streams (<c>.br</c>) are excluded: they share the disk icon but are not conversion inputs.
+    /// <para>镜像类文件的扩展名（分区镜像与裸镜像）。不含 OTA 产物 <c>.dat</c> 与压缩流 <c>.br</c>：
+    /// 它们与镜像共用磁盘图标，但不是「格式转换」的输入。</para>
     /// </summary>
     private static readonly FrozenSet<string> ImageFileExtensions =
         new HashSet<string>(StringComparer.Ordinal)
@@ -29,28 +29,28 @@ public static class ExplorerIconCatalog
         }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
-    /// <para>判断路径是否为镜像类文件（扩展名表与图标映射共享，避免两处各写一份）。</para>
     /// Determines whether the path is an image file (the extension table is shared with the icon
     /// mapping instead of being written twice).
+    /// <para>判断路径是否为镜像类文件（扩展名表与图标映射共享，避免两处各写一份）。</para>
     /// </summary>
-    /// <param name="path"><para>文件路径。</para>The file path.</param>
-    /// <returns><para>是镜像扩展名时返回 true。</para>True for an image extension.</returns>
+    /// <param name="path">The file path. <para>文件路径。</para></param>
+    /// <returns>True for an image extension. <para>是镜像扩展名时返回 true。</para></returns>
     public static bool IsImageExtension(string path)
         => !string.IsNullOrEmpty(path) &&
             ImageFileExtensions.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant());
 
     /// <summary>
-    /// <para>解析节点图标：占位节点与未知扩展名取通用文件图标，目录按「项目文件夹 / 普通文件夹」区分，
-    /// 文件按扩展名映射到图标与家族配色。</para>
     /// Resolves a node icon: placeholder nodes and unknown extensions use the generic file glyph,
     /// directories split into project folders and plain folders, and files map by extension to a glyph
     /// and family colour.
+    /// <para>解析节点图标：占位节点与未知扩展名取通用文件图标，目录按「项目文件夹 / 普通文件夹」区分，
+    /// 文件按扩展名映射到图标与家族配色。</para>
     /// </summary>
-    /// <param name="path"><para>节点路径。</para>The node path.</param>
-    /// <param name="isDirectory"><para>是否为目录。</para>Whether the node is a directory.</param>
-    /// <param name="isProjectFolder"><para>是否为项目文件夹。</para>Whether the node is a project folder.</param>
-    /// <param name="isPlaceholder"><para>是否为占位节点。</para>Whether the node is a placeholder.</param>
-    /// <returns><para>该节点应显示的图标与配色。</para>The glyph and colour to show for the node.</returns>
+    /// <param name="path">The node path. <para>节点路径。</para></param>
+    /// <param name="isDirectory">Whether the node is a directory. <para>是否为目录。</para></param>
+    /// <param name="isProjectFolder">Whether the node is a project folder. <para>是否为项目文件夹。</para></param>
+    /// <param name="isPlaceholder">Whether the node is a placeholder. <para>是否为占位节点。</para></param>
+    /// <returns>The glyph and colour to show for the node. <para>该节点应显示的图标与配色。</para></returns>
     public static ExplorerIcon Resolve(string path, bool isDirectory, bool isProjectFolder = false, bool isPlaceholder = false)
     {
         if (isPlaceholder)
@@ -145,9 +145,9 @@ public static class ExplorerIconCatalog
 }
 
 /// <summary>
-/// <para>图标与家族配色的组合，避免每次访问属性时重复解析扩展名。</para>
 /// A glyph paired with its family colour, so the extension is not re-resolved on every property access.
+/// <para>图标与家族配色的组合，避免每次访问属性时重复解析扩展名。</para>
 /// </summary>
-/// <param name="Kind"><para>Material 图标。</para>The Material icon.</param>
-/// <param name="Brush"><para>图标颜色。</para>The icon colour.</param>
+/// <param name="Kind">The Material icon. <para>Material 图标。</para></param>
+/// <param name="Brush">The icon colour. <para>图标颜色。</para></param>
 public readonly record struct ExplorerIcon(MaterialIconKind Kind, IBrush Brush);

@@ -34,9 +34,8 @@ internal readonly record struct Ext4DirectoryEntry
     }
 
     /// <summary>
-    /// Enumerates the directory entries inside one directory block.
-    /// The name lives inside its own record: upstream <c>struct ext4_dir_entry_2</c> is inode, rec_len, name_len, file_type and then the name bytes, so a record can hold at most <c>rec_len - 8</c> name bytes. A record declaring more than that is corrupt, and enumerating it would fold the following records into one name and then skip them, presenting a name the image never stored; therefore the walk stops at such a record and neither it nor any later record in the block is listed. Stopping is safe for untrusted input because the records kept are byte-verified and a damaged directory cannot be repaired from the block alone.
-    /// <para>枚举一个目录块内的所有目录项。名称位于自身记录之内：上游 <c>struct ext4_dir_entry_2</c> 依次为 inode、rec_len、name_len、file_type 再跟名称字节，因此一条记录最多容纳 <c>rec_len - 8</c> 字节的名称。声明更多名称字节即为损坏记录，继续解析会把后续记录折进一个名称再整体跳过，呈现出镜像里并不存在的名称；因此扫描到此停止，本条与其后的记录都不列出。对不可信输入而言停止而非猜测是安全的：已保留的记录都经过字节核对，而损坏目录无法只靠本块修复。</para>
+    /// Enumerates the directory entries inside one directory block, stopping at the first record that declares more name bytes than <c>rec_len - 8</c> allows rather than folding later records into one name.
+    /// <para>枚举一个目录块内的所有目录项；遇到声明的名称字节超过 <c>rec_len - 8</c> 上限的记录时停止扫描，而不是把后续记录折进一个名称。</para>
     /// </summary>
     /// <param name="block">Bytes of one directory block; a record needs 8 header bytes plus its name, and the name is read only within the smaller of its own record and the space left in the block, so no read leaves the array.
     /// <para>单个目录块的字节；每条记录至少需要 8 字节头加上名称，名称只在“自身记录容量”与“块剩余空间”两者的较小者之内读取，任何读取都不会越出数组。</para></param>

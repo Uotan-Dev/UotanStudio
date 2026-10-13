@@ -11,10 +11,9 @@ using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 namespace UotanStudio.Benchmarks.Performance;
 
 /// <summary>
-/// Baselines for the EROFS compressed-extract hot path (per-pcluster metabox reads and LZ4 decode),
-/// the Ext4 metadata walk (per-block reads and the 64-block cache overflow clear), the Delivery
-/// per-file SHA-256 checksum loop, and the byte-equivalence scan. These back the Batch 5/6/7
-/// allocation and wall-clock comparisons; a change that does not move these numbers is reverted.
+/// Baselines for the EROFS compressed-extract hot path, the Ext4 metadata walk, the per-file SHA-256
+/// checksum loop, and the byte-equivalence scan.
+/// <para>EROFS 压缩解包热路径、Ext4 元数据遍历、逐文件 SHA-256 校验循环与字节等价扫描的基线。</para>
 /// </summary>
 [MemoryDiagnoser]
 public class HotPathBenchmarks
@@ -34,7 +33,6 @@ public class HotPathBenchmarks
         _root = Path.Combine(Path.GetTempPath(), "uotan_bench_hotpath_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
 
-        // EROFS: compressible multi-cluster payloads so extraction fires the metabox/pcluster path.
         var erofsSource = Path.Combine(_root, "erofs_src");
         Directory.CreateDirectory(erofsSource);
         var erofsNames = new List<string>();
@@ -52,7 +50,6 @@ public class HotPathBenchmarks
         _erofsImage = new ErofsBuilder().Build(erofsSource, new ErofsOptions { Compress = true });
         _erofsPaths = [.. erofsNames];
 
-        // Ext4: many entries to exceed MaxCachedMetadataBlocks (64) during the walk.
         var ext4Source = Path.Combine(_root, "ext4_src");
         for (var d = 0; d < 40; d++)
         {
@@ -66,7 +63,6 @@ public class HotPathBenchmarks
 
         _ext4Image = Ext4Builder.Build(ext4Source, new Ext4Options { IncludeJournal = false });
 
-        // Delivery checksum: a staged tree with mixed sizes.
         var stage = Path.Combine(_root, "stage");
         Directory.CreateDirectory(stage);
         long total = 0;
@@ -81,7 +77,6 @@ public class HotPathBenchmarks
 
         _stagedFiles = [.. names.Select(n => Path.Combine(stage, n))];
 
-        // Byte-equivalence: one representative produced image, scanned whole.
         _equivalenceImage = CompressiblePayload(16 * 1024 * 1024, new Random(7));
         _equivalenceDigest = Convert.ToHexStringLower(SHA256.HashData(_equivalenceImage));
         _equivalenceLength = _equivalenceImage.Length;
@@ -171,8 +166,6 @@ public class HotPathBenchmarks
 
     private static byte[] CompressiblePayload(int length, Random rng)
     {
-        // Repeating 4 KiB blocks with small periodic jitter: LZ4 yields multi-block pclusters,
-        // and the file spans enough clusters to hit the metabox reload path on extract.
         var data = new byte[length];
         var seed = new byte[4096];
         rng.NextBytes(seed);

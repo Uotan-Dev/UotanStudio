@@ -5,15 +5,11 @@ using System.Security.Cryptography;
 namespace UotanStudio.Comm.Protocols.Adb.Pairing;
 
 /// <summary>
-/// SPAKE2 over the Ed25519 group, byte-compatible with BoringSSL
-/// <c>spake25519.cc</c> as used by AOSP adb wireless pairing. The client is Alice
-/// (mask point M) and the device pairing server is Bob (mask point N); the shared
-/// key is the SHA-512 digest over the length-prefixed transcript of the role
-/// names, both SPAKE2 messages, the derived DH point and the password hash.
-/// <para>Ed25519 群上的 SPAKE2，与 AOSP adb 无线配对所用的 BoringSSL
-/// <c>spake25519.cc</c> 逐字节兼容。客户端为 Alice（掩码点 M），设备配对服务端为
-/// Bob（掩码点 N）；共享密钥为对角色名、双方 SPAKE2 消息、派生 DH 点与密码哈希
-/// 依次加小端长度前缀后求 SHA-512 的摘要。</para>
+/// SPAKE2 over the Ed25519 group: the client is Alice (mask point M) and the pairing
+/// server is Bob (mask point N). The shared key is a SHA-512 digest of the
+/// length-prefixed transcript.
+/// <para>Ed25519 群上的 SPAKE2：客户端为 Alice（掩码点 M），配对服务端为 Bob（掩码点
+/// N）。共享密钥是对加长度前缀的转写内容求 SHA-512 的摘要。</para>
 /// </summary>
 internal sealed class AdbSpake2
 {
@@ -47,17 +43,16 @@ internal sealed class AdbSpake2
     private bool _messageGenerated;
 
     /// <summary>
-    /// Creates a client-side (Alice) context with the AOSP role names.
-    /// <para>创建客户端（Alice）上下文，角色名与 AOSP 一致。</para>
+    /// Creates a client-side (Alice) context with the pairing role names.
+    /// <para>创建使用配对角色名的客户端（Alice）上下文。</para>
     /// </summary>
     /// <returns>A new client context. <para>新的客户端上下文。</para></returns>
     public static AdbSpake2 CreateClient() =>
         new(RoleAlice, "adb pair client\0"u8.ToArray(), "adb pair server\0"u8.ToArray());
 
     /// <summary>
-    /// Creates a server-side (Bob) context with the AOSP role names; used by the
-    /// protocol loopback tests.
-    /// <para>创建服务端（Bob）上下文，角色名与 AOSP 一致；供协议环回测试使用。</para>
+    /// Creates a server-side (Bob) context with the pairing role names.
+    /// <para>创建使用配对角色名的服务端（Bob）上下文。</para>
     /// </summary>
     /// <returns>A new server context. <para>新的服务端上下文。</para></returns>
     public static AdbSpake2 CreateServer() =>
@@ -91,9 +86,8 @@ internal sealed class AdbSpake2
     }
 
     /// <summary>
-    /// Generates our SPAKE2 message from the shared password with injected randomness;
-    /// exposed for deterministic tests.
-    /// <para>用共享密码与注入的随机字节生成消息；仅供确定性测试使用。</para>
+    /// Generates our SPAKE2 message from the shared password with injected randomness.
+    /// <para>用共享密码与注入的随机字节生成本方 SPAKE2 消息。</para>
     /// </summary>
     /// <param name="password">The shared password bytes. <para>共享密码字节。</para></param>
     /// <param name="random64">64 bytes of randomness for the private scalar.
@@ -200,10 +194,12 @@ internal sealed class AdbSpake2
 
     /// <summary>
     /// Multiplies the Ed25519 base point by <paramref name="scalar"/> and encodes the
-    /// result; a test hook for verifying the curve arithmetic against RFC 8032 vectors.
-    /// <para>将 Ed25519 基点乘以 <paramref name="scalar"/> 并编码结果；用于以 RFC 8032
-    /// 向量验证曲线算术的测试钩子。</para>
+    /// result, so curve arithmetic can be checked against RFC 8032 vectors.
+    /// <para>将 Ed25519 基点乘以 <paramref name="scalar"/> 并编码结果，便于按 RFC 8032
+    /// 向量核对曲线算术。</para>
     /// </summary>
+    /// <param name="scalar">The scalar multiplier. <para>标量乘数。</para></param>
+    /// <returns>The encoded 32-byte point. <para>编码后的 32 字节点。</para></returns>
     internal static byte[] MultiplyBaseForTest(BigInteger scalar) => Encode(ScalarMultiply(scalar, BasePoint));
 
     private static BigInteger Reduce(byte[] littleEndian64) => LeToBigInteger(littleEndian64) % L;
@@ -338,12 +334,20 @@ internal sealed class AdbSpake2
     }
 }
 
-/// <summary>Extensions mirroring Java's BigInteger bit access for readability.</summary>
+/// <summary>
+/// Bit-access extension members over big integer values.
+/// <para>为大整数值提供按位访问的扩展成员。</para>
+/// </summary>
 internal static class AdbSpake2Extensions
 {
     extension(BigInteger value)
     {
-        /// <summary>Returns whether bit <paramref name="index"/> of the value is set.</summary>
+        /// <summary>
+        /// Returns whether bit <paramref name="index"/> of the value is set.
+        /// <para>返回该值的第 <paramref name="index"/> 位是否置位。</para>
+        /// </summary>
+        /// <param name="index">The zero-based bit index. <para>从零开始的位序号。</para></param>
+        /// <returns><c>true</c> when that bit is set. <para>该位已置位时为 <c>true</c>。</para></returns>
         public bool TestBit(int index) => !((value >> index) & BigInteger.One).IsZero;
     }
 }

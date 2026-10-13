@@ -3,14 +3,14 @@ namespace UotanStudio.Services.Projects;
 public sealed partial class ProjectSession
 {
     /// <summary>
-    /// <para>另存为新的解决方案。平铺模型下目标子项目是目标目录（目标解决方案所在目录）的直接子级：
-    /// 目标目录与源目录不同时，把每个源子项目文件夹复制为目标目录的直接子级；未打开工程时在目标目录
-    /// 落出一个仅含单个子项目的新工程。源上下文在失败时保持原样，源子项目文件不会被改写。</para>
     /// Publishes a copy under the flat model: destination sub-projects are direct children of the destination
     /// directory (the directory holding the target solution). When the destination differs from the source
     /// directory, each source sub-project folder is copied as a direct child; when no project is open, a fresh
     /// single-sub-project solution is published there. The source context stays intact on failure and source
     /// sub-project files are never rewritten.
+    /// <para>另存为新的解决方案。平铺模型下目标子项目是目标目录（目标解决方案所在目录）的直接子级：
+    /// 目标目录与源目录不同时，把每个源子项目文件夹复制为目标目录的直接子级；未打开工程时在目标目录
+    /// 落出一个仅含单个子项目的新工程。源上下文在失败时保持原样，源子项目文件不会被改写。</para>
     /// </summary>
     private async Task SaveAsCoreAsync(string path, CancellationToken cancellationToken)
     {
@@ -75,14 +75,14 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>把源子项目文件夹复制为目标目录的直接子级，把打开的节点项目文档写入目标 <c>nodes/</c>
-    /// 目录（未打开但已登记的节点项目按其源文件复制），并写入固件/状态与解决方案文件，随后打开新工程。
-    /// 目标子项目与源子项目为同一文件夹时不复制（同目录另存即引用源子项目）。</para>
     /// Copies source sub-project folders as direct children of the destination directory, writes open node
     /// project documents into the destination <c>nodes/</c> directory (registered-but-closed node projects are
     /// copied from their source files), writes the firmware / state and solution files, then opens the
     /// published project. A destination sub-project that already is the source sub-project folder is not
     /// copied (same-directory Save As references the source sub-project).
+    /// <para>把源子项目文件夹复制为目标目录的直接子级，把打开的节点项目文档写入目标 <c>nodes/</c>
+    /// 目录（未打开但已登记的节点项目按其源文件复制），并写入固件/状态与解决方案文件，随后打开新工程。
+    /// 目标子项目与源子项目为同一文件夹时不复制（同目录另存即引用源子项目）。</para>
     /// </summary>
     private async Task PublishCopyAsync(
         string fullPath, string destinationDirectory,
@@ -172,8 +172,8 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>复制单个文件并拒绝符号链接/联接。</para>
     /// Copies one file, rejecting symbolic links and junctions.
+    /// <para>复制单个文件并拒绝符号链接/联接。</para>
     /// </summary>
     private static void CopyFileContents(string source, string destination, CancellationToken cancellationToken)
     {
@@ -185,8 +185,8 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>递归复制目录内容（跳过符号链接/联接指向，避免复制工程外路径）。</para>
     /// Recursively copies a directory's contents, rejecting symbolic links and junctions.
+    /// <para>递归复制目录内容（跳过符号链接/联接指向，避免复制工程外路径）。</para>
     /// </summary>
     private static void CopyDirectoryContents(string source, string destination, CancellationToken cancellationToken)
     {

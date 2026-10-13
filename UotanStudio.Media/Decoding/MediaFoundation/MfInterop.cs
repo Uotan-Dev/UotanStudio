@@ -3,19 +3,25 @@ using System.Runtime.Versioning;
 
 namespace UotanStudio.Media.Decoding.MediaFoundation;
 
-/// <summary>MediaFoundation interop helpers: functions, GUIDs and error codes.</summary>
-/// <summary>MediaFoundation 互操作辅助：函数、GUID 与错误码。</summary>
+/// <summary>
+/// MediaFoundation interop helpers: functions, GUIDs and error codes.
+/// <para>MediaFoundation 互操作辅助：函数、GUID 与错误码。</para>
+/// </summary>
 [SupportedOSPlatform("windows")]
 internal static partial class MfInterop
 {
     private const string MfPlat = "mfplat.dll";
 
-    /// <summary>MF_VERSION for Windows 8+ (0x0002 &lt;&lt; 16 | 0x0070).</summary>
-    /// <summary>MF_VERSION（Windows 8+，0x0002 &lt;&lt; 16 | 0x0070）。</summary>
+    /// <summary>
+    /// MF_VERSION for Windows 8+ (0x0002 &lt;&lt; 16 | 0x0070).
+    /// <para>MF_VERSION（Windows 8+，0x0002 &lt;&lt; 16 | 0x0070）。</para>
+    /// </summary>
     public const uint MfVersion = 0x0002_0070;
 
-    /// <summary>COINIT_MULTITHREADED.</summary>
-    /// <summary>COINIT_MULTITHREADED。</summary>
+    /// <summary>
+    /// COINIT_MULTITHREADED.
+    /// <para>COINIT_MULTITHREADED。</para>
+    /// </summary>
     public const uint CoInitMultithreaded = 0x0;
 
     [LibraryImport(MfPlat)]
@@ -60,152 +66,226 @@ internal static partial class MfInterop
     [LibraryImport("ole32.dll")]
     public static partial void CoUninitialize();
 
-    /// <summary>MFMediaType_Video ('vids').</summary>
-    /// <summary>MFMediaType_Video（'vids'）。</summary>
+    /// <summary>
+    /// MFMediaType_Video ('vids').
+    /// <para>MFMediaType_Video（'vids'）。</para>
+    /// </summary>
     public static readonly Guid MediaTypeVideo = new("73646976-0000-0010-8000-00AA00389B71");
 
-    /// <summary>MFVideoFormat_H264 (FCC 'H264').</summary>
-    /// <summary>MFVideoFormat_H264（FCC 'H264'）。</summary>
+    /// <summary>
+    /// MFVideoFormat_H264 (FCC 'H264').
+    /// <para>MFVideoFormat_H264（FCC 'H264'）。</para>
+    /// </summary>
     public static readonly Guid VideoFormatH264 = new("34363248-0000-0010-8000-00AA00389B71");
 
-    /// <summary>MFVideoFormat_HEVC (FCC 'HEVC').</summary>
-    /// <summary>MFVideoFormat_HEVC（FCC 'HEVC'）。</summary>
+    /// <summary>
+    /// MFVideoFormat_HEVC (FCC 'HEVC').
+    /// <para>MFVideoFormat_HEVC（FCC 'HEVC'）。</para>
+    /// </summary>
     public static readonly Guid VideoFormatHevc = new("43564548-0000-0010-8000-00AA00389B71");
 
-    /// <summary>MFVideoFormat_NV12 (FCC 'NV12').</summary>
-    /// <summary>MFVideoFormat_NV12（FCC 'NV12'）。</summary>
+    /// <summary>
+    /// MFVideoFormat_NV12 (FCC 'NV12').
+    /// <para>MFVideoFormat_NV12（FCC 'NV12'）。</para>
+    /// </summary>
     public static readonly Guid VideoFormatNv12 = new("3231564E-0000-0010-8000-00AA00389B71");
 
-    /// <summary>MFVideoFormat_ARGB32 (D3DFMT_A8R8G8B8 = 0x15).</summary>
-    /// <summary>MFVideoFormat_ARGB32（D3DFMT_A8R8G8B8 = 0x15）。</summary>
+    /// <summary>
+    /// MFVideoFormat_ARGB32 (D3DFMT_A8R8G8B8 = 0x15).
+    /// <para>MFVideoFormat_ARGB32（D3DFMT_A8R8G8B8 = 0x15）。</para>
+    /// </summary>
     public static readonly Guid VideoFormatArgb32 = new("00000015-0000-0010-8000-00AA00389B71");
 
-    /// <summary>MF_MT_MAJOR_TYPE.</summary>
-    /// <summary>MF_MT_MAJOR_TYPE。</summary>
+    /// <summary>
+    /// MF_MT_MAJOR_TYPE.
+    /// <para>MF_MT_MAJOR_TYPE。</para>
+    /// </summary>
     public static readonly Guid MtMajorType = new("48eba18e-f8c9-4687-bf11-0a74c9f96a8f");
 
-    /// <summary>MF_MT_SUBTYPE.</summary>
-    /// <summary>MF_MT_SUBTYPE。</summary>
+    /// <summary>
+    /// MF_MT_SUBTYPE.
+    /// <para>MF_MT_SUBTYPE。</para>
+    /// </summary>
     public static readonly Guid MtSubtype = new("f7e34c9a-42e8-4714-b74b-cb29d72c35e5");
 
-    /// <summary>MF_MT_FRAME_SIZE.</summary>
-    /// <summary>MF_MT_FRAME_SIZE。</summary>
+    /// <summary>
+    /// MF_MT_FRAME_SIZE.
+    /// <para>MF_MT_FRAME_SIZE。</para>
+    /// </summary>
     public static readonly Guid MtFrameSize = new("1652c33d-d6b2-4012-b834-72030849a37d");
 
-    /// <summary>MF_MT_DEFAULT_STRIDE.</summary>
-    /// <summary>MF_MT_DEFAULT_STRIDE。</summary>
+    /// <summary>
+    /// MF_MT_DEFAULT_STRIDE.
+    /// <para>MF_MT_DEFAULT_STRIDE。</para>
+    /// </summary>
     public static readonly Guid MtDefaultStride = new("644b4c48-b489-4089-8cec-9f9e3caa1ee7");
 
-    /// <summary>MF_MT_VIDEO_NOMINAL_RANGE (MFNominalRange: 1 = 0-255, 2 = 16-235).</summary>
-    /// <summary>MF_MT_VIDEO_NOMINAL_RANGE（MFNominalRange：1 = 0-255，2 = 16-235）。</summary>
+    /// <summary>
+    /// MF_MT_VIDEO_NOMINAL_RANGE (MFNominalRange: 1 = 0-255, 2 = 16-235).
+    /// <para>MF_MT_VIDEO_NOMINAL_RANGE（MFNominalRange：1 = 0-255，2 = 16-235）。</para>
+    /// </summary>
     public static readonly Guid MtVideoNominalRange = new("c21b8ee5-b956-4071-8daf-325edf5cab11");
 
-    /// <summary>MF_MT_YUV_MATRIX (MFYUVMatrix: 1 = BT.709, 2 = BT.601).</summary>
-    /// <summary>MF_MT_YUV_MATRIX（MFYUVMatrix：1 = BT.709，2 = BT.601）。</summary>
+    /// <summary>
+    /// MF_MT_YUV_MATRIX (MFYUVMatrix: 1 = BT.709, 2 = BT.601).
+    /// <para>MF_MT_YUV_MATRIX（MFYUVMatrix：1 = BT.709，2 = BT.601）。</para>
+    /// </summary>
     public static readonly Guid MtYuvMatrix = new("3e23d450-2c75-4d25-a00e-b91670d12327");
 
-    /// <summary>MFMediaType_Audio ('auds').</summary>
-    /// <summary>MFMediaType_Audio（'auds'）。</summary>
+    /// <summary>
+    /// MFMediaType_Audio ('auds').
+    /// <para>MFMediaType_Audio（'auds'）。</para>
+    /// </summary>
     public static readonly Guid MediaTypeAudio = new("73647561-0000-0010-8000-00AA00389B71");
 
-    /// <summary>MFAudioFormat_AAC (0x1610).</summary>
-    /// <summary>MFAudioFormat_AAC（0x1610）。</summary>
+    /// <summary>
+    /// MFAudioFormat_AAC (0x1610).
+    /// <para>MFAudioFormat_AAC（0x1610）。</para>
+    /// </summary>
     public static readonly Guid AudioFormatAac = new("00001610-0000-0010-8000-00AA00389B71");
 
-    /// <summary>MFAudioFormat_PCM (0x0001).</summary>
-    /// <summary>MFAudioFormat_PCM（0x0001）。</summary>
+    /// <summary>
+    /// MFAudioFormat_PCM (0x0001).
+    /// <para>MFAudioFormat_PCM（0x0001）。</para>
+    /// </summary>
     public static readonly Guid AudioFormatPcm = new("00000001-0000-0010-8000-00AA00389B71");
 
-    /// <summary>MF_MT_USER_DATA (codec private data, e.g. AAC AudioSpecificConfig).</summary>
-    /// <summary>MF_MT_USER_DATA（编解码器私有数据，如 AAC AudioSpecificConfig）。</summary>
+    /// <summary>
+    /// MF_MT_USER_DATA (codec private data, e.g. AAC AudioSpecificConfig).
+    /// <para>MF_MT_USER_DATA（编解码器私有数据，如 AAC AudioSpecificConfig）。</para>
+    /// </summary>
     public static readonly Guid MtUserData = new("b6bc765f-4c3b-40a4-bd51-2535b66fe09d");
 
-    /// <summary>MF_MT_AUDIO_NUM_CHANNELS.</summary>
-    /// <summary>MF_MT_AUDIO_NUM_CHANNELS。</summary>
+    /// <summary>
+    /// MF_MT_AUDIO_NUM_CHANNELS.
+    /// <para>MF_MT_AUDIO_NUM_CHANNELS。</para>
+    /// </summary>
     public static readonly Guid MtAudioNumChannels = new("37e48bf5-645e-4c5b-89de-ada9e29b696a");
 
-    /// <summary>MF_MT_AUDIO_SAMPLES_PER_SECOND.</summary>
-    /// <summary>MF_MT_AUDIO_SAMPLES_PER_SECOND。</summary>
+    /// <summary>
+    /// MF_MT_AUDIO_SAMPLES_PER_SECOND.
+    /// <para>MF_MT_AUDIO_SAMPLES_PER_SECOND。</para>
+    /// </summary>
     public static readonly Guid MtAudioSamplesPerSecond = new("5faeeae7-0290-4c31-9e8a-c534f68d9dba");
 
-    /// <summary>MF_MT_AUDIO_BITS_PER_SAMPLE.</summary>
-    /// <summary>MF_MT_AUDIO_BITS_PER_SAMPLE。</summary>
+    /// <summary>
+    /// MF_MT_AUDIO_BITS_PER_SAMPLE.
+    /// <para>MF_MT_AUDIO_BITS_PER_SAMPLE。</para>
+    /// </summary>
     public static readonly Guid MtAudioBitsPerSample = new("f2deb57f-40fa-4764-aa33-ed4f2d1ff669");
 
-    /// <summary>MFT_CATEGORY_AUDIO_DECODER.</summary>
-    /// <summary>MFT_CATEGORY_AUDIO_DECODER。</summary>
+    /// <summary>
+    /// MFT_CATEGORY_AUDIO_DECODER.
+    /// <para>MFT_CATEGORY_AUDIO_DECODER。</para>
+    /// </summary>
     public static readonly Guid CategoryAudioDecoder = new("9ea73fb4-ef7a-4559-8d5d-719d8f0426c7");
 
-    /// <summary>MFT_CATEGORY_VIDEO_DECODER.</summary>
-    /// <summary>MFT_CATEGORY_VIDEO_DECODER。</summary>
+    /// <summary>
+    /// MFT_CATEGORY_VIDEO_DECODER.
+    /// <para>MFT_CATEGORY_VIDEO_DECODER。</para>
+    /// </summary>
     public static readonly Guid CategoryVideoDecoder = new("d6c02d4b-6833-45b4-971a-05a4b04bab91");
 
-    /// <summary>CLSID_VideoProcessorMFT (msvproc.dll).</summary>
-    /// <summary>CLSID_VideoProcessorMFT（msvproc.dll）。</summary>
+    /// <summary>
+    /// CLSID_VideoProcessorMFT (msvproc.dll).
+    /// <para>CLSID_VideoProcessorMFT（msvproc.dll）。</para>
+    /// </summary>
     public static readonly Guid ClsidVideoProcessorMft = new("88753b26-5b24-49bd-b2e7-0c445c78c982");
 
-    /// <summary>IID_IMFMediaEventGenerator.</summary>
-    /// <summary>IID_IMFMediaEventGenerator。</summary>
+    /// <summary>
+    /// IID_IMFMediaEventGenerator.
+    /// <para>IID_IMFMediaEventGenerator。</para>
+    /// </summary>
     public static readonly Guid IidImfMediaEventGenerator = new("2cd0bd52-bcd5-4b89-b62c-eadc0c031e7d");
 
-    /// <summary>IID_IUnknown.</summary>
-    /// <summary>IID_IUnknown。</summary>
+    /// <summary>
+    /// IID_IUnknown.
+    /// <para>IID_IUnknown。</para>
+    /// </summary>
     public static readonly Guid IidIUnknown = new("00000000-0000-0000-C000-000000000046");
 
-    /// <summary>MF_TRANSFORM_ASYNC.</summary>
-    /// <summary>MF_TRANSFORM_ASYNC。</summary>
+    /// <summary>
+    /// MF_TRANSFORM_ASYNC.
+    /// <para>MF_TRANSFORM_ASYNC。</para>
+    /// </summary>
     public static readonly Guid TransformAsync = new("f81a699a-649a-497d-8c73-29f8fed6ad7a");
 
-    /// <summary>MF_TRANSFORM_ASYNC_UNLOCK.</summary>
-    /// <summary>MF_TRANSFORM_ASYNC_UNLOCK。</summary>
+    /// <summary>
+    /// MF_TRANSFORM_ASYNC_UNLOCK.
+    /// <para>MF_TRANSFORM_ASYNC_UNLOCK。</para>
+    /// </summary>
     public static readonly Guid TransformAsyncUnlock = new("e5666d6b-3422-4eb6-a421-da7db1f8e207");
 
-    /// <summary>MF_SA_D3D11_AWARE.</summary>
-    /// <summary>MF_SA_D3D11_AWARE。</summary>
+    /// <summary>
+    /// MF_SA_D3D11_AWARE.
+    /// <para>MF_SA_D3D11_AWARE。</para>
+    /// </summary>
     public static readonly Guid SaD3D11Aware = new("206b4fc8-fcf9-4c51-afe3-9764369e33a0");
 
-    /// <summary>IID_IMFDXGIDeviceManager.</summary>
-    /// <summary>IID_IMFDXGIDeviceManager。</summary>
+    /// <summary>
+    /// IID_IMFDXGIDeviceManager.
+    /// <para>IID_IMFDXGIDeviceManager。</para>
+    /// </summary>
     public static readonly Guid IidDxgiDeviceManager = new("eb533d5d-2db6-40f8-97a9-494692014f07");
 
-    /// <summary>IID_IMFTransform.</summary>
-    /// <summary>IID_IMFTransform。</summary>
+    /// <summary>
+    /// IID_IMFTransform.
+    /// <para>IID_IMFTransform。</para>
+    /// </summary>
     public static readonly Guid IidImfTransform = new("bf94c121-5b05-4e6f-8000-ba598961414d");
 
-    /// <summary>MFT_ENUM_FLAG_SYNCMFT | LOCALMFT | SORTANDFILTER.</summary>
-    /// <summary>MFT_ENUM_FLAG_SYNCMFT | LOCALMFT | SORTANDFILTER。</summary>
+    /// <summary>
+    /// MFT_ENUM_FLAG_SYNCMFT | LOCALMFT | SORTANDFILTER.
+    /// <para>MFT_ENUM_FLAG_SYNCMFT | LOCALMFT | SORTANDFILTER。</para>
+    /// </summary>
     public const uint MftEnumFlags = 0x01 | 0x10 | 0x40;
 
-    /// <summary>MFT_ENUM_FLAG_ASYNCMFT | HARDWARE | SORTANDFILTER — async hardware decoders only.</summary>
-    /// <summary>MFT_ENUM_FLAG_ASYNCMFT | HARDWARE | SORTANDFILTER —— 仅异步硬件解码器。</summary>
+    /// <summary>
+    /// MFT_ENUM_FLAG_ASYNCMFT | HARDWARE | SORTANDFILTER — async hardware decoders only.
+    /// <para>MFT_ENUM_FLAG_ASYNCMFT | HARDWARE | SORTANDFILTER —— 仅异步硬件解码器。</para>
+    /// </summary>
     public const uint MftEnumFlagsAsyncHardware = 0x02 | 0x04 | 0x40;
 
-    /// <summary>MFT_OUTPUT_STREAM_PROVIDES_SAMPLES.</summary>
-    /// <summary>MFT_OUTPUT_STREAM_PROVIDES_SAMPLES。</summary>
+    /// <summary>
+    /// MFT_OUTPUT_STREAM_PROVIDES_SAMPLES.
+    /// <para>MFT_OUTPUT_STREAM_PROVIDES_SAMPLES。</para>
+    /// </summary>
     public const uint MftOutputStreamProvidesSamples = 0x100;
 
-    /// <summary>MFT_OUTPUT_DATA_BUFFER_FORMAT_CHANGE.</summary>
-    /// <summary>MFT_OUTPUT_DATA_BUFFER_FORMAT_CHANGE。</summary>
+    /// <summary>
+    /// MFT_OUTPUT_DATA_BUFFER_FORMAT_CHANGE.
+    /// <para>MFT_OUTPUT_DATA_BUFFER_FORMAT_CHANGE。</para>
+    /// </summary>
     public const uint MftOutputDataBufferFormatChange = 0x100;
 
-    /// <summary>MFT_MESSAGE_COMMAND_FLUSH.</summary>
-    /// <summary>MFT_MESSAGE_COMMAND_FLUSH。</summary>
+    /// <summary>
+    /// MFT_MESSAGE_COMMAND_FLUSH.
+    /// <para>MFT_MESSAGE_COMMAND_FLUSH。</para>
+    /// </summary>
     public const uint MftMessageFlush = 0;
 
-    /// <summary>MFT_MESSAGE_NOTIFY_BEGIN_STREAMING.</summary>
-    /// <summary>MFT_MESSAGE_NOTIFY_BEGIN_STREAMING。</summary>
+    /// <summary>
+    /// MFT_MESSAGE_NOTIFY_BEGIN_STREAMING.
+    /// <para>MFT_MESSAGE_NOTIFY_BEGIN_STREAMING。</para>
+    /// </summary>
     public const uint MftMessageBeginStreaming = 0x10000000;
 
-    /// <summary>MFT_MESSAGE_NOTIFY_START_OF_STREAM.</summary>
-    /// <summary>MFT_MESSAGE_NOTIFY_START_OF_STREAM。</summary>
+    /// <summary>
+    /// MFT_MESSAGE_NOTIFY_START_OF_STREAM.
+    /// <para>MFT_MESSAGE_NOTIFY_START_OF_STREAM。</para>
+    /// </summary>
     public const uint MftMessageStartOfStream = 0x10000003;
 
-    /// <summary>MFT_MESSAGE_NOTIFY_END_OF_STREAM.</summary>
-    /// <summary>MFT_MESSAGE_NOTIFY_END_OF_STREAM。</summary>
+    /// <summary>
+    /// MFT_MESSAGE_NOTIFY_END_OF_STREAM.
+    /// <para>MFT_MESSAGE_NOTIFY_END_OF_STREAM。</para>
+    /// </summary>
     public const uint MftMessageNotifyEndOfStream = 0x10000002;
 
-    /// <summary>MFT_MESSAGE_COMMAND_DRAIN.</summary>
-    /// <summary>MFT_MESSAGE_COMMAND_DRAIN。</summary>
+    /// <summary>
+    /// MFT_MESSAGE_COMMAND_DRAIN.
+    /// <para>MFT_MESSAGE_COMMAND_DRAIN。</para>
+    /// </summary>
     public const uint MftMessageCommandDrain = 0x1;
 
     public const int SOk = 0;
@@ -252,8 +332,10 @@ internal struct MfVariant
 internal static unsafe class MfCom
 {
     private static void* Slot(nint value, int index) => (*(void***)value)[index];
-    /// <summary>Reads one vtable slot; exposed for the few calls defined outside this class.</summary>
-    /// <summary>读取一个 vtable 槽位；供少数在本类之外定义的调用使用。</summary>
+    /// <summary>
+    /// Reads one vtable slot; exposed for the few calls defined outside this class.
+    /// <para>读取一个 vtable 槽位；供少数在本类之外定义的调用使用。</para>
+    /// </summary>
     internal static void* PublicSlot(nint value, int index) => Slot(value, index);
     public static int QueryInterface(nint value, in Guid iid, out nint result)
     {
@@ -283,8 +365,10 @@ internal static unsafe class MfCom
             return ((delegate* unmanaged[Stdcall]<nint, Guid*, byte*, uint, int>)Slot(value, 26))(value, k, d, (uint)data.Length);
     }
 
-    /// <summary>IMFAttributes.SetUnknown (slot 27).</summary>
-    /// <summary>IMFAttributes.SetUnknown（槽位 27）。</summary>
+    /// <summary>
+    /// IMFAttributes.SetUnknown (slot 27).
+    /// <para>IMFAttributes.SetUnknown（槽位 27）。</para>
+    /// </summary>
     public static int SetUnknown(nint value, in Guid key, nint unknown)
     {
         fixed (Guid* k = &key)
@@ -370,8 +454,10 @@ internal static unsafe class MfCom
     public static int SetLength(nint value, uint length) =>
         ((delegate* unmanaged[Stdcall]<nint, uint, int>)Slot(value, 6))(value, length);
 
-    /// <summary>IMFMediaEventGenerator.GetEvent (slot 3).</summary>
-    /// <summary>IMFMediaEventGenerator.GetEvent（槽位 3）。</summary>
+    /// <summary>
+    /// IMFMediaEventGenerator.GetEvent (slot 3).
+    /// <para>IMFMediaEventGenerator.GetEvent（槽位 3）。</para>
+    /// </summary>
     public static int GetEvent(nint eventGenerator, uint eventFlags, out nint mediaEvent)
     {
         fixed (nint* e = &mediaEvent)
@@ -403,8 +489,10 @@ internal static unsafe class MfCom
             return ((delegate* unmanaged[Stdcall]<nint, Guid*, uint*, int>)Slot(mediaEvent, 7))(mediaEvent, k, v);
     }
 
-    /// <summary>IMFSample.GetBufferByIndex (slot 40).</summary>
-    /// <summary>IMFSample.GetBufferByIndex（槽位 40）。</summary>
+    /// <summary>
+    /// IMFSample.GetBufferByIndex (slot 40).
+    /// <para>IMFSample.GetBufferByIndex（槽位 40）。</para>
+    /// </summary>
     public static int GetBufferByIndex(nint sample, uint index, out nint buffer)
     {
         fixed (nint* b = &buffer)
@@ -423,8 +511,10 @@ internal static unsafe class MfCom
             return ((delegate* unmanaged[Stdcall]<nint, uint*, int>)Slot(sample, 39))(sample, c);
     }
 
-    /// <summary>IMFAttributes.GetUnknown (slot 17).</summary>
-    /// <summary>IMFAttributes.GetUnknown（槽位 17）。</summary>
+    /// <summary>
+    /// IMFAttributes.GetUnknown (slot 17).
+    /// <para>IMFAttributes.GetUnknown（槽位 17）。</para>
+    /// </summary>
     public static int GetUnknown(nint attributes, in Guid key, in Guid iid, out nint result)
     {
         fixed (Guid* k = &key, i = &iid) fixed (nint* r = &result)
@@ -696,8 +786,10 @@ internal static unsafe class MfCom
         ((delegate* unmanaged[Stdcall]<nint, nint, uint, int, void>)Slot(videoContext, 37))(videoContext, processor, streamIndex, enable);
 }
 
-/// <summary>D3D11_VIDEO_PROCESSOR_CONTENT_DESC.</summary>
-/// <summary>D3D11_VIDEO_PROCESSOR_CONTENT_DESC。</summary>
+/// <summary>
+/// D3D11_VIDEO_PROCESSOR_CONTENT_DESC.
+/// <para>D3D11_VIDEO_PROCESSOR_CONTENT_DESC。</para>
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct D3D11VideoProcessorContentDesc
 {
@@ -713,8 +805,10 @@ internal struct D3D11VideoProcessorContentDesc
     public uint Usage;
 }
 
-/// <summary>D3D11_VIDEO_PROCESSOR_COLOR_SPACE (d3d11.h bitfields, 4-byte layout).</summary>
-/// <summary>D3D11_VIDEO_PROCESSOR_COLOR_SPACE（d3d11.h 位域，4 字节布局）。</summary>
+/// <summary>
+/// D3D11_VIDEO_PROCESSOR_COLOR_SPACE (d3d11.h bitfields, 4-byte layout).
+/// <para>D3D11_VIDEO_PROCESSOR_COLOR_SPACE（d3d11.h 位域，4 字节布局）。</para>
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct D3D11VideoProcessorColorSpace
 {

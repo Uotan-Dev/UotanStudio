@@ -18,8 +18,8 @@ public sealed class AvbChainVerifyOptions
     public string SlotSuffix { get; init; } = string.Empty;
 
     /// <summary>Pins the root signer independently of the image. <para>独立于镜像固定根签名者。</para></summary>
-    /// <value>A complete avbtool public-key blob, or null for self-consistency inspection without a trust claim.
-    /// <para>完整 avbtool 公钥 Blob；为 null 时仅检查自洽性，不声明信任。</para></value>
+    /// <value>A complete AVB public-key blob, or null for self-consistency inspection without a trust claim.
+    /// <para>完整 AVB 公钥 Blob；为 null 时仅检查自洽性，不声明信任。</para></value>
     public byte[]? TrustedRootPublicKey { get; init; }
 
     /// <summary>Supplies externally obtained rollback minima. <para>提供外部获得的回滚索引下限。</para></summary>
@@ -27,7 +27,7 @@ public sealed class AvbChainVerifyOptions
     /// <para>槽位 0 至 31 及下限；提供映射时，访问的槽位缺失即失败。为 null 时不验证回滚策略。</para></value>
     public IReadOnlyDictionary<uint, ulong>? MinimumRollbackIndexes { get; init; }
 
-    /// <summary>Allows offline traversal beyond libavb's top-level-only chain rule. <para>允许超出 libavb 仅顶层可声明链规则的离线遍历。</para></summary>
+    /// <summary>Allows offline traversal beyond the top-level-only chain rule. <para>允许在离线遍历时超出仅顶层可声明链规则的限制。</para></summary>
     /// <value>False by default; true still reports nested chains and does not establish boot-policy compatibility.
     /// <para>默认为假；设为真时仍报告嵌套链，不建立启动策略兼容性。</para></value>
     public bool InspectNestedChains { get; init; }

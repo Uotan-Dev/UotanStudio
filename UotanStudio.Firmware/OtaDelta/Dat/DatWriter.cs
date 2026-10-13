@@ -6,9 +6,9 @@ using UotanStudio.Firmware.OtaDelta.Diff;
 namespace UotanStudio.Firmware.OtaDelta.Dat;
 
 /// <summary>
-/// Writes recovery block-OTA datasets — a <c>.new.dat</c> (optionally <c>.new.dat.br</c>) data file plus a
+/// Writes block-OTA datasets — a <c>.new.dat</c> (optionally <c>.new.dat.br</c>) data file plus a
 /// <c>.transfer.list</c> — from raw partition images, one <see cref="BlockSize"/>-byte block at a time.
-/// <para>从原始分区镜像写出 recovery 块 OTA 数据集——<c>.new.dat</c>（或 <c>.new.dat.br</c>）数据文件与
+/// <para>从原始分区镜像写出块 OTA 数据集——<c>.new.dat</c>（或 <c>.new.dat.br</c>）数据文件与
 /// <c>.transfer.list</c>——每次处理一个 <see cref="BlockSize"/> 字节的数据块。</para>
 /// </summary>
 /// <remarks>
@@ -25,8 +25,8 @@ public static class DatWriter
 
     /// <remarks>
     /// A block-diff run longer than this many blocks (16 MiB) is split across several commands so one command's
-    /// source and target regions stay bounded in memory, mirroring blockimgdiff's cache-budget splitting.
-    /// <para>超过该块数（16 MiB）的差分区段会拆成多条命令，使单条命令的源/目标区域在内存中有界，对应 blockimgdiff 按缓存预算的拆分。</para>
+    /// source and target regions stay bounded in memory.
+    /// <para>超过该块数（16 MiB）的差分区段会拆成多条命令，使单条命令的源/目标区域在内存中有界。</para>
     /// </remarks>
     private const long MaximumBlocksPerPatchCommand = 4096;
 
@@ -189,23 +189,14 @@ public static class DatWriter
     }
 
     /// <summary>
-    /// Writes an incremental classic block OTA from a source and target image. Runs of differing non-zero
-    /// blocks become positional <c>imgdiff</c> commands whose bsdiff bytes land in <c>.patch.dat</c>; blocks
-    /// that become zero become <c>zero</c> commands; unchanged blocks are omitted and inherited from the
-    /// source copy the updater seeds. Runs are compared positionally, so blocks that move without editing
-    /// are re-emitted rather than referenced with <c>move</c>/<c>stash</c>. If the target has no differing
-    /// non-zero block (only zeroing or identical content), which the recovery reader could not seed from a
-    /// source it never consumes, the writer falls back to a full <c>new</c> image.
-    /// <para>由源镜像与目标镜像写出增量经典块 OTA。差异非零块区段成为位置式 <c>imgdiff</c> 命令，其 bsdiff
-    /// 字节落入 <c>.patch.dat</c>；归零块成为 <c>zero</c> 命令；未改动块被省略并由 updater 预置的源拷贝继承。
-    /// 区段按位置比较，故移动的块被重新发出而非以 <c>move</c>/<c>stash</c> 引用。若目标无差异非零块（仅归零或完全
-    /// 相同），而 recovery 读取器无法从不消费的源预置，则回退为全量 <c>new</c> 镜像。</para>
+    /// Writes an incremental classic block OTA from a source and target image.
+    /// <para>由源镜像与目标镜像写出增量经典块 OTA。</para>
     /// </summary>
     /// <remarks>
     /// A dataset without source-dependent commands (<c>imgdiff</c>, <c>diff</c>, <c>move</c> or <c>stash</c>)
-    /// cannot be seeded from the base image by the recovery reader, so the writer ships the target as a plain
+    /// cannot be seeded from the base image by the reader, so the writer ships the target as a plain
     /// full image instead.
-    /// <para>不含源依赖命令（<c>imgdiff</c>、<c>diff</c>、<c>move</c> 或 <c>stash</c>）的数据集无法由 recovery
+    /// <para>不含源依赖命令（<c>imgdiff</c>、<c>diff</c>、<c>move</c> 或 <c>stash</c>）的数据集无法由
     /// 读取器从基座镜像预置，因此此时把目标作为普通全量镜像发布。</para>
     /// </remarks>
     /// <param name="sourceImagePath">Base image the updater seeds the target from; the file must exist. <para>updater 用于预置目标的基座镜像；文件必须存在。</para></param>

@@ -3,11 +3,11 @@ namespace UotanStudio.Services.Projects;
 public sealed partial class ProjectSession
 {
     /// <summary>
-    /// <para>在当前解决方案中登记并写入一个空的节点项目（<c>nodes/&lt;name&gt;.uotannode</c>），把它作为活动
-    /// 画布打开。名称重复时抛出异常；解决方案中已有其他活动画布时会被移交给新项目。</para>
     /// Registers and writes an empty node project (<c>nodes/&lt;name&gt;.uotannode</c>) in the open solution and
     /// opens it as the active canvas. A duplicate name throws; an existing active canvas hands the active role
     /// to the new project.
+    /// <para>在当前解决方案中登记并写入一个空的节点项目（<c>nodes/&lt;name&gt;.uotannode</c>），把它作为活动
+    /// 画布打开。名称重复时抛出异常；解决方案中已有其他活动画布时会被移交给新项目。</para>
     /// </summary>
     /// <param name="name">Node project name, also the file base name; must pass
     /// <see cref="ProjectValidation.ValidateName"/>. <para>节点项目名，同时作为文件基本名，需通过
@@ -75,8 +75,8 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>把已登记的节点项目载入编辑器成为打开的文档，并设为活动画布。</para>
     /// Loads a registered node project into the editor as an open document and makes it the active canvas.
+    /// <para>把已登记的节点项目载入编辑器成为打开的文档，并设为活动画布。</para>
     /// </summary>
     /// <param name="name">Registered node project name. <para>已登记的节点项目名。</para></param>
     /// <param name="cancellationToken">Cancels the gate wait and the reads.
@@ -110,9 +110,9 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>关闭已登记节点项目的编辑器文档，保留其磁盘文件与登记，使其成为待打开项。</para>
     /// Discards the editor document of a registered node project, keeping its file and registration so it
     /// becomes a not-open entry.
+    /// <para>关闭已登记节点项目的编辑器文档，保留其磁盘文件与登记，使其成为待打开项。</para>
     /// </summary>
     /// <param name="name">Registered node project name. <para>已登记的节点项目名。</para></param>
     /// <param name="cancellationToken">Cancels the gate wait and the solution rewrite.
@@ -141,10 +141,10 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>注销一个节点项目：关闭其编辑器文档并从解决方案清单移除，磁盘上的 <c>.uotannode</c> 文件保持
-    /// 不变。</para>
     /// Unregisters a node project: closes its editor document and removes it from the solution list while
     /// leaving the <c>.uotannode</c> file on disk untouched.
+    /// <para>注销一个节点项目：关闭其编辑器文档并从解决方案清单移除，磁盘上的 <c>.uotannode</c> 文件保持
+    /// 不变。</para>
     /// </summary>
     /// <param name="name">Registered node project name. <para>已登记的节点项目名。</para></param>
     /// <param name="cancellationToken">Cancels the gate wait and the solution rewrite.
@@ -175,8 +175,8 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>把已打开的节点项目设为活动画布。</para>
     /// Makes an open node project the active canvas.
+    /// <para>把已打开的节点项目设为活动画布。</para>
     /// </summary>
     /// <param name="name">Registered node project name. <para>已登记的节点项目名。</para></param>
     /// <param name="cancellationToken">Cancels the gate wait and the solution rewrite.
@@ -204,9 +204,9 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>读取当前解决方案文件用于就地编辑其节点项目清单；文件不可读时抛出异常。</para>
     /// Reads the current solution file for in-place editing of its node project list; throws when the file
     /// cannot be read.
+    /// <para>读取当前解决方案文件用于就地编辑其节点项目清单；文件不可读时抛出异常。</para>
     /// </summary>
     /// <param name="path">Solution file path. <para>解决方案文件路径。</para></param>
     /// <param name="cancellationToken">Cancels the read. <para>取消读取。</para></param>
@@ -219,8 +219,8 @@ public sealed partial class ProjectSession
             ?? throw new InvalidDataException("Cannot read the current solution.");
 
     /// <summary>
-    /// <para>按编辑器当前打开状态重写解决方案文件中的节点项目清单。</para>
     /// Rewrites the solution file's node project list from the editor's current open state.
+    /// <para>按编辑器当前打开状态重写解决方案文件中的节点项目清单。</para>
     /// </summary>
     /// <param name="path">Solution file path. <para>解决方案文件路径。</para></param>
     /// <param name="cancellationToken">Cancels the read and the rewrite.
@@ -238,10 +238,10 @@ public sealed partial class ProjectSession
     }
 
     /// <summary>
-    /// <para>由解决方案登记的节点项目和编辑器实际打开的文档推导出要写出的节点项目清单：只有编辑器打开的
-    /// 文档才是打开项，活动项必须是打开项之一。</para>
     /// Derives the node project list to write from the registered projects and the documents the editor
     /// actually holds open: only open documents are open entries, and the active entry must be one of them.
+    /// <para>由解决方案登记的节点项目和编辑器实际打开的文档推导出要写出的节点项目清单：只有编辑器打开的
+    /// 文档才是打开项，活动项必须是打开项之一。</para>
     /// </summary>
     /// <returns>One reference per registered node project, empty when the solution registers none.
     /// <para>每个已登记节点项目一条引用；解决方案未登记时为空。</para></returns>

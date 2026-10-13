@@ -15,8 +15,8 @@ namespace UotanStudio.Comm.Protocols.Edl.Streaming;
 /// <param name="StartLba">The start LBA recorded by the table or computed for the legacy
 /// layout. <para>表内记录、或旧版布局下推算出的起始 LBA。</para></param>
 /// <param name="Sectors">The masked sector count, length plus spare truncated to 16 bits like
-/// the reference (streaming.py:675-676). <para>按参考做法掩码为 16 位的长度加备用扇区数
-/// （streaming.py:675-676）。</para></param>
+/// the reference. <para>按参考做法掩码为 16 位的长度加备用扇区数
+/// 。</para></param>
 /// <param name="Attribute1">The first raw attribute byte. <para>第一个原始属性字节。</para></param>
 /// <param name="Attribute2">The second raw attribute byte. <para>第二个原始属性字节。</para></param>
 /// <param name="Attribute3">The third raw attribute byte. <para>第三个原始属性字节。</para></param>
@@ -31,44 +31,39 @@ public sealed record StreamingPartitionEntry(
     byte WhichFlash);
 
 /// <summary>
-/// Parses the 512-byte streaming on-device partition table: the four little-endian header words
-/// and the fixed 28-byte records, in the two field layouts the reference distinguishes by magic
-/// (get_partitions and read_partition_table, streaming.py:634-682). Every length and record count
-/// is bounds-checked with <c>checked</c> arithmetic before any record byte is read.
-/// <para>解析 512 字节的流式设备分区表：四个小端头部字与固定的 28 字节记录，并按参考依据魔数
-/// 区分的两种字段布局解析（get_partitions 与 read_partition_table，streaming.py:634-682）。每个
-/// 长度与记录数在读取任何记录字节前都用 <c>checked</c> 运算做边界检查。</para>
+/// Parses the 512-byte streaming on-device partition table: four little-endian header words and fixed 28-byte records, in the two field layouts distinguished by magic. Every length and record count is bounds-checked with checked arithmetic before any record byte is read.
+/// <para>解析 512 字节流式设备端分区表：四个小端头部字与定长 28 字节记录，按魔数区分两种字段布局。读取任何记录字节前，所有长度与记录数均以 checked 运算做上限校验。</para>
 /// </summary>
 public sealed class StreamingPartitionTable
 {
     /// <summary>
     /// Header magic of the legacy table whose records store length and spare instead of an
-    /// explicit offset (streaming.py:665).
-    /// <para>旧版表头魔数；其记录存长度与备用扇区而非显式偏移（streaming.py:665）。</para>
+    /// explicit offset.
+    /// <para>旧版表头魔数；其记录存长度与备用扇区而非显式偏移。</para>
     /// </summary>
     public const uint LegacyMagic1 = 0xAA7D1B9A;
 
     /// <summary>
-    /// Second legacy header magic word (streaming.py:665).
-    /// <para>旧版表头第二个魔数字（streaming.py:665）。</para>
+    /// Second legacy header magic word.
+    /// <para>旧版表头第二个魔数字。</para>
     /// </summary>
     public const uint LegacyMagic2 = 0x1F7D48BC;
 
     /// <summary>
-    /// First recognized table magic accepted by the reference read path (streaming.py:645).
-    /// <para>参考读取路径认可的首个表魔数（streaming.py:645）。</para>
+    /// First recognized table magic accepted by the reference read path.
+    /// <para>参考读取路径认可的首个表魔数。</para>
     /// </summary>
     public const uint Partition9kMagic1 = 0x55EE73AA;
 
     /// <summary>
-    /// Second recognized table magic accepted by the reference read path (streaming.py:645).
-    /// <para>参考读取路径认可的第二个表魔数（streaming.py:645）。</para>
+    /// Second recognized table magic accepted by the reference read path.
+    /// <para>参考读取路径认可的第二个表魔数。</para>
     /// </summary>
     public const uint Partition9kMagic2 = 0xE35EBDDB;
 
     /// <summary>
     /// Byte size of one partition record (the reference <c>0x1C</c> stride, streaming.py:666-670).
-    /// <para>每条分区记录的字节数（参考的 <c>0x1C</c> 步长，streaming.py:666-670）。</para>
+    /// <para>每条分区记录的字节数。</para>
     /// </summary>
     public const int RecordBytes = 0x1C;
 
@@ -113,7 +108,7 @@ public sealed class StreamingPartitionTable
     /// <summary>
     /// Parses a raw streaming partition table image (the reference reads it with the 512-byte
     /// on-device table size, streaming.py:15, 243-246).
-    /// <para>解析原始流式分区表映像（参考按 512 字节的设备表大小读取，streaming.py:15、243-246）。</para>
+    /// <para>解析原始流式分区表映像。</para>
     /// </summary>
     /// <param name="table">The raw table bytes; at most
     /// <see cref="StreamingConstants.PartitionTableBytes"/> long.
@@ -191,9 +186,9 @@ public sealed class StreamingPartitionTable
 
     /// <summary>
     /// Decodes a record name up to its first NUL, mirroring the reference
-    /// <c>rstrip(b"\x00")</c> (streaming.py:674).
+    /// <c>rstrip(b"\x00")</c>.
     /// <para>将记录名解码到首个 NUL 为止，对应参考的 <c>rstrip(b"\x00")</c>
-    /// （streaming.py:674）。</para>
+    /// 。</para>
     /// </summary>
     private static string DecodeName(ReadOnlySpan<byte> field)
     {

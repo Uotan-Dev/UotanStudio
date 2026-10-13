@@ -37,11 +37,8 @@ internal partial class SolutionJsonContext : JsonSerializerContext;
 public static class SolutionPersistenceService
 {
     /// <summary>
-    /// Asynchronously saves the solution snapshot to the specified path via an atomic staged write: the
-    /// JSON is first written beside the destination and only moved over it once fully serialized, and an
-    /// existing file with identical text is left untouched. Concurrent saves are serialized.
-    /// <para>异步保存解决方案快照到指定路径，采用原子暂存写入：先在目标文件旁完整序列化 JSON，成功后
-    /// 才移动覆盖目标；磁盘上文本完全一致的文件保持不动。并发写入互相串行。</para>
+    /// Asynchronously saves the solution snapshot to the specified path.
+    /// <para>异步保存解决方案快照到指定路径。</para>
     /// </summary>
     /// <param name="path">Destination solution file path. <para>目标解决方案文件路径。</para></param>
     /// <param name="snapshot">Snapshot to serialize; must not be <see langword="null"/>.

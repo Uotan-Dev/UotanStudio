@@ -5,27 +5,21 @@ using UotanStudio.Firmware.Core;
 namespace UotanStudio.Firmware.Application.Containers;
 
 /// <summary>
-/// <para>一次定向提取的结果：成功提取的容器内部条目及其输出文件路径。</para>
 /// Result of one targeted extraction: extracted inner entries and their output file paths.
+/// <para>一次定向提取的结果：成功提取的容器内部条目及其输出文件路径。</para>
 /// </summary>
-/// <param name="Entries"><para>内部条目名（分区名或 ZIP 内路径）。</para>Inner entry names (partition names or ZIP paths).</param>
-/// <param name="OutputPaths"><para>输出文件绝对路径，与 <paramref name="Entries"/> 一一对应。</para>Output absolute paths, one-to-one with <paramref name="Entries"/>.</param>
+/// <param name="Entries">Inner entry names (partition names or ZIP paths). <para>内部条目名（分区名或 ZIP 内路径）。</para></param>
+/// <param name="OutputPaths">Output absolute paths, one-to-one with <paramref name="Entries"/>. <para>输出文件绝对路径，与 <paramref name="Entries"/> 一一对应。</para></param>
 public sealed record ContainerExtractionResult(IReadOnlyList<string> Entries, IReadOnlyList<string> OutputPaths)
 {
-    /// <summary><para>空结果（无提取或全部失败）。</para>Empty result (nothing extracted or all failed).</summary>
-    /// <value><para>共享的不可变空实例，两个列表均为空。</para>Shared immutable empty instance with both lists empty.</value>
+    /// <summary>Empty result (nothing extracted or all failed). <para>空结果（无提取或全部失败）。</para></summary>
+    /// <value>Shared immutable empty instance with both lists empty. <para>共享的不可变空实例，两个列表均为空。</para></value>
     public static ContainerExtractionResult Empty { get; } = new([], []);
 }
 
 /// <summary>
-/// <para>定向提取器：从容器按勾选条目提取到显式输出目录，不指定目录时保留输出到原包旁的兼容行为。
-/// super 按 LP 分区流式裁剪；payload 经 <c>PayloadParser.ExtractAsync</c> 按分区名提取；ZIP 按条目路径流式解出。
-/// 全部有界流式、AOT 安全（无反射），失败时抛出异常由调用方统一处理。</para>
-/// Targeted extractor: extracts selected entries from a container into an explicit output directory,
-/// preserving the legacy output-next-to-container behavior when none is given. Super partitions are
-/// stream-cropped by LP extents; payload partitions go through <c>PayloadParser.ExtractAsync</c>; ZIP
-/// members are stream-extracted by entry path. All bounded streaming, AOT-safe (no reflection);
-/// failures throw and are handled by the caller.
+/// Extracts selected entries from a container into an explicit output directory, preserving the legacy output-next-to-container behavior when none is given. Super partitions are stream-cropped by LP extents, payload partitions through PayloadParser.ExtractAsync, ZIP members by entry path.
+/// <para>把容器中选定的条目解包到显式输出目录，未指定时保留“输出到容器旁”的既有行为。Super 分区按 LP extent 流式裁剪，payload 分区经 PayloadParser.ExtractAsync，ZIP 成员按条目路径流式解出。</para>
 /// </summary>
 public static class ContainerEntryExtractor
 {
@@ -34,30 +28,30 @@ public static class ContainerEntryExtractor
     public const long DefaultMaximumOutputBytes = 64L * 1024 * 1024 * 1024;
 
     /// <summary>
-    /// <para>从容器按勾选条目定向提取（同步包装，供后台线程调用）。</para>
     /// Extracts the selected entries from a container (sync wrapper for background threads).
+    /// <para>从容器按勾选条目定向提取（同步包装，供后台线程调用）。</para>
     /// </summary>
-    /// <param name="containerPath"><para>容器文件路径。</para>Container file path.</param>
+    /// <param name="containerPath">Container file path. <para>容器文件路径。</para></param>
     /// <param name="selectedNames">
-    /// <para>勾选的内部条目：super/payload 分区名，或 ZIP 条目完整路径。</para>
     /// Selected inner entries: super/payload partition names, or full ZIP entry paths.
+    /// <para>勾选的内部条目：super/payload 分区名，或 ZIP 条目完整路径。</para>
     /// </param>
     /// <param name="fromPayloadOnly">
-    /// <para>仅提取 payload 分区（ZIP 容器只勾选 payload 部分时为 true）。</para>
     /// Extract payload partitions only (true when a ZIP's payload section alone is selected).
+    /// <para>仅提取 payload 分区（ZIP 容器只勾选 payload 部分时为 true）。</para>
     /// </param>
-    /// <param name="cancellationToken"><para>取消令牌。</para>Cancellation token.</param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <param name="outputDirectory">
-    /// <para>输出目录；<see langword="null"/> 时输出到容器所在目录。</para>
     /// Output directory; when <see langword="null"/>, next to the container.
+    /// <para>输出目录；<see langword="null"/> 时输出到容器所在目录。</para>
     /// </param>
-    /// <param name="progress"><para>0-100 百分比进度。</para>0-100 percent progress.</param>
-    /// <param name="byteProgress"><para>累计已处理字节与总量。</para>Cumulative processed bytes and total.</param>
+    /// <param name="progress">0-100 percent progress. <para>0-100 百分比进度。</para></param>
+    /// <param name="byteProgress">Cumulative processed bytes and total. <para>累计已处理字节与总量。</para></param>
     /// <param name="maximumOutputBytes">
-    /// <para>解压输出字节上限；超过即拒绝，防止不可信容器耗尽磁盘。</para>
     /// Decompressed output byte budget; exceeded is rejected so an untrusted container cannot fill the disk.
+    /// <para>解压输出字节上限；超过即拒绝，防止不可信容器耗尽磁盘。</para>
     /// </param>
-    /// <returns><para>提取结果。</para>The extraction result.</returns>
+    /// <returns>The extraction result. <para>提取结果。</para></returns>
     public static async Task<ContainerExtractionResult> ExtractAsync(
         string containerPath,
         IReadOnlyList<string> selectedNames,
@@ -84,9 +78,9 @@ public static class ContainerEntryExtractor
     }
 
     /// <summary>
-    /// <para>从 super 镜像按分区名流式裁剪出独立 img（读取 LP 元数据定位 extent，逐段复制）。</para>
     /// Crops standalone imgs from a super image by partition names (LP extents located from metadata,
     /// copied segment by segment).
+    /// <para>从 super 镜像按分区名流式裁剪出独立 img（读取 LP 元数据定位 extent，逐段复制）。</para>
     /// </summary>
     private static async Task<ContainerExtractionResult> ExtractSuperAsync(
         string containerPath, IReadOnlyList<string> partitionNames, CancellationToken cancellationToken, string outputDirectory, IProgress<double>? progress, IProgress<(long Processed, long Total)>? byteProgress, long maximumOutputBytes)
@@ -165,9 +159,9 @@ public static class ContainerEntryExtractor
     }
 
     /// <summary>
-    /// <para>经 <c>PayloadParser.ExtractAsync</c> 按分区名从 payload 提取（输出到容器所在目录）。</para>
     /// Extracts partitions from a payload by name via <c>PayloadParser.ExtractAsync</c>
     /// (output next to the container).
+    /// <para>经 <c>PayloadParser.ExtractAsync</c> 按分区名从 payload 提取（输出到容器所在目录）。</para>
     /// </summary>
     private static async Task<ContainerExtractionResult> ExtractPayloadAsync(
         string containerPath, IReadOnlyList<string> partitionNames, CancellationToken cancellationToken, string outputDirectory,
@@ -203,10 +197,10 @@ public static class ContainerEntryExtractor
     }
 
     /// <summary>
-    /// <para>从 ZIP 按条目路径流式解出镜像；<paramref name="fromPayloadOnly"/> 为 true 时
-    /// 转而对内含 payload.bin 执行 payload 分区提取。</para>
     /// Stream-extracts images from a ZIP by entry path; when <paramref name="fromPayloadOnly"/> is
     /// true, instead extracts payload partitions from the contained payload.bin.
+    /// <para>从 ZIP 按条目路径流式解出镜像；<paramref name="fromPayloadOnly"/> 为 true 时
+    /// 转而对内含 payload.bin 执行 payload 分区提取。</para>
     /// </summary>
     private static async Task<ContainerExtractionResult> ExtractZipAsync(
         string containerPath, IReadOnlyList<string> selectedNames, bool fromPayloadOnly, CancellationToken cancellationToken, string outputDirectory, IProgress<double>? progress, IProgress<(long Processed, long Total)>? byteProgress, long maximumOutputBytes)
@@ -262,9 +256,9 @@ public static class ContainerEntryExtractor
     }
 
     /// <summary>
-    /// <para>构造输出路径：与容器同目录原地产出 <c>&lt;条目名&gt;.img</c>；重名时追加序号。</para>
     /// Builds the output path: <c>&lt;entry&gt;.img</c> produced in place next to the container;
     /// collisions get a numeric suffix.
+    /// <para>构造输出路径：与容器同目录原地产出 <c>&lt;条目名&gt;.img</c>；重名时追加序号。</para>
     /// </summary>
     private static string BuildOutputPath(string containerPath, string entryName)
     {

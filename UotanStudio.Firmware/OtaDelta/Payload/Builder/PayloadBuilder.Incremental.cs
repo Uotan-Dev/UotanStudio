@@ -9,11 +9,11 @@ namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
 public sealed partial class PayloadBuilder
 {
     /// <summary>
-    /// Adds an incremental partition built from a source base image and its target image. Unchanged
+    /// Adds an incremental partition built from a source base image and its target image: unchanged
     /// blocks are emitted as SOURCE_COPY operations (no payload data, hashed against the source) and
-    /// changed blocks as REPLACE operations, mirroring update_engine's block-level incremental format.
+    /// changed blocks as REPLACE operations.
     /// <para>由源基座镜像和目标镜像构建增量分区。未变更块输出为 SOURCE_COPY 操作（不占用载荷数据，
-    /// 哈希基于源镜像），变更块输出为 REPLACE 操作，与 update_engine 的块级增量格式保持一致。</para>
+    /// 哈希基于源镜像），变更块输出为 REPLACE 操作。</para>
     /// </summary>
     /// <remarks>
     /// Requires block-aligned source and target; their lengths may differ. SOURCE_COPY needs minor version &#8805; 2,

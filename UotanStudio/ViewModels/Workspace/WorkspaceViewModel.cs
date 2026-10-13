@@ -16,9 +16,9 @@ using UotanStudio.Views.Workspace;
 namespace UotanStudio.ViewModels.Workspace;
 
 /// <summary>
-/// <para>工作区视图模型，承载 Dock 布局，并管理文档区文档的打开与聚焦。</para>
 /// Workspace view model, hosting the dock layout and managing opening and focusing documents in the
 /// document area.
+/// <para>工作区视图模型，承载 Dock 布局，并管理文档区文档的打开与聚焦。</para>
 /// </summary>
 public class WorkspaceViewModel : ViewModelBase, IDisposable
 {
@@ -28,12 +28,15 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     private CompareViewModel? _compareDocument;
     private ScreenMirrorViewModel? _screenMirrorDocument;
     internal ProjectExplorerViewModel? ProjectExplorer => (_factory as WorkspaceDockFactory)?.ProjectExplorer;
-    /// <summary>Exposes the concrete workspace factory for project-lifecycle document cleanup. 供工程生命周期清理文档使用。</summary>
+    /// <summary>
+    /// Exposes the concrete workspace factory for project-lifecycle document cleanup.
+    /// <para>供工程生命周期清理文档使用。</para>
+    /// </summary>
     internal WorkspaceDockFactory? DockFactory => _factory as WorkspaceDockFactory;
 
     /// <summary>
-    /// <para>获取或设置 Dock 根布局。</para>
     /// Gets or sets the dock root layout.
+    /// <para>获取或设置 Dock 根布局。</para>
     /// </summary>
     public IRootDock? Layout
     {
@@ -42,8 +45,8 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>构造工作区视图模型：创建 Dock 工厂与布局，并完成布局初始化。</para>
     /// Constructs the workspace view model: creates the dock factory and layout, then initializes the layout.
+    /// <para>构造工作区视图模型：创建 Dock 工厂与布局，并完成布局初始化。</para>
     /// </summary>
     public WorkspaceViewModel() : this(new WorkspaceDockFactory()) { }
 
@@ -58,10 +61,10 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>在工作区文档区打开或聚焦对比文档，复用尚未关闭的实例并切换到工作区。</para>
     /// Opens or focuses the compare document, reusing its instance until closed, and navigates to the workspace.
+    /// <para>在工作区文档区打开或聚焦对比文档，复用尚未关闭的实例并切换到工作区。</para>
     /// </summary>
-    /// <returns><para>对比文档；布局未就绪时为 null。</para>The compare document, or null if the layout is unavailable.</returns>
+    /// <returns>The compare document, or null if the layout is unavailable. <para>对比文档；布局未就绪时为 null。</para></returns>
     public CompareViewModel? OpenCompareDocument()
     {
         if (_compareDocument?.Owner is not IDock owner || owner.VisibleDockables?.Contains(_compareDocument) != true)
@@ -92,13 +95,10 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>在工作区文档区新建一个对比文档（不复用已有实例），供「在新标签打开文件对比」使用；
-    /// 新文档的 Id 唯一，避免与已打开的对比标签冲突。</para>
-    /// Opens an additional compare document in the workspace document area (never reusing an existing instance),
-    /// used by "open the file comparison in a new tab"; the new document gets a unique Id so it cannot clash with
-    /// an already open compare tab.
+    /// Opens a new compare document in the workspace document area instead of reusing an existing one.
+    /// <para>在工作区文档区新建一个对比文档，不复用已有实例。</para>
     /// </summary>
-    /// <returns><para>新建的对比文档；布局未就绪时为 null。</para>The new compare document, or null if the layout is unavailable.</returns>
+    /// <returns>The new compare document, or null if the layout is unavailable. <para>新建的对比文档；布局未就绪时为 null。</para></returns>
     public CompareViewModel? OpenNewCompareDocument()
     {
         var documentDock = _documentDock ??= FindDocumentsPane();
@@ -126,11 +126,11 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>在工作区文档区打开或聚焦投屏文档，复用尚未关闭的实例并切换到工作区。</para>
     /// Opens or focuses the screen-mirror document, reusing its instance until closed,
     /// and navigates to the workspace.
+    /// <para>在工作区文档区打开或聚焦投屏文档，复用尚未关闭的实例并切换到工作区。</para>
     /// </summary>
-    /// <returns><para>投屏文档；布局未就绪时为 null。</para>The screen-mirror document, or null if the layout is unavailable.</returns>
+    /// <returns>The screen-mirror document, or null if the layout is unavailable. <para>投屏文档；布局未就绪时为 null。</para></returns>
     public ScreenMirrorViewModel? OpenScreenMirrorDocument()
     {
         if (_screenMirrorDocument?.Owner is not IDock owner || owner.VisibleDockables?.Contains(_screenMirrorDocument) != true)
@@ -161,27 +161,27 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>按统一文档打开请求打开文档，转调路径+模式重载。</para>
     /// Opens a document from the unified request, delegating to the path+mode overload.
+    /// <para>按统一文档打开请求打开文档，转调路径+模式重载。</para>
     /// </summary>
-    /// <param name="request"><para>统一打开请求。</para>The unified open request.</param>
+    /// <param name="request">The unified open request. <para>统一打开请求。</para></param>
     internal Task OpenDocumentAsync(Services.Workspace.Documents.DocumentOpenRequest request)
         => OpenDocumentAsync(request.Path ?? string.Empty, request.Mode);
 
     /// <summary>
-    /// <para>异步打开指定路径的文档：若该路径已在文档区打开则聚焦并返回；否则创建
-    /// <see cref="FileViewModel"/>，按扩展名解析语法语言，加入文档区并激活。</para>
     /// Asynchronously opens the document at the given path: focuses it if the path is already open in
     /// the document area; otherwise creates a <see cref="FileViewModel"/>, resolves the syntax language
     /// by extension, adds it to the document area and activates it.
+    /// <para>异步打开指定路径的文档：若该路径已在文档区打开则聚焦并返回；否则创建
+    /// <see cref="FileViewModel"/>，按扩展名解析语法语言，加入文档区并激活。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>要打开的文档文件路径。</para>
     /// The path of the document file to open.
+    /// <para>要打开的文档文件路径。</para>
     /// </param>
     /// <param name="mode">
-    /// <para>请求的打开方式；默认 <c>Auto</c> 由文件类型+后缀综合判定。</para>
     /// The requested open mode; default <c>Auto</c> decided by file type+extension.
+    /// <para>请求的打开方式；默认 <c>Auto</c> 由文件类型+后缀综合判定。</para>
     /// </param>
     public async Task OpenDocumentAsync(string path, EditorOpenMode mode = EditorOpenMode.Auto)
     {
@@ -228,14 +228,14 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>以文本兜底路径打开或聚焦文档：路径已打开则按需切换模式并载入，否则新建
-    /// <see cref="FileViewModel"/> 加入文档区并激活。供自动解析未命中编辑器描述符时调用。</para>
     /// Opens or focuses a document through the text fallback path: switches mode and reloads when the
     /// path is already open, otherwise creates a <see cref="FileViewModel"/>, adds it to the document
     /// area and activates it. Invoked when automatic resolution matches no editor descriptor.
+    /// <para>以文本兜底路径打开或聚焦文档：路径已打开则按需切换模式并载入，否则新建
+    /// <see cref="FileViewModel"/> 加入文档区并激活。供自动解析未命中编辑器描述符时调用。</para>
     /// </summary>
-    /// <param name="path"><para>文档文件路径。</para>The document file path.</param>
-    /// <param name="mode"><para>解析后的打开方式。</para>The resolved open mode.</param>
+    /// <param name="path">The document file path. <para>文档文件路径。</para></param>
+    /// <param name="mode">The resolved open mode. <para>解析后的打开方式。</para></param>
     internal async Task OpenTextAsync(string path, EditorOpenMode mode)
     {
         var documentDock = _documentDock ??= FindDocumentsPane();
@@ -283,7 +283,10 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>Opens or focuses an offline log document. 打开或聚焦离线日志文档。</summary>
+    /// <summary>
+    /// Opens or focuses an offline log document.
+    /// <para>打开或聚焦离线日志文档。</para>
+    /// </summary>
     public async Task OpenLogAsync(string path)
     {
         var documentDock = _documentDock ??= FindDocumentsPane();
@@ -304,14 +307,14 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>在文档区以 DTB 双栏编辑器打开指定的设备树二进制文件：若已打开则聚焦并返回；
-    /// 否则创建并加载 <see cref="DtbEditorViewModel"/>。</para>
     /// Opens the given device-tree blob in the DTB dual-pane editor in the document area: focuses it if
     /// already open; otherwise creates and loads a <see cref="DtbEditorViewModel"/>.
+    /// <para>在文档区以 DTB 双栏编辑器打开指定的设备树二进制文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="DtbEditorViewModel"/>。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>要打开的 DTB 文件路径。</para>
     /// The path of the DTB file to open.
+    /// <para>要打开的 DTB 文件路径。</para>
     /// </param>
     public Task OpenDtbAsync(string path) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
@@ -319,14 +322,14 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
-    /// <para>在文档区以 DEX 双栏编辑器打开指定的 DEX 文件：若已打开则聚焦并返回；
-    /// 否则创建并加载 <see cref="DexEditorViewModel"/>。</para>
     /// Opens the given DEX file in the DEX dual-pane editor in the document area: focuses it if
     /// already open; otherwise creates and loads a <see cref="DexEditorViewModel"/>.
+    /// <para>在文档区以 DEX 双栏编辑器打开指定的 DEX 文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="DexEditorViewModel"/>。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>要打开的 DEX 文件路径。</para>
     /// The path of the DEX file to open.
+    /// <para>要打开的 DEX 文件路径。</para>
     /// </param>
     public Task OpenDexAsync(string path) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
@@ -349,14 +352,14 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
-    /// <para>在文档区以结构化 QCN 编辑器打开指定的 QCN 文件：若已打开则聚焦并返回；
-    /// 否则创建并加载 <see cref="QcnEditorViewModel"/>。</para>
     /// Opens the given QCN file in the structured QCN editor in the document area: focuses it if
     /// already open; otherwise creates and loads a <see cref="QcnEditorViewModel"/>.
+    /// <para>在文档区以结构化 QCN 编辑器打开指定的 QCN 文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="QcnEditorViewModel"/>。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>要打开的 QCN 文件路径。</para>
     /// The path of the QCN file to open.
+    /// <para>要打开的 QCN 文件路径。</para>
     /// </param>
     public Task OpenQcnAsync(string path) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
@@ -364,14 +367,14 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
-    /// <para>在文档区以 Manifest 编辑器打开指定的 AXML 文件：若已打开则聚焦并返回；
-    /// 否则创建并加载 <see cref="ManifestEditorViewModel"/>。</para>
     /// Opens the given AXML file in the Manifest editor in the document area: focuses it if already
     /// open; otherwise creates and loads a <see cref="ManifestEditorViewModel"/>.
+    /// <para>在文档区以 Manifest 编辑器打开指定的 AXML 文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="ManifestEditorViewModel"/>。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>要打开的 AXML 文件路径。</para>
     /// The path of the AXML file to open.
+    /// <para>要打开的 AXML 文件路径。</para>
     /// </param>
     public Task OpenManifestAsync(string path) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
@@ -379,14 +382,14 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
-    /// <para>在文档区以 ARSC 资源表编辑器打开指定的 resources.arsc 文件：若已打开则聚焦并返回；
-    /// 否则创建并加载 <see cref="ArscEditorViewModel"/>。</para>
     /// Opens the given resources.arsc file in the ARSC resource-table editor in the document area:
     /// focuses it if already open; otherwise creates and loads an <see cref="ArscEditorViewModel"/>.
+    /// <para>在文档区以 ARSC 资源表编辑器打开指定的 resources.arsc 文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="ArscEditorViewModel"/>。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>要打开的 ARSC 文件路径。</para>
     /// The path of the ARSC file to open.
+    /// <para>要打开的 ARSC 文件路径。</para>
     /// </param>
     public Task OpenArscAsync(string path) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
@@ -394,14 +397,14 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
-    /// <para>在文档区以 Hex 编辑器打开指定的二进制文件：若已打开则聚焦并返回；
-    /// 否则创建并加载 <see cref="HexEditorViewModel"/>。</para>
     /// Opens the given binary file in the Hex editor in the document area: focuses it if already
     /// open; otherwise creates and loads a <see cref="HexEditorViewModel"/>.
+    /// <para>在文档区以 Hex 编辑器打开指定的二进制文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="HexEditorViewModel"/>。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>要打开的二进制文件路径。</para>
     /// The path of the binary file to open.
+    /// <para>要打开的二进制文件路径。</para>
     /// </param>
     public Task OpenHexAsync(string path) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
@@ -409,14 +412,14 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
-    /// <para>在文档区以 APK 元数据编辑器打开指定的 APK 文件：若已打开则聚焦并返回；
-    /// 否则创建并加载 <see cref="ApkEditorViewModel"/>。</para>
     /// Opens the given APK file in the APK metadata editor in the document area: focuses it if already
     /// open; otherwise creates and loads an <see cref="ApkEditorViewModel"/>.
+    /// <para>在文档区以 APK 元数据编辑器打开指定的 APK 文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="ApkEditorViewModel"/>。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>要打开的 APK 文件路径。</para>
     /// The path of the APK file to open.
+    /// <para>要打开的 APK 文件路径。</para>
     /// </param>
     public Task OpenApkAsync(string path) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
@@ -424,14 +427,14 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
-    /// <para>在文档区以固件元数据面板打开指定的固件文件：若已打开则聚焦并返回；
-    /// 否则创建并加载 <see cref="FirmwareInfoViewModel"/>。</para>
     /// Opens the given firmware file in the firmware metadata panel in the document area: focuses it if
     /// already open; otherwise creates and loads a <see cref="FirmwareInfoViewModel"/>.
+    /// <para>在文档区以固件元数据面板打开指定的固件文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="FirmwareInfoViewModel"/>。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>要打开的固件文件路径。</para>
     /// The path of the firmware file to open.
+    /// <para>要打开的固件文件路径。</para>
     /// </param>
     public async Task OpenFirmwareAsync(string path, FormatDetectionResult? detection = null)
     {
@@ -499,15 +502,15 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>在文档区以文件管理器文档编辑器打开指定的文件系统镜像（ext4/EROFS/F2FS raw img）：
-    /// 若已打开则聚焦并返回；否则创建并加载 <see cref="FileManagerEditorViewModel"/>。</para>
     /// Opens the given filesystem image (ext4/EROFS/F2FS raw img) in the file-manager document editor in
     /// the document area: focuses it if already open; otherwise creates and loads a
     /// <see cref="FileManagerEditorViewModel"/>.
+    /// <para>在文档区以文件管理器文档编辑器打开指定的文件系统镜像（ext4/EROFS/F2FS raw img）：
+    /// 若已打开则聚焦并返回；否则创建并加载 <see cref="FileManagerEditorViewModel"/>。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>要打开的镜像文件路径。</para>
     /// The path of the image file to open.
+    /// <para>要打开的镜像文件路径。</para>
     /// </param>
     public async Task OpenFileSystemAsync(string path)
     {
@@ -583,11 +586,11 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>订阅文档区 <see cref="IDock.ActiveDockable"/> 变更，在用户切换已打开文档标签时
-    /// 发送 <see cref="ActiveDocumentChangedMessage"/>，使属性面板等订阅方刷新显示。</para>
     /// Subscribes to the document dock's <see cref="IDock.ActiveDockable"/> changes, sending an
     /// <see cref="ActiveDocumentChangedMessage"/> when the user switches between already-open document
     /// tabs so subscribers such as the properties panel can refresh.
+    /// <para>订阅文档区 <see cref="IDock.ActiveDockable"/> 变更，在用户切换已打开文档标签时
+    /// 发送 <see cref="ActiveDocumentChangedMessage"/>，使属性面板等订阅方刷新显示。</para>
     /// </summary>
     private void EnsureDocumentDockSubscribed(DocumentDock documentDock)
     {
@@ -611,9 +614,9 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>在布局中按 Id 查找文档区（DocumentsPane）并缓存其引用；布局未就绪时返回 <c>null</c>。</para>
     /// Finds and caches the document area (DocumentsPane) by Id in the layout; returns <c>null</c> when
     /// the layout is not ready.
+    /// <para>在布局中按 Id 查找文档区（DocumentsPane）并缓存其引用；布局未就绪时返回 <c>null</c>。</para>
     /// </summary>
     public DocumentDock? FindDocumentsPanePublic() => _documentDock ??= FindDocumentsPane();
 
@@ -628,12 +631,12 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>从持久化快照恢复一个已打开的文档标签。根据 <see cref="OpenDocumentDto.Kind"/> 分派到对应的打开方法。</para>
     /// Restores a document tab recorded in the persisted snapshot. Dispatches by
     /// <see cref="OpenDocumentDto.Kind"/> to the appropriate open method.
+    /// <para>从持久化快照恢复一个已打开的文档标签。根据 <see cref="OpenDocumentDto.Kind"/> 分派到对应的打开方法。</para>
     /// </summary>
-    /// <param name="dto"><para>文档描述符。</para>The document descriptor.</param>
-    /// <param name="rootDir"><para>工程根目录（用于拼接绝对路径）。</para>The project root directory.</param>
+    /// <param name="dto">The document descriptor. <para>文档描述符。</para></param>
+    /// <param name="rootDir">The project root directory. <para>工程根目录（用于拼接绝对路径）。</para></param>
     public async Task RestoreOpenDocumentAsync(Services.Projects.OpenDocumentDto dto, string rootDir)
     {
         if (dto.Kind == "Compare")
@@ -701,8 +704,8 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>释放资源：取消订阅文档区属性变更事件。</para>
     /// Releases resources: unsubscribes from document-dock property-changed events.
+    /// <para>释放资源：取消订阅文档区属性变更事件。</para>
     /// </summary>
     public void Dispose()
     {

@@ -3,9 +3,9 @@ using System.Text;
 namespace UotanStudio.Firmware.MagicGen;
 
 /// <summary>
-/// <para>把 <see cref="RuleAst"/> 序列化为运行时 <c>CompiledMagicEngine.ReadRule</c> 逐字段读取的二进制布局。</para>
 /// Serializes <see cref="RuleAst"/> into the exact per-field binary layout that the runtime
 /// <c>CompiledMagicEngine.ReadRule</c> reads back.
+/// <para>把 <see cref="RuleAst"/> 序列化为运行时 <c>CompiledMagicEngine.ReadRule</c> 逐字段读取的二进制布局。</para>
 /// </summary>
 internal static class Emitter
 {

@@ -3,7 +3,8 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.Interactions;
 
-/// <summary>Infers form field interfaces from definition nodes without executing the workflow.</summary>
+/// <summary>Infers form field interfaces from definition nodes without executing the workflow.
+/// <para>在不执行工作流的情况下，从定义节点推断表单字段接口。</para></summary>
 public static class InteractionSchemaResolver
 {
     public static void Refresh(IEnumerable<FlowNodeViewModel> sourceNodes, IEnumerable<NodeConnectionViewModel> sourceConnections)

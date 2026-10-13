@@ -79,8 +79,8 @@ public sealed partial class DeviceMonitorService
     private readonly Lock _sync = new();
 
     /// <summary>
-    /// <para>设备列表发生变化（热插拔、adb server 变更或强制刷新完成）时触发。</para>
     /// Raised when the device list changed (hotplug, adb-server change or completed force refresh).
+    /// <para>设备列表发生变化（热插拔、adb server 变更或强制刷新完成）时触发。</para>
     /// </summary>
     public event EventHandler? DevicesChanged;
 
@@ -94,10 +94,10 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>启动服务：立即执行一次全量扫描，并开始监听 USB 热插拔与 adb server 设备变更。
-    /// 幂等，可安全多次调用。</para>
     /// Starts the service: performs one full scan immediately and begins monitoring USB
     /// hotplug and adb-server device changes. Idempotent.
+    /// <para>启动服务：立即执行一次全量扫描，并开始监听 USB 热插拔与 adb server 设备变更。
+    /// 幂等，可安全多次调用。</para>
     /// </summary>
     public void Start()
     {
@@ -127,12 +127,11 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>将 USB 设备增删/变更写入统一日志。与工具相关的设备记录为 Info；
-    /// 无关设备（摄像头、键鼠等）仅记录 Debug，避免日志刷屏。</para>
-    /// Writes USB device add/remove/change events into the unified log. Relevant
-    /// devices are logged at Info; irrelevant ones (webcams, HID, etc.) at Debug
-    /// to avoid log spam.
+    /// Writes USB device add, remove and change events into the unified log, logging relevant
+    /// devices at Info and the rest at Debug.
+    /// <para>把 USB 设备的增删与变更写入统一日志，相关设备记为 Info，其余记为 Debug。</para>
     /// </summary>
+    /// <param name="changes">The device change events to log. <para>要记录的变更事件。</para></param>
     private static void LogDeviceChanges(IReadOnlyList<UsbDeviceChange> changes)
     {
         foreach (var change in changes)
@@ -159,17 +158,17 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>判断 USB 设备是否与本工具相关（ADB/Fastboot/EDL/RKDL）。不相关设备的
-    /// 变化（如复合摄像头接口节点的动态插拔）不会触发设备列表重扫。</para>
-    /// Determines whether a USB device is relevant to the tool (ADB/Fastboot/EDL/RKDL).
-    /// Changes of irrelevant devices (e.g. dynamic interface churn of composite webcams)
-    /// do not trigger a device-list rescan.
+    /// Determines whether a USB device classifies to a supported protocol such as ADB, Fastboot,
+    /// EDL or RKDL.
+    /// <para>判断 USB 设备能否归类为受支持的协议，例如 ADB、Fastboot、EDL 或 RKDL。</para>
     /// </summary>
+    /// <param name="info">The USB device information to test. <para>要判断的 USB 设备信息。</para></param>
+    /// <returns>True when the device classifies to a supported protocol. <para>设备能归类为受支持协议时为 true。</para></returns>
     private static bool IsRelevantDevice(UsbDeviceInfo info) => Classify(info) is not null;
 
     /// <summary>
-    /// <para>调度一次去抖动的设备列表刷新通知。</para>
     /// Schedules a debounced device-list change notification.
+    /// <para>调度一次去抖动的设备列表刷新通知。</para>
     /// </summary>
     private void ScheduleChange()
     {
@@ -182,9 +181,9 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>停止监视并释放资源，包括设备控制器自身的移除监视、server 监视与未完成的租约。</para>
     /// Stops monitoring and releases resources, including the device controller's own removal watch,
     /// server-lifecycle watch and outstanding leases.
+    /// <para>停止监视并释放资源，包括设备控制器自身的移除监视、server 监视与未完成的租约。</para>
     /// </summary>
     public void Dispose()
     {

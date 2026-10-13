@@ -4,13 +4,13 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 
 /// <summary>
-/// <para>活动配置里一个接口描述符的纯数据形状：接口号与类/子类/协议三元组。它不引用任何
-/// LibUsbDotNet 类型，因此 <see cref="LibUsbTopologyGraph"/> 可以在没有原生 libusb 运行时的机器上
-/// （含测试宿主）被完整验证。</para>
 /// The plain data shape of one interface descriptor from the active configuration: the interface number
 /// plus the class/subclass/protocol triple. It references no LibUsbDotNet type, so
 /// <see cref="LibUsbTopologyGraph"/> can be verified completely on machines without a native libusb
 /// runtime (including the test host).
+/// <para>活动配置里一个接口描述符的纯数据形状：接口号与类/子类/协议三元组。它不引用任何
+/// LibUsbDotNet 类型，因此 <see cref="LibUsbTopologyGraph"/> 可以在没有原生 libusb 运行时的机器上
+/// （含测试宿主）被完整验证。</para>
 /// </summary>
 internal sealed record LibUsbTopologyInterface
 {
@@ -32,12 +32,12 @@ internal sealed record LibUsbTopologyInterface
 }
 
 /// <summary>
-/// <para>libusb 设备清单里一个设备的纯数据形状：总线号、端口链、VID/PID/bcdDevice、序列号、协商速度与
-/// 活动配置的接口列表。字段只承载后端读到的原始值；厂商/产品/版本回退解析、接口三元组回退与协议分类都由
-/// <see cref="UsbTopologyNodes.Create"/> 统一补齐。</para>
 /// The plain data shape of one device from the libusb device list: bus number, port chain, VID/PID/
 /// bcdDevice, serial, negotiated speed and the interface list of the active configuration. Fields carry
 /// only raw values the backend read; fallback identity and triple parsing and protocol classification are
+/// <para>libusb 设备清单里一个设备的纯数据形状：总线号、端口链、VID/PID/bcdDevice、序列号、协商速度与
+/// 活动配置的接口列表。字段只承载后端读到的原始值；厂商/产品/版本回退解析、接口三元组回退与协议分类都由
+/// <see cref="UsbTopologyNodes.Create"/> 统一补齐。</para>
 /// unified by <see cref="UsbTopologyNodes.Create"/>.</summary>
 internal sealed record LibUsbTopologyDevice
 {
@@ -78,16 +78,6 @@ internal sealed record LibUsbTopologyDevice
 }
 
 /// <summary>
-/// <para>把 libusb 的总线号与端口链重建为 总线根 → 集线器 → 设备 → 接口 的扁平节点集合，是 libusb 后端的
-/// 纯塑形层：输入为 <see cref="LibUsbTopologyDevice"/> 记录列表，不触碰原生库。设备节点以
-/// <see cref="LibUsbPortIdentity"/> 的规范令牌 <c>libusb-port:&lt;bus&gt;:&lt;chain&gt;</c> 为标识，父标识为
-/// 去掉最后一个端口的链；链只剩一个端口时父为总线根节点 <c>libusb-bus:&lt;n&gt;</c>。当端口链隐含了中间集线器
-/// 层级但清单中没有匹配设备时，会补发一个 <see cref="UsbTopologyNodeKind.Hub"/> 节点且
-/// <c>Description</c> 为 <see langword="null"/>——该节点是根据链推断出来的，并非实际观测到的设备。端口链无法
-/// 构成规范令牌（空链、含 0 端口或超过 7 级）时，设备改用 <c>libusb-device:&lt;bus&gt;:&lt;vid&gt;:&lt;pid&gt;</c>
-/// 回退标识并挂在总线根下；令牌相同的重复记录折叠到首次出现。观测到的设备若其端口链
-/// 是另一设备链的严格前缀，则按拓扑角色标注为集线器。每个节点只声明 <c>ParentInstanceId</c>，嵌套由共享的
-/// <see cref="UsbTopologyTree"/> 完成。</para>
 /// The pure shaping layer that rebuilds libusb bus numbers and port chains into flat
 /// bus-root → hub → device → interface nodes. It consumes <see cref="LibUsbTopologyDevice"/> records and
 /// never touches the native library. Device nodes are keyed by the canonical
@@ -101,6 +91,16 @@ internal sealed record LibUsbTopologyDevice
 /// map to the same token collapse to the first occurrence. An
 /// observed device whose chain is a strict prefix of another device's chain is stated as a hub. Every
 /// node only declares <c>ParentInstanceId</c>; nesting is done by the shared <see cref="UsbTopologyTree"/>.
+/// <para>把 libusb 的总线号与端口链重建为 总线根 → 集线器 → 设备 → 接口 的扁平节点集合，是 libusb 后端的
+/// 纯塑形层：输入为 <see cref="LibUsbTopologyDevice"/> 记录列表，不触碰原生库。设备节点以
+/// <see cref="LibUsbPortIdentity"/> 的规范令牌 <c>libusb-port:&lt;bus&gt;:&lt;chain&gt;</c> 为标识，父标识为
+/// 去掉最后一个端口的链；链只剩一个端口时父为总线根节点 <c>libusb-bus:&lt;n&gt;</c>。当端口链隐含了中间集线器
+/// 层级但清单中没有匹配设备时，会补发一个 <see cref="UsbTopologyNodeKind.Hub"/> 节点且
+/// <c>Description</c> 为 <see langword="null"/>——该节点是根据链推断出来的，并非实际观测到的设备。端口链无法
+/// 构成规范令牌（空链、含 0 端口或超过 7 级）时，设备改用 <c>libusb-device:&lt;bus&gt;:&lt;vid&gt;:&lt;pid&gt;</c>
+/// 回退标识并挂在总线根下；令牌相同的重复记录折叠到首次出现。观测到的设备若其端口链
+/// 是另一设备链的严格前缀，则按拓扑角色标注为集线器。每个节点只声明 <c>ParentInstanceId</c>，嵌套由共享的
+/// <see cref="UsbTopologyTree"/> 完成。</para>
 /// </summary>
 internal static class LibUsbTopologyGraph
 {

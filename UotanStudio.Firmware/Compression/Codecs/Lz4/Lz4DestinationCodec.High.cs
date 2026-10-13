@@ -1,5 +1,3 @@
-// Derived from K4os.Compression.LZ4 1.3.8 (f5a25b7d72e2e41550fe20662597169ff11c3b60).
-// LZ4 fillOutput corrections follow liblz4 v1.9.4. See Lz4DestinationCodec.LICENSE.
 using System.Runtime.CompilerServices;
 using reg_t = System.UInt64;
 using size_t = System.UInt32;

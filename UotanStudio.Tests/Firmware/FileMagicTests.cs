@@ -5,13 +5,13 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// <para>编译型魔数引擎 FileMagic 的识别测试。</para>
 /// Identification tests for the compiled magic engine (upstream file(1) magic(5) corpus emitted
 /// into C# rule tables by UotanStudio.Firmware.MagicGen). Every expected description below was
 /// captured from the engine and cross-checked against the installed <c>file(1)</c> 5.48 oracle.
 /// The vendored corpus tracks upstream master, so a few trailing description clauses that require a
 /// full-file read (ELF "no section header", gzip ISIZE) or that classify plain text are intentionally
 /// out of scope for a header-probe identifier and are asserted only on their stable prefix.
+/// <para>编译型魔数引擎 FileMagic 的识别测试。</para>
 /// </summary>
 public class FileMagicTests
 {
@@ -316,13 +316,13 @@ public class FileMagicTests
 }
 
 /// <summary>
-/// <para>与系统 <c>file(1)</c> 的差分一致性测试。</para>
 /// Differential parity checks against the system <c>file(1)</c>. These exercise the same fixtures
 /// through both the compiled engine and the upstream oracle and assert both classify the file into
 /// the same family (matched on a shared keyword rather than the full description, because the vendored
 /// corpus tracks upstream master and some trailing clauses drift). Tests skip when no <c>file</c>
 /// executable is available on <c>PATH</c>; the oracle comparison for these fixtures was performed
 /// manually with file(1) 5.48 while the assertions above were authored.
+/// <para>与系统 <c>file(1)</c> 的差分一致性测试。</para>
 /// </summary>
 public class FileMagicDifferentialTests
 {

@@ -1,6 +1,7 @@
 namespace UotanStudio.Services.Projects;
 
-/// <summary>Desktop history compatibility facade; execution delegates remain owned by the host.</summary>
+/// <summary>Desktop history compatibility facade; execution delegates are provided through the reconstruction hook.
+/// <para>桌面历史兼容门面；执行委托经由重建钩子提供。</para></summary>
 public sealed class OperationHistoryService
 {
     public const int Capacity = ProjectHistory.Capacity;

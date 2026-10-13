@@ -4,53 +4,42 @@ using UotanStudio.Firmware.Core.IO;
 namespace UotanStudio.Firmware.Radio.Qcn;
 
 /// <summary>
-/// In-place patcher for Qualcomm QCN NV backup files. Because every NV record is a fixed
-/// 136 bytes, edits never change stream sizes: the patcher rewrites only the 128-byte data region of
-/// changed records at the physical offsets derived from the container's FAT chains, leaving the
-/// record headers and every other byte of the file untouched. The patch is staged into an adjacent
-/// temporary file, re-parsed for verification and only then atomically published over the source.
-/// <para>Qualcomm QCN NV 备份文件的原位补丁器。由于每条 NV 记录都是定长 136 字节，编辑不会改变流
-/// 大小：补丁器仅重写被修改记录的 128 字节数据区（物理偏移从容器的 FAT 链换算），记录头与文件其余
-/// 字节一律不动。补丁先写入相邻临时文件，重新解析校验通过后才原子发布覆盖源文件。</para>
+/// In-place patcher for Qualcomm QCN NV backup files. Every NV record is a fixed 136 bytes, so only the 128-byte data region of changed records is rewritten at offsets derived from the FAT chains. The patch is staged to a temporary file, re-parsed, then atomically published.
+/// <para>Qualcomm QCN NV 备份文件的原位补丁器。每条 NV 记录定长 136 字节，故仅重写被修改记录的 128 字节数据区（偏移由 FAT 链换算）。补丁先写入临时文件、重新解析校验，再原子发布。</para>
 /// </summary>
 public static class QcnWriter
 {
     /// <summary>
-    /// Patches the QCN file at <paramref name="path"/> so its NV records carry the data held by
-    /// <paramref name="items"/>. The items must originate from this exact file (same record count,
-    /// stream paths, record indices, ids and flags); only records whose 128-byte data region differs
-    /// from the on-disk content are rewritten.
-    /// <para>对 <paramref name="path"/> 的 QCN 文件打补丁，使其 NV 记录携带 <paramref name="items"/>
-    /// 持有的数据。条目必须源自该文件本身（记录数、流路径、记录索引、id 与 flags 一致）；只有
-    /// 128 字节数据区与磁盘内容不同的记录才会被重写。</para>
+    /// Patches the NV records of a QCN file with the data held by the supplied items.
+    /// <para>用给定条目持有的数据修补 QCN 文件的 NV 记录。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>要补丁的 QCN 文件路径。</para>
     /// The QCN file path to patch.
+    /// <para>要补丁的 QCN 文件路径。</para>
     /// </param>
     /// <param name="items">
-    /// <para>来自该文件的完整条目集合（可为编辑后的 QcnReader.ParseAsync 结果）。</para>
     /// The complete item set originating from this file (e.g. an edited QcnReader.ParseAsync result).
+    /// <para>来自该文件的完整条目集合（可为编辑后的 QcnReader.ParseAsync 结果）。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// <para>取消令牌，贯穿校验、临时文件写入与发布。</para>
     /// Cancellation token carried through verification, the temporary file write and publication.
+    /// <para>取消令牌，贯穿校验、临时文件写入与发布。</para>
     /// </param>
     /// <returns>
-    /// <para>实际重写的数据区数量（0 表示内容已一致，文件未改动）。</para>
     /// The number of data regions actually rewritten (0 when the content already matches and the file is untouched).
+    /// <para>实际重写的数据区数量（0 表示内容已一致，文件未改动）。</para>
     /// </returns>
     /// <exception cref="QcnPatchMismatchException">
-    /// <para>条目集合与文件不匹配（记录数、流路径、索引、id 或 flags 不一致）。</para>
     /// The item set does not match the file (record count, stream paths, indices, ids or flags differ).
+    /// <para>条目集合与文件不匹配（记录数、流路径、索引、id 或 flags 不一致）。</para>
     /// </exception>
     /// <exception cref="QcnException">
-    /// <para>补丁后的校验失败；源文件保持原样。</para>
     /// Post-patch verification failed; the source file is left untouched.
+    /// <para>补丁后的校验失败；源文件保持原样。</para>
     /// </exception>
     /// <exception cref="UotanStudio.Firmware.CompoundFile.CompoundFileException">
-    /// <para>容器结构损坏或不受支持。</para>
     /// The container structure is corrupted or unsupported.
+    /// <para>容器结构损坏或不受支持。</para>
     /// </exception>
     public static async Task<int> PatchAsync(string path, IReadOnlyList<QcnNvItem> items, CancellationToken cancellationToken = default)
     {

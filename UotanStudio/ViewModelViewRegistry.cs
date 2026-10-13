@@ -15,40 +15,27 @@ using UotanStudio.Views.Workspace;
 namespace UotanStudio;
 
 /// <summary>
-/// <para>界面视图的唯一目录（AOT 安全）：既登记 ViewModel→View 工厂与呈现元数据，
-/// 供 <c>ViewLocator</c> 查找，也登记顶层页签（烧录/交付/节点/设置）的页面工厂，
-/// 取代此前分散在 <c>ViewLocator</c>、<c>MainView</c> 中的并行枚举与手工 <c>new</c>。</para>
-/// The single catalog of views (AOT-safe): it registers the ViewModel→View factories with
-/// presentation metadata for <c>ViewLocator</c>, and the top-level tab (flash/delivery/node/
-/// settings) page factories, replacing the parallel enumerations and hand-written <c>new</c>
-/// calls previously spread across <c>ViewLocator</c> and <c>MainView</c>.
+/// Single AOT-safe catalog of view-model-to-control factories with presentation metadata for
+/// <c>ViewLocator</c>, plus factories for the four on-demand top-level tabs.
+/// <para>唯一的 AOT 安全控件工厂目录：按数据模型类型登记工厂与呈现元数据以便 <c>ViewLocator</c> 查找，
+/// 并登记四个顶层页签的按需工厂。</para>
 /// </summary>
-/// <remarks>
-/// <para>注册表在静态字段初始化时一次性登记全部条目，不含运行时反射；新增 ViewModel 或顶层
-/// 页签须在此同步登记。<c>IsDocumentStyle</c> 标记需要编辑器外观（透明背景 + 点击上报）的文档型
-/// 视图，<c>ViewLocator</c> 据此施加该处理，不再维护独立的 VM 类型列表。</para>
-/// The catalog is populated once in static field initializers without runtime reflection; new
-/// ViewModels or top-level tabs must be registered here as well. The <c>IsDocumentStyle</c> flag
-/// marks document views that need editor chrome (transparent background + click reporting);
-/// <c>ViewLocator</c> applies that treatment from the flag instead of keeping its own VM-type list.
-/// </remarks>
 internal static class ViewModelViewRegistry
 {
     /// <summary>
-    /// <para>一条 ViewModel→View 登记：视图工厂与呈现元数据。</para>
-    /// A single ViewModel→View registration: the view factory plus presentation metadata.
+    /// A single registration entry: the control factory plus presentation metadata.
+    /// <para>单条登记条目：控件工厂与呈现元数据。</para>
     /// </summary>
-    /// <param name="CreateView"><para>创建视图控件的工厂。</para>The factory that creates the view control.</param>
+    /// <param name="CreateView">The factory producing the control. <para>产出控件的工厂。</para></param>
     /// <param name="IsDocumentStyle">
-    /// <para>是否为需要编辑器外观（透明背景 + 点击上报）的文档型视图。</para>
-    /// Whether the view is a document-style editor needing a transparent background and the
-    /// click-to-activate handler.
+    /// Whether this entry needs document-style chrome: a transparent background and a click-to-activate handler.
+    /// <para>该条目是否需要文档型外观：透明背景与点击激活上报。</para>
     /// </param>
     internal readonly record struct Entry(Func<Control> CreateView, bool IsDocumentStyle = false);
 
     /// <summary>
-    /// <para>VM 类型 → 视图登记条目 的映射表。</para>
     /// Map of VM type → view registration entry.
+    /// <para>VM 类型 → 视图登记条目 的映射表。</para>
     /// </summary>
     private static readonly FrozenDictionary<Type, Entry> _registry = new Dictionary<Type, Entry>
     {
@@ -82,24 +69,24 @@ internal static class ViewModelViewRegistry
     }.ToFrozenDictionary();
 
     /// <summary>
-    /// <para>顶层页签枚举，标识主窗口底栏按需创建的四个页面。</para>
     /// Top-level tab identifiers for the four pages the main window creates on demand.
+    /// <para>顶层页签枚举，标识主窗口底栏按需创建的四个页面。</para>
     /// </summary>
     internal enum TopLevelPage
     {
-        /// <summary><para>烧录页。</para>The flash page.</summary>
+        /// <summary>The flash tab.<para>烧录标签页。</para></summary>
         Flash,
-        /// <summary><para>交付页。</para>The delivery page.</summary>
+        /// <summary>The delivery tab.<para>交付标签页。</para></summary>
         Delivery,
-        /// <summary><para>节点编辑页。</para>The node-editor page.</summary>
+        /// <summary>The node editor tab.<para>节点编辑标签页。</para></summary>
         NodeEditor,
-        /// <summary><para>设置页。</para>The settings page.</summary>
+        /// <summary>The settings tab.<para>设置标签页。</para></summary>
         Settings,
     }
 
     /// <summary>
-    /// <para>顶层页签 → 页面工厂 的映射表。</para>
     /// Map of top-level tab → page factory.
+    /// <para>顶层页签 → 页面工厂 的映射表。</para>
     /// </summary>
     private static readonly FrozenDictionary<TopLevelPage, Func<Control>> _topLevelPages =
         new Dictionary<TopLevelPage, Func<Control>>
@@ -111,13 +98,13 @@ internal static class ViewModelViewRegistry
         }.ToFrozenDictionary();
 
     /// <summary>
-    /// <para>按 ViewModel 类型查找对应视图工厂；未注册时返回 <c>null</c>。</para>
-    /// Looks up the view factory for the given ViewModel type; returns <c>null</c> when unregistered.
+    /// Looks up a registered control factory by data-model type; returns <c>null</c> when unregistered.
+    /// <para>按数据模型类型查找已登记的控件工厂；未登记时返回 <c>null</c>。</para>
     /// </summary>
-    /// <param name="viewModelType"><para>ViewModel 类型。</para>The ViewModel type.</param>
+    /// <param name="viewModelType">The data-model type to look up. <para>待查找的数据模型类型。</para></param>
     /// <returns>
-    /// <para>视图工厂委托；未注册时为 <c>null</c>。</para>
-    /// The view-factory delegate; <c>null</c> when unregistered.
+    /// The control-factory delegate; <c>null</c> when unregistered.
+    /// <para>控件工厂委托；未登记时为 <c>null</c>。</para>
     /// </returns>
     public static Func<Control>? Resolve(Type viewModelType)
     {
@@ -125,14 +112,13 @@ internal static class ViewModelViewRegistry
     }
 
     /// <summary>
-    /// <para>判断该 ViewModel 类型对应的视图是否为文档型编辑器外观；未注册时返回 <c>false</c>。</para>
-    /// Whether the view for the given ViewModel type uses the document-style editor chrome;
-    /// returns <c>false</c> when unregistered.
+    /// Whether the entry for a data-model type uses document-style chrome; false when unregistered.
+    /// <para>某数据模型类型的条目是否使用文档型外观；未登记时为 false。</para>
     /// </summary>
-    /// <param name="viewModelType"><para>ViewModel 类型。</para>The ViewModel type.</param>
+    /// <param name="viewModelType">The data-model type to check. <para>待检查的数据模型类型。</para></param>
     /// <returns>
-    /// <para>条目存在且标记为 <c>IsDocumentStyle</c> 时返回 <c>true</c>。</para>
     /// <c>true</c> when a registered entry is flagged <c>IsDocumentStyle</c>.
+    /// <para>条目存在且标记为 <c>IsDocumentStyle</c> 时返回 <c>true</c>。</para>
     /// </returns>
     public static bool IsDocumentStyle(Type viewModelType)
     {
@@ -140,11 +126,11 @@ internal static class ViewModelViewRegistry
     }
 
     /// <summary>
-    /// <para>按顶层页签创建对应页面控件。</para>
-    /// Creates the page control for the given top-level tab.
+    /// Creates a control for the given top-level tab.
+    /// <para>按顶层页签创建对应控件。</para>
     /// </summary>
-    /// <param name="page"><para>顶层页签标识。</para>The top-level tab identifier.</param>
-    /// <returns><para>对应页面控件。</para>The matching page control.</returns>
+    /// <param name="page">The top-level tab identifier. <para>顶层页签标识。</para></param>
+    /// <returns>The control for that tab. <para>该页签对应的控件。</para></returns>
     public static Control CreateTopLevelPage(TopLevelPage page)
     {
         return _topLevelPages[page]();

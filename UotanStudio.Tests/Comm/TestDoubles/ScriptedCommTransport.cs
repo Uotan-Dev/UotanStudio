@@ -19,7 +19,10 @@ public sealed class ScriptedCommTransport : ICommTransport
     private byte[]? _headRemainder;
     private bool _connected = true;
 
-    /// <summary>Gets all bytes written through this transport, in order. 所有写入字节。</summary>
+    /// <summary>
+    /// Gets all bytes written through this transport, in order.
+    /// <para>所有写入字节。</para>
+    /// </summary>
     public List<byte[]> Writes { get; } = [];
 
     /// <summary>Gets the number of transport reads, including empty reads.</summary>
@@ -31,7 +34,10 @@ public sealed class ScriptedCommTransport : ICommTransport
     /// <summary>Gets the number of <see cref="Reset"/> calls.</summary>
     public int ResetCount { get; private set; }
 
-    /// <summary>Gets whether the transport reports connected. 是否报告已连接。</summary>
+    /// <summary>
+    /// Gets whether the transport reports connected.
+    /// <para>是否报告已连接。</para>
+    /// </summary>
     public bool IsConnected => _connected;
 
     /// <summary>
@@ -52,7 +58,10 @@ public sealed class ScriptedCommTransport : ICommTransport
     /// </summary>
     public Func<byte[], int, int, bool>? RejectWrite { get; set; }
 
-    /// <summary>Enqueues a device response. 入队一条设备响应。</summary>
+    /// <summary>
+    /// Enqueues a device response.
+    /// <para>入队一条设备响应。</para>
+    /// </summary>
     public void Enqueue(byte[] data)
     {
         if (data.Length == 0)
@@ -67,7 +76,10 @@ public sealed class ScriptedCommTransport : ICommTransport
         }
     }
 
-    /// <summary>Enqueues a UTF-8 text device response. 入队一条 UTF-8 文本设备响应。</summary>
+    /// <summary>
+    /// Enqueues a UTF-8 text device response.
+    /// <para>入队一条 UTF-8 文本设备响应。</para>
+    /// </summary>
     public void Enqueue(string text) => Enqueue(Encoding.UTF8.GetBytes(text));
 
     /// <inheritdoc />

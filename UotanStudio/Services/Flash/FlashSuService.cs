@@ -4,10 +4,16 @@ using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
 
-/// <summary>ADB root probe and explicitly selected block-device flashing.</summary>
+/// <summary>ADB root probe and explicitly selected block-device flashing.
+/// <para>ADB root 探测与显式选择的块设备刷写。</para></summary>
 public static class FlashSuService
 {
-    /// <summary>Checks whether the selected ADB target can execute a noninteractive root shell.</summary>
+    /// <summary>Checks whether the selected ADB target can execute a noninteractive root shell.
+    /// <para>检查所选 ADB 目标能否执行非交互式 root shell。</para></summary>
+    /// <param name="device">The ADB target to probe. <para>要探测的 ADB 目标。</para></param>
+    /// <param name="ct">Cancellation for the probe. <para>探测过程的取消令牌。</para></param>
+    /// <returns>True when a noninteractive root shell succeeds; false otherwise.
+    /// <para>非交互式 root shell 执行成功时为 true，否则为 false。</para></returns>
     public static async Task<bool> HasSuAsync(DetectedDevice device, CancellationToken ct)
     {
         if (device.Protocol != DeviceProtocolKind.Adb || device.State != "device") return false;
@@ -26,7 +32,13 @@ public static class FlashSuService
         }
     }
 
-    /// <summary>Pushes a selected image and writes it only to a validated partition node.</summary>
+    /// <summary>Pushes a selected image and writes it only to a validated partition node.
+    /// <para>推送所选镜像，并仅写入经过校验的分区节点。</para></summary>
+    /// <param name="device">The online ADB target to flash. <para>要刷写的在线 ADB 目标。</para></param>
+    /// <param name="partition">The by-name partition node to write. <para>要写入的 by-name 分区节点。</para></param>
+    /// <param name="path">Local image file to push and write. <para>要推送并写入的本地镜像文件。</para></param>
+    /// <param name="ct">Cancellation for push, write and cleanup. <para>推送、写入与清理的取消令牌。</para></param>
+    /// <returns>A single-line status for the completed write. <para>完成写入后的单行状态文本。</para></returns>
     public static async Task<string> FlashAsync(DetectedDevice device, string partition, string path, CancellationToken ct)
     {
         if (device.Protocol != DeviceProtocolKind.Adb || device.State != "device" ||

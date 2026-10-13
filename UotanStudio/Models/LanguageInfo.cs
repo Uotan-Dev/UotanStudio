@@ -1,72 +1,78 @@
 namespace UotanStudio.Models;
 
 /// <summary>
-/// <para>表示一种可用语言的动态信息，支持运行时动态扩展。</para>
 /// Represents dynamic information about an available language, supporting runtime extension.
+/// <para>表示一种可用语言的动态信息，支持运行时动态扩展。</para>
 /// </summary>
 public class LanguageInfo : IEquatable<LanguageInfo>
 {
     /// <summary>
-    /// <para>获取或设置语言的区域性名称（如 "en-US"、"zh-CN"）。</para>
-    /// Gets or sets the culture name of the language (e.g., "en-US", "zh-CN").
+    /// Gets or sets the culture name of the language.
+    /// <para>获取或设置语言的区域性名称。</para>
     /// </summary>
+    /// <value>The culture name, such as en-US.<para>区域性名称，例如 en-US。</para></value>
     public string CultureName { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>获取或设置语言的原生名称（如 "English"、"简体中文"）。</para>
-    /// Gets or sets the native name of the language (e.g., "English", "简体中文").
+    /// Gets or sets the native name of the language.
+    /// <para>获取或设置语言的原生名称。</para>
     /// </summary>
+    /// <value>The name written in the language itself.<para>以该语言自身书写的名称。</para></value>
     public string NativeName { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>获取或设置语言的英文名称（如 "English"、"Chinese (Simplified)"）。</para>
-    /// Gets or sets the English name of the language (e.g., "English", "Chinese (Simplified)").
+    /// Gets or sets the English name of the language.
+    /// <para>获取或设置语言的英文名称。</para>
     /// </summary>
+    /// <value>The name written in English.<para>英文书写的名称。</para></value>
     public string EnglishName { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>获取或设置一个值，指示该语言是否为应用程序内置语言。</para>
     /// Gets or sets a value indicating whether the language is built-in to the application.
+    /// <para>获取或设置一个值，指示该语言是否为应用程序内置语言。</para>
     /// </summary>
+    /// <value>True when the language is built-in.<para>语言为内置语言时为 true。</para></value>
     public bool IsBuiltIn { get; set; }
 
     /// <summary>
-    /// <para>获取或设置一个值，指示该选项是否表示"跟随系统语言"。</para>
     /// Gets or sets a value indicating whether this option represents "follow system language".
+    /// <para>获取或设置一个值，指示该选项是否表示"跟随系统语言"。</para>
     /// </summary>
+    /// <value>True when the option follows the system language.<para>选项跟随系统语言时为 true。</para></value>
     public bool IsSystemLanguage { get; set; }
 
     /// <summary>
-    /// <para>获取用于在界面中显示的名称。优先显示原生名称，若原生名称为空则显示区域性名称。</para>
-    /// Gets the display name for UI. Prefers the native name; falls back to the culture name if empty.
+    /// Gets the display name. Prefers the native name and falls back to the culture name when empty.
+    /// <para>获取用于显示的名称。优先显示原生名称，原生名称为空时显示区域性名称。</para>
     /// </summary>
+    /// <value>The name to display.<para>用于显示的名称。</para></value>
     public string DisplayName => string.IsNullOrEmpty(NativeName) ? CultureName : NativeName;
 
     /// <summary>
-    /// <para>初始化 <see cref="LanguageInfo"/> 类的新实例。</para>
     /// Initializes a new instance of the <see cref="LanguageInfo"/> class.
+    /// <para>初始化 <see cref="LanguageInfo"/> 类的新实例。</para>
     /// </summary>
     public LanguageInfo() { }
 
     /// <summary>
-    /// <para>使用指定的区域性名称、原生名称、英文名称和内置标志初始化 <see cref="LanguageInfo"/> 类的新实例。</para>
     /// Initializes a new instance of the <see cref="LanguageInfo"/> class with the specified culture name, native name, English name, and built-in flag.
+    /// <para>使用指定的区域性名称、原生名称、英文名称和内置标志初始化 <see cref="LanguageInfo"/> 类的新实例。</para>
     /// </summary>
     /// <param name="cultureName">
-    /// <para>区域性名称。</para>
     /// The culture name.
+    /// <para>区域性名称。</para>
     /// </param>
     /// <param name="nativeName">
-    /// <para>原生名称。</para>
     /// The native name.
+    /// <para>原生名称。</para>
     /// </param>
     /// <param name="englishName">
-    /// <para>英文名称。</para>
     /// The English name.
+    /// <para>英文名称。</para>
     /// </param>
     /// <param name="isBuiltIn">
-    /// <para>是否为内置语言。</para>
     /// Whether the language is built-in.
+    /// <para>是否为内置语言。</para>
     /// </param>
     public LanguageInfo(string cultureName, string nativeName, string englishName, bool isBuiltIn = false)
     {
@@ -77,13 +83,10 @@ public class LanguageInfo : IEquatable<LanguageInfo>
     }
 
     /// <summary>
-    /// <para>创建表示"跟随系统语言"的 <see cref="LanguageInfo"/> 实例。</para>
     /// Creates a <see cref="LanguageInfo"/> instance representing "follow system language".
+    /// <para>创建表示"跟随系统语言"的 <see cref="LanguageInfo"/> 实例。</para>
     /// </summary>
-    /// <returns>
-    /// <para>表示跟随系统语言的 <see cref="LanguageInfo"/> 实例。</para>
-    /// A <see cref="LanguageInfo"/> instance representing follow system language.
-    /// </returns>
+    /// <value>A <see cref="LanguageInfo"/> instance for the system-language option.<para>表示跟随系统语言选项的 <see cref="LanguageInfo"/> 实例。</para></value>
     public static LanguageInfo SystemLanguage { get; } = new()
     {
         CultureName = string.Empty,
@@ -94,16 +97,16 @@ public class LanguageInfo : IEquatable<LanguageInfo>
     };
 
     /// <summary>
-    /// <para>判断当前实例是否与另一个 <see cref="LanguageInfo"/> 相等。</para>
     /// Determines whether the current instance is equal to another <see cref="LanguageInfo"/>.
+    /// <para>判断当前实例是否与另一个 <see cref="LanguageInfo"/> 相等。</para>
     /// </summary>
     /// <param name="other">
-    /// <para>要比较的另一个实例。</para>
     /// The other instance to compare.
+    /// <para>要比较的另一个实例。</para>
     /// </param>
     /// <returns>
-    /// <para>如果相等则为 true；否则为 false。</para>
     /// True if equal; otherwise, false.
+    /// <para>如果相等则为 true；否则为 false。</para>
     /// </returns>
     public bool Equals(LanguageInfo? other)
     {
@@ -112,26 +115,30 @@ public class LanguageInfo : IEquatable<LanguageInfo>
     }
 
     /// <summary>
-    /// <para>判断当前实例是否与指定对象相等。</para>
     /// Determines whether the current instance is equal to the specified object.
+    /// <para>判断当前实例是否与指定对象相等。</para>
     /// </summary>
+    /// <param name="obj">The object to compare. <para>要比较的对象。</para></param>
+    /// <returns>True if equal; otherwise, false.<para>如果相等则为 true；否则为 false。</para></returns>
     public override bool Equals(object? obj) => Equals(obj as LanguageInfo);
 
     /// <summary>
-    /// <para>获取哈希代码。</para>
     /// Gets the hash code.
+    /// <para>获取哈希代码。</para>
     /// </summary>
+    /// <returns>The hash code for this instance.<para>当前实例的哈希代码。</para></returns>
     public override int GetHashCode() => HashCode.Combine(IsSystemLanguage, CultureName);
 
     /// <summary>
-    /// <para>返回表示当前语言的字符串。</para>
     /// Returns a string representing the current language.
+    /// <para>返回表示当前语言的字符串。</para>
     /// </summary>
+    /// <returns>The culture name, or System for the system-language option.<para>区域性名称；跟随系统语言时返回 System。</para></returns>
     public override string ToString() => IsSystemLanguage ? "System" : CultureName;
 
     /// <summary>
-    /// <para>判断两个 <see cref="LanguageInfo"/> 实例是否相等。</para>
     /// Determines whether two <see cref="LanguageInfo"/> instances are equal.
+    /// <para>判断两个 <see cref="LanguageInfo"/> 实例是否相等。</para>
     /// </summary>
     public static bool operator ==(LanguageInfo? left, LanguageInfo? right)
     {
@@ -139,8 +146,8 @@ public class LanguageInfo : IEquatable<LanguageInfo>
     }
 
     /// <summary>
-    /// <para>判断两个 <see cref="LanguageInfo"/> 实例是否不相等。</para>
     /// Determines whether two <see cref="LanguageInfo"/> instances are not equal.
+    /// <para>判断两个 <see cref="LanguageInfo"/> 实例是否不相等。</para>
     /// </summary>
     public static bool operator !=(LanguageInfo? left, LanguageInfo? right) => !(left == right);
 }

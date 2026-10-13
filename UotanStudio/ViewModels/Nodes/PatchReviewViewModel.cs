@@ -5,9 +5,9 @@ using UotanStudio.Services.Patching;
 namespace UotanStudio.ViewModels.Nodes;
 
 /// <summary>
-/// <para>补丁评审状态视图模型，承载最近一次执行或预览的变更行、复合节点执行结果与发布结论。</para>
 /// View model for the patch review state, carrying the change rows, composite execution results and publication
 /// outcome of the most recent execution or preview.
+/// <para>补丁评审状态视图模型，承载最近一次执行或预览的变更行、复合节点执行结果与发布结论。</para>
 /// </summary>
 public sealed class PatchReviewViewModel : ViewModelBase
 {

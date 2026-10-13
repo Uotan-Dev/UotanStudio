@@ -428,10 +428,16 @@ public class BuilderStreamingTests
             _inner = inner;
         }
 
-        /// <summary>Set once the builder pre-sizes the output (second pass began). 第二遍开始预分配时置位。</summary>
+        /// <summary>
+        /// Set once the builder pre-sizes the output (second pass began).
+        /// <para>第二遍开始预分配时置位。</para>
+        /// </summary>
         public ManualResetEventSlim PreSized { get; } = new();
 
-        /// <summary>Set by the test to let the build continue. 由测试置位以放行构建。</summary>
+        /// <summary>
+        /// Set by the test to let the build continue.
+        /// <para>由测试置位以放行构建。</para>
+        /// </summary>
         public ManualResetEventSlim Resume { get; } = new();
 
         public override bool CanRead => false;

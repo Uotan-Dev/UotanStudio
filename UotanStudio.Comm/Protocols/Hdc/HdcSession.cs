@@ -53,10 +53,10 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
     }
 
     /// <summary>
-    /// <para>为已打开的直连 USB 设备会话构造一个由调用方持有的 Hdc 会话；封装传输包装与构造，使宿主无需直接命名
-    /// <c>UsbDeviceTransport</c> 或 <see cref="HdcSession"/> 构造子。</para>
     /// Constructs a caller-owned HDC session over an already-opened direct USB device session, so hosts need
     /// not name <c>UsbDeviceTransport</c> or the <see cref="HdcSession"/> constructor directly.
+    /// <para>为已打开的直连 USB 设备会话构造一个由调用方持有的 Hdc 会话；封装传输包装与构造，使宿主无需直接命名
+    /// <c>UsbDeviceTransport</c> 或 <see cref="HdcSession"/> 构造子。</para>
     /// </summary>
     internal static HdcSession ForDirectUsb(IUsbDeviceSession usb)
     {

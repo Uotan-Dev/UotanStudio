@@ -168,11 +168,11 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>Validation.Applicability.Check 与 Flow.Applicability.Gate 共用的适用性判定：求值、记录并把 Conflict 转为异常。
-    /// 两个 TypeKey 的差异只在端口布局（Gate 以 Apply/Skip Flow 输出承载分支）。</para>
     /// Shared applicability evaluation for Validation.Applicability.Check and Flow.Applicability.Gate: evaluates,
     /// records, and turns Conflict into an exception. The two TypeKeys differ only in port layout
     /// (Gate carries the branch via Apply/Skip Flow outputs).
+    /// <para>Validation.Applicability.Check 与 Flow.Applicability.Gate 共用的适用性判定：求值、记录并把 Conflict 转为异常。
+    /// 两个 TypeKey 的差异只在端口布局（Gate 以 Apply/Skip Flow 输出承载分支）。</para>
     /// </summary>
     private void ExecuteApplicabilityNode(INodeExecutionContext context)
     {

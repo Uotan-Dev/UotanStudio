@@ -32,24 +32,17 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Source label embedding the probed host and port, e.g. <c>adb-server@127.0.0.1:5037</c>.
-    /// <para>内嵌所探测主机与端口的源标签，例如 <c>adb-server@127.0.0.1:5037</c>。</para>
+    /// Source label embedding the probed host and port in the form <c>adb-server@host:port</c>.
+    /// <para>以 adb-server@host:port 形式内嵌所探测主机与端口的源标签。</para>
     /// </summary>
     /// <value>The stable name of this discovery source. <para>该发现源的稳定名称。</para></value>
     public string Name => $"adb-server@{host}:{port}";
 
     /// <summary>
-    /// Lists the adb server's targets and projects each into a <c>server</c>-routed endpoint carrying the
-    /// server-reported link class.
-    /// <para>列出 adb server 的目标，并把每个目标投影为携带 server 上报链路类别的 <c>server</c> 路由端点。</para>
-    /// A target keyed by a DNS-SD instance name is additionally annotated with the endpoint the server's own
-    /// mDNS table resolves it to, so a consumer can fold it together with the <c>host:port</c> target that
-    /// reaches the same device.
-    /// <para>以 DNS-SD 实例名为键的目标还会附带 server 自身 mDNS 表为其解析出的端点，使消费方能够把它与抵达
-    /// 同一设备的 <c>host:port</c> 目标合并。</para>
-    /// Returns an empty list when nothing is listening on the configured host and port; the target
-    /// query runs on the thread pool and is re-checked for cancellation afterwards.
-    /// <para>配置的宿主机与端口无监听时返回空列表；目标查询在线程池上执行，之后会再次检查取消。</para>
+    /// Lists the adb server's targets and projects each into a <c>server</c>-routed endpoint;
+    /// DNS-SD-keyed targets carry the endpoint resolved from the server's mDNS table.
+    /// <para>列出 adb server 的目标，并把每个目标投影为 <c>server</c> 路由端点；以 DNS-SD 实例名为键的
+    /// 目标附带 server mDNS 表解析出的端点。</para>
     /// </summary>
     /// <param name="cancellationToken">
     /// Cancels the liveness probe and the target query. <para>取消存活探测与目标查询。</para>
@@ -58,17 +51,6 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
     /// One endpoint per server target, or an empty list when the server is absent.
     /// <para>每个 server 目标对应一个端点；server 不存在时为空列表。</para>
     /// </returns>
-    /// <remarks>
-    /// <para>
-    /// 没有链路描述符的目标只有在 mDNS 表为它解析出 IP 端点后才记为 <c>TCP</c>：server 的解析结果本身就是
-    /// 链路证据。解析不到时保持空值，界面按 <c>Unknown</c> 呈现，绝不按序列号文本形状推断链路类别。
-    /// </para>
-    /// <para>
-    /// A target without a link descriptor is reported as <c>TCP</c> only after the mDNS table resolves it
-    /// to an IP endpoint, since that resolution is itself link evidence; an unresolved name stays unreported
-    /// rather than classified from its text shape.
-    /// </para>
-    /// </remarks>
     public async Task<IReadOnlyList<DeviceEndpoint>> DiscoverAsync(CancellationToken cancellationToken)
     {
         if (!await DebugBridgeRoute.IsListeningAsync(host, port, cancellationToken).ConfigureAwait(false))
@@ -104,16 +86,23 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
     /// Reads the server's mDNS table once, and only when a target is keyed by a DNS-SD instance name.
     /// <para>仅当存在以 DNS-SD 实例名为键的目标时，读取一次 server 的 mDNS 表。</para>
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// 普通仅 USB 的列表会跳过这条额外的 host 命令。无应答或不受支持的 mDNS 表不改变任何已上报事实：
-    /// 无法解析的实例名按原样上报，绝不按文本形状猜测。
-    /// </para>
-    /// <para>
-    /// An ordinary USB-only listing skips the extra host command. An unanswered or unsupported mDNS
-    /// table changes no reported fact: an instance name that cannot be resolved is reported as-is.
-    /// </para>
-    /// </remarks>
+    /// <param name="targets">
+    /// Server targets whose serials are checked for DNS-SD instance names.
+    /// <para>待检查序列号是否为 DNS-SD 实例名的 server 目标。</para>
+    /// </param>
+    /// <param name="serverHost">
+    /// Hostname of the adb server whose mDNS table is queried. <para>查询其 mDNS 表的 adb server 主机名。</para>
+    /// </param>
+    /// <param name="serverPort">
+    /// TCP port of that adb server. <para>该 adb server 的 TCP 端口。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels the mDNS query. <para>取消本次 mDNS 查询。</para>
+    /// </param>
+    /// <returns>
+    /// A map from normalized instance names to resolved endpoints, empty when nothing resolves.
+    /// <para>规范化实例名到已解析端点的映射；无可解析项时为空。</para>
+    /// </returns>
     private static async Task<IReadOnlyDictionary<string, string>> ResolveMdnsAliasesAsync(
         IReadOnlyList<AdbTargetInfo> targets, string serverHost, int serverPort, CancellationToken cancellationToken)
     {

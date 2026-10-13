@@ -117,19 +117,18 @@ public static class QualcommImageAnalyzer
     /// <summary>
     /// Analyzes an ELF input and, when it belongs to a multi-component container, each discovered component
     /// inside its own bounded window.
-    /// A component is authenticated against the bytes of its window only, so its program-header offsets are
-    /// read relative to that window. The offset-0 analysis stays the returned top-level result and is never
-    /// overwritten by component results, which are reported independently. A candidate that starts strictly
-    /// inside a byte range an earlier component hashed successfully is recorded as nested evidence instead of
-    /// being analyzed again, because re-reading those bytes authenticates nothing new. Discovering several
-    /// components is not a claim that every component authenticated, and no result here speaks for OEM or
-    /// device acceptance.
-    /// <para>分析 ELF 输入；当其属于多组件容器时，在每个候选组件自己的有界窗口内分析该组件。
-    /// 组件仅针对其窗口内的字节完成认证，因此其程序头偏移按窗口相对位置解析。偏移 0 处的分析仍是返回值的
-    /// 顶层字段，绝不被组件结果覆盖，组件结果独立报告。起始位置严格落在更早组件已成功摘要的字节范围内的
-    /// 候选项，只记录为嵌套证据而不再次分析，因为重复读取这些字节不会产生新的认证结论。发现多个组件并不等于
-    /// 所有组件均已通过认证，此处的任何结果都不代表 OEM 或设备的接受。</para>
+    /// <para>分析 ELF 输入；当其属于多组件容器时，在每个候选组件自己的有界窗口内分析该组件。</para>
     /// </summary>
+    /// <remarks>
+    /// Components are authenticated against their window's bytes only; the offset-0 analysis stays the
+    /// returned top-level result and component results are reported independently. Candidates strictly inside
+    /// an earlier component's hashed range are recorded as nested evidence instead of being re-analyzed, and
+    /// discovering several components never claims that every component authenticated or speaks for OEM or
+    /// device acceptance.
+    /// <para>组件仅针对其窗口内的字节完成认证；偏移 0 处的分析仍是返回值的顶层字段，组件结果独立报告。
+    /// 落在更早组件已成功摘要范围内的候选项只记录为嵌套证据而不再次分析；发现多个组件并不等于所有组件均已
+    /// 通过认证，也不代表 OEM 或设备的接受。</para>
+    /// </remarks>
     /// <param name="stream">Readable, seekable container positioned anywhere.
     /// <para>任意位置处的可读、可寻址容器。</para></param>
     /// <param name="options">Resource limits and caller-owned root fingerprints.

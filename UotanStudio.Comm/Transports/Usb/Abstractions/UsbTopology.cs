@@ -1,11 +1,11 @@
 namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 
 /// <summary>
-/// <para>USB 总线拓扑中一类节点的角色。角色只描述该节点在拓扑里的位置，不携带平台专有概念，
-/// 以便 Windows、Linux、macOS、libusb 与 HarmonyOS 后端共用同一棵树。</para>
 /// The role of a node in the USB bus topology. The role only describes where the node sits in the
 /// tree and carries no platform-specific notion, so the Windows, Linux, macOS, libusb and HarmonyOS
 /// backends can share one tree shape.
+/// <para>USB 总线拓扑中一类节点的角色。角色只描述该节点在拓扑里的位置，不携带平台专有概念，
+/// 以便 Windows、Linux、macOS、libusb 与 HarmonyOS 后端共用同一棵树。</para>
 /// </summary>
 public enum UsbTopologyNodeKind
 {
@@ -29,11 +29,11 @@ public enum UsbTopologyNodeKind
 }
 
 /// <summary>
-/// <para>提供拓扑数据的后端。每个后端能填满的字段不同，能力差异通过
-/// <see cref="UsbTopologyCapabilities"/> 明示，界面不得把「后端不提供」渲染成「设备没有」。</para>
 /// The backend that produced the topology. Backends fill different field sets; the differences are
 /// declared through <see cref="UsbTopologyCapabilities"/> so the UI never renders "not provided by
 /// this backend" as "absent on the device".
+/// <para>提供拓扑数据的后端。每个后端能填满的字段不同，能力差异通过
+/// <see cref="UsbTopologyCapabilities"/> 明示，界面不得把「后端不提供」渲染成「设备没有」。</para>
 /// </summary>
 public enum UsbTopologyBackendKind
 {
@@ -54,10 +54,10 @@ public enum UsbTopologyBackendKind
 }
 
 /// <summary>
-/// <para>后端能力声明。字段为 <see langword="false"/> 表示该后端在原理上拿不到这项数据，
-/// 而不是本次枚举失败。</para>
 /// Backend capability declaration. A <see langword="false"/> field means the backend cannot obtain
 /// that data in principle, not that this particular enumeration failed.
+/// <para>后端能力声明。字段为 <see langword="false"/> 表示该后端在原理上拿不到这项数据，
+/// 而不是本次枚举失败。</para>
 /// </summary>
 public sealed record UsbTopologyCapabilities
 {
@@ -81,12 +81,12 @@ public sealed record UsbTopologyCapabilities
 }
 
 /// <summary>
-/// <para>拓扑中的一个扁平节点。所有后端共用该形状：后端只填自己拿得到的字段，其余保持
-/// <see langword="null"/>；父子关系用 <see cref="ParentInstanceId"/> 表达，由
-/// <c>UsbTopologyTree</c> 统一成树。</para>
 /// One flat node of the topology. Every backend shares this shape: a backend fills only the fields it
 /// can obtain and leaves the rest <see langword="null"/>; parentage is expressed through
 /// <see cref="ParentInstanceId"/> and unified into a tree by <c>UsbTopologyTree</c>.
+/// <para>拓扑中的一个扁平节点。所有后端共用该形状：后端只填自己拿得到的字段，其余保持
+/// <see langword="null"/>；父子关系用 <see cref="ParentInstanceId"/> 表达，由
+/// <c>UsbTopologyTree</c> 统一成树。</para>
 /// </summary>
 public sealed record UsbTopologyNode
 {
@@ -179,9 +179,9 @@ public sealed record UsbTopologyNode
 }
 
 /// <summary>
-/// <para>树中的一个分支：节点加其子分支。由 <c>UsbTopologyTree.Build</c> 生成，供界面直接绑定。</para>
 /// A branch of the tree: a node plus its child branches. Produced by <c>UsbTopologyTree.Build</c> and
 /// bound directly by the UI.
+/// <para>树中的一个分支：节点加其子分支。由 <c>UsbTopologyTree.Build</c> 生成，供界面直接绑定。</para>
 /// </summary>
 /// <param name="Node">
 /// The branch node. <para>分支节点。</para>
@@ -192,10 +192,10 @@ public sealed record UsbTopologyNode
 public sealed record UsbTopologyBranch(UsbTopologyNode Node, IReadOnlyList<UsbTopologyBranch> Children);
 
 /// <summary>
-/// <para>一次拓扑读取的结果：能力声明、树、原始扁平节点与耗时。保留扁平节点是为了让界面在
-/// 「按树显示」与「按列表显示」之间切换时不必重新枚举。</para>
 /// One topology read: capabilities, tree, the raw flat nodes and elapsed time. The flat nodes are kept
 /// so the UI can switch between tree and list views without re-enumerating.
+/// <para>一次拓扑读取的结果：能力声明、树、原始扁平节点与耗时。保留扁平节点是为了让界面在
+/// 「按树显示」与「按列表显示」之间切换时不必重新枚举。</para>
 /// </summary>
 /// <param name="Capabilities">
 /// What the reporting backend can fill. <para>上报后端能填充的范围。</para>
@@ -221,10 +221,10 @@ public sealed record UsbTopologyResult(
 }
 
 /// <summary>
-/// <para>USB 拓扑后端的最小契约：只读扁平节点，成树由共享的 <c>UsbTopologyTree</c> 负责，
-/// 因此各平台不会各自实现排序、孤儿提升与环检测。</para>
 /// The minimal contract for a USB topology backend: read flat nodes only. Tree construction is shared
 /// through <c>UsbTopologyTree</c>, so no platform re-implements ordering, orphan hoisting or cycle handling.
+/// <para>USB 拓扑后端的最小契约：只读扁平节点，成树由共享的 <c>UsbTopologyTree</c> 负责，
+/// 因此各平台不会各自实现排序、孤儿提升与环检测。</para>
 /// </summary>
 public interface IUsbTopologyProvider
 {

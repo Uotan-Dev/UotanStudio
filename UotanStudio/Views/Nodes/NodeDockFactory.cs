@@ -8,14 +8,14 @@ using UotanStudio.Services;
 namespace UotanStudio.Views.Nodes;
 
 /// <summary>
-/// <para>节点编辑器的 Dock 布局工厂，创建包含工具箱、画布、属性面板和执行日志的布局。</para>
 /// Dock layout factory for the node editor, creating a layout with toolbox, canvas, properties panel, and execution log.
+/// <para>节点编辑器的 Dock 布局工厂，创建包含工具箱、画布、属性面板和执行日志的布局。</para>
 /// </summary>
 public class NodeDockFactory : Factory
 {
     /// <summary>
-    /// <para>创建节点编辑器的 Dock 布局。</para>
     /// Creates the dock layout for the node editor.
+    /// <para>创建节点编辑器的 Dock 布局。</para>
     /// </summary>
     /// <returns>根 Dock 布局。</returns>
     public override IRootDock CreateLayout()
@@ -117,12 +117,12 @@ public class NodeDockFactory : Factory
     }
 
     /// <summary>
-    /// <para>初始化 Dock 布局，注册上下文定位器和宿主窗口定位器。</para>
     /// Initializes the dock layout, registering context locators and host window locators.
+    /// <para>初始化 Dock 布局，注册上下文定位器和宿主窗口定位器。</para>
     /// </summary>
     /// <param name="layout">
-    /// <para>要初始化的布局。</para>
     /// The layout to initialize.
+    /// <para>要初始化的布局。</para>
     /// </param>
     public override void InitLayout(IDockable layout)
     {
@@ -158,12 +158,12 @@ public class NodeDockFactory : Factory
     }
 
     /// <summary>
-    /// <para>关闭可停靠面板，安全移除。</para>
     /// Closes a dockable panel with safe removal.
+    /// <para>关闭可停靠面板，安全移除。</para>
     /// </summary>
     /// <param name="dockable">
-    /// <para>要关闭的可停靠面板。</para>
     /// The dockable to close.
+    /// <para>要关闭的可停靠面板。</para>
     /// </param>
     public override void CloseDockable(IDockable? dockable)
     {

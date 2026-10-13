@@ -9,9 +9,6 @@ namespace UotanStudio.Benchmarks.Firmware;
 /// which is what decides the cost of writing a checksummed sparse image.
 /// <para>度量以不同模式表宽度把已展开稀疏 FILL 区域喂给 CRC32 累加器的成本，该成本决定写带校验稀疏镜像的开销。</para>
 /// </summary>
-/// <remarks>
-/// Run with <c>dotnet run -c Release --project UotanStudio.Benchmarks -- --filter "*SparseFillCrc*" --job short</c>.
-/// </remarks>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 1, iterationCount: 3)]
 public class SparseFillCrcBenchmarks

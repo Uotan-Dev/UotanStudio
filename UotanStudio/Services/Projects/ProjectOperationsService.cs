@@ -8,7 +8,8 @@ using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Services.Projects;
 
-/// <summary>Desktop compatibility facade over the independent project lifecycle library.</summary>
+/// <summary>Desktop compatibility facade over the independent project lifecycle library.
+/// <para>包装独立项目生命周期库的桌面兼容门面。</para></summary>
 public sealed class ProjectOperationsService
 {
     private static readonly Lazy<ProjectOperationsService> LazyInstance = new(() => new());
@@ -18,7 +19,11 @@ public sealed class ProjectOperationsService
     private object? _workspaceOwner;
     internal bool IsWorkspaceAttached => _workspaceOwner is not null;
 
-    /// <summary>Attaches the one desktop shell supported by the global firmware metadata context.</summary>
+    /// <summary>Attaches the one desktop shell supported by the global firmware metadata context.
+    /// <para>附着全局固件元数据上下文所支持的唯一桌面外壳。</para></summary>
+    /// <param name="nodes">The node editor binding to attach.<para>要附着的节点编辑绑定。</para></param>
+    /// <param name="workspace">The workspace binding to attach.<para>要附着的工作区绑定。</para></param>
+    /// <returns>A token that detaches the shell when disposed.<para>释放时解除外壳附着的令牌。</para></returns>
     internal IDisposable AttachWorkspace(NodeEditorViewModel nodes, WorkspaceViewModel workspace)
     {
         if (_workspaceOwner is not null) throw new InvalidOperationException("A desktop shell already owns this project service.");
@@ -56,23 +61,29 @@ public sealed class ProjectOperationsService
     {
         _workspace = workspace;
         _session = new(workspace, ProjectContextService.Instance.Core, OperationHistoryService.Instance.Core);
-        // 交付计划与面板可见性随解决方案文件持久化：保存前捕获，打开后恢复。
-        // Delivery plan and panel visibility persist inside the solution file: capture before saves, restore after opens.
         _session.CaptureState = CaptureSolutionState;
         _session.Changed += OnSessionChanged;
         _session.SolutionReloaded += OnSolutionReloaded;
     }
 
     private const string PanelStateKey = "panels";
-    /// <summary>Host hook (delivery page) that captures the delivery plan element before solution saves.</summary>
+    /// <summary>Delegate slot that captures the delivery plan element before solution saves.
+    /// <para>在解决方案保存前捕获交付计划元素的委托槽位。</para></summary>
+    /// <value>The capture delegate, or <see langword="null"/> when unset.<para>捕获委托；未设置时为 <see langword="null"/>。</para></value>
     internal Func<JsonElement?>? CaptureDeliveryState { get; set; }
-    /// <summary>Delivery plan element carried by the most recently opened/saved solution; null when absent.</summary>
+    /// <summary>Delivery plan element carried by the most recently opened/saved solution; null when absent.
+    /// <para>最近打开或保存的解决方案所携带的交付计划元素；缺失时为 <see langword="null"/>。</para></summary>
+    /// <value>The pending delivery plan element, or <see langword="null"/> when absent.<para>待处理的交付计划元素；缺失时为 <see langword="null"/>。</para></value>
     internal JsonElement? PendingDeliveryState => _session.SolutionState is { } state
         && state.TryGetValue(DeliveryPlanStore.StateKey, out var delivery) ? delivery : null;
-    /// <summary>Persists the delivery plan and panel visibility by rewriting only the solution file.</summary>
+    /// <summary>Persists the delivery plan and panel visibility by rewriting only the solution file.
+    /// <para>仅重写解决方案文件即可持久化交付计划与工作区可见性。</para></summary>
     public Task PersistSolutionStateAsync() => _session.PersistSolutionStateAsync();
 
-    /// <summary>Holds the project session gate while a patch graph reads and publishes project files.</summary>
+    /// <summary>Holds the project session gate while a patch graph reads and publishes project files.
+    /// <para>在补丁图读取并发布项目文件期间持有项目会话门。</para></summary>
+    /// <param name="operation">The gated asynchronous operation to run.<para>要受门控执行的异步操作。</para></param>
+    /// <param name="cancellationToken">Token that cancels the wait and the operation.<para>用于取消等待与操作的令牌。</para></param>
     internal Task ExecuteFileOperationAsync(Func<Task> operation, CancellationToken cancellationToken)
         => _session.ExecuteFileOperationAsync(operation, cancellationToken);
 
@@ -81,8 +92,6 @@ public sealed class ProjectOperationsService
         Dictionary<string, JsonElement> state = [];
         if (CaptureDeliveryState?.Invoke() is { ValueKind: JsonValueKind.Object } delivery)
             state[DeliveryPlanStore.StateKey] = delivery;
-        // 交付页尚未加载时保留解决方案文件中原有的交付计划，避免被空捕获覆盖。
-        // Keep the delivery plan already stored in the solution file until the delivery page has loaded and captures.
         else if (_session.SolutionState is { } previous && previous.TryGetValue(DeliveryPlanStore.StateKey, out var kept))
             state[DeliveryPlanStore.StateKey] = kept;
         var panels = WorkspacePanelService.Instance.CaptureVisibility();
@@ -91,18 +100,12 @@ public sealed class ProjectOperationsService
     }
 
     private Dictionary<string, JsonElement>? _restoredState;
-    // 解决方案完整重载计数器：每次打开/添加/删除子项目的完整重载递增。订阅方在每次刷新时比较它，
-    // 因此即使面板当时不在可视树中、错过了 ProjectContextChangedMessage，也会在重新进入时强制重载。
-    // Full-reload counter, incremented on every open/add/remove-sub-project reload. Subscribers compare it on
-    // every refresh, so a panel that was detached and missed ProjectContextChangedMessage still reloads later.
     private int _solutionReloadGeneration;
     internal int SolutionReloadGeneration => _solutionReloadGeneration;
     private void OnSolutionReloaded() => _solutionReloadGeneration++;
 
     private void OnSessionChanged()
     {
-        // 仅在解决方案状态更换（打开/另存）时恢复面板可见性，不覆盖用户随后的手动开关。
-        // Restore panel visibility only when the solution state is replaced (open/save-as), never over later manual toggles.
         if (!ReferenceEquals(_restoredState, _session.SolutionState))
         {
             _restoredState = _session.SolutionState;
@@ -138,7 +141,6 @@ public sealed class ProjectOperationsService
     public Task SaveActiveDocumentAsync() => _session.SaveActiveDocumentAsync();
     public Task PersistToAsync(string path) => _session.PersistToAsync(path);
     internal Task PersistToAsync(string path, bool persistPageState) => _session.PersistToAsync(path, persistPageState);
-    // BeforeProjectChangeAsync owns the desktop AutoSave policy; do not force a save when it is disabled.
     public Task<bool> SwitchSubProjectAsync(string name) => _session.SwitchSubProjectAsync(name, persistCurrent: false);
     public Task<bool> CloseAsync() => _session.CloseAsync();
     internal Task<bool> CloseAfterSaveAsync() => _session.CloseAsync(confirmChange: false);

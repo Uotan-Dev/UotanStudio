@@ -6,13 +6,8 @@ using UotanStudio.Firmware.FileSystem.Metadata;
 namespace UotanStudio.Firmware.FileSystem.Ext4;
 
 /// <summary>
-/// Read-only parser for raw ext4 images. The image is treated as untrusted input: superblock geometry,
-/// block size, feature flags, sparse_super2 backup-group identity, group descriptor table size, inode
-/// numbers, directory depth, cycles and xattr values are each validated against explicit bounds before
-/// content is produced, and an optional JBD2 journal replay is folded in as a dirty-block overlay.
-/// <para>ext4 原始镜像的只读解析器。镜像按不可信输入处理：超级块几何、块大小、特性标志、sparse_super2
-/// 备份组身份、块组描述符表大小、inode 编号、目录深度、目录环与 xattr 值都会在产出内容前对照显式边界
-/// 校验，并可选地重放 JBD2 日志形成脏块覆盖层。</para>
+/// Read-only parser for raw ext4 images. The image is treated as untrusted: superblock geometry, block size, feature flags, backup-group identity, group descriptor table size, inode numbers, directory depth, cycles and xattr values are bounds-checked before content is produced, and an optional JBD2 journal replay is folded in.
+/// <para>原始 ext4 镜像的只读解析器。镜像视为不可信输入：超级块几何、块大小、特性标志、备份组标识、组描述符表大小、inode 号、目录深度、环路与 xattr 值在产出内容前均做上限检查，并可选折叠 JBD2 日志重放。</para>
 /// </summary>
 public sealed class Ext4Parser : IDisposable
 {
@@ -348,15 +343,8 @@ public sealed class Ext4Parser : IDisposable
     }
 
     /// <summary>
-    /// Reports whether one block group stores a backup superblock and group descriptor table copy
-    /// under the image's sparse-layout features: with COMPAT_SPARSE_SUPER2 only the two groups named
-    /// by <c>s_backup_bgs</c> (plus group 0) carry copies; otherwise RO_COMPAT_SPARSE_SUPER selects
-    /// groups 1, 3, 5, 7 and every power of three, five or seven; without either feature only group 0
-    /// stores the primary superblock.
-    /// <para>判断某个块组是否在本镜像的稀疏布局特性下保存超级块与组描述符表备份：置位
-    /// COMPAT_SPARSE_SUPER2 时，仅 <c>s_backup_bgs</c> 命名的两个组（加上组 0）保存备份；否则若置位
-    /// RO_COMPAT_SPARSE_SUPER，则组 1、3、5、7 以及 3、5、7 的各次幂保存备份；两者都未置位时，只有组 0
-    /// 保存主超级块。</para>
+    /// Reports whether one block group stores a backup superblock and descriptor table copy.
+    /// <para>判断某个块组是否保存超级块与组描述符表备份。</para>
     /// </summary>
     /// <param name="group">Zero-based block group index. <para>从零开始的块组编号。</para></param>
     /// <returns><see langword="true"/> when the group stores superblock copies; otherwise <see langword="false"/>.

@@ -19,8 +19,8 @@ public static class UsbTrace
     /// Gets or sets the logger that receives plain text diagnostics.
     /// <para>获取或设置接收纯文本诊断日志的记录器。</para>
     /// </summary>
-    /// <value>The <see cref="IUsbLogger"/> sink used by every logging entry point on this class; the default writes to the console.
-    /// <para>此类所有日志入口使用的 <see cref="IUsbLogger"/> 汇；默认实现写入控制台。</para></value>
+    /// <value>The <see cref="IUsbLogger"/> sink receiving every plain text diagnostic from this class; the default writes to the console.
+    /// <para>接收本类全部纯文本诊断的 <see cref="IUsbLogger"/> 汇；默认实现写入控制台。</para></value>
     public static IUsbLogger Logger { get; set; } = new ConsoleUsbLogger();
 
     /// <summary>
@@ -30,11 +30,8 @@ public static class UsbTrace
     public static event Action<UsbTransferEvent>? TransferObserved;
 
     /// <summary>
-    /// Gets whether any structured transfer subscriber is registered. Callers use this
-    /// to skip allocating the <see cref="UsbTransferEvent"/> entirely when diagnostics
-    /// are disabled (the hot transfer path otherwise constructs one per transfer).
-    /// <para>获取是否注册了任何结构化传输订阅者。调用方据此在诊断关闭时完全跳过
-    /// <see cref="UsbTransferEvent"/> 的分配（否则热传输路径每次传输都会构造一个）。</para>
+    /// Gets whether any structured transfer subscriber is registered.
+    /// <para>获取是否已注册任何结构化传输订阅者。</para>
     /// </summary>
     /// <value><see langword="true"/> when at least one handler is attached to <see cref="TransferObserved"/>.
     /// <para><see cref="TransferObserved"/> 上至少挂接了一个处理程序时为 <see langword="true"/>。</para></value>
@@ -90,11 +87,10 @@ public static class UsbTrace
     }
 
     /// <summary>
-    /// Writes an error message regardless of the <see cref="IsEnabled"/> switch, so that
-    /// exception reasons (e.g. LibUsbDotNet UsbException) reach the global log even when
-    /// verbose USB diagnostics are turned off.
-    /// <para>无论 <see cref="IsEnabled"/> 开关如何都写入错误消息，使异常原因
-    /// （例如 LibUsbDotNet 的 UsbException）即使在详细 USB 诊断关闭时也能进入全局日志。</para>
+    /// Writes an error message regardless of the <see cref="IsEnabled"/> switch, so failures still
+    /// reach the global log when verbose USB diagnostics are off.
+    /// <para>无论 <see cref="IsEnabled"/> 开关如何都写入错误消息，使详细 USB 诊断关闭时故障
+    /// 仍能进入全局日志。</para>
     /// </summary>
     /// <param name="message">The error message. <para>错误消息。</para></param>
     public static void LogError(string message)

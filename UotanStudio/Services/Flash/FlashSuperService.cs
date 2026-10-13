@@ -2,10 +2,15 @@ using UotanStudio.Firmware.BlockImage.Lp;
 
 namespace UotanStudio.Services.Flash;
 
-/// <summary>Reads and extracts selected partitions from raw or sparse Super images.</summary>
+/// <summary>Reads and extracts selected partitions from raw or sparse Super images.
+/// <para>从原始或稀疏 Super 镜像读取并提取所选分区。</para></summary>
 public static class FlashSuperService
 {
-    /// <summary>Returns partitions and their logical sizes from validated LP metadata.</summary>
+    /// <summary>Returns partitions and their logical sizes from validated LP metadata.
+    /// <para>从已校验的 LP 元数据返回分区及其逻辑大小。</para></summary>
+    /// <param name="path">Path of the Super image to inspect. <para>要检查的 Super 镜像路径。</para></param>
+    /// <param name="ct">Cancellation for the metadata walk. <para>元数据遍历的取消令牌。</para></param>
+    /// <returns>Partition names with their logical byte sizes. <para>分区名及其逻辑字节大小。</para></returns>
     public static Task<IReadOnlyList<(string Name, long Size)>> ListAsync(string path, CancellationToken ct)
         => Task.Run<IReadOnlyList<(string Name, long Size)>>(() =>
         {
@@ -32,7 +37,13 @@ public static class FlashSuperService
             return entries;
         }, ct);
 
-    /// <summary>Extracts only requested partitions and atomically publishes a new directory.</summary>
+    /// <summary>Extracts only requested partitions and atomically publishes a new directory.
+    /// <para>仅提取请求的分区，并原子发布一个新目录。</para></summary>
+    /// <param name="path">Path of the Super image to unpack. <para>要解包的 Super 镜像路径。</para></param>
+    /// <param name="names">Requested partition names. <para>请求的分区名。</para></param>
+    /// <param name="parent">Existing parent directory for the output. <para>输出所在的已存在父目录。</para></param>
+    /// <param name="ct">Cancellation for extraction and publishing. <para>提取与发布过程的取消令牌。</para></param>
+    /// <returns>Path of the newly published output directory. <para>新发布输出目录的路径。</para></returns>
     public static async Task<string> ExtractAsync(string path, IReadOnlyList<string> names, string parent, CancellationToken ct)
     {
         if (names.Count == 0 || names.Any(name => !FlashManifestReader.IsPartitionName(name)))

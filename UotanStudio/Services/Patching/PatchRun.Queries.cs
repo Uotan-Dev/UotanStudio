@@ -11,7 +11,11 @@ public sealed partial class PatchRun
     private int _discoveredEntries;
     private long _discoveredCharacters;
 
-    /// <summary>Probes the staged bytes and checks their identity before and after inspection.</summary>
+    /// <summary>Probes the staged bytes and checks their identity before and after inspection.<para>探测暂存字节，并在检查前后核对其身份。</para></summary>
+    /// <param name="path">The confined file path to probe.<para>要探测的受限文件路径。</para></param>
+    /// <param name="hint">The expected format kind, if any.<para>预期的格式类别；无则为空。</para></param>
+    /// <param name="token">The cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The probed format with its inspected details.<para>探测到的格式及其检查细节。</para></returns>
     public async Task<PatchFormatResult> ProbeFormatAsync(string path, PatchFormatKind hint, CancellationToken token)
     {
         await _gate.WaitAsync(token).ConfigureAwait(false);
@@ -41,7 +45,10 @@ public sealed partial class PatchRun
         finally { _gate.Release(); }
     }
 
-    /// <summary>Checks physical directories and parents implied by staged additions, recording the physical precondition.</summary>
+    /// <summary>Checks physical directories and parents implied by staged additions, recording the physical precondition.<para>检查物理目录以及暂存新增所隐含的父目录，并记录该物理前置条件。</para></summary>
+    /// <param name="path">The confined directory path to check.<para>要检查的受限目录路径。</para></param>
+    /// <param name="token">The cancellation token.<para>取消令牌。</para></param>
+    /// <returns>True when the directory exists or is implied by staged additions.<para>目录存在或由暂存新增隐含时为 true。</para></returns>
     public async Task<bool> DirectoryExistsAsync(string path, CancellationToken token)
     {
         await _gate.WaitAsync(token).ConfigureAwait(false);
@@ -56,7 +63,12 @@ public sealed partial class PatchRun
         finally { _gate.Release(); }
     }
 
-    /// <summary>Finds the staged file view and rechecks the physical search result before publishing.</summary>
+    /// <summary>Finds the staged file view and rechecks the physical search result before publishing.<para>查找暂存文件视图，并在发布前复核物理搜索结果。</para></summary>
+    /// <param name="root">The confined directory to search.<para>要搜索的受限目录。</para></param>
+    /// <param name="pattern">The file-name pattern to match.<para>要匹配的文件名模式。</para></param>
+    /// <param name="expectedMatches">The required match count, or zero for any.<para>要求的匹配数量，零表示不限。</para></param>
+    /// <param name="token">The cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The matching paths merged from physical and staged views, ordered.<para>由物理与暂存视图合并出的匹配路径，按序排列。</para></returns>
     public async Task<IReadOnlyList<string>> FindAsync(string root, string pattern, int expectedMatches, CancellationToken token)
     {
         if (expectedMatches is < 0 or > 100_000)

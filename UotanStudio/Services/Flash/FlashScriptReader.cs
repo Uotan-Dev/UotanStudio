@@ -1,9 +1,11 @@
 namespace UotanStudio.Services.Flash;
 
-/// <summary>Imports a small, explicit subset of legacy Fastboot scripts without invoking a shell.</summary>
+/// <summary>Imports a small, explicit subset of legacy Fastboot scripts without invoking a shell.<para>导入旧式 Fastboot 脚本中有界的显式子集，不调用 shell。</para></summary>
 public static class FlashScriptReader
 {
-    /// <summary>Parses ordered commands, rejecting any unsupported statement before execution.</summary>
+    /// <summary>Parses ordered commands, rejecting any unsupported statement before execution.<para>解析按序排列的命令，在执行前拒绝任何不支持的语句。</para></summary>
+    /// <param name="path">Script file to import.<para>要导入的脚本文件。</para></param>
+    /// <returns>The ordered plan built from supported commands.<para>由受支持命令构成的有序计划。</para></returns>
     public static FlashManifest Read(string path)
     {
         var info = new FileInfo(path);

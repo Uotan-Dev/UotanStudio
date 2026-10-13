@@ -9,9 +9,9 @@ using UotanStudio.ViewModels.Editors;
 namespace UotanStudio.Views.Editors;
 
 /// <summary>
-/// <para>scrcpy 投屏文档视图：显示解码后的设备画面，并把鼠标/滚轮/键盘事件转发给设备。</para>
 /// scrcpy screen-mirror document view: shows the decoded device frame and
 /// forwards mouse / wheel / key events to the device.
+/// <para>scrcpy 投屏文档视图：显示解码后的设备画面，并把鼠标/滚轮/键盘事件转发给设备。</para>
 /// </summary>
 public partial class ScreenMirrorView : UserControl
 {
@@ -20,8 +20,8 @@ public partial class ScreenMirrorView : UserControl
     private uint _pressedButton;
     private (int X, int Y, int Width, int Height) _lastTouch;
     /// <summary>
-    /// <para>构造投屏视图。</para>
     /// Creates the screen-mirror view.
+    /// <para>构造投屏视图。</para>
     /// </summary>
     public ScreenMirrorView()
     {
@@ -95,9 +95,9 @@ public partial class ScreenMirrorView : UserControl
     }
 
     /// <summary>
-    /// <para>把物理键盘按键映射为 Android 键码注入；未知键不拦截，保留宿主快捷键语义。</para>
     /// Maps physical key presses onto injected Android key codes; unmapped keys stay unhandled so host
     /// shortcuts keep working.
+    /// <para>把物理键盘按键映射为 Android 键码注入；未知键不拦截，保留宿主快捷键语义。</para>
     /// </summary>
     /// <inheritdoc />
     protected override void OnKeyDown(KeyEventArgs e)
@@ -122,8 +122,8 @@ public partial class ScreenMirrorView : UserControl
     }
 
     /// <summary>
-    /// <para>把文本输入转发为 scrcpy INJECT_TEXT，避免逐键映射布局差异。</para>
     /// Forwards typed text as scrcpy INJECT_TEXT instead of per-key codes so layout differences stay on the device.
+    /// <para>把文本输入转发为 scrcpy INJECT_TEXT，避免逐键映射布局差异。</para>
     /// </summary>
     /// <inheritdoc />
     protected override void OnTextInput(Avalonia.Input.TextInputEventArgs e)
@@ -137,8 +137,8 @@ public partial class ScreenMirrorView : UserControl
     }
 
     /// <summary>
-    /// <para>Avalonia 按键到 Android KeyEvent 键码的映射表。</para>
     /// Maps Avalonia keys onto Android KeyEvent key codes.
+    /// <para>Avalonia 按键到 Android KeyEvent 键码的映射表。</para>
     /// </summary>
     private static bool TryMapAndroidKey(Key key, out int keyCode)
     {

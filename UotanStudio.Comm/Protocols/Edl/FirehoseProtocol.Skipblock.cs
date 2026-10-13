@@ -3,24 +3,16 @@ using System.Security.Cryptography;
 namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
-/// Digest-driven skip-before-write programming modeled on qdl's skipblock fast path
-/// (<c>src/firehose.c</c> firehose_program_skipblock): the region is walked in bounded chunks, each
-/// chunk's source bytes are hashed locally with qdl's trailing zero-pad semantics, and only chunks
-/// whose local digest differs from the flash digest reported by <c>&lt;getsha256digest&gt;</c> are
-/// programmed. NAND is excluded because spare/OOB bytes make target digests programmer-specific,
-/// mirroring the reference restrictions.
-/// <para>基于摘要的“先比对后跳过”编程路径，参照 qdl 的 skipblock 快速路径（<c>src/firehose.c</c>
-/// 的 firehose_program_skipblock）：区域按有界分块遍历，每块源字节按 qdl 的尾部零填充语义在本地
-/// 计算哈希，只有与 <c>&lt;getsha256digest&gt;</c> 上报的闪存摘要不一致的块才会被编程。NAND 的
-/// spare/OOB 字节使目标摘要因 programmer 而异，与参考实现的限制一致，故被排除。</para>
+/// Digest-driven skip-before-write programming: the region is walked in bounded chunks, each chunk hashed locally with trailing zero-pad semantics, and only chunks whose local digest differs from the reported flash digest are programmed. NAND is excluded because spare bytes make target digests programmer-specific.
+/// <para>基于摘要的写入前跳过编程：按有界分块遍历区域，每块按尾部补零语义本地哈希，仅当本地摘要与上报的闪存摘要不同才编程。NAND 除外，因为其 spare 字节使目标摘要依赖 programmer。</para>
 /// </summary>
 public sealed partial class FirehoseProtocol
 {
     /// <summary>
-    /// Maximum region handed to one <c>&lt;getsha256digest&gt;</c> round trip (qdl
-    /// <c>SKIPBLOCK_CHUNK_BYTES</c>). Hashing a multi-gigabyte partition in a single query can
+    /// Maximum region handed to one <c>&lt;getsha256digest&gt;</c> round trip. Hashing a
+    /// multi-gigabyte partition in a single query can
     /// exceed the target's digest timeout, so the region is compared chunk by chunk.
-    /// <para>单次 <c>&lt;getsha256digest&gt;</c> 往返的最大区域（qdl 的 SKIPBLOCK_CHUNK_BYTES）。
+    /// <para>单次 <c>&lt;getsha256digest&gt;</c> 往返的最大区域。
     /// 对多 GB 分区做单次摘要查询可能超过目标的摘要计算超时，因此按块逐一比对。</para>
     /// </summary>
     private const long SkipblockChunkBytes = 512L * 1024 * 1024;
@@ -39,9 +31,8 @@ public sealed partial class FirehoseProtocol
     /// </summary>
     /// <param name="dataStream">
     /// The seekable source covering the region from its start; bytes past its end are treated as
-    /// zeros for digest comparison and programming, mirroring qdl's trailing zero-pad.
-    /// <para>从区域起点覆盖该区域的可寻址源；超出其末尾的字节在摘要比对与编程时均按零处理，
-    /// 与 qdl 的尾部零填充一致。</para>
+    /// zeros for digest comparison and programming.
+    /// <para>从区域起点覆盖该区域的可寻址源；超出其末尾的字节在摘要比对与编程时均按零处理。</para>
     /// </param>
     /// <param name="startSector">The absolute starting sector. <para>绝对起始扇区。</para></param>
     /// <param name="numSectors">The number of declared sectors. <para>声明的扇区数。</para></param>
@@ -120,11 +111,11 @@ public sealed partial class FirehoseProtocol
 
     /// <summary>
     /// Hashes <paramref name="length"/> bytes of the source starting at <paramref name="offset"/>
-    /// with trailing zero-pad past the source's end (qdl firehose_region_local_digest), so a chunk
+    /// with trailing zero-pad past the source's end, so a chunk
     /// reaching beyond the image compares as if the missing tail were zeros. Streaming keeps the
     /// buffer bounded regardless of the region size.
     /// <para>对源中自 <paramref name="offset"/> 起的 <paramref name="length"/> 字节计算哈希，源结束
-    /// 之后按零填充（qdl 的 firehose_region_local_digest），使越过镜像末尾的分块如同缺失尾部为零一样
+    /// 之后按零填充，使越过镜像末尾的分块如同缺失尾部为零一样
     /// 参与比对。流式处理使缓冲与区域大小无关、保持有界。</para>
     /// </summary>
     /// <param name="dataStream">The seekable source stream. <para>可寻址的源流。</para></param>
@@ -184,23 +175,38 @@ public sealed partial class FirehoseProtocol
         private readonly long _sourceAvailable = Math.Max(0, source.Length - sourceOffset);
         private long _position;
 
-        /// <summary>Gets whether the stream can be read. 流是否可读。</summary>
+        /// <summary>
+        /// Gets whether the stream can be read.
+        /// <para>流是否可读。</para>
+        /// </summary>
         public override bool CanRead => true;
 
-        /// <summary>Gets whether the stream can seek. 流是否可寻址。</summary>
+        /// <summary>
+        /// Gets whether the stream can seek.
+        /// <para>流是否可寻址。</para>
+        /// </summary>
         public override bool CanSeek => true;
 
-        /// <summary>Gets whether the stream can be written. 流是否可写。</summary>
+        /// <summary>
+        /// Gets whether the stream can be written.
+        /// <para>流是否可写。</para>
+        /// </summary>
         public override bool CanWrite => false;
 
-        /// <summary>Gets the declared chunk length. 声明的分块长度。</summary>
+        /// <summary>
+        /// Gets the declared chunk length.
+        /// <para>声明的分块长度。</para>
+        /// </summary>
         public override long Length => length;
 
         /// <summary>Gets or sets the position within the declared chunk.
         /// 分块内的位置。</summary>
         public override long Position { get => _position; set => _position = value; }
 
-        /// <summary>Flush (no-op). 刷新（空操作）。</summary>
+        /// <summary>
+        /// Flush (no-op).
+        /// <para>刷新（空操作）。</para>
+        /// </summary>
         public override void Flush() { }
 
         /// <summary>Reads source bytes followed by zero padding.
@@ -246,7 +252,10 @@ public sealed partial class FirehoseProtocol
             return buffer.Length;
         }
 
-        /// <summary>Seeks within the declared chunk length. 在声明的分块长度内寻址。</summary>
+        /// <summary>
+        /// Seeks within the declared chunk length.
+        /// <para>在声明的分块长度内寻址。</para>
+        /// </summary>
         public override long Seek(long offset, SeekOrigin origin) => _position = origin switch
         {
             SeekOrigin.Begin => offset,
@@ -254,10 +263,16 @@ public sealed partial class FirehoseProtocol
             _ => length + offset
         };
 
-        /// <summary>Set length (not supported). 设置长度（不支持）。</summary>
+        /// <summary>
+        /// Set length (not supported).
+        /// <para>设置长度（不支持）。</para>
+        /// </summary>
         public override void SetLength(long value) => throw new NotSupportedException();
 
-        /// <summary>Write (not supported). 写入（不支持）。</summary>
+        /// <summary>
+        /// Write (not supported).
+        /// <para>写入（不支持）。</para>
+        /// </summary>
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
         /// <summary>Disposes the view without closing the underlying source.

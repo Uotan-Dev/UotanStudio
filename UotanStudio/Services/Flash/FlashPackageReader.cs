@@ -1,9 +1,11 @@
 namespace UotanStudio.Services.Flash;
 
-/// <summary>Reads an unpacked collection of explicitly named partition images.</summary>
+/// <summary>Reads an unpacked collection of explicitly named partition images.<para>读取已解包且名称明确的分区镜像集合。</para></summary>
 public static class FlashPackageReader
 {
-    /// <summary>Returns top-level images from the folder or its images subfolder.</summary>
+    /// <summary>Returns top-level images from the folder or its images subfolder.<para>返回该目录或其 images 子目录中的顶层镜像。</para></summary>
+    /// <param name="folder">Directory holding the unpacked images.<para>存放解包镜像的目录。</para></param>
+    /// <returns>The partition names, image paths and lengths.<para>分区名、镜像路径与长度。</para></returns>
     public static IReadOnlyList<(string Partition, string Path, long Length)> Read(string folder)
     {
         if (!Directory.Exists(folder))

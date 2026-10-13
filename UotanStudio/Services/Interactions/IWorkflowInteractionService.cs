@@ -2,14 +2,16 @@ using UotanStudio.Projects.Interactions;
 
 namespace UotanStudio.Services.Interactions;
 
-/// <summary>Host boundary for user interaction. Implementations must close requests on cancellation.</summary>
+/// <summary>Boundary for user interaction requests. Implementations must close requests on cancellation.
+/// <para>用户交互请求的边界接口；实现必须在取消时关闭请求。</para></summary>
 public interface IWorkflowInteractionService
 {
     bool IsSupported { get; }
     Task<InteractionResult> ShowAsync(InteractionRequest request, CancellationToken cancellationToken);
 }
 
-/// <summary>Noninteractive runs fail explicitly rather than inventing user consent.</summary>
+/// <summary>Noninteractive runs fail explicitly rather than inventing user consent.
+/// <para>非交互运行会明确失败，而不会伪造用户同意。</para></summary>
 public sealed class UnsupportedWorkflowInteractionService : IWorkflowInteractionService
 {
     public static UnsupportedWorkflowInteractionService Instance { get; } = new();
@@ -18,7 +20,10 @@ public sealed class UnsupportedWorkflowInteractionService : IWorkflowInteraction
         => throw new NotSupportedException("This execution host does not support user interaction.");
 }
 
-/// <summary>Serializes modal requests and distinguishes workflow cancellation from an interaction timeout.</summary>
+/// <summary>Serializes modal requests and distinguishes workflow cancellation from an interaction timeout.
+/// <para>串行化模态请求，并区分工作流取消与交互超时。</para></summary>
+/// <param name="presenter">The wrapped interaction service that presents each request.
+/// <para>负责呈现每个请求的被包装交互服务。</para></param>
 public sealed class QueuedWorkflowInteractionService(IWorkflowInteractionService presenter) : IWorkflowInteractionService, IWorkflowFeedbackService
 {
     private readonly SemaphoreSlim _queue = new(1, 1);

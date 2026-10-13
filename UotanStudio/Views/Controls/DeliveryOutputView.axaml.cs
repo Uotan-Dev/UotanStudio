@@ -20,16 +20,16 @@ internal sealed class DeliveryScriptDocument(string title)
     internal bool Modified => Baseline is not null && Baseline != Document.Text;
 }
 
-/// <summary><para>使用现有控件维护交付选项、生成文本和持久化草稿。</para>Delivery options, generated scripts and persistent drafts using the existing controls.</summary>
+/// <summary>Delivery options, generated scripts and persistent drafts using the existing controls. <para>使用现有控件维护交付选项、生成文本和持久化草稿。</para></summary>
 public partial class DeliveryOutputView : UserControl
 {
     private const double MinimumSettingsHeight = 340;
 
-    /// <summary><para>输出设置栏与相邻镜像列表共用的宽度。</para>Width shared by the output settings and the neighboring image list.</summary>
+    /// <summary>Width shared by the output settings and the neighboring image list. <para>输出设置栏与相邻镜像列表共用的宽度。</para></summary>
     public static readonly StyledProperty<double> SettingsWidthProperty =
         AvaloniaProperty.Register<DeliveryOutputView, double>(nameof(SettingsWidth), 180);
 
-    /// <summary><para>获取或设置输出设置栏的宽度。</para>Gets or sets the width of the output settings pane.</summary>
+    /// <summary>Gets or sets the width of the output settings pane. <para>获取或设置输出设置栏的宽度。</para></summary>
     public double SettingsWidth { get => GetValue(SettingsWidthProperty); set => SetValue(SettingsWidthProperty, value); }
 
     private DeliveryViewModel? _model;
@@ -50,7 +50,7 @@ public partial class DeliveryOutputView : UserControl
     private Border? _editorHost;
     private bool _editorEnabled = true;
 
-    /// <summary><para>初始化输出表单和无文档的编辑区域。</para>Initializes the output form and empty editor pane.</summary>
+    /// <summary>Initializes the output form and empty editor pane. <para>初始化输出表单和无文档的编辑区域。</para></summary>
     public DeliveryOutputView()
     {
         InitializeComponent();

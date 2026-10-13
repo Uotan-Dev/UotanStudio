@@ -1,13 +1,8 @@
 namespace UotanStudio.Firmware.Core.Streams;
 
 /// <summary>
-/// Read-only view over one absolute byte window of a seekable stream. Reads stop at the window end
-/// and return 0 there, positions are relative to the window start, and every seek outside the
-/// window is rejected. Seeking the underlying stream is performed on demand, so several windows may
-/// share one stream when they coordinate through the same <c>syncRoot</c>.
-/// <para>对可定位流上一个绝对字节窗口的只读视图。读取到窗口末尾即停止并在该处返回 0，位置均相对于窗口
-/// 起点，超出窗口的定位会被拒绝。底层流的定位按需执行，因此多个窗口在通过同一个 <c>syncRoot</c> 协调时
-/// 可以共用一条流。</para>
+/// Read-only view over one absolute byte window of a seekable stream. Reads stop at the window end and return 0 there, positions are relative to the window start, and every seek outside the window is rejected. The underlying stream is positioned on demand, so several windows may share one stream.
+/// <para>可寻址流上某个绝对字节窗口的只读视图。读取到窗口末尾即停止并返回 0，位置相对窗口起点，任何越界 seek 均被拒绝。底层流按需定位，因此多个窗口可共用同一流。</para>
 /// </summary>
 public sealed class BoundedReadStream : Stream
 {

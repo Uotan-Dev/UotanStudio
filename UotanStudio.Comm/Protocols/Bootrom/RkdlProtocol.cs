@@ -4,44 +4,26 @@ using System.Security.Cryptography;
 namespace UotanStudio.Comm.Protocols.Bootrom;
 
 /// <summary>
-/// Rockchip rockusb CBW/CSW frame structures (UFI-Style bulk protocol, see rkdeveloptool RKComm.h).
-/// <para>Rockchip rockusb CBW/CSW 帧结构（UFI 风格批量协议，见 rkdeveloptool RKComm.h）。</para>
-/// The CBW is 31 bytes and the CSW is 13 bytes. CBW header fields (signature, tag, transfer
-/// length) are little-endian while the CBWCB address/length fields are big-endian, matching the
-/// reference C implementation under <c>#pragma pack(1)</c>.
-/// <para>CBW 为 31 字节、CSW 为 13 字节。CBW 头部字段（签名、标签、传输长度）为小端序，
-/// 而 CBWCB 中的地址/长度字段为大端序，与参考 C 实现（<c>#pragma pack(1)</c>）一致。</para>
+/// Rockchip rockusb CBW/CSW frame structures for the UFI-style bulk protocol. The CBW is
+/// 31 bytes and the CSW is 13 bytes.
+/// <para>Rockchip rockusb 的 UFI 风格批量协议 CBW/CSW 帧结构。CBW 为 31 字节，
+/// CSW 为 13 字节。</para>
 /// </summary>
 internal static class RkdlFrame
 {
     /// <summary>
-    /// CBW signature bytes in transmission order: the DWORD constant <c>0x43425355</c> declared by
-    /// rkdeveloptool <c>RKComm.h</c> (<c>CBW_SIGN 0x43425355 /* "USBC" */</c>) stored little-endian,
-    /// which puts the least significant byte first on the wire and therefore emits
-    /// <c>55 53 42 43</c> = ASCII "USBC". The USB Mass Storage Bulk-Only Transport specification
-    /// requires the same order (dCBWSignature = 0x43425355, transmitted LSB first), as do
-    /// rkflashtool <c>memcpy(cmd, "USBC", 4)</c> and u-boot rockusb
-    /// <c>USB_BULK_CB_SIG 0x43425355 /* Spells out USBC */</c>.
-    /// <para>CBW 签名的传输顺序字节：rkdeveloptool <c>RKComm.h</c> 声明的 DWORD 常量
-    /// <c>0x43425355</c>（<c>CBW_SIGN 0x43425355 /* "USBC" */</c>）按小端存储，最低有效字节先到线上，
-    /// 因此发出 <c>55 53 42 43</c> = ASCII "USBC"。USB 大容量存储 Bulk-Only 传输规范要求同一顺序
-    /// （dCBWSignature = 0x43425355，按 LSB 先发送），rkflashtool 的
-    /// <c>memcpy(cmd, "USBC", 4)</c> 与 u-boot rockusb 的
-    /// <c>USB_BULK_CB_SIG 0x43425355 /* Spells out USBC */</c> 亦如此。</para>
+    /// CBW signature bytes in transmission order: the DWORD 0x43425355 stored
+    /// little-endian, which puts the ASCII bytes USBC on the wire.
+    /// <para>CBW 签名的传输顺序字节：DWORD 0x43425355 按小端存储，线上即为 ASCII
+    /// 的 USBC。</para>
     /// </summary>
     public static readonly byte[] CbwSignature = [0x55, 0x53, 0x42, 0x43];
 
     /// <summary>
-    /// CSW signature bytes in transmission order: the DWORD constant <c>0x53425355</c> declared by
-    /// rkdeveloptool <c>RKComm.h</c> (<c>CSW_SIGN 0x53425355 /* "USBS" */</c>) stored little-endian,
-    /// which emits <c>55 53 42 53</c> = ASCII "USBS". This is the byte sequence a real rockusb device
-    /// returns and the one <c>UFI_CHECK_SIGN</c> compares against; u-boot rockusb produces it with
-    /// <c>csw-&gt;signature = cpu_to_le32(USB_BULK_CS_SIG)</c>.
-    /// <para>CSW 签名的传输顺序字节：rkdeveloptool <c>RKComm.h</c> 声明的 DWORD 常量
-    /// <c>0x53425355</c>（<c>CSW_SIGN 0x53425355 /* "USBS" */</c>）按小端存储，发出
-    /// <c>55 53 42 53</c> = ASCII "USBS"。这是真实 rockusb 设备返回的字节序列，也是
-    /// <c>UFI_CHECK_SIGN</c> 据以比较的序列；u-boot rockusb 用
-    /// <c>csw-&gt;signature = cpu_to_le32(USB_BULK_CS_SIG)</c> 产生它。</para>
+    /// CSW signature bytes in transmission order: the DWORD 0x53425355 stored
+    /// little-endian, which puts the ASCII bytes USBS on the wire.
+    /// <para>CSW 签名的传输顺序字节：DWORD 0x53425355 按小端存储，线上即为 ASCII
+    /// 的 USBS。</para>
     /// </summary>
     public static readonly byte[] CswSignature = [0x55, 0x53, 0x42, 0x53];
 
@@ -83,8 +65,8 @@ internal static class RkdlFrame
 }
 
 /// <summary>
-/// DEVICE_RESET sub codes (RESET_SUBCODE, see rkdeveloptool RKComm.h).
-/// <para>DEVICE_RESET 子码（RESET_SUBCODE，见 rkdeveloptool RKComm.h）。</para>
+/// DEVICE_RESET sub codes sent with the reset command (RESET_SUBCODE).
+/// <para>随复位命令发送的 DEVICE_RESET 子码（RESET_SUBCODE）。</para>
 /// </summary>
 internal static class RkdlResetSubCode
 {
@@ -108,15 +90,13 @@ internal static class RkdlResetSubCode
 /// Command Block Wrapper (CBW) for the Rockchip rockusb protocol.
 /// <para>Rockchip rockusb 协议的命令块包装（CBW）。</para>
 /// </summary>
-/// <remarks>Initializes a new CBW with the given command parameters.
-/// <para>使用给定命令参数初始化新的 CBW。</para></remarks>
 /// <param name="operationCode">The rockusb operation code. <para>rockusb 操作码。</para></param>
-/// <param name="flags">Direction flags (<see cref="RkdlFrame.DirectionIn"/>/<see cref="RkdlFrame.DirectionOut"/>). <para>方向标志（<see cref="RkdlFrame.DirectionIn"/>/<see cref="RkdlFrame.DirectionOut"/>）。</para></param>
-/// <param name="transferLength">Data phase length in bytes (dwCBWTransferLength). <para>数据阶段长度（字节，dwCBWTransferLength）。</para></param>
+/// <param name="flags">The direction flags for the data phase. <para>数据阶段的方向标志。</para></param>
+/// <param name="transferLength">The data phase length in bytes (dwCBWTransferLength). <para>数据阶段长度（字节，dwCBWTransferLength）。</para></param>
 /// <param name="cbwcbLength">Length of the command block (0x06 or 0x0A). <para>命令块长度（0x06 或 0x0A）。</para></param>
-/// <param name="subCode">Value stored in CBWCB.ucReserved (sub code). <para>存入 CBWCB.ucReserved 的值（子码）。</para></param>
-/// <param name="address">LBA address (stored big-endian in the CBWCB). <para>LBA 地址（CBWCB 中按大端序存储）。</para></param>
-/// <param name="sectorLength">Sector count (stored big-endian in the CBWCB). <para>扇区数（CBWCB 中按大端序存储）。</para></param>
+/// <param name="subCode">The value stored in the reserved command-block byte. <para>存入命令块保留字节的值。</para></param>
+/// <param name="address">The LBA address, stored big-endian in the command block. <para>LBA 地址，在命令块中按大端序存储。</para></param>
+/// <param name="sectorLength">The sector count, stored big-endian in the command block. <para>扇区数，在命令块中按大端序存储。</para></param>
 internal sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transferLength, byte cbwcbLength,
     byte subCode = 0, uint address = 0, ushort sectorLength = 0)
 {
@@ -125,54 +105,63 @@ internal sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transf
     /// Gets the random CBW tag used to match the corresponding CSW.
     /// <para>获取用于匹配对应 CSW 的随机 CBW 标签。</para>
     /// </summary>
+    /// <value>The random tag. <para>随机标签。</para></value>
     public uint Tag { get; } = MakeTag();
 
     /// <summary>
     /// Gets the operation code.
     /// <para>获取操作码。</para>
     /// </summary>
+    /// <value>The rockusb operation code. <para>rockusb 操作码。</para></value>
     public byte OperationCode { get; } = (byte)operationCode;
 
     /// <summary>
     /// Gets the direction flags.
     /// <para>获取方向标志。</para>
     /// </summary>
+    /// <value>The data phase direction flags. <para>数据阶段的方向标志。</para></value>
     public byte Flags { get; } = flags;
 
     /// <summary>
     /// Gets the data phase transfer length in bytes.
     /// <para>获取数据阶段的传输长度（字节）。</para>
     /// </summary>
+    /// <value>The transfer length. <para>传输长度。</para></value>
     public uint TransferLength { get; } = transferLength;
 
     /// <summary>
     /// Gets the CBWCB (command block) length.
     /// <para>获取 CBWCB（命令块）长度。</para>
     /// </summary>
+    /// <value>The command block length. <para>命令块长度。</para></value>
     public byte CbwcbLength { get; } = cbwcbLength;
 
     /// <summary>
-    /// Gets the sub code stored in CBWCB.ucReserved.
-    /// <para>获取存储在 CBWCB.ucReserved 中的子码。</para>
+    /// Gets the sub code stored in the reserved command-block byte.
+    /// <para>获取存储在命令块保留字节中的子码。</para>
     /// </summary>
+    /// <value>The sub code. <para>子码。</para></value>
     public byte SubCode { get; } = subCode;
 
     /// <summary>
-    /// Gets the LBA address (kept in host byte order; serialized big-endian).
-    /// <para>获取 LBA 地址（保持主机字节序；序列化时按大端序）。</para>
+    /// Gets the LBA address, kept in host byte order and serialized big-endian.
+    /// <para>获取 LBA 地址，保持主机字节序并按大端序序列化。</para>
     /// </summary>
+    /// <value>The LBA address. <para>LBA 地址。</para></value>
     public uint Address { get; } = address;
 
     /// <summary>
-    /// Gets the sector count (kept in host byte order; serialized big-endian).
-    /// <para>获取扇区数（保持主机字节序；序列化时按大端序）。</para>
+    /// Gets the sector count, kept in host byte order and serialized big-endian.
+    /// <para>获取扇区数，保持主机字节序并按大端序序列化。</para>
     /// </summary>
+    /// <value>The sector count. <para>扇区数。</para></value>
     public ushort SectorLength { get; } = sectorLength;
 
     /// <summary>
-    /// Generates a random 4-byte CBW tag (see rkdeveloptool MakeCBWTag).
-    /// <para>生成随机 4 字节 CBW 标签（见 rkdeveloptool MakeCBWTag）。</para>
+    /// Generates a random 4-byte CBW tag.
+    /// <para>生成随机的 4 字节 CBW 标签。</para>
     /// </summary>
+    /// <returns>The random tag. <para>随机标签。</para></returns>
     public static uint MakeTag()
     {
         Span<byte> bytes = stackalloc byte[4];
@@ -184,6 +173,7 @@ internal sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transf
     /// Serializes the CBW into its 31-byte wire format.
     /// <para>将 CBW 序列化为 31 字节的线上格式。</para>
     /// </summary>
+    /// <returns>The serialized CBW bytes. <para>序列化后的 CBW 字节。</para></returns>
     public byte[] ToBytes()
     {
         var bytes = new byte[RkdlFrame.CbwLength];
@@ -226,24 +216,28 @@ internal sealed class RkdlCsw
     /// Gets the CBW tag echoed back by the device.
     /// <para>获取设备回显的 CBW 标签。</para>
     /// </summary>
+    /// <value>The echoed tag. <para>回显的标签。</para></value>
     public uint Tag { get; }
 
     /// <summary>
     /// Gets the data residue reported by the device.
     /// <para>获取设备报告的未处理数据余量。</para>
     /// </summary>
+    /// <value>The residue in bytes. <para>余量的字节数。</para></value>
     public uint DataResidue { get; }
 
     /// <summary>
     /// Gets the CSW status (0 = success, 1 = failure).
     /// <para>获取 CSW 状态（0 = 成功，1 = 失败）。</para>
     /// </summary>
+    /// <value>The raw status byte. <para>原始状态字节。</para></value>
     public byte Status { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the command succeeded (ucCSWStatus == 0).
-    /// <para>获取命令是否成功（ucCSWStatus == 0）。</para>
+    /// Gets a value indicating whether the command succeeded, that is, the status byte is zero.
+    /// <para>获取命令是否成功的值，即状态字节为零。</para>
     /// </summary>
+    /// <value><c>true</c> when the status byte is zero. <para>状态字节为零时为 <c>true</c>。</para></value>
     public bool IsSuccess => Status == 0;
 
     /// <summary>
@@ -281,9 +275,9 @@ internal sealed class RkdlCsw
 }
 
 /// <summary>
-/// CRC helpers used by the RKDL protocol (CRC-16/CCITT for the loader download and
-/// CRC-32 for the GPT header checksums).
-/// <para>RKDL 协议使用的 CRC 辅助方法（loader 下载的 CRC-16/CCITT 与 GPT 头校验的 CRC-32）。</para>
+/// CRC helpers for the RKDL protocol: CRC-16/CCITT for the loader download and CRC-32
+/// for the GPT header checksums.
+/// <para>RKDL 协议的 CRC 辅助方法：loader 下载用 CRC-16/CCITT，GPT 头校验用 CRC-32。</para>
 /// </summary>
 internal static class RkdlCrc
 {
@@ -324,10 +318,8 @@ internal static class RkdlCrc
 }
 
 /// <summary>
-/// GPT layout helpers used to write the master/backup GPT tables (see rkdeveloptool gpt.h
-/// and main.cpp prepare_gpt_backup / update_gpt_disksize).
-/// <para>写入主/备份 GPT 表时使用的 GPT 布局辅助方法（见 rkdeveloptool gpt.h
-/// 与 main.cpp 的 prepare_gpt_backup / update_gpt_disksize）。</para>
+/// GPT layout helpers that build and update the master and backup GPT tables.
+/// <para>构建并更新主 GPT 表与备份 GPT 表的布局辅助方法。</para>
 /// </summary>
 internal static class RkdlGpt
 {
@@ -341,9 +333,8 @@ internal static class RkdlGpt
     public const ulong HeaderSignature = 0x5452415020494645UL;
 
     /// <summary>
-    /// Builds the 33-sector backup GPT from a 34-sector master GPT following
-    /// rkdeveloptool prepare_gpt_backup.
-    /// <para>按照 rkdeveloptool 的 prepare_gpt_backup，从 34 扇区的主 GPT 构建 33 扇区备份 GPT。</para>
+    /// Builds the 33-sector backup GPT from a 34-sector master GPT image.
+    /// <para>从 34 扇区的主 GPT 镜像构建 33 扇区的备份 GPT。</para>
     /// </summary>
     /// <param name="masterGpt">The 34-sector master GPT image. <para>34 扇区的主 GPT 镜像。</para></param>
     /// <returns>The 33-sector backup GPT image. <para>33 扇区的备份 GPT 镜像。</para></returns>
@@ -377,11 +368,9 @@ internal static class RkdlGpt
     }
 
     /// <summary>
-    /// Updates the master and backup GPT tables for the given total sector count, following
-    /// rkdeveloptool update_gpt_disksize (grows the final partition when needed, recomputes CRCs
-    /// and rebuilds the backup table).
-    /// <para>按给定总扇区数更新主/备份 GPT 表，遵循 rkdeveloptool 的 update_gpt_disksize
-    /// （必要时扩展最后一个分区、重算 CRC 并重建备份表）。</para>
+    /// Updates the master and backup GPT tables for the given total sector count, growing
+    /// the final partition when needed and recomputing the CRCs.
+    /// <para>按给定总扇区数更新主 GPT 与备份 GPT 表，必要时扩展最后一个分区并重算 CRC。</para>
     /// </summary>
     /// <param name="masterGpt">The 34-sector master GPT image (updated in place). <para>34 扇区的主 GPT 镜像（原地更新）。</para></param>
     /// <param name="backupGpt">The 33-sector backup GPT image (rebuilt). <para>33 扇区的备份 GPT 镜像（重建）。</para></param>

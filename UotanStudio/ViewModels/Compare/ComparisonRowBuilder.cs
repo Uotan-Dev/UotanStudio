@@ -7,16 +7,16 @@ namespace UotanStudio.ViewModels.Compare;
 internal static class ComparisonRowBuilder
 {
     /// <summary>
-    /// <para>把目录树按当前展开状态压平成行列表：展开的节点后面紧跟其子项（缩进 +1）。
-    /// 左右两栏共用同一份列表，因此同名条目落在同一行、单侧缺失的行在另一侧自动留空，
-    /// 展开状态也天然同步。</para>
     /// Flattens the directory tree into rows by the current expansion state: an expanded node is
     /// immediately followed by its children (depth + 1). Both panes share one list, so same-name entries
     /// land on the same row, single-side rows stay blank on the other side, and expansion is inherently
     /// synchronised.
+    /// <para>把目录树按当前展开状态压平成行列表：展开的节点后面紧跟其子项（缩进 +1）。
+    /// 左右两栏共用同一份列表，因此同名条目落在同一行、单侧缺失的行在另一侧自动留空，
+    /// 展开状态也天然同步。</para>
     /// </summary>
-    /// <param name="roots"><para>树根（文件夹对比只有一个根：最初始的文件夹）。</para>The tree roots (a folder comparison has one root: the initial folder).</param>
-    /// <param name="compared"><para>是否处于对比状态（决定该行的右键菜单是「另一边」还是「左边/右边」）。</para>Whether the rows belong to a comparison (which decides between the "other side" and "left/right" menu items).</param>
+    /// <param name="roots">The tree roots (a folder comparison has one root: the initial folder). <para>树根（文件夹对比只有一个根：最初始的文件夹）。</para></param>
+    /// <param name="compared">Whether the rows belong to a comparison (which decides between the "other side" and "left/right" menu items). <para>是否处于对比状态（决定该行的右键菜单是「另一边」还是「左边/右边」）。</para></param>
     internal static List<CompareRowViewModel> ForTree(IEnumerable<CompareTreeNodeViewModel> roots, bool compared)
     {
         List<CompareRowViewModel> rows = [];
@@ -29,10 +29,10 @@ internal static class ComparisonRowBuilder
     }
 
     /// <summary>
-    /// <para>由目录树节点构建一行：两侧名称、图标、大小与整行状态色都按侧给出；目录树行渲染展开箭头与
-    /// 文件图标，缺失侧留空。</para>
     /// Builds one row from a directory-tree node: both sides' names, glyphs, sizes and whole-row status are
     /// per side; a tree row renders the expander and file glyph, and the missing side stays blank.
+    /// <para>由目录树节点构建一行：两侧名称、图标、大小与整行状态色都按侧给出；目录树行渲染展开箭头与
+    /// 文件图标，缺失侧留空。</para>
     /// </summary>
     private static void AppendTreeRow(
         CompareTreeNodeViewModel node,
@@ -53,11 +53,11 @@ internal static class ComparisonRowBuilder
     }
 
     /// <summary>
-    /// <para>由目录树节点构建一行：状态「不同」时整行（两侧）高亮，单侧条目按侧加淡色背景，
-    /// 与之前拉平列表的整行变色规则一致。</para>
     /// Builds one row from a directory-tree node: a "different" status highlights the whole row on both
     /// sides and a single-side entry tints its own side, matching the flat list's previous whole-row
     /// colouring.
+    /// <para>由目录树节点构建一行：状态「不同」时整行（两侧）高亮，单侧条目按侧加淡色背景，
+    /// 与之前拉平列表的整行变色规则一致。</para>
     /// </summary>
     private static CompareRowViewModel ForTreeNode(CompareTreeNodeViewModel node, int depth, bool compared)
     {
@@ -96,13 +96,13 @@ internal static class ComparisonRowBuilder
         => isDirectory || size < 0 ? string.Empty : FormatSize(size);
 
     /// <summary>
-    /// <para>构建浏览一个文本文件的行：内容落在左侧单元格，行号 1 起，可直接编辑（浏览状态也允许改文本，
-    /// 保存后写回文件），没有对比状态色与右键菜单。</para>
     /// Builds the rows for browsing a text file: content in the left cells with one-based line numbers and direct editing
     /// (browsing may edit text too, saved back to the file), without comparison status colours or a context menu.
+    /// <para>构建浏览一个文本文件的行：内容落在左侧单元格，行号 1 起，可直接编辑（浏览状态也允许改文本，
+    /// 保存后写回文件），没有对比状态色与右键菜单。</para>
     /// </summary>
-    /// <param name="lines"><para>文件行。</para>The file's lines.</param>
-    /// <param name="edited"><para>文本被编辑时的回调（供所属列标记文件已修改）。</para>Callback invoked when the text is edited.</param>
+    /// <param name="lines">The file's lines. <para>文件行。</para></param>
+    /// <param name="edited">Callback invoked when the text is edited. <para>文本被编辑时的回调（供所属列标记文件已修改）。</para></param>
     internal static List<CompareRowViewModel> ForText(
         IReadOnlyList<string> lines,
         Action<CompareRowViewModel, bool>? edited = null) =>
@@ -113,14 +113,14 @@ internal static class ComparisonRowBuilder
             hasLeftLine: true, hasRightLine: false, edited: edited))];
 
     /// <summary>
-    /// <para>构建单侧文本对比的行：内容只落在有文件的一侧（行号 1 起），另一侧整列留空，
-    /// 有文件的一侧带单侧淡色背景，与目录列表的单侧配色一致。</para>
     /// Builds a single-side text comparison's rows: content only on the side that has the file (one-based
     /// line numbers), the other column entirely blank, and the populated side tinted like the single-side
     /// colouring of a folder listing.
+    /// <para>构建单侧文本对比的行：内容只落在有文件的一侧（行号 1 起），另一侧整列留空，
+    /// 有文件的一侧带单侧淡色背景，与目录列表的单侧配色一致。</para>
     /// </summary>
-    /// <param name="lines"><para>文件行。</para>The file's lines.</param>
-    /// <param name="leftSide"><para>文件是否在左侧。</para>Whether the file is on the left side.</param>
+    /// <param name="lines">The file's lines. <para>文件行。</para></param>
+    /// <param name="leftSide">Whether the file is on the left side. <para>文件是否在左侧。</para></param>
     /// <param name="edited">文本被编辑时的回调（供文档标记「已修改」）。<para>Callback invoked when the text is edited.</para></param>
     internal static List<CompareRowViewModel> ForTextSingleSide(
         IReadOnlyList<string> lines,
@@ -139,11 +139,6 @@ internal static class ComparisonRowBuilder
                 compared: true, hasLeftLine: false, hasRightLine: true, edited: edited))];
 
     /// <summary>
-    /// <para>由两侧元数据构建元数据视图行：格式名行、摘要行、键值对行（键并集）、条目行与组件行；
-    /// 条目与组件按**名称**对齐（两侧名称并集，同名条目落在同一水平行；仅单侧条目在缺失侧
-    /// 置空占位，不显示名称），键值对缺失侧取 "-"；**同名但值不同也判定为差异**——键值对值不同、
-    /// 组件大小不同均标记为 Different 并整行差异高亮，仅单侧存在的键/组件标记为 LeftOnly/RightOnly；
-    /// 两侧都无法识别时给出单条"无法识别"提示行。</para>
     /// Builds the metadata-view rows from both sides' metadata: a format-name row, summary rows,
     /// key-value rows (key union), entry rows and component rows. Entries and components are aligned
     /// **by name** (union of both sides' names; same-name items land on the same horizontal row, and
@@ -152,6 +147,11 @@ internal static class ComparisonRowBuilder
     /// and differing component sizes are marked Different with a full-row diff highlight, and keys or
     /// components present on only one side are marked LeftOnly/RightOnly; a single "unrecognized" hint
     /// row is produced when neither side is recognized.
+    /// <para>由两侧元数据构建元数据视图行：格式名行、摘要行、键值对行（键并集）、条目行与组件行；
+    /// 条目与组件按**名称**对齐（两侧名称并集，同名条目落在同一水平行；仅单侧条目在缺失侧
+    /// 置空占位，不显示名称），键值对缺失侧取 "-"；**同名但值不同也判定为差异**——键值对值不同、
+    /// 组件大小不同均标记为 Different 并整行差异高亮，仅单侧存在的键/组件标记为 LeftOnly/RightOnly；
+    /// 两侧都无法识别时给出单条"无法识别"提示行。</para>
     /// </summary>
     internal static List<CompareRowViewModel> ForMetadata(ComparisonMetadata? left, ComparisonMetadata? right, string unrecognized)
     {
@@ -290,8 +290,8 @@ internal static class ComparisonRowBuilder
     }
 
     /// <summary>
-    /// <para>按 '\n' 拆分文本并去除行尾 '\r'；空文本返回空列表。</para>
     /// Splits text by '\n' and trims trailing '\r'; an empty text yields an empty list.
+    /// <para>按 '\n' 拆分文本并去除行尾 '\r'；空文本返回空列表。</para>
     /// </summary>
     private static List<string> SplitLines(string text)
     {
@@ -310,8 +310,8 @@ internal static class ComparisonRowBuilder
     }
 
     /// <summary>
-    /// <para>将字节数格式化为可读大小文本（如 "1.5 MB"）；0 字节显示 "0 B"。</para>
     /// Formats a byte count into a human-readable size string (e.g. "1.5 MB"); 0 bytes shows "0 B".
+    /// <para>将字节数格式化为可读大小文本（如 "1.5 MB"）；0 字节显示 "0 B"。</para>
     /// </summary>
     private static string FormatSize(long bytes) => SizeFormatter.Format(bytes);
 }

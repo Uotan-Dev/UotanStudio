@@ -91,12 +91,7 @@ public readonly struct ChunkHeader
 
     /// <summary>
     /// Validates whether the chunk header has a recognized type and consistent size fields.
-    /// Only the four AOSP standard types (RAW, FILL, DONT_CARE, CRC32) are accepted;
-    /// any other type — including the 0x8000 vendor-range bits — is rejected here so
-    /// the reader and the validator agree on what is a parseable sparse image.
-    /// <para>验证数据块头部是否具有可识别的类型和一致的大小字段。仅接受 AOSP 四种标准类型
-    /// （RAW/FILL/DONT_CARE/CRC32），任何其他类型——含 0x8000 厂商范围位——在此即被拒绝，
-    /// 使读取端与验证端结论一致。</para>
+    /// <para>验证数据块头部是否具有可识别的类型与一致的大小字段。</para>
     /// </summary>
     /// <param name="chunkHeaderSize">Effective per-chunk header size declared in the file header, including extended bytes.
     /// <para>文件头部声明的每块有效头部大小，包含扩展字节。</para></param>

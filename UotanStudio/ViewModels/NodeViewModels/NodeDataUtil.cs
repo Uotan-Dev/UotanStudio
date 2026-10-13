@@ -6,33 +6,33 @@ using UotanStudio.ViewModels.Devices;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>节点数据辅助工具，提供端口值到字节数组、布尔、整数与浮点数的宽松转换。</para>
 /// Node data utility providing lenient conversion of port values to byte arrays, booleans, integers and floating-point numbers.
+/// <para>节点数据辅助工具，提供端口值到字节数组、布尔、整数与浮点数的宽松转换。</para>
 /// </summary>
 internal static class NodeDataUtil
 {
     internal const int MaxInMemoryBytes = 64 * 1024 * 1024;
 
     /// <summary>
-    /// <para>判断两个端口类型是否可以连接：任意一方为 <see cref="NodePortType.Any"/> 则允许连接；
-    /// <see cref="NodePortType.Device"/> 仅能与 <see cref="NodePortType.Device"/> 或
-    /// <see cref="NodePortType.Any"/> 连接；其余要求类型相同。</para>
     /// Determines whether two port types can be connected: either side being
     /// <see cref="NodePortType.Any"/> permits the connection; <see cref="NodePortType.Device"/>
     /// only connects to <see cref="NodePortType.Device"/> or <see cref="NodePortType.Any"/>;
     /// otherwise the types must match.
+    /// <para>判断两个端口类型是否可以连接：任意一方为 <see cref="NodePortType.Any"/> 则允许连接；
+    /// <see cref="NodePortType.Device"/> 仅能与 <see cref="NodePortType.Device"/> 或
+    /// <see cref="NodePortType.Any"/> 连接；其余要求类型相同。</para>
     /// </summary>
     /// <param name="source">
-    /// <para>源端口（输出）类型。</para>
     /// The source (output) port type.
+    /// <para>源端口（输出）类型。</para>
     /// </param>
     /// <param name="target">
-    /// <para>目标端口（输入）类型。</para>
     /// The target (input) port type.
+    /// <para>目标端口（输入）类型。</para>
     /// </param>
     /// <returns>
-    /// <para>是否可以连接。</para>
     /// Whether the connection is allowed.
+    /// <para>是否可以连接。</para>
     /// </returns>
     public static bool CanConnect(NodePortType source, NodePortType target)
     {
@@ -43,19 +43,19 @@ internal static class NodeDataUtil
     }
 
     /// <summary>
-    /// <para>把端口值转换为 <see cref="DetectedDevice"/>：值为 <see cref="DetectedDevice"/> 时原样返回；
-    /// 值为 <see cref="DeviceInfo"/> 时返回其 <see cref="DeviceInfo.Device"/>；其余返回 <c>null</c>。</para>
     /// Converts a port value to a <see cref="DetectedDevice"/>: <see cref="DetectedDevice"/> values are
     /// returned as-is; <see cref="DeviceInfo"/> values yield their <see cref="DeviceInfo.Device"/>;
     /// anything else yields <c>null</c>.
+    /// <para>把端口值转换为 <see cref="DetectedDevice"/>：值为 <see cref="DetectedDevice"/> 时原样返回；
+    /// 值为 <see cref="DeviceInfo"/> 时返回其 <see cref="DeviceInfo.Device"/>；其余返回 <c>null</c>。</para>
     /// </summary>
     /// <param name="value">
-    /// <para>端口值。</para>
     /// The port value.
+    /// <para>端口值。</para>
     /// </param>
     /// <returns>
-    /// <para>设备句柄；无法转换时返回 <c>null</c>。</para>
     /// The device handle; <c>null</c> when not convertible.
+    /// <para>设备句柄；无法转换时返回 <c>null</c>。</para>
     /// </returns>
     public static DetectedDevice? ToDevice(object? value)
     {
@@ -68,17 +68,16 @@ internal static class NodeDataUtil
     }
 
     /// <summary>
-    /// <para>把端口值转换为字节数组：字节数组原样返回；字符串若是已存在文件路径则读取文件内容，否则按 UTF-8 编码；其他对象转换为字符串后按 UTF-8 编码。</para>
-    /// Converts a port value to a byte array: byte arrays are returned as-is; strings that denote an existing file path are read as file
-    /// contents, otherwise encoded as UTF-8; other objects are converted to a string and encoded as UTF-8.
+    /// Converts a port value to a byte array for node execution.
+    /// <para>把端口值转换为节点执行所需的字节数组。</para>
     /// </summary>
     /// <param name="value">
-    /// <para>端口值。</para>
     /// The port value.
+    /// <para>端口值。</para>
     /// </param>
     /// <returns>
-    /// <para>得到的字节数组；<c>null</c> 表示无法转换。</para>
     /// The resulting byte array; <c>null</c> when conversion is not possible.
+    /// <para>得到的字节数组；<c>null</c> 表示无法转换。</para>
     /// </returns>
     public static byte[]? ToBytes(object? value, CancellationToken cancellationToken = default)
     {
@@ -160,16 +159,16 @@ internal static class NodeDataUtil
     }
 
     /// <summary>
-    /// <para>把端口值转换为展示用的字符串（字节数组显示其长度与十六进制摘要）。</para>
     /// Converts a port value to a display string (byte arrays show their length and a hexadecimal digest).
+    /// <para>把端口值转换为展示用的字符串（字节数组显示其长度与十六进制摘要）。</para>
     /// </summary>
     /// <param name="value">
-    /// <para>端口值。</para>
     /// The port value.
+    /// <para>端口值。</para>
     /// </param>
     /// <returns>
-    /// <para>展示文本。</para>
     /// The display text.
+    /// <para>展示文本。</para>
     /// </returns>
     public static string ToDisplay(object? value)
     {
@@ -182,20 +181,20 @@ internal static class NodeDataUtil
     }
 
     /// <summary>
-    /// <para>把端口值转换为布尔：布尔原样；字符串 <c>true</c>/<c>1</c>/<c>yes</c> 视为真；数值非零视为真。</para>
     /// Converts a port value to a boolean: booleans are returned as-is; strings <c>true</c>/<c>1</c>/<c>yes</c> are true; non-zero numbers are true.
+    /// <para>把端口值转换为布尔：布尔原样；字符串 <c>true</c>/<c>1</c>/<c>yes</c> 视为真；数值非零视为真。</para>
     /// </summary>
     /// <param name="value">
-    /// <para>端口值。</para>
     /// The port value.
+    /// <para>端口值。</para>
     /// </param>
     /// <param name="fallback">
-    /// <para>无法判定时的默认值。</para>
     /// The default value when undecidable.
+    /// <para>无法判定时的默认值。</para>
     /// </param>
     /// <returns>
-    /// <para>转换后的布尔值。</para>
     /// The converted boolean.
+    /// <para>转换后的布尔值。</para>
     /// </returns>
     public static bool ToBool(object? value, bool fallback = false)
     {
@@ -212,20 +211,20 @@ internal static class NodeDataUtil
     }
 
     /// <summary>
-    /// <para>把端口值转换为 32 位整数，失败时返回 <paramref name="fallback"/>。</para>
     /// Converts a port value to a 32-bit integer, returning <paramref name="fallback"/> on failure.
+    /// <para>把端口值转换为 32 位整数，失败时返回 <paramref name="fallback"/>。</para>
     /// </summary>
     /// <param name="value">
-    /// <para>端口值。</para>
     /// The port value.
+    /// <para>端口值。</para>
     /// </param>
     /// <param name="fallback">
-    /// <para>转换失败时的默认值。</para>
     /// The default value on conversion failure.
+    /// <para>转换失败时的默认值。</para>
     /// </param>
     /// <returns>
-    /// <para>转换后的整数。</para>
     /// The converted integer.
+    /// <para>转换后的整数。</para>
     /// </returns>
     public static int ToInt(object? value, int fallback = 0)
     {
@@ -242,20 +241,20 @@ internal static class NodeDataUtil
     }
 
     /// <summary>
-    /// <para>把端口值转换为双精度浮点数，失败时返回 <paramref name="fallback"/>。</para>
     /// Converts a port value to a double, returning <paramref name="fallback"/> on failure.
+    /// <para>把端口值转换为双精度浮点数，失败时返回 <paramref name="fallback"/>。</para>
     /// </summary>
     /// <param name="value">
-    /// <para>端口值。</para>
     /// The port value.
+    /// <para>端口值。</para>
     /// </param>
     /// <param name="fallback">
-    /// <para>转换失败时的默认值。</para>
     /// The default value on conversion failure.
+    /// <para>转换失败时的默认值。</para>
     /// </param>
     /// <returns>
-    /// <para>转换后的浮点数。</para>
     /// The converted double.
+    /// <para>转换后的浮点数。</para>
     /// </returns>
     public static double ToDouble(object? value, double fallback = 0)
     {

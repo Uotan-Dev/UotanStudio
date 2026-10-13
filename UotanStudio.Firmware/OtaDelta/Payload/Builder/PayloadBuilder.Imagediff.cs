@@ -15,13 +15,13 @@ public sealed partial class PayloadBuilder
     /// 生成的 IMGDIFF2 容器；未变更区段仍为 SOURCE_COPY。</para>
     /// </summary>
     /// <remarks>
-    /// SOURCE_IMAGEDIFF (value 15) is this repository's payload extension, mirroring the recovery block-OTA
-    /// imgdiff encoding; upstream update_engine rejects it and the parallel extractor path reports it as an
+    /// SOURCE_IMAGEDIFF (value 15) is this repository's payload extension, mirroring the block-OTA
+    /// imgdiff encoding; the parallel extractor path reports it as an
     /// unsupported operation. LZ4DIFF generation is deliberately not attempted: the container's inner streams
     /// are computed over LZ4-compressed partition representations that no local oracle produces, so its exact
     /// framing cannot be pinned from the applier alone.
-    /// <para>SOURCE_IMAGEDIFF（值 15）是本仓库的载荷扩展，对应 recovery 块 OTA 的 imgdiff 编码；上游 update_engine
-    /// 会拒绝它，并行提取路径会将其报告为不支持的操作。LZ4DIFF 生成被刻意放弃：其内部流建立在 LZ4 压缩分区表示之上，
+    /// <para>SOURCE_IMAGEDIFF（值 15）是本仓库的载荷扩展，对应块 OTA 的 imgdiff 编码；
+    /// 并行提取路径会将其报告为不支持的操作。LZ4DIFF 生成被刻意放弃：其内部流建立在 LZ4 压缩分区表示之上，
     /// 本地没有能生成该表示的 oracle，仅凭 applier 无法钉死其精确封装。</para>
     /// </remarks>
     /// <param name="partitionName">

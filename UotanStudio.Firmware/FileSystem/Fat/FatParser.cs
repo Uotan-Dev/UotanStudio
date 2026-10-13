@@ -7,16 +7,8 @@ using UotanStudio.Firmware.Core;
 namespace UotanStudio.Firmware.FileSystem.Fat;
 
 /// <summary>
-/// Read-only view over a FAT12/FAT16/FAT32 volume image. The on-disk decoding is delegated to the
-/// managed DiscUtils FAT implementation; this type adds the bounded-input guards the firmware pipeline
-/// requires: a structural boot-record check before the library is engaged, a ceiling on the in-memory
-/// allocation table, entry-count and depth limits for the directory walk, and per-file extent validation
-/// against the real image length so a volume whose BIOS parameter block declares more sectors than the
-/// file holds still yields every byte-range it genuinely covers.
-/// <para>FAT12/FAT16/FAT32 卷镜像的只读视图。磁盘解码交给托管的 DiscUtils FAT 实现，本类型补上固件流水
-/// 线要求的不可信输入约束：调用库之前先做结构化引导记录校验、限制内存中的文件分配表大小、为目录遍历设置
-/// 条目数与深度上限，并按镜像真实长度逐文件校验区间，使 BIOS 参数块声明扇区数多于实际文件长度的卷仍能解
-/// 出它确实覆盖的全部字节。</para>
+/// Read-only view over a FAT12/FAT16/FAT32 volume image, decoding through the managed DiscUtils FAT implementation behind bounded-input guards: a structural boot-record check, an allocation-table ceiling, directory walk limits, and per-file extent validation against the real image length.
+/// <para>FAT12/FAT16/FAT32 卷镜像的只读视图，磁盘解码委托给托管的 DiscUtils FAT 实现，并加有不可信输入约束：结构化引导记录校验、文件分配表上限、目录遍历限制，以及按镜像真实长度逐文件校验区间。</para>
 /// </summary>
 public sealed class FatParser : IDisposable
 {

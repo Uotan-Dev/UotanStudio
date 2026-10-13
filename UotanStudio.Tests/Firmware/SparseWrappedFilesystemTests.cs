@@ -169,8 +169,8 @@ public sealed class SparseWrappedFilesystemTests
     }
 
     /// <summary>
-    /// <para>测试用临时文件集（sparse 镜像 / raw 镜像 / 源目录），释放时全部删除。</para>
     /// A temporary fixture (sparse image / raw image / source directory) that deletes everything on dispose.
+    /// <para>测试用临时文件集（sparse 镜像 / raw 镜像 / 源目录），释放时全部删除。</para>
     /// </summary>
     private sealed class Fixture : IDisposable
     {

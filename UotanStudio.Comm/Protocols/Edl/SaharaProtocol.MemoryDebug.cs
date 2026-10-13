@@ -12,17 +12,14 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// MEMORY_READ 请求具体的地址区间。</para>
 /// </summary>
 /// <remarks>
-/// The framing follows the reference server: a HELLO in memory-debug mode is answered with a
+/// The framing: a HELLO in memory-debug mode is answered with a
 /// HELLO_RESPONSE naming that mode, the target then sends MEMORY_DEBUG or MEMORY_DEBUG64 carrying the
-/// table location, and every MEMORY_READ reply is raw bytes with no packet header
-/// (QSaharaServer/src/sahara_protocol.h:60-86, :264-278 and :281-297 for the packet identities and
-/// layouts, and QSaharaServer/src/sahara_protocol.c:591-633 and :700-715 for the reception of the
-/// unframed table payload). The HELLO_RESPONSE has no packet-size field, so the host keeps
+/// table location, and every MEMORY_READ reply is raw bytes with no packet header.
+/// The HELLO_RESPONSE has no packet-size field, so the host keeps
 /// advertising <see cref="EdlConstants.DefaultMaxPacketLength"/> and never negotiates a smaller value.
-/// <para>成帧方式参照服务端：内存调试模式下的 HELLO 会以声明该模式的 HELLO_RESPONSE 应答，目标随后
-/// 发送携带表位置的 MEMORY_DEBUG 或 MEMORY_DEBUG64，而每次 MEMORY_READ 的回复都是不带包头的裸字节
-/// （包标识与布局见 QSaharaServer/src/sahara_protocol.h:60-86、:264-278 与 :281-297；不带帧的表载荷
-/// 接收见 QSaharaServer/src/sahara_protocol.c:591-633 与 :700-715）。HELLO_RESPONSE 不含包长字段，
+/// <para>成帧方式：内存调试模式下的 HELLO 会以声明该模式的 HELLO_RESPONSE 应答，目标随后
+/// 发送携带表位置的 MEMORY_DEBUG 或 MEMORY_DEBUG64，而每次 MEMORY_READ 的回复都是不带包头的裸字节。
+/// HELLO_RESPONSE 不含包长字段，
 /// 因此主机继续对外声明 <see cref="EdlConstants.DefaultMaxPacketLength"/>，绝不协商更小的值。</para>
 /// </remarks>
 public sealed partial class SaharaProtocol
@@ -34,11 +31,11 @@ public sealed partial class SaharaProtocol
     /// Gets or sets the largest region this host is willing to dump in one call.
     /// <para>获取或设置主机单次愿意转储的最大区域长度。</para>
     /// </summary>
-    /// <value>A local byte ceiling; the reference implementations bound a region only by the target's
-    /// own table (QSaharaServer/src/sahara_protocol.c:922-923), so this guard exists to keep a
+    /// <value>A local byte ceiling; the protocol bounds a region only by the target's
+    /// own table, so this guard exists to keep a
     /// malformed table from driving an unbounded write. Must be positive.
-    /// <para>本地字节上限；参考实现只用目标自报的表来约束区域
-    /// （QSaharaServer/src/sahara_protocol.c:922-923），因此该护栏是为了让畸形的表无法驱动无限写入。
+    /// <para>本地字节上限；协议只用目标自报的表来约束区域
+    /// ，因此该护栏是为了让畸形的表无法驱动无限写入。
     /// 必须为正数。</para></value>
     public long MaxMemoryDumpRegionBytes { get; set; } = EdlConstants.SaharaMemoryRegionLimitBytes;
 
@@ -196,12 +193,15 @@ public sealed partial class SaharaProtocol
     }
 
     /// <summary>
-    /// Streams one target memory region into a file, publishing it only after the whole region
-    /// arrived: the bytes land in <c>filePath.partial</c> and are renamed over the target path once
-    /// the dump finishes, so a failure leaves any previous file untouched.
-    /// <para>把单个目标内存区域流式写入文件，只有整段区域到齐后才发布：字节先落在
-    /// <c>filePath.partial</c>，转储完成后再重命名覆盖目标路径，因此失败时既有文件保持原样。</para>
+    /// Streams one target memory region into a file, publishing it only after the whole region arrived.
+    /// <para>把单个目标内存区域流式写入文件，只有整段区域到齐后才发布。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>The bytes land in <c>filePath.partial</c> and are renamed over the target path once the dump
+    /// finishes, so a failure leaves any previous file untouched.</para>
+    /// <para>字节先落在 <c>filePath.partial</c>，转储完成后再重命名覆盖目标路径，因此失败时既有文件保持
+    /// 原样。</para>
+    /// </remarks>
     /// <param name="region">The region to dump. <para>要转储的区域。</para></param>
     /// <param name="filePath">The destination file path chosen by the caller; an existing file is
     /// replaced only after a complete dump. <para>由调用方选定的目标文件路径；既有文件仅在完整转储之后被替换。</para></param>
@@ -252,13 +252,11 @@ public sealed partial class SaharaProtocol
 
     /// <summary>
     /// Collects every non-empty region of the target's debug table into
-    /// <paramref name="outputDirectory"/>, naming each file after the region's own proposed name.
-    /// Zero-length regions are skipped the way the reference server skips them
-    /// (QSaharaServer/src/sahara_protocol.c:886-887), and the session ends with a Sahara RESET so the
-    /// target leaves memory-debug mode.
-    /// <para>把目标调试表中所有非空区域收集到 <paramref name="outputDirectory"/>，每个文件以区域自报的
-    /// 名称命名。零长度区域按参考服务端的方式跳过（QSaharaServer/src/sahara_protocol.c:886-887），
-    /// 会话以一次 Sahara RESET 结束，使目标离开内存调试模式。</para>
+    /// <paramref name="outputDirectory"/>.
+    /// <para>把目标调试表中所有非空区域收集到 <paramref name="outputDirectory"/>。</para>
+    /// Each file is named after the region's own proposed name, and the session ends with a Sahara RESET
+    /// so the target leaves memory-debug mode.
+    /// <para>每个文件以区域自报的名称命名，会话以一次 Sahara RESET 结束，使目标离开内存调试模式。</para>
     /// </summary>
     /// <param name="outputDirectory">Directory the region files are written into; created when
     /// missing. <para>写入区域文件的目录；不存在时会被创建。</para></param>
@@ -320,14 +318,11 @@ public sealed partial class SaharaProtocol
 
     /// <summary>
     /// Validates a file name proposed by the target, refusing anything that could escape the output
-    /// directory or collide with a Windows device namespace. The reference server strips leading
-    /// separators and refuses <c>..</c> before opening a dump file
-    /// (QSaharaServer/src/sahara_protocol.c:727-745); the C# reference applies the same rejection with
-    /// a Windows reserved-name check (edl-ng-ref/QCEDL.NET/Layers/PBL/Sahara/QualcommSaharaRamDump.cs:450-477).
-    /// <para>校验目标提出的文件名，拒绝任何可能逃出输出目录或与 Windows 设备命名空间冲突的名称。参考
-    /// 服务端在打开转储文件前会剥掉前导分隔符并拒绝 <c>..</c>
-    /// （QSaharaServer/src/sahara_protocol.c:727-745）；C# 参考实现施加同样的拒绝并附带 Windows 保留名
-    /// 检查（edl-ng-ref/QCEDL.NET/Layers/PBL/Sahara/QualcommSaharaRamDump.cs:450-477）。</para>
+    /// directory or collide with a Windows device namespace.
+    /// <para>校验目标提出的文件名，拒绝任何可能逃出输出目录或与 Windows 设备命名空间冲突的名称。</para>
+    /// Leading separators are stripped, <c>..</c> is refused before opening a dump file, and a Windows
+    /// reserved-name check applies.
+    /// <para>打开转储文件前会剥掉前导分隔符并拒绝 <c>..</c>，并附带 Windows 保留名检查。</para>
     /// </summary>
     /// <param name="fileName">The candidate name from the target's debug table.
     /// <para>来自目标调试表的候选名称。</para></param>
@@ -434,10 +429,9 @@ public sealed partial class SaharaProtocol
     }
 
     /// <summary>
-    /// Parses the debug region table into records at the field offsets the reference header defines
-    /// for the two record widths (QSaharaServer/src/sahara_protocol.h:463-479).
-    /// <para>按参考头文件为两种记录宽度所定义的字段偏移，把调试区域表解析为记录
-    /// （QSaharaServer/src/sahara_protocol.h:463-479）。</para>
+    /// Parses the debug region table into records at the field offsets the protocol header defines
+    /// for the two record widths.
+    /// <para>按协议头为两种记录宽度所定义的字段偏移，把调试区域表解析为记录。</para>
     /// </summary>
     /// <param name="table">The raw table bytes. <para>原始表字节。</para></param>
     /// <param name="extended">Whether the table uses the 64-byte record layout. <para>表是否采用 64 字节记录布局。</para></param>
@@ -493,11 +487,9 @@ public sealed partial class SaharaProtocol
 
     /// <summary>
     /// Leaves Sahara memory-debug mode by sending RESET and waiting for the RESET_RESPONSE, so a caller
-    /// that collected the region bytes itself still ends the link the way the reference dump sequence
-    /// does (edl-ng-ref/QCEDL.NET/Layers/PBL/Sahara/QualcommSaharaRamDump.cs:79).
+    /// that collected the region bytes itself still ends the link cleanly.
     /// <para>通过发送 RESET 并等待 RESET_RESPONSE 离开 Sahara 内存调试模式，使自行收集区域字节的调用方
-    /// 也能像参考转储序列那样结束链路（edl-ng-ref/QCEDL.NET/Layers/PBL/Sahara/
-    /// QualcommSaharaRamDump.cs:79）。</para>
+    /// 也能干净地结束链路。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation token checked while writing and reading.
     /// <para>在写出与读取期间检查的取消令牌。</para></param>
@@ -513,11 +505,9 @@ public sealed partial class SaharaProtocol
 
     /// <summary>
     /// Best-effort RESET for the failure path of a caller-owned collection: the write is attempted and
-    /// every completion failure is logged and swallowed so the original cause survives, matching the
-    /// reference cleanup (edl-ng-ref/QCEDL.NET/Layers/PBL/Sahara/QualcommSaharaRamDump.cs:84).
+    /// every completion failure is logged and swallowed so the original cause survives.
     /// <para>为调用方自持的收集失败路径提供尽力而为的 RESET：仍会尝试写出，但任何完成失败都只记录并被吞掉，
-    /// 使原始原因得以保留，与参考实现的清理方式一致（edl-ng-ref/QCEDL.NET/Layers/PBL/Sahara/
-    /// QualcommSaharaRamDump.cs:84）。</para>
+    /// 使原始原因得以保留。</para>
     /// </summary>
     public async Task TryResetMemoryDebugLinkAsync()
     {
@@ -530,10 +520,8 @@ public sealed partial class SaharaProtocol
     }
 
     /// <summary>
-    /// Sends Sahara RESET and waits for the matching RESET_RESPONSE, the way the reference protocol
-    /// leaves memory-debug mode (QSaharaServer/src/sahara_protocol.h:70-71).
-    /// <para>发送 Sahara RESET 并等待对应的 RESET_RESPONSE，与参考协议离开内存调试模式的方式一致
-    /// （QSaharaServer/src/sahara_protocol.h:70-71）。</para>
+    /// Sends Sahara RESET and waits for the matching RESET_RESPONSE to leave memory-debug mode.
+    /// <para>发送 Sahara RESET 并等待对应的 RESET_RESPONSE，以离开内存调试模式。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     private async Task SendResetOwnedAsync(CancellationToken cancellationToken)

@@ -459,8 +459,8 @@ public class SparseRoundTripTests
     /// 写入分区缓冲，DONT_CARE（及写入游标）被跳过——即上游重稀疏化不变量针对的
     /// ABOOT/fastbootd 语义。</para>
     /// </summary>
-    /// <param name="pieces"><para>按刷写顺序排列的分片文件。</para>The piece files in flash order.</param>
-    /// <param name="partitionSize"><para>分区逻辑容量（字节）。</para>The partition's logical capacity in bytes.</param>
+    /// <param name="pieces">The piece files in flash order. <para>按刷写顺序排列的分片文件。</para></param>
+    /// <param name="partitionSize">The partition's logical capacity in bytes. <para>分区逻辑容量（字节）。</para></param>
     private static byte[] FlashPiecesInOrder(IReadOnlyList<string> pieces, long partitionSize)
     {
         var partition = new byte[partitionSize];

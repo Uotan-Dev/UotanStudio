@@ -4,7 +4,7 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.Patching;
 
-/// <summary>Inspects actual graphs rather than trusting plugin capability declarations.</summary>
+/// <summary>Inspects actual graphs rather than trusting plugin capability declarations.<para>检查实际的节点图，而不是轻信插件的能力声明。</para></summary>
 internal static class PatchWorkflowPolicy
 {
     internal static (bool HasPatches, bool Safe) Inspect(IReadOnlyList<FlowNodeViewModel> nodes)

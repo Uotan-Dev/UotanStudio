@@ -5,12 +5,17 @@ using UotanStudio.Firmware.Patching;
 
 namespace UotanStudio.Services.Patching;
 
-/// <summary>Bounded offline configuration I/O. Image streams must use the image adapter instead.</summary>
+/// <summary>Bounded offline configuration I/O. Image streams must use the image adapter instead.<para>有界的离线配置读写。镜像流应改用镜像适配器。</para></summary>
 public static class PatchFileService
 {
     private const int MaxBytes = TextPatch.MaxCharacters * 4;
 
-    /// <summary>Finds files below a root without following links. Patterns are relative and case sensitive.</summary>
+    /// <summary>Finds files below a root without following links. Patterns are relative and case sensitive.<para>在根目录下查找文件且不跟随链接。模式为相对路径且区分大小写。</para></summary>
+    /// <param name="root">Directory searched recursively.<para>递归搜索的目录。</para></param>
+    /// <param name="pattern">Relative case-sensitive match pattern.<para>相对且区分大小写的匹配模式。</para></param>
+    /// <param name="expectedMatches">Required number of matches.<para>要求的匹配数量。</para></param>
+    /// <param name="token">Token cancelling the search.<para>取消搜索的令牌。</para></param>
+    /// <returns>Sorted absolute paths of the matches.<para>匹配项排序后的绝对路径。</para></returns>
     public static IReadOnlyList<string> Find(string root, string pattern, int expectedMatches, CancellationToken token)
     {
         if (expectedMatches is < 0 or > 100_000)
@@ -95,7 +100,10 @@ public static class PatchFileService
             && FileSystemName.MatchesSimpleExpression(pattern.Replace('\\', '/'), relative, false);
     }
 
-    /// <summary>Reads strictly decoded UTF-8/UTF-16 with a fixed byte and character limit.</summary>
+    /// <summary>Reads strictly decoded UTF-8/UTF-16 with a fixed byte and character limit.<para>按固定的字节与字符上限严格解码并读取 UTF-8 或 UTF-16 文本。</para></summary>
+    /// <param name="path">File to read.<para>要读取的文件。</para></param>
+    /// <param name="token">Token cancelling the read.<para>取消读取的令牌。</para></param>
+    /// <returns>Text with its physical encoding and digest.<para>含物理编码与摘要的文本。</para></returns>
     public static async Task<PatchTextDocument> ReadAsync(string path, CancellationToken token)
     {
         RejectLinks(path);
@@ -136,7 +144,11 @@ public static class PatchFileService
         return new PatchTextDocument(text, encoding, Convert.ToHexString(SHA256.HashData(bytes)));
     }
 
-    /// <summary>Publishes to a new output file using a sibling temporary file; existing files are preserved.</summary>
+    /// <summary>Publishes to a new output file using a sibling temporary file; existing files are preserved.<para>使用同级临时文件发布到新输出路径，已有文件保持不变。</para></summary>
+    /// <param name="path">New output file path.<para>新的输出文件路径。</para></param>
+    /// <param name="text">Text to publish.<para>要发布的文本。</para></param>
+    /// <param name="encoding">Encoding name to write with.<para>写入所使用的编码名称。</para></param>
+    /// <param name="token">Token cancelling the write.<para>取消写入的令牌。</para></param>
     public static async Task WriteNewAsync(string path, string text, string encoding, CancellationToken token)
     {
         if (text.Length > TextPatch.MaxCharacters || text.Contains('\0'))
@@ -181,17 +193,11 @@ public static class PatchFileService
     };
 
     /// <summary>
-    /// Rejects reparse points between the deepest existing non-link directory of the path and the path itself.
-    /// <para>
-    /// 沿目录向上检查到已存在的最深真实目录为止，中途遇到符号链接即拒绝。边界之上的祖先由调用方或操作系统选定，
-    /// 不受补丁内容控制，因此不参与判定；macOS 上 <c>/var</c> 是指向 <c>/private/var</c> 的符号链接，
-    /// 临时目录必定经由它解析，把链接本身当作边界并拒绝会误伤所有合法的工作区。
-    /// </para>
-    /// The walk stops at the deepest existing non-link directory because ancestors above a workspace root are chosen
-    /// by the caller or the operating system and are not patch-controlled. macOS resolves <c>Path.GetTempPath()</c>
-    /// through the <c>/var</c> to <c>/private/var</c> symbolic link, so treating that link as the boundary rejects
-    /// every legitimate workspace.
+    /// Rejects reparse points between the deepest existing real directory of a path and
+    /// that path itself.
+    /// <para>拒绝某路径最深真实上级目录与该路径本身之间的重解析点。</para>
     /// </summary>
+    /// <param name="path">Path whose directory chain is checked.<para>检查其目录链的路径。</para></param>
     private static void RejectLinks(string path)
     {
         var full = Path.GetFullPath(path);
@@ -210,11 +216,12 @@ public static class PatchFileService
     }
 
     /// <summary>
-    /// Returns the deepest ancestor that already exists as a real directory. A component that does not exist, or that
-    /// is itself a symbolic link, is skipped so the search continues upwards for a real directory; <see cref="RejectLinks"/>
-    /// still inspects every skipped link while walking down to the target, so a link planted inside a workspace is
-    /// rejected while an operating-system link above it is not.
+    /// Returns the deepest ancestor that already exists as a real directory, skipping
+    /// missing components and symbolic links.
+    /// <para>返回已作为真实目录存在的最深上级目录，跳过缺失组件与符号链接。</para>
     /// </summary>
+    /// <param name="full">Fully qualified path walked upwards.<para>向上遍历的完整路径。</para></param>
+    /// <returns>Absolute path of the boundary directory.<para>边界目录的绝对路径。</para></returns>
     private static string DeepestExistingAncestor(string full)
     {
         for (var current = Path.GetDirectoryName(full); current is not null; current = Path.GetDirectoryName(current))
@@ -233,5 +240,8 @@ public static class PatchFileService
     }
 }
 
-/// <summary>Text together with its physical encoding and original file identity.</summary>
+/// <summary>Text together with its physical encoding and original file identity.<para>文本连同其物理编码与原始文件身份。</para></summary>
+/// <param name="Text">Decoded document text.<para>解码后的文档文本。</para></param>
+/// <param name="Encoding">Name of the physical encoding.<para>物理编码的名称。</para></param>
+/// <param name="Sha256">Digest of the original bytes.<para>原始字节的摘要。</para></param>
 public sealed record PatchTextDocument(string Text, string Encoding, string Sha256);

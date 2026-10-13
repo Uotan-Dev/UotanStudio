@@ -50,10 +50,10 @@ public sealed partial class ProjectSession
     public event Action? Changed;
 
     /// <summary>
-    /// <para>解决方案从磁盘完整重新加载后触发（打开、添加/删除子项目）。宿主据此重建与解决方案
-    /// 而非文件路径绑定的状态，例如交付面板。</para>
     /// Raised after a solution is reloaded from disk in full (open, add/remove sub-project). Hosts use it
     /// to rebuild state keyed by the solution rather than by its file path, such as the delivery panel.
+    /// <para>解决方案从磁盘完整重新加载后触发（打开、添加/删除子项目）。宿主据此重建与解决方案
+    /// 而非文件路径绑定的状态，例如交付面板。</para>
     /// </summary>
     public event Action? SolutionReloaded;
 

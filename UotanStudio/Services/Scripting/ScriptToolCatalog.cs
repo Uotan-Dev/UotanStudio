@@ -6,13 +6,31 @@ using UotanStudio.Services.Network;
 namespace UotanStudio.Services.Scripting;
 
 /// <summary>
-/// Builds the host-side, data-driven tool surface exposed to a plugin script as <c>tool</c>. Tools are
-/// named with the same hierarchy as the workflow-node keys, so a node and its script tool target the
-/// same capability. Dangerous tools are flagged here and confirmed centrally by <see cref="LuaScriptEngine"/>.
+/// Builds the data-driven tool table exposed to a plugin script as <c>tool</c>, naming each entry like
+/// its workflow-node key. <para>构建以 <c>tool</c> 暴露给插件脚本的数据驱动工具表，条目名与对应工作流节点键一致。</para>
 /// </summary>
 public static class ScriptToolCatalog
 {
-    /// <summary>Creates the tool table for one script execution.</summary>
+    /// <summary>
+    /// Creates the tool table for one script execution.
+    /// <para>为一次脚本执行创建工具表。</para>
+    /// </summary>
+    /// <param name="context">
+    /// Execution context that owns resources registered by the tools.
+    /// <para>持有工具所注册资源的执行上下文。</para>
+    /// </param>
+    /// <param name="gateway">
+    /// Gateway dispatching device and flash operations for the tools.
+    /// <para>为工具分发设备与刷写操作的网关。</para>
+    /// </param>
+    /// <param name="httpClient">
+    /// Client that download entries call to fetch remote content.
+    /// <para>下载条目获取远端内容所调用的客户端。</para>
+    /// </param>
+    /// <returns>
+    /// The tool table keyed by hierarchical tool name.
+    /// <para>以层级工具名为键的工具表。</para>
+    /// </returns>
     public static IReadOnlyDictionary<string, ScriptTool> Create(
         INodeExecutionContext context,
         IScriptToolGateway gateway,

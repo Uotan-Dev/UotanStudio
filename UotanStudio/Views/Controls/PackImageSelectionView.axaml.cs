@@ -11,12 +11,12 @@ using UotanStudio.Services.Projects;
 
 namespace UotanStudio.Views.Controls;
 
-/// <summary><para>交付表单共用的镜像选择列表，读取文件大小并维护本地选择。</para>Shared delivery image picker; reads file sizes and holds local selections.</summary>
+/// <summary>Shared delivery image picker; reads file sizes and holds local selections. <para>交付表单共用的镜像选择列表，读取文件大小并维护本地选择。</para></summary>
 public partial class PackImageSelectionView : UserControl
 {
     public static readonly StyledProperty<bool> ShowOriginalsProperty =
         AvaloniaProperty.Register<PackImageSelectionView, bool>(nameof(ShowOriginals));
-    /// <summary><para>空列表占位的显示属性。</para>Controls the empty-list placeholder.</summary>
+    /// <summary>Controls the empty-list placeholder. <para>空列表占位的显示属性。</para></summary>
     public static readonly StyledProperty<bool> ShowEmptyListProperty =
         AvaloniaProperty.Register<PackImageSelectionView, bool>(nameof(ShowEmptyList));
 
@@ -32,15 +32,15 @@ public partial class PackImageSelectionView : UserControl
     private int _externalGroupNumber;
     private bool _selectionNotificationPending;
 
-    /// <summary><para>是否显示原包镜像。</para>Whether to include original images.</summary>
+    /// <summary>Whether to include original images. <para>是否显示原包镜像。</para></summary>
     public bool ShowOriginals { get => GetValue(ShowOriginalsProperty); set => SetValue(ShowOriginalsProperty, value); }
-    /// <summary><para>没有镜像分组时是否显示一个空列表。</para>Whether to show an empty list when no image groups exist.</summary>
+    /// <summary>Whether to show an empty list when no image groups exist. <para>没有镜像分组时是否显示一个空列表。</para></summary>
     public bool ShowEmptyList { get => GetValue(ShowEmptyListProperty); set => SetValue(ShowEmptyListProperty, value); }
-    /// <summary><para>是否正在加载或选择文件。</para>Whether files are being loaded or picked.</summary>
+    /// <summary>Whether files are being loaded or picked. <para>是否正在加载或选择文件。</para></summary>
     public bool IsBusy => _loading || _picking;
-    /// <summary><para>加载及文件选择状态发生变化。</para>Loading or file-picker state changed.</summary>
+    /// <summary>Loading or file-picker state changed. <para>加载及文件选择状态发生变化。</para></summary>
     public event EventHandler? StateChanged;
-    /// <summary><para>所选镜像集合更新，包括全选、原包开关及项目刷新。</para>Selected images changed, including select-all, originals and project refresh.</summary>
+    /// <summary>Selected images changed, including select-all, originals and project refresh. <para>所选镜像集合更新，包括全选、原包开关及项目刷新。</para></summary>
     public event EventHandler? SelectedImagesChanged;
 
     internal event EventHandler? LayoutChanged;
@@ -48,7 +48,7 @@ public partial class PackImageSelectionView : UserControl
 
     private void OnLayoutToggleChanged(object? sender, RoutedEventArgs e) => LayoutChanged?.Invoke(this, EventArgs.Empty);
 
-    /// <summary><para>初始化虚拟化镜像列表。</para>Initializes the virtualized image lists.</summary>
+    /// <summary>Initializes the virtualized image lists. <para>初始化虚拟化镜像列表。</para></summary>
     public PackImageSelectionView()
     {
         InitializeComponent();
@@ -83,7 +83,7 @@ public partial class PackImageSelectionView : UserControl
         base.OnDetachedFromVisualTree(e);
     }
 
-    /// <summary><para>刷新当前项目的镜像路径，保留仍存在的镜像选择。</para>Refreshes image paths, preserving selections for existing images.</summary>
+    /// <summary>Refreshes image paths, preserving selections for existing images. <para>刷新当前项目的镜像路径，保留仍存在的镜像选择。</para></summary>
     public async Task RefreshAsync()
     {
         if (!_attached) return;

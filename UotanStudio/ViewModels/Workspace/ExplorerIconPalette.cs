@@ -3,13 +3,13 @@ using Avalonia.Media;
 namespace UotanStudio.ViewModels.Workspace;
 
 /// <summary>
-/// <para>资源管理器图标配色：每个文件家族一个固定色，参考 VS / VS Code 解决方案管理器的着色方式，
-/// 由文件树节点与右键菜单共用。颜色取中等明度，在浅色与深色主题下都可辨识，因此不随后续主题切换重算，
-/// 与 VS 保持一致；这些颜色只用于展示，不参与任何格式或归属判定。</para>
 /// Explorer icon palette: one fixed colour per file family, following the way VS / VS Code colour their
 /// explorer icons, shared by the file-tree nodes and the context menu. The colours are mid-tone so they
 /// stay legible in both the light and dark themes and therefore do not change with the theme, matching VS.
 /// Display-only; no format or ownership decision uses them.
+/// <para>资源管理器图标配色：每个文件家族一个固定色，参考 VS / VS Code 解决方案管理器的着色方式，
+/// 由文件树节点与右键菜单共用。颜色取中等明度，在浅色与深色主题下都可辨识，因此不随后续主题切换重算，
+/// 与 VS 保持一致；这些颜色只用于展示，不参与任何格式或归属判定。</para>
 /// </summary>
 public static class ExplorerIconPalette
 {

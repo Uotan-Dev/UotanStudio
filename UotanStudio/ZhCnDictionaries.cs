@@ -4,23 +4,23 @@ using Avalonia.Markup.Xaml;
 namespace UotanStudio.Locale.ZhCn;
 
 /// <summary>
-/// <para>简体中文通用模块资源字典（<c>Locale/zh-CN/Common.axaml</c> 的代码后置），
-/// AOT 安全的类型实例化。</para>
 /// Simplified-Chinese common-module resource dictionary (code-behind of
 /// <c>Locale/zh-CN/Common.axaml</c>) with AOT-safe typed instantiation.
+/// <para>简体中文通用模块资源字典（<c>Locale/zh-CN/Common.axaml</c> 的代码后置），
+/// AOT 安全的类型实例化。</para>
 /// </summary>
 public partial class Common : ResourceDictionary
 {
     /// <summary>
-    /// <para>创建该语言模块字典并从预编译 XAML 填充内容。</para>
     /// Creates the locale module dictionary, loading its content from the precompiled XAML.
+    /// <para>创建该语言模块字典并从预编译 XAML 填充内容。</para>
     /// </summary>
     public Common() => AvaloniaXamlLoader.Load(this);
 }
 
 /// <summary>
-/// <para>简体中文菜单模块资源字典（<c>Locale/zh-CN/Menu.axaml</c> 的代码后置）。</para>
 /// Simplified-Chinese menu-module resource dictionary (code-behind of <c>Locale/zh-CN/Menu.axaml</c>).
+/// <para>简体中文菜单模块资源字典（<c>Locale/zh-CN/Menu.axaml</c> 的代码后置）。</para>
 /// </summary>
 public partial class Menu : ResourceDictionary
 {
@@ -29,8 +29,8 @@ public partial class Menu : ResourceDictionary
 }
 
 /// <summary>
-/// <para>简体中文停靠模块资源字典（<c>Locale/zh-CN/Dock.axaml</c> 的代码后置）。</para>
 /// Simplified-Chinese dock-module resource dictionary (code-behind of <c>Locale/zh-CN/Dock.axaml</c>).
+/// <para>简体中文停靠模块资源字典（<c>Locale/zh-CN/Dock.axaml</c> 的代码后置）。</para>
 /// </summary>
 public partial class Dock : ResourceDictionary
 {
@@ -39,8 +39,8 @@ public partial class Dock : ResourceDictionary
 }
 
 /// <summary>
-/// <para>简体中文节点模块资源字典（<c>Locale/zh-CN/Node.axaml</c> 的代码后置）。</para>
 /// Simplified-Chinese node-module resource dictionary (code-behind of <c>Locale/zh-CN/Node.axaml</c>).
+/// <para>简体中文节点模块资源字典（<c>Locale/zh-CN/Node.axaml</c> 的代码后置）。</para>
 /// </summary>
 public partial class Node : ResourceDictionary
 {
@@ -49,8 +49,8 @@ public partial class Node : ResourceDictionary
 }
 
 /// <summary>
-/// <para>简体中文设置模块资源字典（<c>Locale/zh-CN/Settings.axaml</c> 的代码后置）。</para>
 /// Simplified-Chinese settings-module resource dictionary (code-behind of <c>Locale/zh-CN/Settings.axaml</c>).
+/// <para>简体中文设置模块资源字典（<c>Locale/zh-CN/Settings.axaml</c> 的代码后置）。</para>
 /// </summary>
 public partial class Settings : ResourceDictionary
 {
@@ -59,8 +59,8 @@ public partial class Settings : ResourceDictionary
 }
 
 /// <summary>
-/// <para>简体中文设备模块资源字典（<c>Locale/zh-CN/Device.axaml</c> 的代码后置）。</para>
 /// Simplified-Chinese device-module resource dictionary (code-behind of <c>Locale/zh-CN/Device.axaml</c>).
+/// <para>简体中文设备模块资源字典（<c>Locale/zh-CN/Device.axaml</c> 的代码后置）。</para>
 /// </summary>
 public partial class Device : ResourceDictionary
 {

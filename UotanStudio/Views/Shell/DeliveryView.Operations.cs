@@ -197,9 +197,15 @@ public partial class DeliveryView
         }
     };
 
-    /// <summary><para>解决方案保存前的捕获钩子：表单未加载或正在恢复时返回 null（保留原状态）。</para>
+    /// <summary>
     /// Capture hook invoked before solution saves; returns null (keeping the stored state) when the
-    /// form is not loaded or is being restored.</summary>
+    /// form is not loaded or is being restored.
+    /// <para>解决方案保存前的捕获钩子：表单未加载或正在恢复时返回 null（保留原状态）。</para>
+    /// </summary>
+    /// <returns>
+    /// The captured state element, or null when capture is skipped.
+    /// <para>捕获到的状态元素；跳过捕获时为 null。</para>
+    /// </returns>
     private JsonElement? CaptureDeliveryState()
     {
         var root = _deliveryRoot;
@@ -457,9 +463,15 @@ public partial class DeliveryView
         }
     }
 
-    /// <summary><para>输出前预估磁盘需求并对比剩余空间；不足时弹确认框，用户取消则中断输出。</para>
+    /// <summary>
     /// Estimates disk demand before the export and compares it with free space; on shortage the user is
-    /// asked to confirm, and declining aborts the export.</summary>
+    /// asked to confirm, and declining aborts the export.
+    /// <para>输出前预估磁盘需求并对比剩余空间；不足时弹确认框，用户取消则中断输出。</para>
+    /// </summary>
+    /// <param name="plan">
+    /// The delivery plan whose output directory and demand are checked.
+    /// <para>要检查输出目录与磁盘需求的交付计划。</para>
+    /// </param>
     private async Task CheckDeliveryDiskSpaceAsync(DeliveryPlan plan)
     {
         try

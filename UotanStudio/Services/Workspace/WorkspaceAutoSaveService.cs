@@ -39,19 +39,21 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
     }
 
     /// <summary>
-    /// <para>上次会话快照的轻量签名；无变化时跳过整轮 DTO 构建与序列化。</para>
     /// Lightweight signature of the last session snapshot; the whole DTO build/serialize
     /// pass is skipped when nothing changed.
+    /// <para>上次会话快照的轻量签名；无变化时跳过整轮 DTO 构建与序列化。</para>
     /// </summary>
     private string? _lastSessionSignature;
 
     /// <summary>
-    /// <para>计算会话状态的轻量变更签名（文档路径集合、停靠比例/活动项、节点拓扑与缩放），
-    /// 避免每轮定时器都全量重建 DTO 并序列化。</para>
-    /// Computes a lightweight change signature of the session state (document path set, dock
-    /// proportions/active items, panel visibility, main-window bounds, node topology and zoom) so the timer skips full DTO rebuilds
-    /// and serialization when nothing changed.
+    /// Computes a lightweight change signature of the session state: document paths, dock proportions
+    /// and active items, visibility state, window bounds and node topology.
+    /// <para>计算会话状态的轻量变更签名：文档路径、停靠比例与活动项、可见状态、窗口边界与节点拓扑。</para>
     /// </summary>
+    /// <returns>
+    /// The signature text for the state as currently captured.
+    /// <para>按当前捕获状态生成的签名文本。</para>
+    /// </returns>
     private string ComputeSessionSignature()
     {
         var sb = new System.Text.StringBuilder(64);
@@ -279,7 +281,14 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         return string.IsNullOrEmpty(_projects.CurrentProjectPath) || await _projects.CloseAfterSaveAsync();
     }
 
-    /// <summary>Waits for existing work before prompting; never initiates a save before confirmation.</summary>
+    /// <summary>
+    /// Waits for in-flight work to settle before prompting, and initiates no save before confirmation.
+    /// <para>先等待进行中的工作结束再提示，确认之前不发起任何保存。</para>
+    /// </summary>
+    /// <returns>
+    /// True when each dirty document's confirmation was accepted.
+    /// <para>每个脏文档的确认均被接受时为真。</para>
+    /// </returns>
     private async Task<bool> WaitAndConfirmDocumentsAsync()
     {
         await _coordinator.WaitForIdleAsync();

@@ -3,13 +3,8 @@ using System.Runtime.Versioning;
 namespace UotanStudio.Media.Decoding.MediaFoundation;
 
 /// <summary>
-/// A decoded BGRA frame that stays on the GPU: the video processor wrote it into a shared D3D11 texture
-/// guarded by a keyed mutex, and presentation imports the texture without a CPU download. The producer
-/// must not touch the texture again until <see cref="MarkPresented"/> reports that the compositor finished
-/// the update which acquired key 1 and released key 0.
-/// <para>留在 GPU 上的 BGRA 解码帧：视频处理器把它写入由键互锁守护的共享 D3D11 纹理，呈现时直接导入纹理，
-/// 无需 CPU 下载。在 <see cref="MarkPresented"/> 报告合成器完成"获取键 1、释放键 0"的更新之前，
-/// 生产方不得再触碰该纹理。</para>
+/// A decoded BGRA frame that stays on the GPU: the video processor wrote it into a shared D3D11 texture guarded by a keyed mutex, and presentation imports the texture without a CPU download. The producer must not touch the texture until the presentation completes.
+/// <para>保留在 GPU 上的解码后 BGRA 帧：视频处理器把它写入由 keyed mutex 保护的可共享 D3D11 纹理，呈现侧直接导入该纹理而不经 CPU 下载。生产者须等到呈现完成后再触碰该纹理。</para>
 /// </summary>
 /// <remarks>
 /// <para>
@@ -71,11 +66,8 @@ public sealed class D3D11SharedVideoFrame
     public VideoColorRange ColorRange { get; }
 
     /// <summary>
-    /// Reports that this frame left the presentation path (update completed, failed, or skipped); the
-    /// texture becomes rentable again and the call is idempotent and safe from any thread. Presenters must
-    /// call it exactly once per frame, in a finally clause.
-    /// <para>报告本帧已离开呈现路径（更新完成、失败或被跳过）；纹理重新可租用。调用幂等且可在任意线程执行。
-    /// 呈现器必须对每帧在 finally 中恰好调用一次。</para>
+    /// Reports that this frame left the presentation path (update completed, failed, or skipped).
+    /// <para>报告本帧已离开呈现路径（更新完成、失败或被跳过）。</para>
     /// </summary>
     public void MarkPresented() => _ring.MarkPresented(_slot);
 }

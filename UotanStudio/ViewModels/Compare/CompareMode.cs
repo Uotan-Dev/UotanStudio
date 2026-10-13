@@ -1,51 +1,51 @@
 namespace UotanStudio.ViewModels.Compare;
 
 /// <summary>
-/// <para>对比面板的展示模式。</para>
-/// The compare panel's display mode.
+/// The display mode of a comparison.
+/// <para>比较的展示模式。</para>
 /// </summary>
 public enum CompareMode
 {
     /// <summary>
-    /// <para>空态：尚无比较内容。</para>
     /// Empty state: no comparison yet.
+    /// <para>空态：尚无比较内容。</para>
     /// </summary>
     None,
 
     /// <summary>
-    /// <para>文件夹比较。</para>
     /// Folder comparison.
+    /// <para>文件夹比较。</para>
     /// </summary>
     Folder,
 
     /// <summary>
-    /// <para>文本比较。</para>
     /// Text comparison.
+    /// <para>文本比较。</para>
     /// </summary>
     Text,
 
     /// <summary>
-    /// <para>二进制比较（元数据或十六进制差异视图）。</para>
     /// Binary comparison (metadata or hex-diff view).
+    /// <para>二进制比较（元数据或十六进制差异视图）。</para>
     /// </summary>
     Binary,
 }
 
 /// <summary>
-/// <para>二进制比较的展示视图。</para>
 /// The binary comparison's display view.
+/// <para>二进制比较的展示视图。</para>
 /// </summary>
 public enum BinaryViewKind
 {
     /// <summary>
-    /// <para>元数据视图（格式名/摘要/键值对/条目/组件）。</para>
     /// Metadata view (format name / summary / key-values / entries / components).
+    /// <para>元数据视图（格式名/摘要/键值对/条目/组件）。</para>
     /// </summary>
     Metadata,
 
     /// <summary>
-    /// <para>十六进制差异视图。</para>
     /// Hex-diff view.
+    /// <para>十六进制差异视图。</para>
     /// </summary>
     Hex,
 }

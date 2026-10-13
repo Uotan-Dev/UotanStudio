@@ -4,10 +4,8 @@ namespace UotanStudio.Firmware.BootSecurity.Patcher;
 
 /// <summary>
 /// Small, deliberately conservative parser for the shell DSL shipped inside root packages.
-/// It understands the file operations used by Magisk's <c>util_functions.sh</c> and APatch
-/// installer scripts without executing shell code.
-/// <para>一个刻意保守的小型解析器，用于根包内置的 shell DSL。它理解 Magisk 的 <c>util_functions.sh</c>
-/// 与 APatch 安装脚本使用的文件操作，且不执行任何 shell 代码。</para>
+/// It understands the file operations used by root installer scripts without executing shell code.
+/// <para>一个刻意保守的小型解析器，用于根包内置的 shell DSL。它理解根安装脚本使用的文件操作，且不执行任何 shell 代码。</para>
 /// </summary>
 internal static partial class BootPatchScriptParser
 {

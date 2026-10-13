@@ -1,41 +1,16 @@
 namespace UotanStudio.Comm.Protocols.Mtk.Security;
 
 /// <summary>
-/// Per-chip eFuse cell table transcribed from the MediaTek reference client
-/// (config/brom_config.py:7-221, branch order preserved and every value unchanged).
-/// Each cell is stored either as a base-relative offset below 0x1000, matching the
-/// <c>base + offset</c> expressions in that source, or as an absolute cell address
-/// with the 0x100000000 marker bit set, matching the literal entries. The
-/// reference reader adds the caller supplied eFuse base to the former and uses the
-/// latter verbatim, and it treats any resolved value below 0x1000 as data to report
-/// instead of an address to read (Library/DA/xflash/extension/xflash.py:618-650).
-/// <para>逐芯片 eFuse 单元表，转录自联发科参考客户端（config/brom_config.py:7-221，
-/// 保留分支顺序且每个取值都未改动）。每个单元要么以小于 0x1000 的基准相对偏移保存
-/// （对应源码里的 <c>base + offset</c>），要么以带 0x100000000 标记位的绝对地址
-/// 保存（对应源码里的字面量）。参考读取器把调用方提供的 eFuse 基址加到前者上，后者原样
-/// 使用；解析后小于 0x1000 的值按待上报的数据处理，而不是当作可读地址
-/// （Library/DA/xflash/extension/xflash.py:618-650）。</para>
+/// Per-chip eFuse cell address table for MediaTek BootROM hardware codes. Each cell is stored either
+/// as a base-relative offset below 0x1000 or as an absolute cell address with the 0x100000000 marker
+/// bit set; a resolved value below 0x1000 is reported as data rather than treated as an address to read.
+/// <para>联发科 BootROM 各硬件代码的 eFuse 单元地址表：单元以小于 0x1000 的基址相对偏移或带
+/// 0x100000000 标记位的绝对地址保存；解析后小于 0x1000 的值按数据上报，不当作可读地址。</para>
 /// </summary>
 /// <remarks>
-/// <para>Every group below is the transcription of one branch of that reference class, kept in branch
-/// order. The verified line range of each branch, counted from line 1 of config/brom_config.py, is:</para>
-/// <para>
-/// 0x6570, 0x6580, 0x0321, 0x0335 = 9-16; 0x0551 = 17-25; 0x1208 = 26-41;
-/// 0x6582, 0x6595, 0x6752, 0x6795, 0x6592 = 42-50; 0x6572 = 51-57;
-/// 0x0601, 0x0326, 0x6757, 0x8695 = 58-63; 0x0688 = 64-99; 0x0699, 0x0766 = 100-109;
-/// 0x0788 = 110-122; 0x0717 = 123-132; 0x0690 = 133-141; 0x0707, 0x0725, 0x0813 = 142-153;
-/// 0x0279 = 154-161; 0x0562 = 162-170; 0x0989, 0x0996, 0x0816 = 171-182; 0x8163 = 183-192;
-/// 0x8167 = 193-210; 0x8176 = 211-221.
-/// </para>
-/// <para>下列每个分组都是参考类某一个分支的转录，并保持分支顺序；上面各行号即对应分支在
-/// config/brom_config.py 中经核实的行范围（从第 1 行开始计数）。该参考类只给出按位置排列的单元地址，
-/// 没有为任何单元命名，所以这里不引入字段名；同一分组内重复出现的单元是参考数据自身的重复，
-/// 转录时按原样保留。</para>
-/// <para>A hardware code matching no branch keeps the reference's failure shape: the lookup reports a
-/// miss instead of guessing a table, because that class chains <c>if</c> and <c>elif</c> with no trailing
-/// <c>else</c> (config/brom_config.py:9-221).</para>
-/// <para>没有匹配任何分支的硬件代码保持参考实现的失败形态：查找只会报告未命中而不会猜测一张表，
-/// 因为该类只用 <c>if</c> 与 <c>elif</c> 串联，没有末尾的 <c>else</c>（config/brom_config.py:9-221）。</para>
+/// <para>Groups are keyed by hardware code and keep their internal cell order; repeated cells within a
+/// group are preserved verbatim.</para>
+/// <para>分组按硬件代码组织并保持内部单元顺序；同组内重复的单元按原样保留。</para>
 /// </remarks>
 public static class MtkEfuseFieldTable
 {
@@ -213,20 +188,16 @@ public static class MtkEfuseFieldTable
     public static IReadOnlyList<ushort> SupportedHardwareCodes { get; } =
         [.. Groups.SelectMany(group => group.HardwareCodes).Distinct()];
 
-    /// <summary>Gets every transcribed group as it was read from the reference branch chain.
-    /// <para>获取按参考分支链读入的每个转录分组。</para></summary>
+    /// <summary>Gets every group of hardware codes and encoded cells.
+    /// <para>获取每个分组的硬件代码与编码单元。</para></summary>
     /// <remarks>
     /// <para>The view is built once at type initialisation from the same arrays the lookup walks, so it
-    /// adds no per-call allocation and no startup cost beyond wrapping 18 existing pairs. It exists so
-    /// the census of the transcription (group count, hardware-code count and cell count) can be checked
-    /// against config/brom_config.py:7-221 without reflecting over this type.</para>
-    /// <para>该视图在类型初始化时依据查找实际遍历的同一批数组一次性构造，除了包装现有的 18 对数据
-    /// 之外不增加任何每次调用分配或启动开销。它存在的意义是：无需对本类型反射，就能把转录的普查
-    /// 数量（分组数、硬件代码数与单元数）与 config/brom_config.py:7-221 对照校验。</para>
+    /// adds no per-call allocation.</para>
+    /// <para>该视图在类型初始化时依据查找实际遍历的同一批数组一次性构造，不增加每次调用的分配。</para>
     /// </remarks>
     /// <value>
-    /// The hardware codes and encoded cells of each group, in source branch order.
-    /// <para>每个分组的硬件代码与编码单元，顺序与源码分支一致。</para>
+    /// The hardware codes and encoded cells of each group, in table order.
+    /// <para>每个分组的硬件代码与编码单元，按表顺序排列。</para>
     /// </value>
     internal static IReadOnlyList<(IReadOnlyList<ushort> HardwareCodes, IReadOnlyList<ulong> Cells)> TranscribedGroups { get; } =
         [.. Groups.Select(group => (
@@ -245,11 +216,9 @@ public static class MtkEfuseFieldTable
     /// <summary>Copies the raw encoded cell table for one hardware code.
     /// <para>复制某个硬件代码的原始编码单元表。</para></summary>
     /// <remarks>
-    /// The reference client raises an attribute error for a hardware code with no branch
-    /// (config/brom_config.py:8-221 has no fallback); that case is reported as a lookup miss here
-    /// instead of being approximated with a neighbouring chip's table.
-    /// <para>参考客户端对没有对应分支的硬件代码抛出属性错误（config/brom_config.py:8-221 没有回退分支）；
-    /// 此处把该情况上报为查找失败，而不用相邻芯片的表近似。</para>
+    /// A hardware code with no group is reported as a lookup miss rather than guessed from a
+    /// neighbouring chip's table.
+    /// <para>没有对应分组的硬件代码上报为查找失败，而不用相邻芯片的表近似。</para>
     /// </remarks>
     /// <param name="hardwareCode">The hardware code to look up. 要查找的硬件代码。</param>
     /// <param name="cells">Receives the encoded cells, in table order, when the lookup succeeds.

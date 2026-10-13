@@ -35,10 +35,10 @@ public class VendorRamdiskTableEntry
     /// <para>表条目中记录的原始 32 位 RAMDisk 类型代码。</para>
     /// </summary>
     /// <value>
-    /// The AOSP <c>boot_image.h</c> defines 0 (<c>NONE</c>), 1 (<c>PLATFORM</c>), 2 (<c>RECOVERY</c>) and 3
+    /// Defined values are 0 (<c>NONE</c>), 1 (<c>PLATFORM</c>), 2 (<c>RECOVERY</c>) and 3
     /// (<c>DLKM</c>); see <see cref="VendorRamdiskType"/>. The parser stores the little-endian value verbatim and the
     /// packer re-emits it unchanged, including vendor extensions outside that range.
-    /// <para>AOSP <c>boot_image.h</c> 定义 0（<c>NONE</c>）、1（<c>PLATFORM</c>）、2（<c>RECOVERY</c>）与 3（<c>DLKM</c>），
+    /// <para>已定义取值为 0（<c>NONE</c>）、1（<c>PLATFORM</c>）、2（<c>RECOVERY</c>）与 3（<c>DLKM</c>），
     /// 参见 <see cref="VendorRamdiskType"/>。解析器按小端序原样保存，打包器原样写回，包括该范围之外的厂商扩展值。</para>
     /// </value>
     public uint RamdiskType { get; set; }

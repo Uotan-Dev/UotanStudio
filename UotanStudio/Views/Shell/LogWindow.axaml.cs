@@ -10,8 +10,8 @@ using UotanStudio.Views.Controls;
 namespace UotanStudio.Views.Shell;
 
 /// <summary>
-/// <para>全局日志独立窗口，按等级着色显示日志并提供筛选、清空、导出与文本选择复制。</para>
 /// Standalone global log window with level-colored entries, filtering, clear, export, and selectable text.
+/// <para>全局日志独立窗口，按等级着色显示日志并提供筛选、清空、导出与文本选择复制。</para>
 /// </summary>
 public partial class LogWindow : Window
 {
@@ -19,8 +19,8 @@ public partial class LogWindow : Window
     private readonly LogTextPresenter<LogViewModel.LogEntryViewModel> _presenter;
 
     /// <summary>
-    /// <para>初始化日志窗口，并绑定到跨窗口关闭与重开保留日志的共享视图模型。</para>
     /// Initializes the log window with the shared view model that retains logs across window closure and reopening.
+    /// <para>初始化日志窗口，并绑定到跨窗口关闭与重开保留日志的共享视图模型。</para>
     /// </summary>
     public LogWindow()
     {
@@ -48,8 +48,8 @@ public partial class LogWindow : Window
         => _presenter.Update(e, SharedViewModel.Entries);
 
     /// <summary>
-    /// <para>清空按钮点击事件，清空当前日志集合并滚动到底部。</para>
     /// Clear button click handler, clearing the current log collection and scrolling to bottom.
+    /// <para>清空按钮点击事件，清空当前日志集合并滚动到底部。</para>
     /// </summary>
     private void OnClearClick(object? sender, RoutedEventArgs e)
     {
@@ -61,8 +61,8 @@ public partial class LogWindow : Window
     }
 
     /// <summary>
-    /// <para>导出按钮点击事件，弹出保存对话框并将当前日志集合写入文本文件。</para>
     /// Export button click handler, opening a save dialog and writing the current log collection to a text file.
+    /// <para>导出按钮点击事件，弹出保存对话框并将当前日志集合写入文本文件。</para>
     /// </summary>
     private async void OnExportClick(object? sender, RoutedEventArgs e)
     {
@@ -70,8 +70,8 @@ public partial class LogWindow : Window
     }
 
     /// <summary>
-    /// <para>导出日志到用户选择的文件。</para>
     /// Exports logs to a user-chosen file.
+    /// <para>导出日志到用户选择的文件。</para>
     /// </summary>
     private async Task ExportLogsAsync()
     {

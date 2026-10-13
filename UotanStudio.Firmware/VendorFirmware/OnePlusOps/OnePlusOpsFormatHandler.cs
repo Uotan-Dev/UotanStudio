@@ -323,11 +323,8 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
     }
 
     /// <summary>
-    /// Tries to decrypt partition data with every key in the OnePlusKeyTable.
-    /// A non-matching key is rejected on a probe window, so a full-image pass runs only for the key whose
-    /// probe matched; cryptographic errors from one key are swallowed and the search continues with the next.
-    /// <para>尝试使用 OnePlusKeyTable 中的全部密钥解密分区数据。不匹配的密钥在试探窗口上即被拒绝，
-    /// 因此只有试探命中的密钥才执行全量解密；单个密钥抛出的加密错误会被吞掉，搜索继续转向下一个密钥。</para>
+    /// Tries to decrypt partition data with every key in the OnePlus key table.
+    /// <para>尝试使用一加密钥表中的全部密钥解密分区数据。</para>
     /// </summary>
     /// <param name="data">Candidate partition payload. It must be at least one AES block long and an exact
     /// multiple of <c>16</c> bytes, because the AES-ECB path decrypts whole blocks without padding; the buffer

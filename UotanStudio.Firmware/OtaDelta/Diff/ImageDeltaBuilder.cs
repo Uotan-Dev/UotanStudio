@@ -53,26 +53,24 @@ internal sealed class ImgDiffBuilderOptions
 }
 
 /// <summary>
-/// Produces IMGDIFF2 containers (VERSION2 chunk layout as parsed by <see cref="ImageDeltaPatch.Apply"/>,
-/// which round-trips AOSP recovery imgdiff output) from a raw source and target image: one NORMAL chunk whose
+/// Produces IMGDIFF2 containers from a raw source and target image: one NORMAL chunk whose
 /// payload is a BSDIFF1 stream covering the block-aligned common prefix, plus one RAW chunk carrying the
 /// block-misaligned target tail verbatim.
-/// <para>由原始源镜像与目标镜像生成 IMGDIFF2 容器（即 <see cref="ImageDeltaPatch.Apply"/> 解析、可往返 AOSP
-/// recovery imgdiff 输出的 VERSION2 块布局）：一个 NORMAL 块，其载荷为覆盖块对齐公共前缀的 BSDIFF1 流；
+/// <para>由原始源镜像与目标镜像生成 IMGDIFF2 容器：一个 NORMAL 块，其载荷为覆盖块对齐公共前缀的 BSDIFF1 流；
 /// 外加一个 RAW 块，原样携带未块对齐的目标尾部。</para>
 /// </summary>
 /// <remarks>
 /// The builder always self-checks by default (see <see cref="ImgDiffBuilderOptions.SelfVerify"/>): the generated
 /// container is applied back to the source and compared with the target before the caller can publish it.
-/// Correctness is preferred over patch size; unlike AOSP imgdiff this builder never emits DEFLATE-aware chunks,
+/// Correctness is preferred over patch size; this builder never emits DEFLATE-aware chunks,
 /// so callers must not claim compression-aware diffs.
 /// <para>构建器默认自校验（见 <see cref="ImgDiffBuilderOptions.SelfVerify"/>）：生成的容器会先回放到源镜像并与
-/// 目标比较，之后才交由调用方发布。正确性优先于补丁大小；与 AOSP imgdiff 不同，本构建器不发射 DEFLATE 感知块，
+/// 目标比较，之后才交由调用方发布。正确性优先于补丁大小；本构建器不发射 DEFLATE 感知块，
 /// 调用方不得声称具备压缩感知差分。</para>
 /// </remarks>
 internal static class ImageDeltaBuilder
 {
-    /// <summary>The Android recovery block size the container layout assumes by default. <para>容器布局默认采用的 Android recovery 块大小。</para></summary>
+    /// <summary>The block size the container layout assumes by default. <para>容器布局默认采用的块大小。</para></summary>
     public const int DefaultBlockSize = 4096;
 
     /// <summary>Builds an IMGDIFF2 patch container from raw source and target images. <para>由原始源镜像与目标镜像构建 IMGDIFF2 补丁容器。</para></summary>
@@ -89,8 +87,8 @@ internal static class ImageDeltaBuilder
     /// </param>
     /// <param name="blockSize">
     /// Block alignment for the NORMAL/RAW split; must be a positive power of two no larger than 1 MiB. The
-    /// recovery updater vocabulary assumes <see cref="DefaultBlockSize"/>. <para>NORMAL/RAW 切分的块对齐；必须是不大于
-    /// 1 MiB 的正 2 的幂。recovery 更新器词汇表假定 <see cref="DefaultBlockSize"/>。</para>
+    /// updater vocabulary assumes <see cref="DefaultBlockSize"/>. <para>NORMAL/RAW 切分的块对齐；必须是不大于
+    /// 1 MiB 的正 2 的幂。更新器词汇表假定 <see cref="DefaultBlockSize"/>。</para>
     /// </param>
     /// <param name="options">
     /// Self-verification and size-ceiling settings; <see langword="null"/> uses <see cref="ImgDiffBuilderOptions"/>

@@ -363,9 +363,9 @@ internal struct SaharaDoneResponsePacket
 
 /// <summary>
 /// Sahara RESET packet structure (8 bytes), the host request that makes the target leave its current
-/// mode (QSaharaServer/src/sahara_protocol.h:374-379).
+/// mode.
 /// <para>Sahara RESET 包结构（8 字节），即让目标离开当前模式的主机请求
-/// （QSaharaServer/src/sahara_protocol.h:374-379）。</para>
+/// 。</para>
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal struct SaharaResetPacket
@@ -391,9 +391,9 @@ internal struct SaharaResetResponsePacket
 
 /// <summary>
 /// Sahara MEMORY_DEBUG packet structure (16 bytes), carrying the address and length of the target's
-/// debug region table (QSaharaServer/src/sahara_protocol.h:388-395).
+/// debug region table.
 /// <para>Sahara MEMORY_DEBUG 包结构（16 字节），携带目标调试区域表的地址与长度
-/// （QSaharaServer/src/sahara_protocol.h:388-395）。</para>
+/// 。</para>
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal struct SaharaMemoryDebugPacket
@@ -410,9 +410,9 @@ internal struct SaharaMemoryDebugPacket
 
 /// <summary>
 /// Sahara MEMORY_DEBUG64 packet structure (24 bytes), the widened variant of
-/// <see cref="SaharaMemoryDebugPacket"/> (QSaharaServer/src/sahara_protocol.h:396-401).
+/// <see cref="SaharaMemoryDebugPacket"/>.
 /// <para>Sahara MEMORY_DEBUG64 包结构（24 字节），即 <see cref="SaharaMemoryDebugPacket"/> 的拓宽变体
-/// （QSaharaServer/src/sahara_protocol.h:396-401）。</para>
+/// 。</para>
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal struct SaharaMemoryDebug64Packet
@@ -429,11 +429,9 @@ internal struct SaharaMemoryDebug64Packet
 
 /// <summary>
 /// Sahara MEMORY_READ packet structure (16 bytes), the host request that makes the target return the
-/// addressed bytes with no packet framing (QSaharaServer/src/sahara_protocol.h:403-410 and the
-/// transmitter at QSaharaServer/src/sahara_protocol.c:1465-1495).
+/// addressed bytes with no packet framing.
 /// <para>Sahara MEMORY_READ 包结构（16 字节），即让目标按地址回送裸字节且不再带包框的主机请求
-/// （QSaharaServer/src/sahara_protocol.h:403-410，以及发送实现
-/// QSaharaServer/src/sahara_protocol.c:1465-1495）。</para>
+/// 。</para>
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal struct SaharaMemoryReadPacket
@@ -450,9 +448,9 @@ internal struct SaharaMemoryReadPacket
 
 /// <summary>
 /// Sahara MEMORY_READ64 packet structure (24 bytes), the widened variant of
-/// <see cref="SaharaMemoryReadPacket"/> (QSaharaServer/src/sahara_protocol.h:411-416).
+/// <see cref="SaharaMemoryReadPacket"/>.
 /// <para>Sahara MEMORY_READ64 包结构（24 字节），即 <see cref="SaharaMemoryReadPacket"/> 的拓宽变体
-/// （QSaharaServer/src/sahara_protocol.h:411-416）。</para>
+/// 。</para>
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal struct SaharaMemoryRead64Packet

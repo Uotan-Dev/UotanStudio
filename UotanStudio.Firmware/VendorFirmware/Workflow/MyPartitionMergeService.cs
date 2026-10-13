@@ -92,18 +92,8 @@ public sealed record MyPartitionMergeResult(string MovedRoot, int MovedEntries, 
     bool PreservationFolded, int FoldedInodeEntries);
 
 /// <summary>
-/// Merges an extracted <c>my_*</c> partition into an extracted system tree: relocates the directory under its
-/// slot-stripped name, rebases the <c>file_contexts</c> and <c>fs_config</c> sidecars (the explicit configuration
-/// directory, the consolidated metadata sidecars, or the moved tree root), appends the
-/// <c>import &lt;mountPrefix&gt;/&lt;partition&gt;/build.prop</c> directive to the system build.prop, and folds the
-/// partition's sidecars and preservation payload into the system metadata so a preserved rebuild keeps the merged
-/// files' ownership, permissions, SELinux labels and symbolic links. Each published file is replaced atomically
-/// and progress is reported through <see cref="IFirmwareProgress"/>.
-/// <para>将解包的 <c>my_*</c> 分区合并进解包的 system 目录树：按去槽位后的名称迁移目录、改基
-/// <c>file_contexts</c> 与 <c>fs_config</c> 附属文件（显式配置目录、统一元数据附属文件或移动后的树根）、
-/// 向 system 的 build.prop 追加 <c>import &lt;挂载前缀&gt;/&lt;分区&gt;/build.prop</c> 指令，并把分区的附属文件与
-/// 保留负载折叠进 system 元数据，使受保留重建保住合并文件的属主、权限、SELinux 标签与符号链接。
-/// 每个发布文件均以原子方式替换，进度通过 <see cref="IFirmwareProgress"/> 报告。</para>
+/// Merges an extracted <c>my_*</c> partition into an extracted system tree: relocates the directory under its slot-stripped name, rebases the <c>file_contexts</c> and <c>fs_config</c> sidecars, appends the <c>import &lt;mountPrefix&gt;/&lt;partition&gt;/build.prop</c> directive to the system build.prop, and folds the sidecars into the system metadata so a preserved rebuild keeps ownership, permissions, SELinux labels and symbolic links.
+/// <para>将解包的 <c>my_*</c> 分区合并进解包的 system 目录树：按去槽位后的名称迁移目录、改基 <c>file_contexts</c> 与 <c>fs_config</c> 附属文件、向 system 的 build.prop 追加 <c>import &lt;mountPrefix&gt;/&lt;partition&gt;/build.prop</c> 指令，并把附属文件折入 system 元数据，使保留式重建保留所有权、权限、SELinux 标签与符号链接。</para>
 /// </summary>
 public sealed class MyPartitionMergeService
 {

@@ -9,7 +9,7 @@ using UotanStudio.Services.Logging;
 
 namespace UotanStudio.ViewModels.Editors;
 
-/// <summary>Read-only offline log document with full-line filtering. 支持整行筛选的只读离线日志文档。</summary>
+/// <summary>Read-only offline log document with full-line filtering.<para>支持整行筛选的只读离线日志文档。</para></summary>
 public partial class LogEditorViewModel : Document, ILogViewModel
 {
     private IReadOnlyList<ILogLine> _allEntries = [];
@@ -19,42 +19,46 @@ public partial class LogEditorViewModel : Document, ILogViewModel
     Workspace.AdbLogViewModel? ILogViewModel.LiveModel => null;
     LogEditorViewModel? ILogViewModel.FileModel => this;
 
-    /// <summary>Opened file path. 打开的文件路径。</summary>
+    /// <summary>Opened file path.<para>打开的文件路径。</para></summary>
     [ObservableProperty] private string _filePath = string.Empty;
-    /// <summary>Whether the document is loading. 是否正在加载文档。</summary>
+    /// <summary>Whether the document is loading.<para>是否正在加载文档。</para></summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ReloadCommand))]
     private bool _isLoading;
-    /// <summary>Load or export error. 加载或导出错误。</summary>
+    /// <summary>Load or export error.<para>加载或导出错误。</para></summary>
     [ObservableProperty] private string? _errorMessage;
-    /// <summary>Full-line query. 整行查询文本。</summary>
+    /// <summary>Full-line query.<para>整行查询文本。</para></summary>
     [ObservableProperty] private string _searchText = string.Empty;
-    /// <summary>Regular-expression search. 正则表达式搜索。</summary>
+    /// <summary>Regular-expression search.<para>正则表达式搜索。</para></summary>
     [ObservableProperty] private bool _useRegex;
-    /// <summary>Case-sensitive search. 区分大小写搜索。</summary>
+    /// <summary>Case-sensitive search.<para>区分大小写搜索。</para></summary>
     [ObservableProperty] private bool _matchCase;
-    /// <summary>Exact severity filter. 精确等级筛选。</summary>
+    /// <summary>Exact severity filter.<para>精确等级筛选。</para></summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedLevelIndex))]
     private LogLevel? _levelFilter;
-    /// <summary>Search validation error. 搜索验证错误。</summary>
+    /// <summary>Search validation error.<para>搜索验证错误。</para></summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSearchError))]
     private string? _searchError;
 
-    /// <summary>Current matching entries. 当前匹配的条目。</summary>
+    /// <summary>Current matching entries.<para>当前匹配的条目。</para></summary>
+    /// <value>Entries matching the active filters.<para>匹配当前筛选条件的条目。</para></value>
     public IReadOnlyList<ILogLine> Entries { get; private set; } = [];
-    /// <summary>Notifies the view after a filtered snapshot changes. 筛选快照变更通知。</summary>
+    /// <summary>Signals that the filtered snapshot changed after reapplication.<para>筛选结果快照在重新应用后发生变化时发出通知。</para></summary>
     public event NotifyCollectionChangedEventHandler? EntriesChanged;
-    /// <summary>Available severity filters. 可用等级筛选。</summary>
+    /// <summary>Available severity filters.<para>可用等级筛选。</para></summary>
+    /// <value>Severity filter choices, starting with the All item.<para>等级筛选选项，以“全部”项开头。</para></value>
     public IReadOnlyList<LogLevel?> Levels { get; } = [null, LogLevel.Trace, LogLevel.Debug, LogLevel.Info, LogLevel.Warn, LogLevel.Error, LogLevel.Fatal];
-    /// <summary>Index-based selection preserves the All item. 基于索引的选项，保留“全部”语义。</summary>
+    /// <summary>Index-based selection preserves the All item.<para>基于索引的选项，保留“全部”语义。</para></summary>
+    /// <value>Index into the severity choices, where zero means All.<para>等级选项列表中的索引，零表示“全部”。</para></value>
     public int SelectedLevelIndex
     {
         get => LevelFilter.HasValue ? (int)LevelFilter.Value + 1 : 0;
         set { if (value >= 0 && value < Levels.Count) LevelFilter = Levels[value]; }
     }
-    /// <summary>Whether the query has an error. 查询是否有错误。</summary>
+    /// <summary>Whether the query has an error.<para>查询是否有错误。</para></summary>
+    /// <value>Whether a search validation error is recorded.<para>是否记录了搜索校验错误。</para></value>
     public bool HasSearchError => SearchError is not null;
     bool ILogViewModel.AutoScroll { get => false; set { } }
     bool ILogViewModel.IsPaused => false;
@@ -72,7 +76,8 @@ public partial class LogEditorViewModel : Document, ILogViewModel
     [RelayCommand(CanExecute = nameof(CanReload))]
     private Task Reload() => LoadAsync(FilePath);
 
-    /// <summary>Loads all supported entries, replacing the document only on success. 加载全部受支持条目，仅成功后替换文档。</summary>
+    /// <summary>Loads all supported entries, replacing the document only on success.<para>加载全部受支持条目，仅成功后替换文档。</para></summary>
+    /// <param name="path">Path of the log file to load.<para>要加载的日志文件路径。</para></param>
     public async Task LoadAsync(string path)
     {
         if (_closed) return;
@@ -147,7 +152,7 @@ public partial class LogEditorViewModel : Document, ILogViewModel
         EntriesChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
     }
 
-    /// <summary>Cancels pending loading and releases file history on close. 关闭时取消加载并释放文件历史。</summary>
+    /// <summary>Cancels pending loading and releases file history on close.<para>关闭时取消加载并释放文件历史。</para></summary>
     public void Cleanup()
     {
         _closed = true;

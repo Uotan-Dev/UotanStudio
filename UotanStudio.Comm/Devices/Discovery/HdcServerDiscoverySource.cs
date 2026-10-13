@@ -30,12 +30,10 @@ public sealed class HdcServerDiscoverySource(string host = "127.0.0.1", int? por
 
     /// <summary>
     /// Runs <c>list targets -v</c> against the HDC server and projects each parsed target into a
-    /// <c>server</c>-routed endpoint keyed by its connect key.
+    /// <c>server</c>-routed endpoint keyed by its connect key; returns an empty list when the
+    /// server is marked absent.
     /// <para>对 HDC server 执行 <c>list targets -v</c>，并把每个解析出的目标投影为以连接键标识的
-    /// <c>server</c> 路由端点。</para>
-    /// Returns an empty list when the global availability parameter marks the configured host and
-    /// port as having no server (non-default endpoints keep live probing).
-    /// <para>全局存在性参数标记配置的宿主机与端口无 server 时返回空列表（非默认端点保持实时探测）。</para>
+    /// <c>server</c> 路由端点；server 被标记为不存在时返回空列表。</para>
     /// </summary>
     /// <param name="cancellationToken">
     /// Cancels the server query. <para>取消 server 查询。</para>

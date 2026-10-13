@@ -2,13 +2,9 @@ namespace UotanStudio.Comm.Protocols.Edl.Streaming;
 
 /// <summary>
 /// Pure HDLC framing for DIAG streaming packets: the 0x7E flag, the 0x7D escape with 0x5E and
-/// 0x5D un-escape pairs, and the reflected CRC16-CCITT table transcribed from the reference
-/// <c>edlclient/Library/hdlc.py</c> (escape/unescape at hdlc.py:84-119, crc16 at hdlc.py:15-74,
-/// convert_cmdbuf at hdlc.py:122-127, receive_reply at hdlc.py:136-171).
+/// 0x5D un-escape pairs, and the reflected CRC16-CCITT table.
 /// <para>流式 DIAG 报文的纯 HDLC 帧封装：0x7E 标志字节、0x7D 转义与 0x5E/0x5D 反转义对，以及
-/// 转写自参考 <c>edlclient/Library/hdlc.py</c> 的反射 CRC16-CCITT 表（escape/unescape 见
-/// hdlc.py:84-119，crc16 见 hdlc.py:15-74，convert_cmdbuf 见 hdlc.py:122-127，receive_reply 见
-/// hdlc.py:136-171）。</para>
+/// 反射 CRC16-CCITT 表。</para>
 /// </summary>
 /// <remarks>
 /// This is the only place in the streaming stack that touches raw HDLC bytes; every buffer is
@@ -23,9 +19,8 @@ internal static class DiagHdlcCodec
     private const byte EscapedEscape = 0x5D;
 
     /// <summary>
-    /// The 256-entry CRC16 table exactly as published by the reference implementation
-    /// (hdlc.py:15-47).
-    /// <para>与参考实现完全一致的 256 项 CRC16 表（hdlc.py:15-47）。</para>
+    /// The 256-entry CRC16 table.
+    /// <para>256 项 CRC16 表。</para>
     /// </summary>
     private static readonly ushort[] CrcTable =
     [
@@ -64,9 +59,9 @@ internal static class DiagHdlcCodec
     ];
 
     /// <summary>
-    /// Computes the reference CRC16 (init 0xFFFF, table walkthrough, final inversion) over the
-    /// supplied bytes (hdlc.py:71-74).
-    /// <para>按参考实现计算 CRC16（初值 0xFFFF、查表推进、最终取反）（hdlc.py:71-74）。</para>
+    /// Computes the CRC16 (init 0xFFFF, table walkthrough, final inversion) over the
+    /// supplied bytes.
+    /// <para>计算 CRC16（初值 0xFFFF、查表推进、最终取反）。</para>
     /// </summary>
     /// <param name="data">The bytes to checksum. <para>待校验的字节。</para></param>
     /// <returns>The CRC16 value. <para>CRC16 校验值。</para></returns>
@@ -82,13 +77,11 @@ internal static class DiagHdlcCodec
     }
 
     /// <summary>
-    /// Frames a DIAG packet the way the reference <c>convert_cmdbuf</c> does: optionally append
+    /// Frames a DIAG packet: optionally append
     /// the little-endian CRC16 of the payload, escape every 0x7E and 0x7D byte, and terminate
-    /// with the 0x7E flag (hdlc.py:84-96, 122-127). The reference truncates oversized payloads
-    /// silently at hdlc.py:213; here an oversized payload is rejected instead.
-    /// <para>按参考 <c>convert_cmdbuf</c> 封装 DIAG 报文：可选地追加负载的小端 CRC16，把每个
-    /// 0x7E 与 0x7D 字节转义，最后以 0x7E 标志结束（hdlc.py:84-96、122-127）。参考在
-    /// hdlc.py:213 静默截断超长负载，这里改为直接拒绝超长负载。</para>
+    /// with the 0x7E flag. An oversized payload is rejected.
+    /// <para>封装 DIAG 报文：可选地追加负载的小端 CRC16，把每个
+    /// 0x7E 与 0x7D 字节转义，最后以 0x7E 标志结束。超长负载会被直接拒绝。</para>
     /// </summary>
     /// <param name="payload">The DIAG payload bytes to frame. <para>待封装的 DIAG 负载字节。</para></param>
     /// <param name="withCrc">Whether to append the little-endian CRC16 before escaping.
@@ -143,14 +136,13 @@ internal static class DiagHdlcCodec
     }
 
     /// <summary>
-    /// Un-frames a DIAG packet the way the reference receive paths do: un-escape the bytes,
+    /// Un-frames a DIAG packet: un-escape the bytes,
     /// drop a leading 0x7E flag, require the trailing flag, and when the frame carries a CRC
-    /// strip the two checksum bytes (optionally verifying them first). The reference skips the
-    /// leading-flag strip on its no-CRC replies (hdlc.py:173-195); decoding normalizes that
-    /// asymmetry so callers always see the payload starting at the DIAG response byte.
-    /// <para>按参考接收路径解除 DIAG 封装：反转义字节、去掉首部 0x7E 标志、要求尾部标志，并在帧
-    /// 带校验时剥掉两个校验字节（可选择先验证）。参考在无校验应答中会跳过剥首标志
-    /// （hdlc.py:173-195）；解码统一该差异，使调用方看到的负载始终从 DIAG 响应字节开始。</para>
+    /// strip the two checksum bytes (optionally verifying them first). Decoding normalizes the
+    /// no-CRC asymmetry so callers always see the payload starting at the DIAG response byte.
+    /// <para>解除 DIAG 封装：反转义字节、去掉首部 0x7E 标志、要求尾部标志，并在帧
+    /// 带校验时剥掉两个校验字节（可选择先验证）。解码统一无校验帧的差异，
+    /// 使调用方看到的负载始终从 DIAG 响应字节开始。</para>
     /// </summary>
     /// <param name="frame">The raw framed bytes as read from the transport.
     /// <para>从传输读到的原始封装字节。</para></param>

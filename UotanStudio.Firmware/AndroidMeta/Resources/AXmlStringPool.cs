@@ -5,13 +5,8 @@ using UotanStudio.Firmware.AndroidMeta.AXml;
 namespace UotanStudio.Firmware.AndroidMeta.Resources;
 
 /// <summary>
-/// Parser and holder for one ResStringPool chunk of an Android binary XML/resource container. All
-/// chunk fields are little-endian; strings are stored UTF-8 or UTF-16LE depending on the pool's
-/// UTF-8 flag. <see cref="Parse"/> bounds-checks every header value, offset and string extent
-/// against the caller-supplied chunk window before exposing any string.
-/// <para>Android 二进制 XML/资源容器中单个 ResStringPool 数据块的解析与持有者。数据块字段均为小端；
-/// 字符串按数据池的 UTF-8 标志以 UTF-8 或 UTF-16LE 存放。<see cref="Parse"/> 在暴露任何字符串之前，
-/// 会把所有头部值、偏移与字符串范围对照调用方给出的数据块窗口做边界检查。</para>
+/// Parser and holder for one ResStringPool chunk of an Android binary XML resource container. All chunk fields are little-endian and strings are UTF-8 or UTF-16LE depending on the pool's UTF-8 flag; every header value, offset and string extent is bounds-checked against the caller-supplied chunk window.
+/// <para>Android 二进制 XML 资源容器中单个 ResStringPool 块的解析器与持有者。块内字段均为小端，字符串依 UTF-8 标志为 UTF-8 或 UTF-16LE；所有头部值、偏移与字符串范围均按调用方给出的块窗口做上限检查。</para>
 /// </summary>
 public sealed class AXmlStringPool
 {

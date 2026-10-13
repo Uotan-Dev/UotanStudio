@@ -9,9 +9,9 @@ public sealed partial class RkdlSession
     /// <summary>
     /// Reads chip info from the device via a READ_CHIP_INFO CBW/CSW transaction (16 bytes).
     /// The first four bytes of the response are an ASCII chip tag (e.g. "320A"); it is
-    /// exposed both raw and decoded (see upstream CRKDevice::CheckChip).
+    /// exposed both raw and decoded.
     /// <para>通过 READ_CHIP_INFO CBW/CSW 事务从设备读取芯片信息（16 字节）。响应的前 4 字节是
-    /// ASCII 芯片标签（如 "320A"）；同时以原始值与解码字符串暴露（见上游 CRKDevice::CheckChip）。</para>
+    /// ASCII 芯片标签（如 "320A"）；同时以原始值与解码字符串暴露。</para>
     /// </summary>
     internal RkChipInfo ReadChipInfo()
     {
@@ -169,20 +169,21 @@ public sealed partial class RkdlSession
         => ReadDataCommand(RkdlCommand.ReadFlashId, 5, RkdlFrame.CbwcbLengthShort, 5, 5);
 
     /// <summary>
-    /// Reads the device capability bits via a READ_CAPABILITY CBW/CSW transaction (8 bytes,
-    /// matching rkdeveloptool RKU_ReadCapability with dwCBWTransferLength = 8).
-    /// <para>通过 READ_CAPABILITY CBW/CSW 事务读取设备能力位（8 字节，对应 rkdeveloptool
-    /// RKU_ReadCapability 的 dwCBWTransferLength = 8）。</para>
-    /// The result is undecoded. The meaning of each capability bit is defined by the capability
-    /// structure in upstream <c>RKComm.h</c>/<c>RKBoot.h</c>, which this repository does not carry a
-    /// verifiable copy of, so no typed decoder is offered and callers must not interpret individual
-    /// bits from the prose above alone. <see cref="ReadChipInfo"/> does return a typed result only
-    /// because the layout of its 16-byte response is already exercised by an existing code path.
-    /// <para>返回结果未解码。每个能力位的含义由上游 <c>RKComm.h</c>/<c>RKBoot.h</c> 中的 capability
-    /// 结构定义，本仓库没有可核对的副本，因此不提供类型化解码器，调用方也不得仅凭上面的散文描述去解释
-    /// 单个位。<see cref="ReadChipInfo"/> 之所以返回类型化结果，是因为其 16 字节响应的布局已被现有代码
-    /// 路径实际使用。</para>
+    /// Reads the device capability bits via one READ_CAPABILITY CBW/CSW transaction, which
+    /// transfers 8 bytes.
+    /// <para>通过一次 READ_CAPABILITY CBW/CSW 事务读取设备能力位，传输 8 字节。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>The result is undecoded. Each capability bit is defined by a capability structure whose
+    /// layout this repository does not carry a verifiable copy of, so no typed decoder is offered and
+    /// callers must not interpret individual bits from the prose above alone.
+    /// <see cref="ReadChipInfo"/> does return a typed result only because the layout of its 16-byte
+    /// response is already exercised by an existing code path.</para>
+    /// <para>返回结果未解码。每个能力位由一份 capability 结构定义，本仓库没有该结构可核对的副本，
+    /// 因此不提供类型化解码器，调用方也不得仅凭上面的散文描述去解释单个位。
+    /// <see cref="ReadChipInfo"/> 之所以返回类型化结果，是因为其 16 字节响应的布局已被现有代码路径
+    /// 实际使用。</para>
+    /// </remarks>
     /// <returns>The raw capability bytes returned by the device (at least 8).
     /// <para>设备返回的原始能力位字节（至少 8 个）。</para></returns>
     /// <exception cref="RkdlException">The data phase was shorter than the 8 bytes requested, or the
@@ -223,34 +224,33 @@ public sealed partial class RkdlSession
 
     /// <summary>
     /// Powers the device off (DEVICE_RESET with the <see cref="RkdlResetSubCode.PowerOff"/>
-    /// sub code, matching rkdeveloptool PowerOffDevice).
-    /// <para>关闭设备电源（DEVICE_RESET，子码 <see cref="RkdlResetSubCode.PowerOff"/>，
-    /// 对应 rkdeveloptool 的 PowerOffDevice）。</para>
+    /// sub code).
+    /// <para>关闭设备电源（DEVICE_RESET，子码 <see cref="RkdlResetSubCode.PowerOff"/>）。</para>
     /// </summary>
     public void Shutdown()
         => ResetDevice(RkdlResetSubCode.PowerOff);
 
     /// <summary>
     /// Erases flash blocks via ERASE_NORMAL (or ERASE_FORCE) CBW/CSW transactions, chunked at
-    /// <see cref="RkdlConstants.MaxEraseBlocksPerCommand"/> blocks per command
-    /// (rkdeveloptool CRKComm::EraseBlocks / MAX_ERASE_BLOCKS).
+    /// <see cref="RkdlConstants.MaxEraseBlocksPerCommand"/> blocks per command.
     /// <para>通过 ERASE_NORMAL（或 ERASE_FORCE）CBW/CSW 事务擦除 flash 块，每条命令最多
-    /// <see cref="RkdlConstants.MaxEraseBlocksPerCommand"/> 个块（rkdeveloptool 的
-    /// CRKComm::EraseBlocks / MAX_ERASE_BLOCKS）。</para>
-    /// The range is validated against the device geometry before the first command is written, and
+    /// <see cref="RkdlConstants.MaxEraseBlocksPerCommand"/> 个块。</para>
+    /// </summary>
+    /// <remarks>
+    /// <para>The range is validated against the device geometry before the first command is written, and
     /// the running position is accumulated in 64 bits with a checked add, so a range that would pass
-    /// the 32-bit wire address cannot wrap back to the start of the media and erase it again.
+    /// the 32-bit wire address cannot wrap back to the start of the media and erase it again.</para>
     /// <para>在写出第一条命令前，范围会对照设备几何校验；运行位置以 64 位累加并做 checked 加法，因此一个
     /// 能通过 32 位线上地址的范围不可能回绕到介质起点再擦一遍。</para>
-    /// Unverified boundary: this repository carries no verified erase-block-to-sector ratio, so the
-    /// block arguments are passed to <c>cbwcb.dwAddress</c> verbatim exactly as before and are
-    /// validated in those same wire units. Whether a given device counts ERASE_NORMAL addresses in
-    /// erase blocks rather than 512-byte sectors can only be settled on real hardware; a device that
-    /// counts in erase blocks therefore accepts a narrower range here than it physically has.
-    /// <para>未验证边界：本仓库没有可核对的擦除块与扇区比例，因此块参数仍像以前一样原样填入
-    /// <c>cbwcb.dwAddress</c>，并按同样的线上单位校验。某台设备究竟按擦除块还是按 512 字节扇区计
-    /// ERASE_NORMAL 地址，只能在真机上确认；按擦除块计数的设备在此会接受比其物理容量更窄的范围。</para>
-    /// </summary>
+    /// <para>Unverified boundary: this repository carries no verified erase-block-to-sector ratio, so the
+    /// block arguments are passed to <c>cbwcb.dwAddress</c> verbatim and are validated in those same wire
+    /// units. Whether a given device counts ERASE_NORMAL addresses in erase blocks rather than 512-byte
+    /// sectors can only be settled on real hardware; a device that counts in erase blocks therefore
+    /// accepts a narrower range here than it physically has.</para>
+    /// <para>未验证边界：本仓库没有可核对的擦除块与扇区比例，因此块参数原样填入 <c>cbwcb.dwAddress</c>，
+    /// 并按同样的线上单位校验。某台设备究竟按擦除块还是按 512 字节扇区计 ERASE_NORMAL 地址，只能在
+    /// 真机上确认；按擦除块计数的设备在此会接受比其物理容量更窄的范围。</para>
+    /// </remarks>
     /// <param name="blockPos">The first block to erase. <para>起始块号。</para></param>
     /// <param name="blockCount">The number of blocks to erase. <para>要擦除的块数。</para></param>
     /// <param name="force"><c>true</c> to use ERASE_FORCE (ignores bad-block markers). <para>是否使用 ERASE_FORCE（忽略坏块标记）。</para></param>
@@ -342,10 +342,9 @@ public sealed partial class RkdlSession
     /// <summary>
     /// Tests whether the device is ready via a TEST_UNIT_READY (0x00) CBW/CSW transaction,
     /// decoding the loader-boot progress from the CSW data residue (total in the low 16 bits,
-    /// current in the high 16 bits, both big-endian — see rkdeveloptool RKU_TestDeviceReady).
+    /// current in the high 16 bits, both big-endian).
     /// <para>通过 TEST_UNIT_READY（0x00）CBW/CSW 事务检测设备是否就绪，并从 CSW 数据余量解码
-    /// loader 启动进度（总进度在低 16 位、当前进度在高 16 位，均按大端序——见 rkdeveloptool
-    /// 的 RKU_TestDeviceReady）。</para>
+    /// loader 启动进度（总进度在低 16 位、当前进度在高 16 位，均按大端序）。</para>
     /// </summary>
     /// <param name="progressCurrent">Receives the current progress value. <para>接收当前进度值。</para></param>
     /// <param name="progressTotal">Receives the total progress value. <para>接收总进度值。</para></param>
@@ -372,9 +371,8 @@ public sealed partial class RkdlSession
 
     /// <summary>
     /// Polls TEST_UNIT_READY until the loader reports ready or the timeout elapses, reporting
-    /// boot progress (current/total) along the way (rkdeveloptool CRKComm::TestDeviceReady loop).
-    /// <para>轮询 TEST_UNIT_READY 直到 loader 报告就绪或超时，期间上报启动进度
-    /// （当前/总进度）（rkdeveloptool 的 CRKComm::TestDeviceReady 循环）。</para>
+    /// boot progress (current/total) along the way.
+    /// <para>轮询 TEST_UNIT_READY 直到 loader 报告就绪或超时，期间上报启动进度（当前/总进度）。</para>
     /// </summary>
     /// <param name="timeoutMs">Total wait budget in milliseconds. <para>总等待预算（毫秒）。</para></param>
     /// <param name="progress">Optional progress receiver. <para>可选进度接收器。</para></param>

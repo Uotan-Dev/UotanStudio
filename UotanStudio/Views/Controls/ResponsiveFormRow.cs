@@ -4,8 +4,8 @@ using Avalonia.Controls;
 namespace UotanStudio.Views.Controls;
 
 /// <summary>
-/// <para>在空间足够时横向排列标签和输入控件，空间不足时自动切换为上下排列。</para>
 /// Places a label beside its editor when space permits and stacks them when the row becomes narrow.
+/// <para>在空间足够时横向排列标签和输入控件，空间不足时自动切换为上下排列。</para>
 /// </summary>
 public sealed class ResponsiveFormRow : Panel
 {
@@ -47,8 +47,8 @@ public sealed class ResponsiveFormRow : Panel
     }
 
     /// <summary>
-    /// <para>获取或设置标签列的最小宽度。</para>
     /// Gets or sets the minimum label-column width.
+    /// <para>获取或设置标签列的最小宽度。</para>
     /// </summary>
     public double MinLabelWidth
     {
@@ -57,8 +57,8 @@ public sealed class ResponsiveFormRow : Panel
     }
 
     /// <summary>
-    /// <para>获取或设置横向布局时标签列允许增长到的最大宽度。</para>
     /// Gets or sets the maximum label-column width in horizontal layout.
+    /// <para>获取或设置横向布局时标签列允许增长到的最大宽度。</para>
     /// </summary>
     public double MaxLabelWidth
     {
@@ -67,9 +67,9 @@ public sealed class ResponsiveFormRow : Panel
     }
 
     /// <summary>
-    /// <para>获取或设置输入控件保持横向布局所需的最小宽度；该值只决定换行时机，不限制上下布局中的实际宽度。</para>
     /// Gets or sets the minimum editor width required to keep the horizontal layout; this value only
     /// controls when stacking occurs and does not constrain the editor width in the stacked layout.
+    /// <para>获取或设置输入控件保持横向布局所需的最小宽度；该值只决定换行时机，不限制上下布局中的实际宽度。</para>
     /// </summary>
     public double MinEditorWidth
     {
@@ -78,8 +78,8 @@ public sealed class ResponsiveFormRow : Panel
     }
 
     /// <summary>
-    /// <para>获取或设置横向布局中标签与输入控件之间的距离。</para>
     /// Gets or sets the horizontal spacing between the label and editor.
+    /// <para>获取或设置横向布局中标签与输入控件之间的距离。</para>
     /// </summary>
     public double ColumnSpacing
     {
@@ -88,8 +88,8 @@ public sealed class ResponsiveFormRow : Panel
     }
 
     /// <summary>
-    /// <para>获取或设置上下布局中标签与输入控件之间的距离。</para>
     /// Gets or sets the vertical spacing between the label and editor.
+    /// <para>获取或设置上下布局中标签与输入控件之间的距离。</para>
     /// </summary>
     public double RowSpacing
     {

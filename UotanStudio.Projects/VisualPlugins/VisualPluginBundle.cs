@@ -87,13 +87,8 @@ public static class VisualPluginBundle
     }
 
     /// <summary>
-    /// Streams resources into a sibling temporary ZIP and publishes only after all identities match.
-    /// Resources are stored uncompressed under <c>assets/&lt;sha256&gt;</c> and written once per content
-    /// hash. The destination is replaced by an atomic move only after the archive is flushed to disk;
-    /// any earlier failure leaves the existing file untouched and deletes the temporary.
-    /// <para>把资源流式写入同级临时 ZIP，仅当所有身份校验全部通过后才发布。资源以不压缩形式存于
-    /// <c>assets/&lt;sha256&gt;</c>，同一内容哈希只写一次。归档落盘刷新完成后才通过原子移动替换目标；
-    /// 更早的任何失败都会保留既有文件并删除临时文件。</para>
+    /// Streams the package resources into a sibling temporary ZIP and publishes it atomically.
+    /// <para>将包内资源以流式写入同级临时 ZIP，并在校验通过后原子发布。</para>
     /// </summary>
     /// <param name="path">
     /// Destination bundle path; it is resolved to a full path and may be overwritten on success.
@@ -170,14 +165,8 @@ public static class VisualPluginBundle
     }
 
     /// <summary>
-    /// Copies a resource with bounded memory and exact length/hash checks. Callers must stage the
-    /// destination. The resource is searched only in the asset list owned directly by
-    /// <paramref name="package"/>; nested composite packages are passed as their own scope. Reads come
-    /// from the trusted local source path when present, otherwise the bundle recorded by <c>Load</c> is
-    /// reopened and re-validated against the retained root snapshot.
-    /// <para>以有界内存和精确的长度/哈希校验复制资源。调用方必须自行暂存目标。资源只在
-    /// <paramref name="package"/> 直接拥有的资源列表中查找；内嵌复合包需以各自的作用域传入。存在受信任
-    /// 的本地源路径时从该路径读取，否则重新打开 <c>Load</c> 记录的包，并按保留的根快照重新校验。</para>
+    /// Copies one resource with bounded memory and exact length and hash checks.
+    /// <para>以有界内存和精确的长度与哈希校验复制单个资源。</para>
     /// </summary>
     /// <param name="package">
     /// Scope whose own asset list is searched and whose structure is validated before copying.

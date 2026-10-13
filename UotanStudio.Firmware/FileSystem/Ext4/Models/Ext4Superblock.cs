@@ -72,8 +72,8 @@ internal sealed class Ext4Superblock
     public bool HasSparseSuper => (FeatureRoCompat & 0x0001) != 0;
 
     /// <summary>COMPAT_SPARSE_SUPER2 restricts superblock and descriptor-table backups to the two groups named by the superblock. <para>COMPAT_SPARSE_SUPER2 把超级块与描述符表备份限定为超级块中记录的两个组。</para></summary>
-    /// <value><see langword="true"/> when compat bit 0x200 is set; the kernel then also mandates <c>s_first_data_block == 0</c>.
-    /// <para>compat 位 0x200 置位时为 <see langword="true"/>；此时内核还强制要求 <c>s_first_data_block == 0</c>。</para></value>
+    /// <value><see langword="true"/> when compat bit 0x200 is set; the image then also declares <c>s_first_data_block == 0</c>.
+    /// <para>compat 位 0x200 置位时为 <see langword="true"/>；此时镜像同时声明 <c>s_first_data_block == 0</c>。</para></value>
     public bool HasSparseSuper2 => (FeatureCompat & 0x0200) != 0;
 
     public long BlockSize => 1024L << (int)LogBlockSize;
