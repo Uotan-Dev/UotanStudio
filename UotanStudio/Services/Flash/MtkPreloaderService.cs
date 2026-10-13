@@ -33,67 +33,6 @@ internal static class MtkPreloaderService
         return session.PeekPreloaderMemoryAsync(address, length, ct);
     }
 
-    /// <summary>Writes a byte block through the preloader write command, splitting payloads that exceed the
-    /// session's per-command ceiling into aligned chunks.
-    /// <para>通过 preloader 写入命令写入字节块，并把超过会话单命令上限的载荷拆成对齐的分块。</para></summary>
-    /// <param name="session">A session sitting in the preloader command stage.
-    /// <para>处于 preloader 命令阶段的会话。</para></param>
-    /// <param name="address">The first byte address; it must be 32-bit aligned.
-    /// <para>起始字节地址；必须按 32 位对齐。</para></param>
-    /// <param name="data">The payload bytes to write; a non-multiple of four pads up to three trailing bytes.
-    /// <para>要写入的载荷字节；非四倍数长度会补齐最多三个尾部字节。</para></param>
-    /// <param name="confirmed">The explicit opt-in that authorizes every write byte.
-    /// <para>授权所有写入字节的显式确认。</para></param>
-    /// <param name="ct">Cancellation honoured before the first device byte and between every chunk.
-    /// <para>在首个设备字节之前以及每块之间都会响应的取消令牌。</para></param>
-    /// <returns>The number of payload bytes submitted to the device.<para>已提交给设备的载荷字节数。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="session"/> is null.
-    /// <para><paramref name="session"/> 为 null。</para></exception>
-    /// <exception cref="UnauthorizedAccessException"><paramref name="confirmed"/> is false; no byte was sent.
-    /// <para><paramref name="confirmed"/> 为 false；未发送任何字节。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="data"/> is empty, or
-    /// <paramref name="address"/> is not 32-bit aligned; no byte was sent.
-    /// <para><paramref name="data"/> 为空，或 <paramref name="address"/> 未按 32 位对齐；未发送任何字节。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The window leaves the 32-bit address space.
-    /// <para>窗口越出 32 位地址空间。</para></exception>
-    /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
-    /// <para>会话不处于 preloader 命令阶段。</para></exception>
-    /// <exception cref="MtkProtocolException">A chunk was refused; the session faults.
-    /// <para>某分块被拒绝；会话进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">Cancellation was requested at any cooperative point.
-    /// <para>在任一协作点请求了取消。</para></exception>
-    internal static async Task<int> WriteWindowAsync(MtkSession session, uint address, ReadOnlyMemory<byte> data,
-        bool confirmed, CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(session);
-        RequireConfirmation(confirmed, "preloader window write");
-        if (data.IsEmpty)
-        {
-            throw new ArgumentException("A preloader window write needs at least one byte.", nameof(data));
-        }
-
-        if (address % MtkDaMemoryAccess.RegisterCellBytes != 0)
-        {
-            throw new ArgumentException(
-                $"The preloader write address 0x{address:X8} is not 32-bit aligned.", nameof(address));
-        }
-
-        RequireWindowWithinAddressSpace(address, data.Length);
-
-        var ceiling = MtkDaMemoryAccess.MaximumWordLoopWriteBytes;
-        var submitted = 0;
-        for (var position = 0; position < data.Length; position += ceiling)
-        {
-            ct.ThrowIfCancellationRequested();
-            var chunkLength = Math.Min(ceiling, data.Length - position);
-            submitted += await session
-                .WritePreloaderMemoryAsync(checked(address + (uint)position),
-                    data.Slice(position, chunkLength), confirmWrite: true, ct)
-                .ConfigureAwait(false);
-        }
-
-        return submitted;
-    }
 
     /// <summary>Arms the preloader watchdog reset so the next timeout reboots the device straight into the
     /// boot ROM. <para>武装 preloader 看门狗复位，使下一次超时直接把设备重启进 boot ROM。</para></summary>

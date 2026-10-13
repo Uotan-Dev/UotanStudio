@@ -5,7 +5,6 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using UotanStudio.Comm.Protocols.Edl.Auth;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Services;
@@ -297,7 +296,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Fact]
-    public async Task MtkMetaBootAndXmlPropertyControls_EnumModesAndRows_ArePresentInMtkPane()
+    public async Task MtkXmlPropertyControls_Rows_ArePresentInMtkPane()
     {
         Task dispatch;
         using (ExecutionContext.SuppressFlow())
@@ -311,12 +310,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     window.Show();
                     Dispatcher.UIThread.RunJobs();
                     var pane = view.FindControl<StackPanel>("MtkPane")!;
-                    var mode = view.FindControl<ComboBox>("MtkMetaBootModeBox")!;
-                    Assert.Equal(Enum.GetNames<MtkXFlashMetaBootMode>(), mode.ItemsSource!.Cast<object>().ToArray());
-                    Assert.Equal(0, mode.SelectedIndex);
-                    Assert.Equal(nameof(MtkXFlashMetaBootMode.Off), mode.SelectedItem);
-                    var apply = view.FindControl<Button>("MtkSetMetaButton")!;
-                    Assert.Contains(pane, apply.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
                     var property = view.FindControl<TextBox>("MtkXmlPropertyBox")!;
                     var query = view.FindControl<Button>("MtkXmlPropertyQueryButton")!;
                     Assert.Contains(pane, property.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
@@ -327,69 +320,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     window.Close();
                 }
 
-                return Task.CompletedTask;
-            }, TestContext.Current.CancellationToken);
-        }
-
-        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-    }
-
-    [Fact]
-    public async Task EdlAuthKindSelector_ProjectVerification_ExposesCatalogueAndDerivesProjectName()
-    {
-        Task dispatch;
-        using (ExecutionContext.SuppressFlow())
-        {
-            dispatch = fixture.DispatchAsync(() =>
-            {
-                var view = new FlashView();
-                var kindBox = view.FindControl<ComboBox>("EdlAuthKindBox");
-                var modelBox = view.FindControl<ComboBox>("EdlOnePlusModelBox");
-                var projectBox = view.FindControl<TextBox>("EdlProjectIdBox");
-                Assert.NotNull(kindBox);
-                Assert.NotNull(modelBox);
-                Assert.NotNull(projectBox);
-                Assert.Equal(5, kindBox!.Items.Count);
-                Assert.Equal(0, kindBox.SelectedIndex);
-                Assert.False(modelBox!.IsVisible);
-                Assert.True(projectBox!.IsEnabled);
-
-                kindBox.SelectedIndex = 2;
-                view.UpdateLayout();
-                Assert.True(modelBox.IsVisible);
-                Assert.False(projectBox.IsEnabled);
-                Assert.Equal(EdlOnePlusProjectCatalog.ProjectIds.Count, modelBox.Items.Count);
-
-                var lemonade = 0;
-                for (var index = 0; index < EdlOnePlusProjectCatalog.ProjectIds.Count; index++)
-                {
-                    if (EdlOnePlusProjectCatalog.ProjectIds[index] == "19825")
-                    {
-                        lemonade = index;
-                    }
-                }
-
-                modelBox.SelectedIndex = lemonade;
-                view.UpdateLayout();
-                Assert.Equal("0898dcd6", projectBox.Text);
-
-                kindBox.SelectedIndex = 1;
-                view.UpdateLayout();
-                Assert.False(modelBox.IsVisible);
-                Assert.True(projectBox.IsEnabled);
-                kindBox.SelectedIndex = 3;
-                view.UpdateLayout();
-                Assert.False(modelBox.IsVisible);
-                Assert.True(projectBox.IsEnabled);
-                Assert.NotEqual(kindBox.Items[2]?.ToString(), kindBox.Items[3]?.ToString());
-                Assert.False(string.IsNullOrWhiteSpace(kindBox.Items[3]?.ToString()));
-
-                kindBox.SelectedIndex = 4;
-                view.UpdateLayout();
-                Assert.False(modelBox.IsVisible);
-                Assert.False(projectBox.IsEnabled);
-                Assert.True(view.FindControl<Button>("ChooseEdlXiaomiAuthFileButton")!.IsVisible);
-                Assert.False(string.IsNullOrWhiteSpace(kindBox.Items[4]?.ToString()));
                 return Task.CompletedTask;
             }, TestContext.Current.CancellationToken);
         }
@@ -419,16 +349,13 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     Assert.Equal([0, 1, 2, 3, 4, 5, 6, 7], (int[])lun.ItemsSource!);
                     Assert.Equal(0, lun.SelectedItem);
                     var pane = view.FindControl<StackPanel>("EdlPane")!;
-                    var poke = view.FindControl<Button>("EdlPokeButton")!;
-                    var memcpy = view.FindControl<Button>("EdlMemcpyButton")!;
-                    Assert.Contains(pane, poke.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
-                    Assert.Contains(pane, memcpy.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
-                    var peek = view.FindControl<Button>("EdlPeekButton")!;
                     var factoryReset = view.FindControl<Button>("EdlFactoryResetButton")!;
-                    Assert.Contains(pane, peek.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                    var readback = view.FindControl<Button>("EdlReadbackButton")!;
                     Assert.Contains(pane, factoryReset.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
-                    Assert.NotNull(view.FindControl<TextBox>("EdlPeekAddressBox"));
-                    Assert.NotNull(view.FindControl<TextBox>("EdlPeekLengthBox"));
+                    Assert.Contains(pane, readback.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                    Assert.Null(view.FindControl<Button>("EdlPeekButton"));
+                    Assert.Null(view.FindControl<Button>("EdlPokeButton"));
+                    Assert.Null(view.FindControl<Button>("EdlMemcpyButton"));
                 }
                 finally
                 {
@@ -832,27 +759,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Theory]
-    [InlineData("60000", true, 60000)]
-    [InlineData(" 1 ", true, 1)]
-    [InlineData("86400000", true, 86400000)]
-    [InlineData("0", false, 0)]
-    [InlineData("86400001", false, 0)]
-    [InlineData("-5", false, 0)]
-    [InlineData("60s", false, 0)]
-    [InlineData("", false, 0)]
-    public void TryReadEdlAuthTimeout_BoxText_KeepsTheDocumentedMillisecondWindow(
-        string? text, bool expected, int expectedMs)
-    {
-        var parsed = FlashView.TryReadEdlAuthTimeout(text, out var timeoutMs);
-
-        Assert.Equal(expected, parsed);
-        if (expected)
-        {
-            Assert.Equal(expectedMs, timeoutMs);
-        }
-    }
-
-    [Theory]
     [InlineData("a", "a")]
     [InlineData("B", "b")]
     [InlineData(" 1 ", "1")]
@@ -1058,7 +964,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Fact]
-    public async Task MtkMemoryControls_AreInTheMtkPaneAndStartWithoutConfirmation()
+    public async Task MtkMemoryControls_AreAbsentFromTheMtkPane()
     {
         Task dispatch;
         using (ExecutionContext.SuppressFlow())
@@ -1071,23 +977,15 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 {
                     window.Show();
                     Dispatcher.UIThread.RunJobs();
-                    var pane = view.FindControl<StackPanel>("MtkPane")!;
                     foreach (var name in new[]
                     {
                         "MtkMemoryAddressBox", "MtkMemoryLengthBox", "MtkMemoryRegisterBox", "MtkMemoryPeekButton",
-                        "MtkPokeDataBox", "MtkPokeConfirmBox", "MtkPokeButton"
+                        "MtkPokeDataBox", "MtkPokeConfirmBox", "MtkPokeButton", "MtkCrashModeBox", "MtkCrashButton",
+                        "MtkSetMetaButton", "MtkMetaBootModeBox"
                     })
                     {
-                        var control = view.FindControl<Control>(name)!;
-                        Assert.NotNull(control);
-                        Assert.Contains(pane, control.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                        Assert.Null(view.FindControl<Control>(name));
                     }
-
-                    Assert.Equal("0x10000", view.FindControl<TextBox>("MtkMemoryAddressBox")!.Text);
-                    Assert.Equal("64", view.FindControl<TextBox>("MtkMemoryLengthBox")!.Text);
-                    Assert.False(view.FindControl<CheckBox>("MtkMemoryRegisterBox")!.IsChecked.GetValueOrDefault());
-                    Assert.False(view.FindControl<CheckBox>("MtkPokeConfirmBox")!.IsChecked.GetValueOrDefault());
-                    Assert.True(string.IsNullOrEmpty(view.FindControl<TextBox>("MtkPokeDataBox")!.Text));
                 }
                 finally
                 {
@@ -1399,12 +1297,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     storage.ItemsSource!.Cast<object>().ToArray());
                 Assert.Equal(0, storage.SelectedIndex);
 
-                var crash = view.FindControl<ComboBox>("MtkCrashModeBox")!;
-                Assert.Equal(Enum.GetNames<MtkDaCrashMode>(), crash.ItemsSource!.Cast<object>().ToArray());
-                Assert.Equal(0, crash.SelectedIndex);
-                Assert.Equal(nameof(MtkDaCrashMode.Dasend1), crash.SelectedItem);
-
-                Assert.NotNull(view.FindControl<Button>("MtkCrashButton"));
                 Assert.NotNull(view.FindControl<Button>("MtkSetSpeedButton"));
                 Assert.NotNull(view.FindControl<Button>("MtkRebootMetaButton"));
                 Assert.NotNull(view.FindControl<Button>("MtkRebootAndroidTestButton"));
@@ -1412,7 +1304,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 Assert.Equal("0x0", view.FindControl<TextBox>("MtkPreloaderOffsetBox")!.Text);
                 Assert.Equal("0x1000", view.FindControl<TextBox>("MtkPreloaderLengthBox")!.Text);
                 Assert.NotNull(view.FindControl<Button>("MtkPreloaderPeekButton"));
-                Assert.NotNull(view.FindControl<Button>("MtkPreloaderWriteButton"));
                 Assert.NotNull(view.FindControl<Button>("MtkPreloaderReturnToBromButton"));
                 Assert.NotNull(view.FindControl<Button>("MtkPreloaderDisableWatchdogButton"));
                 Assert.NotNull(view.FindControl<Button>("MtkPreloaderJumpButton"));

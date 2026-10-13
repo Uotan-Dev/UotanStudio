@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.Compression.Compressors;
+using UotanStudio.Compress.Compressors;
 using UotanStudio.Services.Flash;
 using Xunit;
 
