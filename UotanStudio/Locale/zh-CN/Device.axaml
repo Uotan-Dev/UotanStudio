@@ -82,6 +82,10 @@
     <x:String x:Key="Device_MtkHardware">硬件代码</x:String>
     <x:String x:Key="Device_MtkFirmware">软硬件版本</x:String>
     <x:String x:Key="Device_MtkSecurityBits">安全位 SBC/SLA/DAA/CERT</x:String>
+    <x:String x:Key="Device_MtkBootLoaderVersion">bootloader 版本</x:String>
+    <x:String x:Key="Device_MtkBootRomVersion">Boot ROM 版本</x:String>
+    <x:String x:Key="Device_MtkMeid">MEID</x:String>
+    <x:String x:Key="Device_MtkSocid">SOCID</x:String>
     <x:String x:Key="Device_MtkInfoUnknown">尚未取得 Boot ROM 身份信息。</x:String>
     <x:String x:Key="Device_Serial">序列号</x:String>
     <x:String x:Key="Device_Model">型号</x:String>

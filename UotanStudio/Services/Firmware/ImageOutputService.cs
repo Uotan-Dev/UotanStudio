@@ -1,6 +1,6 @@
+using UotanStudio.Compress.Files;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.Compression.Files;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.OtaDelta.Dat;
 
@@ -71,7 +71,7 @@ internal static class ImageOutputService
             {
                 var compressed = dat + ".br";
                 CompressionFile.CompressFile(dat, compressed,
-                    UotanStudio.Firmware.Compression.CompressionFormat.Brotli,
+                    UotanStudio.Compress.CompressionFormat.Brotli,
                     new() { Level = brotliLevel },
                     FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.Compressing));
                 dat = compressed;

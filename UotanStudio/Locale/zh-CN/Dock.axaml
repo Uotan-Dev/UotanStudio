@@ -53,8 +53,8 @@
     <x:String x:Key="Dock_EROFSAlgorithmHint">lz4 打包更快；lz4hc 用更多打包时间换取更小镜像（两者写盘的编解码器都是 LZ4）。lzma、deflate 与 zstd 会选用不同的磁盘编解码器。压缩等级只作用于带搜索的编码器。</x:String>
     <x:String x:Key="Dock_EROFSCompLevel">EROFS压缩等级</x:String>
     <x:String x:Key="Dock_EROFSCompLevelHint">等级越高压缩越密：对 lz4hc 是搜索深度，对快速 lz4 是密度与速度的权衡。</x:String>
-    <x:String x:Key="Dock_EROFSFeatures">EROFS特性位</x:String>
-    <x:String x:Key="Dock_EROFSFeaturesHint">留空表示继承源镜像的特性位。令牌是以逗号分隔的上游特性名：lz4_0padding、compr_cfgs、big_pcluster、device_table、ztailpacking、fragments、dedupe、metabox；以感叹号开头表示清除该位，例如 !ztailpacking。</x:String>
+    <x:String x:Key="Dock_EROFSFeatures">EROFS特性</x:String>
+    <x:String x:Key="Dock_EROFSFeaturesHint">编辑受保留 EROFS 镜像的磁盘特性声明，使用上游特性名：名称置位，加 "!" 前缀清除，"auto" 让两个超级块字保持推导。留空则原样继承源镜像记录下来的声明。</x:String>
     <x:String x:Key="Dock_F2FSCompression">F2FS 压缩</x:String>
     <x:String x:Key="Dock_F2FSAlgorithm">F2FS 算法</x:String>
     <x:String x:Key="Dock_F2FSCompLevel">F2FS 压缩等级</x:String>

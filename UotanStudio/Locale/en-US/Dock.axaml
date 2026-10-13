@@ -68,7 +68,7 @@
     <x:String x:Key="Dock_EROFSCompLevel">EROFS Level</x:String>
     <x:String x:Key="Dock_EROFSCompLevelHint">Higher values search harder for a smaller image: it drives the lz4hc search depth and the fast lz4 density/speed trade-off.</x:String>
     <x:String x:Key="Dock_EROFSFeatures">EROFS Features</x:String>
-    <x:String x:Key="Dock_EROFSFeaturesHint">Leave it empty to inherit the source image's feature bits. Tokens are comma-separated upstream feature names: lz4_0padding, compr_cfgs, big_pcluster, device_table, ztailpacking, fragments, dedupe, metabox. Prefix one with an exclamation mark to clear it, for example !ztailpacking.</x:String>
+    <x:String x:Key="Dock_EROFSFeaturesHint">Edit the on-disk feature declaration of a preserved EROFS image, using the upstream feature names: a name sets its bit, a name prefixed with "!" clears it, and "auto" keeps both superblock words derived. Left empty, the declaration recorded from the source image is inherited unchanged.</x:String>
     <x:String x:Key="Dock_F2FSCompression">F2FS Compression</x:String>
     <x:String x:Key="Dock_F2FSAlgorithm">F2FS Codec</x:String>
     <x:String x:Key="Dock_F2FSCompLevel">F2FS Level</x:String>

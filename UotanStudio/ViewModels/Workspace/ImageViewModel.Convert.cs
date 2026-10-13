@@ -1,6 +1,6 @@
+using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.Compression.Compressors;
 using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;

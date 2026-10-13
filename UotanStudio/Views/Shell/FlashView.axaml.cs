@@ -8,7 +8,6 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Edl;
-using UotanStudio.Comm.Protocols.Edl.Auth;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Comm.Protocols.Mtk;
@@ -108,14 +107,6 @@ public partial class FlashView : UserControl
     private string? _rootPackagePath;
     private readonly Dictionary<FlashPartitionEntry, RawProgramEntry> _edlEntries = [];
     private string? _edlProgrammer;
-    private byte[]? _edlXiaomiAuthData;
-
-    private const int EdlAuthKindNone = 0;
-    private const int EdlAuthKindDemacia = 1;
-    private const int EdlAuthKindOnePlusProject = 2;
-    private const int EdlAuthKindNothingProject = 3;
-    private const int EdlAuthKindXiaomi = 4;
-    private readonly List<string> _edlOnePlusModelIds = [];
     private IReadOnlyList<string> _edlProgrammerCandidates = [];
     private string? _edlProgrammerOverride;
     private string? _edlProgrammerDirectory;
@@ -178,12 +169,8 @@ public partial class FlashView : UserControl
         MtkProtocolBox.SelectionChanged += (_, _) => UpdateEdlButton();
         MtkStorageKindBox.ItemsSource = new[] { "eMMC", "UFS", "NOR", "NAND", "Auto" };
         MtkStorageKindBox.SelectedIndex = 0;
-        MtkCrashModeBox.ItemsSource = Enum.GetNames<MtkDaCrashMode>();
-        MtkCrashModeBox.SelectedIndex = 0;
         MtkLegacyCompletionBox.ItemsSource = Enum.GetNames<MtkLegacyCompletionProfile>();
         MtkLegacyCompletionBox.SelectedIndex = 0;
-        MtkMetaBootModeBox.ItemsSource = Enum.GetNames<MtkXFlashMetaBootMode>();
-        MtkMetaBootModeBox.SelectedIndex = 0;
         MtkBaudBox.ItemsSource = new[] { 115200, 921600, 460800, 230400 };
         MtkBaudBox.SelectedIndex = 0;
         EdlSerialBaudBox.ItemsSource = new[] { 115200, 921600, 460800, 230400 };
@@ -200,22 +187,6 @@ public partial class FlashView : UserControl
         MtkRpmbModeBox.SelectedIndex = 0;
         MtkRpmbOffsetBox.Text = "0";
         MtkRpmbLengthBox.Text = "8";
-        EdlAuthKindBox.ItemsSource = new[]
-        {
-            initializers.GetString("Flash_EdlAuthNone"),
-            initializers.GetString("Flash_EdlDemaciaAuth"),
-            initializers.GetString("Flash_EdlProjectAuth"),
-            initializers.GetString("Flash_EdlNothingAuth"),
-            initializers.GetString("Flash_EdlXiaomiAuth"),
-        };
-        EdlAuthKindBox.SelectedIndex = EdlAuthKindNone;
-        _edlOnePlusModelIds.AddRange(EdlOnePlusProjectCatalog.ProjectIds);
-        EdlOnePlusModelBox.ItemsSource = _edlOnePlusModelIds
-            .Select(identifier => string.Format(
-                initializers.GetString("Flash_EdlOnePlusModelFormat"),
-                EdlOnePlusProjectCatalog.Describe(identifier),
-                identifier))
-            .ToArray();
         EdlGeneralizedXmlBox.IsEnabled = false;
         EdlGenerateXmlBox.IsCheckedChanged += (_, _) =>
             EdlGeneralizedXmlBox.IsEnabled = EdlGenerateXmlBox.IsChecked == true;
@@ -971,247 +942,36 @@ public partial class FlashView : UserControl
     }
 
     /// <summary>
-    /// Builds the EDL startup requirements from the page; outputs null when authentication is off, and reports a
-    /// localized diagnostic and returns false when the inputs are incomplete.
-    /// <para>按界面选择构造 EDL 启动要求：未勾选鉴权时输出 null；输入无效时记录本地化提示并返回 false。</para>
+    /// Builds the EDL startup requirements from the page; outputs null when no compatibility switch is
+    /// requested and every timeout keeps its default.
+    /// <para>按界面选择构造 EDL 启动要求：未请求任何兼容开关且超时保持默认时输出 null。</para>
     /// </summary>
     private bool TryBuildEdlInitialization(out EdlInitializationOptions? initialization)
     {
         initialization = null;
-        var netType = EdlNetTypeBox.IsChecked == true;
         var qudRecovery = EdlQudRecoveryBox.IsChecked == true;
         var pendingCompletion = EdlPendingCompletionBox.IsChecked == true;
         var streamDload = EdlAllowStreamDloadBox.IsChecked == true;
         var skipResponse = EdlSkipResponseBox.IsChecked == true;
-        if (!TryReadEdlAuthTimeout(EdlAuthTimeoutBox.Text, out var authTimeoutMs))
-        {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlAuthTimeoutInvalid"));
-            return false;
-        }
-
-        if (EdlAuthKindBox.SelectedIndex == EdlAuthKindNone)
-        {
-            initialization = netType || qudRecovery || pendingCompletion || streamDload || skipResponse ||
-                authTimeoutMs != EdlAuthTimeoutDefaultMs
-                ? new EdlInitializationOptions
-                {
-                    SendOnePlusNetType = netType,
-                    QudHelloRecoveryEnabled = qudRecovery,
-                    AllowSingleFirehosePendingCompletion = pendingCompletion,
-                    AuthenticationTimeoutMs = authTimeoutMs,
-                    AllowStreamDload = streamDload,
-                    SkipResponseOnReadWrite = skipResponse
-                }
-                : null;
-            return true;
-        }
-
-        var language = LanguageService.Instance;
-        if (EdlAuthKindBox.SelectedIndex == EdlAuthKindXiaomi)
-        {
-            if (_edlXiaomiAuthData is not { } authData)
+        initialization = qudRecovery || pendingCompletion || streamDload || skipResponse
+            ? new EdlInitializationOptions
             {
-                AppendLog(language.GetString("Flash_EdlXiaomiAuthInvalid"));
-                return false;
+                QudHelloRecoveryEnabled = qudRecovery,
+                AllowSingleFirehosePendingCompletion = pendingCompletion,
+                AllowStreamDload = streamDload,
+                SkipResponseOnReadWrite = skipResponse
             }
-
-            initialization = WithEdlCompatibility(new EdlInitializationOptions
-            {
-                XiaomiAuthenticationProvider = new EdlXiaomiAuthFileProvider(authData),
-            }, netType, qudRecovery, pendingCompletion, authTimeoutMs);
-            return true;
-        }
-
-        if (!ulong.TryParse(EdlSerialBox.Text?.Trim(), System.Globalization.NumberStyles.None,
-                System.Globalization.CultureInfo.InvariantCulture, out var serial) || serial == 0)
-        {
-            AppendLog(language.GetString("Flash_EdlSerialInvalid"));
-            return false;
-        }
-
-        if (EdlAuthKindBox.SelectedIndex == EdlAuthKindDemacia)
-        {
-            var projectId = EdlProjectIdBox.Text?.Trim() ?? string.Empty;
-            if (projectId.Length == 0)
-            {
-                AppendLog(language.GetString("Flash_EdlProjectIdMissing"));
-                return false;
-            }
-
-            initialization = WithEdlCompatibility(new EdlInitializationOptions
-            {
-                QueryIdentityBeforeUpload = true,
-                ProjectAuthentication = new EdlProjectAuthenticationOptions
-                {
-                    Kind = EdlProjectAuthenticationKind.OnePlusDemacia,
-                    ProjectId = projectId,
-                    SerialNumber = serial,
-                    Provider = new EdlOnePlusDemaciaAuthProvider(),
-                },
-            }, netType, qudRecovery, pendingCompletion, authTimeoutMs);
-            return true;
-        }
-
-        if (EdlAuthKindBox.SelectedIndex == EdlAuthKindNothingProject)
-        {
-            var nothingProjectId = EdlProjectIdBox.Text?.Trim() ?? string.Empty;
-            if (nothingProjectId.Length == 0)
-            {
-                AppendLog(language.GetString("Flash_EdlProjectIdMissing"));
-                return false;
-            }
-
-            if (netType)
-            {
-                AppendLog(language.GetString("Flash_EdlNetTypeConflict"));
-                return false;
-            }
-
-            if (!EdlNothingProjectCatalog.TryResolve(nothingProjectId, out var nothingProfile) ||
-                nothingProfile is null)
-            {
-                AppendLog($"{language.GetString("Flash_EdlNothingProjectUnknown")} {nothingProjectId}");
-                return false;
-            }
-
-            initialization = WithEdlCompatibility(new EdlInitializationOptions
-            {
-                QueryIdentityBeforeUpload = true,
-                ProjectAuthentication = new EdlProjectAuthenticationOptions
-                {
-                    Kind = EdlProjectAuthenticationKind.NothingProject,
-                    ProjectId = nothingProjectId,
-                    SerialNumber = serial,
-                    Provider = new EdlNothingProjectAuthProvider(nothingProfile),
-                },
-            }, netType, qudRecovery, pendingCompletion, authTimeoutMs);
-            return true;
-        }
-
-        if (!TrySelectedOnePlusProfile(out var profile))
-        {
-            return false;
-        }
-
-        if (netType && profile.Family != EdlOnePlusProjectFamily.SoftwareProjectModel)
-        {
-            AppendLog(language.GetString("Flash_EdlNetTypeConflict"));
-            return false;
-        }
-
-        var provider = new EdlOnePlusProjectAuthProvider(profile);
-        initialization = WithEdlCompatibility(new EdlInitializationOptions
-        {
-            QueryIdentityBeforeUpload = true,
-            ProjectAuthentication = new EdlProjectAuthenticationOptions
-            {
-                Kind = profile.Family == EdlOnePlusProjectFamily.SoftwareProjectModel
-                    ? EdlProjectAuthenticationKind.OnePlusSoftwareProject
-                    : EdlProjectAuthenticationKind.OnePlusProject,
-                ProjectId = profile.ProjectId,
-                SerialNumber = serial,
-                Provider = provider,
-                CommandTokenProvider = provider,
-            },
-        }, netType, qudRecovery, pendingCompletion, authTimeoutMs);
+            : null;
         return true;
     }
 
-    /// <summary>
-    /// Resolves the catalogue entry selected on the page; a missing or unresolvable selection reports a localized
-    /// diagnostic and returns false.
-    /// <para>取界面选中的 OnePlus 目录项并解析配置；未选择或目录解析失败时记录本地化提示。</para>
-    /// </summary>
-    private bool TrySelectedOnePlusProfile(out EdlOnePlusProjectProfile profile)
-    {
-        var index = EdlOnePlusModelBox.SelectedIndex;
-        if (index >= 0 && index < _edlOnePlusModelIds.Count &&
-            EdlOnePlusProjectCatalog.TryResolve(_edlOnePlusModelIds[index], out var resolved) &&
-            resolved is not null)
-        {
-            profile = resolved;
-            return true;
-        }
-
-        profile = null!;
-        AppendLog(LanguageService.Instance.GetString("Flash_EdlOnePlusModelMissing"));
-        return false;
-    }
-
-    /// <summary>
-    /// Switches the authentication command family: catalogue project verification needs a model selection, while
-    /// demacia and no authentication keep the manually typed project name.
-    /// <para>切换鉴权命令家族：目录项目校验需要选择机型，demacia 与不鉴权则使用手输项目号。</para>
-    /// </summary>
-    private void OnEdlAuthKindChanged(object? source, SelectionChangedEventArgs e)
-    {
-        var catalogue = EdlAuthKindBox.SelectedIndex == EdlAuthKindOnePlusProject;
-        var xiaomi = EdlAuthKindBox.SelectedIndex == EdlAuthKindXiaomi;
-        EdlOnePlusModelBox.IsVisible = catalogue;
-        EdlProjectIdBox.IsEnabled = !catalogue && !xiaomi;
-        ChooseEdlXiaomiAuthFileButton.IsVisible = xiaomi;
-        EdlXiaomiAuthFileText.IsVisible = xiaomi;
-        if (catalogue && EdlOnePlusModelBox.SelectedIndex < 0)
-        {
-            EdlProjectIdBox.Text = string.Empty;
-        }
-    }
-
-    /// <summary>
-    /// Picks the Xiaomi fixed auth-data file; the upstream xiaomi module's credential blob is exactly
-    /// 256 bytes and the challenge request is ignored verbatim.
-    /// <para>选择小米固定鉴权数据文件；上游 xiaomi 模块的凭据块恰好为 256 字节，挑战请求原样忽略。</para>
-    /// </summary>
-    private async void OnChooseEdlXiaomiAuthFileClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(this) is not { } topLevel) return;
-        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = LanguageService.Instance.GetString("Flash_EdlXiaomiAuthFile"),
-            AllowMultiple = false,
-            FileTypeFilter = [FilePickerFileTypes.All]
-        });
-        if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
-        try
-        {
-            var data = await File.ReadAllBytesAsync(path);
-            if (data.Length != 256)
-            {
-                throw new InvalidDataException(LanguageService.Instance.GetString("Flash_EdlXiaomiAuthInvalid"));
-            }
-            _edlXiaomiAuthData = data;
-            EdlXiaomiAuthFileText.Text = Path.GetFileName(path);
-            ToolTip.SetTip(EdlXiaomiAuthFileText, path);
-            AppendLog(Path.GetFileName(path));
-        }
-        catch (Exception ex)
-        {
-            _edlXiaomiAuthData = null;
-            EdlXiaomiAuthFileText.Text = string.Empty;
-            AppendLog(ex.Message);
-        }
-    }
-
-    /// <summary>
-    /// Writes the token project name from the catalogue entry into the project field so the typed value cannot
-    /// disagree with the resolved profile.
-    /// <para>按目录项把令牌内的项目名回填到项目号输入框，避免用户输入与配置不一致的名称。</para>
-    /// </summary>
-    private void OnEdlOnePlusModelChanged(object? source, SelectionChangedEventArgs e)
-    {
-        if (TrySelectedOnePlusProfile(out var profile))
-        {
-            EdlProjectIdBox.Text = profile.ProjectId;
-            EdlProjectIdBox.IsEnabled = false;
-        }
-    }
 
     /// <summary>
     /// Advances the session to the configured Firehose state with the selected programmer and startup
     /// requirements, reused by the single-operation erase and read-back paths; an already configured session
-    /// without authentication requirements is reused as-is.
+    /// without startup requirements is reused as-is.
     /// <para>用当前所选 programmer 与启动要求把会话推进到 Firehose 配置态，供擦除、回读等单项操作复用；
-    /// 已配置且无鉴权要求时直接复用现有配置。</para>
+    /// 已配置且无启动要求时直接复用现有配置。</para>
     /// </summary>
     private async Task<FirehoseProtocol> ConfigureEdlAsync(EdlSession session,
         EdlInitializationOptions? initialization, CancellationToken cancellationToken)
@@ -1362,7 +1122,6 @@ public partial class FlashView : UserControl
         });
         var edlFirehose = isEdl && EdlStage == EdlProtocolState.Firehose;
         var edlSaharaCommandMode = isEdl && EdlStage is not (EdlProtocolState.Firehose or EdlProtocolState.Streaming);
-        EdlRawMemoryGroup.IsVisible = expert && edlFirehose;
         EdlRegionGroup.IsVisible = expert && isEdl;
 
         ChooseEdlRegionDirButton.IsEnabled = !_busy && edlFirehose;
@@ -1428,8 +1187,6 @@ public partial class FlashView : UserControl
             _ => "Flash_MtkStageUndetermined",
         });
         var mtkDaStage = isMtk && MtkStage == MtkStageDa;
-        MtkDaMemoryGroup.IsVisible = expert && mtkDaStage;
-        MtkDiagnosticGroup.IsVisible = expert && mtkDaStage;
         MtkLegacyParamsGroup.IsVisible = expert && isMtk && SelectedMtkProtocol == MtkDaProtocol.Legacy;
         MtkScatterHintText.IsVisible = _mtkResolution is null;
         MtkPortLabel.IsVisible = !isMtkUsb;
@@ -1459,9 +1216,6 @@ public partial class FlashView : UserControl
         EdlEraseButton.IsEnabled = edlFirehose && !_busy && HasSelectedEdlEntries();
         EdlReadStorageInfoButton.IsEnabled = !_busy && isEdl;
         EdlRepairGptButton.IsEnabled = !_busy && edlFirehose;
-        EdlPeekButton.IsEnabled = !_busy && edlFirehose;
-        EdlPeekAddressBox.IsEnabled = !_busy && edlFirehose;
-        EdlPeekLengthBox.IsEnabled = !_busy && edlFirehose;
         EdlFactoryResetButton.IsEnabled = !_busy && edlFirehose;
         var mtkBootStage = isMtkUsb && mtkStage is MtkStageBootRom or MtkStagePreloader;
         MtkUsbOnlyRow.IsVisible = mtkBootStage;
@@ -1478,29 +1232,18 @@ public partial class FlashView : UserControl
         MtkPreloaderLengthBox.IsEnabled = preloaderEnabled;
 
         MtkPreloaderPeekButton.IsEnabled = preloaderEnabled;
-        MtkPreloaderWriteDataBox.IsEnabled = preloaderEnabled;
-        MtkPreloaderWriteConfirmBox.IsEnabled = preloaderEnabled;
-        MtkPreloaderWriteButton.IsEnabled = preloaderEnabled;
         MtkPreloaderReturnToBromButton.IsEnabled = preloaderEnabled;
         MtkPreloaderDisableWatchdogButton.IsEnabled = preloaderEnabled;
         MtkPreloaderPartitionNameBox.IsEnabled = preloaderEnabled;
         MtkPreloaderJumpButton.IsEnabled = preloaderEnabled;
         MtkPreloaderBootloaderJumpButton.IsEnabled = preloaderEnabled;
         var mtkProtocolReady = !_busy && protocol is DeviceProtocolKind.Mtk && mtkStage != MtkStageLogging;
-        MtkCrashModeBox.IsEnabled = mtkProtocolReady;
-        MtkCrashButton.IsEnabled = mtkProtocolReady;
         MtkSetSpeedButton.IsEnabled = mtkProtocolReady;
         MtkRebootMetaButton.IsEnabled = mtkProtocolReady;
         MtkRebootAndroidTestButton.IsEnabled = mtkProtocolReady;
         MtkRepairGptButton.IsEnabled = mtkProtocolReady;
         MtkFullDumpButton.IsEnabled = mtkProtocolReady;
-        MtkMemoryAddressBox.IsEnabled = mtkProtocolReady;
-        MtkMemoryLengthBox.IsEnabled = mtkProtocolReady;
-        MtkMemoryRegisterBox.IsEnabled = mtkProtocolReady;
-        MtkMemoryPeekButton.IsEnabled = mtkProtocolReady;
-        MtkPokeDataBox.IsEnabled = mtkProtocolReady;
-        MtkPokeConfirmBox.IsEnabled = mtkProtocolReady;
-        MtkPokeButton.IsEnabled = mtkProtocolReady;
+        MtkRawReadGroup.IsVisible = expert && mtkDaStage;
         MtkDumpSkipBox.IsEnabled = mtkProtocolReady;
         MtkDumpPartitionListButton.IsEnabled = mtkProtocolReady;
         MtkDumpWholeFlashButton.IsEnabled = mtkProtocolReady;
@@ -1511,8 +1254,6 @@ public partial class FlashView : UserControl
         MtkAreaOffsetBox.IsEnabled = mtkProtocolReady;
         MtkAreaLengthBox.IsEnabled = mtkProtocolReady;
         MtkReadAreaButton.IsEnabled = mtkProtocolReady;
-        MtkMetaBootModeBox.IsEnabled = mtkProtocolReady;
-        MtkSetMetaButton.IsEnabled = mtkProtocolReady;
         MtkXmlPropertyBox.IsEnabled = mtkProtocolReady;
         MtkXmlPropertyQueryButton.IsEnabled = mtkProtocolReady;
         MtkRebootButton.IsEnabled = mtkProtocolReady;
@@ -1521,9 +1262,9 @@ public partial class FlashView : UserControl
         var edlLoaderRowVisible = SelectedDevice is null || edlSaharaCommandMode;
         foreach (var loaderControl in new Control[]
         {
-            EdlChooseProgrammerButton, EdlProgrammerPathText, EdlAuthKindBox, EdlOnePlusModelBox, EdlNetTypeBox,
-            EdlQudRecoveryBox, EdlPendingCompletionBox, EdlAuthTimeoutBox, EdlProjectIdBox,
-            ChooseEdlXiaomiAuthFileButton, EdlXiaomiAuthFileText, EdlChooseProgrammerDirButton
+            EdlChooseProgrammerButton, EdlProgrammerPathText,
+            EdlQudRecoveryBox, EdlPendingCompletionBox,
+            EdlChooseProgrammerDirButton
         })
         {
             loaderControl.IsVisible = edlLoaderRowVisible;
@@ -1980,11 +1721,6 @@ public partial class FlashView : UserControl
 
         if (!TryReadEdlBundleTuning(out var bundleTuning)) return;
         if (!TryBuildEdlInitialization(out var initialization)) return;
-        if (useSerialPort && initialization is not null)
-        {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlSerialAuthUnsupported"));
-            return;
-        }
         SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
@@ -3158,208 +2894,6 @@ public partial class FlashView : UserControl
         await RunEdlPowerRequestAsync("Flash_EdlSetActiveSlot", "Flash_EdlSetActiveSlotConfirm",
             "Flash_EdlSetActiveSlotDone",
             (firehose, cancellationToken) => firehose.SetActivePartitionAsync(slot, cancellationToken));
-    }
-
-    /// <summary>
-    /// Parses a hexadecimal address from the page; negatives and malformed text are refused.
-    /// <para>解析界面输入的十六进制地址；不允许负数且必须可解析。</para>
-    /// </summary>
-    private static bool TryReadEdlHexString(string? text, out long value)
-    {
-        value = 0;
-        return long.TryParse(text?.Trim().Replace(" ", string.Empty), System.Globalization.NumberStyles.HexNumber,
-            System.Globalization.CultureInfo.InvariantCulture, out value) && value >= 0;
-    }
-
-    /// <summary>
-    /// Writes up to 8 bytes of target memory: the irreversible-write box must be ticked and the dialog
-    /// confirmed a second time.
-    /// <para>向目标内存写入最多 8 字节：需要勾选不可逆确认，再经对话框二次确认。</para>
-    /// </summary>
-    private async void OnEdlPokeClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
-            TopLevel.GetTopLevel(this) is not Window owner) return;
-        var language = LanguageService.Instance;
-        if (!TryReadEdlHexString(EdlPokeAddressBox.Text, out var address))
-        {
-            AppendLog(language.GetString("Flash_EdlPokeInvalid"));
-            return;
-        }
-
-        byte[] payload;
-        try
-        {
-            payload = Convert.FromHexString(EdlPokeDataBox.Text?.Trim() ?? string.Empty);
-        }
-        catch (FormatException)
-        {
-            AppendLog(language.GetString("Flash_EdlPokeInvalid"));
-            return;
-        }
-
-        if (payload.Length is < 1 or > 8)
-        {
-            AppendLog(language.GetString("Flash_EdlPokeInvalid"));
-            return;
-        }
-
-        if (EdlPokeConfirmBox.IsChecked != true)
-        {
-            AppendLog(language.GetString("Flash_EdlPokeConfirmRequired"));
-            return;
-        }
-
-        _confirming = true;
-        bool confirmed;
-        try
-        {
-            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_EdlPoke"),
-                language.GetString("Flash_EdlPokeConfirm"));
-        }
-        finally { _confirming = false; }
-        if (!confirmed) return;
-        if (!TryBuildEdlInitialization(out var initialization)) return;
-
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        CancelFlashButton.IsEnabled = true;
-        try
-        {
-            var response = await App.DeviceMonitor.RunEdlAsync(device, async edl =>
-            {
-                var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token).ConfigureAwait(true);
-                return await firehose.PokeAsync(address, payload, cancellation.Token).ConfigureAwait(true);
-            }, cancellation.Token);
-            AppendLog(response.IsAck
-                ? $"0x{address:X} ← {Convert.ToHexString(payload)}"
-                : $"{language.GetString("Flash_EdlPowerNotAcknowledged")}");
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            _flashCancellation = null;
-            CancelFlashButton.IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// Copies a bounded range inside target memory in 8-byte steps; the dialog must be confirmed before
-    /// the destination is touched.
-    /// <para>在目标内存内按 8 字节步长复制一段有界范围；写目标前需对话框确认。</para>
-    /// </summary>
-    private async void OnEdlMemcpyClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
-            TopLevel.GetTopLevel(this) is not Window owner) return;
-        var language = LanguageService.Instance;
-        if (!TryReadEdlHexString(EdlMemcpySourceBox.Text, out var source) ||
-            !TryReadEdlHexString(EdlMemcpyDestBox.Text, out var destination) ||
-            !long.TryParse(EdlMemcpySizeBox.Text?.Trim(),
-                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture,
-                out var size) || size is < 1 or > 16 * 1024 * 1024)
-        {
-            AppendLog(language.GetString("Flash_EdlPokeInvalid"));
-            return;
-        }
-
-        if (EdlMemcpyConfirmBox.IsChecked != true)
-        {
-            AppendLog(language.GetString("Flash_EdlMemcpyConfirmRequired"));
-            return;
-        }
-
-        _confirming = true;
-        bool confirmed;
-        try
-        {
-            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_EdlMemcpy"),
-                language.GetString("Flash_EdlMemcpyDialogConfirm"));
-        }
-        finally { _confirming = false; }
-        if (!confirmed) return;
-        if (!TryBuildEdlInitialization(out var initialization)) return;
-
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        CancelFlashButton.IsEnabled = true;
-        try
-        {
-            await App.DeviceMonitor.RunEdlAsync(device, async edl =>
-            {
-                var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token).ConfigureAwait(true);
-                var response = await firehose.MemcpyAsync(destination, source, size, cancellation.Token)
-                    .ConfigureAwait(true);
-                if (!response.IsAck)
-                {
-                    throw new InvalidOperationException(language.GetString("Flash_EdlMemcpyRejected"));
-                }
-
-                return true;
-            }, cancellation.Token);
-            AppendLog($"0x{source:X} → 0x{destination:X} ({size} B)");
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            _flashCancellation = null;
-            CancelFlashButton.IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// Reads a target memory window through <c>peek</c>: a read-only debug command needing no
-    /// confirmation; the bytes land in the log as a hex window with address and ASCII columns, and an
-    /// address beyond the 32-bit display range is refused locally.
-    /// <para>经 <c>peek</c> 读取目标内存窗口：只读调试命令，无需确认；读回的字节按带地址与 ASCII 列的
-    /// 十六进制窗口写进日志，超出 32 位显示范围的地址在本地被拒绝。</para>
-    /// </summary>
-    private async void OnEdlPeekClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device) return;
-        var language = LanguageService.Instance;
-        if (!TryReadEdlHexString(EdlPeekAddressBox.Text, out var address) || address > uint.MaxValue ||
-            !long.TryParse(EdlPeekLengthBox.Text?.Trim(), System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out var size) ||
-            size is < 1 or > 16 * 1024 * 1024)
-        {
-            AppendLog(language.GetString("Flash_EdlPeekInvalid"));
-            return;
-        }
-
-        if (!TryBuildEdlInitialization(out var initialization)) return;
-
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        CancelFlashButton.IsEnabled = true;
-        try
-        {
-            var (_, data) = await App.DeviceMonitor.RunEdlAsync(device, async edl =>
-            {
-                var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token)
-                    .ConfigureAwait(true);
-                return await firehose.PeekAsync(size, address, cancellation.Token).ConfigureAwait(true);
-            }, cancellation.Token).ConfigureAwait(true);
-            AppendLog(FormatMemoryWindow((uint)address, data));
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            _flashCancellation = null;
-            CancelFlashButton.IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
     }
 
     /// <summary>
@@ -5096,7 +4630,6 @@ public partial class FlashView : UserControl
             CompletionProfile = profiles[Math.Clamp(MtkLegacyCompletionBox.SelectedIndex, 0, profiles.Length - 1)],
             NandSize64Bit = MtkLegacyNand64BitBox.IsChecked == true,
             ForceCharging = MtkLegacyForceChargeBox.IsChecked == true,
-            PatchStageTwoSecurityChecks = MtkLegacyPatchSecurityBox.IsChecked == true,
         };
     }
 
@@ -5883,9 +5416,6 @@ public partial class FlashView : UserControl
         _flashCancellation = cancellation;
         CancelFlashButton.IsEnabled = true;
         MtkFullDumpButton.IsEnabled = false;
-        MtkFullDumpButton.IsEnabled = false;
-        MtkMemoryPeekButton.IsEnabled = false;
-        MtkPokeButton.IsEnabled = false;
         try
         {
             await RunWithReadyMtkSessionAsync(operation, cancellation.Token).ConfigureAwait(true);
@@ -5939,10 +5469,8 @@ public partial class FlashView : UserControl
 
     /// <summary>
     /// Parses only the shape of a memory window: the address accepts hexadecimal with an optional 0x prefix and the
-    /// length a positive decimal integer. Ceilings, four-byte alignment and write-length rules stay validated by
-    /// <c>MtkDaMemoryAccess</c> in the communication layer, so the view never re-implements them.
-    /// <para>解析内存窗口的形状：地址接受可选 0x 前缀的十六进制，长度接受十进制正整数。上限、四字对齐与写长度
-    /// 都由 <c>MtkDaMemoryAccess</c> 在通信层校验，界面不重复实现这些规则。</para>
+    /// length a positive decimal integer.
+    /// <para>解析内存窗口的形状：地址接受可选 0x 前缀的十六进制，长度接受十进制正整数。</para>
     /// </summary>
     /// <param name="addressText">The address text. <para>地址文本。</para></param>
     /// <param name="lengthText">The length text. <para>长度文本。</para></param>
@@ -6010,147 +5538,6 @@ public partial class FlashView : UserControl
 
         return builder.ToString().TrimEnd();
     }
-
-    /// <summary>
-    /// Reads one memory or register window through the selected download-agent family: register access loops in
-    /// four-byte cells and memory access reads a block, both bounded by the communication layer, and the bytes come
-    /// back as a hex window in the log.
-    /// <para>读取所选下载代理家族的一段内存或寄存器：寄存器以四字为单位循环，内存为块读取；两者的具体上限由通信层
-    /// 校验，回读到的字节以十六进制窗口写进日志。</para>
-    /// </summary>
-    private async void OnMtkMemoryPeekClick(object? sender, RoutedEventArgs e)
-    {
-        if (!TryReadMemoryWindow(MtkMemoryAddressBox.Text, MtkMemoryLengthBox.Text, out var address, out var length))
-        {
-            AppendLog(LanguageService.Instance.GetString("Flash_MtkMemoryShapeInvalid"));
-            return;
-        }
-
-        var family = SelectedMtkProtocol;
-        var asRegister = MtkMemoryRegisterBox.IsChecked == true;
-        await RunMtkSecurityOperationAsync("Flash_MtkMemoryPeek", null, async (session, token) =>
-        {
-            var bytes = asRegister
-                ? family switch
-                {
-                    MtkDaProtocol.XFlash => await session.PeekXFlashRegisterAsync(address, length, token)
-                        .ConfigureAwait(true),
-                    MtkDaProtocol.Legacy => await session.PeekLegacyRegisterAsync(address, length, token)
-                        .ConfigureAwait(true),
-                    MtkDaProtocol.Xml => await session.PeekXmlRegisterAsync(address, length, token)
-                        .ConfigureAwait(true),
-                    _ => throw new ArgumentOutOfRangeException(nameof(family), family, "Unknown agent family.")
-                }
-                : family switch
-                {
-                    MtkDaProtocol.XFlash => await session.PeekXFlashMemoryAsync(address, length, token)
-                        .ConfigureAwait(true),
-                    MtkDaProtocol.Legacy => await session.PeekLegacyMemoryAsync(address, length, token)
-                        .ConfigureAwait(true),
-                    MtkDaProtocol.Xml => await session.PeekXmlMemoryAsync(address, length, token)
-                        .ConfigureAwait(true),
-                    _ => throw new ArgumentOutOfRangeException(nameof(family), family, "Unknown agent family.")
-                };
-            AppendLog(FormatMemoryWindow(address, bytes));
-        });
-    }
-
-    /// <summary>
-    /// Writes bytes through the selected download-agent family: a poke is irreversible, so it needs both the
-    /// confirmation checkbox and the dialog, and a payload whose hex length disagrees with the length box fails
-    /// before any device interaction.
-    /// <para>向所选下载代理家族写入一段字节：写入是不可逆操作，既要勾选确认，也要在对话框里再次确认；数据十六进制
-    /// 与长度不符会在任何设备交互之前报错。</para>
-    /// </summary>
-    private async void OnMtkPokeClick(object? sender, RoutedEventArgs e)
-    {
-        var prompt = LanguageService.Instance;
-        if (!TryReadMemoryWindow(MtkMemoryAddressBox.Text, MtkMemoryLengthBox.Text, out var address, out var length))
-        {
-            AppendLog(prompt.GetString("Flash_MtkMemoryShapeInvalid"));
-            return;
-        }
-
-        byte[] payload;
-        try
-        {
-            payload = Convert.FromHexString(MtkPokeDataBox.Text?.Trim() ?? string.Empty);
-        }
-        catch (FormatException)
-        {
-            AppendLog(prompt.GetString("Flash_MtkPokeDataInvalid"));
-            return;
-        }
-
-        if (payload.Length != length)
-        {
-            AppendLog($"{prompt.GetString("Flash_MtkPokeLengthMismatch")} {payload.Length}/{length}");
-            return;
-        }
-
-        if (MtkPokeConfirmBox.IsChecked != true)
-        {
-            AppendLog(prompt.GetString("Flash_MtkPokeConfirmRequired"));
-            return;
-        }
-
-        var family = SelectedMtkProtocol;
-        await RunMtkSecurityOperationAsync("Flash_MtkPoke", "Flash_MtkPokeDialogConfirm", async (session, token) =>
-        {
-            var written = family switch
-            {
-                MtkDaProtocol.XFlash => await session.PokeXFlashMemoryAsync(address, payload, confirmWrite: true, token)
-                    .ConfigureAwait(true),
-                MtkDaProtocol.Legacy => await session.PokeLegacyMemoryAsync(address, payload, confirmWrite: true, token)
-                    .ConfigureAwait(true),
-                MtkDaProtocol.Xml => await session.PokeXmlMemoryAsync(address, payload, confirmWrite: true, token)
-                    .ConfigureAwait(true),
-                _ => throw new ArgumentOutOfRangeException(nameof(family), family, "Unknown agent family.")
-            };
-            AppendLog($"0x{address:X8} {written} {prompt.GetString("Flash_MtkPokeWritten")}");
-        });
-    }
-
-    private const int EdlAuthTimeoutDefaultMs = 60000;
-
-    /// <summary>
-    /// Parses the authentication deadline in milliseconds, accepting only a decimal integer from 1 through
-    /// 86400000 and returning false for any other text so the caller can report it.
-    /// <para>解析鉴权截止毫秒：只接受 1 至 86400000 的十进制整数，其他文本返回 false 由调用方提示。</para>
-    /// </summary>
-    /// <param name="text">The raw box text. <para>输入框原文。</para></param>
-    /// <param name="timeoutMs">The parsed deadline. <para>解析出的截止时间。</para></param>
-    /// <returns><see langword="true"/> when the value is usable. <para>取值可用时为
-    /// <see langword="true"/>。</para></returns>
-    internal static bool TryReadEdlAuthTimeout(string? text, out int timeoutMs) =>
-        int.TryParse(text?.Trim(), System.Globalization.NumberStyles.None,
-            System.Globalization.CultureInfo.InvariantCulture, out timeoutMs) &&
-        timeoutMs is >= 1 and <= 86400000;
-
-    /// <summary>
-    /// Writes the vendor authentication and compatibility switches into a project authentication
-    /// configuration, shared by both auth branches.
-    /// <para>把厂商鉴权与兼容开关写进项目鉴权配置，两处分支共用同一组赋值。</para>
-    /// </summary>
-    /// <param name="options">The options under construction. <para>正在构造的启动要求。</para></param>
-    /// <param name="netType">Whether SetNetType is requested. <para>是否请求 SetNetType。</para></param>
-    /// <param name="qudRecovery">Whether QUD HELLO recovery is granted.
-    /// <para>是否授予 QUD HELLO 恢复。</para></param>
-    /// <param name="pendingCompletion">Whether a single pending completion is tolerated.
-    /// <para>是否容忍单次 pending 完成。</para></param>
-    /// <param name="authTimeoutMs">The authentication deadline. <para>鉴权截止时间。</para></param>
-    /// <returns>The options with the switches applied. <para>已套用开关的启动要求。</para></returns>
-    private EdlInitializationOptions WithEdlCompatibility(EdlInitializationOptions options, bool netType,
-        bool qudRecovery, bool pendingCompletion, int authTimeoutMs) =>
-        options with
-        {
-            SendOnePlusNetType = netType,
-            QudHelloRecoveryEnabled = qudRecovery,
-            AllowSingleFirehosePendingCompletion = pendingCompletion,
-            AuthenticationTimeoutMs = authTimeoutMs,
-            AllowStreamDload = EdlAllowStreamDloadBox.IsChecked == true,
-            SkipResponseOnReadWrite = EdlSkipResponseBox.IsChecked == true
-        };
 
     /// <summary>
     /// Runs the given operation on a fresh preloader command-stage session: every click takes a newly initialized
@@ -6239,7 +5626,7 @@ public partial class FlashView : UserControl
         if (!TryReadPreloaderAddress(MtkPreloaderOffsetBox.Text, out var address) ||
             !TryReadPreloaderCount(MtkPreloaderLengthBox.Text, out var length) || length <= 0)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_MtkMemoryAddress"));
+            AppendLog(LanguageService.Instance.GetString("Flash_MtkPreloaderOffset"));
             return;
         }
 
@@ -6248,31 +5635,6 @@ public partial class FlashView : UserControl
             var data = await MtkPreloaderService.PeekWindowAsync(session, address, length, token)
                 .ConfigureAwait(true);
             AppendLog($"0x{address:X8}: {Convert.ToHexString(data)}");
-        });
-    }
-
-    private async void OnMtkPreloaderWriteClick(object? sender, RoutedEventArgs e)
-    {
-        if (!TryReadPreloaderAddress(MtkPreloaderOffsetBox.Text, out var address) ||
-            MtkPreloaderWriteDataBox.Text?.Trim() is not { Length: > 0 } hex ||
-            !TryParseHexBytes(hex, out var data))
-        {
-            AppendLog(LanguageService.Instance.GetString("Flash_MtkPreloaderWriteData"));
-            return;
-        }
-
-        if (MtkPreloaderWriteConfirmBox.IsChecked != true)
-        {
-            AppendLog(LanguageService.Instance.GetString("Flash_MtkPreloaderWriteConfirm"));
-            return;
-        }
-
-        await RunMtkPreloaderAsync("Flash_MtkPreloaderWriteConfirmDialog", async (session, token) =>
-        {
-            var submitted = await MtkPreloaderService.WriteWindowAsync(session, address, data,
-                confirmed: true, token).ConfigureAwait(true);
-            AppendLog(string.Format(LanguageService.Instance.GetString("Flash_MtkPreloaderWriteApplied"),
-                $"0x{address:X8}", submitted));
         });
     }
 
@@ -6330,107 +5692,6 @@ public partial class FlashView : UserControl
 
         bytes = Convert.FromHexString(digits[..count]);
         return true;
-    }
-
-    private async void OnMtkCrashClick(object? sender, RoutedEventArgs e)
-    {
-        var language = LanguageService.Instance;
-        if (!TryReadMtkSelection(out _, out _, out _, out _, out _, out _) ||
-            TopLevel.GetTopLevel(this) is not Window owner ||
-            SelectedDevice is not { Protocol: DeviceProtocolKind.Mtk } usbDevice)
-        {
-            return;
-        }
-
-        _confirming = true;
-        bool confirmed;
-        try
-        {
-            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_MtkCrashButton"),
-                language.GetString("Flash_MtkCrashConfirm"));
-        }
-        finally { _confirming = false; }
-        if (!confirmed) return;
-
-        var mode = Enum.GetValues<MtkDaCrashMode>()[Math.Max(MtkCrashModeBox.SelectedIndex, 0)];
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        CancelFlashButton.IsEnabled = true;
-        try
-        {
-            await RunWithReadyMtkSessionAsync(async (session, token) =>
-            {
-                var result = await session.CrashDaAsync(mode, confirm: true, token).ConfigureAwait(true);
-                AppendLog($"{result.Mode}: {result.Detail}");
-                AppendLog(language.GetString("Flash_MtkCrashConfirm"));
-            }, cancellation.Token).ConfigureAwait(true);
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            _flashCancellation = null;
-            CancelFlashButton.IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// Writes the META boot flag triple on a ready XFlash agent: set_meta is defined only by the XFlash
-    /// family, so a non-XFlash family is refused locally before any device contact; the write is
-    /// irreversible and needs the user's confirmation first.
-    /// <para>在已就绪的 XFlash 代理上写入 meta 启动标志三元组：set_meta 只由 XFlash 家族定义，非 XFlash 家族在
-    /// 接触设备前本地拒绝；写入不可逆，执行前需用户确认。</para>
-    /// </summary>
-    private async void OnMtkSetMetaClick(object? sender, RoutedEventArgs e)
-    {
-        var language = LanguageService.Instance;
-        if (SelectedMtkProtocol != MtkDaProtocol.XFlash)
-        {
-            AppendLog(language.GetString("Flash_MtkSetMetaFamilyUnsupported"));
-            return;
-        }
-
-        if (!TryReadMtkSelection(out _, out _, out _, out _, out _, out _) ||
-            TopLevel.GetTopLevel(this) is not Window owner)
-        {
-            return;
-        }
-
-        _confirming = true;
-        bool confirmed;
-        try
-        {
-            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_MtkSetMetaButton"),
-                language.GetString("Flash_MtkSetMetaConfirm"));
-        }
-        finally { _confirming = false; }
-        if (!confirmed) return;
-
-        var mode = Enum.GetValues<MtkXFlashMetaBootMode>()[Math.Max(MtkMetaBootModeBox.SelectedIndex, 0)];
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        CancelFlashButton.IsEnabled = true;
-        try
-        {
-            await RunWithReadyMtkSessionAsync(async (session, token) =>
-            {
-                await session.SetXFlashMetaBootModeAsync(mode, token).ConfigureAwait(true);
-                AppendLog(string.Format(language.GetString("Flash_MtkSetMetaApplied"), mode));
-            }, cancellation.Token).ConfigureAwait(true);
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            _flashCancellation = null;
-            CancelFlashButton.IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
     }
 
     private async void OnMtkSetSpeedClick(object? sender, RoutedEventArgs e)

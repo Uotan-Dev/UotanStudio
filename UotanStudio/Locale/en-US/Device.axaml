@@ -82,6 +82,10 @@
     <x:String x:Key="Device_MtkHardware">Hardware code</x:String>
     <x:String x:Key="Device_MtkFirmware">HW/SW version</x:String>
     <x:String x:Key="Device_MtkSecurityBits">Security bits SBC/SLA/DAA/CERT</x:String>
+    <x:String x:Key="Device_MtkBootLoaderVersion">Bootloader version</x:String>
+    <x:String x:Key="Device_MtkBootRomVersion">Boot ROM version</x:String>
+    <x:String x:Key="Device_MtkMeid">MEID</x:String>
+    <x:String x:Key="Device_MtkSocid">SOCID</x:String>
     <x:String x:Key="Device_MtkInfoUnknown">Boot ROM identity not available yet.</x:String>
     <x:String x:Key="Device_Serial">Serial</x:String>
     <x:String x:Key="Device_Model">Model</x:String>

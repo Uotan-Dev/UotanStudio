@@ -726,14 +726,17 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- MTK 模式信息：硬件代码与安全位来自一次只读 Boot ROM 握手，值为技术串，标签走资源。 -->
+                        <!-- MTK 模式信息：硬件代码与安全位来自一次只读 Boot ROM 握手，值为技术串，标签走资源。
+                             两个版本字节由同一次握手顺带读取，目标不上报时对应行隐藏。 -->
                         <!-- MTK mode info: the hardware code and security bits come from one read-only Boot ROM
-                             handshake; the values are technical strings and the labels come from resources. -->
+                             handshake; the values are technical strings and the labels come from resources. The two
+                             version bytes come along with the same handshake, and a row hides when the target
+                             reported no version. -->
                         <Border Classes="InfoCard" IsVisible="{Binding IsMtk}">
                             <StackPanel>
                                 <TextBlock Classes="CardCaption" Text="{DynamicResource Device_MtkInfo}" />
-                                <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8"
-                                      IsVisible="{Binding HasMtkInfo}">
+                                <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                                      RowSpacing="8" IsVisible="{Binding HasMtkInfo}">
                                     <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
                                                Text="{DynamicResource Device_MtkHardware}" />
                                     <TextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
@@ -748,6 +751,36 @@
                                                Text="{DynamicResource Device_MtkSecurityBits}" />
                                     <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
                                                Text="{Binding MtkSecurityBits}" />
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_MtkBootLoaderVersion}"
+                                               IsVisible="{Binding MtkBootLoaderVersion, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding MtkBootLoaderVersion}"
+                                               IsVisible="{Binding MtkBootLoaderVersion, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_MtkBootRomVersion}"
+                                               IsVisible="{Binding MtkBootRomVersion, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding MtkBootRomVersion}"
+                                               IsVisible="{Binding MtkBootRomVersion, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+
+                                    <!-- MEID 与 SOCID 由同一次握手顺带读回，目标不上报时整行隐藏，不显示占位符。 -->
+                                    <!-- MEID and SOCID ride along with the same handshake; a target that reports none hides the row instead of showing a placeholder. -->
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_MtkMeid}"
+                                               IsVisible="{Binding MtkMeidHex, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding MtkMeidHex}"
+                                               IsVisible="{Binding MtkMeidHex, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+
+                                    <TextBlock Grid.Row="6" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_MtkSocid}"
+                                               IsVisible="{Binding MtkSocidHex, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                    <TextBlock Grid.Row="6" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding MtkSocidHex}"
+                                               IsVisible="{Binding MtkSocidHex, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
                                 </Grid>
                                 <TextBlock Classes="CardValue" Text="{DynamicResource Device_MtkInfoUnknown}"
                                            IsVisible="{Binding !HasMtkInfo}" />

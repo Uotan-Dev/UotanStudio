@@ -1,0 +1,86 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        x:Class="UotanStudio.Views.Dialogs.DangerousConfirmDialog"
+        Title="{DynamicResource DangerousConfirm_Title}"
+        Width="560" SizeToContent="Height" MinWidth="480"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        CanMinimize="False" CanMaximize="False" CanResize="False"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
+        WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
+    <Window.Styles>
+        <Style Selector="WindowDrawnDecorations /template/ StackPanel#PART_OverlayPanel">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Width" Value="{DynamicResource CaptionButtonWidth}" />
+        </Style>
+        <Style Selector="WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MinimizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MaximizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=FullScreenButton]">
+            <Setter Property="IsVisible" Value="False" />
+            <Setter Property="IsEnabled" Value="False" />
+        </Style>
+        <Style Selector="Button.danger-confirm">
+            <Setter Property="Background" Value="#C62828" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="MinWidth" Value="110" />
+            <Setter Property="Height" Value="32" />
+        </Style>
+        <Style Selector="Button.danger-confirm:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#B71C1C" />
+        </Style>
+        <Style Selector="TextBlock.tab-tag">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Opacity" Value="0.75" />
+        </Style>
+        <Style Selector="TextBlock.device-id">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Opacity" Value="0.85" />
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" Margin="24,40,24,20">
+        <!-- 标签：与调用方传入的 TabTitle 对应，用于提示操作所在模块 -->
+        <TextBlock x:Name="TabTitleText" Grid.Row="0" Classes="tab-tag" Margin="0,0,0,6" />
+
+        <!-- 标题：由请求方提供的强警示句，例如"擦除整个用户区" -->
+        <TextBlock x:Name="TitleText" Grid.Row="1"
+                   FontSize="16" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+        <!-- 详情：目标设备、分区/地址、字节数等 -->
+        <TextBlock x:Name="DetailText" Grid.Row="2"
+                   FontSize="13" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+        <!-- 设备标识（可选）：序列号或 loader build -->
+        <Border x:Name="DevicePanel" Grid.Row="3"
+                IsVisible="False"
+                Margin="0,0,0,16"
+                Padding="10,8" CornerRadius="6"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                BorderThickness="1">
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="DeviceIdentifierText"
+                           Classes="device-id" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="4" RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
+            <CheckBox x:Name="AckCheckBox" Grid.Row="0" IsChecked="False"
+                      Content="{DynamicResource DangerousConfirm_Ack}"
+                      IsCheckedChanged="OnGateChanged" />
+            <TextBox x:Name="ConfirmWordBox" Grid.Row="1"
+                     HorizontalAlignment="Stretch" MinWidth="120" MinHeight="32"
+                     PlaceholderText="{DynamicResource DangerousConfirm_EnterHint}"
+                     TextChanged="OnGateChanged" />
+            <StackPanel Grid.Row="2" Orientation="Horizontal"
+                        HorizontalAlignment="Right" Spacing="8" Margin="0,4,0,0">
+                <Button x:Name="CancelButton"
+                        Content="{DynamicResource DangerousConfirm_CancelButton}"
+                        IsCancel="True" MinWidth="100" Height="32"
+                        Click="OnCancelClick" />
+                <Button x:Name="ConfirmButton" Classes="danger-confirm"
+                        Content="{DynamicResource DangerousConfirm_ConfirmButton}"
+                        IsDefault="True" IsEnabled="False"
+                        Click="OnConfirmClick" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

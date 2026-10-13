@@ -167,7 +167,7 @@
                      HorizontalAlignment="Stretch" Padding="5"
                      ToolTip.Tip="{DynamicResource Dock_EROFSFeaturesHint}"
                      Text="{Binding ErofsFeatureOverrides}" FontSize="13"
-                     PlaceholderText="lz4_0padding,!ztailpacking" />
+                     PlaceholderText="!big_pcluster" />
         </controls:ResponsiveFormRow>
         <controls:ResponsiveFormRow Margin="8,10,5,0"
                                     MinLabelWidth="90" MaxLabelWidth="90"
