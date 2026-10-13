@@ -1,23 +1,18 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Ext4.Models;
 using UotanStudio.Firmware.FileSystem.Metadata;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
+using UotanStudio.Hash.Crc32c;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;
 
 /// <summary>
-/// Builds raw ext4 filesystem images from a host directory. The layout (block groups, bitmaps, group
-/// descriptors, extent trees, journal and resize inode) is planned entirely from the scanned tree, and
-/// every geometry decision is bounded: a capacity that cannot hold metadata plus content fails instead
-/// of silently truncating.
-/// <para>从主机目录构建 ext4 原始文件系统镜像。布局（块组、位图、块组描述符、extent 树、日志与
-/// resize inode）完全基于扫描得到的目录树规划；所有几何决策均有边界：无法容纳元数据与内容的容量
-/// 会直接失败，而不是静默截断。</para>
+/// Builds raw ext4 filesystem images from a host directory. The layout — block groups, bitmaps, group descriptors, extent trees, journal and resize inode — is planned from the scanned tree, and every geometry decision is bounded: a capacity that cannot hold metadata plus content fails instead of silently truncating.
+/// <para>由宿主目录构建原始 ext4 文件系统镜像。布局（块组、位图、组描述符、extent 树、日志与 resize inode）完全由扫描出的目录树规划，且每个几何决策都有界：容量放不下元数据加内容时直接失败，不会静默截断。</para>
 /// </summary>
 public sealed partial class Ext4Builder
 {
@@ -285,7 +280,7 @@ public sealed partial class Ext4Builder
     /// <param name="sourceDirectory">Host directory tree packed into the image; it must exist. <para>被打包的主机目录树；必须存在。</para></param>
     /// <param name="outputPath">Destination image path; written through a temporary file and published by an atomic move that overwrites an existing target. The destination and its staging file are skipped when they lie inside the source tree. <para>目标镜像路径；先写临时文件，再以覆盖式原子移动发布。当目标及其暂存文件位于源目录树内时会被跳过。</para></param>
     /// <param name="options">Layout and capacity options; <see langword="null"/> uses <see cref="Ext4Options"/> defaults. Invalid combinations are rejected during validation. <para>布局与容量选项；<see langword="null"/> 时使用 <see cref="Ext4Options"/> 默认值。非法组合会在校验阶段被拒绝。</para></param>
-    /// <param name="progress"><para>可选写作进度 <c>(已写字节, 源目录估算总字节)</c>；<c>null</c> 表示不报告。</para>Optional write progress <c>(bytes written, estimated source bytes)</c>; <c>null</c> disables reporting.</param>
+    /// <param name="progress">Optional write progress <c>(bytes written, estimated source bytes)</c>; <c>null</c> disables reporting. <para>可选写作进度 <c>(已写字节, 源目录估算总字节)</c>；<c>null</c> 表示不报告。</para></param>
     public static void Build(string sourceDirectory, string outputPath, Ext4Options? options = null, IProgress<(long Processed, long Total)>? progress = null)
     {
         var effective = Validate(sourceDirectory, options);
@@ -1260,8 +1255,6 @@ public sealed partial class Ext4Builder
                 using var process = System.Diagnostics.Process.Start(psi);
                 if (process != null)
                 {
-                    // Drain stderr so the child cannot block on a full error pipe while we copy
-                    // stdout; the label is optional, so only a clean 0-exit stdout value is kept.
                     _ = process.StandardError.ReadToEndAsync();
                     using var ms = new MemoryStream();
                     process.StandardOutput.BaseStream.CopyTo(ms);
@@ -1274,8 +1267,6 @@ public sealed partial class Ext4Builder
             }
             catch
             {
-                // A missing or failing getfattr is expected on hosts without SELinux xattrs;
-                // the inode is still built, just without the security.selinux label.
             }
         }
         else
@@ -1620,8 +1611,8 @@ public sealed partial class Ext4Builder
     }
 
     /// <summary>
-    /// Yields the e2fsprogs ext2fs_list_backups backup-group sequence for sparse_super (1,3,5,7,9,25,27,49,…) below groupCount — identical to the ascending group-number walk with bg_has_super used by the fsck resize-inode check.
-    /// <para>生成 e2fsprogs ext2fs_list_backups 的备份组序列（sparse_super：1,3,5,7,9,25,27,49,…）， 小于 groupCount 时依次产出（与组号升序遍历 + bg_has_super 的校验顺序一致）。</para>
+    /// Yields the sparse_super backup-group sequence (1,3,5,7,9,25,27,49,…) below groupCount in ascending group-number order.
+    /// <para>按组号升序产出 sparse_super 在 groupCount 之内的备份组序列（1,3,5,7,9,25,27,49,…）。</para>
     /// </summary>
     private static IEnumerable<int> ListBackupGroups(int groupCount)
     {

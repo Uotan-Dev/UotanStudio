@@ -7,8 +7,6 @@ public sealed partial class MtkSession
 {
     private const string XmlReadRpmbCommand = "CMD:CUSTOMRPMBR";
     private const string XmlReadUfsRpmbCommand = "CMD:CUSTOMURPMBR";
-    private const string XmlWriteRpmbCommand = "CMD:CUSTOMRPMBW";
-    private const string XmlWriteUfsRpmbCommand = "CMD:CUSTOMURPMBW";
 
     /// <summary>
     /// Reads a bounded run of RPMB frames through the XML DA's custom RPMB command.
@@ -144,98 +142,6 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>
-    /// Writes whole RPMB frames through the XML DA, only after the caller opted into authenticated writes.
-    /// <para>仅在调用方开启认证写入后，通过 XML DA 写入完整的 RPMB 帧。</para>
-    /// </summary>
-    /// <remarks>
-    /// The exchange mirrors <c>mtkclient/Library/DA/xml/extension/v6.py:323-357</c>: command element, its
-    /// <c>OK</c>, the frame index, the whole frame as one payload, then a two-byte result message closed by
-    /// <c>CMD:END</c> and <c>CMD:START</c>. The reference client rejects a buffer whose length differs from one
-    /// frame before sending anything; no zero padding, no erase and no retry are added here.
-    /// <para>该交换对应 <c>mtkclient/Library/DA/xml/extension/v6.py:323-357</c>：命令元素、其 <c>OK</c>、
-    /// 帧序号、整帧作为单个载荷，随后是两字节结果消息，并由 <c>CMD:END</c> 与 <c>CMD:START</c> 收尾。
-    /// 参考客户端会在发送任何东西之前拒绝长度不等于一个帧的缓冲区；此处不补零、不擦除，也不重试。</para>
-    /// </remarks>
-    /// <param name="range">The validated frame-aligned range to write.
-    /// <para>要写入的、已校验的帧对齐范围。</para></param>
-    /// <param name="source">A readable stream holding one whole frame per requested frame; it remains open.
-    /// <para>为每个请求帧提供一个完整帧的可读流；保持打开。</para></param>
-    /// <param name="options">The options, which must enable
-    /// <see cref="MtkRpmbOptions.AllowAuthenticatedWrites"/>.
-    /// <para>选项，必须启用 <see cref="MtkRpmbOptions.AllowAuthenticatedWrites"/>。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>One status result per addressed frame. <para>每个已寻址帧的状态结果。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="options"/> is null.
-    /// <para><paramref name="source"/> 或 <paramref name="options"/> 为 null。</para></exception>
-    /// <exception cref="NotSupportedException">
-    /// <see cref="MtkRpmbOptions.AllowAuthenticatedWrites"/> is <see langword="false"/>.
-    /// <para><see cref="MtkRpmbOptions.AllowAuthenticatedWrites"/> 为 <see langword="false"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException"><paramref name="source"/> is unreadable.
-    /// <para><paramref name="source"/> 不可读。</para></exception>
-    /// <exception cref="EndOfStreamException">The source ended before a whole frame was available.
-    /// <para>源在凑足完整一帧之前已结束。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The range or count is outside the configured bounds.
-    /// <para>范围或数量超出配置的边界。</para></exception>
-    /// <exception cref="InvalidOperationException">The geometry is unknown or no channel is attached.
-    /// <para>几何信息未知或未附加通道。</para></exception>
-    /// <exception cref="MtkProtocolException">A message violated the protocol; the family faults.
-    /// <para>某条消息违反协议；该协议族进入 fault 状态。</para></exception>
-    /// <exception cref="TimeoutException">The exchange deadline expired; the family faults.
-    /// <para>交换截止时间到期；该协议族进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public async Task<MtkRpmbWriteResult> WriteXmlRpmbFramesAsync(MtkRpmbFrameRange range, Stream source,
-        MtkRpmbOptions options, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(options);
-        RequireRpmbWriteOptIn(options);
-        options.Validate();
-        if (!source.CanRead)
-        {
-            throw new ArgumentException("The RPMB write source is not readable.", nameof(source));
-        }
-        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            RequireState(MtkSessionState.XmlStorageGeometryKnown);
-            cancellationToken.ThrowIfCancellationRequested();
-            var target = RequireXmlRpmbTarget();
-            var capacity = RequireXmlRpmbCapacity();
-            range.Validate(capacity, options.MaximumWriteFrames);
-            var frames = new List<MtkRpmbFrameResult>();
-            var buffer = new byte[MtkRpmbWire.FrameLength];
-            await RunRpmbExchangeAsync(async token =>
-            {
-                var channel = _xml ?? throw new InvalidOperationException("The XML DA channel was not attached.");
-                for (var index = 0; index < range.FrameCount; index++)
-                {
-                    var frame = checked(range.StartFrame + index);
-                    await source.ReadExactlyAsync(buffer, token).ConfigureAwait(false);
-                    var outcome = await WriteXmlRpmbFrameAsync(channel, GetXmlWriteCommand(target), frame, buffer, token).ConfigureAwait(false);
-                    frames.Add(new MtkRpmbFrameResult { Frame = frame, Outcome = outcome, RawFrame = [] });
-                    if (!outcome.IsOkay)
-                    {
-                        break;
-                    }
-                }
-            }, options.OperationTimeoutMs, FaultXml, cancellationToken).ConfigureAwait(false);
-            var accepted = frames.Count(frame => frame.Outcome.IsOkay);
-            RecordRpmbEvidence("rpmb-write", accepted == range.FrameCount ? CommandOutcomeKind.Completed : CommandOutcomeKind.Rejected,
-                $"xml {GetXmlWriteCommand(target)} frames {range.StartFrame}+{range.FrameCount}; {accepted} accepted.");
-            return new MtkRpmbWriteResult { Target = target, Requested = range, Frames = frames };
-        }
-        finally
-        {
-            _operation.Release();
-        }
-    }
-
     private MtkRpmbTarget RequireXmlRpmbTarget()
     {
         var storage = XmlStorage ?? throw new InvalidOperationException("XML storage has not been discovered.");
@@ -252,9 +158,6 @@ public sealed partial class MtkSession
 
     private static string GetXmlReadCommand(MtkRpmbTarget target) =>
         target == MtkRpmbTarget.Emmc ? XmlReadRpmbCommand : XmlReadUfsRpmbCommand;
-
-    private static string GetXmlWriteCommand(MtkRpmbTarget target) =>
-        target == MtkRpmbTarget.Emmc ? XmlWriteRpmbCommand : XmlWriteUfsRpmbCommand;
 
     private async Task<MtkRpmbReadResult> ReadXmlRpmbFramesOwnedAsync(MtkRpmbFrameRange range, MtkRpmbTarget target,
         long capacity, MtkRpmbOptions options, CancellationToken cancellationToken)
@@ -310,19 +213,6 @@ public sealed partial class MtkSession
         }
         await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
         return (outcome, data);
-    }
-
-    private async Task<MtkRpmbFrameOutcome> WriteXmlRpmbFrameAsync(MtkXmlChannel channel, string command,
-        long frame, byte[] payload, CancellationToken token)
-    {
-        var outcome = await SendXmlRpmbRequestAsync(channel, command, frame, payload, token).ConfigureAwait(false);
-        await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
-        if (!outcome.IsOkay)
-        {
-            RecordRpmbEvidence("rpmb-frame", CommandOutcomeKind.Rejected,
-                $"xml {command} write frame {frame} reported 0x{outcome.ReportedCode:X4}.");
-        }
-        return outcome;
     }
 
     private async Task<MtkRpmbFrameOutcome> SendXmlRpmbRequestAsync(MtkXmlChannel channel, string command,

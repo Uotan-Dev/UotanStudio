@@ -11,9 +11,9 @@ namespace UotanStudio.ViewModels.Workspace;
 internal partial class ImageViewModel
 {
     /// <summary>
-    /// <para>将选中镜像从列表移除并把项目内文件移动到 <c>.deleted/</c>，登记可撤销历史（撤销移回）。</para>
     /// Removes the selected image from the list and moves its project file to
     /// <c>.deleted/</c>, recording reversible history (undo moves it back).
+    /// <para>将选中镜像从列表移除并把项目内文件移动到 <c>.deleted/</c>，登记可撤销历史（撤销移回）。</para>
     /// </summary>
     [RelayCommand]
     private Task DeleteSelectedAsync() => RunExclusiveAsync(DeleteSelectedCoreAsync);
@@ -165,10 +165,10 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>使用 LP 元数据构建器与 sparse 写入器将项目内 raw/sparse 镜像合成为 super 镜像，输出到
-    /// <c>output/</c> 并登记历史。</para>
     /// Builds a super image from the project's raw/sparse images using the LP metadata builder and the
     /// sparse writer, outputting to <c>output/</c> and recording history.
+    /// <para>使用 LP 元数据构建器与 sparse 写入器将项目内 raw/sparse 镜像合成为 super 镜像，输出到
+    /// <c>output/</c> 并登记历史。</para>
     /// </summary>
     [RelayCommand]
     private Task SynthesizeSuperAsync() => RunExclusiveAsync(SynthesizeSuperCoreAsync);
@@ -244,10 +244,6 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>把右键条目或用户勾选的可刷写镜像（boot/raw/sparse/ext4/erofs/f2fs/super）刷入当前选中设备：分区名取镜像文件名去扩展名，
-    /// 多段分区名（如 <c>system_ext_a</c>）原样保留，不由本层拆分或追加槽位后缀；槽位解析交给
-    /// <c>FastbootSession.ResolvePartitionWithSlot</c> 处理（已带显式槽位后缀的名按原样刷写）。
-    /// 逐分区复用 <see cref="FlashService.FlashImageAsync"/> 执行，单分区失败会继续，进度与结果回报到状态文本。</para>
     /// Flashes the clicked or checked flashable images (boot/raw/sparse/ext4/erofs/f2fs/super) to the currently selected device
     /// in order: the partition name is the image file name without its extension, and compound names such as
     /// <c>system_ext_a</c> are preserved verbatim (this layer never splits or slot-suffixes them); slot
@@ -255,6 +251,10 @@ internal partial class ImageViewModel
     /// explicit slot suffix unchanged. Each partition is flashed sequentially via
     /// <see cref="BatchFlashService.FlashSelectedAsync"/> which reuses <see cref="FlashService.FlashImageAsync"/>,
     /// a single-partition failure does not stop the rest, and progress/results are reported to the status text.
+    /// <para>把右键条目或用户勾选的可刷写镜像（boot/raw/sparse/ext4/erofs/f2fs/super）刷入当前选中设备：分区名取镜像文件名去扩展名，
+    /// 多段分区名（如 <c>system_ext_a</c>）原样保留，不由本层拆分或追加槽位后缀；槽位解析交给
+    /// <c>FastbootSession.ResolvePartitionWithSlot</c> 处理（已带显式槽位后缀的名按原样刷写）。
+    /// 逐分区复用 <see cref="FlashService.FlashImageAsync"/> 执行，单分区失败会继续，进度与结果回报到状态文本。</para>
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanFlashSelected))]
     private Task FlashSelectedAsync(ImageEntryViewModel? image = null) => RunExclusiveAsync(() => FlashSelectedCoreAsync(image));
@@ -336,16 +336,19 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>「刷入选中文件」命令是否可用：仅当当前选中设备为 Fastboot 协议时才可执行，
-    /// 以此作为按钮禁用的判定条件。</para>
     /// Whether the "flash selected" command is enabled: it can only run when the currently
     /// selected device uses the Fastboot protocol, which drives the button's enabled state.
+    /// <para>「刷入选中文件」命令是否可用：仅当当前选中设备为 Fastboot 协议时才可执行，
+    /// 以此作为按钮禁用的判定条件。</para>
     /// </summary>
     private bool CanFlashSelected(ImageEntryViewModel? image)
         => DeviceViewModel.Instance?.SelectedDevice is { } d
            && d.Protocol == DeviceProtocolKind.Fastboot;
 
-    /// <summary>Builds DAT output for the clicked or checked entries. 为右键或勾选条目构建 DAT。</summary>
+    /// <summary>
+    /// Builds DAT output for the clicked or checked entries.
+    /// <para>为右键或勾选条目构建 DAT。</para>
+    /// </summary>
     [RelayCommand]
     private Task SynthesizeDatAsync(ImageEntryViewModel? image = null) => RunImagesAsync("dat", image);
 }

@@ -184,16 +184,21 @@ public sealed class ProjectSettingsDto
     public int ErofsCompLevel { get; set; } = 8;
 
     /// <summary>
-    /// EROFS superblock feature-bit overrides named after the upstream erofs-utils feature list. An empty
-    /// value keeps the source image's feature words; a leading <c>!</c> clears one feature.
-    /// <para>以上游 erofs-utils 特性名单命名的 EROFS 超级块特性位覆盖。空值表示沿用源镜像的特性字，
-    /// 前缀 <c>!</c> 表示清除该特性。</para>
+    /// EROFS feature declaration edit script, using the upstream feature names as printed by
+    /// <c>erofs-utils</c>: an edit sets a bit, a <c>!</c>-prefixed edit clears it, and <c>auto</c> keeps both
+    /// superblock words derived. The script edits the feature words recorded from the preserved source image,
+    /// so an empty value inherits them unchanged.
+    /// <para>EROFS 特性声明编辑脚本，使用与 <c>erofs-utils</c> 输出一致的上游特性名：普通记号置位，加 <c>!</c>
+    /// 前缀清除，<c>auto</c> 让两个超级块字保持推导。脚本编辑的是自保留源镜像记录下来的特性字，因此空值表示
+    /// 原样继承。</para>
     /// </summary>
     /// <value>
-    /// Comma-separated upstream feature names; <c>string.Empty</c> stores no override.
-    /// <para>逗号分隔的上游特性名；<c>string.Empty</c> 表示未存储覆盖。</para>
+    /// The edit script applied over the inherited declaration; <see langword="null"/> stores no declaration
+    /// edit. Tokens outside the upstream feature table fail the build instead of being dropped silently.
+    /// <para>应用在被继承声明之上的编辑脚本；<see langword="null"/> 表示未存储声明编辑。超出上游特性表的记号
+    /// 会让构建失败，而不是被静默丢弃。</para>
     /// </value>
-    public string ErofsFeatureOverrides { get; set; } = string.Empty;
+    public string? ErofsFeatureOverrides { get; set; }
 
     /// <summary>
     /// Explicit F2FS compression selection. A missing value inherits source metadata when rebuilding,

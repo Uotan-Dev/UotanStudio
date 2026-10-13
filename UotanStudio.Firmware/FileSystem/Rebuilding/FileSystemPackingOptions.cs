@@ -1,3 +1,4 @@
+using System.Globalization;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
@@ -97,15 +98,26 @@ internal static class FileSystemPackingOptions
         => options.TryGetValue(key, out var value) && value.Length > 0 ? value : null;
 
     /// <summary>
-    /// Applies the <c>ErofsFeatures</c> and <c>ErofsDotOmitted</c> packing keys to builder options. The edit
-    /// script starts from <paramref name="inheritedWords"/> when the caller carries an inherited declaration and
+    /// Applies the <c>ErofsFeatures</c>, <c>ErofsDotOmitted</c>, <c>ErofsFragments</c>,
+    /// <c>ErofsMetabox</c>, <c>ErofsExcludePath</c>, <c>ErofsExcludeRegex</c>,
+    /// <c>ErofsUseExtentIndexes</c>, <c>ErofsChunkSize</c>, <c>ErofsBlobDeviceIds</c>,
+    /// <c>ErofsInodeFormat</c>, <c>ErofsChunkIndexKind</c>, <c>ErofsCompressHints</c> and
+    /// <c>ErofsDedupeMode</c> packing keys to builder
+    /// options. The feature edit script starts from
+    /// <paramref name="inheritedWords"/> when the caller carries an inherited declaration and
     /// from the writer's own implied words otherwise; a key that is absent leaves the declaration untouched, so a
     /// build without these keys stays byte-identical to one that never had them. A token outside the upstream
-    /// feature table fails the build rather than dropping the edit silently.
-    /// <para>把 <c>ErofsFeatures</c> 与 <c>ErofsDotOmitted</c> 打包键应用到构建选项。调用方携带继承声明时以
+    /// feature table or outside the layout-mode vocabulary fails the build rather than dropping the edit silently.
+    /// The exclusion, hint and device-index keys hold one entry per line rather than a comma-separated list,
+    /// because a regular expression or a path may contain a comma.
+    /// <para>把 <c>ErofsFeatures</c>、<c>ErofsDotOmitted</c>、<c>ErofsFragments</c>、<c>ErofsMetabox</c>、
+    /// <c>ErofsExcludePath</c>、<c>ErofsExcludeRegex</c>、<c>ErofsUseExtentIndexes</c>、<c>ErofsChunkSize</c>、
+    /// <c>ErofsBlobDeviceIds</c>、<c>ErofsInodeFormat</c>、<c>ErofsChunkIndexKind</c>、<c>ErofsCompressHints</c>
+    /// 与 <c>ErofsDedupeMode</c> 打包键应用到构建选项。调用方携带继承声明时以
     /// <paramref name="inheritedWords"/> 作为编辑基线，否则以写入方自行推导的隐含字作为基线；缺失的键不会改动
-    /// 声明，因此未带这些键的构建与从未有过这些键时逐字节一致。超出上游特性表的记号会使构建失败，而不是静默
-    /// 丢弃该次编辑。</para>
+    /// 声明，因此未带这些键的构建与从未有过这些键时逐字节一致。超出上游特性表或布局模式词表的记号会使构建
+    /// 失败，而不是静默丢弃该次编辑。排除键、提示键与设备下标键每行一个条目而非逗号分隔，因为正则表达式或
+    /// 路径可能包含逗号。</para>
     /// </summary>
     /// <param name="options">Merged packing option map. <para>已合并的打包选项映射。</para></param>
     /// <param name="erofsOptions">Builder options receiving the declaration.
@@ -133,33 +145,134 @@ internal static class FileSystemPackingOptions
 
         if (options.TryGetValue("ErofsDotOmitted", out var dotOmitted))
         {
-            erofsOptions.DotOmitted = ParseErofsDotOmitted(dotOmitted);
+            erofsOptions.DotOmitted = ParseErofsTriState(dotOmitted, "ErofsDotOmitted");
+        }
+
+        if (options.TryGetValue("ErofsFragments", out var fragments))
+        {
+            var fragmentMode = NormalizeLayoutToken(fragments);
+            (erofsOptions.Fragments, erofsOptions.AllFilesAsFragments) = fragmentMode switch
+            {
+                "off" => (false, false),
+                "tails" => (true, false),
+                "all-small" => (true, true),
+                "fragdedupe" => (true, true),
+                _ => throw new FileSystemUnsupportedFeatureException(
+                    $"EROFS fragment mode '{fragments}' is none of 'off', 'tails', 'all-small' or 'fragdedupe'."),
+            };
+            if (fragmentMode == "fragdedupe")
+            {
+                erofsOptions.Dedup = true;
+            }
+        }
+
+        if (options.TryGetValue("ErofsMetabox", out var metabox))
+        {
+            var metaboxMode = NormalizeLayoutToken(metabox);
+            if (metaboxMode is not ("off" or "auto" or "forced"))
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"EROFS metabox mode '{metabox}' is none of 'off', 'auto' or 'forced'.");
+            }
+
+            erofsOptions.Metabox = metaboxMode is "auto" or "forced";
+            erofsOptions.MetaboxRequired = metaboxMode == "forced";
+        }
+
+        if (options.TryGetValue("ErofsExcludePath", out var excludePaths))
+        {
+            erofsOptions.ExcludePaths = SplitExclusionEntries(excludePaths);
+        }
+
+        if (options.TryGetValue("ErofsExcludeRegex", out var excludeRegexes))
+        {
+            erofsOptions.ExcludeRegexes = SplitExclusionEntries(excludeRegexes);
+        }
+
+        if (options.TryGetValue("ErofsUseExtentIndexes", out var useExtentIndexes))
+        {
+            erofsOptions.UseExtentIndexes = ParseErofsTriState(useExtentIndexes, "ErofsUseExtentIndexes");
+        }
+
+        if (options.TryGetValue("ErofsChunkSize", out var chunkSize))
+        {
+            if (!int.TryParse(chunkSize, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedChunkSize))
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"Unsupported EROFS ErofsChunkSize value '{chunkSize}'; expected an integer byte count.");
+            }
+            erofsOptions.ChunkSize = parsedChunkSize;
+        }
+
+        if (options.TryGetValue("ErofsBlobDeviceIds", out var blobDeviceIds))
+        {
+            erofsOptions.BlobDeviceIds = ParseErofsDeviceIds(blobDeviceIds, "ErofsBlobDeviceIds");
+        }
+
+        if (options.TryGetValue("ErofsInodeFormat", out var inodeFormat))
+        {
+            erofsOptions.InodeFormat = ParseErofsEnum<ErofsInodeFormat>(inodeFormat, "ErofsInodeFormat");
+        }
+
+        if (options.TryGetValue("ErofsChunkIndexKind", out var chunkIndexKind))
+        {
+            erofsOptions.ChunkIndexKind = ParseErofsEnum<ErofsChunkIndexKind>(chunkIndexKind, "ErofsChunkIndexKind");
+        }
+
+        if (options.TryGetValue("ErofsCompressHints", out var compressHints))
+        {
+            erofsOptions.CompressHints = SplitExclusionEntries(compressHints);
+        }
+
+        if (options.TryGetValue("ErofsDedupeMode", out var dedupeMode))
+        {
+            erofsOptions.DedupeMode = ParseErofsEnum<ErofsDedupeMode>(dedupeMode, "ErofsDedupeMode");
         }
     }
 
     /// <summary>
+    /// Splits an exclusion packing key into entries, one per line. A comma separator cannot be used here the
+    /// way <c>ErofsFeatures</c> uses one, because a regular expression may legitimately contain a comma and
+    /// even a <c>/</c>-separated path, so a comma-separated list would silently cut a pattern in half.
+    /// <para>按行拆分排除类打包键，每行一个条目。此处不能照搬 <c>ErofsFeatures</c> 的逗号分隔：正则表达式
+    /// 合法地可能包含逗号、甚至包含以 <c>/</c> 分隔的路径，逗号分隔会把模式静默截断。</para>
+    /// </summary>
+    /// <param name="value">Raw key text; entries are separated by LF or CRLF and surrounding whitespace of each
+    /// entry is trimmed. <para>原始键文本；条目以 LF 或 CRLF 分隔，每条目首尾空白被裁剪。</para></param>
+    /// <returns>The non-empty entries, or <see langword="null"/> when the key held no entry so the builder keeps
+    /// its own default. <para>非空条目；键内没有任何条目时返回 <see langword="null"/>，使构建器保持自身默认值。</para></returns>
+    private static IReadOnlyList<string>? SplitExclusionEntries(string value)
+    {
+        var entries = value
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToArray();
+        return entries.Length == 0 ? null : entries;
+    }
+
+    /// <summary>
+    /// Trims and lower-cases a layout-mode packing token so these keys accept the spelling an
+    /// <c>erofs-utils</c> command line would carry.
+    /// <para>裁剪并小写化布局模式打包记号，使这些键接受与 <c>erofs-utils</c> 命令行一致的写法。</para>
+    /// </summary>
+    /// <param name="value">Raw token text. <para>原始记号文本。</para></param>
+    /// <returns>The normalized token. <para>规范化后的记号。</para></returns>
+    private static string NormalizeLayoutToken(string value)
+        => value.Trim().ToLowerInvariant();
+
+    /// <summary>
     /// Derives the declaration baseline the writer computes for these options when no words are inherited, so a
-    /// packing key edits the declaration the image would otherwise carry. Layout-implied bits stay out of the
-    /// baseline because the builder reconciles them against the planned layout and reports them instead.
+    /// packing key edits the declaration the image would otherwise carry. Both words come from the single
+    /// derivation the builder itself uses; layout-implied bits stay out of the baseline because the builder
+    /// reconciles them against the planned layout and reports them instead.
     /// <para>推导未继承特性字时写入方对本组选项算出的声明基线，使打包键是在镜像原本将携带的声明上做编辑。
-    /// 布局隐含位不进入基线：打包器会按实际规划的布局与声明对账并另行报告结果。</para>
+    /// 两个字都取自打包器自身使用的同一份推导；布局隐含位不进入基线：打包器会按实际规划的布局与声明对账
+    /// 并另行报告结果。</para>
     /// </summary>
     /// <param name="options">Builder options whose implied declaration is requested.
     /// <para>需要其隐含声明的构建选项。</para></param>
     /// <returns>The implied compat and incompat words. <para>推导出的 compat 与 incompat 字。</para></returns>
     private static (uint Compat, uint Incompat) ImpliedFeatureWords(ErofsOptions options)
-    {
-        var compat = (options.SuperblockChecksum ? ErofsSuperblock.CompatSbChecksum : 0u)
-            | (options.SourceMtimeFeature ? ErofsSuperblock.CompatMtime : 0u)
-            | (options.SourceXattrFilterFeature ? ErofsSuperblock.CompatXattrFilter : 0u);
-        var incompat = options.Compress ? ErofsSuperblock.IncompatLz4_0Padding : 0u;
-        if (options.Compress && !options.LegacyCompatibility)
-        {
-            incompat |= ErofsSuperblock.IncompatBigPcluster;
-        }
-
-        return (compat, incompat);
-    }
+        => (options.DerivedCompatBits(), options.DerivedIncompatBaseline());
 
     /// <summary>
     /// Reads a dot-omitted declaration: an empty or <c>auto</c> value keeps the derived behaviour, a tri-state name
@@ -168,8 +281,10 @@ internal static class FileSystemPackingOptions
     /// 关闭或开启该特性。</para>
     /// </summary>
     /// <param name="value">Raw option text. <para>原始选项文本。</para></param>
+    /// <param name="key">Packing key the value came from, used in the failure message.
+    /// <para>该值来自的打包键，用于失败信息。</para></param>
     /// <returns>The tri-state selection. <para>三态选择结果。</para></returns>
-    private static ErofsTriStateFeature ParseErofsDotOmitted(string? value)
+    private static ErofsTriStateFeature ParseErofsTriState(string? value, string key)
     {
         if (string.IsNullOrWhiteSpace(value) || string.Equals(value, "auto", StringComparison.OrdinalIgnoreCase))
         {
@@ -193,7 +308,61 @@ internal static class FileSystemPackingOptions
         }
 
         throw new FileSystemUnsupportedFeatureException(
-            $"Unsupported EROFS dot-omitted declaration '{value}'.");
+            $"Unsupported EROFS {key} declaration '{value}'.");
+    }
+
+    /// <summary>
+    /// Parses an enum-valued packing key, accepting the declared member names case-insensitively and
+    /// rejecting anything else instead of falling back to the default.
+    /// <para>解析枚举型打包键：不区分大小写地接受已声明的成员名，其他取值直接报错而不是回落到默认值。</para>
+    /// </summary>
+    /// <param name="value">Raw option text. <para>原始选项文本。</para></param>
+    /// <param name="key">Packing key the value came from. <para>该值来自的打包键。</para></param>
+    /// <returns>The parsed member. <para>解析得到的成员。</para></returns>
+    /// <exception cref="FileSystemUnsupportedFeatureException">The text names no declared member.
+    /// <para>文本没有指名任何已声明的成员。</para></exception>
+    private static TEnum ParseErofsEnum<TEnum>(string value, string key) where TEnum : struct, Enum
+    {
+        if (Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed))
+        {
+            return parsed;
+        }
+
+        throw new FileSystemUnsupportedFeatureException(
+            $"Unsupported EROFS {key} value '{value}'; expected one of " +
+            $"{string.Join(", ", Enum.GetNames<TEnum>())}.");
+    }
+
+    /// <summary>
+    /// Parses a line-separated packing key into the non-negative device indices it names.
+    /// <para>把按行分隔的打包键解析为它指名的非负设备下标。</para>
+    /// </summary>
+    /// <param name="value">Raw option text, one index per line. <para>原始选项文本，每行一个下标。</para></param>
+    /// <param name="key">Packing key the value came from. <para>该值来自的打包键。</para></param>
+    /// <returns>The indices, or <see langword="null"/> when the key held no entry.
+    /// <para>下标列表；键内没有任何条目时返回 <see langword="null"/>。</para></returns>
+    /// <exception cref="FileSystemUnsupportedFeatureException">An entry is not a non-negative integer.
+    /// <para>某个条目不是非负整数。</para></exception>
+    private static IReadOnlyList<int>? ParseErofsDeviceIds(string value, string key)
+    {
+        var entries = SplitExclusionEntries(value);
+        if (entries is null)
+        {
+            return null;
+        }
+
+        var ids = new int[entries.Count];
+        for (var i = 0; i < entries.Count; i++)
+        {
+            if (!int.TryParse(entries[i], NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) || id < 0)
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"Unsupported EROFS {key} entry '{entries[i]}'; expected a non-negative device index.");
+            }
+            ids[i] = id;
+        }
+
+        return ids;
     }
 
     /// <summary>

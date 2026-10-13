@@ -13,23 +13,29 @@ using UotanStudio.ViewModels.Devices;
 namespace UotanStudio.Services.Flash;
 
 /// <summary>
-/// <para>真实刷写服务：通过 UotanStudio.Comm 协议层把镜像刷写到设备分区，
-/// 统一封装 Fastboot / EDL / RKDL / ADB 四条路径并回报进度。禁止在此直接操作 USB 细节。
-/// 实现 <see cref="IFlashService"/>，可通过 DI 注入；<see cref="Default"/> 提供默认单例，
-/// 静态方法委托到单例以保持后向兼容。</para>
-/// Real flashing service: writes an image to a device partition through the
-/// UotanStudio.Comm protocol layer, unifying the Fastboot / EDL / RKDL / ADB paths with
-/// progress reporting. Implements <see cref="IFlashService"/> for DI; <see cref="Default"/>
-/// provides the default singleton; static methods delegate to it for backward compatibility.
+/// Flashing service that writes an image to a device partition over the Fastboot, EDL, RKDL and ADB
+/// protocol paths and reports progress for each phase.
+/// <para>刷写服务：按 Fastboot、EDL、RKDL 与 ADB 协议路径把镜像写入设备分区，并上报各阶段进度。</para>
 /// </summary>
 public sealed class FlashService : IFlashService
 {
-    /// <summary><para>默认单例实例。</para>The default singleton instance.</summary>
+    /// <summary>The default singleton instance. <para>默认单例实例。</para></summary>
+    /// <value>The shared instance the static entry points delegate to. <para>静态入口委托使用的共享实例。</para></value>
     public static FlashService Default { get; } = new();
 
     private FlashService() { }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Flashes an image to a device partition over the protocol the device reports; a failure is
+    /// captured and returned as a failure result.
+    /// <para>按设备所上报的协议把镜像刷写到分区；失败会被捕获并作为失败结果返回。</para>
+    /// </summary>
+    /// <param name="device">The target device whose protocol selects the flash path. <para>决定刷写路径的目标设备。</para></param>
+    /// <param name="partition">The target partition name. <para>目标分区名。</para></param>
+    /// <param name="imagePath">Full path of the image file to flash. <para>待刷写镜像文件的完整路径。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The flash result describing success or failure. <para>描述成功或失败的刷写结果。</para></returns>
     public async Task<FlashResult> FlashImageAsync(
         DeviceInfo device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
@@ -70,17 +76,17 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>擦除单个分区（仅 fastboot 协议）：经 <see cref="DeviceMonitorService"/> 打开会话并执行
-    /// <c>erase &lt;partition&gt;</c>。非 fastboot 设备返回失败结果。</para>
     /// Erases a single partition (fastboot protocol only): opens a session via
     /// <see cref="DeviceMonitorService"/> and executes <c>erase &lt;partition&gt;</c>. Non-fastboot
     /// devices yield a failure result.
+    /// <para>擦除单个分区（仅 fastboot 协议）：经 <see cref="DeviceMonitorService"/> 打开会话并执行
+    /// <c>erase &lt;partition&gt;</c>。非 fastboot 设备返回失败结果。</para>
     /// </summary>
-    /// <param name="device"><para>目标设备。</para>The target device.</param>
-    /// <param name="partition"><para>要擦除的分区名。</para>The partition name to erase.</param>
-    /// <param name="progress"><para>可选的擦除进度报告器。</para>Optional erase progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns>擦除结果。</returns>
+    /// <param name="device">The target device. <para>目标设备。</para></param>
+    /// <param name="partition">The partition name to erase. <para>要擦除的分区名。</para></param>
+    /// <param name="progress">Optional erase progress reporter. <para>可选的擦除进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The erase result. <para>擦除结果。</para></returns>
     public async Task<FlashResult> ErasePartitionAsync(
         DeviceInfo device, string partition, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
@@ -129,17 +135,14 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>擦除设备上的全部分区（仅 fastboot 协议）：通过 <c>getvar:all</c> 枚举
-    /// <c>partition-type</c>/<c>partition-size</c> 上报的分区，逐个执行 erase 并汇报累计进度。
-    /// 非 fastboot 设备返回失败结果。</para>
     /// Erases every partition on the device (fastboot protocol only): enumerates the partitions
-    /// reported via <c>getvar:all</c> as <c>partition-type</c>/<c>partition-size</c> keys and erases
-    /// each in turn, reporting cumulative progress. Non-fastboot devices yield a failure result.
+    /// reported by <c>getvar:all</c> and erases each in turn with cumulative progress.
+    /// <para>擦除设备上的全部分区（仅 fastboot 协议）：枚举 <c>getvar:all</c> 上报的分区，逐个擦除并汇报累计进度。</para>
     /// </summary>
-    /// <param name="device"><para>目标设备。</para>The target device.</param>
-    /// <param name="progress"><para>可选的擦除进度报告器。</para>Optional erase progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns>擦除结果。</returns>
+    /// <param name="device">The target device. <para>目标设备。</para></param>
+    /// <param name="progress">Optional erase progress reporter. <para>可选的擦除进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The erase result. <para>擦除结果。</para></returns>
     public async Task<FlashResult> EraseAllAsync(
         DeviceInfo device, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
@@ -193,17 +196,16 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>通过 ADB 把 OTA 包推送到 recovery sideload 模式：连接 ADB 会话后重启到 sideload、
-    /// 等待设备重新出现，再把包流式推送到 <c>/sideload/package.zip</c>。</para>
-    /// Pushes an OTA package to the device in recovery sideload mode via ADB: connects the ADB
-    /// session, reboots into sideload, waits for the device to reappear, then streams the package
-    /// to <c>/sideload/package.zip</c>.
+    /// Pushes an OTA package to the device in recovery sideload mode via ADB: it reboots into
+    /// sideload, waits for the device to reappear, then streams the package to the sideload node.
+    /// <para>通过 ADB 把 OTA 包推送到 recovery sideload 模式：先重启进入 sideload 并等待设备重新出现，
+    /// 再把包流式推送到 sideload 设备节点。</para>
     /// </summary>
-    /// <param name="device"><para>目标设备。</para>The target device.</param>
-    /// <param name="otaPackagePath"><para>OTA 镜像（zip）完整路径。</para>Full path of the OTA (zip) package.</param>
-    /// <param name="progress"><para>可选的推送进度报告器。</para>Optional push progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns>侧载结果。</returns>
+    /// <param name="device">The target device. <para>目标设备。</para></param>
+    /// <param name="otaPackagePath">Full path of the OTA (zip) package. <para>OTA 镜像（zip）完整路径。</para></param>
+    /// <param name="progress">Optional push progress reporter. <para>可选的推送进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The sideload result. <para>侧载结果。</para></returns>
     public async Task<FlashResult> FlashSideloadAsync(
         DeviceInfo device, string otaPackagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
@@ -247,17 +249,17 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>查询设备属性：fastboot 走 <c>getvar &lt;name&gt;</c>（<see cref="FastbootSession.GetVariable"/>），
-    /// ADB 走 <c>getprop &lt;name&gt;</c>（<see cref="IAdbDeviceSession.CreateDeviceServices"/> 的 GetProp），
-    /// 结果以 <c>name=value</c> 形式放入 <see cref="FlashResult.Summary"/>。</para>
     /// Queries a device property: <c>getvar &lt;name&gt;</c> (<see cref="FastbootSession.GetVariable"/>)
     /// on fastboot, <c>getprop &lt;name&gt;</c> (GetProp on <see cref="IAdbDeviceSession.CreateDeviceServices"/>)
     /// on ADB; the value is placed into <see cref="FlashResult.Summary"/> as <c>name=value</c>.
+    /// <para>查询设备属性：fastboot 走 <c>getvar &lt;name&gt;</c>（<see cref="FastbootSession.GetVariable"/>），
+    /// ADB 走 <c>getprop &lt;name&gt;</c>（<see cref="IAdbDeviceSession.CreateDeviceServices"/> 的 GetProp），
+    /// 结果以 <c>name=value</c> 形式放入 <see cref="FlashResult.Summary"/>。</para>
     /// </summary>
-    /// <param name="device"><para>目标设备。</para>The target device.</param>
-    /// <param name="propertyName"><para>属性/变量名。</para>The property/variable name.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns>查询结果（值在 <see cref="FlashResult.Summary"/> 中）。</returns>
+    /// <param name="device">The target device. <para>目标设备。</para></param>
+    /// <param name="propertyName">The property/variable name. <para>属性/变量名。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The query result whose summary holds the <c>name=value</c> pair. <para>摘要中给出 name=value 的查询结果。</para></returns>
     public async Task<FlashResult> GetDevicePropertyAsync(
         DeviceInfo device, string propertyName, CancellationToken ct)
     {
@@ -311,12 +313,14 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>枚举 fastboot 设备上报的分区名：解析 <c>getvar:all</c> 中 <c>partition-type:</c> /
-    /// <c>partition-size:</c> 前缀的变量键，去重后返回。</para>
     /// Enumerates the partition names reported by a fastboot device: parses the
     /// <c>partition-type:</c> / <c>partition-size:</c> prefixed variable keys from
     /// <c>getvar:all</c>, deduplicated.
+    /// <para>枚举 fastboot 设备上报的分区名：解析 <c>getvar:all</c> 中 <c>partition-type:</c> /
+    /// <c>partition-size:</c> 前缀的变量键，去重后返回。</para>
     /// </summary>
+    /// <param name="session">An open fastboot session. <para>已打开的 fastboot 会话。</para></param>
+    /// <returns>The deduplicated partition names. <para>去重后的分区名列表。</para></returns>
     private static List<string> EnumeratePartitions(FastbootSession session)
     {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -345,11 +349,17 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>Fastboot 路径：经 <see cref="DeviceMonitorService"/> 打开会话并执行
-    /// <c>flash &lt;partition&gt; &lt;image&gt;</c>，逐块上报进度。</para>
     /// Fastboot path: opens a session via <see cref="DeviceMonitorService"/> and executes
     /// <c>flash &lt;partition&gt; &lt;image&gt;</c>, reporting progress per chunk.
+    /// <para>Fastboot 路径：经 <see cref="DeviceMonitorService"/> 打开会话并执行
+    /// <c>flash &lt;partition&gt; &lt;image&gt;</c>，逐块上报进度。</para>
     /// </summary>
+    /// <param name="device">The target fastboot device. <para>目标 fastboot 设备。</para></param>
+    /// <param name="partition">The target partition name. <para>目标分区名。</para></param>
+    /// <param name="imagePath">Full path of the image file. <para>镜像文件完整路径。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The flash result. <para>刷写结果。</para></returns>
     private static async Task<FlashResult> FlashFastbootAsync(
         DeviceInfo device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
@@ -361,10 +371,6 @@ public sealed class FlashService : IFlashService
         {
             TryBackupBeforeFlash(session, partition, progress, ct, stateDir);
 
-            // fastbootd 会拒绝大于当前逻辑分区的镜像（FAIL EOVERFLOW "Value too large for defined
-            // data type"），因此必须先按 AOSP fastboot do_flash 语义把分区调整到镜像尺寸再刷写。
-            // fastbootd rejects an image larger than the current logical partition (FAIL EOVERFLOW),
-            // so the partition is resized to the image size first, following AOSP fastboot do_flash.
             var target = PrepareFlashTarget(session, partition, GetImageLogicalSize(imagePath), progress);
             var summary = FlashImageChunked(session, target, imagePath, progress, ct);
             Report(progress, target, 100, "Flash complete. 刷写完成。");
@@ -373,24 +379,16 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>解析刷写目标分区（A/B 槽位）并按 AOSP fastboot <c>do_flash</c> 语义准备逻辑分区：
-    /// 目标为逻辑分区时先发送 <c>resize-logical-partition:&lt;分区&gt;:&lt;镜像逻辑尺寸&gt;</c>，
-    /// 使 fastbootd 的 <c>flash</c> 接受大于当前分区的镜像，而非返回 EOVERFLOW
-    /// （"Value too large for defined data type"）或越界写入失败。非逻辑分区和设备不支持
-    /// <c>is-logical</c> 时不做任何调整。</para>
-    /// Resolves the flash target (A/B slot) and prepares a logical partition following AOSP fastboot
-    /// <c>do_flash</c>: a logical partition is resized to the image's logical size with
-    /// <c>resize-logical-partition:&lt;partition&gt;:&lt;size&gt;</c> beforehand, so fastbootd's
-    /// <c>flash</c> accepts an oversized image instead of rejecting it with EOVERFLOW
-    /// ("Value too large for defined data type") or failing past the mapped range. Physical
-    /// partitions and devices without <c>is-logical</c> support are left untouched.
+    /// Resolves the flash target slot and prepares a logical partition by resizing it to the
+    /// image's logical size so the download accepts an oversized image. Physical partitions are
+    /// left untouched.
+    /// <para>解析刷写目标槽位，并在目标为逻辑分区时把它调整为镜像的逻辑尺寸，使下载接受更大的镜像。</para>
     /// </summary>
-    /// <param name="session"><para>已连接的 fastboot 会话。</para>A connected fastboot session.</param>
-    /// <param name="partition"><para>目标分区名（可能尚未带槽位后缀）。</para>The target partition name (may lack a slot suffix).</param>
-    /// <param name="imageSize"><para>镜像的逻辑尺寸（字节，由 <see cref="GetImageLogicalSize"/> 得到）。</para>
-    /// The image's logical size in bytes, as returned by <see cref="GetImageLogicalSize"/>.</param>
-    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
-    /// <returns><para>后续 <c>flash:</c> 应使用的槽位解析后分区名。</para>The slot-resolved name to use for the following <c>flash:</c>.</returns>
+    /// <param name="session">A connected fastboot session. <para>已连接的 fastboot 会话。</para></param>
+    /// <param name="partition">The target partition name, which may lack a slot suffix. <para>目标分区名，可能尚未带槽位后缀。</para></param>
+    /// <param name="imageSize">The image's logical size in bytes. <para>镜像的逻辑尺寸（字节）。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <returns>The slot-resolved name for the following <c>flash:</c>. <para>后续 <c>flash:</c> 使用的槽位解析后分区名。</para></returns>
     public static string PrepareFlashTarget(
         FastbootSession session, string partition, long imageSize, IProgress<FlashProgress>? progress)
     {
@@ -417,9 +415,6 @@ public sealed class FlashService : IFlashService
         var response = session.ResizeLogicalPartition(target, imageSize);
         if (!response.IsSuccess)
         {
-            // AOSP fastboot ignores a failed resize and still flashes: a partition that is already
-            // large enough can be written without resizing.
-            // AOSP fastboot 忽略调整失败并继续刷写：分区已足够大时无需调整也可写入。
             LogService.Instance.Write(LogLevel.Warn, "FlashService",
                 $"Resize-logical-partition {target} to {imageSize} failed: {response.Info}; continuing flash. 逻辑分区大小调整失败，继续刷写。");
         }
@@ -428,16 +423,14 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>获取镜像的逻辑尺寸：稀疏镜像取头部声明的展开大小（<c>total_blks × blk_sz</c>），
-    /// 原始镜像取文件长度。设备侧校验的是展开后的大小（fastbootd 用下载数据长度对比分区大小），
-    /// 因此逻辑分区调整必须按展开尺寸而不是稀疏文件体积进行。</para>
     /// Gets the image's logical size: the expanded size declared by a sparse header
-    /// (<c>total_blks × blk_sz</c>) or the file length of a raw image. The device compares its
-    /// partition size against the expanded payload, so a logical partition must be resized to the
-    /// expanded size rather than the smaller sparse file size.
+    /// (<c>total_blks × blk_sz</c>) or the file length of a raw image. Logical partition sizing
+    /// uses this expanded size.
+    /// <para>获取镜像的逻辑尺寸：稀疏镜像取头部声明的展开大小（<c>total_blks × blk_sz</c>），
+    /// 原始镜像取文件长度。逻辑分区调整使用该展开尺寸。</para>
     /// </summary>
-    /// <param name="imagePath"><para>镜像文件完整路径。</para>Full path of the image file.</param>
-    /// <returns><para>镜像逻辑尺寸（字节）。</para>The image's logical size in bytes.</returns>
+    /// <param name="imagePath">Full path of the image file. <para>镜像文件完整路径。</para></param>
+    /// <returns>The image's logical size in bytes. <para>镜像逻辑尺寸（字节）。</para></returns>
     public static long GetImageLogicalSize(string imagePath)
     {
         ArgumentException.ThrowIfNullOrEmpty(imagePath);
@@ -451,41 +444,23 @@ public sealed class FlashService : IFlashService
         }
         catch (IOException)
         {
-            // 文件短于稀疏头（或读取失败）：按原始镜像处理。
-            // Shorter than a sparse header (or unreadable): treated as a raw image.
         }
 
         return new FileInfo(imagePath).Length;
     }
 
     /// <summary>
-    /// <para>按 fastboot 的 max-download-size 刷写镜像：不超过上限时单次 download+flash（稀疏镜像
-    /// 原样交由 bootloader 解析）；超过上限时把镜像转为/拆分为若干不超过上限的稀疏分片并顺序刷写
-    /// （bootloader 在当前偏移处追加写入，与 AOSP fastboot 行为一致）。分片临时文件用后即删。</para>
-    /// Flashes an image honoring the fastboot max-download-size: images within the limit are sent in a
-    /// single download+flash (sparse payloads are passed through for the bootloader to decode); larger
-    /// images are converted to/split into sparse chunks no larger than the limit and flashed sequentially
-    /// (the bootloader appends each chunk at the current offset, matching AOSP fastboot behavior).
-    /// Chunk temp files are deleted afterwards.
+    /// Flashes an image honoring the fastboot download limit, sending it in a single download or
+    /// splitting it into sparse chunks flashed sequentially, and deletes the chunk temp files
+    /// afterwards.
+    /// <para>按 fastboot 下载上限刷写镜像：一次性上传，或拆分为若干稀疏分片顺序刷写，随后删除分片临时文件。</para>
     /// </summary>
-    /// <remarks>
-    /// <paramref name="partition"/> must already be slot-resolved (see
-    /// <see cref="PrepareFlashTarget"/>), because every piece is flashed with
-    /// <c>resolveSlot: false</c>. Both flash calls narrow the session preflight to what this method has
-    /// not already established: the single-image path uses
-    /// <see cref="FlashPartitionOptions.PreparedTarget"/> (slot, <c>is-logical</c> and logical resize were
-    /// paid by <see cref="PrepareFlashTarget"/>, the download limit is already cached in the session, and
-    /// the <c>partition-size</c> comparison is one the host never makes), and the resparse path uses
-    /// <see cref="FlashPartitionOptions.PreparedSparseChunks"/>, which also skips the capacity comparison
-    /// because a sparse chunk's file length says nothing about the bytes it expands to.
-    /// <para><paramref name="partition"/> 必须已由 <see cref="PrepareFlashTarget"/> 完成槽位解析，
-    /// 因为每个分片都以 <c>resolveSlot: false</c> 刷写。两处刷写都把会话预检收窄到本方法尚未确立的部分：
-    /// 单镜像路径使用 <see cref="FlashPartitionOptions.PreparedTarget"/>（槽位、<c>is-logical</c> 与逻辑
-    /// 分区调整已由 <see cref="PrepareFlashTarget"/> 付过，下载上限已在会话内缓存，而
-    /// <c>partition-size</c> 对照是宿主从未做过的一项）；重新分片路径使用
-    /// <see cref="FlashPartitionOptions.PreparedSparseChunks"/>，它额外跳过容量对照，因为稀疏分片的文件
-    /// 长度不能说明它将展开成多少字节。</para>
-    /// </remarks>
+    /// <param name="session">An open fastboot session. <para>已打开的 fastboot 会话。</para></param>
+    /// <param name="partition">The slot-resolved target partition. <para>已解析槽位的目标分区。</para></param>
+    /// <param name="imagePath">Full path of the image file. <para>镜像文件完整路径。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A summary line describing the bytes flashed. <para>描述已刷写字节数的摘要文本。</para></returns>
     private static string FlashImageChunked(
         FastbootSession session, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
@@ -515,8 +490,6 @@ public sealed class FlashService : IFlashService
         var tempDir = Directory.CreateTempSubdirectory("uotan-flash-").FullName;
         try
         {
-            // 原始镜像先转稀疏；已是稀疏则直接拆分。
-            // Convert a raw image to sparse first; already-sparse images are split directly.
             var sparsePath = IsSparseImage(imagePath)
                 ? imagePath
                 : Path.Combine(tempDir, "source.sparse");
@@ -563,15 +536,15 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>若设置「刷写前自动备份」已启用，在刷写前把 fastboot 目标分区备份到
-    /// 子项目状态目录 <c>.uotan/backup/</c>（未打开工程时退化到临时目录）。
-    /// 备份进度并入现有刷写进度通道；备份失败仅记录警告日志，绝不中断刷写。</para>
-    /// If the "auto-backup before flash" setting is enabled, backs up the fastboot target
-    /// partition to the captured sub-project state directory <c>.uotan/backup/</c> before flashing
-    /// (falls back to the temp directory when no solution is open). Backup progress is
-    /// merged into the existing flash progress channel; a failed backup only logs a warning
-    /// and never aborts the flash.
+    /// Backs up the fastboot target partition to the project state directory before flashing when
+    /// auto-backup is enabled. A failed backup only logs a warning and never aborts the flash.
+    /// <para>启用自动备份时，在刷写前把 fastboot 目标分区备份到项目状态目录。备份失败仅记录警告，绝不中断刷写。</para>
     /// </summary>
+    /// <param name="session">An open fastboot session. <para>已打开的 fastboot 会话。</para></param>
+    /// <param name="partition">The partition to back up. <para>待备份的分区。</para></param>
+    /// <param name="progress">Optional reporter sharing the flash progress channel. <para>与刷写共用进度通道的可选报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="stateDir">The state directory for backups, or null for the temp directory. <para>存放备份的状态目录，为 null 时使用临时目录。</para></param>
     private static void TryBackupBeforeFlash(
         FastbootSession session, string partition,
         IProgress<FlashProgress>? progress, CancellationToken ct, string? stateDir)
@@ -614,14 +587,17 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>EDL 路径：解析镜像目录中的 rawprogram*.xml，按分区匹配执行单分区直刷；
-    /// 分区未命中时返回失败（软件未发布，无旧整包回退兼容需求）。无
-    /// rawprogram 时给出清晰错误。</para>
-    /// EDL path: parses the rawprogram*.xml in the image directory and performs a
-    /// single-partition flash when the partition matches; an unmatched partition returns a
-    /// failure result (no legacy full-bundle fallback is kept for unreleased builds).
-    /// A clear error is raised when no rawprogram is present.
+    /// EDL path: matches the partition in the image directory's rawprogram manifest and programs
+    /// that single entry, locating it through the device partition table when no manifest is
+    /// present.
+    /// <para>EDL 路径：在镜像目录的 rawprogram 清单中匹配分区并单发编程该条目；没有清单时改用设备分区表定位。</para>
     /// </summary>
+    /// <param name="device">The target EDL device. <para>目标 EDL 设备。</para></param>
+    /// <param name="partition">The target partition name. <para>目标分区名。</para></param>
+    /// <param name="imagePath">Full path of the image file. <para>镜像文件完整路径。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The flash result. <para>刷写结果。</para></returns>
     private static async Task<FlashResult> FlashEdlAsync(
         DeviceInfo device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
@@ -651,33 +627,52 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>EDL 单分区直刷：确保会话初始化后把单个 rawprogram 条目经 Firehose program
-    /// 单发刷写。</para>
     /// EDL single-partition flash: initializes the session and flashes a single rawprogram
     /// entry with one Firehose program.
+    /// <para>EDL 单分区直刷：确保会话初始化后把单个 rawprogram 条目经 Firehose program
+    /// 单发刷写。</para>
     /// </summary>
-    /// <param name="session"><para>已（或尚未）初始化的 EDL 会话。</para>The EDL session, initialized on demand.</param>
-    /// <param name="entry"><para>目标 rawprogram 条目。</para>The target rawprogram entry.</param>
-    /// <param name="imageDir"><para>镜像文件所在目录。</para>The image file directory.</param>
-    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns>刷写结果。</returns>
+    /// <param name="session">The EDL session, initialized on demand. <para>已（或尚未）初始化的 EDL 会话。</para></param>
+    /// <param name="entry">The target rawprogram entry. <para>目标 rawprogram 条目。</para></param>
+    /// <param name="imageDir">The image file directory. <para>镜像文件所在目录。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The flash result. <para>刷写结果。</para></returns>
     public async Task<FlashResult> FlashEdlPartitionAsync(
         EdlSession session, RawProgramEntry entry, string imageDir,
         IProgress<FlashProgress>? progress, CancellationToken ct)
         => await FlashEdlPartitionAsync(session, entry, imageDir, null, progress, ct).ConfigureAwait(false);
 
-    /// <summary>Uploads a package-supplied Firehose programmer before programming a manifest entry.</summary>
+    /// <summary>
+    /// Uploads a package-supplied Firehose programmer before programming a manifest entry.
+    /// <para>编程清单条目前先上传包内自带的 Firehose programmer。</para>
+    /// </summary>
+    /// <param name="session">The EDL session, initialized on demand. <para>按需初始化的 EDL 会话。</para></param>
+    /// <param name="entry">The target rawprogram entry. <para>目标 rawprogram 条目。</para></param>
+    /// <param name="imageDir">The image file directory. <para>镜像文件所在目录。</para></param>
+    /// <param name="programmerPath">Path of the Firehose programmer, or null to skip the upload. <para>Firehose programmer 路径，为 null 时跳过上传。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The flash result. <para>刷写结果。</para></returns>
     public async Task<FlashResult> FlashEdlPartitionAsync(
         EdlSession session, RawProgramEntry entry, string imageDir, string? programmerPath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
         => await FlashEdlPartitionAsync(session, entry, imageDir, programmerPath, progress, ct, verify: false).ConfigureAwait(false);
 
     /// <summary>
-    /// <para>上传包内 Firehose programmer（可选）后编程清单条目，并可在写入成功后执行回读校验。</para>
     /// Uploads a package-supplied Firehose programmer before programming a manifest entry, with an
     /// optional read-back verification after a successful write.
+    /// <para>上传包内 Firehose programmer（可选）后编程清单条目，并可在写入成功后执行回读校验。</para>
     /// </summary>
+    /// <param name="session">The EDL session, initialized on demand. <para>按需初始化的 EDL 会话。</para></param>
+    /// <param name="entry">The target rawprogram entry. <para>目标 rawprogram 条目。</para></param>
+    /// <param name="imageDir">The image file directory. <para>镜像文件所在目录。</para></param>
+    /// <param name="programmerPath">Path of the Firehose programmer, or null to skip the upload. <para>Firehose programmer 路径，为 null 时跳过上传。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="verify">Whether to read the programmed range back and compare it with the source file. <para>是否回读已编程范围并与源文件比对。</para></param>
+    /// <param name="initialization">Options governing session initialization, or null for the defaults. <para>控制会话初始化的选项，为 null 时使用默认值。</para></param>
+    /// <returns>The flash result. <para>刷写结果。</para></returns>
     public async Task<FlashResult> FlashEdlPartitionAsync(
         EdlSession session, RawProgramEntry entry, string imageDir, string? programmerPath,
         IProgress<FlashProgress>? progress, CancellationToken ct, bool verify,
@@ -696,43 +691,33 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>EDL 单分区直刷核心：直接对 <see cref="FirehoseProtocol"/> 单发 program 命令
-    /// （跳过会话/Sahara，供测试与高级调用）。</para>
     /// EDL single-partition flash core: issues a single Firehose program directly against
-    /// a <see cref="FirehoseProtocol"/> (bypassing the session/Sahara, for tests and advanced
-    /// callers).
+    /// a <see cref="FirehoseProtocol"/> without a session or Sahara stage.
+    /// <para>EDL 单分区直刷核心：不经过会话与 Sahara 阶段，直接对 Firehose 协议实例单发一条 program 命令。</para>
     /// </summary>
-    /// <param name="firehose"><para>已配置的 Firehose 协议实例。</para>A configured Firehose protocol instance.</param>
-    /// <param name="entry"><para>目标 rawprogram 条目。</para>The target rawprogram entry.</param>
-    /// <param name="imageDir"><para>镜像文件所在目录。</para>The image file directory.</param>
-    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns>刷写结果。</returns>
+    /// <param name="firehose">A configured Firehose protocol instance. <para>已配置的 Firehose 协议实例。</para></param>
+    /// <param name="entry">The target rawprogram entry. <para>目标 rawprogram 条目。</para></param>
+    /// <param name="imageDir">The image file directory. <para>镜像文件所在目录。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The flash result. <para>刷写结果。</para></returns>
     public async Task<FlashResult> FlashEdlPartitionAsync(
         FirehoseProtocol firehose, RawProgramEntry entry, string imageDir,
         IProgress<FlashProgress>? progress, CancellationToken ct)
         => await FlashEdlPartitionAsync(firehose, entry, imageDir, progress, ct, verify: false).ConfigureAwait(false);
 
     /// <summary>
-    /// <para>EDL 单分区直刷核心（带回读校验门控）：直接对 <see cref="FirehoseProtocol"/> 单发 program 命令
-    /// （跳过会话/Sahara，供测试与高级调用）。verify 为 true 且写入走整扇区原始数据路径、比对基准与源文件
-    /// 逐字节一致时，用 <see cref="FirehoseProtocol.VerifyProgramAsync"/> 回读校验；稀疏编程、非零
-    /// file_sector_offset 或镜像长于编程范围时安全跳过并在 Summary 说明。</para>
-    /// EDL single-partition flash core with an optional read-back gate: issues a single Firehose program
-    /// directly against a <see cref="FirehoseProtocol"/> (bypassing the session/Sahara, for tests and
-    /// advanced callers). When <paramref name="verify"/> is set and the write used the whole-sector raw
-    /// path whose byte-for-byte source comparison is well defined, the programmed range is read back with
-    /// <see cref="FirehoseProtocol.VerifyProgramAsync"/>; sparse programming, a non-zero file sector offset
-    /// or an image longer than the programmed range skip verification with a note in the summary.
+    /// EDL single-partition flash core with an optional read-back gate: programs one Firehose range
+    /// and skips verification with a note when a byte-for-byte comparison has no well-defined basis.
+    /// <para>带可选回读门的 EDL 单分区直刷核心：单发编程一个 Firehose 范围，逐字节比对缺少明确基准时跳过回读并在结果中说明原因。</para>
     /// </summary>
-    /// <param name="firehose"><para>已配置的 Firehose 协议实例。</para>A configured Firehose protocol instance.</param>
-    /// <param name="entry"><para>目标 rawprogram 条目。</para>The target rawprogram entry.</param>
-    /// <param name="imageDir"><para>镜像文件所在目录。</para>The image file directory.</param>
-    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <param name="verify"><para>写入成功后是否把该扇区范围回读并与源文件逐字节比对。</para>
-    /// Whether to read the programmed range back after a successful write and compare it with the source file.</param>
-    /// <returns>刷写结果。</returns>
+    /// <param name="firehose">A configured Firehose protocol instance. <para>已配置的 Firehose 协议实例。</para></param>
+    /// <param name="entry">The target rawprogram entry. <para>目标 rawprogram 条目。</para></param>
+    /// <param name="imageDir">The image file directory. <para>镜像文件所在目录。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="verify">Whether to read the programmed range back and compare it with the source file. <para>写入成功后是否回读已编程范围并与源文件逐字节比对。</para></param>
+    /// <returns>The flash result. <para>刷写结果。</para></returns>
     public async Task<FlashResult> FlashEdlPartitionAsync(
         FirehoseProtocol firehose, RawProgramEntry entry, string imageDir,
         IProgress<FlashProgress>? progress, CancellationToken ct, bool verify)
@@ -770,9 +755,6 @@ public sealed class FlashService : IFlashService
 
         var startSector = entry.StartSector;
 
-        // 回读校验只在整扇区原始写入且比对基准可从源文件首字节对齐时可行；其余路径记录跳过原因。
-        // Read-back verification is only defined for a whole-sector raw write whose source comparison
-        // starts at the file's first byte; other paths record a skip reason instead.
         long? verifyNumSectors = null;
         long verifyStartSector = 0;
         string? verifySkipReason = null;
@@ -908,13 +890,13 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>在 rawprogram 条目列表中按 label/filename 匹配目标分区。</para>
     /// Matches the target partition in a list of rawprogram entries by label/filename.
+    /// <para>在 rawprogram 条目列表中按 label/filename 匹配目标分区。</para>
     /// </summary>
-    /// <param name="entries"><para>rawprogram 条目列表。</para>The rawprogram entries.</param>
-    /// <param name="partition"><para>目标分区名（如 boot）。</para>Target partition name (e.g. boot).</param>
-    /// <param name="imagePath"><para>可选镜像路径；其文件名也参与匹配。</para>Optional image path; its filename also participates in matching.</param>
-    /// <returns>命中的条目；未命中返回 <c>null</c>。 The matching entry, or <c>null</c>.</returns>
+    /// <param name="entries">The rawprogram entries. <para>rawprogram 条目列表。</para></param>
+    /// <param name="partition">The target partition name. <para>目标分区名。</para></param>
+    /// <param name="imagePath">Optional image path whose filename also participates in matching. <para>文件名同样参与匹配的可选镜像路径。</para></param>
+    /// <returns>The matching entry, or <c>null</c> when none matches. <para>命中的条目，未命中时为 null。</para></returns>
     public static RawProgramEntry? FindEdlTarget(IEnumerable<RawProgramEntry> entries, string partition, string? imagePath)
     {
         if (entries is null || string.IsNullOrWhiteSpace(partition))
@@ -941,42 +923,34 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>RKDL 路径：打开 RkdlSession，可选下载 loader（maskrom 模式必需），解析
-    /// Rockchip parameter 分区表，将镜像写入目标分区 LBA（核心写入见
-    /// <see cref="FlashRkdlPartition"/>）。</para>
-    /// RKDL path: opens an RkdlSession, optionally downloads the loader (required in
-    /// maskrom mode), parses the Rockchip parameter partition table and writes the image to
-    /// the target partition LBA (core write in <see cref="FlashRkdlPartition"/>).
+    /// RKDL path: opens an RKDL session, downloads the loader required in maskrom mode, parses
+    /// the Rockchip parameter partition table and writes the image at the target partition LBA.
+    /// <para>RKDL 路径：打开 RKDL 会话，下载 maskrom 模式必需的 loader，解析 Rockchip parameter 分区表，并按目标分区 LBA 写入镜像。</para>
     /// </summary>
-    /// <param name="device"><para>目标设备。</para>The target device.</param>
-    /// <param name="partition"><para>目标分区名（如 boot）。</para>Target partition name (e.g. boot).</param>
-    /// <param name="imagePath"><para>镜像文件完整路径（loader 与 parameter 在镜像目录中自动发现）。</para>
-    /// Full path of the image file (loader and parameter are auto-discovered in its directory).</param>
-    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns>刷写结果。</returns>
+    /// <param name="device">The target device. <para>目标设备。</para></param>
+    /// <param name="partition">The target partition name. <para>目标分区名。</para></param>
+    /// <param name="imagePath">Full path of the image file. <para>镜像文件完整路径。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The flash result. <para>刷写结果。</para></returns>
     public static async Task<FlashResult> FlashRkdlAsync(
         DeviceInfo device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
         => await FlashRkdlAsync(device, partition, imagePath, loaderPath: null, progress, ct).ConfigureAwait(false);
 
     /// <summary>
-    /// <para>RKDL 路径（显式 loader 路径）：行为与无 loader 参数的重载一致，但 loader 路径
-    /// 由调用方显式指定（为 null 时在镜像目录自动发现）。</para>
-    /// RKDL path with an explicit loader path: behaves like the overload without a loader
-    /// argument, but the loader path is supplied by the caller (auto-discovered when null).
+    /// RKDL path that programs a partition with an explicitly given loader path, discovered in
+    /// the image directory when null.
+    /// <para>RKDL 路径：按显式给出的 loader 路径刷写分区，为 null 时在镜像目录中自动发现。</para>
     /// </summary>
-    /// <param name="device"><para>目标设备。</para>The target device.</param>
-    /// <param name="partition"><para>目标分区名。</para>Target partition name.</param>
-    /// <param name="imagePath"><para>镜像文件完整路径。</para>Full path of the image file.</param>
-    /// <param name="loaderPath"><para>可选 Rockchip loader（MiniLoaderAll / *loader*.bin）；为 null 时在镜像目录自动发现。</para>
-    /// Optional Rockchip loader (MiniLoaderAll / *loader*.bin); auto-discovered in the image directory when null.</param>
-    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <param name="verify"><para>写入成功后是否把该分区区间回读并与源镜像逐字节比对。</para>
-    /// Whether to read the written range back from the device after a successful write and compare it
-    /// byte for byte with the source image.</param>
-    /// <returns>刷写结果。</returns>
+    /// <param name="device">The target device. <para>目标设备。</para></param>
+    /// <param name="partition">The target partition name. <para>目标分区名。</para></param>
+    /// <param name="imagePath">Full path of the image file. <para>镜像文件完整路径。</para></param>
+    /// <param name="loaderPath">Optional Rockchip loader file, auto-discovered in the image directory when null. <para>为 null 时在镜像目录自动发现的可选 Rockchip loader 文件。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="verify">Whether to read the written range back and compare it with the source image. <para>写入成功后是否回读写入范围并与源镜像比对。</para></param>
+    /// <returns>The flash result. <para>刷写结果。</para></returns>
     public static async Task<FlashResult> FlashRkdlAsync(
         DeviceInfo device, string partition, string imagePath, string? loaderPath,
         IProgress<FlashProgress>? progress, CancellationToken ct, bool verify = false)
@@ -1070,17 +1044,16 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>RKDL 单分区写入核心：用 <see cref="RkdlSession.WriteLBA"/> 把镜像写入分区 LBA。</para>
     /// RKDL single-partition write core: writes the image to the partition LBA with
     /// <see cref="RkdlSession.WriteLBA"/>.
+    /// <para>RKDL 单分区写入核心：用 <see cref="RkdlSession.WriteLBA"/> 把镜像写入分区 LBA。</para>
     /// </summary>
-    /// <param name="session"><para>已打开的 RKDL 会话。</para>An open RKDL session.</param>
-    /// <param name="partitionInfo"><para>目标分区信息（来自 Rockchip parameter）。</para>
-    /// The target partition info (from the Rockchip parameter).</param>
-    /// <param name="imagePath"><para>镜像文件完整路径。</para>Full path of the image file.</param>
-    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns>刷写结果。</returns>
+    /// <param name="session">An open RKDL session. <para>已打开的 RKDL 会话。</para></param>
+    /// <param name="partitionInfo">The target partition entry from the Rockchip parameter table. <para>Rockchip parameter 分区表中的目标分区条目。</para></param>
+    /// <param name="imagePath">Full path of the image file. <para>镜像文件完整路径。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The flash result. <para>刷写结果。</para></returns>
     public static FlashResult FlashRkdlPartition(
         RkdlSession session, RockchipPartition partitionInfo, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
@@ -1109,11 +1082,17 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>ADB 路径：recovery sideload（.zip OTA / 显式 sideload 目标）或在线安装
-    /// （push 到 /data/local/tmp + pm install / apply update）。</para>
     /// ADB path: recovery sideload (for .zip OTA or explicit "sideload" targets) or online
     /// install (push to /data/local/tmp + pm install / apply update).
+    /// <para>ADB 路径：recovery sideload（.zip OTA / 显式 sideload 目标）或在线安装
+    /// （push 到 /data/local/tmp + pm install / apply update）。</para>
     /// </summary>
+    /// <param name="device">The target ADB device. <para>目标 ADB 设备。</para></param>
+    /// <param name="partition">The target partition or sideload name. <para>目标分区或 sideload 名。</para></param>
+    /// <param name="imagePath">Full path of the image file. <para>镜像文件完整路径。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The flash result. <para>刷写结果。</para></returns>
     private static async Task<FlashResult> FlashAdbAsync(
         DeviceInfo device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
@@ -1143,20 +1122,23 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>判断目标是否为 recovery sideload（显式分区名 "sideload" 或 .zip OTA 镜像）。</para>
     /// Determines whether the target is a recovery sideload (explicit "sideload" partition
     /// or a .zip OTA image).
+    /// <para>判断目标是否为 recovery sideload（显式分区名 "sideload" 或 .zip OTA 镜像）。</para>
     /// </summary>
+    /// <param name="partition">The target partition name. <para>目标分区名。</para></param>
+    /// <param name="imagePath">The image file path. <para>镜像文件路径。</para></param>
+    /// <returns>True when the target is a recovery sideload. <para>目标为 recovery sideload 时返回 true。</para></returns>
     public static bool IsSideloadTarget(string partition, string imagePath)
         => string.Equals(partition, "sideload", StringComparison.OrdinalIgnoreCase)
            || string.Equals(Path.GetExtension(imagePath), ".zip", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// <para>通过 ADB 设备服务重启设备进入 sideload 模式（<c>reboot:sideload</c>）。</para>
     /// Reboots the device into sideload mode via the ADB device services
     /// (<c>reboot:sideload</c>).
+    /// <para>通过 ADB 设备服务重启设备进入 sideload 模式（<c>reboot:sideload</c>）。</para>
     /// </summary>
-    /// <param name="session"><para>已连接的 ADB 会话。</para>A connected ADB session.</param>
+    /// <param name="session">A connected ADB session. <para>已连接的 ADB 会话。</para></param>
     public static void RebootToSideload(IAdbDeviceSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -1164,14 +1146,13 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>流式推送 OTA 到 sideload 设备节点（<c>/sideload/package.zip</c>）。</para>
     /// Streams the OTA to the sideload device node (<c>/sideload/package.zip</c>).
+    /// <para>流式推送 OTA 到 sideload 设备节点（<c>/sideload/package.zip</c>）。</para>
     /// </summary>
-    /// <param name="session"><para>已连接到 sideload 模式的 ADB 会话。</para>An ADB session connected to sideload mode.</param>
-    /// <param name="imagePath"><para>OTA 镜像路径。</para>The OTA image path.</param>
-    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns><para>推送完成或取消后的任务。</para>A task that completes once the push finished or was canceled.</returns>
+    /// <param name="session">An ADB session connected to sideload mode. <para>已连接到 sideload 模式的 ADB 会话。</para></param>
+    /// <param name="imagePath">The OTA image path. <para>OTA 镜像路径。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     public static async Task PushSideloadFileAsync(IAdbDeviceSession session, string imagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -1189,17 +1170,14 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>在线安装：push 到 <c>/data/local/tmp</c>，APK 走 <c>pm install -r</c>，其余
-    /// （如 OTA zip）尝试 <c>apply update</c>（部分 recovery 暴露该命令）。</para>
-    /// Online install: pushes to <c>/data/local/tmp</c> and runs <c>pm install -r</c> for
-    /// APKs; other images (e.g. OTA zips) try <c>apply update</c> (exposed by some
-    /// recoveries).
+    /// Online install: pushes the image to <c>/data/local/tmp</c> and runs <c>pm install -r</c> for
+    /// an APK, or the recovery <c>apply update</c> command otherwise.
+    /// <para>在线安装：把镜像推送到 <c>/data/local/tmp</c>，APK 执行 <c>pm install -r</c>，其余走 recovery 的 <c>apply update</c>。</para>
     /// </summary>
-    /// <param name="session"><para>已连接的 ADB 会话。</para>A connected ADB session.</param>
-    /// <param name="imagePath"><para>待安装镜像路径。</para>The image path to install.</param>
-    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns><para>推送与安装命令完成或取消后的任务。</para>A task that completes once the push and the install command finished or were canceled.</returns>
+    /// <param name="session">A connected ADB session. <para>已连接的 ADB 会话。</para></param>
+    /// <param name="imagePath">The image path to install. <para>待安装镜像路径。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     public static async Task InstallOnlineAsync(IAdbDeviceSession session, string imagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -1232,9 +1210,11 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>等待设备在 sideload 模式下重新出现并重新连接（最多约 30 秒）。</para>
     /// Waits for the device to reappear in sideload mode and reconnect (up to ~30 s).
+    /// <para>等待设备在 sideload 模式下重新出现并重新连接（最多约 30 秒）。</para>
     /// </summary>
+    /// <param name="session">The ADB session to reconnect. <para>待重连的 ADB 会话。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     private static async Task WaitForSideloadReconnectAsync(IAdbDeviceSession session, CancellationToken ct)
     {
         for (var attempt = 0; attempt < 30; attempt++)
@@ -1250,8 +1230,6 @@ public sealed class FlashService : IFlashService
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Device is still rebooting; keep retrying.
-                // 设备仍在重启，继续重试。
             }
 
             await Task.Delay(1000, ct).ConfigureAwait(false);
@@ -1262,21 +1240,20 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>按分区记录的上次进度上报，用于 100ms 节流去重。</para>
     /// Last reported progress per partition, used for 100 ms throttling.
+    /// <para>按分区记录的上次进度上报，用于 100ms 节流去重。</para>
     /// </summary>
     private static readonly PartitionProgressThrottle ProgressThrottle = new();
 
     /// <summary>
-    /// <para>上报一条进度：既写入调用方提供的 <see cref="IProgress{T}"/>，
-    /// 也发送 <see cref="FlashProgressMessage"/> 供输出面板 Flash 通道展示。
-    /// 相同状态在 100ms 内重复上报会被合并（100% 终值必达），避免 USB 传输层
-    /// 每次写块都触发消息广播风暴。</para>
-    /// Reports a progress entry: writes to the caller-provided <see cref="IProgress{T}"/>
-    /// and sends a <see cref="FlashProgressMessage"/> for the output panel's Flash channel.
-    /// Duplicate reports with the same status within 100 ms are coalesced (the final 100%
-    /// always gets through) to avoid a message storm on every USB write chunk.
+    /// Reports a progress entry through the given progress sink and the shared progress message
+    /// channel. Duplicate reports with the same status within 100 ms are coalesced.
+    /// <para>既写入给定的进度接收对象，也发送共享的进度消息。相同状态在 100 毫秒内的重复上报会被合并。</para>
     /// </summary>
+    /// <param name="progress">Optional progress sink, which may be null. <para>可选的进度接收对象，可为 null。</para></param>
+    /// <param name="partition">The partition the entry refers to, or null. <para>该条进度对应的分区，可为 null。</para></param>
+    /// <param name="percent">The progress percent from 0 to 100. <para>0 到 100 的进度百分比。</para></param>
+    /// <param name="status">The status text to show. <para>要显示的状态文本。</para></param>
     private static void Report(IProgress<FlashProgress>? progress, string? partition, int percent, string status)
     {
         if (!ProgressThrottle.ShouldReport(partition, percent, status, Environment.TickCount64)) return;
@@ -1285,9 +1262,12 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>解析 rawprogram 条目的源文件路径。</para>
     /// Resolves the source image path of a rawprogram entry.
+    /// <para>解析 rawprogram 条目的源文件路径。</para>
     /// </summary>
+    /// <param name="entry">The rawprogram entry. <para>rawprogram 条目。</para></param>
+    /// <param name="imageDir">The image file directory. <para>镜像文件所在目录。</para></param>
+    /// <returns>The resolved source path, or an empty string. <para>解析出的源文件路径，未找到时为空字符串。</para></returns>
     private static string ResolveEntrySource(RawProgramEntry entry, string imageDir)
     {
         return !string.IsNullOrEmpty(entry.SourceFile) && File.Exists(entry.SourceFile)
@@ -1298,9 +1278,11 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>解析 rawprogram 的 start_sector（支持十进制与 0x 十六进制）。</para>
     /// Parses a rawprogram start_sector (decimal or 0x-hex).
+    /// <para>解析 rawprogram 的 start_sector（支持十进制与 0x 十六进制）。</para>
     /// </summary>
+    /// <param name="value">The literal start_sector text. <para>清单里的 start_sector 原文。</para></param>
+    /// <returns>The parsed sector number. <para>解析出的扇区号。</para></returns>
     public static long ParseStartSectorValue(string value)
     {
         if (long.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var dec))
@@ -1316,29 +1298,28 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>判断 rawprogram 的 start_sector 是否为 <c>NUM_DISK_SECTORS-</c> 相对表达式
-    /// （含可选结尾句点），与 Firehose 侧的地址文法保持一致。</para>
     /// Whether a rawprogram start_sector is a <c>NUM_DISK_SECTORS-</c> relative expression (with an
     /// optional trailing dot), matching the address grammar used on the Firehose side.
+    /// <para>判断 rawprogram 的 start_sector 是否为 <c>NUM_DISK_SECTORS-</c> 相对表达式
+    /// （含可选结尾句点），与 Firehose 侧的地址文法保持一致。</para>
     /// </summary>
-    /// <param name="value"><para>清单里的 start_sector 原文。</para>The literal start_sector text.</param>
-    /// <returns><para>为相对表达式时返回 true。</para>True when the expression is disk-relative.</returns>
+    /// <param name="value">The literal start_sector text. <para>清单里的 start_sector 原文。</para></param>
+    /// <returns>True when the expression is disk-relative. <para>为相对表达式时返回 true。</para></returns>
     public static bool IsRelativeStartSector(string value)
         => value.Trim().TrimEnd('.').StartsWith("NUM_DISK_SECTORS-", StringComparison.Ordinal);
 
     /// <summary>
-    /// <para>解析 rawprogram 的 start_sector：绝对表达式直接返回，<c>NUM_DISK_SECTORS-</c> 相对表达式
-    /// 按该 LUN 的扇区总数求出绝对扇区。</para>
     /// Parses a rawprogram start_sector: absolute expressions return as-is, while
     /// <c>NUM_DISK_SECTORS-</c> relative expressions resolve against the LUN's sector count.
+    /// <para>解析 rawprogram 的 start_sector：绝对表达式直接返回，<c>NUM_DISK_SECTORS-</c> 相对表达式
+    /// 按该 LUN 的扇区总数求出绝对扇区。</para>
     /// </summary>
-    /// <param name="value"><para>清单里的 start_sector 原文。</para>The literal start_sector text.</param>
-    /// <param name="numDiskSectors"><para>该物理分区的总扇区数；相对表达式必需。</para>
-    /// The physical partition's sector count; required for relative expressions.</param>
-    /// <returns><para>绝对起始扇区。</para>The absolute start sector.</returns>
+    /// <param name="value">The literal start_sector text. <para>清单里的 start_sector 原文。</para></param>
+    /// <param name="numDiskSectors">The physical partition's sector count used to resolve a relative expression. <para>用于解析相对表达式的物理分区扇区总数。</para></param>
+    /// <returns>The absolute start sector. <para>绝对起始扇区。</para></returns>
     /// <exception cref="InvalidOperationException">
-    /// <para>相对表达式未提供扇区总数，或该偏移落在盘外。</para>
     /// A relative expression lacks a sector count, or the offset falls outside the disk.
+    /// <para>相对表达式未提供扇区总数，或该偏移落在盘外。</para>
     /// </exception>
     public static long ParseStartSectorValue(string value, long numDiskSectors)
     {
@@ -1364,9 +1345,11 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>检测 Android sparse 镜像魔数（0xED26FF3A）。</para>
     /// Detects the Android sparse image magic (0xED26FF3A).
+    /// <para>检测 Android sparse 镜像魔数（0xED26FF3A）。</para>
     /// </summary>
+    /// <param name="stream">The stream to probe at its current position. <para>在当前位置进行探测的流。</para></param>
+    /// <returns>True when the sparse magic is present. <para>命中稀疏镜像魔数时返回 true。</para></returns>
     private static bool IsAndroidSparseImage(Stream stream)
     {
         var position = stream.Position;
@@ -1383,9 +1366,12 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>在镜像目录中查找 Rockchip loader 文件。</para>
     /// Locates a Rockchip loader file in the image directory.
+    /// <para>在镜像目录中查找 Rockchip loader 文件。</para>
     /// </summary>
+    /// <param name="loaderPath">The explicitly given loader path, which may be null. <para>显式给出的 loader 路径，可为 null。</para></param>
+    /// <param name="imageDir">The directory to search for loader files. <para>搜索 loader 文件的目录。</para></param>
+    /// <returns>The loader path, or null when none is found. <para>loader 路径，未找到时为 null。</para></returns>
     internal static string? ResolveLoaderPath(string? loaderPath, string imageDir)
     {
         if (!string.IsNullOrWhiteSpace(loaderPath) && File.Exists(loaderPath))
@@ -1414,9 +1400,11 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>在镜像目录中查找 Rockchip parameter 文件（parameter / parameter.txt）。</para>
     /// Locates a Rockchip parameter file (parameter / parameter.txt) in the image directory.
+    /// <para>在镜像目录中查找 Rockchip parameter 文件（parameter / parameter.txt）。</para>
     /// </summary>
+    /// <param name="imageDir">The directory to search. <para>待搜索的目录。</para></param>
+    /// <returns>The parameter file path, or null when none is found. <para>parameter 文件路径，未找到时为 null。</para></returns>
     internal static string? FindParameterFile(string imageDir)
     {
         if (string.IsNullOrWhiteSpace(imageDir) || !Directory.Exists(imageDir))
@@ -1434,22 +1422,25 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>判断目录中是否存在 Rockchip parameter 分区表文件；目录不存在时为 false，不抛异常。</para>
     /// Determines whether the directory contains a Rockchip parameter partition-table file;
     /// returns false for a missing directory without throwing.
+    /// <para>判断目录中是否存在 Rockchip parameter 分区表文件；目录不存在时为 false，不抛异常。</para>
     /// </summary>
-    /// <param name="imageDir"><para>待检查的目录。</para>The directory to inspect.</param>
-    /// <returns><para>存在 parameter 文件时为 true。</para>True when a Rockchip parameter file is present.</returns>
+    /// <param name="imageDir">The directory to inspect. <para>待检查的目录。</para></param>
+    /// <returns>True when a Rockchip parameter file is present. <para>存在 parameter 文件时为 true。</para></returns>
     internal static bool HasRockchipParameter(string imageDir)
         => FindParameterFile(imageDir) is not null;
 
     /// <summary>
-    /// <para>把设备回读流与源文件逐字节比对：64 KiB 有界缓冲，源文件短于比对长度或任一块不一致
-    /// 时提前返回 false，禁止整读入内存。</para>
-    /// Compares a device read-back stream byte for byte against the source file using a bounded
-    /// 64 KiB buffer, returning false early when the source is shorter than the compared length or
-    /// any block differs; the payload is never buffered as a whole.
+    /// Compares a device read-back stream against the source file byte for byte using a bounded
+    /// 64 KiB buffer, returning false early when the source is shorter or any block differs.
+    /// <para>用 64 KiB 有界缓冲把设备回读流与源文件逐字节比对，源文件较短或任一块不一致时提前返回 false。</para>
     /// </summary>
+    /// <param name="sourceFile">Path of the source image file. <para>源镜像文件路径。</para></param>
+    /// <param name="deviceStream">The stream yielding device bytes. <para>提供设备回读字节的流。</para></param>
+    /// <param name="length">The number of bytes to compare. <para>要比对的字节数。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>True when every compared byte matched. <para>所有比对字节都一致时为 true。</para></returns>
     private static async Task<bool> CompareReadbackAsync(string sourceFile, Stream deviceStream, long length, CancellationToken ct)
     {
         if (length <= 0)
@@ -1496,14 +1487,14 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>sideload 模式下的远端推送目标。</para>
     /// Remote push target in sideload mode.
+    /// <para>sideload 模式下的远端推送目标。</para>
     /// </summary>
     private const string SideloadRemotePath = "/sideload/package.zip";
 
     /// <summary>
-    /// <para>包装源流，按读取字节数上报进度。</para>
     /// Wraps a source stream, reporting progress by bytes read.
+    /// <para>包装源流，按读取字节数上报进度。</para>
     /// </summary>
     private sealed class ProgressReportingStream : Stream
     {
@@ -1565,11 +1556,14 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>把 <see cref="RkdlSession.ReadLBA"/> 的区间读取包装为拉取式只读流：每次以有界的
-    /// 64 KiB 整扇区块向设备取数，避免整段回读进入内存。</para>
     /// Wraps a range of <see cref="RkdlSession.ReadLBA"/> as a pull-based read-only stream, fetching
     /// device data in bounded 64 KiB whole-sector blocks so a full read-back never lands in memory.
+    /// <para>把 <see cref="RkdlSession.ReadLBA"/> 的区间读取包装为拉取式只读流：每次以有界的
+    /// 64 KiB 整扇区块向设备取数，避免整段回读进入内存。</para>
     /// </summary>
+    /// <param name="session">The open RKDL session the range is read from. <para>读取该范围的已打开 RKDL 会话。</para></param>
+    /// <param name="startLba">The first sector of the device range. <para>设备范围的首个扇区。</para></param>
+    /// <param name="length">The total bytes the stream yields. <para>该流输出的总字节数。</para></param>
     private sealed class RkdlReadbackStream(RkdlSession session, long startLba, long length) : Stream
     {
         private const int BlockBytes = 65536;
@@ -1597,9 +1591,6 @@ public sealed class FlashService : IFlashService
                     return 0;
                 }
 
-                // 除末段外每次取整 64 KiB（扇区大小的倍数），保证下一段的起始 LBA 仍落在扇区边界上。
-                // Every block but the tail is a whole 64 KiB (a sector-size multiple), keeping each
-                // follow-up LBA on a sector boundary.
                 var toFetch = (int)Math.Min(BlockBytes, remaining);
                 using var blockStream = new MemoryStream(_block, 0, toFetch, writable: true);
                 session.ReadLBA(startLba + _fetched / RkdlConstants.SectorSize, blockStream, toFetch);
@@ -1622,49 +1613,53 @@ public sealed class FlashService : IFlashService
 }
 
 /// <summary>
-/// <para>刷写操作结果。</para>
 /// Flash operation result.
+/// <para>刷写操作结果。</para>
 /// </summary>
 public sealed class FlashResult
 {
     /// <summary>
-    /// <para>获取或设置刷写是否成功。</para>
     /// Gets or sets whether the flash succeeded.
+    /// <para>获取或设置刷写是否成功。</para>
     /// </summary>
+    /// <value>Whether the flash succeeded. <para>刷写是否成功。</para></value>
     public bool Success { get; set; }
 
     /// <summary>
-    /// <para>获取或设置结果摘要（成功时的描述或失败原因）。</para>
     /// Gets or sets the result summary (description on success, or the failure reason).
+    /// <para>获取或设置结果摘要（成功时的描述或失败原因）。</para>
     /// </summary>
+    /// <value>The description on success or the failure reason. <para>成功时的描述或失败原因。</para></value>
     public string Summary { get; set; } = string.Empty;
 }
 
 /// <summary>
-/// <para>刷写进度通知，与 <see cref="FlashProgressMessage"/> 字段对齐。</para>
 /// Flash progress notification, aligned with <see cref="FlashProgressMessage"/> fields.
+/// <para>刷写进度通知，与 <see cref="FlashProgressMessage"/> 字段对齐。</para>
 /// </summary>
-/// <remarks>
-/// <para>初始化刷写进度。</para>
-/// Initializes the flash progress.
-/// </remarks>
+/// <param name="partition">The partition being flashed, or null. <para>正在刷写的分区，可为 null。</para></param>
+/// <param name="percent">The progress percent from 0 to 100. <para>0 到 100 的进度百分比。</para></param>
+/// <param name="status">The status text. <para>状态文本。</para></param>
 public sealed class FlashProgress(string? partition, int percent, string status)
 {
     /// <summary>
-    /// <para>正在刷写的分区；非分区级时为 null。</para>
     /// Gets the partition being flashed; null when not partition-specific.
+    /// <para>正在刷写的分区；非分区级时为 null。</para>
     /// </summary>
+    /// <value>The partition name, or null for a phase-level entry. <para>分区名，阶段级条目时为 null。</para></value>
     public string? Partition { get; } = partition;
 
     /// <summary>
-    /// <para>获取进度百分比（0-100）。</para>
     /// Gets the progress percent (0-100).
+    /// <para>获取进度百分比（0-100）。</para>
     /// </summary>
+    /// <value>The progress percent from 0 to 100. <para>0 到 100 的进度百分比。</para></value>
     public int Percent { get; } = percent;
 
     /// <summary>
-    /// <para>获取状态文本。</para>
     /// Gets the status text.
+    /// <para>获取状态文本。</para>
     /// </summary>
+    /// <value>The status text describing the current phase. <para>描述当前阶段的状态文本。</para></value>
     public string Status { get; } = status;
 }

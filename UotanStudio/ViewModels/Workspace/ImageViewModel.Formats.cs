@@ -38,13 +38,13 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>分解 raw 物理镜像：先按魔数探测是否为 ext4/erofs/f2fs 文件系统镜像，命中则用对应解析器
-    /// 级联解出内部文件系统内容；未命中则回退为原 raw 字节流复制。头部探测与解包目录规则
-    /// （<see cref="ImageOperationPaths"/>）语义不变。</para>
     /// Extracts a raw physical image: probes the magic for an ext4/erofs/f2fs filesystem image and
     /// cascades into its contents with the matching parser when matched; otherwise falls back to
     /// copying the raw byte stream. Header probing and unpack-directory semantics
     /// (<see cref="ImageOperationPaths"/>) are unchanged.
+    /// <para>分解 raw 物理镜像：先按魔数探测是否为 ext4/erofs/f2fs 文件系统镜像，命中则用对应解析器
+    /// 级联解出内部文件系统内容；未命中则回退为原 raw 字节流复制。头部探测与解包目录规则
+    /// （<see cref="ImageOperationPaths"/>）语义不变。</para>
     /// </summary>
     private static async Task<FirmwareOpResult> ExtractRawAsync(string sourcePath, string outputDir, string name, IProgress<(int processed, int total)>? progress = null, IProgress<UotanStudio.Firmware.Core.FileSystemByteProgress>? byteProgress = null, IReadOnlyList<string>? erofsExtraDevicePaths = null, CancellationToken cancellationToken = default)
     {

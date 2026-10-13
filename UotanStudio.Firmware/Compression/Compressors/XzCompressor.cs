@@ -1,6 +1,7 @@
 using SharpCompress.Compressors.Xz;
 using UotanStudio.Firmware.Compression.Internal;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Hash.XzCrc64;
 
 namespace UotanStudio.Firmware.Compression.Compressors;
 

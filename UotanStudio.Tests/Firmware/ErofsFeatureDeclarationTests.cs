@@ -2,6 +2,7 @@ using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
+using UotanStudio.Hash.Xxh32;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -127,25 +128,227 @@ public sealed class ErofsFeatureDeclarationTests
         Assert.Contains(nameof(ErofsOptions.ExtraDeviceCount), error.Message, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData(ErofsFeature.ChunkedFile)]
-    [InlineData(ErofsFeature.XattrPrefixes)]
-    [InlineData(ErofsFeature.FortyEightBit)]
-    public void Build_ReadOnlyIncompatDeclaration_ThrowsArgumentOutOfRange(ErofsFeature feature)
+    [Fact]
+    public void Build_DeclaredFortyEightBit_WritesWideBlockCountAndRootNid()
+    {
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x5A, 40 * 1024).ToArray());
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            UseExtentIndexes = ErofsTriStateFeature.Enabled,
+            Features = Declare(ErofsFeature.Lz4ZeroPadding).With(ErofsFeature.FortyEightBit),
+        });
+
+        var superblock = ReadSuperblock(image);
+        Assert.True((superblock.FeatureIncompat & ErofsSuperblock.Incompat48Bit) != 0);
+        Assert.Equal(superblock.Blocks, (uint)superblock.BlockCount64);
+        Assert.Equal(superblock.BlocksHi, checked((ushort)(superblock.BlockCount64 >> 32)));
+        Assert.Equal(superblock.RootNid8b, superblock.RootNid64);
+    }
+
+    [Fact]
+    public void Build_DeclaredFortyEightBitWithNoWideField_Throws()
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x42, 8 * 1024).ToArray());
         var options = new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            Features = Declare(ErofsFeature.Lz4ZeroPadding).With(feature),
+            Features = Declare(ErofsFeature.Lz4ZeroPadding).With(ErofsFeature.FortyEightBit),
         };
 
-        var error = Assert.Throws<ArgumentOutOfRangeException>(() => new ErofsBuilder().Build(source.Path, options));
+        var error = Assert.Throws<NotSupportedException>(() => new ErofsBuilder().Build(source.Path, options));
 
-        Assert.Equal(nameof(ErofsOptions.Features), error.ParamName);
-        Assert.Contains(ErofsFeatureTable.NameOf(feature), error.Message, StringComparison.Ordinal);
-        Assert.Equal(ErofsFeatureCapability.ReadOnlyForEmit, ErofsFeatureTable.CapabilityOf(feature));
+        Assert.Contains("48bit", error.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(ErofsOptions.UseExtentIndexes), error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Build_DeclaredXattrPrefixesWithNoPrefixTable_Throws()
+    {
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x42, 8 * 1024).ToArray());
+        var options = new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            Features = Declare(ErofsFeature.Lz4ZeroPadding).With(ErofsFeature.XattrPrefixes),
+        };
+
+        var error = Assert.Throws<NotSupportedException>(() => new ErofsBuilder().Build(source.Path, options));
+
+        Assert.Contains("xattr_prefixes", error.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(ErofsOptions.SourceXattrPrefixes), error.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(ErofsOptions.IshareXattrPrefix), error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Build_LongXattrName_WritesPrefixTableThatReadsBackTheFullName()
+    {
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x42, 1024).ToArray());
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            FileXattrs = new Dictionary<string, IReadOnlyList<ErofsXattrEntry>>
+            {
+                ["data.bin"] =
+                [
+                    new ErofsXattrEntry { Name = "vendor.example.long", Value = [0x01, 0x02] },
+                ],
+            },
+        });
+
+        var superblock = ReadSuperblock(image);
+        Assert.True((superblock.FeatureIncompat & ErofsSuperblock.IncompatXattrPrefixes) != 0);
+        Assert.True((superblock.FeatureCompat & ErofsSuperblock.CompatPlainXattrPfx) != 0);
+        Assert.True(superblock.XattrPrefixCount > 0);
+
+        var bytes = image.ToArray();
+        using var parser = new ErofsParser(new MemoryStream(bytes));
+        var file = parser.EnumerateFiles().Single(entry => entry.Path.EndsWith("data.bin", StringComparison.Ordinal));
+        var xattrs = file.Xattrs ?? throw new Xunit.Sdk.XunitException("The rebuilt file carries no xattrs.");
+        Assert.Contains(xattrs, x => x.Name == "vendor.example.long" && x.Value.SequenceEqual(new byte[] { 0x01, 0x02 }));
+    }
+
+    [Fact]
+    public void Build_IshareXattrs_PacksRepeatedSetsIntoSharedAreaThatReadsBack()
+    {
+        using var source = new TempDirectory();
+        source.WriteBytes("a.bin", Enumerable.Repeat((byte)0x11, 512).ToArray());
+        source.WriteBytes("b.bin", Enumerable.Repeat((byte)0x22, 512).ToArray());
+        IReadOnlyList<ErofsXattrEntry> shared =
+        [
+            new ErofsXattrEntry { Name = "user.role", Value = "system"u8.ToArray() },
+        ];
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            IshareXattrs = true,
+            FileXattrs = new Dictionary<string, IReadOnlyList<ErofsXattrEntry>>
+            {
+                ["a.bin"] = shared,
+                ["b.bin"] = shared,
+            },
+        });
+
+        var superblock = ReadSuperblock(image);
+        Assert.True((superblock.FeatureCompat & ErofsSuperblock.CompatIshareXattrs) != 0);
+        Assert.NotEqual(0u, superblock.XattrBlkAddr);
+
+        using var parser = new ErofsParser(new MemoryStream(image));
+        var files = parser.EnumerateFiles();
+        foreach (var name in new[] { "a.bin", "b.bin" })
+        {
+            var file = files.Single(entry => entry.Path.EndsWith(name, StringComparison.Ordinal));
+            var xattrs = file.Xattrs ?? throw new Xunit.Sdk.XunitException($"{name} carries no xattrs.");
+            var role = Assert.Single(xattrs, x => x.Name == "user.role");
+            Assert.Equal("system", System.Text.Encoding.UTF8.GetString(role.Value));
+        }
+    }
+
+    [Fact]
+    public void Build_SharedEaInMetabox_HostsTheSharedAreaInTheMetaboxContainer()
+    {
+        using var source = new TempDirectory();
+        source.WriteBytes("a.bin", Enumerable.Repeat((byte)0x11, 512).ToArray());
+        source.WriteBytes("b.bin", Enumerable.Repeat((byte)0x22, 512).ToArray());
+        IReadOnlyList<ErofsXattrEntry> shared =
+        [
+            new ErofsXattrEntry { Name = "user.role", Value = "system"u8.ToArray() },
+        ];
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Metabox = true,
+            MetaboxRequired = true,
+            IshareXattrs = true,
+            FileXattrs = new Dictionary<string, IReadOnlyList<ErofsXattrEntry>>
+            {
+                ["a.bin"] = shared,
+                ["b.bin"] = shared,
+            },
+        });
+
+        var superblock = ReadSuperblock(image);
+        Assert.True((superblock.FeatureCompat & ErofsSuperblock.CompatIshareXattrs) != 0);
+        Assert.True((superblock.FeatureCompat & ErofsSuperblock.CompatSharedEaInMetabox) != 0,
+            "a metabox build must advertise that the shared area lives in the container it wrote.");
+        Assert.NotEqual(0u, superblock.XattrBlkAddr);
+        Assert.NotEqual(0u, superblock.MetaBoxNid);
+
+        using var parser = new ErofsParser(new MemoryStream(image));
+        foreach (var name in new[] { "a.bin", "b.bin" })
+        {
+            var file = parser.EnumerateFiles().Single(entry => entry.Path.EndsWith(name, StringComparison.Ordinal));
+            var role = Assert.Single(file.Xattrs ?? [], x => x.Name == "user.role");
+            Assert.Equal("system", System.Text.Encoding.UTF8.GetString(role.Value));
+        }
+    }
+
+    [Fact]
+    public void Build_IshareFingerprintPrefix_WritesDigestAndNamesThePrefixInTheSuperblock()
+    {
+        using var source = new TempDirectory();
+        var payload = Enumerable.Repeat((byte)0x77, 3000).ToArray();
+        source.WriteBytes("data.bin", payload);
+        const string prefix = "erofs.fingerprint.v1";
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            IshareXattrs = true,
+            IshareXattrPrefix = prefix,
+        });
+
+        var superblock = ReadSuperblock(image);
+        Assert.True((superblock.FeatureCompat & ErofsSuperblock.CompatIshareXattrs) != 0);
+        Assert.True(superblock.XattrPrefixCount > 0);
+        Assert.True(superblock.IshareXattrPrefixId < superblock.XattrPrefixCount);
+        Assert.Equal(0, superblock.IshareXattrPrefixId & ErofsXattr.LongPrefixFlag);
+
+        using var parser = new ErofsParser(new MemoryStream(image));
+        var file = parser.EnumerateFiles().Single(entry => entry.Path.EndsWith("data.bin", StringComparison.Ordinal));
+        var fingerprint = Assert.Single(file.Xattrs ?? [], x => x.Name == prefix);
+        var expected = new byte[7 + 32];
+        "sha256:"u8.CopyTo(expected);
+        System.Security.Cryptography.SHA256.HashData(payload).CopyTo(expected, 7);
+        Assert.Equal(expected, fingerprint.Value);
+    }
+
+    [Fact]
+    public void Build_XattrNameFilter_WritesHeaderWordAndPublishesTheCompatBit()
+    {
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x31, 4096).ToArray());
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Features = ErofsFeatureSet.Auto
+                .With(ErofsFeature.Lz4ZeroPadding)
+                .With(ErofsFeature.XattrFilter),
+            FileXattrs = new Dictionary<string, IReadOnlyList<ErofsXattrEntry>>
+            {
+                ["data.bin"] = [new ErofsXattrEntry { Name = "user.role", Value = "system"u8.ToArray() }],
+            },
+        });
+
+        var superblock = ReadSuperblock(image);
+        Assert.True((superblock.FeatureCompat & ErofsSuperblock.CompatXattrFilter) != 0);
+
+        using var parser = new ErofsParser(new MemoryStream(image));
+        var file = parser.EnumerateFiles().Single(entry => entry.Path.EndsWith("data.bin", StringComparison.Ordinal));
+        Assert.Contains(file.Xattrs ?? [], x => x.Name == "user.role");
+    }
+
+    [Fact]
+    public void ComputeNameFilter_MatchesUpstreamXxh32Vectors()
+    {
+        Assert.Equal(0x02CC5D05u, Xxh32.Compute([], 0));
+        Assert.Equal(0x550D7456u, Xxh32.Compute("a"u8, 0));
+        Assert.Equal(0x32D153FFu, Xxh32.Compute("abc"u8, 0));
+    }
+
+    private static ErofsSuperblock ReadSuperblock(byte[] image)
+    {
+        var superblock = new byte[ErofsSuperblock.SuperblockSize + ErofsSuperblock.ExtSlotSize];
+        Array.Copy(image, ErofsSuperblock.SuperblockOffset, superblock, 0, superblock.Length);
+        return ErofsSuperblock.FromBytes(superblock);
     }
 
     [Fact]
@@ -173,7 +376,7 @@ public sealed class ErofsFeatureDeclarationTests
         Assert.False(superblock.HasCompatChecksum);
         Assert.False(superblock.HasCompatXattrFilter);
         Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, superblock.FeatureIncompat);
-        Assert.Equal(ErofsSuperblock.CompatSbChecksum, options.DroppedCompatBits);
+        Assert.Equal(ErofsSuperblock.CompatSbChecksum | ErofsSuperblock.CompatXattrFilter, options.DroppedCompatBits);
         Assert.Equal(0u, options.AddedIncompatBits);
         Assert.True(options.FeaturesAuthoritative);
         using var parser = new ErofsParser(image);

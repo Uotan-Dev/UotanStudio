@@ -1,17 +1,13 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
+using System.Numerics;
 using System.Text;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Edl.Streaming;
 
 /// <summary>
-/// Implements the Qualcomm Streaming DLOAD protocol, the pre-Firehose command-mode flash
-/// transport spoken over DIAG packets. The session enters this protocol after Sahara exec 0x05
-/// switches the target into the streaming downloader; the host negotiates with a hello exchange,
-/// optionally programs flash in 1024-byte chunks, and always finalizes sections with qclose.
-/// <para>实现 Qualcomm Streaming DLOAD（流式下载）协议，即命令模式下经 DIAG 报文承载的 Firehose
-/// 之前的刷写传输。Sahara exec 0x05 把目标切换到流式下载器后，会话由本协议接管：主机以 hello
-/// 交换协商，可选地按 1024 字节块刷写闪存，并始终以 qclose 结束每个段。</para>
+/// Implements the Qualcomm Streaming DLOAD protocol, the pre-Firehose command-mode flash transport over DIAG packets. The session enters it after Sahara exec 0x05, negotiates with a hello exchange, optionally programs flash in 1024-byte chunks and finalizes sections with qclose.
+/// <para>实现 Qualcomm Streaming DLOAD 协议，即 Firehose 之前经 DIAG 数据包承载的命令模式刷写传输。Sahara exec 0x05 后进入该协议，经 hello 交换协商，可选按 1024 字节分块编程闪存，并以 qclose 收尾。</para>
 /// </summary>
 /// <remarks>
 /// Transcribed from the reference <c>edlclient/Library/streaming.py</c> (class <c>Streaming</c>)
@@ -35,9 +31,9 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
 
     /// <summary>
     /// The ASCII marker the reference host writes in front of every section name, mirroring
-    /// <c>bytes("0:" + name)</c> (streaming.py:171).
+    /// <c>bytes("0:" + name)</c>.
     /// <para>参考主机在每个段名前写入的 ASCII 标记，对应 <c>bytes("0:" + name)</c>
-    /// （streaming.py:171）。</para>
+    /// 。</para>
     /// </summary>
     private const string SectionNamePrefix = "0:";
 
@@ -77,10 +73,10 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
     /// <summary>
     /// Sends the host hello with <see cref="StreamingConstants.HostMagic"/> and parses the
     /// target's device description. Like the reference <c>hello</c>, one mismatched response
-    /// triggers a single resend before the exchange is declared failed (streaming.py:718-774).
+    /// triggers a single resend before the exchange is declared failed.
     /// <para>随 <see cref="StreamingConstants.HostMagic"/> 发送主机 hello 并解析目标的设备描述。
     /// 与参考 <c>hello</c> 相同，首个不匹配的响应会触发一次重发，之后才判定交换失败
-    /// （streaming.py:718-774）。</para>
+    /// 。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The parsed device description, also cached in <see cref="Device"/>.
@@ -98,9 +94,9 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
 
     /// <summary>
     /// Negotiates the trusted or untrusted security state with DIAG command 0x17 and reports
-    /// whether the target acknowledged with 0x18 (streaming.py:154-158).
+    /// whether the target acknowledged with 0x18.
     /// <para>用 DIAG 命令 0x17 协商受信或不受信的安全状态，并报告目标是否以 0x18 确认
-    /// （streaming.py:154-158）。</para>
+    /// 。</para>
     /// </summary>
     /// <param name="trusted">Pass <see langword="true"/> for the trusted mode byte 0x01,
     /// <see langword="false"/> for 0x00. <para>受信模式传 <see langword="true"/>（模式字节 0x01），
@@ -118,9 +114,9 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
 
     /// <summary>
     /// Sends the DIAG close (qclose) command 0x15 and reports whether the target answered with
-    /// the close response identifier 0x16 (streaming.py:160-167).
+    /// the close response identifier 0x16.
     /// <para>发送 DIAG 关闭（qclose）命令 0x15，并报告目标是否以关闭响应号 0x16 应答
-    /// （streaming.py:160-167）。</para>
+    /// 。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns><see langword="true"/> when the close was acknowledged.
@@ -134,11 +130,11 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
     }
 
     /// <summary>
-    /// Sends the DIAG reset command 0x0B. Like the reference <c>reset</c>, a target that goes
-    /// silent immediately after the command is tolerated; the session simply stops being usable
-    /// once the loader leaves the streaming protocol (streaming.py:368-370).
-    /// <para>发送 DIAG 复位命令 0x0B。与参考 <c>reset</c> 相同，命令后目标立即静默是可以容忍的；
-    /// loader 一旦离开流式协议，会话即不再可用（streaming.py:368-370）。</para>
+    /// Sends the DIAG reset command 0x0B.
+    /// <para>发送 DIAG 复位命令 0x0B。</para>
+    /// A target that goes silent immediately after the command is tolerated; the session simply stops
+    /// being usable once the loader leaves the streaming protocol.
+    /// <para>命令后目标立即静默是可以容忍的；loader 一旦离开流式协议，会话即不再可用。</para>
     /// </summary>
     /// <param name="confirm">Pass <see langword="true"/> to confirm that resetting the streaming
     /// session is intended. <para>传 <see langword="true"/> 以确认确实要复位流式会话。</para></param>
@@ -245,8 +241,7 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
     /// Frames one DIAG command with the reference CRC-on-send behaviour (hdlc.py:216-226 always
     /// appends the CRC; the no-CRC variants only skip verification of the reply), writes it, and
     /// reads one framed reply.
-    /// <para>按参考的“发送必带校验”行为封装一条 DIAG 命令（hdlc.py:216-226 始终追加 CRC，
-    /// 无校验变体只是跳过对回包的验证），写出后读取一个封装回包。</para>
+    /// <para>按参考的“发送必带校验”行为封装一条 DIAG 命令，写出后读取一个封装回包。</para>
     /// </summary>
     private async Task<byte[]> SendDiagOwnedAsync(byte[] command, bool verifyResponseCrc,
         bool tolerateNoResponse, CancellationToken cancellationToken)
@@ -272,12 +267,12 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
 
     /// <summary>
     /// Accumulates transport reads until the trailing HDLC flag arrives, mirroring the reference
-    /// reply loop that keeps reading while the last byte is not 0x7E (hdlc.py:136-171), then
+    /// reply loop that keeps reading while the last byte is not 0x7E, then
     /// decodes exactly one framed payload. A whole-packet budget of <c>_timeoutMs</c> replaces the
-    /// reference's five retry reads (hdlc.py:146-151).
+    /// reference's five retry reads.
     /// <para>持续累积传输读取直到尾部的 HDLC 标志到达，对应参考中“末字节不是 0x7E 就继续读”的
-    /// 回包循环（hdlc.py:136-171），随后解码恰好一个封装负载。以 <c>_timeoutMs</c> 为整包预算
-    /// 替代参考的 5 次重试读取（hdlc.py:146-151）。</para>
+    /// 回包循环，随后解码恰好一个封装负载。以 <c>_timeoutMs</c> 为整包预算
+    /// 替代参考的 5 次重试读取。</para>
     /// </summary>
     private async Task<byte[]> ReceiveDiagFrameOwnedAsync(bool verifyCrc, CancellationToken cancellationToken)
     {
@@ -424,9 +419,9 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
 /// <summary>
 /// The device description the streaming target returns in its hello response: version fields,
 /// the preferred block size, the base flash address, the flash identification string, the window
-/// size, the sector table, and the feature bits (streaming.py:718-774).
+/// size, the sector table, and the feature bits.
 /// <para>流式目标在 hello 响应中返回的设备描述：版本字段、首选块大小、闪存基地址、闪存识别串、
-/// 窗口大小、扇区表与特性位（streaming.py:718-774）。</para>
+/// 窗口大小、扇区表与特性位。</para>
 /// </summary>
 /// <param name="Command">The DIAG response identifier, always
 /// <see cref="StreamingConstants.DiagHelloResponse"/> for a parsed hello.
@@ -464,9 +459,9 @@ public sealed record StreamingDeviceInfo(
     /// <summary>
     /// Parses the fixed hello layout, then the variable flash-id and sector tables, bounding
     /// every device-supplied length before reading it. Offsets follow the reference parser with
-    /// the leading HDLC flag normalized away (streaming.py:746-763).
+    /// the leading HDLC flag normalized away.
     /// <para>先解析固定 hello 布局，再解析变长的闪存 ID 与扇区表，并在读取任何由设备提供的长度
-    /// 之前先做边界检查。偏移在剥掉前导 HDLC 标志后对应参考解析器（streaming.py:746-763）。</para>
+    /// 之前先做边界检查。偏移在剥掉前导 HDLC 标志后对应参考解析器。</para>
     /// </summary>
     internal static bool TryParse(ReadOnlySpan<byte> reply, out StreamingDeviceInfo? info)
     {
@@ -521,6 +516,55 @@ public sealed record StreamingDeviceInfo(
             NumberOfSectors: numberOfSectors,
             SectorSizes: sectorSizes,
             FeatureBits: reply[sectorEnd]);
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves the sector size the target itself advertised in its hello response, so that no
+    /// caller has to assume a fixed one.
+    /// <para>解析目标在 hello 响应中自己通告的扇区尺寸，使调用方无需假设固定值。</para>
+    /// </summary>
+    /// <remarks>
+    /// <para>This session carries no chipset table, so the advertised table is the single geometry the
+    /// loader reports. The table must name one size that is a power of two within
+    /// <see cref="StreamingConstants.MinReportedSectorBytes"/> to
+    /// <see cref="StreamingConstants.MaxReportedSectorBytes"/>: an empty table, several distinct sizes,
+    /// or an implausible value is refused instead of guessed, because every derived byte offset, length
+    /// and block count scales with it.</para>
+    /// <para>本会话没有芯片表，因此该通告表就是 loader 上报的唯一几何信息。表内必须只有一种尺寸，
+    /// 且该尺寸为 2 的幂并落在 <see cref="StreamingConstants.MinReportedSectorBytes"/> 到
+    /// <see cref="StreamingConstants.MaxReportedSectorBytes"/> 之间：空表、多种不同尺寸或不成理的值
+    /// 一律拒绝而非臆测，因为由此派生的每个字节偏移、长度与块数都会随之缩放。</para>
+    /// </remarks>
+    /// <param name="sectorBytes">The reported sector size in bytes, or 0 when nothing was
+    /// resolved. <para>上报的扇区字节数；未能解析时为 0。</para></param>
+    /// <returns><see langword="true"/> when one plausible sector size was reported.
+    /// <para>上报了唯一且合理的扇区尺寸时为 <see langword="true"/>。</para></returns>
+    public bool TryGetReportedSectorBytes(out int sectorBytes)
+    {
+        sectorBytes = 0;
+        if (SectorSizes.Length == 0)
+        {
+            return false;
+        }
+
+        var reported = SectorSizes[0];
+        foreach (var size in SectorSizes)
+        {
+            if (size != reported)
+            {
+                return false;
+            }
+        }
+
+        if (!BitOperations.IsPow2(reported)
+            || reported < StreamingConstants.MinReportedSectorBytes
+            || reported > StreamingConstants.MaxReportedSectorBytes)
+        {
+            return false;
+        }
+
+        sectorBytes = (int)reported;
         return true;
     }
 }

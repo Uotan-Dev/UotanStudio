@@ -3,18 +3,19 @@ using System.Globalization;
 namespace UotanStudio.Services.Flash;
 
 /// <summary>
-/// <para>Rockchip parameter 文件中的单个分区条目。</para>
 /// A single partition entry from a Rockchip parameter file.
+/// <para>Rockchip parameter 文件中的单个分区条目。</para>
 /// </summary>
 public sealed class RockchipPartition
 {
     /// <summary>
-    /// <para>初始化分区条目。</para>
     /// Initializes a partition entry.
+    /// <para>初始化分区条目。</para>
     /// </summary>
-    /// <param name="name">分区名（如 boot）。 Partition name (e.g. boot).</param>
-    /// <param name="sizeSectors">分区大小（512 字节扇区）。 Partition size in 512-byte sectors.</param>
-    /// <param name="offsetSectors">分区起始 LBA（512 字节扇区）。 Partition start LBA in 512-byte sectors.</param>
+    /// <param name="name">Partition name, for example boot. <para>分区名，例如 boot。</para></param>
+    /// <param name="sizeSectors">Partition size in 512-byte sectors. <para>分区大小，以 512 字节扇区计。</para></param>
+    /// <param name="offsetSectors">Partition start LBA in 512-byte sectors.
+    /// <para>分区起始 LBA，以 512 字节扇区计。</para></param>
     public RockchipPartition(string name, long sizeSectors, long offsetSectors)
     {
         Name = name;
@@ -23,47 +24,51 @@ public sealed class RockchipPartition
     }
 
     /// <summary>
-    /// <para>获取分区名。</para>
     /// Gets the partition name.
+    /// <para>获取分区名。</para>
     /// </summary>
+    /// <value>The name recorded in the parameter entry. <para>parameter 条目中记录的分区名。</para></value>
     public string Name { get; }
 
     /// <summary>
-    /// <para>获取分区大小（512 字节扇区）。</para>
     /// Gets the partition size in 512-byte sectors.
+    /// <para>获取分区大小（512 字节扇区）。</para>
     /// </summary>
+    /// <value>The size counted in 512-byte sectors. <para>以 512 字节扇区计的大小。</para></value>
     public long SizeSectors { get; }
 
     /// <summary>
-    /// <para>获取分区起始 LBA（512 字节扇区）。</para>
     /// Gets the partition start LBA in 512-byte sectors.
+    /// <para>获取分区起始 LBA（512 字节扇区）。</para>
     /// </summary>
+    /// <value>The start LBA counted in 512-byte sectors. <para>以 512 字节扇区计的起始 LBA。</para></value>
     public long OffsetSectors { get; }
 
     /// <summary>
-    /// <para>返回分区条目的字符串表示。</para>
     /// Returns a string representation of the partition entry.
+    /// <para>返回分区条目的字符串表示。</para>
     /// </summary>
+    /// <returns>The name, start LBA and sector count. <para>名称、起始 LBA 与扇区数。</para></returns>
     public override string ToString() => $"RockchipPartition[{Name}, LBA 0x{OffsetSectors:X}, {SizeSectors} sectors]";
 }
 
 /// <summary>
-/// <para>解析 Rockchip 固件 parameter 文件中的分区表（<c>CMDLINE: mtdparts=...</c>）。</para>
-/// Parses the partition table from a Rockchip firmware parameter file
-/// (<c>CMDLINE: mtdparts=...</c>).
+/// Parses the partition table from a Rockchip firmware parameter file.
+/// <para>解析 Rockchip 固件 parameter 文件中的分区表。</para>
 /// </summary>
 public static class RockchipParameterParser
 {
-    /// <summary>Rockchip 扇区大小（字节）。 Rockchip sector size in bytes.</summary>
+    /// <summary>Rockchip sector size in bytes. <para>Rockchip 扇区大小（字节）。</para></summary>
     public const int SectorSize = 512;
 
     /// <summary>
-    /// <para>解析 parameter 文件并返回其分区表。</para>
     /// Parses a parameter file and returns its partition table.
+    /// <para>解析 parameter 文件并返回其分区表。</para>
     /// </summary>
-    /// <param name="filePath">parameter 文件路径。 Path to the parameter file.</param>
-    /// <returns>解析出的分区列表（保持文件中的顺序）。 The parsed partitions, in file order.</returns>
-    /// <exception cref="InvalidDataException">文件不存在、缺少 <c>CMDLINE</c> 或 <c>mtdparts=</c>，或条目格式无效时抛出。</exception>
+    /// <param name="filePath">Path to the parameter file. <para>parameter 文件路径。</para></param>
+    /// <returns>The parsed partitions, in file order. <para>解析出的分区列表，保持文件中的顺序。</para></returns>
+    /// <exception cref="InvalidDataException">The file has no <c>CMDLINE</c> line or an entry is malformed.
+    /// <para>文件没有 <c>CMDLINE</c> 行或某个条目格式无效。</para></exception>
     public static IReadOnlyList<RockchipPartition> Parse(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath))
@@ -94,12 +99,13 @@ public static class RockchipParameterParser
     }
 
     /// <summary>
-    /// <para>从 <c>CMDLINE</c> 值解析分区表。</para>
     /// Parses the partition table from a <c>CMDLINE</c> value.
+    /// <para>从 <c>CMDLINE</c> 值解析分区表。</para>
     /// </summary>
-    /// <param name="cmdline">CMDLINE 的值。 The CMDLINE value.</param>
-    /// <returns>解析出的分区列表。 The parsed partitions.</returns>
-    /// <exception cref="InvalidDataException">缺少 <c>mtdparts=</c> 或条目格式无效时抛出。</exception>
+    /// <param name="cmdline">The CMDLINE value. <para>CMDLINE 的值。</para></param>
+    /// <returns>The parsed partitions. <para>解析出的分区列表。</para></returns>
+    /// <exception cref="InvalidDataException">The value has no <c>mtdparts=</c> marker or an entry is malformed.
+    /// <para>值中没有 <c>mtdparts=</c> 标记或某个条目格式无效。</para></exception>
     public static IReadOnlyList<RockchipPartition> ParseCommandLine(string cmdline)
     {
         var mtdIdx = cmdline.IndexOf("mtdparts=", StringComparison.OrdinalIgnoreCase);
@@ -110,11 +116,6 @@ public static class RockchipParameterParser
 
         var mtd = cmdline[(mtdIdx + "mtdparts=".Length)..];
 
-        // The device name precedes the first ':' (e.g. "rk29xxnand:..."). Everything after
-        // the first ':' holds the comma-separated entries; a trailing ":gpt" (or ":raw")
-        // suffix is dropped.
-        // 设备名位于首个 ':' 之前（如 "rk29xxnand:..."）。首个 ':' 之后为逗号分隔的条目；
-        // 末尾的 ":gpt"（或 ":raw"）后缀被丢弃。
         var colonIdx = mtd.IndexOf(':');
         var entriesPart = colonIdx >= 0 ? mtd[(colonIdx + 1)..] : mtd;
         var lastColon = entriesPart.LastIndexOf(':');
@@ -139,9 +140,11 @@ public static class RockchipParameterParser
     }
 
     /// <summary>
-    /// <para>解析单个 <c>size@offset(name)</c> 条目。</para>
     /// Parses a single <c>size@offset(name)</c> entry.
+    /// <para>解析单个 <c>size@offset(name)</c> 条目。</para>
     /// </summary>
+    /// <param name="entry">The raw entry segment. <para>原始条目片段。</para></param>
+    /// <returns>The parsed partition entry. <para>解析出的分区条目。</para></returns>
     private static RockchipPartition ParseEntry(string entry)
     {
         var atIdx = entry.IndexOf('@');
@@ -167,12 +170,13 @@ public static class RockchipParameterParser
     }
 
     /// <summary>
-    /// <para>解析大小/偏移值：支持 0x 十六进制、十进制与 K/M/G/T 后缀（后缀先换算为字节再
-    /// 换算为 512 字节扇区；无后缀时按扇区处理，与 rkdeveloptool 一致）。</para>
-    /// Parses a size/offset value: 0x-hex, decimal and K/M/G/T suffixes are supported
-    /// (suffixed values are converted to bytes then to 512-byte sectors; bare values are
-    /// already treated as sectors, matching rkdeveloptool).
+    /// Parses a size or offset value with 0x-prefixed hex, decimal, and K/M/G/T suffixes. Suffixed values are
+    /// converted to bytes and then to 512-byte sectors; bare values are treated as sectors.
+    /// <para>解析大小或偏移值，支持 0x 十六进制、十进制与 K/M/G/T 后缀；带后缀的值先换算为字节再换算为
+    /// 512 字节扇区，无后缀的值按扇区处理。</para>
     /// </summary>
+    /// <param name="text">The raw size or offset token. <para>原始大小或偏移文本。</para></param>
+    /// <returns>The value in 512-byte sectors. <para>以 512 字节扇区计的值。</para></returns>
     private static long ParseSectorValue(string text)
     {
         if (string.IsNullOrWhiteSpace(text))

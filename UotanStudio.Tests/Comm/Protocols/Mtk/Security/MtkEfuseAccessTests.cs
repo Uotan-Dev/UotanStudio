@@ -1,9 +1,6 @@
 using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Security;
-using UotanStudio.Services.Flash;
-using UotanStudio.Tests.Comm.Protocols.Mtk.Rpmb;
-using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
 namespace UotanStudio.Tests.Comm.Protocols.Mtk.Security;
@@ -326,62 +323,5 @@ public sealed class MtkEfuseAccessTests
         Assert.Equal(0x1000u, MtkEfuseAccess.NonAddressThreshold);
         Assert.Equal(0x90u, MtkEfuseAccess.PublicKeyOffset);
         Assert.Equal(0x20, MtkEfuseAccess.PublicKeyLength);
-    }
-}
-
-public sealed class MtkEfuseConsumerTests
-{
-    private const ushort HardwareCode = 0x0551;
-    private const uint EfuseBase = 0x0010_0000;
-
-    [Fact]
-    public async Task ReadEfuseRangeAsync_WholeTranscribedTable_ReturnsEveryCellInTableOrder()
-    {
-        Assert.True(MtkEfuseFieldTable.TryGetCells(HardwareCode, out var cells));
-        using var transport = new ScriptedCommTransport();
-        using var session = await MtkRpmbTestHarness.CreateStageTwoSessionAsync(transport);
-        var before = transport.Writes.Count;
-        for (var index = 0; index < cells.Length; index++)
-        {
-            MtkRpmbTestHarness.EnqueueXFlashValue(transport, 0);
-            MtkRpmbTestHarness.EnqueueXFlashValue(transport, 0);
-            MtkRpmbTestHarness.EnqueueXFlashFrame(transport, [(byte)(index * 4), 0, 0, 0]);
-            MtkRpmbTestHarness.EnqueueXFlashValue(transport, 0);
-        }
-
-        var outcome = await MtkSecCfgService.ReadEfuseRangeAsync(session, MtkDaProtocol.XFlash, HardwareCode,
-            EfuseBase, 0, cells.Length, cancellationToken: TestContext.Current.CancellationToken);
-
-        Assert.True(outcome.Status.Success);
-        var reading = Assert.IsAssignableFrom<MtkEfuseReading>(outcome.Reading);
-        Assert.Equal(cells.Length, reading.Cells.Count);
-        Assert.Equal(37, reading.ReadCellCount);
-        Assert.Equal(0x0010_0020u, reading.Cells[0].Cell.Address);
-        Assert.Equal(0x0010_07C8u, reading.Cells[^1].Cell.Address);
-        for (var index = 0; index < reading.Cells.Count; index++)
-        {
-            Assert.Equal((uint)(index * 4), reading.Cells[index].Value);
-            Assert.Equal(MtkEfuseAccess.ResolveCell(cells[index], EfuseBase).Address,
-                reading.Cells[index].Cell.Address);
-        }
-
-        Assert.Contains("37 cells", outcome.Status.Summary, StringComparison.Ordinal);
-        Assert.True(transport.Writes.Count > before);
-    }
-
-    [Fact]
-    public async Task ReadEfuseRangeAsync_LastCellOfTheLongestTable_IsStillInsideTheRequestCeiling()
-    {
-        Assert.True(MtkEfuseFieldTable.TryGetCells(0x0688, out var cells));
-        using var transport = new ScriptedCommTransport();
-        using var session = await MtkRpmbTestHarness.CreateStageTwoSessionAsync(transport);
-        var before = transport.Writes.Count;
-
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => MtkSecCfgService.ReadEfuseRangeAsync(
-            session, MtkDaProtocol.XFlash, 0x0688, EfuseBase, cells.Length - 1, 2,
-            cancellationToken: TestContext.Current.CancellationToken));
-
-        MtkEfuseAccess.ValidateRange(cells, cells.Length - 1, 1);
-        Assert.Equal(before, transport.Writes.Count);
     }
 }

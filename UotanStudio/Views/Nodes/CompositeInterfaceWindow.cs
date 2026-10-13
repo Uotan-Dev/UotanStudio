@@ -7,7 +7,10 @@ using UotanStudio.Services.VisualPlugins;
 
 namespace UotanStudio.Views.Nodes;
 
-/// <summary>Reviews automatically discovered interfaces before changing the graph.</summary>
+/// <summary>
+/// Reviews automatically discovered interfaces before changing the graph.
+/// <para>在修改图之前审查自动发现的接口。</para>
+/// </summary>
 internal sealed class CompositeInterfaceWindow : Window
 {
     private readonly TextBox _name;

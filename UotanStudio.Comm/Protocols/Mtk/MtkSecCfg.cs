@@ -254,54 +254,6 @@ public static class MtkSecCfg
         return BuildVersion4Image(header, hash);
     }
 
-    /// <summary>Builds the image that closes or opens a version 4 configuration whose stored hash is
-    /// protected by a target-driven hardware engine.
-    /// <para>构造关闭或打开版本 4 配置的镜像，其存储摘要由目标驱动的硬件引擎保护。</para></summary>
-    /// <remarks>
-    /// The digest recomputation, the dword order and the zero padding follow seccfg.py:89-102; only the
-    /// hash transform is delegated to <paramref name="engine"/>, using exactly the variant the read
-    /// resolved for the stored hash.
-    /// <para>摘要重算、双字顺序与补零遵循 seccfg.py:89-102；只有摘要变换交给 <paramref name="engine"/>，
-    /// 且使用的正是读取阶段为存储摘要解析出的那一个变体。</para>
-    /// </remarks>
-    /// <param name="report">A report decoded by <see cref="TryReadVersion4Async"/> with a resolved hardware
-    /// hash kind. <para>由 <see cref="TryReadVersion4Async"/> 解码且硬件摘要种类已解析的报告。</para></param>
-    /// <param name="intent">The requested state transition. 请求的状态转换。</param>
-    /// <param name="engine">The target-driven transform engine. 目标驱动的变换引擎。</param>
-    /// <param name="cancellationToken">Cancellation for every target exchange.
-    /// <para>每次目标交换的取消令牌。</para></param>
-    /// <returns>The padded image, exactly a multiple of <see cref="ImageAlignment"/> bytes.
-    /// <para>补白后的镜像，长度恰为 <see cref="ImageAlignment"/> 的整数倍。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="report"/> or <paramref name="engine"/> is null.
-    /// <para><paramref name="report"/> 或 <paramref name="engine"/> 为 null。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="intent"/> is undefined.
-    /// <para><paramref name="intent"/> 未定义。</para></exception>
-    /// <exception cref="InvalidOperationException">The configuration already carries the requested state.
-    /// <para>配置已处于请求状态。</para></exception>
-    /// <exception cref="NotSupportedException">The declared size contradicts the documented layout, or the
-    /// hash kind is <see cref="MtkSecCfgHashKind.Unresolved"/>.
-    /// <para>声明大小与已记载布局矛盾，或摘要种类为 <see cref="MtkSecCfgHashKind.Unresolved"/>。</para></exception>
-    public static async Task<byte[]> CreateVersion4Async(MtkSecCfgV4Report report, MtkSecCfgLockIntent intent,
-        IMtkSecCfgHashEngine engine, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(report);
-        ArgumentNullException.ThrowIfNull(engine);
-        ValidateVersion4Rewrite(report, intent);
-
-        if (report.HashKind is MtkSecCfgHashKind.Software or MtkSecCfgHashKind.Unresolved)
-        {
-            throw new NotSupportedException(
-                report.HashKind == MtkSecCfgHashKind.Software
-                    ? "The software transform is applied by the synchronous writer."
-                    : "The hash kind is unresolved, so no documented transform can be applied.");
-        }
-
-        var header = BuildVersion4Header(report, intent);
-        var hash = await engine.TransformAsync(report.HashKind, SHA256.HashData(header), encrypt: true,
-            cancellationToken).ConfigureAwait(false);
-        return BuildVersion4Image(header, hash);
-    }
-
     private static void ValidateVersion4Rewrite(MtkSecCfgV4Report report, MtkSecCfgLockIntent intent)
     {
         if (intent == MtkSecCfgLockIntent.Lock && report.LockStateRaw == LockStateWrittenWhenClosed)

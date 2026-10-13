@@ -1,16 +1,16 @@
 namespace UotanStudio.Models;
 
 /// <summary>
-/// <para>本应用使用或参考的开源项目清单（关于对话框的开源项目区块数据源，静态只读，AOT 友好）。</para>
-/// Catalog of the open-source projects used by or referenced in this application (data source for the
-/// open-source section of the About dialog; static and read-only, AOT friendly).
+/// Catalog of open-source project entries, static and read-only.
+/// <para>开源项目条目清单，静态且只读。</para>
 /// </summary>
 public static class OpenSourceProjects
 {
     /// <summary>
-    /// <para>获取开源项目清单。</para>
     /// Gets the open-source project catalog.
+    /// <para>获取开源项目清单。</para>
     /// </summary>
+    /// <value>The open-source project entries.<para>开源项目条目列表。</para></value>
     public static IReadOnlyList<OpenSourceProject> All { get; } =
     [
         new OpenSourceProject

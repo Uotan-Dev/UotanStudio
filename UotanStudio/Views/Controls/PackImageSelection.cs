@@ -4,10 +4,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace UotanStudio.Views.Controls;
 
-/// <summary><para>交付页面所选镜像及其来源项目。</para>Selected delivery image and its source project.</summary>
+/// <summary>Selected delivery image and its source project. <para>交付页面所选镜像及其来源项目。</para></summary>
 public sealed record PackImageSelection(string GroupName, string FilePath)
 {
-    /// <summary><para>实际文件大小；无法读取时为空。</para>Actual file size, or null when unavailable.</summary>
+    /// <summary>Actual file size, or null when unavailable. <para>实际文件大小；无法读取时为空。</para></summary>
     public long? SizeBytes { get; init; }
     /// <summary>Logical partition names from this source project; null when no source metadata exists.</summary>
     public IReadOnlySet<string>? DynamicPartitions { get; init; }
@@ -41,9 +41,9 @@ internal sealed partial class PackImageGroup : ObservableObject, IDisposable
 
     public string Name { get; }
     public bool IsExternal { get; }
-    /// <summary><para>是否为交付生成镜像分组。</para>Whether this group holds delivery-generated outputs.</summary>
+    /// <summary>Whether this group holds delivery-generated outputs. <para>是否为交付生成镜像分组。</para></summary>
     public bool IsDeliveryOutputs { get; init; }
-    /// <summary><para>是否为节点工作流产物分组。</para>Whether this group holds node-workflow published artifacts.</summary>
+    /// <summary>Whether this group holds node-workflow published artifacts. <para>是否为节点工作流产物分组。</para></summary>
     public bool IsNodeOutputs { get; init; }
     internal IReadOnlySet<string>? DynamicPartitions { get; init; }
     public ObservableCollection<PackImageEntry> Images { get; } = [];

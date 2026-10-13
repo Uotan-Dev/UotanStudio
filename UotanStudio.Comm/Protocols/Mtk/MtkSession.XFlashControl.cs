@@ -15,55 +15,22 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 public enum MtkXFlashMetaBootMode
 {
     /// <summary>Normal boot, unknown connection type (reference <c>off</c>).
-    /// <para>正常启动，未知连接类型（参考的 <c>off</c>）。</para></summary>
+    /// <para>正常启动，未知连接类型。</para></summary>
     Off,
     /// <summary>Meta boot over UART (reference <c>uart</c>).
-    /// <para>经 UART 的 meta 启动（参考的 <c>uart</c>）。</para></summary>
+    /// <para>经 UART 的 meta 启动。</para></summary>
     Uart,
     /// <summary>Meta boot over USB (reference <c>usb</c>).
-    /// <para>经 USB 的 meta 启动（参考的 <c>usb</c>）。</para></summary>
+    /// <para>经 USB 的 meta 启动。</para></summary>
     Usb
 }
 
-/// <summary>Checksum scope the reference documents for the checksum-level command.
-/// <para>参考为校验和级别命令记载的校验范围。</para></summary>
-public enum MtkXFlashChecksumLevel
-{
-    /// <summary>No checksumming (reference <c>none[0x0]</c>).
-    /// <para>不校验（参考的 <c>none[0x0]</c>）。</para></summary>
-    None = 0,
-    /// <summary>Checksum USB transfers (reference <c>USB[0x1]</c>).
-    /// <para>校验 USB 传输（参考的 <c>USB[0x1]</c>）。</para></summary>
-    Usb = 1,
-    /// <summary>Checksum storage writes (reference <c>storage[0x2]</c>).
-    /// <para>校验存储写入（参考的 <c>storage[0x2]</c>）。</para></summary>
-    Storage = 2,
-    /// <summary>Checksum both directions (reference <c>both[0x3]</c>).
-    /// <para>两者都校验（参考的 <c>both[0x3]</c>）。</para></summary>
-    Both = 3
-}
-
-/// <summary>Power source the reference documents for the battery-option command.
-/// <para>参考为电池选项命令记载的供电来源。</para></summary>
-public enum MtkXFlashBatteryOption
-{
-    /// <summary>Power from the battery (reference <c>battery[0x0]</c>).
-    /// <para>由电池供电（参考的 <c>battery[0x0]</c>）。</para></summary>
-    Battery = 0,
-    /// <summary>Power from USB (reference <c>USB power[0x1]</c>).
-    /// <para>由 USB 供电（参考的 <c>USB power[0x1]</c>）。</para></summary>
-    UsbPower = 1,
-    /// <summary>Automatic selection (reference <c>auto[0x2]</c>).
-    /// <para>自动选择（参考的 <c>auto[0x2]</c>）。</para></summary>
-    Auto = 2
-}
-
 /// <summary>
-/// Device-control write commands of the XFlash download agent: the meta boot mode, reset key,
-/// checksum level, battery option and eMMC hardware-reset-pin selectors the reference documents,
-/// plus the parameterless download-info and hardware-reset-pin disable markers.
-/// <para>XFlash 下载代理的器件控制写入命令：参考记载的 meta 启动模式、复位按键、校验级别、电池选项与
-/// eMMC 硬件复位引脚选择器，以及无参数的下载信息与硬件复位引脚禁用标记。</para>
+/// Device-control write commands of the XFlash download agent: the meta boot mode and eMMC
+/// hardware-reset-pin selectors the reference documents, plus the parameterless download-info and
+/// hardware-reset-pin disable markers.
+/// <para>XFlash 下载代理的器件控制写入命令：参考记载的 meta 启动模式与 eMMC 硬件复位引脚选择器，
+/// 以及无参数的下载信息与硬件复位引脚禁用标记。</para>
 /// </summary>
 /// <remarks>
 /// <para>Every SET exchange mirrors <c>send_devctrl</c> with a parameter
@@ -81,15 +48,11 @@ public enum MtkXFlashBatteryOption
 /// </remarks>
 public sealed partial class MtkSession
 {
-    private const uint XFlashSetBatteryOpt = 0x020002;
-    private const uint XFlashSetChecksumLevel = 0x020003;
-    private const uint XFlashSetResetKey = 0x020004;
     private const uint XFlashSetMetaBootMode = 0x020006;
     private const uint XFlashSetEmmcHwResetPin = 0x020007;
     private const uint XFlashStartDlInfo = 0x080001;
     private const uint XFlashEndDlInfo = 0x080002;
     private const uint XFlashDisableEmmcHwResetPin = 0x080004;
-    private const uint XFlashDefaultResetKey = 0x68;
 
     /// <summary>Sets the meta boot mode flag triple through the documented control code.
     /// <para>通过已记载的控制码设置 meta 启动模式标志三元组。</para></summary>
@@ -132,100 +95,6 @@ public sealed partial class MtkSession
         };
         return SetXFlashDeviceControlParameterAsync(XFlashSetMetaBootMode,
             [bootMode, connectionType, 0], "xflash-set-meta", $"Meta boot mode {mode}.", cancellationToken);
-    }
-
-    /// <summary>Sets the boot-key reset combination through the documented control code.
-    /// <para>通过已记载的控制码设置开机按键复位组合。</para></summary>
-    /// <remarks>
-    /// The payload is one little-endian word, defaulting to the reference 0x68 two-key combination
-    /// (Library/DA/xflash/xflash_lib.py:207-209).
-    /// 载荷为一个小端字，默认取参考的双键组合 0x68（Library/DA/xflash/xflash_lib.py:207-209）。
-    /// </remarks>
-    /// <param name="resetKey">The reset key combination value; the reference default is 0x68.
-    /// <para>复位按键组合值；参考默认为 0x68。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>A task that completes after the agent acknowledged the value.
-    /// <para>在代理确认该值后完成的任务。</para></returns>
-    /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
-    /// <para>未附加 XFlash 一阶段代理。</para></exception>
-    /// <exception cref="MtkProtocolException">A status was rejected; the XFlash family faults.
-    /// <para>某状态被拒绝；XFlash 家族进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public Task SetXFlashResetKeyAsync(uint resetKey = XFlashDefaultResetKey,
-        CancellationToken cancellationToken = default) =>
-        SetXFlashDeviceControlWordAsync(XFlashSetResetKey, resetKey, "xflash-set-reset-key",
-            $"Reset key 0x{resetKey:X}.", cancellationToken);
-
-    /// <summary>Sets the transfer checksum scope through the documented control code.
-    /// <para>通过已记载的控制码设置传输校验范围。</para></summary>
-    /// <remarks>
-    /// The payload is one little-endian word carrying the documented scope values
-    /// (Library/DA/xflash/xflash_lib.py:241-244).
-    /// 载荷为携带已记载范围取值的一个小端字（Library/DA/xflash/xflash_lib.py:241-244）。
-    /// </remarks>
-    /// <param name="level">The checksum scope to request. 要请求的校验范围。</param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>A task that completes after the agent acknowledged the scope.
-    /// <para>在代理确认该校验范围后完成的任务。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="level"/> is not a defined scope;
-    /// no byte was sent. <para><paramref name="level"/> 不是已定义的范围；未发送任何字节。</para></exception>
-    /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
-    /// <para>未附加 XFlash 一阶段代理。</para></exception>
-    /// <exception cref="MtkProtocolException">A status was rejected; the XFlash family faults.
-    /// <para>某状态被拒绝；XFlash 家族进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public Task SetXFlashChecksumLevelAsync(MtkXFlashChecksumLevel level = MtkXFlashChecksumLevel.None,
-        CancellationToken cancellationToken = default)
-    {
-        if (!Enum.IsDefined(level))
-        {
-            throw new ArgumentOutOfRangeException(nameof(level));
-        }
-
-        return SetXFlashDeviceControlWordAsync(XFlashSetChecksumLevel, (uint)level, "xflash-set-checksum-level",
-            $"Checksum level {level}.", cancellationToken);
-    }
-
-    /// <summary>Sets the power-source behaviour through the documented control code.
-    /// <para>通过已记载的控制码设置供电来源行为。</para></summary>
-    /// <remarks>
-    /// The payload is one little-endian word, defaulting to the reference auto selection
-    /// (Library/DA/xflash/xflash_lib.py:246-249).
-    /// 载荷为一个小端字，默认取参考的自动选择（Library/DA/xflash/xflash_lib.py:246-249）。
-    /// </remarks>
-    /// <param name="option">The power-source behaviour to request. 要请求的供电来源行为。</param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>A task that completes after the agent acknowledged the option.
-    /// <para>在代理确认该选项后完成的任务。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="option"/> is not a defined
-    /// option; no byte was sent. <para><paramref name="option"/> 不是已定义的选项；未发送任何字节。</para></exception>
-    /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
-    /// <para>未附加 XFlash 一阶段代理。</para></exception>
-    /// <exception cref="MtkProtocolException">A status was rejected; the XFlash family faults.
-    /// <para>某状态被拒绝；XFlash 家族进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public Task SetXFlashBatteryOptionAsync(MtkXFlashBatteryOption option = MtkXFlashBatteryOption.Auto,
-        CancellationToken cancellationToken = default)
-    {
-        if (!Enum.IsDefined(option))
-        {
-            throw new ArgumentOutOfRangeException(nameof(option));
-        }
-
-        return SetXFlashDeviceControlWordAsync(XFlashSetBatteryOpt, (uint)option, "xflash-set-battery-opt",
-            $"Battery option {option}.", cancellationToken);
     }
 
     /// <summary>Enables or disables the eMMC hardware reset pin through the documented control code.

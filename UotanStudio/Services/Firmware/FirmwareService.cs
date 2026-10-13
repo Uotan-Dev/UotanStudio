@@ -36,34 +36,36 @@ public sealed class FirmwareOpResult
     /// Gets whether the operation succeeded.
     /// <para>获取操作是否成功。</para>
     /// </summary>
+    /// <value>True when the operation succeeded. <para>操作成功时为 true。</para></value>
     public bool Success { get; init; }
 
     /// <summary>
     /// Gets the operation summary.
     /// <para>获取操作摘要。</para>
     /// </summary>
+    /// <value>The summary text describing the outcome. <para>描述结果情况的摘要文本。</para></value>
     public string Summary { get; init; } = string.Empty;
 
     /// <summary>
     /// Gets the list of entry names.
     /// <para>获取条目名称列表。</para>
     /// </summary>
+    /// <value>The entry names reported by the operation. <para>操作上报的条目名称。</para></value>
     public IReadOnlyList<string> Entries { get; init; } = [];
 
     /// <summary>
-    /// Gets the library-side key/value facts carried by the operation, including the filesystem
-    /// equivalence flags; mapping a library result onto this type is the only way those flags reach the host.
-    /// <para>获取操作携带的库侧键值信息，其中包含文件系统等价标记；把库结果映射到本类型是这些标记抵达宿主的唯一途径。</para>
+    /// Gets the key/value facts carried by the operation, including the filesystem equivalence flags.
+    /// <para>获取操作携带的键值信息，其中包含文件系统等价标记。</para>
     /// </summary>
+    /// <value>The metadata keyed by fact name. <para>按事实名称索引的元数据。</para></value>
     public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
 
     /// <summary>
     /// Gets the four-dimension equivalence report parsed from <see cref="Metadata"/>. A dimension whose flag is
-    /// absent or unparsable stays <see cref="FirmwareEquivalenceState.NotEvaluated"/>; this property never turns a
-    /// missing check into an equivalence claim.
-    /// <para>获取依据 <see cref="Metadata"/> 解析出的四维度等价报告。标记缺失或无法解析的维度保持为不评估；
-    /// 本属性绝不会把未执行的检查变成等价声明。</para>
+    /// absent or unparsable stays <see cref="FirmwareEquivalenceState.NotEvaluated"/>.
+    /// <para>获取依据 <see cref="Metadata"/> 解析出的四维度等价报告。标记缺失或无法解析的维度保持为不评估。</para>
     /// </summary>
+    /// <value>The parsed equivalence report. <para>解析得到的等价报告。</para></value>
     public FilesystemEquivalenceReport Equivalence => FilesystemEquivalenceReport.FromMetadata(Metadata);
 
     /// <summary>
@@ -71,18 +73,16 @@ public sealed class FirmwareOpResult
     /// <para>创建失败的操作结果。</para>
     /// </summary>
     /// <param name="summary">Failure summary. <para>失败摘要。</para></param>
+    /// <returns>A failed result carrying that summary. <para>携带该摘要的失败结果。</para></returns>
     public static FirmwareOpResult Fail(string summary) => new() { Success = false, Summary = summary };
 
     /// <summary>
-    /// The single library-result to host-result conversion. Host code must use this instead of building a host
-    /// result field by field, because an ad-hoc conversion silently drops <see cref="Metadata"/> and with it the
-    /// equivalence report the filesystem rebuild produced.
-    /// <para>库结果到宿主结果的唯一转换入口。宿主代码必须使用本方法而不是逐字段自建宿主结果，因为临时编写的
-    /// 转换会悄悄丢弃 <see cref="Metadata"/>，连带丢掉文件系统重建产出的等价报告。</para>
+    /// Converts a library operation result into this result type so metadata survives the mapping.
+    /// <para>把库侧操作结果转换为本结果类型，使元数据在映射中得以保留。</para>
     /// </summary>
     /// <param name="result">Library result to mirror. <para>待映射的库结果。</para></param>
-    /// <returns>A host result carrying the same success flag, summary, entries and metadata.
-    /// <para>携带相同成功标志、摘要、明细行与元数据的宿主结果。</para></returns>
+    /// <returns>The converted result carrying the same success flag, summary, entries and metadata.
+    /// <para>携带相同成功标志、摘要、明细行与元数据的转换结果。</para></returns>
     public static FirmwareOpResult From(UotanStudio.Firmware.Core.FirmwareOpResult result)
         => new()
         {
@@ -105,15 +105,31 @@ public sealed class FirmwareService
     /// Gets the FirmwareService singleton instance.
     /// <para>获取 FirmwareService 单例。</para>
     /// </summary>
+    /// <value>The shared service instance. <para>共享的服务实例。</para></value>
     public static FirmwareService Instance => LazyInstance.Value;
 
     private FirmwareService() { }
 
-    /// <summary>Inspects a Magisk, KernelSU, APatch or LKM package using native parsers.</summary>
+    /// <summary>
+    /// Inspects a root package for the boot patch format and variant it carries.
+    /// <para>检查 root 包所携带的引导补丁格式与变体。</para>
+    /// </summary>
+    /// <param name="packagePath">The root package file path. <para>root 包文件路径。</para></param>
+    /// <param name="cancellationToken">Cancels the inspection before it completes. <para>在完成前取消检查。</para></param>
+    /// <returns>The detected patch format and variant. <para>识别出的补丁格式与变体。</para></returns>
     public Task<BootPatchDetection> DetectBootPatchAsync(string packagePath, CancellationToken cancellationToken = default)
         => new BootPatchService().DetectAsync(packagePath, cancellationToken);
 
-    /// <summary>Applies a root package to a boot image without invoking an external magiskboot executable.</summary>
+    /// <summary>
+    /// Applies a root package to a boot image with in-process patching and writes the result to a new file.
+    /// <para>以进程内补丁将 root 包应用到 boot 镜像，并把结果写入新文件。</para>
+    /// </summary>
+    /// <param name="packagePath">The root package file path. <para>root 包文件路径。</para></param>
+    /// <param name="bootPath">The source boot image path. <para>源 boot 镜像路径。</para></param>
+    /// <param name="outputPath">The patched boot image path. <para>打过补丁的 boot 镜像路径。</para></param>
+    /// <param name="options">Patch options; <see langword="null"/> uses the defaults. <para>补丁选项；空值使用默认设置。</para></param>
+    /// <param name="cancellationToken">Cancels patching and publication. <para>取消补丁与发布。</para></param>
+    /// <returns>The patch outcome with its summary and outputs. <para>包含摘要与输出项的补丁结果。</para></returns>
     public Task<BootPatchResult> PatchBootAsync(string packagePath, string bootPath, string outputPath,
         BootPatchOptions? options = null, CancellationToken cancellationToken = default)
         => new BootPatchService().PatchAsync(packagePath, bootPath, outputPath, options, cancellationToken);
@@ -152,8 +168,8 @@ public sealed class FirmwareService
     /// Lists all entry names in a CPIO/TAR archive without unpacking to disk.
     /// <para>列举 CPIO/TAR 归档的全部条目名称（不解包到磁盘）。</para>
     /// </summary>
-    /// <param name="archivePath">The archive file path.</param>
-    /// <returns>Operation result, Entries is the entry name list.</returns>
+    /// <param name="archivePath">The archive file path. <para>归档文件路径。</para></param>
+    /// <returns>Operation result whose entries are the archive member names. <para>操作结果，Entries 为归档成员名。</para></returns>
     public async Task<FirmwareOpResult> ListCpioEntriesAsync(string archivePath)
     {
         try
@@ -172,13 +188,13 @@ public sealed class FirmwareService
 
     /// <summary>
     /// Replaces an extraction directory after staging a CPIO/TAR archive, restoring its contents on failure.
-    /// <para>暂存 CPIO/TAR 解包结果后替换输出目录，失败时恢复既有内容；底层提取 API 仍使用合并语义。</para>
+    /// <para>暂存 CPIO/TAR 解包结果后替换输出目录，失败时恢复既有内容。</para>
     /// </summary>
-    /// <param name="archivePath">The archive file path.</param>
-    /// <param name="outputDirectory">The output directory.</param>
-    /// <param name="overwrite">Whether to replace a nonempty output directory.</param>
-    /// <param name="cancellationToken">Cancels extraction before metadata publication.</param>
-    /// <returns>Operation result.</returns>
+    /// <param name="archivePath">The archive file path. <para>归档文件路径。</para></param>
+    /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
+    /// <param name="overwrite">Whether to replace a nonempty output directory. <para>是否替换非空输出目录。</para></param>
+    /// <param name="cancellationToken">Cancels extraction before metadata publication. <para>在元数据发布前取消提取。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> UnpackCpioAsync(string archivePath, string outputDirectory,
         bool overwrite = true, CancellationToken cancellationToken = default)
     {
@@ -255,10 +271,10 @@ public sealed class FirmwareService
     /// Packs a directory with verified atomic publication, restoring captured archive headers and links when available.
     /// <para>校验后原子发布目录归档；有重打包元数据时恢复归档头与链接，无元数据时使用目录构建器默认值。</para>
     /// </summary>
-    /// <param name="inputDirectory">The input directory.</param>
-    /// <param name="outputArchivePath">The output archive path.</param>
-    /// <param name="cancellationToken">Cancels enumeration, payload copying and validation before publication.</param>
-    /// <returns>Operation result.</returns>
+    /// <param name="inputDirectory">The input directory. <para>输入目录。</para></param>
+    /// <param name="outputArchivePath">The output archive path. <para>输出归档路径。</para></param>
+    /// <param name="cancellationToken">Cancels enumeration, payload copying and validation before publication. <para>在发布前取消枚举、数据复制与校验。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> PackCpioAsync(string inputDirectory, string outputArchivePath, CancellationToken cancellationToken = default)
     {
         using var scope = RepackMetadata.UseContext(CaptureOperationContext(inputDirectory));
@@ -271,11 +287,11 @@ public sealed class FirmwareService
     /// Extracts specified partitions (or all partitions) from an Android OTA payload.bin to an output directory.
     /// <para>从 Android OTA payload.bin 提取指定分区（或全部分区）到输出目录。</para>
     /// </summary>
-    /// <param name="payloadPath">The payload.bin file path.</param>
-    /// <param name="outputDirectory">The output directory.</param>
-    /// <param name="partitionName">Target partition name; null or empty means all partitions.</param>
+    /// <param name="payloadPath">The Android OTA payload file path. <para>Android OTA payload 文件路径。</para></param>
+    /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
+    /// <param name="partitionName">Target partition name; empty means all partitions. <para>目标分区名；为空表示全部分区。</para></param>
     /// <param name="cancellationToken">Cancels metadata reads, extraction and metadata publication. <para>取消元数据读取、提取与元数据发布。</para></param>
-    /// <returns>Operation result.</returns>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
     public Task<FirmwareOpResult> ExtractPayloadAsync(string payloadPath, string outputDirectory,
         string? partitionName = null, CancellationToken cancellationToken = default)
         => CompleteUnpackAsync(payloadPath, outputDirectory,
@@ -317,19 +333,14 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Verifies an Android Verified Boot VBMeta image: parses the header, extracts descriptors,
-    /// recomputes the embedded digest and verifies the RSASSA-PSS / PKCS#1 v1.5 signature with the
-    /// key embedded in the image or with a user-supplied trusted public key.
-    /// <para>校验 Android Verified Boot VBMeta 镜像：解析头部、提取描述符、重新计算内嵌摘要，
-    /// 并使用镜像内嵌密钥或用户提供的受信任公钥验证 RSASSA-PSS / PKCS#1 v1.5 签名。</para>
+    /// Verifies an Android Verified Boot VBMeta image by recomputing its embedded digest and checking its signature.
+    /// <para>通过重算内嵌摘要并校验签名来验证 Android Verified Boot VBMeta 镜像。</para>
     /// </summary>
-    /// <param name="vbmetaPath">The vbmeta.img file path.</param>
-    /// <param name="publicKeyPath">Optional trusted public key file (AVB <c>extract_public_key</c> blob, PEM or DER);
-    /// when omitted the public key embedded in the vbmeta auxiliary data block is used.
-    /// <para>可选的受信任公钥文件（AVB <c>extract_public_key</c> 数据块、PEM 或 DER）；
-    /// 省略时使用 vbmeta 辅助数据块中内嵌的公钥。</para></param>
+    /// <param name="vbmetaPath">The VBMeta image file path. <para>VBMeta 镜像文件路径。</para></param>
+    /// <param name="publicKeyPath">An optional trusted public key file in AVB, PEM or DER form; the embedded key is used when omitted.
+    /// <para>可选的受信任公钥文件（AVB、PEM 或 DER 形式），省略时使用内嵌公钥。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>Operation result, Summary contains the signature validity and descriptor summary.</returns>
+    /// <returns>Operation result whose summary reports signature validity and descriptors. <para>操作结果，摘要报告签名有效性与描述符。</para></returns>
     public async Task<FirmwareOpResult> VerifyAvbAsync(string vbmetaPath, string? publicKeyPath = null, CancellationToken cancellationToken = default)
     {
         try
@@ -390,12 +401,8 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Signs an Android Verified Boot VBMeta image with the given RSA private key: rebuilds the header,
-    /// embeds the supplied hash descriptors and the AVB-format public key, and streams the signed image
-    /// to the output path. The output can be verified by <see cref="AvbVerifier.VerifyVBMeta"/>.
-    /// <para>使用给定 RSA 私钥对 Android Verified Boot VBMeta 镜像签名：重建头部、嵌入给定哈希
-    /// 描述符与 AVB 格式公钥，并将签名镜像流式写出到输出路径。输出可被
-    /// <see cref="AvbVerifier.VerifyVBMeta"/> 验证。</para>
+    /// Signs an Android Verified Boot VBMeta image with an RSA private key, embedding the given hash descriptors.
+    /// <para>使用 RSA 私钥对 Android Verified Boot VBMeta 镜像签名，并嵌入给定的哈希描述符。</para>
     /// </summary>
     /// <param name="vbmetaPath">The source VBMeta image (header metadata is preserved).
     /// <para>源 VBMeta 镜像（保留头部元数据）。</para></param>
@@ -510,11 +517,8 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Generates a fresh APK signing key pair and self-signed certificate (optionally an
-    /// encrypted private key and a PFX bundle). Existing files are never overwritten; the
-    /// material is round-trip verified through the APK signer's key loader before commit.
-    /// <para>生成全新的 APK 签名密钥对与自签证书（可选加密私钥与 PFX 合并输出）。绝不覆盖已存在的文件；
-    /// 材料提交前先经 APK 签名器的密钥加载器回环自检。</para>
+    /// Generates a fresh APK signing key pair and self-signed certificate, round-trip verified before commit.
+    /// <para>生成全新的 APK 签名密钥对与自签证书，提交前先经回环自检。</para>
     /// </summary>
     /// <param name="options">Generation options (key type, subject, validity, password).
     /// <para>生成选项（密钥类型、主题、有效期、密码）。</para></param>
@@ -539,12 +543,8 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// <para>一键禁用 VBMeta 镜像的 AVB 校验：置位 hashtree/verification 两个禁用标志并清零认证块
-    /// （见 <see cref="AvbSigner.DisableVbmetaVerificationAsync"/>），无需私钥。输出经临时文件原子提交。</para>
-    /// Disables AVB verification on a VBMeta image in one step: sets the hashtree/verification
-    /// disable flags and zeroes the authentication block (see
-    /// <see cref="AvbSigner.DisableVbmetaVerificationAsync"/>); no private key required. The output
-    /// is committed atomically via a temp file.
+    /// Disables AVB verification on a VBMeta image by setting the disable flags and zeroing the authentication block.
+    /// <para>通过置位禁用标志并清零认证块，在 VBMeta 镜像上禁用 AVB 校验。</para>
     /// </summary>
     /// <param name="vbmetaPath">The source VBMeta image. <para>源 VBMeta 镜像。</para></param>
     /// <param name="outputPath">The patched output path (must differ from the source).
@@ -585,12 +585,8 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Adds an AVB v2 hash footer to a partition image with the given RSA private key: streams the
-    /// image out while computing its digest, aligns to 4K, appends a signed self-contained VBMeta
-    /// image and the standard footer. The output can be verified by <see cref="AvbVerifier.Verify"/>.
-    /// <para>使用给定 RSA 私钥为分区镜像追加 AVB v2 哈希尾部：流式复制镜像的同时计算其摘要，
-    /// 对齐到 4K，追加签名后的自包含 VBMeta 镜像与标准尾部。输出可被
-    /// <see cref="AvbVerifier.Verify"/> 验证。</para>
+    /// Adds an AVB v2 hash footer to a partition image with the given RSA private key and a signed VBMeta block.
+    /// <para>使用给定 RSA 私钥与已签名 VBMeta 块，为分区镜像追加 AVB v2 哈希尾部。</para>
     /// </summary>
     /// <param name="imagePath">The partition image to sign. <para>要签名的分区镜像。</para></param>
     /// <param name="partitionName">The target partition name. <para>目标分区名称。</para></param>
@@ -665,11 +661,10 @@ public sealed class FirmwareService
 
     /// <summary>Verifies an explicitly mapped AVB chain without accessing a device.
     /// <para>使用显式分区映射离线验证 AVB 链，不访问设备。</para></summary>
-    /// <param name="options">Exact partition paths, an optional caller-supplied trusted AVB root public-key blob,
-    /// and optional externally supplied rollback minima. Omitting a trust or rollback policy leaves that check unverified.
-    /// <para>精确分区路径、可选的调用方可信 AVB 根公钥数据块，以及可选的外部回滚下限；省略策略时相应检查保持未验证。</para></param>
-    /// <param name="cancellationToken">Cancels image reads and verification; cancellation propagates.
-    /// <para>取消镜像读取与验证；取消异常向调用方传播。</para></param>
+    /// <param name="options">Exact partition paths with an optional trusted AVB root public key and rollback minima.
+    /// <para>精确分区路径，附可选的受信任 AVB 根公钥与回滚下限。</para></param>
+    /// <param name="cancellationToken">Cancels image reads and verification.
+    /// <para>取消镜像读取与验证。</para></param>
     /// <returns>Per-image and per-partition checks, trust and rollback status, and diagnostics.
     /// <para>逐镜像和逐分区检查、信任与回滚状态以及诊断信息。</para></returns>
     /// <exception cref="ArgumentNullException">The options or required mapping is null.
@@ -683,14 +678,8 @@ public sealed class FirmwareService
         => AvbChainVerifier.VerifyAsync(options, cancellationToken);
 
     /// <summary>
-    /// Unpacks a boot or vendor_boot image into a component directory: <c>kernel</c>, <c>ramdisk</c>
-    /// (raw) and <c>ramdisk.cpio</c> (decompressed per <see cref="BootCompressor"/> detection),
-    /// <c>second</c>, <c>dtb</c>, <c>dtbo</c>, <c>signature</c>, plus a <c>metadata.json</c> that
-    /// <see cref="PackBootAsync"/> reads back to restore the original header configuration.
-    /// <para>将 boot 或 vendor_boot 镜像解包到组件目录：<c>kernel</c>、<c>ramdisk</c>（原始）与
-    /// <c>ramdisk.cpio</c>（按 <see cref="BootCompressor"/> 检测结果解压）、<c>second</c>、
-    /// <c>dtb</c>、<c>dtbo</c>、<c>signature</c>，以及可供 <see cref="PackBootAsync"/> 读回的
-    /// <c>metadata.json</c>（用于恢复原始头部配置并重打包）。</para>
+    /// Unpacks a boot or vendor_boot image into a component directory with the metadata needed to repack it.
+    /// <para>将 boot 或 vendor_boot 镜像解包为组件目录，并写出重打包所需的元数据。</para>
     /// </summary>
     /// <param name="bootPath">The boot / vendor_boot image file path. <para>boot / vendor_boot 镜像文件路径。</para></param>
     /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
@@ -701,6 +690,11 @@ public sealed class FirmwareService
 
     /// <summary>Extracts Boot components and metadata using one explicit context.
     /// <para>使用固定上下文提取 Boot 组件和元数据。</para></summary>
+    /// <param name="bootPath">The boot image file path. <para>boot 镜像文件路径。</para></param>
+    /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="context">The repack metadata context to apply. <para>要应用的重打包元数据上下文。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
     public Task<FirmwareOpResult> UnpackBootAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken,
         RepackMetadataContext context)
         => CompleteUnpackAsync(bootPath, outputDirectory, () => UnpackBootCoreAsync(bootPath, outputDirectory, cancellationToken),
@@ -712,9 +706,6 @@ public sealed class FirmwareService
         {
             Directory.CreateDirectory(outputDirectory);
 
-            // 流式读取头部 8 字节判定镜像类型，避免整个镜像读入内存。
-            // Read the 8-byte header streamingly to decide the image type instead of loading the
-            // whole image into memory.
             var magic = await ReadHeaderMagicAsync(bootPath, cancellationToken);
             switch (magic)
             {
@@ -772,6 +763,11 @@ public sealed class FirmwareService
 
     /// <summary>Reads Boot configuration and packs with a fixed metadata context.
     /// <para>使用固定元数据上下文读取 Boot 配置并打包。</para></summary>
+    /// <param name="inputDirectory">The unpacked component directory. <para>已解包的组件目录。</para></param>
+    /// <param name="outputPath">The output boot image path. <para>输出 boot 镜像路径。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="context">The repack metadata context to apply. <para>要应用的重打包元数据上下文。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> PackBootAsync(string inputDirectory, string outputPath, CancellationToken cancellationToken,
         RepackMetadataContext context)
     {
@@ -787,9 +783,12 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Reads the 8-byte magic of a boot / vendor_boot image without loading the whole file.
-    /// <para>只读取 boot / vendor_boot 镜像的 8 字节魔数，不加载整个文件。</para>
+    /// Reads the 8-byte magic of a boot or vendor_boot image without loading the whole file.
+    /// <para>只读取 boot 或 vendor_boot 镜像的 8 字节魔数，不加载整个文件。</para>
     /// </summary>
+    /// <param name="bootPath">The boot image file path. <para>boot 镜像文件路径。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The decoded magic string of the header. <para>解码后的头部魔数字符串。</para></returns>
     private static async Task<string> ReadHeaderMagicAsync(string bootPath, CancellationToken cancellationToken)
     {
         using var fs = new FileStream(bootPath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -817,6 +816,8 @@ public sealed class FirmwareService
     /// Detects whether a file starts with the Android sparse image magic.
     /// <para>检测文件是否以 Android sparse 镜像魔数开头。</para>
     /// </summary>
+    /// <param name="path">The file path to probe. <para>待探测的文件路径。</para></param>
+    /// <returns>True when the sparse magic is present. <para>存在 sparse 魔数时为 true。</para></returns>
     private static bool IsSparseImage(string path)
     {
         try
@@ -838,6 +839,10 @@ public sealed class FirmwareService
     /// <para>从 <paramref name="source"/> 向 <paramref name="target"/> 精确复制 <paramref name="length"/> 字节，
     /// 遵循取消令牌，过早到达流尾时抛出 <see cref="EndOfStreamException"/>。</para>
     /// </summary>
+    /// <param name="source">The stream to read from. <para>读取来源流。</para></param>
+    /// <param name="target">The stream to write to. <para>写入目标流。</para></param>
+    /// <param name="length">The exact byte count to copy. <para>要复制的精确字节数。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     private static void CopyRange(Stream source, Stream target, long length, CancellationToken cancellationToken)
     {
         var buffer = new byte[1024 * 1024];
@@ -859,8 +864,9 @@ public sealed class FirmwareService
     /// Reads metadata of an Oppo firmware package (auto-detecting OFP/OPS/OZIP), outputting format and entry count.
     /// <para>读取 Oppo 固件包（自动检测 OFP/OPS/OZIP）的元数据，输出格式与条目数。</para>
     /// </summary>
-    /// <param name="firmwarePath">The firmware package path.</param>
-    /// <returns>Operation result.</returns>
+    /// <param name="firmwarePath">The firmware package path. <para>固件包路径。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result whose summary reports the format and entry count. <para>操作结果，摘要报告格式与条目数。</para></returns>
     public async Task<FirmwareOpResult> ReadOppoMetadataAsync(string firmwarePath, CancellationToken cancellationToken = default)
     {
         try
@@ -880,10 +886,11 @@ public sealed class FirmwareService
     /// Unpacks an Oppo firmware package (auto-detecting OFP/OPS/OZIP) to an output directory.
     /// <para>解包 Oppo 固件包（自动检测 OFP/OPS/OZIP）到输出目录。</para>
     /// </summary>
-    /// <param name="firmwarePath">The firmware package path.</param>
-    /// <param name="outputDirectory">The output directory.</param>
-    /// <param name="overwrite">Whether to overwrite existing files.</param>
-    /// <returns>Operation result.</returns>
+    /// <param name="firmwarePath">The firmware package path. <para>固件包路径。</para></param>
+    /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
+    /// <param name="overwrite">Whether to overwrite existing files. <para>是否覆盖已存在的文件。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
     public Task<FirmwareOpResult> ExtractOppoAsync(string firmwarePath, string outputDirectory, bool overwrite = true, CancellationToken cancellationToken = default)
         => CompleteUnpackAsync(firmwarePath, outputDirectory, () => ExtractOppoCoreAsync(firmwarePath, outputDirectory, overwrite, cancellationToken), cancellationToken, new OppoFormatHandler(), overwrite, context: CaptureOperationContext(outputDirectory));
 
@@ -910,9 +917,10 @@ public sealed class FirmwareService
     /// Verifies a file's SHA256, for firmware integrity checking.
     /// <para>校验文件 SHA256，用于固件完整性核对。</para>
     /// </summary>
-    /// <param name="filePath">The file path.</param>
-    /// <param name="expectedHash">Expected SHA256 hex string; empty returns only computed value.</param>
-    /// <returns>Operation result, Summary is computed value or comparison result.</returns>
+    /// <param name="filePath">The file path. <para>文件路径。</para></param>
+    /// <param name="expectedHash">Expected SHA256 hex string; empty reports only the computed value. <para>预期的 SHA256 十六进制串，为空时仅报告计算值。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result whose summary is the computed value or the comparison outcome. <para>操作结果，摘要为计算值或比对结论。</para></returns>
     public async Task<FirmwareOpResult> VerifyChecksumAsync(string filePath, string? expectedHash = null, CancellationToken cancellationToken = default)
     {
         try
@@ -934,11 +942,8 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Unpacks the logical partition images from an Android super (LP) image into an output directory by
-    /// parsing the LP metadata (via <see cref="MetadataReader"/>) and copying each partition's linear extent
-    /// range out of the image file. Sparse super images are first expanded to a temporary raw file.
-    /// <para>解析 Android super（LP）镜像的 LP 元数据（经 <see cref="MetadataReader"/>），并按各分区线性
-    /// extent 范围从镜像文件复制出逻辑分区镜像到输出目录。稀疏格式的 super 镜像先展开为临时 raw 文件。</para>
+    /// Unpacks the logical partition images from an Android super image by parsing its LP metadata and copying extent ranges.
+    /// <para>解析 Android super 镜像的 LP 元数据，并按各分区线性 extent 范围复制出逻辑分区镜像。</para>
     /// </summary>
     /// <param name="superPath">The super image file path. <para>super 镜像文件路径。</para></param>
     /// <param name="outputDirectory">The output directory for the extracted partition images. <para>分区镜像输出目录。</para></param>
@@ -998,9 +1003,14 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Merges an ordered set of Android sparse chunks into one raw image. The destination is replaced
-    /// atomically, and source chunks are deleted only after the merged image has been fully published.
+    /// Merges an ordered set of Android sparse chunks into one raw image published atomically.
+    /// <para>将一组按序的 Android sparse 分块合并为单个原子发布的 raw 镜像。</para>
     /// </summary>
+    /// <param name="chunkPaths">The ordered chunk file paths. <para>按序的分块文件路径。</para></param>
+    /// <param name="outputPath">The destination image path. <para>目标镜像路径。</para></param>
+    /// <param name="deleteSources">When set, source chunks are deleted after publication. <para>置位时源分块在发布后删除。</para></param>
+    /// <param name="cancellationToken">Cancels the merge before publication. <para>在发布前取消合并。</para></param>
+    /// <returns>Operation result whose entries list the merged chunk names. <para>操作结果，Entries 列出已合并的分块名。</para></returns>
     public async Task<FirmwareOpResult> MergeSparseChunksAsync(
         IReadOnlyList<string> chunkPaths,
         string outputPath,
@@ -1052,16 +1062,14 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Restores a <c>*.sparsechunk.NN</c> flash set into one image. Raw slices are concatenated and
-    /// self-contained sparse pieces keep their absolute chunk addresses while gap chunks are re-emitted.
-    /// The destination is published atomically; sources are deleted only when
-    /// <paramref name="deleteSources"/> is set and the merge already succeeded.
+    /// Restores a numbered sparsechunk flash set into one image published atomically from its ordered pieces.
+    /// <para>将带编号的 sparsechunk 分块集合还原为单个镜像，并按有序分块原子发布。</para>
     /// </summary>
-    /// <param name="selectedChunkPath">Any numbered member of the set; siblings are resolved from its name.</param>
-    /// <param name="outputPath">Destination image path.</param>
-    /// <param name="deleteSources">When true, removes the input pieces after a successful merge.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Operation result; <c>Entries</c> lists the merged piece file names in merge order.</returns>
+    /// <param name="selectedChunkPath">Any numbered member of the set, whose siblings are resolved from its name. <para>集合中任意带编号成员，同级分块按其名称解析。</para></param>
+    /// <param name="outputPath">The destination image path. <para>目标镜像路径。</para></param>
+    /// <param name="deleteSources">When set, input pieces are removed after a successful merge. <para>置位时，输入分块在合并成功后删除。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result whose entries list the merged piece names in merge order. <para>操作结果，Entries 按合并顺序列出已合并分块名。</para></returns>
     public async Task<FirmwareOpResult> RestoreSparseChunksAsync(string selectedChunkPath, string outputPath,
         bool deleteSources = false, CancellationToken cancellationToken = default)
     {
@@ -1100,15 +1108,14 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Splits a raw image into fixed-size <c>&lt;basePath&gt;.sparsechunk.NN</c> pieces, each published
-    /// atomically. Self-contained sparse inputs are rejected by the library and must be re-split through
-    /// the sparse converter so every piece keeps the full logical geometry.
+    /// Splits a raw image into fixed-size numbered sparsechunk pieces, each published atomically.
+    /// <para>将 raw 镜像切分为固定大小的带编号 sparsechunk 分块，每块原子发布。</para>
     /// </summary>
-    /// <param name="inputPath">Raw image to slice.</param>
-    /// <param name="basePath">Piece name prefix; the two-digit index is appended after <c>.sparsechunk.</c>.</param>
-    /// <param name="chunkSizeBytes">Physical bytes per piece except the final remainder; must be at least 1.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Operation result; <c>Entries</c> lists the produced piece file names in merge order.</returns>
+    /// <param name="inputPath">The raw image to slice. <para>待切分的 raw 镜像。</para></param>
+    /// <param name="basePath">The piece name prefix followed by the two-digit index. <para>分块名称前缀，其后接两位编号。</para></param>
+    /// <param name="chunkSizeBytes">Physical bytes per piece except the final remainder; at least 1. <para>除末尾余量外每块的物理字节数，至少为 1。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result whose entries list the produced piece names in merge order. <para>操作结果，Entries 按合并顺序列出生成的分块名。</para></returns>
     public async Task<FirmwareOpResult> SplitSparseChunksAsync(string inputPath, string basePath,
         long chunkSizeBytes, CancellationToken cancellationToken = default)
     {
@@ -1134,16 +1141,13 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Unpacks an Android sparse image to a directory: when the inner content is a filesystem
-    /// (ext4/erofs/f2fs) it is cascade-unpacked via the corresponding streaming parser, otherwise
-    /// it falls back to a plain raw conversion. A thin wrapper over
-    /// <see cref="SparseFormatHandler.UnpackAsync"/>.
-    /// <para>将 Android sparse 镜像解包到目录：内部内容为文件系统（ext4/erofs/f2fs）时通过对应
-    /// 的流式解析器级联解包，否则回退为普通 raw 转换。<see cref="SparseFormatHandler.UnpackAsync"/> 的薄封装。</para>
+    /// Unpacks an Android sparse image to a directory, cascade-unpacking an inner filesystem or falling back to raw conversion.
+    /// <para>将 Android sparse 镜像解包到目录，内层文件系统级联解包，否则回退为 raw 转换。</para>
     /// </summary>
     /// <param name="sparsePath">The sparse image file path. <para>稀疏镜像文件路径。</para></param>
     /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="byteProgress">Optional filesystem byte-progress reporter. <para>可选的文件系统字节进度上报器。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> UnpackSparseImageAsync(string sparsePath, string outputDirectory, CancellationToken cancellationToken = default, IProgress<FileSystemByteProgress>? byteProgress = null)
     {
@@ -1153,18 +1157,15 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Unpacks a filesystem image (ext4/erofs/f2fs) to a directory via the matching streaming parser.
-    /// The format is auto-detected from the image magic bytes; an unsupported or unrecognized image
-    /// returns a failed result without writing output.
-    /// <para>将文件系统镜像（ext4/erofs/f2fs）通过对应的流式解析器解包到目录。格式按镜像魔数自动
-    /// 识别；不支持或未识别的镜像返回失败结果且不写出文件。</para>
+    /// Unpacks an ext4, EROFS or F2FS image to a directory with the matching streaming parser, failing without output otherwise.
+    /// <para>用匹配的流式解析器将 ext4、EROFS 或 F2FS 镜像解包到目录，其余镜像失败且不写出文件。</para>
     /// </summary>
     /// <param name="imagePath">The filesystem image file path. <para>文件系统镜像文件路径。</para></param>
     /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
     /// <param name="progress">Optional progress reporter as (processed file count, total file count). <para>可选进度回调，值为 (已处理文件数, 文件总数)。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <param name="byteProgress">Optional filesystem byte-progress reporter.</param>
-    /// <param name="erofsExtraDevicePaths">EROFS device images in device-table order, when required.</param>
+    /// <param name="byteProgress">Optional filesystem byte-progress reporter. <para>可选的文件系统字节进度上报器。</para></param>
+    /// <param name="erofsExtraDevicePaths">EROFS device images in device-table order, when required. <para>需要时按设备表顺序给出的 EROFS 设备镜像。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> UnpackFileSystemImageAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default, IProgress<FileSystemByteProgress>? byteProgress = null, IReadOnlyList<string>? erofsExtraDevicePaths = null)
     {
@@ -1198,8 +1199,6 @@ public sealed class FirmwareService
                 Directory.CreateDirectory(outputDirectory);
                 var header = FormatDetector.ReadHeader(imagePath, 1082);
 
-                // ext4：魔数 0xEF53 位于偏移 1080。
-                // ext4: magic 0xEF53 at offset 1080.
                 if (header.Length >= 1082
                     && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
                 {
@@ -1213,8 +1212,6 @@ public sealed class FirmwareService
                     };
                 }
 
-                // erofs：魔数 0xE0F5E1E2 位于偏移 1024。
-                // erofs: magic 0xE0F5E1E2 at offset 1024.
                 if (header.Length >= 1028
                     && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xE0F5E1E2)
                 {
@@ -1229,8 +1226,6 @@ public sealed class FirmwareService
                     };
                 }
 
-                // f2fs：魔数 0xF2F52010 位于偏移 1024。
-                // f2fs: magic 0xF2F52010 at offset 1024.
                 if (header.Length >= 1028
                     && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xF2F52010)
                 {
@@ -1254,18 +1249,11 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Writes an Android OTA v4 DAT image pair (a thin wrapper over <see cref="DatWriter"/>): the input raw
-    /// image is converted into a <c>.new.dat</c> data file plus a derived <c>.transfer.list</c>. Note that
-    /// <see cref="DatWriter"/> consumes a raw image (not a transfer list), so the <paramref name="transferListPath"/>
-    /// parameter is the source raw image path; <paramref name="outputPath"/> is the <c>.new.dat</c> output and the
-    /// <c>.transfer.list</c> path is derived from it.
-    /// <para>写出 Android OTA v4 DAT 镜像对（<see cref="DatWriter"/> 的薄封装）：将输入 raw 镜像转为
-    /// <c>.new.dat</c> 数据文件与推导出的 <c>.transfer.list</c>。注意 <see cref="DatWriter"/> 的输入是
-    /// 原始镜像（而非 transfer list），因此 <paramref name="transferListPath"/> 实为源镜像路径，
-    /// <paramref name="outputPath"/> 为 <c>.new.dat</c> 输出，<c>.transfer.list</c> 路径由它推导。</para>
+    /// Writes an Android OTA v4 DAT image pair from a raw image as its data file plus the derived transfer list.
+    /// <para>由原始镜像写出 Android OTA v4 DAT 镜像对，即数据文件与推导出的传输清单。</para>
     /// </summary>
-    /// <param name="transferListPath">The source raw image file path (the DAT pair is derived from it). <para>源原始镜像文件路径（DAT 镜像对由它生成）。</para></param>
-    /// <param name="outputPath">The output <c>.new.dat</c> file path. <para>输出 <c>.new.dat</c> 文件路径。</para></param>
+    /// <param name="transferListPath">The source raw image path from which the DAT pair is derived. <para>用于推导 DAT 镜像对的源原始镜像路径。</para></param>
+    /// <param name="outputPath">The output DAT data file path; the transfer list path derives from it. <para>输出 DAT 数据文件路径，传输清单路径由它推导。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> WriteDatAsync(string transferListPath, string outputPath, CancellationToken cancellationToken = default)
@@ -1299,8 +1287,8 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Inspects a numbered DAT or TWRP volume set without importing it.
-    /// <para>检查带编号的 DAT 或 TWRP 卷集合，但不执行导入。</para>
+    /// Inspects a numbered DAT or recovery backup volume set without importing it.
+    /// <para>检查带编号的 DAT 或 recovery 备份卷集合，但不执行导入。</para>
     /// </summary>
     /// <param name="selectedPath">Any member of the volume set. <para>卷集合中的任意成员。</para></param>
     /// <param name="cancellationToken">Cancels inspection before it starts. <para>在检查开始前取消。</para></param>
@@ -1312,8 +1300,8 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Imports numbered DAT or TWRP volumes to one validated artifact without changing existing output on failure.
-    /// <para>将带编号的 DAT 或 TWRP 卷导入为单个经校验的工件，失败时不更改现有输出。</para>
+    /// Imports numbered DAT or recovery backup volumes to one validated artifact without changing existing output on failure.
+    /// <para>将带编号的 DAT 或 recovery 备份卷导入为单个经校验的工件，失败时不更改现有输出。</para>
     /// </summary>
     /// <param name="selectedPath">Any numbered source volume. <para>任意带编号的源卷。</para></param>
     /// <param name="outputPath">Output artifact path. <para>输出工件路径。</para></param>
@@ -1385,19 +1373,20 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Builds an Android super (logical partition) image from a set of raw/sparse partition images:
-    /// constructs LP metadata via <see cref="MetadataBuilder"/>, writes the metadata into the reserved
-    /// area, lays out the partition data at the linear extent offsets, then sparsifies the whole image.
-    /// <para>从一组 raw/sparse 分区镜像构建 Android super（逻辑分区）镜像：通过
-    /// <see cref="MetadataBuilder"/> 构建 LP 元数据，将元数据写入保留区，按线性 extent 偏移排布分区数据，
-    /// 最后将整镜像转为 sparse 格式。</para>
+    /// Builds an Android super image from raw or sparse partition images by writing LP metadata and laying out partition data.
+    /// <para>由 raw 或 sparse 分区镜像构建 Android super 镜像，写入 LP 元数据并排布分区数据。</para>
     /// </summary>
     /// <param name="partitions">The partitions (name + source image path). <para>分区（名称 + 源镜像路径）。</para></param>
     /// <param name="outputPath">The output super image path. <para>输出 super 镜像路径。</para></param>
     /// <param name="deviceSize">The total device (super) size in bytes. <para>设备（super）总大小（字节）。</para></param>
     /// <param name="groupName">The partition group name. <para>分区组名称。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>Operation result.</returns>
+    /// <param name="metadataSize">The LP metadata area size in bytes. <para>LP 元数据区的字节大小。</para></param>
+    /// <param name="slots">The number of metadata slots. <para>元数据槽位数量。</para></param>
+    /// <param name="blockSize">The block size in bytes. <para>块大小（字节）。</para></param>
+    /// <param name="sparse">Whether to sparsify the produced image. <para>是否将产出镜像转为 sparse 格式。</para></param>
+    /// <param name="virtualAb">Whether to mark the image as virtual A/B. <para>是否将镜像标记为虚拟 A/B。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> SynthesizeSuperAsync(
         IReadOnlyList<SuperPartitionInput> partitions,
         string outputPath,
@@ -1443,11 +1432,13 @@ public sealed class SuperPartitionInput
     /// <summary>
     /// Gets the partition name. <para>获取分区名称。</para>
     /// </summary>
+    /// <value>The partition name. <para>分区名称。</para></value>
     public string Name { get; }
 
     /// <summary>
     /// Gets the source image file path. <para>获取源镜像文件路径。</para>
     /// </summary>
+    /// <value>The source image file path. <para>源镜像文件路径。</para></value>
     public string Path { get; }
 
     /// <summary>

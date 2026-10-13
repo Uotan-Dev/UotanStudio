@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4.Journal;
@@ -72,8 +72,8 @@ internal sealed class JournalSuperblock
     public bool IsEmpty => Start == 0;
 
     /// <summary>
-    /// Creates a clean initial empty-journal superblock (mke2fs empty-log semantics: sequence=1, start=0, first=1, errno=0).
-    /// <para>构造一个干净的初始空日志超级块（mke2fs 空日志语义：sequence=1、start=0、first=1、errno=0）。</para>
+    /// Creates a clean initial empty-journal superblock with sequence=1, start=0, first=1 and errno=0.
+    /// <para>构造一个干净的初始空日志超级块：sequence=1、start=0、first=1、errno=0。</para>
     /// </summary>
     /// <param name="blockSize">Journal block size in bytes, at least 1024 and a power of two.
     /// <para>日志块大小（字节），至少 1024 且必须是 2 的整数次幂。</para></param>
@@ -123,8 +123,8 @@ internal sealed class JournalSuperblock
     }
 
     /// <summary>
-    /// Serializes the journal superblock to a 0x208-byte big-endian buffer (v2/v3 layout: field offsets 0x00..0x50 match the journal_superblock, with s_checksum at 0x204, aligned with the read-side model and the earlier JBD2 layout).
-    /// <para>将日志超级块序列化为 0x208 字节的大端序字节缓冲（v2/v3 布局：字段偏移与 journal_superblock 0x00..0x50 一致，s_checksum 位于 0x204，与读侧模型及早期 JBD2 布局对齐）。</para>
+    /// Serializes the journal superblock to a 0x208-byte big-endian buffer.
+    /// <para>把日志超级块序列化为 0x208 字节的大端序缓冲。</para>
     /// </summary>
     public byte[] ToBytes()
     {
@@ -154,7 +154,7 @@ internal sealed class JournalSuperblock
         {
 
 
-            var crc = Crc32c(data.AsSpan(0, 0x204), UotanStudio.Firmware.Core.Checksums.Crc32c.InitialSeed);
+            var crc = Crc32c(data.AsSpan(0, 0x204), UotanStudio.Hash.Crc32c.Crc32c.InitialSeed);
             BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(0x204, 4), crc);
         }
 
@@ -165,7 +165,7 @@ internal sealed class JournalSuperblock
     /// Computes CRC32c from the given register seed (crc32c_le convention: no final XOR).
     /// <para>以指定寄存器 seed 计算 CRC32c（crc32c_le 约定：无最终异或）。</para>
     /// </summary>
-    private static uint Crc32c(ReadOnlySpan<byte> data, uint seed) => UotanStudio.Firmware.Core.Checksums.Crc32c.Compute(data, seed);
+    private static uint Crc32c(ReadOnlySpan<byte> data, uint seed) => UotanStudio.Hash.Crc32c.Crc32c.Compute(data, seed);
 
     /// <summary>
     /// Parses a JBD2 journal superblock from raw bytes (big-endian).

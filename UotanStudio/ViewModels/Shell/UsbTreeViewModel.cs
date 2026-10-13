@@ -11,46 +11,46 @@ using UotanStudio.Services.Devices;
 namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
-/// <para>USB 树窗口视图模型：经宿主设备监视服务读取 USB 总线拓扑，按后端能力生成节点文本，支持后端切换、
-/// 只看 Android 相关、展开/折叠、文本导出与设备变更自动刷新。读取一律在后台线程执行，界面状态只在 UI 线程更新。</para>
 /// View model of the USB tree window: it reads the USB bus topology through the host device-monitor
 /// service, renders node texts against the reporting backend's capabilities, and supports backend
 /// selection, an Android-only filter, expand/collapse, text export and auto-refresh on device changes.
 /// Reads always run on a background thread while UI state is updated on the UI thread only.
+/// <para>USB 树窗口视图模型：经宿主设备监视服务读取 USB 总线拓扑，按后端能力生成节点文本，支持后端切换、
+/// 只看 Android 相关、展开/折叠、文本导出与设备变更自动刷新。读取一律在后台线程执行，界面状态只在 UI 线程更新。</para>
 /// </summary>
 public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
 {
     /// <summary>
-    /// <para>后端选择器的一项：<c>null</c> 表示由 Comm 自动优先平台原生后端。</para>
     /// One entry of the backend selector; a <see cref="Backend"/> of <c>null</c> lets Comm prefer the
     /// platform-native backend automatically.
+    /// <para>后端选择器的一项：<c>null</c> 表示由 Comm 自动优先平台原生后端。</para>
     /// </summary>
     public sealed partial class UsbTreeBackendOption : ObservableObject
     {
         private readonly Func<string> _displayFactory;
         private readonly Func<string> _descriptionFactory;
 
-        /// <summary><para>本地化的显示文本。</para>The localized display text.</summary>
+        /// <summary>The localized display text. <para>本地化的显示文本。</para></summary>
         [ObservableProperty] private string _display = string.Empty;
 
-        /// <summary><para>能力摘要，用作选择器提示。</para>The capability summary shown as the selector tooltip.</summary>
+        /// <summary>The capability summary shown as the selector tooltip. <para>能力摘要，用作选择器提示。</para></summary>
         [ObservableProperty] private string _description = string.Empty;
 
         /// <summary>
-        /// <para>创建后端选项。</para>
         /// Creates a backend option.
+        /// <para>创建后端选项。</para>
         /// </summary>
         /// <param name="backend">
-        /// <para>该选项代表的后端；<see langword="null"/> 表示自动选择。</para>
         /// The backend this option stands for; <see langword="null"/> means automatic selection.
+        /// <para>该选项代表的后端；<see langword="null"/> 表示自动选择。</para>
         /// </param>
         /// <param name="displayFactory">
-        /// <para>显示文本工厂。</para>
         /// The display-text factory.
+        /// <para>显示文本工厂。</para>
         /// </param>
         /// <param name="descriptionFactory">
-        /// <para>能力摘要工厂。</para>
         /// The capability-summary factory.
+        /// <para>能力摘要工厂。</para>
         /// </param>
         public UsbTreeBackendOption(UsbTopologyBackendKind? backend, Func<string> displayFactory,
             Func<string> descriptionFactory)
@@ -92,36 +92,36 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     private bool _initialized;
     private volatile bool _disposed;
 
-    /// <summary><para>当前可见树的根节点。</para>The roots of the currently visible tree.</summary>
+    /// <summary>The roots of the currently visible tree. <para>当前可见树的根节点。</para></summary>
     public ObservableCollection<UsbTreeNodeViewModel> Roots { get; } = [];
 
     /// <summary><para>后端选择器条目，首项始终是自动选择。</para>
     /// The backend selector entries; the first one is always automatic selection.</summary>
     public ObservableCollection<UsbTreeBackendOption> Backends { get; } = [];
 
-    /// <summary><para>视图模型选中的后端选项。</para>The backend option selected in the view model.</summary>
+    /// <summary>The backend option selected in the view model. <para>视图模型选中的后端选项。</para></summary>
     [ObservableProperty] private UsbTreeBackendOption? _selectedBackend;
 
-    /// <summary><para>「只看 Android 相关」开关。</para>The "Android related only" switch.</summary>
+    /// <summary>The "Android related only" switch. <para>「只看 Android 相关」开关。</para></summary>
     [ObservableProperty] private bool _onlyAndroid;
 
-    /// <summary><para>详情面板当前节点。</para>The node shown in the detail panel.</summary>
+    /// <summary>The node shown in the detail panel. <para>详情面板当前节点。</para></summary>
     [ObservableProperty] private UsbTreeNodeViewModel? _selectedNode;
 
-    /// <summary><para>状态栏文本。</para>The status-bar text.</summary>
+    /// <summary>The status-bar text. <para>状态栏文本。</para></summary>
     [ObservableProperty] private string _statusText = string.Empty;
 
-    /// <summary><para>是否正在读取拓扑。</para>Whether a topology read is running.</summary>
+    /// <summary>Whether a topology read is running. <para>是否正在读取拓扑。</para></summary>
     [ObservableProperty] private bool _isBusy;
 
     /// <summary>
-    /// <para>使用宿主设备监视服务作为拓扑来源构造视图模型。</para>
     /// Constructs the view model with the host device-monitor service as the topology source.
+    /// <para>使用宿主设备监视服务作为拓扑来源构造视图模型。</para>
     /// </summary>
     /// <param name="topologySource">
-    /// <para>可注入的拓扑来源；为 <see langword="null"/> 时经 <c>App.DeviceMonitor</c> 读取真实系统拓扑。</para>
     /// The injectable topology source; <see langword="null"/> reads the real system topology through
     /// <c>App.DeviceMonitor</c>.
+    /// <para>可注入的拓扑来源；为 <see langword="null"/> 时经 <c>App.DeviceMonitor</c> 读取真实系统拓扑。</para>
     /// </param>
     public UsbTreeViewModel(
         Func<UsbTopologyBackendKind?, UsbTopologyResult?>? topologySource = null)
@@ -130,29 +130,29 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>构造视图模型的所有来源与订阅开关。</para>
     /// Constructs the view model with every source and subscription switch.
+    /// <para>构造视图模型的所有来源与订阅开关。</para>
     /// </summary>
     /// <param name="monitorDeviceChanges">
-    /// <para>是否订阅宿主设备监视器的变更事件并启动热插拔监听。无头测试置为 <see langword="false"/>，
-    /// 从而绝不接触真实 USB。</para>
     /// Whether to subscribe to the host device monitor and start hotplug monitoring. Headless tests pass
     /// <see langword="false"/> so they never touch real USB.
+    /// <para>是否订阅宿主设备监视器的变更事件并启动热插拔监听。无头测试置为 <see langword="false"/>，
+    /// 从而绝不接触真实 USB。</para>
     /// </param>
     /// <param name="topologySource">
-    /// <para>拓扑来源；为 <see langword="null"/> 时使用宿主服务。</para>
     /// The topology source; <see langword="null"/> uses the host service.
+    /// <para>拓扑来源；为 <see langword="null"/> 时使用宿主服务。</para>
     /// </param>
     /// <param name="backends">
-    /// <para>后端候选列表；为 <see langword="null"/> 时使用宿主报告的可用列表。传入的列表若包含本机无法
-    /// 运行的后端，<paramref name="capabilitiesSource"/> 必须仍能描述它。</para>
     /// The backend candidates; <see langword="null"/> uses the host-reported available list. When a list is
     /// supplied, <paramref name="capabilitiesSource"/> has to describe every backend in it, including
     /// backends that cannot run here.
+    /// <para>后端候选列表；为 <see langword="null"/> 时使用宿主报告的可用列表。传入的列表若包含本机无法
+    /// 运行的后端，<paramref name="capabilitiesSource"/> 必须仍能描述它。</para>
     /// </param>
     /// <param name="capabilitiesSource">
-    /// <para>后端能力来源。</para>
     /// The backend capability source.
+    /// <para>后端能力来源。</para>
     /// </param>
     internal UsbTreeViewModel(bool monitorDeviceChanges,
         Func<UsbTopologyBackendKind?, UsbTopologyResult?>? topologySource = null,
@@ -183,20 +183,20 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     /// platform is unsupported instead of showing an empty tree.</summary>
     public bool IsTopologySupported => _backendKinds.Count > 0;
 
-    /// <summary><para>不支持时的提示文本。</para>The message shown when no backend is available.</summary>
+    /// <summary>The message shown when no backend is available. <para>不支持时的提示文本。</para></summary>
     public string UnsupportedMessage => Localized("UsbTree_NoBackend");
 
-    /// <summary><para>是否已选中一个节点。</para>Whether a node is selected.</summary>
+    /// <summary>Whether a node is selected. <para>是否已选中一个节点。</para></summary>
     public bool HasSelection => SelectedNode is not null;
 
     /// <summary>
-    /// <para>读取一次拓扑。已有读取在飞行中时复用该次读取并登记重跑请求，避免插拔风暴叠加扫描。</para>
     /// Reads the topology once. While a read is in flight the existing read is reused and a rerun request
     /// is recorded, so a plug storm cannot stack scans.
+    /// <para>读取一次拓扑。已有读取在飞行中时复用该次读取并登记重跑请求，避免插拔风暴叠加扫描。</para>
     /// </summary>
     /// <returns>
-    /// <para>读取完成的任务。</para>
     /// The task completing the read.
+    /// <para>读取完成的任务。</para>
     /// </returns>
     public Task RefreshAsync()
     {
@@ -215,12 +215,12 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>把当前可见树导出为文本，包含驱动与接口诊断信息。</para>
     /// Exports the currently visible tree as text, including driver and interface diagnostics.
+    /// <para>把当前可见树导出为文本，包含驱动与接口诊断信息。</para>
     /// </summary>
     /// <returns>
-    /// <para>导出文本；尚未成功读取时为空字符串。</para>
     /// The exported text, or an empty string when nothing has been read yet.
+    /// <para>导出文本；尚未成功读取时为空字符串。</para>
     /// </returns>
     public string BuildTextExport()
     {
@@ -237,11 +237,11 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>设备变更通知入口：由 <c>DeviceMonitorService.DevicesChanged</c> 订阅调用，先去抖再回到 UI 线程
-    /// 发起读取。测试可直接驱动同一入口以验证订阅生命周期。</para>
     /// Device-change entry point: invoked by the <c>DeviceMonitorService.DevicesChanged</c> subscription,
     /// debounced and then marshalled back to the UI thread to start a read. Tests drive this same entry
     /// point to verify the subscription lifetime.
+    /// <para>设备变更通知入口：由 <c>DeviceMonitorService.DevicesChanged</c> 订阅调用，先去抖再回到 UI 线程
+    /// 发起读取。测试可直接驱动同一入口以验证订阅生命周期。</para>
     /// </summary>
     internal void NotifyDeviceChanged()
     {
@@ -264,9 +264,9 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>释放资源：取消设备变更、语言变更订阅并停止去抖计时器，之后的任何通知都不再读取拓扑。</para>
     /// Releases resources: unsubscribes from device and language changes and stops the debounce timer, so
     /// later notifications never read the topology again.
+    /// <para>释放资源：取消设备变更、语言变更订阅并停止去抖计时器，之后的任何通知都不再读取拓扑。</para>
     /// </summary>
     public void Dispose()
     {
@@ -289,15 +289,15 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary><para>刷新按钮命令。</para>The refresh command.</summary>
+    /// <summary>The refresh command. <para>刷新按钮命令。</para></summary>
     [RelayCommand]
     private Task Refresh() => RefreshAsync();
 
-    /// <summary><para>展开全部节点。</para>Expands every visible node.</summary>
+    /// <summary>Expands every visible node. <para>展开全部节点。</para></summary>
     [RelayCommand]
     private void ExpandAll() => SetExpanded(Roots, true);
 
-    /// <summary><para>折叠全部节点。</para>Collapses every visible node.</summary>
+    /// <summary>Collapses every visible node. <para>折叠全部节点。</para></summary>
     [RelayCommand]
     private void CollapseAll() => SetExpanded(Roots, false);
 

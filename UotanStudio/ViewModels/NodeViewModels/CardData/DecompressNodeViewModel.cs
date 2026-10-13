@@ -7,26 +7,26 @@ using UotanStudio.Services.Execution;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>解压节点视图模型：支持 GZip 与 Deflate 两种解压算法。</para>
 /// Decompress node view model supporting GZip and Deflate decompression algorithms.
+/// <para>解压节点视图模型：支持 GZip 与 Deflate 两种解压算法。</para>
 /// </summary>
 public class DecompressNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
-    /// <para>创建具有指定标题的解压节点。</para>
     /// Creates a decompress node with the specified title.
+    /// <para>创建具有指定标题的解压节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public DecompressNodeViewModel(string title) : base(title, NodeCategory.Data)
     {
     }
 
     /// <summary>
-    /// <para>创建默认的数据解压节点，解压输入数据。</para>
     /// Creates a default data decompress node that decompresses the input data.
+    /// <para>创建默认的数据解压节点，解压输入数据。</para>
     /// </summary>
     public static DecompressNodeViewModel CreateDecompressNode()
     {
@@ -48,16 +48,16 @@ public class DecompressNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的解压逻辑：Data.Compression.Decompress 解压输入数据。</para>
     /// Dispatches decompression logic by the node type key (TypeKey): Data.Compression.Decompress decompresses the input data.
+    /// <para>按节点类型键（TypeKey）分发对应的解压逻辑：Data.Compression.Decompress 解压输入数据。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {

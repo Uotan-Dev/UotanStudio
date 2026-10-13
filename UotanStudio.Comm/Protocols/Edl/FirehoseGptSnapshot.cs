@@ -8,15 +8,22 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// </summary>
 public sealed class FirehoseGptSnapshot
 {
-    internal FirehoseGptSnapshot(FirehoseProtocol owner, FirehoseStorageGeometry geometry, int slot, GptTable table)
+    internal FirehoseGptSnapshot(FirehoseProtocol owner, FirehoseStorageGeometry geometry, int slot, GptTable table,
+        ulong? partitionEntryLba = null, uint? partitionEntryCount = null, uint? partitionEntrySize = null)
     {
         Owner = owner;
         Geometry = geometry;
         Slot = slot;
         Table = table;
+        PartitionEntryLba = partitionEntryLba;
+        PartitionEntryCount = partitionEntryCount;
+        PartitionEntrySize = partitionEntrySize;
     }
 
     internal FirehoseProtocol Owner { get; }
+    internal ulong? PartitionEntryLba { get; }
+    internal uint? PartitionEntryCount { get; }
+    internal uint? PartitionEntrySize { get; }
     /// <summary>
     /// Gets the physical region and geometry reported for this observation.
     /// <para>获取本次观测所报告的物理区域与几何信息。</para>

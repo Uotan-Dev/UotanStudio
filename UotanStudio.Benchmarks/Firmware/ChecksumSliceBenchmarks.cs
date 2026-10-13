@@ -1,5 +1,6 @@
 using BenchmarkDotNet.Attributes;
-using UotanStudio.Firmware.Core.Checksums;
+using UotanStudio.Hash.Crc32;
+using UotanStudio.Hash.Crc32c;
 
 namespace UotanStudio.Benchmarks.Firmware;
 
@@ -9,9 +10,6 @@ namespace UotanStudio.Benchmarks.Firmware;
 /// <para>度量改造后的 slice-by-8 CRC 实现与原始逐字节参考实现的差异，该成本决定了校验和快路径在后续改动后
 /// 是否仍然划算。</para>
 /// </summary>
-/// <remarks>
-/// Run with <c>dotnet run -c Release --project UotanStudio.Benchmarks -- --filter "*ChecksumSlice*" --job short</c>.
-/// </remarks>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 1, iterationCount: 3)]
 public class ChecksumSliceBenchmarks

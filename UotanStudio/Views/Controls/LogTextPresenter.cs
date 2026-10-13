@@ -13,7 +13,8 @@ using UotanStudio.Services;
 
 namespace UotanStudio.Views.Controls;
 
-/// <summary>Maintains entry boundaries and level mappings without replacing unaffected log text.</summary>
+/// <summary>Maintains entry boundaries and level mappings without replacing unaffected log text.<para>维护条目边界与级别映射，不替换未受影响的日志文本。</para></summary>
+/// <param name="document">Text document holding the rendered log content.<para>存放已渲染日志内容的文本文档。</para></param>
 internal sealed class LogTextBuffer(TextDocument document)
 {
     private readonly List<(int Length, int Lines)> _entries = [];
@@ -54,7 +55,7 @@ internal sealed class LogTextBuffer(TextDocument document)
     }
 }
 
-/// <summary>Shares plain log rendering and scrolling while each host retains its own model and lifetime.</summary>
+/// <summary>Shares plain log rendering and scrolling while each holder retains its own model and lifetime.<para>共用纯文本日志渲染与滚动，各持有方保留自己的模型与生命周期。</para></summary>
 internal sealed class LogTextPresenter<T>
 {
     private readonly TextEditor _editor;
@@ -212,7 +213,7 @@ internal sealed class LogTextPresenter<T>
     }
 }
 
-/// <summary>Reserves identical line height for Latin and CJK fallback fonts in all log views.</summary>
+/// <summary>Reserves identical line height for Latin and CJK fallback fonts in all log views.<para>为所有日志视图中的拉丁与 CJK 回退字体预留一致的行高。</para></summary>
 internal static class LogEditorMetrics
 {
     internal static void ApplyLineHeight(TextEditor editor)

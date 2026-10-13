@@ -7,28 +7,28 @@ using UotanStudio.Services.Execution;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>设备选择节点视图模型：按序列号（可选）或默认第一台设备解析 <see cref="DetectedDevice"/>
-/// 并输出，供后续烧录节点通过 Device 端口消费。</para>
 /// Device selection node view model: resolves a <see cref="DetectedDevice"/> by an optional serial
 /// (or the first scanned device) and outputs it for downstream flash nodes via the Device port.
+/// <para>设备选择节点视图模型：按序列号（可选）或默认第一台设备解析 <see cref="DetectedDevice"/>
+/// 并输出，供后续烧录节点通过 Device 端口消费。</para>
 /// </summary>
 public class SelectDeviceNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
-    /// <para>创建具有指定标题的设备选择节点。</para>
     /// Creates a device selection node with the specified title.
+    /// <para>创建具有指定标题的设备选择节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public SelectDeviceNodeViewModel(string title) : base(title, NodeCategory.Flash)
     {
     }
 
     /// <summary>
-    /// <para>创建默认的设备选择节点。</para>
     /// Creates a default device selection node.
+    /// <para>创建默认的设备选择节点。</para>
     /// </summary>
     public static SelectDeviceNodeViewModel CreateSelectDeviceNode()
     {
@@ -44,17 +44,17 @@ public class SelectDeviceNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发设备选择逻辑：Device.Target.Select 从序列号或首台设备解析设备并输出。</para>
     /// Dispatches the device selection logic by the node type key (TypeKey): Device.Target.Select resolves
     /// a device from the serial or the first scanned device and outputs it.
+    /// <para>按节点类型键（TypeKey）分发设备选择逻辑：Device.Target.Select 从序列号或首台设备解析设备并输出。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {

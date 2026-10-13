@@ -21,7 +21,7 @@ leaves that every upper layer may reference.
 | --- | --- | --- |
 | OS adapters | `Transports/Usb/Backend/{Windows,Linux,MacOS,HarmonyOS,LibUsb}` | Native enumeration, handles, endpoint I/O and hotplug. |
 | Bearers | `Transports/{Usb,Serial,Tcp,Udp}` | Bounded I/O, timeouts, cancellation and disposal; USB session extensions and `UsbStream` live beside the sessions they wrap. |
-| Protocols | `Protocols/{Adb,Hdc,Fastboot,Edl,Bootrom,Mtk,Scrcpy}` | Framing, authentication, command and session state. Fastboot network transports and framing live under `Protocols/Fastboot/Transport`; flash-time image helpers under `Protocols/Fastboot/Images`. |
+| Protocols | `Protocols/{Adb,Hdc,Fastboot,Edl,Bootrom,Mtk}` | Framing, authentication, command and session state. Fastboot network transports and framing live under `Protocols/Fastboot/Transport`; flash-time image helpers under `Protocols/Fastboot/Images`. Screen mirroring is not a protocol here: scrcpy lives in `UotanStudio.Mirroring`. |
 | Contracts | `Contracts/` | Host-facing façade interfaces (`IAdbDeviceSession`, `HdcSession` contracts, endpoints, session kinds). No internal dependencies. |
 | Routing | `Routing/` | TCP server liveness probes (`DebugBridgeRoute`), server endpoint facts (`DebugBridgeEndpoints`), ownership decisions and routed session opening (`Devices/Services/DebugBridgeSessionOpener`). |
 | Inventory | `Devices/Discovery` | Separate USB and server discovery sources; exact endpoint identity and reported state. |
@@ -95,13 +95,66 @@ opt-ins via `DeviceCommunicationConfiguration.UsbBackend`.
 
 ## MTK notes
 
-BROM/preloader USB (VID 0x0E8D, PID 0x0003/0x2000/0x2001) is classified as `mtk` and has a
+BROM/preloader USB (VID 0x0E8D; the classifier accepts product ids 0x0003, 0x2000, 0x2001, 0x20FF and 0x3000) is
+classified as `mtk` and has a
 controller session factory; the byte protocol over USB bulk endpoints matches the serial
 profile (mtkclient). V6 all-in-one DA containers are accepted (Firmware-side parsing is
 DA-version independent). Device-initiated XML file operations are served only when
 `MtkSession.HostFileStore` is attached; without it the session stays fail-closed.
-SLA/DAA key material comes exclusively from an `IMtkSlaKeyProvider`/`IMtkDaaResourceProvider`
+SLA/DAA key material comes exclusively from an `IMtkDaaResourceProvider`
 (e.g. `MtkDirectoryKeyStore` over a user-supplied directory); nothing is bundled.
+
+## GPT observation options
+
+`FirehoseProtocol.ReadGptWithPartitionEntryOverridesAsync` is the read-side counterpart of the reference
+downloader's `--gpt-part-entry-start-lba`, `--gpt-num-part-entries` and `--gpt-part-entry-size` switches
+(`edlclient/Library/firehose_client.py:483-485`, consumed at `edlclient/Library/gpt.py:360-362`). The LBA value
+replaces only the location that names the *primary* partition-entry array; every other primary header field still
+has to validate, and the array read there must still match the header-declared entry-array CRC and be
+byte-identical to the backup copy read from the backup header's own location. A number that points inside the
+reported capacity but at the wrong place therefore ends in `InvalidDataException`, while a number that cannot
+describe the array at all — an LBA below 2 or one leaving the array past the reported capacity, or dimensions
+exceeding the supported entry-array limit — is refused earlier with `ArgumentOutOfRangeException` naming the
+offending override. Neither path can yield a partially trusted table. The entry count and entry size are
+array-wide dimensions, so they apply to both copies and the declared CRC keeps gating the result. The backup
+header is always parsed without an LBA override, and all three values are recorded on the returned snapshot so
+named partition operations revalidate the observation with the same dimensions. Upstream hands the same LBA to
+`get_backup_gpt` as well (`firehose.py:852-860`); this implementation deliberately keeps the backup anchored to
+its own header so the primary-vs-backup byte identity stays a real cross-check rather than a self-comparison.
+The read method itself issues no write
+command. A snapshot taken through an override is consumable by the flash page's name-based program, erase and
+readback paths, which matches the reference tool feeding one parsed GPT to both its read and write lists; the
+multi-LUN erase-all preview and the GPT repair path deliberately keep reading the header's own value, because a
+single operator-typed LBA cannot describe eight storage units.
+
+## Manifest wipe requests
+
+`Protocols/Edl/FlashBundle/WipeManifestParser.cs` accepts a `<wipe>` element in a rawprogram document and
+`FirehoseXmlBuilder.BuildWipe` sends it as a `<program>` of zeros over the requested range, which is what the
+Qualcomm loader tool means by `--wipefirst` (`fh_loader/fh_loader.cpp:2814`: "erasefirst and wipefirst are
+flags that affect the `<program>` tag by adding erase/wipe prior to programming"). The *element name* is this
+repository's own: no upstream tool parses a `<wipe>` tag, so a document written for another downloader will not
+carry one, and nothing here should be changed to make `<wipe>` look like upstream syntax. Because a wipe
+overwrites data with zeros and cannot be undone, `FlashBundleOptions.WipeConfirmation` must carry exactly the
+phrase `WIPE` (public on `WipeConfirmation.RequiredPhrase`, which the host reads) before any wipe byte is
+prepared, and a request spanning the whole reported storage additionally needs
+`FlashBundleOptions.AllowEntireStorageWipe`; both gates are refused with no command document built, so the
+device sees nothing. `SkipWipe` drops the manifest's `<wipe>` entries before they are parsed
+(`FlashBundleOrchestrator.Package.cs:134`), so a skipped run carries no wipe preview, no evidence item and no
+`WipeEntriesProcessed` count; only `WipeFirstSectors`, which is a separate request, is still honoured in that run.
+
+## NAND geometry on the wire
+
+`FirehoseConfiguration.NandPagesPerBlock` is the operator-supplied pages-per-block count. The `<program>`, `<read>`
+and `<erase>` frames take it through `FirehoseProtocol.NandPagesPerBlockHint`, and `<configure>` applies the same
+two conditions on its own inside `FirehoseXmlBuilder.BuildConfigure` — all four emit `PAGES_PER_BLOCK` only for a
+NAND storage type with a positive count. The reference client gates the same attribute on
+`MemoryName == "nand"` and a non-zero count (`edlclient/Library/firehose.py:468-470`) and appends it from
+`cmd_program` (`:496`), `cmd_program_buffer` (`:552`), `cmd_erase` (`:606`, `:621`), `cmd_read` (`:671`),
+`cmd_read_buffer` (`:732`) and the connect command (`:906-907`). A non-NAND storage type or a
+value of zero emits no attribute at all, so an eMMC or UFS target never sees a NAND-only field, and a value above
+the 32-bit range is written out verbatim instead of truncated. The attribute is a hint about the target's own
+geometry: it is never derived from a probe, and it authorizes no write.
 
 ## Session ownership
 
@@ -120,22 +173,44 @@ process from owning a USB interface.
 
 ## Resource registration and provenance
 
-Programmers, DAs, EMI images and authentication resources are external inputs. Every resource
-that a Comm selection flow may consume is registered with the fields below; selection decisions
-carry the registered SHA-256, never a filename or model-name guess, and a resource with an
-unknown license stays out of any default package.
+Programmers, DAs, EMI images and authentication resources are external inputs. What a selection flow may
+consume is described by `Protocols/Common/Evidence/ResourceProvenance.cs`: a required `Origin`, an optional
+`LicenseTag`, an optional `Source` and a required `Sha256Hex`. `EdlProgrammerDescriptor.Validate` refuses a
+descriptor whose provenance hash contradicts its own `Sha256Hex`, so a row cannot claim one blob and name
+another. Selection decisions carry the registered SHA-256, never a filename or model-name guess.
 
-```text
-resource_path:
-resource_kind:      programmer | da | emi | auth-key
-sha256:
-origin:             user-supplied | bundled | derived
-source:             url / commit / supplier
-license:
-redistribution:     allowed | user-obligation | forbidden
-applicable_devices: hardware codes / HWID / PKHash constraints
-verification:       scripted | real-transport | device-readonly | unverified (+ date)
-```
+`LicenseTag` is descriptive: no production code reads it, so nothing here automatically keeps an
+unknown-license resource out of a package, and the licensing obligation for anything a user supplies stays with
+the user.
+
+`Protocols/Edl/Programmer/EdlProgrammerFolderScanner.cs` turns a user-selected loader folder into catalog
+rows, and the host now drives it: `UotanStudio/Services/Flash/EdlProgrammerDirectoryService.cs` scans the
+folder, builds an `EdlProgrammerCatalog` and asks `EdlRuleProgrammerSelector` for a verdict against the Sahara
+identity discovery already recorded. It is `internal` and reachable only through `InternalsVisibleTo`, so the
+naming parse and the hashing stay the single producer; the host neither re-parses a file name nor recomputes a
+hash. Only `EdlProgrammerMatchDecision.Matched` returns a descriptor, and `EdlSession.InitializeAsync` still
+re-measures the image hash before a single programmer byte reaches the transport, so a verdict alone never
+authorizes an upload.
+
+## Implemented but deliberately not surfaced in the host
+
+A protocol method with no production caller is not automatically a gap. The following MTK entry points are
+implemented and covered by tests, but the host deliberately exposes no control for them:
+
+- `MtkSession.GetBootLoaderVersionAsync` and `GetBromVersionAsync` — these require the preloader command stage and
+  fault the session on a refused exchange. The non-fatal `QueryBootIdentityOwnedAsync` path already collects the
+  same two bytes during initialization, so no separate control surfaces them.
+
+Re-exposing any of these requires device evidence for the specific operation plus a dedicated dangerous-operation
+confirmation, not just a button.
+
+## Native runtime registration
+
+The libusb binaries are not shipped with the repository. `Transports/Usb/Backend/LibUsb/LibUsbRuntime.cs` is the
+public entry a host uses to register the absolute path of a prepared native library; it forwards to the internal
+`LibUsbNativeLoader`, which stays out of reach across assemblies. `UotanStudio/Services/NativeBin/NativeBinProvisioner.cs`
+downloads the file for the active RID and registers it through that entry. Neither the internal `CommKit` nor
+`UsbCommunicationLayer` is reachable from the host, which is why this dedicated public surface exists.
 
 ## Validation
 
@@ -147,16 +222,14 @@ dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --fi
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter "FullyQualifiedName~UotanStudio.Tests.Devices|FullyQualifiedName~HeadlessControllerGatewayTests" --minimum-expected-tests 1
 ```
 
-Device tests are opt-in. Read-only ADB queries and Sync listing can validate a
-selected serial without changing device contents. `UOTAN_TEST_ADB_TARGET`
-selects that exact target. `UOTAN_TEST_HDC_TARGET` does the same for HDC;
-`UOTAN_TEST_USB_BACKEND=libusb` runs the whole device suite over the libusb
-backend (verified against real hardware), and reboot scenarios additionally
-require `UOTAN_TEST_ALLOW_REBOOT=1`. Physical identity validation additionally requires
-`UOTAN_TEST_ADB_USB_ID`; a missing USB serial or nonmatching PnP identity is
-an unverified association, not a successful USB test. Do not stop a server,
-claim its USB interface, deploy scrcpy, flash, install or reboot a connected
-device as part of routine validation.
+Real-input tests are opt-in through an environment variable each, and skip with that variable named in the
+reason when it is unset: `UOTAN_SELINUX_POLICY_SAMPLE`, `UOTAN_ELF_FIREHOSE_SAMPLE`,
+`UOTAN_SAMSUNG_DAT_MERGE_ORACLE`, `UOTAN_SAMSUNG_PAYLOAD_MERGE_ORACLE`, `UOTAN_HOS_UPDATE_APP_SAMPLE`,
+`UOTAN_MAGISKBOOT_ORACLE` (the upstream reference binary) and `UOTAN_EROFS_CORPUS` — the index and the oracle
+resolver live in `UotanStudio.Tests/TestInfrastructure/`. There is no environment switch that selects a live
+ADB or HDC target: a device test that finds no target skips, and hardware-side behaviour is therefore not part of
+the solution gate. Do not stop a server, claim its USB interface, deploy scrcpy, flash, install or reboot a
+connected device as part of routine validation.
 
 Windows-only builds do not prove Linux/macOS/HarmonyOS backend behavior or
 NativeAOT runtime behavior. Tests skipped for absent equipment remain skipped,

@@ -163,10 +163,10 @@ public sealed class FlashBundleOptions
 
     /// <summary>
     /// Gets or sets the number of leading sectors wiped with zeros on every physical partition
-    /// touched by the bundle after programming/erasing (mirrors fh_loader --wipefirst;
-    /// 0 disables the wipe phase).
+    /// touched by the bundle after programming/erasing
+    /// (0 disables the wipe phase).
     /// <para>获取或设置编程/擦除之后，对包内涉及的所有物理分区以零擦写的前导扇区数
-    /// （对齐 fh_loader --wipefirst；0 表示禁用 wipe 阶段）。</para>
+    /// （0 表示禁用 wipe 阶段）。</para>
     /// </summary>
     /// <value>Leading-sector count zeroed per target partition; must be non-negative, and 0 disables the wipe phase.
     /// <para>每个目标分区被清零的前导扇区数；必须非负，0 表示禁用 wipe 阶段。</para></value>
@@ -183,6 +183,32 @@ public sealed class FlashBundleOptions
     public int[]? WipePhysicalPartitions { get; set; }
 
     /// <summary>
+    /// Gets or sets the caller-supplied confirmation that authorises the <c>&lt;wipe&gt;</c> requests parsed from
+    /// the manifest. A wipe overwrites storage with zeros and cannot be undone, so a manifest wipe is refused,
+    /// with no device write, unless the phrase is exactly <c>WIPE</c>.
+    /// <para>获取或设置授权清单中解析出的 <c>&lt;wipe&gt;</c> 请求的调用方确认。擦写会用零字节覆盖存储且
+    /// 无法回退，因此除非短语恰好为 <c>WIPE</c>，否则清单擦写会被拒绝，且完全不写入设备。</para>
+    /// </summary>
+    /// <value>The confirmation record, or <see langword="null"/> to refuse every manifest wipe request. Leading
+    /// sectors governed by <see cref="WipeFirstSectors"/> are the bundle's own post-programming step and stay
+    /// unaffected by this gate.
+    /// <para>确认记录；为 <see langword="null"/> 时拒绝全部清单擦写请求。由 <see cref="WipeFirstSectors"/>
+    /// 控制的前导扇区属于本包自身的编程后步骤，不受该门控影响。</para></value>
+    public WipeConfirmation? WipeConfirmation { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether a manifest wipe request carrying <c>all="true"</c> may run. Such a request erases
+    /// every block of the addressed partition, including its partition table, and stays refused while this flag
+    /// is <see langword="false"/> even after the confirmation gate passed.
+    /// <para>获取或设置是否允许执行清单中带 <c>all="true"</c> 的擦写请求。该请求会擦除目标分区的每一个块，
+    /// 包含其分区表，因此即使确认门控已通过，在本开关为 <see langword="false"/> 时仍会被拒绝。</para>
+    /// </summary>
+    /// <value><see langword="true"/> to authorise whole-partition wipes; <see langword="false"/> (default)
+    /// refuses them as ambiguous. <para>为 <see langword="true"/> 时授权整分区擦写；默认 <see langword="false"/>
+    /// 因其含义不明确而拒绝。</para></value>
+    public bool AllowEntireStorageWipe { get; set; }
+
+    /// <summary>
     /// Gets or sets whether to commit the UFS provisioning configuration; <c>null</c> uses the
     /// <c>commit</c> attribute parsed from the provisioning XML.
     /// <para>获取或设置是否提交 UFS 配置；<c>null</c> 使用从配置 XML 解析的 <c>commit</c> 属性。</para>
@@ -190,4 +216,27 @@ public sealed class FlashBundleOptions
     /// <value>Explicit commit decision, or <see langword="null"/> to derive it from the epilogue commit attribute (1 means commit).
     /// <para>显式的提交决定；为 <see langword="null"/> 时按 epilogue 的 commit 属性推导（1 表示提交）。</para></value>
     public bool? UfsCommit { get; set; }
+
+    /// <summary>
+    /// Gets or sets the explicit write-chunk bound applied to the session configuration before the bundle
+    /// runs.
+    /// <para>获取或设置运行本包之前写入会话配置的显式写入块上限。</para>
+    /// </summary>
+    /// <value><see langword="null"/> keeps the default bound; otherwise a 512-byte multiple between 512 and
+    /// 16777216, and the protocol still refuses a raised value above what the programmer reported as
+    /// supported.
+    /// <para><see langword="null"/> 保留默认上限；否则须为 512 的倍数且介于 512 与 16777216 之间，且协议仍会
+    /// 拒绝超过 programmer 上报支持值的上调。</para></value>
+    public long? MaxProgramChunkBytes { get; set; }
+
+    /// <summary>
+    /// Gets or sets the NAND <c>PAGES_PER_BLOCK</c> configure attribute taken from the operator rather than
+    /// from the manifest.
+    /// <para>获取或设置来自操作者而非清单的 NAND <c>PAGES_PER_BLOCK</c> configure 属性。</para>
+    /// </summary>
+    /// <value><see langword="null"/> or 0 omits the attribute; otherwise 1 through 65535, checked before the
+    /// session is initialized so the value is on the wire in the configure exchange.
+    /// <para><see langword="null"/> 或 0 表示省略该属性；否则为 1 至 65535，并在会话初始化前完成校验，使该值随
+    /// configure 交互上线。</para></value>
+    public long? NandPagesPerBlock { get; set; }
 }

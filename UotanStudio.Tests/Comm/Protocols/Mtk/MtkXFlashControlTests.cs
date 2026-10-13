@@ -24,49 +24,6 @@ public sealed partial class MtkSessionTests
     }
 
     [Fact]
-    public async Task SetXFlashResetKeyAsync_DefaultKey_SendsLittleEndianWord()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreateStageOneSessionAsync(transport);
-        EnqueueXFlashStatusFrames(transport, 3);
-        var before = transport.Writes.Count;
-
-        await session.SetXFlashResetKeyAsync(cancellationToken: TestContext.Current.CancellationToken);
-
-        Assert.Equal(Convert.FromHexString("04000200"), transport.Writes[before + 3]);
-        Assert.Equal(Convert.FromHexString("68000000"), transport.Writes[before + 5]);
-        Assert.Equal(MtkSessionState.XFlashStageOneReady, session.State);
-    }
-
-    [Fact]
-    public async Task SetXFlashChecksumLevelAsync_BothScope_SendsDocumentedValue()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreateStageOneSessionAsync(transport);
-        EnqueueXFlashStatusFrames(transport, 3);
-        var before = transport.Writes.Count;
-
-        await session.SetXFlashChecksumLevelAsync(MtkXFlashChecksumLevel.Both, TestContext.Current.CancellationToken);
-
-        Assert.Equal(Convert.FromHexString("03000200"), transport.Writes[before + 3]);
-        Assert.Equal(Convert.FromHexString("03000000"), transport.Writes[before + 5]);
-    }
-
-    [Fact]
-    public async Task SetXFlashBatteryOptionAsync_Auto_SendsDocumentedValue()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreateStageOneSessionAsync(transport);
-        EnqueueXFlashStatusFrames(transport, 3);
-        var before = transport.Writes.Count;
-
-        await session.SetXFlashBatteryOptionAsync(MtkXFlashBatteryOption.Auto, TestContext.Current.CancellationToken);
-
-        Assert.Equal(Convert.FromHexString("02000200"), transport.Writes[before + 3]);
-        Assert.Equal(Convert.FromHexString("02000000"), transport.Writes[before + 5]);
-    }
-
-    [Fact]
     public async Task SetXFlashEmmcHwResetPinAsync_Disabled_SendsZeroWord()
     {
         using var transport = new ScriptedCommTransport();
@@ -80,37 +37,6 @@ public sealed partial class MtkSessionTests
         Assert.Equal(new byte[4], transport.Writes[before + 5]);
     }
 
-    [Fact]
-    public async Task SetXFlashChecksumLevelAsync_RejectedCompletionStatus_FaultsXFlash()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreateStageOneSessionAsync(transport);
-        EnqueueXFlashFrame(transport, new byte[4]);
-        EnqueueXFlashFrame(transport, new byte[4]);
-        EnqueueXFlashFrame(transport, [0x53, 0, 0x02, 0xC0]);
-        var before = transport.Writes.Count;
-
-        var error = await Assert.ThrowsAsync<MtkProtocolException>(() =>
-            session.SetXFlashChecksumLevelAsync(MtkXFlashChecksumLevel.Usb, TestContext.Current.CancellationToken));
-
-        Assert.Equal(0xC0020053u, error.Status);
-        Assert.Equal(before + 6, transport.Writes.Count);
-        Assert.Equal(MtkSessionState.Faulted, session.State);
-    }
-
-    [Fact]
-    public async Task SetXFlashBatteryOptionAsync_UndefinedOption_RejectsWithoutDeviceIo()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreateStageOneSessionAsync(transport);
-        var before = transport.Writes.Count;
-
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => session.SetXFlashBatteryOptionAsync(
-            (MtkXFlashBatteryOption)9, TestContext.Current.CancellationToken));
-
-        Assert.Equal(before, transport.Writes.Count);
-        Assert.Equal(MtkSessionState.XFlashStageOneReady, session.State);
-    }
 
     [Fact]
     public async Task SetXFlashMetaBootModeAsync_BeforeStageOne_RefusesWithoutDeviceIo()

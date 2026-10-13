@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
+using ErofsInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
 
@@ -11,38 +13,41 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
 /// </summary>
 public sealed partial class ErofsBuilder
 {
-    private static long EstimateDirPayloadLength(BuildNode node)
+    private static long EstimateDirPayloadLength(ErofsInode node)
         => 2 * ErofsDirectoryEntry.DirentSize + 1 + 2
            + node.Children.Sum(child => (long)ErofsDirectoryEntry.DirentSize + Encoding.UTF8.GetByteCount(child.Name));
 
     /// <summary>
-    /// Builds the directory entries: "." and ".." first (mkfs keeps dot entries by default and fsck enforces their presence), then children ordered by their UTF-8 bytes (matches the mergesort in mkfs and fsck's strictly-increasing check). The dirent name rule guards only those children, so the synthesised dot records stay legal.
-    /// <para>构造目录条目：`. ` 与 `..` 在前（mkfs 默认不省略点条目，fsck 强制检查二者存在）， 随后子条目按 UTF-8 字节序排序（与 mkfs mergesort / fsck 递增校验一致）。目录项名称规则只校验这些子条目，因此合成的点条目保持合法。</para>
+    /// Builds the directory entries as one list of the synthesised "."/".." records and the children, then
+    /// orders the whole list by UTF-8 name bytes. The dot entries participate in the same sort instead of
+    /// staying pinned in front, because names must be strictly increasing; the dirent name rule guards only
+    /// the children, so the synthesised dot records stay legal.
+    /// <para>构造目录条目：把合成的 `.`、`..` 记录与子条目放进同一个列表，再对整表按 UTF-8 名称字节排序。
+    /// 名称必须严格递增，因此点条目参与同一次排序而不能固定在最前。目录项名称规则只校验子条目，
+    /// 因此合成的点条目保持合法。</para>
     /// </summary>
-    private static List<DirEntry> BuildDirEntries(BuildNode node)
+    private static List<DirEntry> BuildDirEntries(ErofsInode node)
     {
         var dotNid = node.Nid;
         var dotDotNid = node.Parent?.Nid ?? node.Nid;
         var entries = new List<DirEntry>(node.Children.Count + 2)
         {
-            new DirEntry(new BuildNode { Nid = dotNid, IsDirectory = true, Name = "." }, "."u8.ToArray()),
-            new DirEntry(new BuildNode { Nid = dotDotNid, IsDirectory = true, Name = ".." }, ".."u8.ToArray()),
+            new DirEntry(new ErofsInode { Nid = dotNid, IsDirectory = true, Name = "." }, "."u8.ToArray()),
+            new DirEntry(new ErofsInode { Nid = dotDotNid, IsDirectory = true, Name = ".." }, ".."u8.ToArray()),
         };
-        entries.AddRange(node.Children
-            .Select(child =>
-            {
-                FileSystemNameLimits.ValidateEntryName(child.Name, "EROFS");
-                return new DirEntry(child, Encoding.UTF8.GetBytes(child.Name));
-            })
-            .OrderBy(e => e.NameBytes, ByteArrayComparer.Instance));
-        return entries;
+        entries.AddRange(node.Children.Select(child =>
+        {
+            FileSystemNameLimits.ValidateEntryName(child.Name, "EROFS");
+            return new DirEntry(child, Encoding.UTF8.GetBytes(child.Name));
+        }));
+        return [.. entries.OrderBy(e => e.NameBytes, ByteArrayComparer.Instance)];
     }
 
     /// <summary>
-    /// Derives the dirent file type from a BuildNode.
-    /// <para>根据 BuildNode 推导 dirent 文件类型。</para>
+    /// Derives the dirent file type from a ErofsInode.
+    /// <para>根据 ErofsInode 推导 dirent 文件类型。</para>
     /// </summary>
-    private static byte DirentFileType(BuildNode node)
+    private static byte DirentFileType(ErofsInode node)
     {
         if (node.IsDirectory) return ErofsInode.FileTypeDirectory;
         if (node.IsSymlink) return ErofsInode.FileTypeSymlink;
@@ -59,10 +64,11 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Single-block directory payload: the dirent array first, then the contiguous name area (de[i].nameoff = name-area start + the sum of preceding name lengths), isomorphic to the kernel fill_dentries / mkfs fill_dirblock.
+    /// Single-block directory payload: the dirent array first, then the contiguous name area
+    /// (de[i].nameoff = name-area start + the sum of preceding name lengths).
     /// <para>目录单块负载：dirent 数组在前、名字区紧随（de[i].nameoff = 名字区起点 + 之前名字长 之和）。</para>
     /// </summary>
-    private static byte[] BuildDirPayload(BuildNode node)
+    private static byte[] BuildDirPayload(ErofsInode node)
     {
         var sorted = BuildDirEntries(node);
         var totalNames = sorted.Sum(e => e.NameBytes.Length);
@@ -83,7 +89,7 @@ public sealed partial class ErofsBuilder
         return payload;
     }
 
-    private readonly record struct DirEntry(BuildNode Child, byte[] NameBytes);
+    private readonly record struct DirEntry(ErofsInode Child, byte[] NameBytes);
 
     private sealed class ByteArrayComparer : IComparer<byte[]>
     {
@@ -107,11 +113,10 @@ public sealed partial class ErofsBuilder
     /// <summary>
     /// Computes the exact directory payload length and block count with the same greedy bin-packing
     /// as WriteDirBlocks: entries never cross a block, and a block-boundary gap is inserted before
-    /// the next block (matching upstream erofs_prepare_dir_file's d_size accumulation). The final
-    /// block is not padded, so the length is not necessarily a multiple of the block size.
+    /// the next block. The final block is not padded, so the length is not necessarily a multiple
+    /// of the block size.
     /// <para>按与 WriteDirBlocks 完全相同的贪心装箱计算目录负载的精确长度与块数：条目不跨块，
-    /// 跨块前插入块边界空余（与上游 erofs_prepare_dir_file 的 d_size 累加一致）。末块不补齐，
-    /// 因此长度不一定是块大小的整数倍。</para>
+    /// 跨块前插入块边界空余。末块不补齐，因此长度不一定是块大小的整数倍。</para>
     /// </summary>
     private static (long Blocks, long Size) MeasureDirLayout(List<DirEntry> sorted, int blockSize)
     {
@@ -158,7 +163,7 @@ public sealed partial class ErofsBuilder
     /// Writes sorted directory entries into blocks with separate entry and name areas.
     /// <para>将排序后的目录条目按块写入，每块包含独立的条目区与名称区。</para>
     /// </summary>
-    private static void WriteDirBlocks(Stream output, BuildNode node, int blockSize, CancellationToken token)
+    private static void WriteDirBlocks(Stream output, ErofsInode node, int blockSize, CancellationToken token)
     {
         var sorted = BuildDirEntries(node);
         var index = 0;
@@ -210,13 +215,13 @@ public sealed partial class ErofsBuilder
         }
     }
 
-    private static long GetInodeRecordSize(BuildNode node, int blockSize)
+    private static long GetInodeRecordSize(ErofsInode node, int blockSize)
     {
         var header = GetInodeHeaderSize(node) + node.XattrIbody.Length;
 
         if (node.IsSymlink)
         {
-            return header + node.Size;
+            return header + (long)node.Size;
         }
 
         if (node.IsDevice)
@@ -232,13 +237,35 @@ public sealed partial class ErofsBuilder
         if (node.Pclusters is not null)
         {
             var tailSize = node.InlineCompressedTail ? node.Pclusters[^1].CompressedLength : 0;
-            if (node.CompactedIndexes)
+            if (UsesExtentIndexes(node))
             {
 
-                return AlignUp(header, 8) + ZErofsMapHeader.Size + 8L * CeilDiv(node.ClusterCount, 2L) + tailSize;
+                var indexBase = checked((int)AlignUp(header, 8));
+                var extentRecordSize = ZErofsMapHeader.ExtentRecordSize(node.ZAdvise);
+                var extentCount = checked((int)node.ZExtents);
+                return ZErofsMapHeader.ExtentMetadataSize(indexBase, extentRecordSize, extentCount) + tailSize;
+            }
+
+            if (node.CompactedIndexes)
+            {
+                var indexBase = AlignUp(header, 8) + ZErofsMapHeader.Size;
+                if (node.Compacted2B)
+                {
+                    var (initial, twoByte, end) = Compacted2BSplit(indexBase, node.ClusterCount);
+                    return indexBase + 8L * CeilDiv(initial, 2L) + 2L * twoByte + 8L * CeilDiv(end, 2L) + tailSize;
+                }
+
+                return indexBase + 8L * CeilDiv(node.ClusterCount, 2L) + tailSize;
             }
 
             return AlignUp(header, 8) + ZErofsMapHeader.Size + 8L + node.ClusterCount * ZErofsLclusterIndex.Size + tailSize;
+        }
+
+        if (node.ChunkIndex is not null)
+        {
+
+            var unit = node.UsesChunkIndexes ? ErofsInode.ChunkIndexEntrySize : ErofsInode.BlockMapEntrySize;
+            return AlignUp(header, unit) + ((long)node.ChunkIndex.Length * unit);
         }
 
         if (node.IsFragment)
@@ -253,15 +280,15 @@ public sealed partial class ErofsBuilder
     /// <summary>
     /// Rejects a symlink whose inline inode record cannot fit one metablock, measuring the record with
     /// <see cref="GetInodeRecordSize"/> so the header choice, inline xattrs and payload bytes match the
-    /// write pass exactly. The kernel resolves an inline symlink target inside the mapped metablock that
-    /// holds the inode, so a record longer than one block is unreadable rather than a long link, and
-    /// <c>mkfs.erofs</c> refuses such input instead of truncating the target. <paramref name="node"/>
+    /// write pass exactly. An inline symlink target is resolved inside the mapped metablock that holds the
+    /// inode, so a record longer than one block is unreadable rather than a long link, which is why such
+    /// input is rejected instead of truncating the target. <paramref name="node"/>
     /// keeps its size equal to the UTF-8 byte count of the target, which is the single measurement used
     /// for both the record bound and the inline payload.
     /// <para>拒绝 inode 记录无法容纳单个 metablock 的符号链接，并使用 <see cref="GetInodeRecordSize"/>
-    /// 度量记录长度，使头部选择、inline xattr 与负载字节与写出阶段完全一致。内核在承载该 inode 的
-    /// 已映射 metablock 内解析 inline 符号链接目标，因此超过一个块的记录不是长链接而是不可读数据，
-    /// <c>mkfs.erofs</c> 同样是拒绝输入而不是截断目标。节点的 size 保持等于目标的 UTF-8 字节数，
+    /// 度量记录长度，使头部选择、inline xattr 与负载字节与写出阶段完全一致。inline 符号链接目标是在承载该
+    /// inode 的已映射 metablock 内解析的，因此超过一个块的记录不是长链接而是不可读数据，输入会被拒绝而不是
+    /// 截断目标。节点的 size 保持等于目标的 UTF-8 字节数，
     /// 这一份度量同时用于记录上限与 inline 负载。</para>
     /// </summary>
     /// <param name="node">Symlink node about to carry its target as inline payload.
@@ -270,10 +297,10 @@ public sealed partial class ErofsBuilder
     /// <para>来自经校验选项的镜像块大小（字节）。</para></param>
     /// <exception cref="InvalidOperationException">The symlink inode record needs more than one block.
     /// <para>符号链接的 inode 记录超过一个块。</para></exception>
-    private static void ValidateSymlinkRecordCapacity(BuildNode node, int blockSize)
+    private static void ValidateSymlinkRecordCapacity(ErofsInode node, int blockSize)
     {
         var targetBytes = Encoding.UTF8.GetByteCount(node.SymlinkTarget);
-        node.Size = targetBytes;
+        node.Size = (ulong)targetBytes;
         var recordSize = GetInodeRecordSize(node, blockSize);
         if (recordSize <= blockSize)
         {
@@ -284,10 +311,43 @@ public sealed partial class ErofsBuilder
             $"EROFS symlink '{node.Name}' has a {targetBytes}-byte target that does not fit the {blockSize}-byte block (inode record {recordSize} bytes).");
     }
 
-    private static long GetInodeHeaderSize(BuildNode node)
+    /// <summary>
+    /// Reports the inode record width one node needs. A caller-declared format overrides the width the
+    /// metadata would otherwise select, and a forced compact record whose fields do not fit it fails loudly
+    /// instead of silently widening: the whole point of the option is the shape it names, so publishing a
+    /// different one would misreport the image. The automatic path keeps its existing precedence — a
+    /// preserved source that recorded an extended record, an extended timestamp, a wide owner or link count,
+    /// then the size and directory-subdirectory bounds.
+    /// <para>报告单个节点所需的 inode 记录宽度。调用方声明的形态优先于元数据本会选择的宽度，而强制紧凑记录装不下
+    /// 其字段时显式报错而非静默加宽：该选项的意义正是它所命名的形态，写出另一种会误报镜像。自动路径保持既有优先级
+    /// ——记录了扩展记录的保留源、扩展时间戳、宽所有者或链接数，随后是文件大小与目录子目录数上界。</para>
+    /// </summary>
+    /// <param name="node">Node about to be measured. <para>即将被度量的节点。</para></param>
+    /// <returns>The record width in bytes. <para>记录宽度（字节）。</para></returns>
+    /// <exception cref="FileSystemUnsupportedFeatureException">The node was forced to the compact record
+    /// while one of its fields needs the extended one.
+    /// <para>节点被强制为紧凑记录，而其某个字段需要扩展记录。</para></exception>
+    private static long GetInodeHeaderSize(ErofsInode node)
     {
-        if (node.SourceInode is { Extended: true } || node.RequiresExtendedTime) return ErofsInode.ExtendedSize;
-        if (node.Uid > ushort.MaxValue || node.Gid > ushort.MaxValue || node.LinkCount > ushort.MaxValue) return ErofsInode.ExtendedSize;
+        if (node.InodeFormat == ErofsInodeFormat.Extended)
+        {
+            return ErofsInode.ExtendedSize;
+        }
+
+        if (node.InodeFormat == ErofsInodeFormat.Compact)
+        {
+            var reason = CompactRecordRejection(node);
+            if (reason is not null)
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"EROFS compact inodes were forced, but '{node.FullPath}' needs the extended record: {reason}.");
+            }
+
+            return ErofsInode.CompactSize;
+        }
+
+        if (node.SourceInode is { IsExtended: true } || node.RequiresExtendedTime) return ErofsInode.ExtendedSize;
+        if (node.Uid > ushort.MaxValue || node.Gid > ushort.MaxValue || node.Nlink > ushort.MaxValue) return ErofsInode.ExtendedSize;
 
         if (node.IsDirectory)
         {
@@ -301,109 +361,201 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Builds one inode record. The advise bit shared by <c>EROFS_I_NLINK_1</c> and dot-omitted directories
-    /// follows the resolved declaration, so a compact inode never carries a bit the declared feature set
-    /// forbids while the superblock word and the per-node layout stay in agreement.
-    /// <para>构造单条 inode 记录。<c>EROFS_I_NLINK_1</c> 与省略点项目录共用的 advise 位跟随已解析的声明，
-    /// 因此紧凑 inode 不会携带声明特性集禁止的位，超级块字与逐节点布局也始终一致。</para>
+    /// Reports why a node cannot be stored in the 32-byte compact record, or <see langword="null"/> when it
+    /// fits. Every field the extended record widens is checked, so a forced compact build names the exact
+    /// dimension that overflowed instead of failing with a generic message.
+    /// <para>报告节点为何无法存入 32 字节紧凑记录，能装下时为 <see langword="null"/>。检查扩展记录加宽的每个
+    /// 字段，使强制紧凑构建指名溢出的确切维度，而不是给出笼统信息。</para>
     /// </summary>
-    private static ErofsInode BuildInode(BuildNode node, int blockSize, ulong now, ErofsOptions options)
+    /// <param name="node">Node being tested. <para>待判定的节点。</para></param>
+    /// <returns>The reason in English, or <see langword="null"/>. <para>英文原因，或 <see langword="null"/>。</para></returns>
+    private static string? CompactRecordRejection(ErofsInode node)
     {
-        var inode = new ErofsInode { AllowNlinkOneBit = DeclaredNlinkOneAdvice(options) };
-        if (GetInodeHeaderSize(node) == ErofsInode.ExtendedSize)
+        if (node.SourceInode is { IsExtended: true })
         {
-            inode.Advise |= ErofsInode.FlagExtended;
+            return "the source image recorded an extended inode";
         }
 
-        var effectiveTime = node.SourceInode?.Mtime ?? (node.Mtime > 0 ? (ulong)node.Mtime : now);
-        inode.CTime = effectiveTime;
-        inode.CTimeNsec = node.SourceInode?.MtimeNanoseconds ?? 0;
-        inode.Uid = node.Uid;
-        inode.Gid = node.Gid;
-        inode.Generation = inode.IsExtended ? 0 : checked((uint)(effectiveTime - now));
-
-        if (node.XattrIbody.Length > 0)
+        if (node.RequiresExtendedTime)
         {
-            inode.XattrICount = ErofsXattr.GetICountForIbodyLength(node.XattrIbody.Length);
+            return "its timestamp needs the extended form";
         }
 
-        if (node.IsSymlink)
+        if (node.Uid > ushort.MaxValue || node.Gid > ushort.MaxValue)
         {
-            inode.Mode = (ushort)(ErofsInode.ModeSymlink | (node.HasModeOverride ? (node.ModeOverride & 0xFFF) : 0x1FF));
-            inode.Nlink = node.LinkCount;
-            inode.Size = (ulong)node.Size;
-            inode.Advise |= ErofsInode.DataLayoutInline;
-            inode.U = uint.MaxValue;
-            node.InlineData = Encoding.UTF8.GetBytes(node.SymlinkTarget);
-            return inode;
+            return $"uid {node.Uid}/gid {node.Gid} exceed {ushort.MaxValue}";
         }
 
-        if (node.IsDevice)
+        if (node.Nlink > ushort.MaxValue)
         {
-            inode.Mode = node.DeviceMode;
-            inode.Nlink = node.LinkCount;
-            inode.Size = 0;
-            inode.Advise |= ErofsInode.DataLayoutFlat;
-            inode.U = node.DeviceRdev;
-            return inode;
+            return $"link count {node.Nlink} exceeds {ushort.MaxValue}";
+        }
+
+        if (node.Size > uint.MaxValue)
+        {
+            return $"size {node.Size} exceeds {uint.MaxValue}";
         }
 
         if (node.IsDirectory)
         {
-            inode.Mode = (ushort)(ErofsInode.ModeDirectory | (node.HasModeOverride ? (node.ModeOverride & 0xFFF) : 0x1ED));
-            inode.Nlink = (ulong)(2 + node.Children.Count(child => child.IsDirectory));
-            inode.Size = (ulong)node.DirPayloadSize;
+            var subdirs = (ulong)node.Children.Count(child => child.IsDirectory);
+            if (2 + subdirs > ushort.MaxValue)
+            {
+                return $"2 + {subdirs} subdirectories exceed {ushort.MaxValue}";
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Fills one node's on-disk fields and addressing state before it is serialized. The advise bit shared
+    /// by <c>EROFS_I_NLINK_1</c> and dot-omitted directories follows the resolved declaration and is emitted
+    /// only for a target that defines the bit, so a compact inode never carries a bit the declared feature set
+    /// forbids nor one the target's advise mask would reject, while the superblock word and the
+    /// per-node layout stay in agreement.
+    /// <para>在序列化之前填充单个节点的磁盘字段与寻址状态。<c>EROFS_I_NLINK_1</c> 与省略点项目录共用的
+    /// advise 位跟随已解析的声明，并且只为定义该位的目标写出，因此紧凑 inode 不会携带声明特性集禁止的位，
+    /// 也不会携带目标 advise 掩码会拒绝的位，超级块字与逐节点布局也始终一致。</para>
+    /// </summary>
+    private static void BuildInode(ErofsInode node, int blockSize, ulong now, ErofsOptions options)
+    {
+        node.AllowNlinkOneBit = DeclaredNlinkOneAdvice(options) && KernelDefinesNlinkOneAdvice(options);
+        node.IFormat = GetInodeHeaderSize(node) == ErofsInode.ExtendedSize ? ErofsInode.FlagExtended : (ushort)0;
+
+        var effectiveTime = node.SourceInode?.CTime ?? (node.CTime is > 0 and <= long.MaxValue ? node.CTime : now);
+        node.CTime = effectiveTime;
+        node.CTimeNsec = node.SourceInode?.CTimeNsec ?? node.CTimeNsec;
+        node.Generation = node.IsExtended ? 0 : checked((uint)(effectiveTime - now));
+
+        if (node.XattrIbody.Length > 0)
+        {
+            node.XattrICount = ErofsXattr.GetICountForIbodyLength(node.XattrIbody.Length);
+        }
+
+        node.XattrISize = node.XattrICount == 0 ? 0 : 12 + 4 * (node.XattrICount - 1);
+
+        if (node.IsSymlink)
+        {
+            node.Mode = (ushort)(ErofsInode.ModeSymlink | (node.HasModeOverride ? (node.ModeOverride & 0xFFF) : 0x1FF));
+            node.InlineData = Encoding.UTF8.GetBytes(node.SymlinkTarget);
+            node.Size = (ulong)node.InlineData.Length;
+            node.DataLayout = ErofsDataLayout.Inline;
+            node.Idata = new ErofsFlatIdata { BlockAddress = uint.MaxValue };
+            return;
+        }
+
+        if (node.IsDevice)
+        {
+            node.Mode = node.DeviceMode;
+            node.Size = 0;
+            node.DataLayout = ErofsDataLayout.Flat;
+            node.Idata = new ErofsFlatIdata { BlockAddress = node.DeviceRdev };
+            return;
+        }
+
+        if (node.IsDirectory)
+        {
+            node.Mode = (ushort)(ErofsInode.ModeDirectory | (node.HasModeOverride ? (node.ModeOverride & 0xFFF) : 0x1ED));
+            node.Nlink = (ulong)(2 + node.Children.Count(child => child.IsDirectory));
+            node.Size = (ulong)node.DirPayloadSize;
             if (node.DirectoryInline)
             {
 
-                inode.Advise |= ErofsInode.DataLayoutInline;
-                inode.U = uint.MaxValue;
+                node.DataLayout = ErofsDataLayout.Inline;
+                node.Idata = new ErofsFlatIdata { BlockAddress = uint.MaxValue };
             }
             else
             {
-                inode.Advise |= ErofsInode.DataLayoutFlat;
-                inode.U = (uint)node.DirBlockAddr;
+                node.DataLayout = ErofsDataLayout.Flat;
+                node.Idata = new ErofsFlatIdata { BlockAddress = (uint)node.DirBlockAddr };
             }
+
+            return;
+        }
+
+        node.Mode = (ushort)(ErofsInode.ModeRegularFile | (node.HasModeOverride ? (node.ModeOverride & 0xFFF) : 0x1A4));
+        if (node.Pclusters is not null)
+        {
+
+            node.DataLayout = node.CompactedIndexes
+                ? ErofsDataLayout.CompactIndexes
+                : ErofsDataLayout.Compressed;
+        }
+        else if (node.ChunkIndex is not null)
+        {
+
+            var chunkFormat = node.ChunkFormatBlkBits;
+            if (chunkFormat == 0 && node.SourceInode is { } chunkSource)
+            {
+                chunkFormat = chunkSource.ChunkFormatBlkBits;
+            }
+
+            var needs48Bit = false;
+            foreach (var startBlock in node.ChunkIndex!)
+            {
+                if (startBlock > uint.MaxValue)
+                {
+                    needs48Bit = true;
+                    break;
+                }
+            }
+
+            var wideFormNeeded = needs48Bit || options.ExtraDeviceCount > 0 || node.DeviceId != 0
+                || (node.SourceInode?.UsesChunkIndexes ?? false);
+            if (options.ChunkIndexKind == ErofsChunkIndexKind.BlockMap && wideFormNeeded)
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"EROFS 4-byte chunk block maps were forced, but '{node.FullPath}' cannot be expressed by "
+                    + "them: " + (needs48Bit
+                        ? "a start block exceeds the 32-bit block map field"
+                        : "its payload carries a device id or a device-shaped layout")
+                    + ".");
+            }
+
+            if (options.ChunkIndexKind == ErofsChunkIndexKind.Indexes || wideFormNeeded)
+            {
+                chunkFormat |= ErofsInode.ChunkFormatIndexes;
+            }
+
+            if (needs48Bit)
+            {
+                chunkFormat |= ErofsInode.ChunkFormat48Bit;
+            }
+
+            if (node.Idata is not ErofsChunkIdata chunkIdata)
+            {
+                chunkIdata = new ErofsChunkIdata();
+                node.Idata = chunkIdata;
+            }
+
+            chunkIdata.ChunkFormat = (ushort)chunkFormat;
+            chunkIdata.DeviceId = node.DeviceId;
+            node.DataLayout = ErofsDataLayout.ChunkBased;
+        }
+        else if (node.IsFragment)
+        {
+
+            node.DataLayout = ErofsDataLayout.Compressed;
+            node.Idata = new ErofsCompressedIdata();
+        }
+        else if (node.FlatBlocks > 0)
+        {
+
+            node.DataLayout = node.InlineData.Length > 0 ? ErofsDataLayout.Inline : ErofsDataLayout.Flat;
+            node.Idata = new ErofsFlatIdata { BlockAddress = (uint)node.FlatBlockAddr };
+        }
+        else if (node.InlineData.Length > 0)
+        {
+
+            node.DataLayout = ErofsDataLayout.Inline;
+            node.Idata = new ErofsFlatIdata { BlockAddress = uint.MaxValue };
         }
         else
         {
-            inode.Mode = (ushort)(ErofsInode.ModeRegularFile | (node.HasModeOverride ? (node.ModeOverride & 0xFFF) : 0x1A4));
-            inode.Nlink = node.LinkCount;
-            inode.Size = (ulong)node.Size;
-            if (node.Pclusters is not null)
-            {
 
-                inode.Advise |= node.CompactedIndexes
-                    ? ErofsInode.DataLayoutCompactIndexes
-                    : ErofsInode.DataLayoutCompressed;
-                inode.U = node.CompressedBlocks;
-            }
-            else if (node.IsFragment)
-            {
-
-                inode.Advise |= ErofsInode.DataLayoutCompressed;
-                inode.U = 0;
-            }
-            else if (node.FlatBlocks > 0)
-            {
-
-                inode.Advise |= node.InlineData.Length > 0 ? ErofsInode.DataLayoutInline : ErofsInode.DataLayoutFlat;
-                inode.U = (uint)node.FlatBlockAddr;
-            }
-            else if (node.InlineData.Length > 0)
-            {
-
-                inode.Advise |= ErofsInode.DataLayoutInline;
-                inode.U = uint.MaxValue;
-            }
-            else
-            {
-
-                inode.Advise |= ErofsInode.DataLayoutFlat;
-                inode.U = 0;
-            }
+            node.DataLayout = ErofsDataLayout.Flat;
+            node.Idata = new ErofsFlatIdata { BlockAddress = 0 };
         }
-
-        return inode;
     }
 }

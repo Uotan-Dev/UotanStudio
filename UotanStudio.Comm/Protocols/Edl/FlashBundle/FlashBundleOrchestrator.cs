@@ -118,13 +118,11 @@ public sealed class FlashBundleProgress(FlashBundlePhase phase, string message, 
 /// 并通过 Firehose 协议逐项派发 Program、Erase、Patch、Wipe 与 UFS 配置操作。</para>
 /// </summary>
 /// <remarks>
-/// This is a session-based port of the reference <c>FlashBundleOrchestrator</c>: instead of a
-/// driver abstraction it operates directly on an <see cref="EdlSession"/> (which owns the
-/// Firehose transport). Skip-block SHA256 verification, NAND geometry back-fill and the
-/// bootable-drive step of the reference are intentionally not ported here.
-/// <para>这是参考 <c>FlashBundleOrchestrator</c> 的基于会话的移植：不使用驱动抽象，而是直接
-/// 基于 <see cref="EdlSession"/>（其持有 Firehose 传输）操作。参考实现中的 skip-block SHA256
-/// 校验、NAND 几何回填与可启动驱动器步骤在此有意未移植。</para>
+/// This orchestrator operates directly on an <see cref="EdlSession"/> (which owns the
+/// Firehose transport) instead of a driver abstraction. Skip-block SHA256 verification, NAND
+/// geometry back-fill and the bootable-drive step are intentionally not implemented here.
+/// <para>本编排器直接基于 <see cref="EdlSession"/>（其持有 Firehose 传输）操作，不使用驱动抽象。
+/// skip-block SHA256 校验、NAND 几何回填与可启动驱动器步骤在此有意未实现。</para>
 /// </remarks>
 /// <remarks>
 /// Initializes a new instance of the <see cref="FlashBundleOrchestrator"/> class.
@@ -168,12 +166,16 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
 
     /// <summary>
     /// Runs a flash bundle from the specified options.
-    /// Options and selection collections are captured before progress callbacks or awaits.
-    /// Callers must not mutate collections during that initial synchronous capture.
-    /// Device phases hold one Firehose operation lease. Progress and log callbacks must not
-    /// synchronously wait for another operation on the same session.
     /// <para>根据指定选项运行刷写包。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>Options and selection collections are captured before progress callbacks or awaits.
+    /// Callers must not mutate collections during that initial synchronous capture. Device phases hold
+    /// one Firehose operation lease. Progress and log callbacks must not synchronously wait for another
+    /// operation on the same session.</para>
+    /// <para>选项与选择集合在进度回调或等待之前捕获，调用方不得在那段初始同步捕获期间改动集合。
+    /// 设备阶段持有一个 Firehose 操作租约；进度与日志回调不得同步等待同一会话上的另一个操作。</para>
+    /// </remarks>
     /// <param name="options">The flash bundle options. <para>刷写包选项。</para></param>
     /// <param name="progress">Optional progress reporter. <para>可选的进度报告器。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
@@ -186,11 +188,11 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
 
     /// <summary>
     /// Validates sources and device ranges without program, erase, patch, wipe or provisioning.
-    /// Session initialization and storage queries are allowed and require caller authorization.
-    /// This observation does not retain a prepared plan; execution must validate again.
-    /// <para>在不执行 program、erase、patch、wipe 或 provisioning 的情况下校验源文件与设备
-    /// 范围。允许会话初始化与存储查询，且需要调用方授权。该观察不会保留已准备好的计划；
-    /// 执行时必须重新校验。</para>
+    /// <para>在不执行 program、erase、patch、wipe 或 provisioning 的情况下校验源文件与设备范围。</para>
+    /// Session initialization and storage queries are allowed and require caller authorization. This
+    /// observation does not retain a prepared plan; execution must validate again.
+    /// <para>允许会话初始化与存储查询，且需要调用方授权。该观察不会保留已准备好的计划；执行时必须
+    /// 重新校验。</para>
     /// </summary>
     /// <param name="options">Selected bundle inputs and policy, captured at entry.
     /// <para>入口处捕获的所选包输入与策略。</para></param>
@@ -228,6 +230,7 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
             var input = prepared ?? ownedPreparation!;
             var filteredPrograms = input.Programs;
             var filteredPatches = input.Patches;
+            var filteredWipes = input.Wipes;
             var ufsProvision = input.Ufs;
             var sources = input.Sources;
             if (input.AbsentPrograms is { Count: > 0 } absentPrograms)
@@ -246,7 +249,8 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
             List<EdlPhysicalRange>? storageRanges = null;
             if (preflightSectorSize > 0)
             {
-                storageRanges = FlashBundlePreflight.Validate(filteredPrograms, filteredPatches, options, preflightSectorSize, cancellationToken, sources, options.Slot);
+                storageRanges = FlashBundlePreflight.Validate(filteredPrograms, filteredPatches, options,
+                    preflightSectorSize, cancellationToken, sources, options.Slot, filteredWipes);
             }
 
             if (options.DryRun && !devicePreflight)
@@ -257,6 +261,7 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
                         "Offline preflight requires a sector size in the manifest, configuration or explicit override.");
                 }
 
+                RecordWipePreviews(filteredWipes, options, result, geometries: null);
                 result.ProgramEntriesSkipped = filteredPrograms.Count;
                 result.PatchEntriesSkipped = filteredPatches?.Count ?? 0;
                 result.IsSuccess = true;
@@ -270,6 +275,29 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
             {
                 throw new InvalidDataException("The selected UFS slot changed while the bundle waited for the device.");
             }
+
+            if (options.MaxProgramChunkBytes is { } chunkBytes)
+            {
+                if (chunkBytes is < 512 or > 16777216 || (chunkBytes & 511) != 0)
+                {
+                    throw new EdlException(EdlErrorCode.InvalidParameter,
+                        "The write-chunk override must be a 512-byte multiple between 512 and 16777216 bytes.");
+                }
+
+                firehose.Configuration.MaxProgramChunkBytes = chunkBytes;
+            }
+
+            if (options.NandPagesPerBlock is { } pagesPerBlock)
+            {
+                if (pagesPerBlock is < 0 or > 65535)
+                {
+                    throw new EdlException(EdlErrorCode.InvalidParameter,
+                        "The NAND pages-per-block override must be 0 or a value between 1 and 65535.");
+                }
+
+                firehose.Configuration.NandPagesPerBlock = pagesPerBlock;
+            }
+
             RaiseProgress(progress, FlashBundlePhase.Parsing, "Initializing EDL session... 初始化 EDL 会话...", 0, 0);
             await _session.InitializeOwnedAsync(null, cancellationToken).ConfigureAwait(false);
             if (options.Slot.HasValue)
@@ -290,7 +318,8 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
 
             if (sectorSize != preflightSectorSize)
             {
-                storageRanges = FlashBundlePreflight.Validate(filteredPrograms, filteredPatches, options, sectorSize, cancellationToken, sources, options.Slot);
+                storageRanges = FlashBundlePreflight.Validate(filteredPrograms, filteredPatches, options,
+                    sectorSize, cancellationToken, sources, options.Slot, filteredWipes);
             }
 
             firehose.Configuration.SectorSize = sectorSize;
@@ -306,12 +335,15 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
             sources?.ValidateLengths(cancellationToken);
             if (devicePreflight)
             {
+                RecordWipePreviews(filteredWipes, options, result, await CollectWipeGeometriesAsync(
+                    firehose, filteredWipes, result, cancellationToken).ConfigureAwait(false));
                 result.ProgramEntriesSkipped = filteredPrograms.Count;
                 result.PatchEntriesSkipped = filteredPatches?.Count ?? 0;
                 result.IsSuccess = true;
                 return result;
             }
-            if (!await ExecuteBundleAsync(options, progress, cancellationToken, result, firehose, filteredPrograms, filteredPatches, ufsProvision, sources, sectorSize).ConfigureAwait(false))
+            if (!await ExecuteBundleAsync(options, progress, cancellationToken, result, firehose, filteredPrograms,
+                    filteredPatches, filteredWipes, ufsProvision, sources, sectorSize).ConfigureAwait(false))
             {
                 return result;
             }

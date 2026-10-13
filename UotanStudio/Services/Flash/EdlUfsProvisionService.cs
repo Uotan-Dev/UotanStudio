@@ -4,38 +4,25 @@ using UotanStudio.ViewModels.Devices;
 namespace UotanStudio.Services.Flash;
 
 /// <summary>
-/// <para>把一份 UFS provisioning 描述符文件落到设备：<see cref="PreviewAsync"/> 只报告将要发送的
-/// LUN 表、大小与提交标志，<see cref="ProvisionAsync"/> 在显式确认后才真正写出描述符槽位，
-/// <see cref="ResetAsync"/> 丢弃待生效的配置。存储类型与 LUN 0 几何一律以设备上报为准。</para>
-/// Lands a UFS provisioning descriptor file on a device: <see cref="PreviewAsync"/> only reports the LUN
-/// table, sizes and commit flag that would be sent, <see cref="ProvisionAsync"/> writes the descriptor
-/// slots after an explicit confirmation, and <see cref="ResetAsync"/> discards a pending configuration.
-/// Storage technology and LUN 0 geometry always come from the device, never from the caller.
+/// Applies a UFS provisioning descriptor file to a device, writing descriptor slots only after explicit
+/// confirmation and reporting the LUN table it would send.
+/// <para>把一份 UFS provisioning 描述符文件落到设备，只在显式确认后写出描述符槽位，并报告将要发送的 LUN 表。</para>
 /// </summary>
-/// <remarks>
-/// <para>预览路径在结构上就不可能写描述符：它只发送一次只读的 <c>getstorageinfo</c>，从不进入
-/// <c>ProvisionUfsAsync</c> 或 <c>UfsResetAsync</c>。写入路径会先用设备上报的 LUN 0 块宽度校验每个
-/// LUN 的大小，再让协议自行预检命令序列。</para>
-/// <para>The preview path is structurally incapable of writing descriptors: it issues one read-only
-/// <c>getstorageinfo</c> and never enters <c>ProvisionUfsAsync</c> or <c>UfsResetAsync</c>. The write path
-/// first validates every LUN size against the block width the device reported for LUN 0, then lets the
-/// protocol preflight the command sequence itself.</para>
-/// </remarks>
 internal static class EdlUfsProvisionService
 {
     /// <summary>
-    /// <para>报告将要发送的 UFS 配置而不接触设备：只读取一次存储几何，绝不成帧任何
-    /// <c>&lt;ufs&gt;</c> 命令。</para>
     /// Reports the UFS configuration that would be sent without touching the device: it reads the storage
     /// geometry once and never frames a <c>&lt;ufs&gt;</c> command.
+    /// <para>报告将要发送的 UFS 配置而不接触设备：只读取一次存储几何，绝不成帧任何
+    /// <c>&lt;ufs&gt;</c> 命令。</para>
     /// </summary>
-    /// <param name="device"><para>目标 EDL 设备。</para>The target EDL device.</param>
-    /// <param name="profilePath"><para>描述符文件路径。</para>Path to the descriptor profile file.</param>
-    /// <param name="progress"><para>阶段进度。</para>Phase progress.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <param name="programmerPath"><para>可选的编程器覆盖路径。</para>Optional programmer override path.</param>
-    /// <param name="initialization"><para>可选的会话认证选项。</para>Optional session authentication options.</param>
-    /// <returns><para>描述将要发送内容的结果。</para>A result describing what would be sent.</returns>
+    /// <param name="device">The target EDL device. <para>目标 EDL 设备。</para></param>
+    /// <param name="profilePath">Path to the descriptor profile file. <para>描述符文件路径。</para></param>
+    /// <param name="progress">Phase progress. <para>阶段进度。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="programmerPath">Optional programmer override path. <para>可选的编程器覆盖路径。</para></param>
+    /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
+    /// <returns>A result describing what would be sent. <para>描述将要发送内容的结果。</para></returns>
     internal static async Task<FlashResult> PreviewAsync(DeviceInfo device, string profilePath,
         IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null)
@@ -50,17 +37,17 @@ internal static class EdlUfsProvisionService
     }
 
     /// <summary>
-    /// <para>写入描述符槽位；未确认时在发出任何字节之前拒绝。</para>
     /// Writes the descriptor slots; an unconfirmed call is refused before any byte is issued.
+    /// <para>写入描述符槽位；未确认时在发出任何字节之前拒绝。</para>
     /// </summary>
-    /// <param name="device"><para>目标 EDL 设备。</para>The target EDL device.</param>
-    /// <param name="profilePath"><para>描述符文件路径。</para>Path to the descriptor profile file.</param>
-    /// <param name="confirmed"><para>调用方是否已显式确认写入。</para>Whether the caller explicitly confirmed the write.</param>
-    /// <param name="progress"><para>阶段进度。</para>Phase progress.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <param name="programmerPath"><para>可选的编程器覆盖路径。</para>Optional programmer override path.</param>
-    /// <param name="initialization"><para>可选的会话认证选项。</para>Optional session authentication options.</param>
-    /// <returns><para>写入结果。</para>The provisioning result.</returns>
+    /// <param name="device">The target EDL device. <para>目标 EDL 设备。</para></param>
+    /// <param name="profilePath">Path to the descriptor profile file. <para>描述符文件路径。</para></param>
+    /// <param name="confirmed">Whether the write was explicitly confirmed. <para>是否已显式确认写入。</para></param>
+    /// <param name="progress">Phase progress. <para>阶段进度。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="programmerPath">Optional programmer override path. <para>可选的编程器覆盖路径。</para></param>
+    /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
+    /// <returns>The provisioning result. <para>写入结果。</para></returns>
     internal static async Task<FlashResult> ProvisionAsync(DeviceInfo device, string profilePath, bool confirmed,
         IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null)
@@ -76,17 +63,17 @@ internal static class EdlUfsProvisionService
     }
 
     /// <summary>
-    /// <para>丢弃目标上待生效的 UFS 配置；未确认时在发出任何字节之前拒绝。</para>
     /// Discards the pending UFS configuration on the target; an unconfirmed call is refused before any byte
     /// is issued.
+    /// <para>丢弃目标上待生效的 UFS 配置；未确认时在发出任何字节之前拒绝。</para>
     /// </summary>
-    /// <param name="device"><para>目标 EDL 设备。</para>The target EDL device.</param>
-    /// <param name="confirmed"><para>调用方是否已显式确认。</para>Whether the caller explicitly confirmed.</param>
-    /// <param name="progress"><para>阶段进度。</para>Phase progress.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <param name="programmerPath"><para>可选的编程器覆盖路径。</para>Optional programmer override path.</param>
-    /// <param name="initialization"><para>可选的会话认证选项。</para>Optional session authentication options.</param>
-    /// <returns><para>复位结果。</para>The reset result.</returns>
+    /// <param name="device">The target EDL device. <para>目标 EDL 设备。</para></param>
+    /// <param name="confirmed">Whether the reset was explicitly confirmed. <para>是否已显式确认复位。</para></param>
+    /// <param name="progress">Phase progress. <para>阶段进度。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="programmerPath">Optional programmer override path. <para>可选的编程器覆盖路径。</para></param>
+    /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
+    /// <returns>The reset result. <para>复位结果。</para></returns>
     internal static async Task<FlashResult> ResetAsync(DeviceInfo device, bool confirmed,
         IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null)
@@ -100,20 +87,20 @@ internal static class EdlUfsProvisionService
     }
 
     /// <summary>
-    /// <para>预览核心：读取设备几何、校验容量并报告将要发送的 LUN 表，全程不成帧任何
-    /// <c>&lt;ufs&gt;</c> 命令。</para>
     /// Preview core: reads the device geometry, validates the capacities and reports the LUN table that
     /// would be sent, framing no <c>&lt;ufs&gt;</c> command at all.
+    /// <para>预览核心：读取设备几何、校验容量并报告将要发送的 LUN 表，全程不成帧任何
+    /// <c>&lt;ufs&gt;</c> 命令。</para>
     /// </summary>
-    /// <param name="firehose"><para>已配置的 Firehose 协议实例。</para>The configured Firehose protocol.</param>
-    /// <param name="profile"><para>已经校验过的描述符集合。</para>The validated descriptor set.</param>
-    /// <param name="progress"><para>阶段进度。</para>Phase progress.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns><para>描述将要发送内容的结果。</para>A result describing what would be sent.</returns>
-    /// <exception cref="InvalidOperationException"><para>设备未上报 UFS 存储。</para>
-    /// The device did not report UFS storage.</exception>
-    /// <exception cref="InvalidDataException"><para>声明容量与设备上报的块宽度不符。</para>
-    /// A declared capacity disagrees with the block width the device reported.</exception>
+    /// <param name="firehose">The configured Firehose protocol. <para>已配置的 Firehose 协议实例。</para></param>
+    /// <param name="profile">The validated descriptor set. <para>已经校验过的描述符集合。</para></param>
+    /// <param name="progress">Phase progress. <para>阶段进度。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A result describing what would be sent. <para>描述将要发送内容的结果。</para></returns>
+    /// <exception cref="InvalidOperationException">The device did not report UFS storage. <para>设备未上报
+    /// UFS 存储。</para></exception>
+    /// <exception cref="InvalidDataException">A declared capacity disagrees with the reported block width.
+    /// <para>声明容量与设备上报的块宽度不符。</para></exception>
     internal static async Task<FlashResult> PreviewCoreAsync(FirehoseProtocol firehose,
         UfsProvisionProfile profile, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
@@ -136,21 +123,21 @@ internal static class EdlUfsProvisionService
     }
 
     /// <summary>
-    /// <para>写入核心：确认、设备存储类型、容量对齐三者都通过后，才把描述符交给协议成帧并发送。</para>
     /// Write core: frames and sends the descriptors only after confirmation, the device-reported storage
     /// technology and the capacity alignment have all passed.
+    /// <para>写入核心：确认、设备存储类型、容量对齐三者都通过后，才把描述符交给协议成帧并发送。</para>
     /// </summary>
-    /// <param name="firehose"><para>已配置的 Firehose 协议实例。</para>The configured Firehose protocol.</param>
-    /// <param name="profile"><para>已经校验过的描述符集合。</para>The validated descriptor set.</param>
-    /// <param name="confirmed"><para>调用方是否已显式确认写入描述符槽位。</para>
-    /// Whether the caller explicitly confirmed writing descriptor slots.</param>
-    /// <param name="progress"><para>阶段进度。</para>Phase progress.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns><para>写入结果。</para>The provisioning result.</returns>
-    /// <exception cref="InvalidOperationException"><para>未确认，或设备未上报 UFS 存储。</para>
-    /// The write was not confirmed, or the device did not report UFS storage.</exception>
-    /// <exception cref="InvalidDataException"><para>声明容量与设备上报的块宽度不符。</para>
-    /// A declared capacity disagrees with the block width the device reported.</exception>
+    /// <param name="firehose">The configured Firehose protocol. <para>已配置的 Firehose 协议实例。</para></param>
+    /// <param name="profile">The validated descriptor set. <para>已经校验过的描述符集合。</para></param>
+    /// <param name="confirmed">Whether writing the descriptor slots was explicitly confirmed. <para>是否已
+    /// 显式确认写入描述符槽位。</para></param>
+    /// <param name="progress">Phase progress. <para>阶段进度。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The provisioning result. <para>写入结果。</para></returns>
+    /// <exception cref="InvalidOperationException">The write was not confirmed, or the device did not report
+    /// UFS storage. <para>未确认，或设备未上报 UFS 存储。</para></exception>
+    /// <exception cref="InvalidDataException">A declared capacity disagrees with the reported block width.
+    /// <para>声明容量与设备上报的块宽度不符。</para></exception>
     internal static async Task<FlashResult> ProvisionCoreAsync(FirehoseProtocol firehose,
         UfsProvisionProfile profile, bool confirmed, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
@@ -188,17 +175,17 @@ internal static class EdlUfsProvisionService
     }
 
     /// <summary>
-    /// <para>复位核心：发送一条 commit 为 0 的结语，丢弃待生效配置；未确认时不发出任何字节。</para>
     /// Reset core: sends one epilogue with a zero commit value to discard a pending configuration; an
     /// unconfirmed call issues no bytes.
+    /// <para>复位核心：发送一条 commit 为 0 的结语，丢弃待生效配置；未确认时不发出任何字节。</para>
     /// </summary>
-    /// <param name="firehose"><para>已配置的 Firehose 协议实例。</para>The configured Firehose protocol.</param>
-    /// <param name="confirmed"><para>调用方是否已显式确认。</para>Whether the caller explicitly confirmed.</param>
-    /// <param name="progress"><para>阶段进度。</para>Phase progress.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns><para>复位结果。</para>The reset result.</returns>
-    /// <exception cref="InvalidOperationException"><para>未确认，或设备未上报 UFS 存储。</para>
-    /// The call was not confirmed, or the device did not report UFS storage.</exception>
+    /// <param name="firehose">The configured Firehose protocol. <para>已配置的 Firehose 协议实例。</para></param>
+    /// <param name="confirmed">Whether the reset was explicitly confirmed. <para>是否已显式确认复位。</para></param>
+    /// <param name="progress">Phase progress. <para>阶段进度。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The reset result. <para>复位结果。</para></returns>
+    /// <exception cref="InvalidOperationException">The call was not confirmed, or the device did not report
+    /// UFS storage. <para>未确认，或设备未上报 UFS 存储。</para></exception>
     internal static async Task<FlashResult> ResetCoreAsync(FirehoseProtocol firehose, bool confirmed,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
@@ -228,14 +215,14 @@ internal static class EdlUfsProvisionService
     }
 
     /// <summary>
-    /// <para>把描述符集合与设备上报的块宽度排成一行可读的 LUN 表，供预览与写入摘要共用。</para>
     /// Renders the descriptor set together with the device-reported block width as one readable LUN table,
     /// shared by the preview and write summaries.
+    /// <para>把描述符集合与设备上报的块宽度排成一行可读的 LUN 表，供预览与写入摘要共用。</para>
     /// </summary>
-    /// <param name="profile"><para>描述符集合。</para>The descriptor set.</param>
-    /// <param name="geometry"><para>设备上报的 LUN 0 几何。</para>The device-reported LUN 0 geometry.</param>
-    /// <param name="slot"><para>Firehose 槽位。</para>The Firehose slot.</param>
-    /// <returns><para>单行摘要文本。</para>A single-line summary.</returns>
+    /// <param name="profile">The descriptor set. <para>描述符集合。</para></param>
+    /// <param name="geometry">The device-reported LUN 0 geometry. <para>设备上报的 LUN 0 几何。</para></param>
+    /// <param name="slot">The Firehose slot. <para>Firehose 槽位。</para></param>
+    /// <returns>A single-line summary. <para>单行摘要文本。</para></returns>
     internal static string DescribePlan(UfsProvisionProfile profile, FirehoseStorageGeometry geometry, int slot)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -249,14 +236,14 @@ internal static class EdlUfsProvisionService
     }
 
     /// <summary>
-    /// <para>只接受设备自己上报为 UFS 的存储：编程器在 configure 应答里回报的 MemoryName 才是判据，
-    /// 调用方的假设不作数。</para>
-    /// Accepts only storage the device itself reported as UFS: the MemoryName the programmer returned in the
-    /// configure acknowledgement is the evidence, not the caller's assumption.
+    /// Accepts only storage the device itself reported as UFS: the MemoryName returned in the configure
+    /// acknowledgement is the evidence, not an assumed storage type.
+    /// <para>只接受设备自己上报为 UFS 的存储：configure 应答里回报的 MemoryName 才是判据，猜测的存储类型
+    /// 不作数。</para>
     /// </summary>
-    /// <param name="firehose"><para>已配置的 Firehose 协议实例。</para>The configured Firehose protocol.</param>
-    /// <exception cref="InvalidOperationException"><para>设备上报的存储类型不是 UFS。</para>
-    /// The device reported a storage type that is not UFS.</exception>
+    /// <param name="firehose">The configured Firehose protocol. <para>已配置的 Firehose 协议实例。</para></param>
+    /// <exception cref="InvalidOperationException">The device reported a storage type that is not UFS.
+    /// <para>设备上报的存储类型不是 UFS。</para></exception>
     private static void RequireUfsStorage(FirehoseProtocol firehose)
     {
         if (firehose.Configuration.StorageType != FirehoseStorageType.Ufs)

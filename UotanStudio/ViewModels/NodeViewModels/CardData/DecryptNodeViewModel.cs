@@ -7,26 +7,26 @@ using UotanStudio.Services.Execution;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>解密节点视图模型：支持 AES-CBC 与 XOR 两种解密算法，与加密节点输出格式对称。</para>
 /// Decrypt node view model supporting AES-CBC and XOR decryption, symmetric with the encrypt node's output format.
+/// <para>解密节点视图模型：支持 AES-CBC 与 XOR 两种解密算法，与加密节点输出格式对称。</para>
 /// </summary>
 public class DecryptNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
-    /// <para>创建具有指定标题的解密节点。</para>
     /// Creates a decrypt node with the specified title.
+    /// <para>创建具有指定标题的解密节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public DecryptNodeViewModel(string title) : base(title, NodeCategory.Data)
     {
     }
 
     /// <summary>
-    /// <para>创建默认的数据解密节点，解密输入数据。</para>
     /// Creates a default data decrypt node that decrypts the input data.
+    /// <para>创建默认的数据解密节点，解密输入数据。</para>
     /// </summary>
     public static DecryptNodeViewModel CreateDecryptNode()
     {
@@ -49,16 +49,16 @@ public class DecryptNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的解密逻辑：Data.Cipher.Decrypt 解密输入数据。</para>
     /// Dispatches decryption logic by the node type key (TypeKey): Data.Cipher.Decrypt decrypts the input data.
+    /// <para>按节点类型键（TypeKey）分发对应的解密逻辑：Data.Cipher.Decrypt 解密输入数据。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {
@@ -106,10 +106,10 @@ public class DecryptNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>AES-CBC 解密：密文前 BlockSize/8 字节为 IV，其后为密文主体（与加密节点的 [.. aes.IV, .. encrypted] 格式对称），
-    /// 用 SHA256(key) 派生密钥。</para>
     /// AES-CBC decryption: the first BlockSize/8 bytes are the IV and the remainder the ciphertext (symmetric with the
     /// encrypt node's [.. aes.IV, .. encrypted] layout), deriving the key via SHA256(key).
+    /// <para>AES-CBC 解密：密文前 BlockSize/8 字节为 IV，其后为密文主体（与加密节点的 [.. aes.IV, .. encrypted] 格式对称），
+    /// 用 SHA256(key) 派生密钥。</para>
     /// </summary>
     private static byte[]? AesDecrypt(byte[] data, byte[] keyMaterial)
     {
@@ -131,8 +131,8 @@ public class DecryptNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>XOR 解密：用 SHA256(key) 派生密钥流逐字节异或（与加密操作对称，异或可逆）。</para>
     /// XOR decryption: XORs each byte with a SHA256(key)-derived key stream (symmetric with encryption, XOR is reversible).
+    /// <para>XOR 解密：用 SHA256(key) 派生密钥流逐字节异或（与加密操作对称，异或可逆）。</para>
     /// </summary>
     private static byte[] XorDecrypt(byte[] data, byte[] keyMaterial)
     {

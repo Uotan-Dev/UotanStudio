@@ -10,7 +10,8 @@ public partial class NodeEditorViewModel
     public IReadOnlyList<NodePortChoice> ValueTypeChoices { get; } =
         [.. FlowNodeViewModel.ValueTypeOptions.Select(value => new NodePortChoice(value, "Node_PortType_"))];
 
-    /// <summary>Hides unconnected advanced and irrelevant inputs on canvas nodes.</summary>
+    /// <summary>Hides unconnected advanced and irrelevant inputs on canvas nodes.<para>在画布节点上隐藏未连接的高级输入与无关输入。</para></summary>
+    /// <value>True when compact presentation is enabled.<para>启用紧凑呈现时为 True。</para></value>
     public bool CompactNodes
     {
         get;
@@ -23,7 +24,8 @@ public partial class NodeEditorViewModel
         }
     }
 
-    /// <summary>Includes advanced parameters in the selected node's inspector.</summary>
+    /// <summary>Includes advanced parameters in the selected node's inspector.<para>在所选节点的检查器中包含高级参数。</para></summary>
+    /// <value>True when advanced parameters are shown.<para>显示高级参数时为 True。</para></value>
     public bool ShowAdvancedParameters
     {
         get;
@@ -36,7 +38,8 @@ public partial class NodeEditorViewModel
         }
     }
 
-    /// <summary>Relevant data and configuration inputs; flow belongs on the canvas.</summary>
+    /// <summary>Relevant data and configuration inputs; flow belongs on the canvas.<para>相关的数据与配置输入；流端口仍归属画布。</para></summary>
+    /// <value>The parameter inputs of the current selection.<para>当前选区的参数输入。</para></value>
     public IReadOnlyList<NodeConnectorViewModel> SelectedParameterInputs => _selectedParameterInputs;
 
     private void RefreshParameterPresentation()

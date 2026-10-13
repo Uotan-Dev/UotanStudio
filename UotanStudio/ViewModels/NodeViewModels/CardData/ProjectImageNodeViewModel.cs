@@ -7,20 +7,20 @@ using UotanStudio.ViewModels.Workspace;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>工程镜像节点视图模型：从工程镜像面板选择一张镜像，并输出其绝对路径。</para>
 /// Project image node view model: selects an image from the project image panel and outputs its absolute path.
+/// <para>工程镜像节点视图模型：从工程镜像面板选择一张镜像，并输出其绝对路径。</para>
 /// </summary>
 public class ProjectImageNodeViewModel : FlowNodeViewModel
 {
     private IReadOnlyList<string>? _cachedAvailableImages;
 
     /// <summary>
-    /// <para>创建具有指定标题的工程镜像节点。</para>
     /// Creates a project image node with the specified title.
+    /// <para>创建具有指定标题的工程镜像节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public ProjectImageNodeViewModel(string title) : base(title, NodeCategory.Data)
     {
@@ -31,8 +31,8 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的工程镜像节点，输出选中镜像的绝对路径。</para>
     /// Creates a default project image node that outputs the absolute path of the selected image.
+    /// <para>创建默认的工程镜像节点，输出选中镜像的绝对路径。</para>
     /// </summary>
     public static ProjectImageNodeViewModel CreateProjectImageNode()
     {
@@ -46,14 +46,14 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>获取该节点为工程镜像引用节点，属性面板据此显示镜像选择编辑区。</para>
     /// Gets whether the node is a project-image reference node; the properties panel shows the image picker for it.
+    /// <para>获取该节点为工程镜像引用节点，属性面板据此显示镜像选择编辑区。</para>
     /// </summary>
     public override bool IsProjectImageNode => true;
 
     /// <summary>
-    /// <para>获取或设置选中的镜像相对路径。</para>
     /// Gets or sets the relative path of the selected image.
+    /// <para>获取或设置选中的镜像相对路径。</para>
     /// </summary>
     public override string SelectedImage
     {
@@ -68,25 +68,25 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
     } = string.Empty;
 
     /// <summary>
-    /// <para>获取工程镜像面板中的可用镜像相对路径列表（每项取自 <see cref="ImageEntryViewModel.RelativePath"/>）。</para>
     /// Gets the list of relative image paths available in the project image panel (each taken from
     /// <see cref="ImageEntryViewModel.RelativePath"/>).
+    /// <para>获取工程镜像面板中的可用镜像相对路径列表（每项取自 <see cref="ImageEntryViewModel.RelativePath"/>）。</para>
     /// </summary>
     public override IReadOnlyList<string> AvailableImages
         => _cachedAvailableImages ??= ComputeAvailableImages();
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发执行逻辑：Resource.Project.Image 输出选中镜像的绝对路径。</para>
     /// Dispatches execution logic by the node type key (TypeKey): Resource.Project.Image outputs the absolute
     /// path of the selected image.
+    /// <para>按节点类型键（TypeKey）分发执行逻辑：Resource.Project.Image 输出选中镜像的绝对路径。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {

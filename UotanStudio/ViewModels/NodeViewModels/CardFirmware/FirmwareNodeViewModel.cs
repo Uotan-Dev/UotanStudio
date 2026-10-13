@@ -4,37 +4,37 @@ using UotanStudio.Services.Execution;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>固件操作节点视图模型，提供固件解包、打包、签名验证和分区提取功能。</para>
 /// Firmware operation node view model, providing firmware unpack, pack, signature verification, and partition extraction capabilities.
+/// <para>固件操作节点视图模型，提供固件解包、打包、签名验证和分区提取功能。</para>
 /// </summary>
 public partial class FirmwareNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
-    /// <para>创建具有指定标题的固件操作节点。</para>
     /// Creates a firmware operation node with the specified title.
+    /// <para>创建具有指定标题的固件操作节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public FirmwareNodeViewModel(string title) : base(title, NodeCategory.Firmware)
     {
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的固件逻辑：Firmware.Container.Unpack 解包（boot/oppo/dt）、Firmware.Container.Pack 打包（boot/cpio/dtbo）、
-    /// Validation.Signature.Verify 校验 AVB 签名、Firmware.Container.Extract 从 payload 提取分区。</para>
     /// Dispatches firmware logic by the node type key (TypeKey): Firmware.Container.Unpack unpacks (boot/oppo/dt), Firmware.Container.Pack packs
     /// (boot/cpio/dtbo), Validation.Signature.Verify verifies an AVB signature, and Firmware.Container.Extract extracts a
     /// partition from a payload.
+    /// <para>按节点类型键（TypeKey）分发对应的固件逻辑：Firmware.Container.Unpack 解包（boot/oppo/dt）、Firmware.Container.Pack 打包（boot/cpio/dtbo）、
+    /// Validation.Signature.Verify 校验 AVB 签名、Firmware.Container.Extract 从 payload 提取分区。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {

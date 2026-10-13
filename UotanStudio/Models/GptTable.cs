@@ -5,148 +5,155 @@ using System.Text;
 namespace UotanStudio.Models;
 
 /// <summary>
-/// <para>UEFI GPT 分区表条目（128 字节分区表项）。</para>
 /// A UEFI GPT partition-table entry (128-byte partition entry).
+/// <para>UEFI GPT 分区表条目（128 字节分区表项）。</para>
 /// </summary>
 public sealed class GptEntry
 {
     /// <summary>
-    /// <para>分区类型 GUID。</para>
     /// Partition type GUID.
+    /// <para>分区类型 GUID。</para>
     /// </summary>
+    /// <value>The GUID identifying the partition type.<para>标识分区类型的 GUID。</para></value>
     public Guid TypeGuid { get; init; }
 
     /// <summary>
-    /// <para>分区唯一 GUID。</para>
     /// Unique partition GUID.
+    /// <para>分区唯一 GUID。</para>
     /// </summary>
+    /// <value>The GUID unique to this partition.<para>本分区独有的 GUID。</para></value>
     public Guid UniqueGuid { get; init; }
 
     /// <summary>
-    /// <para>起始 LBA。</para>
     /// First LBA.
+    /// <para>起始 LBA。</para>
     /// </summary>
+    /// <value>The first LBA of the partition.<para>分区的起始 LBA。</para></value>
     public ulong FirstLba { get; init; }
 
     /// <summary>
-    /// <para>结束 LBA（含）。</para>
     /// Last LBA (inclusive).
+    /// <para>结束 LBA（含）。</para>
     /// </summary>
+    /// <value>The last LBA of the partition, inclusive.<para>分区的结束 LBA（含）。</para></value>
     public ulong LastLba { get; init; }
 
     /// <summary>
-    /// <para>分区属性位。</para>
     /// Partition attributes.
+    /// <para>分区属性位。</para>
     /// </summary>
+    /// <value>The 64-bit partition attribute flags.<para>64 位分区属性标志。</para></value>
     public ulong Attributes { get; init; }
 
     /// <summary>
-    /// <para>分区名称（最多 36 个 UTF-16 单元）。</para>
     /// Partition name (up to 36 UTF-16 units).
+    /// <para>分区名称（最多 36 个 UTF-16 单元）。</para>
     /// </summary>
+    /// <value>The partition name stored in the entry.<para>存储于表项中的分区名称。</para></value>
     public string Name { get; init; } = string.Empty;
 }
 
 /// <summary>
-/// <para>解析出的 GPT 分区表信息。</para>
 /// Parsed GPT partition-table information.
+/// <para>解析出的 GPT 分区表信息。</para>
 /// </summary>
 public sealed class GptTableInfo
 {
     /// <summary>
-    /// <para>磁盘大小（字节，由备份头 LBA 推算）。</para>
     /// Disk size in bytes (derived from the backup header LBA).
+    /// <para>磁盘大小（字节，由备份头 LBA 推算）。</para>
     /// </summary>
+    /// <value>The disk size derived from the backup header LBA.<para>由备份头 LBA 推算出的磁盘大小。</para></value>
     public ulong DiskSizeBytes { get; init; }
 
     /// <summary>
-    /// <para>磁盘 GUID。</para>
     /// Disk GUID.
+    /// <para>磁盘 GUID。</para>
     /// </summary>
+    /// <value>The GUID identifying the disk.<para>标识磁盘的 GUID。</para></value>
     public Guid DiskGuid { get; init; }
 
     /// <summary>
-    /// <para>分区表项。</para>
     /// Partition entries.
+    /// <para>分区表项。</para>
     /// </summary>
+    /// <value>The partition entries of the table.<para>分区表中的分区表项。</para></value>
     public IReadOnlyList<GptEntry> Entries { get; init; } = [];
 }
 
 /// <summary>
-/// <para>UEFI GPT 分区表构建与解析（保护性 MBR + 主 GPT 头 + 分区表项；整数均为小端，
-/// GUID 按 EFI 规范大端存储）。</para>
 /// UEFI GPT partition-table builder and parser (protective MBR + primary GPT header +
 /// partition entries; integers are little-endian, GUIDs are stored big-endian per EFI spec).
+/// <para>UEFI GPT 分区表构建与解析（保护性 MBR + 主 GPT 头 + 分区表项；整数均为小端，
+/// GUID 按 EFI 规范大端存储）。</para>
 /// </summary>
 public static class GptTable
 {
-    /// <summary>扇区大小（字节）。 Sector size in bytes.</summary>
+    /// <summary>Sector size in bytes.<para>扇区大小（字节）。</para></summary>
     public const int SectorSize = 512;
 
-    /// <summary>GPT 头在磁盘中的字节偏移。 GPT header byte offset on disk.</summary>
+    /// <summary>GPT header byte offset on disk.<para>GPT 头在磁盘中的字节偏移。</para></summary>
     public const int HeaderOffset = 512;
 
-    /// <summary>单个分区表项大小（字节）。 Single partition-entry size in bytes.</summary>
+    /// <summary>Single partition-entry size in bytes.<para>单个分区表项大小（字节）。</para></summary>
     public const int EntrySize = 128;
 
-    /// <summary>GPT 头大小（字节）。 GPT header size in bytes.</summary>
+    /// <summary>GPT header size in bytes.<para>GPT 头大小（字节）。</para></summary>
     public const int HeaderSize = 92;
 
-    /// <summary>分区名最大 UTF-16 单元数。 Maximum partition-name UTF-16 units.</summary>
+    /// <summary>Maximum partition-name UTF-16 units.<para>分区名最大 UTF-16 单元数。</para></summary>
     public const int MaxNameUnits = 36;
 
-    /// <summary>头 CRC-32 字段在头内的偏移。 Header CRC-32 field offset within the header.</summary>
+    /// <summary>Header CRC-32 field offset within the header.<para>头 CRC-32 字段在头内的偏移。</para></summary>
     public const int HeaderCrcOffset = 16;
 
-    /// <summary>分区表项 CRC-32 字段在头内的偏移。 Partition-entry-array CRC-32 field offset.</summary>
+    /// <summary>Partition-entry-array CRC-32 field offset within the header.<para>分区表项 CRC-32 字段在头内的偏移。</para></summary>
     public const int EntriesCrcOffset = 88;
 
-    /// <summary>分区表项起始 LBA。 Partition-entry-array start LBA.</summary>
+    /// <summary>Partition-entry-array start LBA.<para>分区表项起始 LBA。</para></summary>
     public const ulong EntriesStartLba = 2;
 
-    /// <summary>首个可用 LBA（头+分区表占 34 个扇区）。 First usable LBA (header + entries occupy 34 sectors).</summary>
+    /// <summary>First usable LBA, the header and entries occupying 34 sectors.<para>首个可用 LBA，头与分区表占 34 个扇区。</para></summary>
     public const ulong FirstUsableLba = 34;
 
-    /// <summary>主 GPT 头所在 LBA。 Primary GPT header LBA.</summary>
+    /// <summary>Primary GPT header LBA.<para>主 GPT 头所在 LBA。</para></summary>
     public const ulong PrimaryHeaderLba = 1;
 
-    /// <summary>GPT 头修订号（1.0）。 GPT header revision (1.0).</summary>
+    /// <summary>GPT header revision number.<para>GPT 头修订号。</para></summary>
     public const uint Revision = 0x0001_0000;
 
-    /// <summary>保护性 MBR 分区类型。 Protective MBR partition type.</summary>
+    /// <summary>Protective MBR partition type.<para>保护性 MBR 分区类型。</para></summary>
     public const byte ProtectiveMbrType = 0xEE;
 
-    /// <summary>分区表项数量上限（解析时校验）。 Maximum partition-entry count (parse bound).</summary>
+    /// <summary>Maximum partition-entry count checked while parsing.<para>解析时校验的分区表项数量上限。</para></summary>
     public const int MaxEntryCount = 1024;
 
     /// <summary>
-    /// <para>在头部附近搜索条目数组的最大字节距离。标准磁盘上数组紧随头部或由头部声明的 LBA
-    /// 给出；EDL 合并 GPT 镜像把头部与数组聚在头部附近的少量扇区内。</para>
-    /// Maximum byte distance searched for a header's entry array. On a standard disk the array follows the
-    /// header or is given by its declared LBA; EDL combined GPT images keep their headers and arrays
-    /// clustered close to each other.
+    /// Maximum byte distance searched around a header for its entry array.
+    /// <para>在头部附近搜索条目数组的最大字节距离。</para>
     /// </summary>
     private const long MaxMetadataDistance = 1024 * 1024;
 
-    /// <summary>GPT 头签名（"EFI PART"）。 GPT header signature ("EFI PART").</summary>
+    /// <summary>GPT header signature ("EFI PART").<para>GPT 头签名（"EFI PART"）。</para></summary>
     public static readonly byte[] Signature = "EFI PART"u8.ToArray();
 
-    /// <summary>默认 Linux 文件系统类型 GUID。 Default Linux filesystem type GUID.</summary>
+    /// <summary>Default Linux filesystem type GUID.<para>默认 Linux 文件系统类型 GUID。</para></summary>
     public static readonly Guid DefaultTypeGuid = new("0FC63DAF-8483-4772-8E79-3D69D8477DE4");
 
     /// <summary>
-    /// <para>检查给定字节是否在扇区对齐偏移上携带 GPT 签名（<c>EFI PART</c>）。</para>
     /// Checks whether the given bytes carry the GPT signature (<c>EFI PART</c>) at a sector-aligned offset.
+    /// <para>检查给定字节是否在扇区对齐偏移上携带 GPT 签名（<c>EFI PART</c>）。</para>
     /// </summary>
+    /// <param name="data">The bytes to inspect.<para>待检查的字节。</para></param>
+    /// <returns>True when a sector-aligned signature is present.<para>存在扇区对齐签名时为真。</para></returns>
     public static bool HasSignature(ReadOnlySpan<byte> data) => FindHeaderOffset(data) >= 0;
 
     /// <summary>
-    /// <para>返回首个扇区对齐的 <c>EFI PART</c> 签名偏移，未找到时返回 <c>-1</c>。EDL 合并 GPT 镜像
-    /// （<c>gpt_both*.bin</c>）把头部放在非 LBA 1 的位置，因此不能只检查偏移 512。</para>
     /// Returns the first sector-aligned <c>EFI PART</c> signature offset, or <c>-1</c> when there is none.
-    /// EDL combined GPT images (<c>gpt_both*.bin</c>) keep their headers away from LBA 1, so offset 512
-    /// alone is not a sufficient probe.
+    /// <para>返回首个扇区对齐的 <c>EFI PART</c> 签名偏移，未找到时返回 <c>-1</c>。</para>
     /// </summary>
+    /// <param name="data">The bytes to scan.<para>待扫描的字节。</para></param>
+    /// <returns>The byte offset of the first aligned signature, or <c>-1</c>.<para>首个对齐签名的字节偏移，未找到时为 <c>-1</c>。</para></returns>
     public static long FindHeaderOffset(ReadOnlySpan<byte> data)
     {
         for (var search = 0; search < data.Length;)
@@ -170,12 +177,13 @@ public static class GptTable
     }
 
     /// <summary>
-    /// <para>解析 GPT 镜像：定位每个扇区对齐的头部，校验头 CRC，并按声明的条目 LBA 或 CRC 搜索定位
-    /// 条目数组；以首个有效副本作为分区表来源。</para>
-    /// Parses a GPT image: locates every sector-aligned header, validates the header CRC, resolves each
-    /// entry array from its declared LBA or a bounded CRC search, and takes the first valid copy as the
-    /// partition-table source.
+    /// Parses a GPT image: locates every sector-aligned header, validates the header CRC, resolves
+    /// each entry array, and takes the first valid copy as the partition-table source.
+    /// <para>解析 GPT 镜像：定位每个扇区对齐的头部，校验头 CRC，解析每个条目数组，
+    /// 并以首个有效副本作为分区表来源。</para>
     /// </summary>
+    /// <param name="image">The image bytes to parse.<para>待解析的镜像字节。</para></param>
+    /// <returns>The disk size, disk GUID and parsed partition entries.<para>磁盘大小、磁盘 GUID 与解析出的分区表项。</para></returns>
     public static GptTableInfo Parse(byte[] image)
     {
         ArgumentNullException.ThrowIfNull(image);
@@ -190,13 +198,13 @@ public static class GptTable
     }
 
     /// <summary>
-    /// <para>原位回写分区表项：把条目按顺序紧凑写入镜像中每个已定位的条目数组，保留文件长度、未建模
-    /// 区域与头部几何字段，只更新条目数量与两处 CRC-32。槽位不足时抛出异常，不会改写相邻结构。</para>
-    /// Writes partition entries back in place: the entries are stored compactly in every located entry
-    /// array while the file length, the unmodelled regions and the header geometry fields are preserved;
-    /// only the entry count and the two CRC-32 values change. A full array throws instead of overwriting
-    /// a neighbouring structure.
+    /// Writes partition entries back in place: every located entry array is rewritten compactly,
+    /// geometry fields and surrounding bytes are preserved, and the count and CRC-32 values update.
+    /// <para>原位回写分区表项：紧凑重写每个已定位的条目数组，保留几何字段与周边字节，并更新条目数量与 CRC-32。</para>
     /// </summary>
+    /// <param name="image">The source image providing the headers and entry arrays.<para>提供头部与条目数组的源镜像。</para></param>
+    /// <param name="entries">The partition entries to write.<para>待写入的分区表项。</para></param>
+    /// <returns>A copy of the image with the rewritten entry arrays.<para>改写条目数组后的镜像副本。</para></returns>
     public static byte[] Patch(byte[] image, IReadOnlyList<GptEntry> entries)
     {
         ArgumentNullException.ThrowIfNull(image);
@@ -317,14 +325,16 @@ public static class GptTable
     }
 
     /// <summary>
-    /// <para>定位条目数组：先按头声明的 LBA 校验 CRC，失败后在头部附近的有界窗口内按扇区对齐搜索，
-    /// 取距离该头部最近的匹配。EDL 合并 GPT 镜像里声明 LBA 是打包时的占位值，且主备数组内容相同，
-    /// 只有 CRC 加最近距离才能把每个头部配到自己的数组。</para>
-    /// Locates the entry array: the declared LBA is verified first, then a bounded sector-aligned window
-    /// around the header is searched and the closest match wins. In EDL combined GPT images the declared
-    /// LBA is a packaging placeholder and both copies hold identical arrays, so only the CRC plus the
-    /// shortest distance pairs each header with its own array.
+    /// Locates the entry array: the offset derived from the declared LBA is verified first, then a
+    /// bounded sector-aligned window around the header is searched and the closest CRC match wins.
+    /// <para>定位条目数组：先校验由声明 LBA 换算出的偏移，失败后在头部附近的有界扇区对齐窗口内搜索，取距离最近的 CRC 匹配。</para>
     /// </summary>
+    /// <param name="image">The source image bytes.<para>源镜像字节。</para></param>
+    /// <param name="headerOffset">Byte offset of the header being paired with an array.<para>待与数组配对的头部字节偏移。</para></param>
+    /// <param name="declared">Entry offset derived from the declared entry-array LBA.<para>由声明的条目数组 LBA 换算出的偏移。</para></param>
+    /// <param name="arrayBytes">Size in bytes of the entry array.<para>条目数组的字节大小。</para></param>
+    /// <param name="expectedCrc">Stored CRC-32 of the entry array.<para>条目数组已存储的 CRC-32。</para></param>
+    /// <returns>The byte offset of a matching array, or <c>-1</c> when none is found.<para>匹配数组的字节偏移，未找到时为 <c>-1</c>。</para></returns>
     private static long FindEntryArray(byte[] image, long headerOffset, long declared, int arrayBytes, uint expectedCrc)
     {
         if (arrayBytes > image.Length)
@@ -425,9 +435,13 @@ public static class GptTable
         lba > (ulong)(long.MaxValue / SectorSize) ? -1 : (long)lba * SectorSize;
 
     /// <summary>
-    /// <para>头部与其条目数组在源镜像中的定位。</para>
     /// A header and its entry array located inside the source image.
+    /// <para>头部与其条目数组在源镜像中的定位。</para>
     /// </summary>
+    /// <param name="HeaderOffset">Byte offset of the header within the image.<para>头部在镜像内的字节偏移。</para></param>
+    /// <param name="HeaderSize">Header size in bytes as recorded by the header.<para>头部自记的字节大小。</para></param>
+    /// <param name="EntriesOffset">Byte offset of the entry array within the image.<para>条目数组在镜像内的字节偏移。</para></param>
+    /// <param name="EntryCount">Declared number of partition entries.<para>声明的分区表项数量。</para></param>
     private readonly record struct GptCopy(long HeaderOffset, int HeaderSize, long EntriesOffset, uint EntryCount);
 
     private static void WriteGuidBigEndian(Span<byte> target, Guid guid)

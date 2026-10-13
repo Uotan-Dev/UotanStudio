@@ -187,29 +187,6 @@ public record MtkBootstrapOptions
     /// </value>
     public IReadOnlyList<MtkBootResourceKind> BootResourceOrder { get; init; } = [];
     /// <summary>
-    /// Gets an optional explicit SLA responder, invoked only if the DA1 request reports 0x1D0D.
-    /// <para>获取可选的显式 SLA 应答器；仅当 DA1 请求上报 0x1D0D 时才会被调用。</para>
-    /// </summary>
-    /// <value>
-    /// The SLA responder, or <see langword="null"/> to reject the exchange when 0x1D0D appears.
-    /// <para>SLA 应答器；为 <see langword="null"/> 时，出现 0x1D0D 将拒绝该交换。</para>
-    /// </value>
-    public IMtkBootRomSlaResponder? BootRomSlaResponder { get; init; }
-    /// <summary>
-    /// Gets an optional key provider resolved against the queried device identity after the
-    /// handshake, so an explicitly selected loader can answer a Boot ROM SLA request from a
-    /// keys directory without a pre-known hardware code. An explicit
-    /// <see cref="BootRomSlaResponder"/> wins over this provider.
-    /// <para>获取可选的密钥提供方：握手后按查询到的设备身份解析，使显式选定的加载器无需预先
-    /// 知道硬件代码也能应答 Boot ROM SLA 请求。显式的 <see cref="BootRomSlaResponder"/>
-    /// 优先于此提供方。</para>
-    /// </summary>
-    /// <value>
-    /// The provider resolved after handshake, or <see langword="null"/> when no directory keys apply.
-    /// <para>握手后解析的提供方；无目录密钥适用时为 <see langword="null"/>。</para>
-    /// </value>
-    public IMtkSlaKeyProvider? SlaKeyProvider { get; init; }
-    /// <summary>
     /// Gets the authorized XFlash/XML DA2 signing provider, invoked only when DA2 reports SLA enabled.
     /// Legacy profiles reject this setting.
     /// <para>获取授权的 XFlash/XML DA2 签名提供方，仅在 DA2 报告启用 SLA 时调用。
@@ -229,14 +206,8 @@ public record MtkBootstrapOptions
     public int SlaTimeoutMs { get; init; } = 60000;
 
     /// <summary>
-    /// Builds startup options from an evaluated loader profile selection, carrying the entry and
-    /// region indices decided by hardware identity rather than by caller-counted indices. The
-    /// selection must be a single match; every weaker decision is rejected here so no bootstrap
-    /// attempt starts from an unproven pairing. Companion resources (EMI, XML settings, SLA
-    /// responders) are added by the caller through record <c>with</c> expressions.
-    /// <para>从已评估的加载器配置选择结果构建启动选项，携带由硬件身份而非调用方手数索引决定的条目与区域索引。
-    /// 选择结果必须是唯一匹配；任何更弱的决策都会在此被拒绝，使未证实的配对无法开始启动尝试。
-    /// 伴随资源（EMI、XML 设置、SLA 应答器）由调用方通过记录 <c>with</c> 表达式补充。</para>
+    /// Builds startup options from an evaluated loader profile selection, carrying the entry and region indices decided by hardware identity. The selection must be a single match; companion resources are added by the caller with collection expressions.
+    /// <para>由已评估的 loader 配置文件选择构建启动选项，携带按硬件身份确定的入口与区域索引。选择必须唯一匹配；伴随资源由调用方以集合表达式添加。</para>
     /// </summary>
     /// <param name="profile">
     /// The parsed, hashed loader profile the selection was evaluated against.

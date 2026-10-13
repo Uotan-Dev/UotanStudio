@@ -324,51 +324,6 @@ public sealed partial class MtkSessionTests
     }
 
     [Fact]
-    public async Task DumpPreloaderInternalFlashAsync_ShortRead_FaultsAndKeepsWrittenPrefix()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreatePreloaderSessionAsync(transport);
-        var first = new byte[16];
-        for (var index = 0; index < first.Length; index++)
-        {
-            first[index] = (byte)index;
-        }
-
-        EnqueuePreloaderRead(transport, PreloaderRead32, 0x0000_0000, 4, first);
-        transport.Enqueue([PreloaderRead32]);
-        transport.Enqueue(BigEndianPreloader(0x10));
-        transport.Enqueue(BigEndianPreloader(4));
-        transport.Enqueue([0x00, 0x00]);
-        transport.Enqueue(new byte[8]);
-        using var destination = new MemoryStream();
-
-        var captured = await Assert.ThrowsAsync<MtkProtocolException>(() =>
-            session.DumpPreloaderInternalFlashAsync(destination, 0x0000_0000, 0x20, 0x10,
-                cancellationToken: TestContext.Current.CancellationToken));
-
-        Assert.NotNull(captured);
-        Assert.Equal(0x10, destination.Length);
-        Assert.Equal(first, destination.ToArray());
-        Assert.Equal(MtkSessionState.Faulted, session.State);
-    }
-
-    [Fact]
-    public async Task DumpPreloaderInternalFlashAsync_Mtk6261WithoutMappingConfirmation_SendsZeroBytes()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreatePreloaderSessionAsync(transport, 0x6261);
-        var before = transport.Writes.Count;
-        using var destination = new MemoryStream();
-
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
-            session.DumpPreloaderInternalFlashAsync(destination, 0x0000_0000, 0x10, 0x10,
-                confirmFlashMapping: false, cancellationToken: TestContext.Current.CancellationToken));
-
-        Assert.Equal(before, transport.Writes.Count);
-        Assert.Equal(0, destination.Length);
-    }
-
-    [Fact]
     public async Task PeekPreloaderMemoryAsync_UnalignedLength_ReversesWordsAndTrimsTail()
     {
         using var transport = new ScriptedCommTransport();
@@ -382,29 +337,6 @@ public sealed partial class MtkSessionTests
 
         Assert.Equal([0x44, 0x33, 0x22, 0x11, 0x88], data);
         Assert.Equal(3, transport.Writes.Count - before);
-        Assert.Equal(MtkSessionState.Bootloader, session.State);
-    }
-
-    [Fact]
-    public async Task DumpPreloaderBromAsync_OneStep_ReadsSixteenWordsAndEmitsLittleEndianBytes()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreatePreloaderSessionAsync(transport);
-        for (var word = 0; word < MtkDaMemoryAccess.DumpStepWords; word++)
-        {
-            EnqueuePreloaderRead(transport, PreloaderRead32, (uint)(word * 4), 1,
-                [0x00, 0x00, 0x00, (byte)word]);
-        }
-
-        using var destination = new MemoryStream();
-
-        var captured = await session.DumpPreloaderBromAsync(destination,
-            new MtkDaMemoryRange(0x0000_0000, MtkDaMemoryAccess.DumpStepBytes),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        Assert.Equal(MtkDaMemoryAccess.DumpStepBytes, captured);
-        Assert.Equal(Enumerable.Range(0, MtkDaMemoryAccess.DumpStepWords)
-            .SelectMany(word => new byte[] { (byte)word, 0, 0, 0 }), destination.ToArray());
         Assert.Equal(MtkSessionState.Bootloader, session.State);
     }
 

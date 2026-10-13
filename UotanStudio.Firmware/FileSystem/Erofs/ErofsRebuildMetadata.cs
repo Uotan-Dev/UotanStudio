@@ -4,6 +4,13 @@ using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Metadata;
+using UnifiedChunkIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsChunkIdata;
+using UnifiedCompressedIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsCompressedIdata;
+using UnifiedDataLayout = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsDataLayout;
+using UnifiedFlatIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsFlatIdata;
+using UnifiedIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.IErofsIdata;
+using UnifiedInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
+using UnifiedInodeLayer = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInodeLayer;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs;
 
@@ -18,8 +25,16 @@ internal static class ErofsRebuildMetadata
 {
     /// <summary>Projects parsed rebuild options into their persisted form. The raw superblock feature words and
     /// the dot-omitted dimension are stored only when the options carry a declaration, so a profile without one
-    /// keeps both fields absent.<para>将解析得到的重建选项投影为持久化形式。仅在选项携带声明时才保存原始超级块
-    /// 特性字与 dot-omitted 维度，未携带声明的档案会让两个字段保持缺失。</para></summary>
+    /// keeps both fields absent. The fragment dimensions and the metabox requirement are stored for every
+    /// profile, and every recorded inode carries its fragment shape and secondary algorithm as enumeration
+    /// member names so the document stays locale-free.
+    /// <para>将解析得到的重建选项投影为持久化形式。仅在选项携带声明时才保存原始超级块特性字与 dot-omitted
+    /// 维度，未携带声明的档案会让两个字段保持缺失。碎片维度与 metabox 要求对每个档案一律保存，且每条已记录
+    /// inode 都以枚举成员名携带其 fragment 形态与第二算法，使文档不依赖语言环境。</para></summary>
+    /// <param name="options">Options derived from the verified source image.
+    /// <para>由已校验源镜像推导出的选项。</para></param>
+    /// <returns>The persisted profile holding every inherited dimension.
+    /// <para>携带全部继承维度的持久化档案。</para></returns>
     internal static ErofsRebuildParameters Capture(ErofsOptions options)
     {
         var parameters = new ErofsRebuildParameters
@@ -32,14 +47,21 @@ internal static class ErofsRebuildMetadata
             CompressedTailPacking = options.CompressedTailPacking,
             UseCompactedIndexes = options.UseCompactedIndexes,
             Fragments = options.Fragments,
+            AllFilesAsFragments = options.AllFilesAsFragments,
             Dedup = options.Dedup,
+            DedupeMode = options.DedupeMode.ToString(),
             Metabox = options.Metabox,
+            MetaboxRequired = options.MetaboxRequired,
             ExtraDeviceCount = options.ExtraDeviceCount,
             SuperblockChecksum = options.SuperblockChecksum,
             MtimeFeature = options.SourceMtimeFeature,
             XattrFilterFeature = options.SourceXattrFilterFeature,
+            XattrNameFilter = options.XattrNameFilter,
+            IshareXattrPrefix = options.IshareXattrPrefix,
+            IshareXattrs = options.IshareXattrs,
             SourceSharedEaInMetabox = options.SourceSharedEaInMetabox,
             SourceMetaboxCompressed = options.SourceMetaboxCompressed,
+            MetaBlkAddr = options.SourceMetaBlkAddr == 0 ? null : options.SourceMetaBlkAddr,
             BuildTime = options.BuildTime,
             BuildTimeNanoseconds = options.BuildTimeNanoseconds,
             BuildTimeOffset = options.BuildTimeOffset,
@@ -60,6 +82,15 @@ internal static class ErofsRebuildMetadata
         if (options.DotOmitted != ErofsTriStateFeature.Auto)
         {
             parameters.DotOmitted = options.DotOmitted.ToString();
+        }
+
+        if (options.SourceXattrPrefixes is { Count: > 0 } prefixes)
+        {
+            parameters.XattrPrefixes = [.. prefixes.Select(prefix => new ErofsRebuildXattrPrefix
+            {
+                BaseIndex = prefix.BaseIndex,
+                Infix = prefix.Infix,
+            })];
         }
 
         if (options.SourceCompressionOptions is { } codecs)
@@ -96,20 +127,25 @@ internal static class ErofsRebuildMetadata
         {
             foreach (var inode in inodes.OrderBy(pair => pair.Key))
             {
+                var source = inode.Value;
+                var extentState = source.Idata as UnifiedCompressedIdata;
                 parameters.Inodes.Add(new ErofsRebuildInode
                 {
                     Nid = inode.Key,
-                    Path = inode.Value.Path,
-                    MTime = inode.Value.Mtime,
-                    MTimeNanoseconds = inode.Value.MtimeNanoseconds,
-                    Extended = inode.Value.Extended,
-                    Compressed = inode.Value.Compressed,
-                    Algorithm = inode.Value.Algorithm.ToString(),
-                    CompactIndexes = inode.Value.CompactIndexes,
-                    InlineData = inode.Value.InlineData,
-                    LogicalClusterSize = inode.Value.LogicalClusterSize,
-                    SourceExtentClusterSize = inode.Value.SourceExtentClusterSize,
-                    SourceExtentRecordSize = inode.Value.SourceExtentRecordSize,
+                    Path = source.SourcePath,
+                    MTime = source.CTime,
+                    MTimeNanoseconds = source.CTimeNsec,
+                    Extended = source.IsExtended,
+                    Compressed = source.SourceCompressed,
+                    Algorithm = source.SourceAlgorithm.ToString(),
+                    CompactIndexes = source.DataLayout == UnifiedDataLayout.CompactIndexes,
+                    InlineData = source.DataLayout == UnifiedDataLayout.Inline,
+                    LogicalClusterSize = source.LogicalClusterSize,
+                    SourceExtentClusterSize = extentState is { HasExtents: true } ? extentState.ExtentClusterSize : null,
+                    SourceExtentRecordSize = extentState is { HasExtents: true } ? extentState.ExtentRecordSize : null,
+                    FragmentShape = source.SourceFragmentShape.ToString(),
+                    SecondaryAlgorithm = source.SecondaryAlgorithm?.ToString(),
+                    ChunkBits = source.ChunkFormatBlkBits,
                 });
             }
         }
@@ -171,22 +207,36 @@ internal static class ErofsRebuildMetadata
     /// Rebuilds the EROFS options from the persisted profile; the profile is untrusted input and is validated.
     /// A profile carrying the recorded feature words makes them the authoritative declaration together with the
     /// stored dot-omitted dimension; a snapshot predating those fields keeps the declaration derived, so such a
-    /// rebuild is byte-identical to the profile-less path.
+    /// rebuild is byte-identical to the profile-less path. A profile without the all-fragments entry reads that
+    /// advise from the recorded fragments dimension, while a profile without the metabox requirement or without
+    /// the per-inode fragment text restores those dimensions as cleared and single-algorithm.
     /// <para>根据持久化档案重建 EROFS 选项；该档案属于不可信输入并会校验。记录了特性字的档案会让这两个字连同
-    /// 保存的 dot-omitted 维度成为权威声明；早于这些字段的快照仍按推导式声明，使该重建与无档案路径逐字节一致。</para>
+    /// 保存的 dot-omitted 维度成为权威声明；早于这些字段的快照仍按推导式声明，使该重建与无档案路径逐字节一致。
+    /// 未记录 all-fragments 的档案从已记录的 fragments 维度读取该 advise；未记录 metabox 要求或未记录逐 inode
+    /// fragment 文本的档案则把这些维度还原为关闭与单算法。</para>
     /// </summary>
     /// <param name="parameters">Persisted profile read from the metadata document.
     /// <para>从元数据文档读出的持久化档案。</para></param>
     /// <returns>The options a rebuild consumes, with the inherited declaration replayed when the profile carries
     /// one. <para>重建所消费的选项；档案携带声明时一并重放。</para></returns>
-    /// <exception cref="FileSystemCorruptedException">The document holds an unknown algorithm or dot-omitted
-    /// name, an out-of-range field, or a device table that cannot be re-emitted.
-    /// <para>文档含未知的算法名或 dot-omitted 名称、超出范围字段，或无法重新输出的设备表。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">The document holds an unknown algorithm, dot-omitted,
+    /// fragment-shape or secondary-algorithm name, an out-of-range field, a device table that cannot be
+    /// re-emitted, a recorded inode algorithm without a configuration record behind it, or a metabox
+    /// requirement recorded without the metabox declaration it needs.
+    /// <para>文档含未知的算法名、dot-omitted 名称、fragment 形态名或第二算法名、超出范围字段、无法重新输出的
+    /// 设备表、缺少配置记录的已记录 inode 算法，或缺少 metabox 声明的 metabox 要求。</para></exception>
     /// <exception cref="FileSystemUnsupportedFeatureException">The inherited incompat word declares a feature the
     /// managed writer can only parse. <para>继承的 incompat 字声明了写入方仅能解析的特性。</para></exception>
     internal static ErofsOptions Restore(ErofsRebuildParameters parameters)
     {
         ArgumentNullException.ThrowIfNull(parameters);
+        if (parameters.MetaboxRequired is true && !parameters.Metabox)
+        {
+            throw new FileSystemCorruptedException(
+                "EROFS preserved metadata requires a metabox container while the recorded image declares no " +
+                "metabox feature, so no layout can honour both.");
+        }
+
         var options = new ErofsOptions
         {
             BlockSize = parameters.BlockSize > 0 ? parameters.BlockSize : 4096,
@@ -198,14 +248,21 @@ internal static class ErofsRebuildMetadata
             CompressedTailPacking = parameters.CompressedTailPacking,
             UseCompactedIndexes = parameters.UseCompactedIndexes,
             Fragments = parameters.Fragments,
+            AllFilesAsFragments = parameters.AllFilesAsFragments ?? parameters.Fragments,
             Dedup = parameters.Dedup,
+            DedupeMode = ParseDedupeMode(parameters.DedupeMode),
             Metabox = parameters.Metabox,
+            MetaboxRequired = parameters.MetaboxRequired ?? false,
             ExtraDeviceCount = parameters.ExtraDeviceCount,
             SuperblockChecksum = parameters.SuperblockChecksum,
             SourceMtimeFeature = parameters.MtimeFeature,
             SourceXattrFilterFeature = parameters.XattrFilterFeature,
+            XattrNameFilter = parameters.XattrNameFilter ?? parameters.XattrFilterFeature,
+            IshareXattrPrefix = parameters.IshareXattrPrefix,
+            IshareXattrs = parameters.IshareXattrs ?? false,
             SourceSharedEaInMetabox = parameters.SourceSharedEaInMetabox,
             SourceMetaboxCompressed = parameters.SourceMetaboxCompressed,
+            SourceMetaBlkAddr = parameters.MetaBlkAddr ?? 0,
             BuildTime = parameters.BuildTime,
             BuildTimeNanoseconds = parameters.BuildTimeNanoseconds,
             BuildTimeOffset = parameters.BuildTimeOffset,
@@ -215,15 +272,18 @@ internal static class ErofsRebuildMetadata
             Lz4MaxDistance = checked((ushort)Math.Clamp(parameters.Lz4MaxDistance, 0, ushort.MaxValue)),
             MaxPclusterSize = parameters.MaxPclusterSize,
             LegacyCompatibility = parameters.LegacyCompatibility,
-            OptimizeCompression = true,
         };
 
         if (parameters.FeatureCompat is { } featureCompat && parameters.FeatureIncompat is { } featureIncompat)
         {
-            RejectUnemittableIncompat(featureIncompat);
             options.Features = ErofsFeatureSet.FromWords(featureCompat, featureIncompat);
             options.FeaturesAuthoritative = true;
             options.DotOmitted = ParseDotOmitted(parameters.DotOmitted);
+        }
+
+        if (parameters.XattrPrefixes is { Count: > 0 } prefixes)
+        {
+            options.SourceXattrPrefixes = [.. prefixes.Select(prefix => (prefix.BaseIndex, prefix.Infix))];
         }
 
         if (parameters.SourceDevices is { Count: > 0 } devices)
@@ -260,7 +320,6 @@ internal static class ErofsRebuildMetadata
                     Lz4MaxDistance = checked((ushort)Math.Clamp(codec.Lz4MaxDistance, 0, ushort.MaxValue)),
                     CompressionLevel = codec.CompressionLevel > 1 ? Math.Clamp(codec.CompressionLevel, 1, 9) : 9,
                     Lz4HighCompression = true,
-                    OptimizeCompression = true,
                 };
             }
 
@@ -273,27 +332,59 @@ internal static class ErofsRebuildMetadata
 
         if (parameters.Inodes.Count > 0)
         {
-            var inodes = new Dictionary<ulong, ErofsSourceInode>(parameters.Inodes.Count);
-            Dictionary<string, ErofsSourceInode>? byPath = null;
+            var inodes = new Dictionary<ulong, UnifiedInode>(parameters.Inodes.Count);
+            Dictionary<string, UnifiedInode>? byPath = null;
             foreach (var inode in parameters.Inodes)
             {
-                var record = new ErofsSourceInode(
-                    inode.MTime,
-                    inode.MTimeNanoseconds,
-                    inode.Extended,
-                    inode.Compressed,
-                    ParseAlgorithm(inode.Algorithm),
-                    inode.CompactIndexes,
-                    inode.InlineData,
-                    inode.LogicalClusterSize,
-                    inode.Path,
-                    inode.SourceExtentClusterSize,
-                    inode.SourceExtentRecordSize);
-                inodes[inode.Nid] = record;
+                var algorithm = ParseAlgorithm(inode.Algorithm);
+                if (inode.Compressed && !CanReencodeWithRecords(options, algorithm))
+                {
+                    throw new FileSystemCorruptedException(
+                        $"EROFS preserved inode '{inode.Path}' names compression algorithm '{inode.Algorithm}' " +
+                        "that carries no configuration record, so the rebuilt superblock would advertise an " +
+                        "algorithm the image cannot decode.");
+                }
+
+                var hasExtents = inode.SourceExtentRecordSize is not null || inode.SourceExtentClusterSize is not null;
+                var layout = inode.Compressed
+                    ? inode.CompactIndexes ? UnifiedDataLayout.CompactIndexes : UnifiedDataLayout.Compressed
+                    : inode.InlineData ? UnifiedDataLayout.Inline
+                    : inode.ChunkBits != 0 ? UnifiedDataLayout.ChunkBased
+                    : UnifiedDataLayout.Flat;
+                UnifiedIdata idata = layout switch
+                {
+                    UnifiedDataLayout.Compressed or UnifiedDataLayout.CompactIndexes => new UnifiedCompressedIdata
+                    {
+                        CompactedIndexes = layout == UnifiedDataLayout.CompactIndexes,
+                        LogicalClusterSize = inode.LogicalClusterSize,
+                        HasExtents = hasExtents,
+                        ExtentRecordSize = inode.SourceExtentRecordSize ?? 0,
+                        ExtentClusterSize = inode.SourceExtentClusterSize ?? 0,
+                    },
+                    UnifiedDataLayout.ChunkBased => new UnifiedChunkIdata { ChunkFormat = (ushort)inode.ChunkBits },
+                    _ => new UnifiedFlatIdata(),
+                };
+
+                var node = new UnifiedInode
+                {
+                    Layer = UnifiedInodeLayer.Source,
+                    Nid = inode.Nid,
+                    SourcePath = inode.Path,
+                    CTime = inode.MTime,
+                    CTimeNsec = inode.MTimeNanoseconds,
+                    IFormat = inode.Extended ? UnifiedInode.FlagExtended : (ushort)0,
+                    DataLayout = layout,
+                    Idata = idata,
+                    SourceCompressed = inode.Compressed,
+                    SourceAlgorithm = algorithm,
+                    SourceFragmentShape = ParseFragmentShape(inode.FragmentShape),
+                    SecondaryAlgorithm = ParseSecondaryAlgorithm(inode.SecondaryAlgorithm),
+                };
+                inodes[inode.Nid] = node;
                 if (inode.Path is { Length: > 0 } path)
                 {
                     byPath ??= new(StringComparer.Ordinal);
-                    byPath[path] = record;
+                    byPath[path] = node;
                 }
             }
 
@@ -305,32 +396,27 @@ internal static class ErofsRebuildMetadata
     }
 
     /// <summary>
-    /// Rejects an inherited incompat word naming a structure the managed writer can only parse, so a
-    /// preserved rebuild never declares a feature it cannot lay out on disk.
-    /// <para>拒绝继承的 incompat 字中写入方仅能解析、无法重新输出的结构位，使保留式重建不会声明无法落盘的
-    /// 特性。</para>
+    /// Reports whether a recorded inode algorithm can be re-encoded by the rebuild, which is precisely whether
+    /// it has a configuration record behind it. The superblock bitmap is built from the encodable algorithms,
+    /// so an inode naming one without a record would leave the bitmap holding a bit the configuration area
+    /// never answers, and both a kernel and <c>fsck.erofs</c> consume the records strictly in ascending bit
+    /// order (erofs-utils emits them the same way, in <c>lib/compress.c</c>). A profile carrying no records
+    /// encodes every payload with the single selected algorithm, so that name is the only acceptable one.
+    /// <para>判断已记录的 inode 算法能否被本次重建重新编码，判据就是它背后是否有配置记录。超级块位图由可编码
+    /// 的算法集合构成，因此缺少记录的 inode 会让位图携带配置区永远不会应答的位，而内核与
+    /// <c>fsck.erofs</c> 都严格按位升序消费这些记录（erofs-utils 在 <c>lib/compress.c</c> 中也按同一顺序写出）。
+    /// 不携带任何记录的档案会用唯一选定的算法编码全部负载，所以只有该名称可以接受。</para>
     /// </summary>
-    /// <param name="incompatBits">Incompat word recorded by the extraction.
-    /// <para>解包阶段记录的 incompat 字。</para></param>
-    /// <exception cref="FileSystemUnsupportedFeatureException">The declaration names at least one read-only
-    /// incompat feature. <para>声明至少涉及一个只读 incompat 特性。</para></exception>
-    private static void RejectUnemittableIncompat(uint incompatBits)
-    {
-        var names = ErofsFeatureTable.ReadOnlyIncompatNames(incompatBits);
-        if (names.Length == 0)
-        {
-            return;
-        }
-
-        var guidance = string.Join("; ", ErofsFeatureTable.Entries
-            .Where(row => !row.IsCompat && row.Capability == ErofsFeatureCapability.ReadOnlyForEmit
-                && (incompatBits & row.Bit) != 0)
-            .Select(row => $"{ErofsFeatureTable.NameOf(row.Feature)} requires at least Linux "
-                + $"{ErofsFeatureTable.DescribeKernel(row.Feature)} and cannot be re-emitted; clear it with "
-                + $"ErofsFeatures=!{ErofsFeatureTable.NameOf(row.Feature)}"));
-        throw new FileSystemUnsupportedFeatureException(
-            $"EROFS source image declares read-only incompatible features {names}. {guidance}.");
-    }
+    /// <param name="options">Options already carrying the restored codec records.
+    /// <para>已携带还原编解码器记录的选项。</para></param>
+    /// <param name="algorithm">Algorithm named by a recorded inode.
+    /// <para>已记录 inode 指名的算法。</para></param>
+    /// <returns><see langword="true"/> when a record exists for the algorithm.
+    /// <para>该算法存在对应配置记录时为 <see langword="true"/>。</para></returns>
+    private static bool CanReencodeWithRecords(ErofsOptions options, ErofsCompressionAlgorithm algorithm)
+        => options.SourceCompressionOptions is { } records
+            ? records.ContainsKey(algorithm)
+            : algorithm == options.Algorithm;
 
     /// <summary>
     /// Reads the stored <c>ErofsTriStateFeature</c> member name for the dot-omitted advise dimension, which
@@ -358,6 +444,64 @@ internal static class ErofsRebuildMetadata
 
         throw new FileSystemCorruptedException(
             $"Unknown EROFS dot-omitted declaration '{name}' in preserved metadata.");
+    }
+
+    /// <summary>
+    /// Reads the stored <c>ErofsFragmentShape</c> member name for the packed-inode placement of one preserved
+    /// inode, which the extraction recorded as text so the document stays locale-free. A profile without an
+    /// entry for the dimension describes a payload that sits in its own blocks or pclusters.
+    /// <para>读取为单个保留 inode 的 packed inode 存放形态保存的 <c>ErofsFragmentShape</c> 成员名；解包阶段以
+    /// 文本记录，使文档不依赖语言环境。未记录该维度的档案描述的是存放在自身块或 pcluster 中的负载。</para>
+    /// </summary>
+    /// <param name="name">Stored member name, or <see langword="null"/> when the profile carries no entry for
+    /// the dimension. <para>保存的成员名；档案未携带该维度时为 <see langword="null"/>。</para></param>
+    /// <returns>The recorded shape; <see cref="ErofsFragmentShape.None"/> when nothing was stored.
+    /// <para>记录的形态；未保存时为 <see cref="ErofsFragmentShape.None"/>。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The stored text is not a member name.
+    /// <para>保存的文本不是成员名。</para></exception>
+    private static ErofsFragmentShape ParseFragmentShape(string? name)
+    {
+        if (name is null)
+        {
+            return ErofsFragmentShape.None;
+        }
+
+        if (Enum.TryParse<ErofsFragmentShape>(name, ignoreCase: false, out var shape) && Enum.IsDefined(shape))
+        {
+            return shape;
+        }
+
+        throw new FileSystemCorruptedException(
+            $"Unknown EROFS fragment shape '{name}' in preserved metadata.");
+    }
+
+    /// <summary>
+    /// Reads the stored <c>ErofsDedupeMode</c> member name for the dedupe dimension of one preserved profile.
+    /// A profile that predates the field restores the repository's existing whole-file comparison, which is
+    /// exactly what such a profile was captured with.
+    /// <para>读取单个保留档案去重维度保存的 <c>ErofsDedupeMode</c> 成员名。早于该字段的档案还原为仓库既有的
+    /// 整文件比较，因为这正是该档案被采集时所使用的语义。</para>
+    /// </summary>
+    /// <param name="name">Stored member name, or <see langword="null"/> when absent.
+    /// <para>保存的成员名；缺失时为 <see langword="null"/>。</para></param>
+    /// <returns>The recorded mode; <see cref="ErofsDedupeMode.WholeFile"/> when nothing was stored.
+    /// <para>记录的模式；未保存时为 <see cref="ErofsDedupeMode.WholeFile"/>。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The stored text is not a member name.
+    /// <para>保存的文本不是成员名。</para></exception>
+    private static ErofsDedupeMode ParseDedupeMode(string? name)
+    {
+        if (name is null)
+        {
+            return ErofsDedupeMode.WholeFile;
+        }
+
+        if (Enum.TryParse<ErofsDedupeMode>(name, ignoreCase: false, out var mode) && Enum.IsDefined(mode))
+        {
+            return mode;
+        }
+
+        throw new FileSystemCorruptedException(
+            $"Unknown EROFS dedupe mode '{name}' in preserved metadata.");
     }
 
     /// <summary>
@@ -402,4 +546,36 @@ internal static class ErofsRebuildMetadata
         => Enum.TryParse<ErofsCompressionAlgorithm>(name, ignoreCase: false, out var algorithm) && Enum.IsDefined(algorithm)
             ? algorithm
             : throw new FileSystemCorruptedException($"Unknown EROFS compression algorithm '{name}' in preserved metadata.");
+
+    /// <summary>
+    /// Reads the stored <c>ErofsCompressionAlgorithm</c> member name of the secondary algorithm a preserved
+    /// inode names through the high nibble of <c>h_algorithmtype</c>, which the extraction recorded as text so
+    /// the document stays locale-free. A profile without an entry leaves the inode with one algorithm, so the
+    /// rebuilt index rows keep the single-algorithm form.
+    /// <para>读取为保留 inode 经 <c>h_algorithmtype</c> 高四位指名的第二算法保存的
+    /// <c>ErofsCompressionAlgorithm</c> 成员名；解包阶段以文本记录，使文档不依赖语言环境。未记录该项的档案让
+    /// inode 只携带一个算法，因此重建出的索引行保持单算法形态。</para>
+    /// </summary>
+    /// <param name="name">Stored member name, or <see langword="null"/> when the profile carries no entry for
+    /// the secondary algorithm. <para>保存的成员名；档案未记录第二算法时为 <see langword="null"/>。</para></param>
+    /// <returns>The named algorithm, or <see langword="null"/> when nothing was stored.
+    /// <para>指名的算法；未记录时为 <see langword="null"/>。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The stored text is not a member name.
+    /// <para>保存的文本不是成员名。</para></exception>
+    private static ErofsCompressionAlgorithm? ParseSecondaryAlgorithm(string? name)
+    {
+        if (name is null)
+        {
+            return null;
+        }
+
+        if (Enum.TryParse<ErofsCompressionAlgorithm>(name, ignoreCase: false, out var algorithm)
+            && Enum.IsDefined(algorithm))
+        {
+            return algorithm;
+        }
+
+        throw new FileSystemCorruptedException(
+            $"Unknown EROFS secondary compression algorithm '{name}' in preserved metadata.");
+    }
 }

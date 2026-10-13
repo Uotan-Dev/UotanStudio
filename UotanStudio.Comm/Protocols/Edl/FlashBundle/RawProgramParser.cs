@@ -3,11 +3,8 @@ using System.Xml.Linq;
 namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 
 /// <summary>
-/// Parses rawprogram XML files containing program entries for EDL flashing. A program entry
-/// carries its image name in the <c>filename</c> attribute; the legacy <c>file</c> attribute
-/// is accepted as a fallback so manifests written by older tooling still resolve.
-/// <para>解析包含 EDL 刷写 program 条目的 rawprogram XML 文件。program 条目以 <c>filename</c> 属性
-/// 携带镜像名；为兼容旧版工具写出的清单，同时回退读取 <c>file</c> 属性。</para>
+/// Parses rawprogram XML files containing program entries for EDL flashing. The <c>filename</c> attribute carries the image name with <c>file</c> accepted as a fallback; digest-bound entries keep their literal digest values, which the parser never validates.
+/// <para>解析包含 EDL 刷写 program 条目的 rawprogram XML 文件。<c>filename</c> 属性给出镜像名，<c>file</c> 作为回退；带摘要的条目保留其字面摘要值，本解析器不做校验。</para>
 /// </summary>
 public static class RawProgramParser
 {
@@ -132,29 +129,59 @@ public static class RawProgramParser
     {
         var root = doc.Root ?? throw new EdlException(EdlErrorCode.XmlParseError, "Rawprogram XML document has no root element. rawprogram XML 文档没有根元素。");
         var entries = new List<RawProgramEntry>();
-        foreach (var element in root.Elements("program"))
+        foreach (var element in root.Elements())
         {
-            var slotAttr = element.Attribute("slot");
-            var entry = new RawProgramEntry
+            switch (element.Name.LocalName)
             {
-                SectorSizeInBytes = (long?)element.Attribute("SECTOR_SIZE_IN_BYTES") ?? 0,
-                NumPartitionSectors = (long?)element.Attribute("num_partition_sectors") ?? 0,
-                Filename = (string?)element.Attribute("filename") ?? (string?)element.Attribute("file") ?? string.Empty,
-                PhysicalPartitionNumber = (int?)element.Attribute("physical_partition_number") ?? 0,
-                StartSector = (string?)element.Attribute("start_sector") ?? "0",
-                FileSectorOffset = (long?)element.Attribute("file_sector_offset") ?? 0,
-                Label = (string?)element.Attribute("label") ?? string.Empty,
-                IsSparse = ParseSparse((string?)element.Attribute("sparse")),
-                UnsparseFileSize = (long?)element.Attribute("UNSPARSE_FILE_SIZE") ?? 0,
-                PagesPerBlock = (int?)element.Attribute("PAGES_PER_BLOCK") ?? 0,
-                LastSector = (long?)element.Attribute("last_sector") ?? 0,
-                Slot = slotAttr != null ? (int?)slotAttr : null
-            };
-
-            entries.Add(entry);
+                case "program":
+                    entries.Add(ParseProgram(element));
+                    break;
+                case "erase":
+                    entries.Add(ParseErase(element));
+                    break;
+            }
         }
 
         return entries;
+    }
+
+    private static RawProgramEntry ParseProgram(XElement element)
+    {
+        var slotAttr = element.Attribute("slot");
+        return new RawProgramEntry
+        {
+            SectorSizeInBytes = (long?)element.Attribute("SECTOR_SIZE_IN_BYTES") ?? 0,
+            NumPartitionSectors = (long?)element.Attribute("num_partition_sectors") ?? 0,
+            Filename = (string?)element.Attribute("filename") ?? (string?)element.Attribute("file") ?? string.Empty,
+            PhysicalPartitionNumber = (int?)element.Attribute("physical_partition_number") ?? 0,
+            StartSector = (string?)element.Attribute("start_sector") ?? "0",
+            FileSectorOffset = (long?)element.Attribute("file_sector_offset") ?? 0,
+            Label = (string?)element.Attribute("label") ?? string.Empty,
+            IsSparse = ParseSparse((string?)element.Attribute("sparse")),
+            UnsparseFileSize = (long?)element.Attribute("UNSPARSE_FILE_SIZE") ?? 0,
+            PagesPerBlock = (int?)element.Attribute("PAGES_PER_BLOCK") ?? 0,
+            LastSector = (long?)element.Attribute("last_sector") ?? 0,
+            Digest = (string?)element.Attribute("digest"),
+            DigestSignature = (string?)element.Attribute("digest_signature"),
+            SignatureSize = (long?)element.Attribute("signature_size") ?? 0,
+            Slot = slotAttr != null ? (int?)slotAttr : null
+        };
+    }
+
+    private static RawProgramEntry ParseErase(XElement element)
+    {
+        var slotAttr = element.Attribute("slot");
+        return new RawProgramEntry
+        {
+            SectorSizeInBytes = (long?)element.Attribute("SECTOR_SIZE_IN_BYTES") ?? 0,
+            NumPartitionSectors = (long?)element.Attribute("num_partition_sectors") ?? 0,
+            Filename = string.Empty,
+            PhysicalPartitionNumber = (int?)element.Attribute("physical_partition_number") ?? 0,
+            StartSector = (string?)element.Attribute("start_sector") ?? "0",
+            Label = (string?)element.Attribute("label") ?? string.Empty,
+            PagesPerBlock = (int?)element.Attribute("PAGES_PER_BLOCK") ?? 0,
+            Slot = slotAttr != null ? (int?)slotAttr : null
+        };
     }
 
     private static bool ParseSparse(string? value)

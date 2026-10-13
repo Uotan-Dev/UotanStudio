@@ -23,11 +23,11 @@ internal sealed record DeliveryOutputsPayload(
     IReadOnlyList<string> Existing);
 
 /// <summary>
-/// <para>清单中单个 USB 端点的负载。<c>Protocol</c> 来自 Comm 的协议分类器，无法分类时为
-/// <c>unknown</c>。<c>DevicePath</c> 与 <c>DeviceKey</c> 仅在请求详细清单时才填充，默认结果省略它们以保持精简。</para>
 /// One USB endpoint in the inventory. <c>Protocol</c> comes from the communication layer's protocol
 /// classifier and is <c>unknown</c> when nothing identifies a known protocol. <c>DevicePath</c> and
 /// <c>DeviceKey</c> are populated only for a detailed inventory request, so the default payload stays small.
+/// <para>清单中单个 USB 端点的负载。<c>Protocol</c> 来自 Comm 的协议分类器，无法分类时为
+/// <c>unknown</c>。<c>DevicePath</c> 与 <c>DeviceKey</c> 仅在请求详细清单时才填充，默认结果省略它们以保持精简。</para>
 /// </summary>
 internal sealed record UsbDevicePayload(
     string Api,
@@ -129,6 +129,44 @@ internal sealed record ContainerExtractionPayload(
     IReadOnlyList<string> Entries,
     IReadOnlyList<string> OutputPaths);
 
+/// <summary>
+/// MTK boot-protocol identity: the descriptor-level USB stage, the command stage the session reached,
+/// the hardware and target-configuration words read before any download-agent request, and the flags
+/// decoded from that configuration word.
+/// <para>联发科 boot 协议身份：描述符级的 USB 阶段、会话已抵达的命令阶段、在任何下载代理请求之前读取的
+/// 硬件与目标配置字，以及由该配置字解码出的各位标志。</para>
+/// </summary>
+internal sealed record MtkChipPayload(
+    string? Target,
+    string State,
+    string UploadStage,
+    string UsbMode,
+    string? UsbModeReason,
+    int HardwareCode,
+    int HardwareSubCode,
+    int HardwareVersion,
+    int SoftwareVersion,
+    long TargetConfiguration,
+    bool SecureBootEnabled,
+    bool SerialLinkAuthenticationRequired,
+    bool DownloadAgentAuthenticationRequired,
+    bool RootCertificateRequired,
+    int? BootLoaderVersion,
+    int? BromVersion,
+    string? MeidHex,
+    string? SocidHex);
+
+/// <summary>
+/// A bounded boot-stage memory peek returned as hexadecimal text.
+/// <para>有界的 boot 阶段内存 peek 读取，以十六进制文本返回。</para>
+/// </summary>
+internal sealed record MtkPeekPayload(
+    string? Target,
+    long Address,
+    int LengthBytes,
+    string BytesHex,
+    string Sha256Hex);
+
 internal sealed record EnvPayload(
     string Name,
     string Version,
@@ -185,6 +223,8 @@ internal sealed record EnvPayload(
 [JsonSerializable(typeof(GptPartitionEntryPayload))]
 [JsonSerializable(typeof(DownloadFilePayload))]
 [JsonSerializable(typeof(ContainerExtractionPayload))]
+[JsonSerializable(typeof(MtkChipPayload))]
+[JsonSerializable(typeof(MtkPeekPayload))]
 [JsonSerializable(typeof(OtaZipVerificationPayload))]
 [JsonSerializable(typeof(OtaZipPatchPayload))]
 [JsonSerializable(typeof(OtaZipRebuildPayload))]

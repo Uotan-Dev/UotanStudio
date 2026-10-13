@@ -3,10 +3,10 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Hash.Adler32;
 
 namespace UotanStudio.Firmware.DeviceTree.Dt;
 

@@ -315,7 +315,7 @@ internal static class LzopCompressor
         header[position++] = 0;
 
         output.Write(header);
-        WriteUInt32BigEndian(output, Core.Checksums.Adler32.Compute(header));
+        WriteUInt32BigEndian(output, UotanStudio.Hash.Adler32.Adler32.Compute(header));
     }
 
     private static void WriteBlock(Stream output, byte[] uncompressed, int uncompressedLength)
@@ -384,8 +384,8 @@ internal static class LzopCompressor
     private static uint Checksum(byte[] data, bool crc32) => crc32 ? Crc32Hash(data, 0, data.Length) : Adler32(data, 0, data.Length);
 
     /// <summary>
-    /// Safe LZO1X-1 decompression, ported from minilzo's lzo1x_decompress_safe with bounds checks.
-    /// <para>安全的 LZO1X-1 解压，移植自 minilzo 的 lzo1x_decompress_safe，带边界检查。</para>
+    /// Performs bounds-checked LZO1X-1 decompression that never writes past the output buffer.
+    /// <para>执行带边界检查的 LZO1X-1 解压，绝不越界写出输出缓冲区。</para>
     /// </summary>
     private static int Lzo1xDecompressSafe(byte[] input, int inputStart, int inputLen, byte[] output)
     {
@@ -662,7 +662,7 @@ internal static class LzopCompressor
     }
 
     private static uint Adler32(byte[] data, int offset, int length)
-        => Core.Checksums.Adler32.Compute(data, offset, length);
+        => UotanStudio.Hash.Adler32.Adler32.Compute(data, offset, length);
 
     private static uint Crc32Hash(byte[] data, int offset, int length)
         => Crc32.HashToUInt32(data.AsSpan(offset, length));

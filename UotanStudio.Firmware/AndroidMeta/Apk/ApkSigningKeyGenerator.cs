@@ -35,8 +35,8 @@ public enum ApkSigningKeyType
 /// </summary>
 public sealed record ApkSigningKeyOptions
 {
-    /// <summary>Key algorithm; RSA 2048 by default, matching apksigner's typical usage.</summary>
-    /// <para>密钥算法；默认 RSA 2048，与 apksigner 常见用法一致。</para>
+    /// <summary>Key algorithm; RSA 2048 by default.</summary>
+    /// <para>密钥算法；默认 RSA 2048。</para>
     /// <value>Algorithm of the generated key pair: RSA at 2048, 3072 or 4096 bits, or ECDSA on a NIST P-256, P-384 or P-521 curve.
     /// <para>生成密钥对的算法：RSA 2048、3072 或 4096 位，或 ECDSA NIST P-256、P-384、P-521 曲线。</para></value>
     public ApkSigningKeyType KeyType { get; init; } = ApkSigningKeyType.Rsa2048;

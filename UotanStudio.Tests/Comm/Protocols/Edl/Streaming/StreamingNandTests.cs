@@ -174,6 +174,42 @@ public class StreamingNandTests
         Assert.False(StreamingNandGeometry.TryParse(page, out _));
     }
 
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(256u)]
+    [InlineData(768u)]
+    [InlineData(131072u)]
+    [InlineData(2147483647u)]
+    public void Geometry_TryParse_HostileBytesPerPage_ReturnsFalse(uint bytesPerPage)
+    {
+        var page = BuildParameterPage(bytesPerPage: bytesPerPage, pagesPerBlock: 64);
+
+        Assert.False(StreamingNandGeometry.TryParse(page, out var geometry));
+        Assert.Null(geometry);
+    }
+
+    [Theory]
+    [InlineData(4097u)]
+    [InlineData(4294967295u)]
+    public void Geometry_TryParse_HostilePagesPerBlock_ReturnsFalse(uint pagesPerBlock)
+    {
+        var page = BuildParameterPage(bytesPerPage: 2048, pagesPerBlock: pagesPerBlock);
+
+        Assert.False(StreamingNandGeometry.TryParse(page, out var geometry));
+        Assert.Null(geometry);
+    }
+
+    [Fact]
+    public void Geometry_TryParse_SmallPageFlash_DecodesReportedPageSize()
+    {
+        var page = BuildParameterPage(bytesPerPage: 512, pagesPerBlock: 32);
+
+        Assert.True(StreamingNandGeometry.TryParse(page, out var geometry));
+        Assert.Equal(512u, geometry!.BytesPerPage);
+        Assert.Equal(32u, geometry.PagesPerBlock);
+        Assert.Equal(32u, geometry.TotalPages);
+    }
+
     [Fact]
     public void PartitionTable_Parse_LegacyLayout_AccumulatesOffsetsAndMasksLengths()
     {
@@ -285,6 +321,19 @@ public class StreamingNandTests
             table.MarkBadAsync(3, confirm: false, TestContext.Current.CancellationToken));
 
         Assert.Empty(transport.Writes);
+    }
+
+    private static byte[] BuildParameterPage(uint bytesPerPage, uint pagesPerBlock)
+    {
+        var page = new byte[512];
+        Encoding.ASCII.GetBytes("ABC").CopyTo(page.AsSpan(32));
+        BinaryPrimitives.WriteUInt32LittleEndian(page.AsSpan(80), bytesPerPage);
+        BinaryPrimitives.WriteUInt16LittleEndian(page.AsSpan(84), 64);
+        BinaryPrimitives.WriteUInt32LittleEndian(page.AsSpan(92), pagesPerBlock);
+        page[96] = 1;
+        page[97] = 1;
+        page[98] = 0x34;
+        return page;
     }
 
     private static byte[] BuildLegacyTable()

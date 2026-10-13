@@ -8,26 +8,26 @@ using UotanStudio.Services.Hashing;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>数据处理节点视图模型，提供文件读取、格式转换、校验和与比较功能。</para>
 /// Data processing node view model, providing file reading, format conversion, checksum, and comparison capabilities.
+/// <para>数据处理节点视图模型，提供文件读取、格式转换、校验和与比较功能。</para>
 /// </summary>
 public class DataNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
-    /// <para>创建具有指定标题的数据处理节点。</para>
     /// Creates a data processing node with the specified title.
+    /// <para>创建具有指定标题的数据处理节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public DataNodeViewModel(string title) : base(title, NodeCategory.Data)
     {
     }
 
     /// <summary>
-    /// <para>创建默认的文件读取节点。</para>
     /// Creates a default file read node.
+    /// <para>创建默认的文件读取节点。</para>
     /// </summary>
     public static DataNodeViewModel CreateFileReadNode()
     {
@@ -42,8 +42,8 @@ public class DataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的格式转换节点。</para>
     /// Creates a default format conversion node.
+    /// <para>创建默认的格式转换节点。</para>
     /// </summary>
     public static DataNodeViewModel CreateConvertNode()
     {
@@ -65,8 +65,8 @@ public class DataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的校验和节点。</para>
     /// Creates a default checksum node.
+    /// <para>创建默认的校验和节点。</para>
     /// </summary>
     public static DataNodeViewModel CreateChecksumNode()
     {
@@ -88,8 +88,8 @@ public class DataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的比较节点。</para>
     /// Creates a default comparison node.
+    /// <para>创建默认的比较节点。</para>
     /// </summary>
     public static DataNodeViewModel CreateCompareNode()
     {
@@ -105,18 +105,18 @@ public class DataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的数据处理逻辑：File.Binary.Read 读取文件、Data.Value.Convert 做格式转换、
-    /// Validation.Data.Hash 计算哈希、Data.Value.Compare 比较两段数据。</para>
     /// Dispatches data-processing logic by the node type key (TypeKey): File.Binary.Read reads a file, Data.Value.Convert performs
     /// conversion, Validation.Data.Hash computes a hash, and Data.Value.Compare compares two data chunks.
+    /// <para>按节点类型键（TypeKey）分发对应的数据处理逻辑：File.Binary.Read 读取文件、Data.Value.Convert 做格式转换、
+    /// Validation.Data.Hash 计算哈希、Data.Value.Compare 比较两段数据。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {

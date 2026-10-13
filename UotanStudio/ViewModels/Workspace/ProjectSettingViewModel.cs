@@ -10,25 +10,25 @@ using UotanStudio.Services.Projects;
 namespace UotanStudio.ViewModels.Workspace;
 
 /// <summary>
-/// <para>打包设置面板视图模型（单例），承载镜像类型、格式、压缩、super 与 DAT 等打包选项，并负责
-/// 与 <see cref="ProjectSettingsDto"/> 双向映射以支持工程快照的保存与恢复。切换活动子项目时
-/// 自动加载对应设置。</para>
 /// Packing settings panel view model (singleton), holding image type, format, compression, super and
 /// DAT options, mapping bidirectionally with <see cref="ProjectSettingsDto"/> to support project
 /// snapshot save/restore. Automatically loads settings when the active sub-project changes.
+/// <para>打包设置面板视图模型（单例），承载镜像类型、格式、压缩、super 与 DAT 等打包选项，并负责
+/// 与 <see cref="ProjectSettingsDto"/> 双向映射以支持工程快照的保存与恢复。切换活动子项目时
+/// 自动加载对应设置。</para>
 /// </summary>
 internal partial class ProjectSettingViewModel : Tool
 {
     /// <summary>
-    /// <para>获取当前打包设置面板单例实例，供工作区停靠面板与菜单共享。</para>
     /// Gets the active packing settings panel singleton, shared by the workspace dock and the menu.
+    /// <para>获取当前打包设置面板单例实例，供工作区停靠面板与菜单共享。</para>
     /// </summary>
     public static ProjectSettingViewModel? Instance { get; private set; }
 
     /// <summary>
-    /// <para>确保打包设置面板单例已创建并返回它；首次调用时构造并在构造函数中注册到 <see cref="Instance"/>。</para>
     /// Ensures the packing settings panel singleton exists and returns it; the first call constructs the
     /// instance (registered on <see cref="Instance"/> in the constructor).
+    /// <para>确保打包设置面板单例已创建并返回它；首次调用时构造并在构造函数中注册到 <see cref="Instance"/>。</para>
     /// </summary>
     internal static ProjectSettingViewModel EnsureInstance() => Instance ??= new();
 
@@ -64,8 +64,8 @@ internal partial class ProjectSettingViewModel : Tool
     private string projectName = "", sUPERSize = "9126805504", sUPERName = "qti_dynamic_partitions", uTCTime = "1230768000", dATSeg = "15";
 
     /// <summary>
-    /// <para>供 EROFS 算法下拉框绑定：按显示顺序排列的可选编解码器令牌。</para>
     /// Picker choices for the EROFS codec combo, in display order.
+    /// <para>供 EROFS 算法下拉框绑定：按显示顺序排列的可选编解码器令牌。</para>
     /// </summary>
     public IReadOnlyList<string> ErofsAlgorithmOptions => ErofsAlgorithmSelectors.Ordered;
 
@@ -76,11 +76,11 @@ internal partial class ProjectSettingViewModel : Tool
     internal bool HasF2fsCompressionOverride { get; private set; }
     internal bool HasF2fsAndroidProfileOverride { get; private set; }
 
+    /// <summary>Whether an EROFS feature declaration edit should override the preserved source words.</summary>
+    internal bool HasErofsFeatureOverride { get; private set; }
+
     /// <summary>Whether EXT4 policy values should override preserved source parameters.</summary>
     internal bool HasExt4PolicyOverride { get; private set; }
-
-    /// <summary>Whether the panel declares EROFS feature bits; an empty override string inherits the source image.</summary>
-    internal bool HasErofsFeatureOverride => !string.IsNullOrWhiteSpace(ErofsFeatureOverrides);
 
     /// <summary>Whether RAW/Android Sparse output was explicitly selected.</summary>
     internal bool HasImageFormatOverride { get; private set; }
@@ -88,9 +88,9 @@ internal partial class ProjectSettingViewModel : Tool
     private bool _applyingDto;
 
     /// <summary>
-    /// <para>创建打包设置面板视图模型并注册单例实例；订阅工程上下文变更消息以在子项目切换时自动加载设置。</para>
     /// Creates the packing settings panel view model and registers the singleton instance; subscribes to
     /// project-context-changed messages to auto-load settings on sub-project switch.
+    /// <para>创建打包设置面板视图模型并注册单例实例；订阅工程上下文变更消息以在子项目切换时自动加载设置。</para>
     /// </summary>
     public ProjectSettingViewModel()
     {
@@ -99,9 +99,9 @@ internal partial class ProjectSettingViewModel : Tool
     }
 
     /// <summary>
-    /// <para>响应工程上下文变更：切换活动子项目时加载对应 <c>.uotanfw</c> 中的打包设置。</para>
     /// Responds to project-context changes: loads the packing settings from the corresponding
     /// <c>.uotanfw</c> when the active sub-project changes.
+    /// <para>响应工程上下文变更：切换活动子项目时加载对应 <c>.uotanfw</c> 中的打包设置。</para>
     /// </summary>
     private async void OnProjectContextChanged(object recipient, ProjectContextChangedMessage message)
     {
@@ -123,12 +123,12 @@ internal partial class ProjectSettingViewModel : Tool
     private int _loadVersion;
 
     /// <summary>
-    /// <para>将当前面板状态导出为打包设置数据传输对象。</para>
     /// Exports the current panel state as a packing settings data transfer object.
+    /// <para>将当前面板状态导出为打包设置数据传输对象。</para>
     /// </summary>
     /// <returns>
-    /// <para>与当前面板字段一一对应的设置 DTO。</para>
     /// A settings DTO mapping one-to-one with the current panel fields.
+    /// <para>与当前面板字段一一对应的设置 DTO。</para>
     /// </returns>
     public ProjectSettingsDto ToDto() => new()
     {
@@ -146,7 +146,9 @@ internal partial class ProjectSettingViewModel : Tool
         SparseOutput = HasImageFormatOverride ? FormatSPARSE : null,
         ErofsAlgorithm = SelectedErofsAlgorithm,
         ErofsCompLevel = EROFSComGrade,
-        ErofsFeatureOverrides = ErofsFeatureOverrides,
+        ErofsFeatureOverrides = HasErofsFeatureOverride && !string.IsNullOrWhiteSpace(ErofsFeatureOverrides)
+            ? ErofsFeatureOverrides.Trim()
+            : null,
         F2fsCompressionEnabled = HasF2fsCompressionOverride ? F2fsCompressionEnabled : null,
         F2fsCompressionAlgorithm = HasF2fsCompressionOverride ? SelectedF2fsCompressionAlgorithm : null,
         F2fsCompressionLevel = HasF2fsCompressionOverride ? F2fsCompressionLevel : null,
@@ -162,13 +164,13 @@ internal partial class ProjectSettingViewModel : Tool
     };
 
     /// <summary>
-    /// <para>将打包设置数据传输对象应用到当前面板字段（同时更新互斥的一组互斥开关）。</para>
     /// Applies a packing settings data transfer object to the current panel fields (also updating each
     /// mutually exclusive toggle group).
+    /// <para>将打包设置数据传输对象应用到当前面板字段（同时更新互斥的一组互斥开关）。</para>
     /// </summary>
     /// <param name="dto">
-    /// <para>要应用设置的 DTO。</para>
     /// The DTO whose settings are applied.
+    /// <para>要应用设置的 DTO。</para>
     /// </param>
     public void ApplyFromDto(ProjectSettingsDto dto)
     {
@@ -230,7 +232,8 @@ internal partial class ProjectSettingViewModel : Tool
             ? ErofsAlgorithmSelectors.Lz4HighCompression
             : ErofsAlgorithmSelectors.Normalize(dto.ErofsAlgorithm);
         EROFSComGrade = dto.ErofsCompLevel;
-        ErofsFeatureOverrides = dto.ErofsFeatureOverrides;
+        ErofsFeatureOverrides = dto.ErofsFeatureOverrides ?? "";
+        HasErofsFeatureOverride = !string.IsNullOrWhiteSpace(dto.ErofsFeatureOverrides);
         F2fsCompressionEnabled = dto.F2fsCompressionEnabled ?? false;
         SelectedF2fsCompressionAlgorithm = NormalizeF2fsCompressionAlgorithm(dto.F2fsCompressionAlgorithm);
         F2fsCompressionLevel = dto.F2fsCompressionLevel ?? 0;
@@ -253,7 +256,7 @@ internal partial class ProjectSettingViewModel : Tool
         _applyingDto = false;
     }
 
-    partial void OnErofsFeatureOverridesChanged(string value) => OnPropertyChanged(nameof(HasErofsFeatureOverride));
+    partial void OnErofsFeatureOverridesChanged(string value) => MarkErofsFeatureOverride();
 
     partial void OnF2fsCompressionEnabledChanged(bool value) => MarkF2fsCompressionOverride();
 
@@ -302,6 +305,14 @@ internal partial class ProjectSettingViewModel : Tool
 
     partial void OnFormatRAWChanged(bool value) => MarkImageFormatOverride();
 
+    private void MarkErofsFeatureOverride()
+    {
+        if (!_applyingDto)
+        {
+            HasErofsFeatureOverride = true;
+        }
+    }
+
     private void MarkF2fsCompressionOverride()
     {
         if (!_applyingDto)
@@ -334,13 +345,13 @@ internal partial class ProjectSettingViewModel : Tool
                 : value ?? nameof(CompressionAlgorithm.Lz4);
 
     /// <summary>
-    /// <para>根据源镜像格式自动推断打包类型：ext4 → EXT4，erofs → EROFS，其余不变。
-    /// 仅在用户未手动覆盖时生效（面板当前值为默认值时才自动切换）。</para>
     /// Infers the packing type from the source image format: ext4 → EXT4, erofs → EROFS;
     /// other formats leave the current setting unchanged. Only takes effect when the panel is
     /// still at its default values (i.e. not manually overridden).
+    /// <para>根据源镜像格式自动推断打包类型：ext4 → EXT4，erofs → EROFS，其余不变。
+    /// 仅在用户未手动覆盖时生效（面板当前值为默认值时才自动切换）。</para>
     /// </summary>
-    /// <param name="format"><para>DetectFormat 返回的格式字符串。</para>Format string from DetectFormat.</param>
+    /// <param name="format">Format string from DetectFormat. <para>DetectFormat 返回的格式字符串。</para></param>
     public void ApplySourceFormat(string format)
     {
         if (string.IsNullOrEmpty(format))

@@ -1,35 +1,39 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Text;
-using UotanStudio.Firmware.Core.Checksums;
+using UotanStudio.Hash.RockchipCrc32;
 
 namespace UotanStudio.Comm.Protocols.Bootrom;
 
 /// <summary>
-/// One entry of an RKBOOT loader image (STRUCT_RKBOOT_ENTRY, see rkdeveloptool RKBoot.h).
-/// <para>RKBOOT loader 镜像中的一个条目（STRUCT_RKBOOT_ENTRY，见 rkdeveloptool 的 RKBoot.h）。</para>
+/// One entry of an RKBOOT loader image (STRUCT_RKBOOT_ENTRY).
+/// <para>RKBOOT loader 镜像中的一个条目（STRUCT_RKBOOT_ENTRY）。</para>
 /// </summary>
 internal sealed class RkBootEntry
 {
     /// <summary>
     /// Gets the entry type (ENUM_RKBOOTENTRY). <para>获取条目类型（ENUM_RKBOOTENTRY）。</para>
     /// </summary>
+    /// <value>The entry type. <para>条目类型。</para></value>
     public uint Type { get; init; }
 
     /// <summary>
     /// Gets the entry name (UTF-16, up to 20 wchar). <para>获取条目名称（UTF-16，最多 20 个 wchar）。</para>
     /// </summary>
+    /// <value>The entry name. <para>条目名称。</para></value>
     public string Name { get; init; } = string.Empty;
 
     /// <summary>
     /// Gets the byte offset of the entry data within the loader image.
     /// <para>获取条目数据在 loader 镜像内的字节偏移。</para>
     /// </summary>
+    /// <value>The offset of the entry data. <para>条目数据的偏移。</para></value>
     public uint DataOffset { get; init; }
 
     /// <summary>
     /// Gets the byte size of the entry data. <para>获取条目数据的字节大小。</para>
     /// </summary>
+    /// <value>The size in bytes. <para>字节大小。</para></value>
     public uint DataSize { get; init; }
 
     /// <summary>
@@ -37,19 +41,16 @@ internal sealed class RkBootEntry
     /// (dwDataDelay in the entry header).
     /// <para>获取下载该条目后需等待的毫秒数（条目头中的 dwDataDelay）。</para>
     /// </summary>
+    /// <value>The post-download delay in milliseconds. <para>下载后需等待的毫秒数。</para></value>
     public uint DataDelay { get; init; }
 }
 
 /// <summary>
-/// Parser for Rockchip RKBOOT loader images (.bin loader files downloaded via the 0x0471/0x0472
-/// vendor requests, see rkdeveloptool RKBoot.cpp / RKImage.cpp). The image starts with a
-/// STRUCT_RKBOOT_HEAD (tag "BOOT"/0x544F4F42 or "LDR "/0x2052444C) that points at three entry
-/// tables (471, 472 and loader), and the whole file is validated by a Rockchip CRC-32
-/// (poly 0x04C10DB7) stored in the last four bytes.
-/// <para>Rockchip RKBOOT loader 镜像解析器（通过 0x0471/0x0472 vendor 请求下载的 .bin loader
-/// 文件，见 rkdeveloptool 的 RKBoot.cpp / RKImage.cpp）。镜像以 STRUCT_RKBOOT_HEAD 开头
-/// （标签 "BOOT"/0x544F4F42 或 "LDR "/0x2052444C），指向三个条目表（471、472 与 loader），
-/// 整个文件由存储在末尾 4 字节的 Rockchip CRC-32（多项式 0x04C10DB7）校验。</para>
+/// Parser for Rockchip RKBOOT loader images: a header tagged BOOT or LDR points at the
+/// 471, 472 and loader entry tables, and the last four bytes hold a Rockchip CRC-32
+/// covering the file.
+/// <para>Rockchip RKBOOT loader 镜像解析器：标签为 BOOT 或 LDR 的头指向 471、472 与
+/// loader 三个条目表，末尾 4 字节保存覆盖整文件的 Rockchip CRC-32。</para>
 /// </summary>
 internal sealed class RkBootImage
 {
@@ -57,55 +58,56 @@ internal sealed class RkBootImage
     /// Gets the 471 (first-stage) entries, in download order.
     /// <para>获取 471（第一阶段）条目，按下载顺序。</para>
     /// </summary>
+    /// <value>The first-stage entries. <para>第一阶段条目。</para></value>
     public IReadOnlyList<RkBootEntry> Entries471 { get; private set; } = [];
 
     /// <summary>
     /// Gets the 472 (second-stage) entries, in download order.
     /// <para>获取 472（第二阶段）条目，按下载顺序。</para>
     /// </summary>
+    /// <value>The second-stage entries. <para>第二阶段条目。</para></value>
     public IReadOnlyList<RkBootEntry> Entries472 { get; private set; } = [];
 
     /// <summary>
     /// Gets the loader (on-flash) entries, in download order.
     /// <para>获取 loader（落盘）条目，按下载顺序。</para>
     /// </summary>
+    /// <value>The loader entries. <para>loader 条目。</para></value>
     public IReadOnlyList<RkBootEntry> LoaderEntries { get; private set; } = [];
 
     /// <summary>
     /// Gets the loader header tag ("BOOT" or "LDR "). <para>获取 loader 头标签（"BOOT" 或 "LDR "）。</para>
     /// </summary>
+    /// <value>The four-character header tag. <para>四字符头标签。</para></value>
     public string Tag { get; private set; } = string.Empty;
 
     /// <summary>
     /// Gets the loader version (rk_boot_header.uiVersion, a packed u32).
     /// <para>获取 loader 版本（rk_boot_header.uiVersion，u32）。</para>
     /// </summary>
+    /// <value>The packed loader version. <para>打包的 loader 版本。</para></value>
     public uint Version { get; private set; }
 
     /// <summary>
     /// Gets the loader merge version (rk_boot_header.mergerVersion, a packed u32).
     /// <para>获取 loader 合并版本（rk_boot_header.mergerVersion，u32）。</para>
     /// </summary>
+    /// <value>The packed merge version. <para>打包的合并版本。</para></value>
     public uint MergeVersion { get; private set; }
 
     /// <summary>
     /// Gets the supported chip mask (emSupportChip). <para>获取支持的芯片掩码（emSupportChip）。</para>
     /// </summary>
+    /// <value>The supported chip mask. <para>支持的芯片掩码。</para></value>
     public uint SupportChip { get; private set; }
 
     /// <summary>
-    /// Gets whether the image is RC4 encrypted (ucRc4Flag). Callers must treat a set flag as fatal:
-    /// no RC4 segment decryption exists in this repository, and entry payloads are transmitted
-    /// verbatim, so <see cref="RkdlSession.DownloadBootLoader"/> rejects such an image instead of
-    /// sending ciphertext that the device would boot as garbage.
-    /// <para>获取镜像是否 RC4 加密（ucRc4Flag）。调用方必须把置位的标志视为致命错误：本仓库没有
-    /// 任何 RC4 段解密实现，且条目负载是原样传输的，因此 <see cref="RkdlSession.DownloadBootLoader"/>
-    /// 会拒绝这类镜像，而不是发送设备会当成垃圾启动的密文。</para>
+    /// Gets whether the image is RC4 encrypted (ucRc4Flag). RC4 segment decryption is
+    /// not implemented, so such an image cannot be downloaded.
+    /// <para>获取镜像是否 RC4 加密（ucRc4Flag）。RC4 段解密没有实现，因此这类镜像无法下载。</para>
     /// </summary>
-    /// <value><c>true</c> when ucRc4Flag (byte 44 of the loader header) is non-zero; such images are
-    /// rejected by the download path rather than decrypted.
-    /// <para>当 ucRc4Flag（loader 头第 44 字节）非零时为 <c>true</c>；此类镜像在下载路径被拒绝，
-    /// 而不是被解密。</para></value>
+    /// <value><c>true</c> when ucRc4Flag (loader header byte 44) is non-zero.
+    /// <para>当 ucRc4Flag（loader 头第 44 字节）非零时为 <c>true</c>。</para></value>
     public bool Rc4Enabled { get; private set; }
 
     /// <summary>
@@ -128,9 +130,9 @@ internal sealed class RkBootImage
 
     /// <summary>
     /// Parses and validates a loader image. The Rockchip CRC-32 over all bytes except the
-    /// trailing four must match the stored value (rkdeveloptool CRKBoot::CrcCheck).
-    /// <para>解析并校验 loader 镜像。除末尾 4 字节外全部字节的 Rockchip CRC-32 必须与存储值
-    /// 一致（rkdeveloptool 的 CRKBoot::CrcCheck）。</para>
+    /// trailing four must match the value stored there.
+    /// <para>解析并校验 loader 镜像。除末尾 4 字节外全部字节的 Rockchip CRC-32 必须与
+    /// 存放在那 4 字节的值一致。</para>
     /// </summary>
     /// <param name="buffer">The loader image bytes. <para>loader 镜像字节。</para></param>
     /// <returns>The parsed image. <para>解析后的镜像。</para></returns>
@@ -189,6 +191,7 @@ internal sealed class RkBootImage
     /// <param name="offset">Byte offset of the table. <para>条目表的字节偏移。</para></param>
     /// <param name="entrySize">Per-entry size (≥ <see cref="EntrySize"/>). <para>每个条目的大小（≥ <see cref="EntrySize"/>）。</para></param>
     /// <param name="count">Number of entries. <para>条目数量。</para></param>
+    /// <returns>The parsed entries in table order. <para>按表顺序解析出的条目。</para></returns>
     private static IReadOnlyList<RkBootEntry> ParseEntries(byte[] buffer, uint offset, ushort entrySize, int count)
     {
         if (count == 0)

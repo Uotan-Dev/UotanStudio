@@ -177,10 +177,11 @@ public static partial class GptReader
         cancellationToken.ThrowIfCancellationRequested();
         var bytes = new byte[blockSize];
         ReadAt(source, checked((long)(lba * (uint)blockSize)), bytes);
-        return ParseHeader(bytes, blockSize, blockCount, lba);
+        return ParseHeader(bytes, blockSize, blockCount, lba, null, null, null);
     }
 
-    private static Header ParseHeader(Span<byte> span, int blockSize, ulong blockCount, ulong lba)
+    private static Header ParseHeader(Span<byte> span, int blockSize, ulong blockCount, ulong lba,
+        ulong? partitionEntryLba, uint? partitionEntryCount, uint? partitionEntrySize)
     {
         if (!span[..8].SequenceEqual("EFI PART"u8) || BinaryPrimitives.ReadUInt32LittleEndian(span[8..]) != 0x10000)
         {
@@ -205,31 +206,72 @@ public static partial class GptReader
         var last = BinaryPrimitives.ReadUInt64LittleEndian(span[48..]);
         var diskId = new Guid(span[56..72]);
         var arrayLba = BinaryPrimitives.ReadUInt64LittleEndian(span[72..]);
-        var count = BinaryPrimitives.ReadUInt32LittleEndian(span[80..]);
-        var entrySize = BinaryPrimitives.ReadUInt32LittleEndian(span[84..]);
+        var headerCount = BinaryPrimitives.ReadUInt32LittleEndian(span[80..]);
+        var headerEntrySize = BinaryPrimitives.ReadUInt32LittleEndian(span[84..]);
         var arrayCrc = BinaryPrimitives.ReadUInt32LittleEndian(span[88..]);
+        ValidateEntryDimensionOverride(partitionEntryCount, partitionEntrySize);
         if (current != lba || alternate != (lba == 1 ? blockCount - 1 : 1) || diskId == Guid.Empty
-            || first > last || last >= blockCount - 1 || count is 0 or > MaximumEntries
-            || entrySize is < 128 or > MaximumEntrySize || (entrySize & (entrySize - 1)) != 0)
+            || first > last || last >= blockCount - 1
+            || (partitionEntryCount is null && headerCount is 0 or > MaximumEntries)
+            || (partitionEntrySize is null
+                && (headerEntrySize is < 128 or > MaximumEntrySize
+                    || (headerEntrySize & (headerEntrySize - 1)) != 0)))
         {
             throw new InvalidDataException("The GPT header identity, geometry or entry dimensions are invalid.");
         }
+        var count = partitionEntryCount ?? headerCount;
+        var entrySize = partitionEntrySize ?? headerEntrySize;
         var arrayBytes = (ulong)count * entrySize;
         if (arrayBytes > MaximumArrayBytes)
         {
+            if (partitionEntryCount is not null || partitionEntrySize is not null)
+            {
+                throw new ArgumentOutOfRangeException(
+                    partitionEntryCount is not null ? nameof(partitionEntryCount) : nameof(partitionEntrySize),
+                    "The requested partition-entry dimensions do not fit the supported entry array limit.");
+            }
             throw new InvalidDataException("The GPT entry array exceeds the supported metadata limit.");
         }
         var arrayBlocks = (arrayBytes + (uint)blockSize - 1) / (uint)blockSize;
         var reservedBlocks = (Math.Max(arrayBytes, 16384UL) + (uint)blockSize - 1) / (uint)blockSize;
         if (first < 2 + reservedBlocks || reservedBlocks >= blockCount - 1
-            || last >= blockCount - 1 - reservedBlocks
-            || arrayLba >= blockCount || arrayBlocks > blockCount - arrayLba
-            || (lba == 1 ? arrayLba < 2 || arrayLba + arrayBlocks > first
-                : arrayLba <= last || arrayLba + arrayBlocks > lba))
+            || last >= blockCount - 1 - reservedBlocks)
         {
             throw new InvalidDataException("The GPT entry array overlaps usable storage or a header.");
         }
-        return new Header(first, last, diskId, arrayLba, count, entrySize, arrayCrc, size, SHA256.HashData(span));
+        if (partitionEntryLba is null)
+        {
+            if (arrayLba >= blockCount || arrayBlocks > blockCount - arrayLba
+                || (lba == 1 ? arrayLba < 2 || arrayLba + arrayBlocks > first
+                    : arrayLba <= last || arrayLba + arrayBlocks > lba))
+            {
+                throw new InvalidDataException("The GPT entry array overlaps usable storage or a header.");
+            }
+            return new Header(first, last, diskId, arrayLba, count, entrySize, arrayCrc, size, SHA256.HashData(span));
+        }
+        var requested = partitionEntryLba.Value;
+        if (requested < 2 || requested > blockCount - 1 || arrayBlocks > blockCount - requested)
+        {
+            throw new ArgumentOutOfRangeException(nameof(partitionEntryLba), requested,
+                "The requested partition-entry array LBA does not leave the entry array inside the reported capacity.");
+        }
+        return new Header(first, last, diskId, requested, count, entrySize, arrayCrc, size, SHA256.HashData(span));
+    }
+
+    private static void ValidateEntryDimensionOverride(uint? partitionEntryCount, uint? partitionEntrySize)
+    {
+        if (partitionEntryCount is > MaximumEntries or 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(partitionEntryCount), partitionEntryCount,
+                "The requested partition-entry count must be between 1 and 65536.");
+        }
+        if (partitionEntrySize is { } requestedEntrySize
+            && (requestedEntrySize is < 128 or > MaximumEntrySize
+                || (requestedEntrySize & (requestedEntrySize - 1)) != 0))
+        {
+            throw new ArgumentOutOfRangeException(nameof(partitionEntrySize), requestedEntrySize,
+                "The requested partition-entry size must be a power of two from 128 through 4096.");
+        }
     }
 
     private static void ReadAt(Stream source, long offset, Span<byte> destination)

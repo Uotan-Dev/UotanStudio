@@ -43,7 +43,7 @@ internal static class FlashBundlePreflight
 
     internal static List<EdlPhysicalRange> Validate(IReadOnlyList<RawProgramEntry> programs, IReadOnlyList<PatchEntry>? patches,
         FlashBundleOptions options, long sectorSize, CancellationToken cancellationToken, FlashBundleSources? sources = null,
-        int? storageSlot = null)
+        int? storageSlot = null, IReadOnlyList<WipeManifestEntry>? wipes = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ValidateSectorSize(sectorSize);
@@ -95,6 +95,20 @@ internal static class FlashBundlePreflight
                 }
             }
         }
+
+        foreach (var entry in wipes ?? [])
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ArgumentOutOfRangeException.ThrowIfNegative(entry.PhysicalPartitionNumber);
+            if (entry.EntireStorage)
+            {
+                continue;
+            }
+
+            ranges.Add(entry.ToPlanRange(sectorSize) ?? throw new InvalidDataException(
+                "A ranged wipe request must declare the sectors it overwrites."));
+        }
+
         return ranges;
     }
 

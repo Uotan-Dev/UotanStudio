@@ -6,26 +6,26 @@ using UotanStudio.Services.Firmware;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>super（逻辑分区）操作节点视图模型，提供 super 镜像解包与合成功能。</para>
 /// Super (logical partition) operation node view model, providing super image unpacking and synthesis.
+/// <para>super（逻辑分区）操作节点视图模型，提供 super 镜像解包与合成功能。</para>
 /// </summary>
 public class SuperNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
-    /// <para>创建具有指定标题的 super 操作节点。</para>
     /// Creates a super operation node with the specified title.
+    /// <para>创建具有指定标题的 super 操作节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public SuperNodeViewModel(string title) : base(title, NodeCategory.Firmware)
     {
     }
 
     /// <summary>
-    /// <para>创建默认的 super 解包节点。</para>
     /// Creates a default super unpack node.
+    /// <para>创建默认的 super 解包节点。</para>
     /// </summary>
     public static SuperNodeViewModel CreateSuperUnpackNode()
     {
@@ -40,8 +40,8 @@ public class SuperNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的 super 合成节点。</para>
     /// Creates a default super pack (synthesis) node.
+    /// <para>创建默认的 super 合成节点。</para>
     /// </summary>
     public static SuperNodeViewModel CreateSuperPackNode()
     {
@@ -64,18 +64,18 @@ public class SuperNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的 super 逻辑：Image.Super.Unpack 从 super 镜像解出逻辑分区、
-    /// Image.Super.Pack 将分区镜像合成为 super 镜像。</para>
     /// Dispatches super logic by the node type key (TypeKey): Image.Super.Unpack extracts logical partitions
     /// from a super image, and Image.Super.Pack synthesizes a super image from partition images.
+    /// <para>按节点类型键（TypeKey）分发对应的 super 逻辑：Image.Super.Unpack 从 super 镜像解出逻辑分区、
+    /// Image.Super.Pack 将分区镜像合成为 super 镜像。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {

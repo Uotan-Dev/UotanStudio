@@ -1,4 +1,5 @@
 using UotanStudio.Firmware.Core;
+using UotanStudio.Hash.XzCrc64;
 
 namespace UotanStudio.Firmware.Compression.Internal;
 
@@ -46,8 +47,8 @@ internal static class XzContainer
     }
 
     /// <summary>
-    /// Wraps a raw LZMA2 stream into a complete .xz file and writes it directly to the stream (used by streaming compression: the check and uncompressed size are precomputed by the caller, so the original data never needs full buffering).
-    /// <para>将 LZMA2 原始流封装为完整 .xz 文件并直接写入流（供流式压缩使用： 校验与未压缩大小由调用方预先计算，无需整块缓冲原始数据）。</para>
+    /// Wraps a raw LZMA2 stream into a complete .xz file and writes it to the stream.
+    /// <para>把 LZMA2 原始流封装为完整 .xz 文件并写入流。</para>
     /// </summary>
     public static void WriteContainer(Stream output, byte[] lzma2Data, ulong uncompressedSize,
         byte[] check, uint dictionarySize, byte checkType = CheckTypeCrc32)

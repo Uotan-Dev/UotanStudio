@@ -1,4 +1,4 @@
-namespace UotanStudio.Comm.Protocols.Edl;
+﻿namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
 /// Firehose protocol health-probe, power and storage-management operations.
@@ -33,15 +33,18 @@ public sealed partial class FirehoseProtocol
     }
 
     /// <summary>
-    /// Resets the device (reboot into the system). A best-effort
-    /// &lt;setbootablestoragedrive&gt; (UFS→1, eMMC→0) is sent before the reset, and only for the
-    /// storage types that own a bootable logical unit: NAND, SPI NOR and undetected storage skip the
-    /// preparation entirely. A NAK of that preparation is tolerated, but an uncertain response stops
-    /// the sequence.
-    /// <para>复位设备（重启进入系统）。复位前会尽力发送 &lt;setbootablestoragedrive&gt;
-    /// （UFS→1，eMMC→0），且仅针对拥有可引导逻辑单元的存储类型：NAND、SPI NOR 与未探测到的存储
-    /// 完全跳过该准备命令。该准备命令返回 NAK 可以容忍，但结果不确定的响应会中止整个序列。</para>
+    /// Resets the device (reboot into the system).
+    /// <para>复位设备（重启进入系统）。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>A best-effort &lt;setbootablestoragedrive&gt; (UFS→1, eMMC→0) is sent before the reset, and only
+    /// for the storage types that own a bootable logical unit: NAND, SPI NOR and undetected storage skip the
+    /// preparation entirely. A NAK of that preparation is tolerated, but an uncertain response stops the
+    /// sequence.</para>
+    /// <para>复位前会尽力发送 &lt;setbootablestoragedrive&gt;（UFS→1，eMMC→0），且仅针对拥有可引导逻辑
+    /// 单元的存储类型：NAND、SPI NOR 与未探测到的存储完全跳过该准备命令。该准备命令返回 NAK 可以容忍，
+    /// 但结果不确定的响应会中止整个序列。</para>
+    /// </remarks>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>
     /// The Firehose response.
@@ -70,13 +73,15 @@ public sealed partial class FirehoseProtocol
 
     /// <summary>
     /// Sends a &lt;power&gt; command and returns only its actual ACK or NAK.
-    /// An ACK retires the session even if transport disconnection cannot be observed.
-    /// Missing, malformed or raw-mode responses fail with an uncertain outcome; they are
-    /// never converted to a successful acknowledgement.
-    /// <para>发送 &lt;power&gt; 命令，且只返回其真实的 ACK 或 NAK。即使无法观测到传输层断开，
-    /// ACK 也会使本会话退役。缺失、格式错误或处于原始模式的响应会以不确定结果失败，绝不
-    /// 被转换成成功确认。</para>
+    /// <para>发送 &lt;power&gt; 命令，且只返回其真实的 ACK 或 NAK。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>An ACK retires the session even if transport disconnection cannot be observed.
+    /// Missing, malformed or raw-mode responses fail with an uncertain outcome; they are never converted
+    /// to a successful acknowledgement.</para>
+    /// <para>即使无法观测到传输层断开，ACK 也会使本会话退役。缺失、格式错误或处于原始模式的响应会以
+    /// 不确定结果失败，绝不被转换成成功确认。</para>
+    /// </remarks>
     /// <param name="option">The reboot option. <para>复位选项。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>
@@ -182,6 +187,41 @@ public sealed partial class FirehoseProtocol
         ThrowIfDisposed();
         var xml = FirehoseXmlBuilder.BuildSetBootableStorageDrive(value);
         return await SendCommandAndWaitResponseAsync(xml, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sets which storage drive the target boots from via &lt;setbootablestoragedrive&gt;.
+    /// Unlike the best-effort preparation inside <see cref="PowerAsync"/>, this surfaces the real device
+    /// acknowledgement and rejects a NAK.
+    /// <para>通过 &lt;setbootablestoragedrive&gt; 设置目标从哪个存储驱动器引导。不同于
+    /// <see cref="PowerAsync"/> 内部尽力而为的准备命令，本方法会返回设备真实确认并对 NAK 予以拒绝。</para>
+    /// </summary>
+    /// <param name="value">The bootable storage drive number; UFS boot LUN 1 and eMMC LUN 0 are the common
+    /// values, and the accepted range is 0 through 255. <para>可引导存储驱动器编号；常见值为 UFS 引导 LUN 1
+    /// 与 eMMC LUN 0，可接受范围为 0 至 255。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The acknowledged device response. <para>设备确认的响应。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> is outside 0 through 255.
+    /// <para><paramref name="value"/> 超出 0 至 255。</para></exception>
+    /// <exception cref="EdlException">The target returned a NAK or the transport failed.
+    /// <para>目标返回 NAK，或传输层失败。</para></exception>
+    /// <exception cref="OperationCanceledException">The lease wait or response reception is cancelled.
+    /// <para>租约等待或响应接收被取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The protocol has been disposed.
+    /// <para>协议已被释放。</para></exception>
+    public async Task<FirehoseResponse> SetBootableStorageDriveAsync(int value, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(value);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(value, 255);
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        var response = await SetBootableStorageDriveCoreAsync(value, cancellationToken).ConfigureAwait(false);
+        if (!response.IsAck)
+        {
+            throw new EdlException(EdlErrorCode.NotSupported,
+                $"The target rejected <setbootablestoragedrive value=\"{value}\". Response: {response.RawValue}");
+        }
+
+        return response;
     }
 
     /// <summary>

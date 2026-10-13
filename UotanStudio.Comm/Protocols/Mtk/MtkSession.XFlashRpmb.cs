@@ -7,9 +7,7 @@ public sealed partial class MtkSession
     private const uint XFlashDeviceControl = 0x010009;
     private const uint XFlashGetRpmbStatus = 0x040010;
     private const uint XFlashCustomReadRpmb = 0x0F0006;
-    private const uint XFlashCustomWriteRpmb = 0x0F0007;
     private const uint XFlashCustomReadUfsRpmb = 0x0F0009;
-    private const uint XFlashCustomWriteUfsRpmb = 0x0F000A;
 
     /// <summary>
     /// Queries the agent's opaque RPMB status reply and reports the RPMB capacity from the discovered geometry.
@@ -217,102 +215,6 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>
-    /// Writes whole RPMB frames, only after the caller opted into authenticated writes.
-    /// <para>仅在调用方开启认证写入后写入完整的 RPMB 帧。</para>
-    /// </summary>
-    /// <remarks>
-    /// The write exchange mirrors
-    /// <c>mtkclient/Library/DA/xflash/extension/xflash.py:412-430</c> with codes from
-    /// <c>mtkclient/Library/DA/xflash/extension/xflash.py:22-25</c>: device-control envelope, write control code,
-    /// the frame index as a four-byte little-endian field, the whole frame as one payload, then a two-byte
-    /// result frame and a status frame. The reference client rejects a buffer that is not exactly one frame
-    /// before sending anything; this session adds no zero padding, no erase and no retry.
-    /// <para>写入交换对应 <c>mtkclient/Library/DA/xflash/extension/xflash.py:412-430</c>，控制码取自
-    /// <c>mtkclient/Library/DA/xflash/extension/xflash.py:22-25</c>：设备控制封装、写入控制码、小端四字节的
-    /// 帧序号、整帧作为单个载荷、随后是两字节结果帧与状态帧。参考客户端会在发送任何东西之前拒绝不是恰好
-    /// 一帧的缓冲区；本会话既不补零、不擦除，也不重试。</para>
-    /// </remarks>
-    /// <param name="range">The validated frame-aligned range to write.
-    /// <para>要写入的、已校验的帧对齐范围。</para></param>
-    /// <param name="source">A readable stream holding one whole frame per requested frame; it remains open.
-    /// <para>为每个请求帧提供一个完整帧的可读流；保持打开。</para></param>
-    /// <param name="options">The options, which must enable
-    /// <see cref="MtkRpmbOptions.AllowAuthenticatedWrites"/>.
-    /// <para>选项，必须启用 <see cref="MtkRpmbOptions.AllowAuthenticatedWrites"/>。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>One status result per addressed frame. <para>每个已寻址帧的状态结果。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="options"/> is null.
-    /// <para><paramref name="source"/> 或 <paramref name="options"/> 为 null。</para></exception>
-    /// <exception cref="NotSupportedException">
-    /// <see cref="MtkRpmbOptions.AllowAuthenticatedWrites"/> is <see langword="false"/>, or the family is NOR or NAND.
-    /// <para><see cref="MtkRpmbOptions.AllowAuthenticatedWrites"/> 为 <see langword="false"/>，或当前族为 NOR 或 NAND。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException"><paramref name="source"/> is unreadable.
-    /// <para><paramref name="source"/> 不可读。</para></exception>
-    /// <exception cref="EndOfStreamException">The source ended before a whole frame was available.
-    /// <para>源在凑足一个完整帧之前已结束。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The range or count is outside the configured bounds.
-    /// <para>范围或数量超出配置的边界。</para></exception>
-    /// <exception cref="InvalidOperationException">The session stage or channel is wrong.
-    /// <para>会话阶段或通道不正确。</para></exception>
-    /// <exception cref="MtkProtocolException">A frame reply violated the protocol; the family faults.
-    /// <para>某帧应答违反协议；该协议族进入 fault 状态。</para></exception>
-    /// <exception cref="TimeoutException">The exchange deadline expired; the family faults.
-    /// <para>交换截止时间到期；该协议族进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public async Task<MtkRpmbWriteResult> WriteXFlashRpmbFramesAsync(MtkRpmbFrameRange range, Stream source,
-        MtkRpmbOptions options, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(options);
-        RequireRpmbWriteOptIn(options);
-        options.Validate();
-        if (!source.CanRead)
-        {
-            throw new ArgumentException("The RPMB write source is not readable.", nameof(source));
-        }
-        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            RequireState(MtkSessionState.XFlashStorageReady);
-            cancellationToken.ThrowIfCancellationRequested();
-            var target = RequireXFlashRpmbTarget();
-            var capacity = ResolveXFlashRpmbCapacity(target);
-            range.Validate(capacity, options.MaximumWriteFrames);
-            var frames = new List<MtkRpmbFrameResult>();
-            var buffer = new byte[MtkRpmbWire.FrameLength];
-            await RunRpmbExchangeAsync(async token =>
-            {
-                var channel = _xflash ?? throw new InvalidOperationException("XFlash was not initialized.");
-                for (var index = 0; index < range.FrameCount; index++)
-                {
-                    var frame = checked(range.StartFrame + index);
-                    await source.ReadExactlyAsync(buffer, token).ConfigureAwait(false);
-                    var outcome = await WriteXFlashRpmbFrameAsync(channel, target, frame, buffer, token).ConfigureAwait(false);
-                    frames.Add(new MtkRpmbFrameResult { Frame = frame, Outcome = outcome, RawFrame = [] });
-                    if (!outcome.IsOkay)
-                    {
-                        break;
-                    }
-                }
-            }, options.OperationTimeoutMs, FaultXFlashStorage, cancellationToken).ConfigureAwait(false);
-            var accepted = frames.Count(frame => frame.Outcome.IsOkay);
-            RecordRpmbEvidence("rpmb-write", accepted == range.FrameCount ? CommandOutcomeKind.Completed : CommandOutcomeKind.Rejected,
-                $"xflash rpmb write {(target == MtkRpmbTarget.Emmc ? XFlashCustomWriteRpmb : XFlashCustomWriteUfsRpmb):X8} " +
-                $"frames {range.StartFrame}+{range.FrameCount}; {accepted} accepted.");
-            return new MtkRpmbWriteResult { Target = target, Requested = range, Frames = frames };
-        }
-        finally
-        {
-            _operation.Release();
-        }
-    }
-
     private MtkRpmbTarget RequireXFlashRpmbTarget()
     {
         var storage = XFlashStorage ?? throw new InvalidOperationException("Storage has not been discovered.");
@@ -403,30 +305,6 @@ public sealed partial class MtkSession
         }
         await ReadXFlashStatusAsync(channel, "rpmb frame data", cancellationToken).ConfigureAwait(false);
         return (outcome, data.Payload);
-    }
-
-    private async Task<MtkRpmbFrameOutcome> WriteXFlashRpmbFrameAsync(MtkXFlashChannel channel, MtkRpmbTarget target,
-        long frame, byte[] payload, CancellationToken cancellationToken)
-    {
-        var command = target == MtkRpmbTarget.Emmc ? XFlashCustomWriteRpmb : XFlashCustomWriteUfsRpmb;
-        await RequireXFlashRpmbCommandAsync(channel, command, cancellationToken).ConfigureAwait(false);
-        await channel.SendAsync(1, CreateRpmbFrameWord(frame), cancellationToken).ConfigureAwait(false);
-        await channel.SendAsync(1, payload, cancellationToken).ConfigureAwait(false);
-        var reply = await channel.ReceiveAsync(2, cancellationToken).ConfigureAwait(false);
-        if (reply.DataType != 1)
-        {
-            throw new MtkProtocolException("The RPMB write result arrived in a non-protocol frame.");
-        }
-        var outcome = ReadRpmbFrameOutcome(reply.Payload);
-        if (!outcome.IsOkay)
-        {
-            var reported = await ReadXFlashValueAsync(channel, "rpmb write refusal", cancellationToken).ConfigureAwait(false);
-            RecordRpmbEvidence("rpmb-frame", CommandOutcomeKind.Rejected,
-                $"xflash rpmb write frame {frame} reported 0x{outcome.ReportedCode:X4}; completion status 0x{reported:X8} kept as evidence.");
-            return outcome;
-        }
-        await ReadXFlashStatusAsync(channel, "rpmb write frame", cancellationToken).ConfigureAwait(false);
-        return outcome;
     }
 
     private async Task RequireXFlashRpmbCommandAsync(MtkXFlashChannel channel, uint command, CancellationToken cancellationToken)

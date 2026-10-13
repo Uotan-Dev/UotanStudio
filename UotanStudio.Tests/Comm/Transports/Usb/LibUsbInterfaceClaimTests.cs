@@ -18,11 +18,11 @@ public sealed class LibUsbInterfaceClaimTests
     [Fact]
     public void BusyClaim_UnsupportedDetach_PreservesClaimErrorAndStops()
     {
-        var failure = new UsbException(Error.Busy);
+        var failure = new UsbException($"{Error.Busy}: device or resource busy");
         var claims = 0;
         var detaches = 0;
         Assert.False(LibUsbInterfaceClaim.TryClaim(() => { claims++; throw failure; },
-            () => { detaches++; throw new UsbException(Error.NotSupported); }, out var error));
+            () => { detaches++; throw new UsbException($"{Error.NotSupported}: not supported"); }, out var error));
         Assert.Same(failure, error);
         Assert.Equal(4, claims);
         Assert.Equal(3, detaches);

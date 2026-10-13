@@ -86,13 +86,8 @@ public static class ZstdCompressor
     }
 
     /// <summary>
-    /// Streaming zstd compression: pipes through ZstdSharp's CompressionStream without full buffering, suitable for large inputs.
-    /// When <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is above 1 and the input is seekable with at least two
-    /// 1 MiB chunks, chunks are compressed concurrently into independent frames and concatenated in chunk order, matching
-    /// the byte-array overload; otherwise a single frame is produced.
-    /// <para>流式 Zstd 压缩：基于 ZstdSharp 的 CompressionStream 直接管道， 无需整块缓冲，适合大输入。当
-    /// <see cref="CompressionOptions.MaxDegreeOfParallelism"/> 大于 1 且输入可寻址并至少包含两个 1 MiB 块时，各块并发
-    /// 压缩为独立帧并按块序串接，与字节数组重载语义一致；否则生成单帧。</para>
+    /// Compresses a stream with zstd, using parallel frames when the options and a seekable input allow it.
+    /// <para>流式执行 zstd 压缩；选项与可寻址输入允许时改用并行独立帧。</para>
     /// </summary>
     /// <param name="input">Readable source stream, consumed to its end and left open.
     /// <para>可读源流，读取到末尾并保持打开。</para></param>

@@ -9,13 +9,8 @@ using UotanStudio.Firmware.Core.Text;
 namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 
 /// <summary>
-/// Builds and signs AVB artifacts — VBMeta images, dm-verity hashtree footers and hash footers — with 2048, 4096 or
-/// 8192-bit RSA keys, and patches VBMeta flags to disable verification. All header fields are big-endian; invalid
-/// inputs and I/O faults return failure results with combined English and Chinese messages, and only argument-null
-/// guards and cancellation escape as exceptions.
-/// <para>使用 2048、4096 或 8192 位 RSA 密钥构建并签名 AVB 工件 —— VBMeta 镜像、dm-verity 哈希树尾部与哈希尾部 ——
-/// 并修补 VBMeta 标志以禁用校验。所有头部字段为大端序；非法输入与 I/O 故障返回带英文中文合并消息的失败结果，
-/// 仅参数为 null 的检查与取消请求会以异常形式逸出。</para>
+/// Builds and signs AVB artifacts — VBMeta images, dm-verity hashtree footers and hash footers — with 2048, 4096 or 8192-bit RSA keys, and patches VBMeta flags to disable verification. All header fields are big-endian; invalid inputs and I/O faults return failure results.
+/// <para>构建并签名 AVB 产物——VBMeta 镜像、dm-verity 哈希树页脚与哈希页脚，支持 2048/4096/8192 位 RSA 密钥，并可修补 VBMeta 标志以关闭校验。所有头部字段为大端；非法输入与 I/O 故障返回失败结果。</para>
 /// </summary>
 public static partial class AvbSigner
 {
@@ -625,8 +620,8 @@ public static partial class AvbSigner
     }
 
     /// <summary>
-    /// Serializes hash descriptors in the upstream libavb hash descriptor layout.
-    /// <para>按上游 libavb 哈希描述符布局序列化哈希描述符。</para>
+    /// Serializes hash descriptors in the AVB hash descriptor wire layout.
+    /// <para>按 AVB 哈希描述符线格式序列化哈希描述符。</para>
     /// </summary>
     private static byte[] SerializeHashDescriptors(IReadOnlyList<AvbHashDescriptor> descriptors)
     {
@@ -686,8 +681,8 @@ public static partial class AvbSigner
     }
 
     /// <summary>
-    /// Serializes a heterogeneous descriptor list in the upstream libavb layouts.
-    /// <para>按上游 libavb 布局序列化异构描述符列表。</para>
+    /// Serializes a heterogeneous descriptor list in the AVB wire layouts.
+    /// <para>按 AVB 线格式序列化异构描述符列表。</para>
     /// </summary>
     private static byte[] SerializeDescriptors(IReadOnlyList<object> descriptors)
     {

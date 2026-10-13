@@ -4,15 +4,8 @@ using System.Text;
 namespace UotanStudio.Firmware.CompoundFile;
 
 /// <summary>
-/// Bounded read-only parser for compound file (OLE2/CFB) containers - the container used by, among
-/// others, Qualcomm QCN NV backup files. Input is untrusted: every offset, sector index, chain
-/// length and declared size is bounds-checked before use, and chain walks are capped so malformed
-/// files can never drive unbounded loops or allocations. Supports version 3 (512-byte sectors) and
-/// version 4 (4096-byte sectors) containers including the mini FAT / mini stream subsystem.
-/// <para>复合文档（OLE2/CFB）容器的有界只读解析器——该容器也被 Qualcomm QCN NV 备份文件等使用。
-/// 输入视为不可信：所有偏移、扇区号、链长与声明大小在使用前均做上限检查，链遍历有步数上限，
-/// 畸形文件不可能导致无界循环或分配。支持版本 3（512 字节扇区）与版本 4（4096 字节扇区），
-/// 包括 mini FAT / mini stream 子系统。</para>
+/// Bounded read-only parser for compound file (OLE2/CFB) containers, the container used by Qualcomm QCN NV backup files among others. Every offset, sector index, chain length and declared size is bounds-checked and chain walks are capped. Supports version 3 and version 4 containers including the mini FAT subsystem.
+/// <para>复合文档（OLE2/CFB）容器的有界只读解析器，Qualcomm QCN NV 备份文件等即使用该容器。所有偏移、扇区号、链长与声明大小均做上限检查，链遍历有步数上限。支持版本 3 与版本 4 容器，含 mini FAT 子系统。</para>
 /// </summary>
 public sealed class CompoundFileReader : IDisposable
 {
@@ -70,28 +63,28 @@ public sealed class CompoundFileReader : IDisposable
     /// <para>打开并解析指定路径的复合文档。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>复合文档文件路径。</para>
     /// The compound file path.
+    /// <para>复合文档文件路径。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// <para>取消令牌，贯穿头部与结构读取。</para>
     /// Cancellation token carried through the header and structure reads.
+    /// <para>取消令牌，贯穿头部与结构读取。</para>
     /// </param>
     /// <returns>
-    /// <para>已解析的读取器实例；使用完毕后须释放。</para>
     /// A parsed reader instance; must be disposed when no longer needed.
+    /// <para>已解析的读取器实例；使用完毕后须释放。</para>
     /// </returns>
     /// <exception cref="InvalidCompoundFileMagicException">
-    /// <para>文件不以 OLE2/CFB 魔数开头或短于 512 字节。</para>
     /// The file does not start with the OLE2/CFB magic or is shorter than 512 bytes.
+    /// <para>文件不以 OLE2/CFB 魔数开头或短于 512 字节。</para>
     /// </exception>
     /// <exception cref="UnsupportedCompoundFileVersionException">
-    /// <para>头部声明的主版本或扇区移位不受支持。</para>
     /// The header declares an unsupported major version or sector shift.
+    /// <para>头部声明的主版本或扇区移位不受支持。</para>
     /// </exception>
     /// <exception cref="CompoundFileCorruptedException">
+    /// The structure is truncated, self-contradictory or violates a bound.
     /// <para>结构被截断、自相矛盾或违反上限。</para>
-    /// The structure is truncated, self-inconsistent or violates a bounds limit.
     /// </exception>
     public static async Task<CompoundFileReader> OpenAsync(string path, CancellationToken cancellationToken = default)
     {
@@ -132,38 +125,35 @@ public sealed class CompoundFileReader : IDisposable
     /// <para>按从根条目开始的斜杠分隔路径查找目录项（不区分大小写）。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>条目路径，例如 <c>00000000/default/NV_ITEM_ARRAY</c>；空字符串匹配根条目。</para>
     /// The entry path, e.g. <c>00000000/default/NV_ITEM_ARRAY</c>; an empty string matches the root.
+    /// <para>条目路径，例如 <c>00000000/default/NV_ITEM_ARRAY</c>；空字符串匹配根条目。</para>
     /// </param>
     /// <returns>
-    /// <para>命中的条目；未命中时为 <c>null</c>。</para>
     /// The matching entry; <c>null</c> when no entry has that path.
+    /// <para>命中的条目；未命中时为 <c>null</c>。</para>
     /// </returns>
     public CompoundFileEntry? TryGetEntryByPath(string path) =>
         _entriesByPath.TryGetValue(path, out var entry) ? entry : null;
 
     /// <summary>
-    /// Opens the content of a stream entry as a bounded read-only, seekable stream over its FAT or
-    /// mini FAT chain. The returned stream shares the reader's file handle and is only valid while
-    /// the reader is not disposed.
-    /// <para>将流条目的内容以有界只读可定位流的形式打开（覆盖其 FAT 或 mini FAT 链）。返回的流共享
-    /// 读取器的文件句柄，仅在读取器未释放期间有效。</para>
+    /// Opens the content of a stream entry as a bounded read-only seekable stream.
+    /// <para>把流条目的内容以有界只读可定位流的形式打开。</para>
     /// </summary>
     /// <param name="entry">
-    /// <para>要打开的流条目。</para>
     /// The stream entry to open.
+    /// <para>要打开的流条目。</para>
     /// </param>
     /// <returns>
-    /// <para>只读流，长度等于条目声明的流大小。</para>
     /// A read-only stream whose length equals the declared stream size of the entry.
+    /// <para>只读流，长度等于条目声明的流大小。</para>
     /// </returns>
     /// <exception cref="ArgumentException">
-    /// <para>条目不是流或根条目。</para>
     /// The entry is neither a stream nor the root.
+    /// <para>条目不是流或根条目。</para>
     /// </exception>
     /// <exception cref="CompoundFileCorruptedException">
-    /// <para>扇区链短于声明大小、包含无效扇区号或形成环。</para>
     /// The sector chain is shorter than the declared size, contains invalid sector indices or forms a cycle.
+    /// <para>扇区链短于声明大小、包含无效扇区号或形成环。</para>
     /// </exception>
     public Stream OpenStream(CompoundFileEntry entry)
     {
@@ -219,20 +209,20 @@ public sealed class CompoundFileReader : IDisposable
     /// 用于在不重建容器的前提下原位补丁流字节。</para>
     /// </summary>
     /// <param name="entry">
-    /// <para>流条目。</para>
     /// The stream entry.
+    /// <para>流条目。</para>
     /// </param>
     /// <returns>
-    /// <para>流块布局（物理偏移数组与逻辑块大小）。</para>
     /// The stream block layout (physical offsets and logical block size).
+    /// <para>流块布局（物理偏移数组与逻辑块大小）。</para>
     /// </returns>
     /// <exception cref="ArgumentException">
-    /// <para>条目不是流或根条目，或流为空。</para>
     /// The entry is neither a stream nor the root, or the stream is empty.
+    /// <para>条目不是流或根条目，或流为空。</para>
     /// </exception>
     /// <exception cref="CompoundFileCorruptedException">
-    /// <para>扇区链短于声明大小、包含无效扇区号或形成环。</para>
     /// The sector chain is shorter than the declared size, contains invalid sector indices or forms a cycle.
+    /// <para>扇区链短于声明大小、包含无效扇区号或形成环。</para>
     /// </exception>
     public CompoundFileStreamLayout GetStreamBlockLayout(CompoundFileEntry entry)
     {
@@ -324,10 +314,6 @@ public sealed class CompoundFileReader : IDisposable
 
         var fat = new uint[maxSectorIndex + 1];
         fat.AsSpan().Fill(FreeSect);
-        // FAT entries are concatenated across the FAT sectors in DIFAT order: the k-th FAT sector
-        // holds entries [k * entriesPerSector, (k + 1) * entriesPerSector) regardless of its sector number.
-        // FAT 条目按 DIFAT 顺序在各 FAT 扇区间拼接：第 k 个 FAT 扇区承载条目
-        // [k * entriesPerSector, (k + 1) * entriesPerSector)，与其扇区号无关。
         var fatBase = 0L;
         foreach (var fatSector in fatSectors)
         {
@@ -711,8 +697,8 @@ public sealed class CompoundFileStream : Stream
     /// <para>当前位置，始终处于 0..<see cref="Length"/> 范围内。</para>
     /// </value>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// <para>设置的位置为负数或超出流长度。</para>
     /// The position being set is negative or beyond the stream length.
+    /// <para>设置的位置为负数或超出流长度。</para>
     /// </exception>
     public override long Position
     {
@@ -760,8 +746,8 @@ public sealed class CompoundFileStream : Stream
     /// <para>不支持；复合文档流为只读。</para>
     /// </summary>
     /// <exception cref="NotSupportedException">
-    /// <para>总是抛出。</para>
     /// Always thrown.
+    /// <para>总是抛出。</para>
     /// </exception>
     public override void Flush() => throw new NotSupportedException();
 
@@ -771,8 +757,8 @@ public sealed class CompoundFileStream : Stream
     /// </summary>
     /// <param name="value">Ignored length; <see cref="Length"/> is fixed to the directory-entry size captured when the stream was opened. <para>被忽略的长度；<see cref="Length"/> 固定为打开流时记录的目录项大小。</para></param>
     /// <exception cref="NotSupportedException">
-    /// <para>总是抛出。</para>
     /// Always thrown.
+    /// <para>总是抛出。</para>
     /// </exception>
     public override void SetLength(long value) => throw new NotSupportedException();
 
@@ -784,8 +770,8 @@ public sealed class CompoundFileStream : Stream
     /// <param name="offset">Ignored index into <paramref name="buffer"/>; it is not validated. <para>被忽略的 <paramref name="buffer"/> 内索引；不会对其校验。</para></param>
     /// <param name="count">Ignored byte count; it is not validated. <para>被忽略的字节数量；不会对其校验。</para></param>
     /// <exception cref="NotSupportedException">
-    /// <para>总是抛出。</para>
     /// Always thrown.
+    /// <para>总是抛出。</para>
     /// </exception>
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
@@ -797,8 +783,8 @@ public sealed class CompoundFileStream : Stream
     /// <param name="offset">Destination offset. <para>目标偏移。</para></param>
     /// <param name="count">Maximum byte count to read. <para>最多读取的字节数。</para></param>
     /// <returns>
-    /// <para>实际读取的字节数；位于流末尾时为 0。</para>
     /// The number of bytes actually read; 0 at the end of the stream.
+    /// <para>实际读取的字节数；位于流末尾时为 0。</para>
     /// </returns>
     public override int Read(byte[] buffer, int offset, int count)
     {
@@ -824,8 +810,8 @@ public sealed class CompoundFileStream : Stream
     /// </summary>
     /// <param name="buffer">Destination span. <para>目标 span。</para></param>
     /// <returns>
-    /// <para>实际读取的字节数；位于流末尾时为 0。</para>
     /// The number of bytes actually read; 0 at the end of the stream.
+    /// <para>实际读取的字节数；位于流末尾时为 0。</para>
     /// </returns>
     public override int Read(Span<byte> buffer)
     {
@@ -852,12 +838,12 @@ public sealed class CompoundFileStream : Stream
     /// <param name="offset">Destination offset. <para>目标偏移。</para></param>
     /// <param name="count">Maximum byte count to read. <para>最多读取的字节数。</para></param>
     /// <param name="cancellationToken">
-    /// <para>取消令牌，贯穿底层文件读取。</para>
     /// Cancellation token carried through the underlying file reads.
+    /// <para>取消令牌，贯穿底层文件读取。</para>
     /// </param>
     /// <returns>
-    /// <para>实际读取的字节数；位于流末尾时为 0。</para>
     /// The number of bytes actually read; 0 at the end of the stream.
+    /// <para>实际读取的字节数；位于流末尾时为 0。</para>
     /// </returns>
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
@@ -882,8 +868,8 @@ public sealed class CompoundFileStream : Stream
     /// <para>读取当前位置的一个字节；流末尾返回 -1。</para>
     /// </summary>
     /// <returns>
-    /// <para>读取的字节值（0..255），流末尾为 -1。</para>
     /// The byte value (0..255), or -1 at the end of the stream.
+    /// <para>读取的字节值（0..255），流末尾为 -1。</para>
     /// </returns>
     public override int ReadByte()
     {
@@ -899,12 +885,12 @@ public sealed class CompoundFileStream : Stream
     /// <param name="offset">Byte offset relative to <paramref name="origin"/>. <para>相对 <paramref name="origin"/> 的字节偏移。</para></param>
     /// <param name="origin">Seek origin. <para>定位原点。</para></param>
     /// <returns>
-    /// <para>新的位置。</para>
     /// The new position.
+    /// <para>新的位置。</para>
     /// </returns>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// <para>计算出的位置为负数或超出流长度。</para>
     /// The computed position is negative or beyond the stream length.
+    /// <para>计算出的位置为负数或超出流长度。</para>
     /// </exception>
     public override long Seek(long offset, SeekOrigin origin)
     {

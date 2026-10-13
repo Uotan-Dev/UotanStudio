@@ -25,11 +25,8 @@ internal sealed class DatFormatHandler : IFormatHandler
     public IReadOnlyList<string> FileExtensions { get; } = ["list"];
 
     /// <summary>
-    /// Determines whether this handler can process the given file: a transfer-list / .list file must look like a
-    /// transfer list (leading version / block-count lines), while a data file (.new.dat / .new.dat.br /
-    /// .patch.dat / .patch.dat.br) must be paired with a sibling *.transfer.list.
-    /// <para>判断该处理器能否处理指定文件：transfer list / .list 文件须形如 transfer list（开头的版本/块数行），
-    /// 数据文件（.new.dat/.new.dat.br/.patch.dat/.patch.dat.br）须存在同目录配套的 *.transfer.list。</para>
+    /// Determines whether this handler can process the given transfer-list or DAT data file.
+    /// <para>判断该处理器能否处理指定的 transfer list 或 DAT 数据文件。</para>
     /// </summary>
     /// <param name="filePath">Path to probe; blank or non-existent paths are rejected without I/O beyond an existence check.
     /// <para>待探测路径；空串或不存在的路径仅经存在性检查即被拒绝。</para></param>
@@ -138,12 +135,8 @@ internal sealed class DatFormatHandler : IFormatHandler
     }
 
     /// <summary>
-    /// Reconstructs the partition image from a full-OTA DAT pair and writes it as
-    /// <c>&lt;stem&gt;.img</c> into the output directory. Incremental DAT pairs (those using
-    /// move/stash/diff/imgdiff commands) are rejected: a source image is required and the read-only
-    /// handler has no channel to receive one.
-    /// <para>由全量 OTA DAT 镜像对重建分区镜像，并以 <c>&lt;词干&gt;.img</c> 写入输出目录。增量 DAT 镜像对
-    /// （使用 move/stash/diff/imgdiff 命令）会被拒绝：其需要基座镜像，而只读处理器没有接收基座的通道。</para>
+    /// Reconstructs the partition image from a full-OTA DAT pair.
+    /// <para>由全量 OTA DAT 镜像对重建分区镜像。</para>
     /// </summary>
     /// <param name="filePath">Transfer-list or companion data file path identifying the DAT pair.
     /// <para>标识 DAT 镜像对的 transfer list 或配套数据文件路径。</para></param>

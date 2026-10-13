@@ -355,6 +355,98 @@ public sealed class DeviceViewHeadlessTests(NodeEditorUiFixture fixture)
         });
     }
 
+    [Theory]
+    [InlineData("en-US", "Bootloader version", "Boot ROM version")]
+    [InlineData("zh-CN", "bootloader 版本", "Boot ROM 版本")]
+    public async Task MtkInfo_VersionBytes_AppearOnlyWhenTheHandshakeReportedThem(
+        string language, string bootLoaderLabel, string bootRomLabel)
+    {
+        await DispatchAsync(() =>
+        {
+            using var model = new DeviceViewModel(monitorDevices: false);
+            var previousLanguage = LanguageService.Instance.CurrentLanguage;
+            LanguageService.Instance.ApplyLanguage(language);
+            var info = new DeviceInfo(Endpoint(DeviceProtocolKind.Mtk, DeviceTransportKind.Usb, "usb:mtk"), model);
+            model.Devices.Add(info);
+            model.SelectedDevice = info;
+            var view = CreateView(model);
+            var window = new Window { Content = view, Width = 960, Height = 800 };
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                Assert.DoesNotContain(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == bootLoaderLabel && text.IsEffectivelyVisible);
+                Assert.DoesNotContain(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == bootRomLabel && text.IsEffectivelyVisible);
+
+                info.SetMtkInfo(new UotanStudio.Comm.Protocols.Mtk.MtkDeviceInfo(0x8A00, 0x0001, 1, 2, 0x17,
+                    BlVersion: 0x1D, BromVersion: 0xFF));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == bootLoaderLabel && text.IsEffectivelyVisible);
+                Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == bootRomLabel && text.IsEffectivelyVisible);
+                Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == "0x1D" && text.IsEffectivelyVisible);
+                Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == "0xFF" && text.IsEffectivelyVisible);
+            }
+            finally
+            {
+                window.Close();
+                LanguageService.Instance.ApplyLanguage(previousLanguage);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
+    [InlineData("en-US", "MEID", "SOCID")]
+    [InlineData("zh-CN", "MEID", "SOCID")]
+    public async Task MtkInfo_Identifiers_AppearOnlyWhenTheHandshakeReportedThem(
+        string language, string meidLabel, string socidLabel)
+    {
+        await DispatchAsync(() =>
+        {
+            using var model = new DeviceViewModel(monitorDevices: false);
+            var previousLanguage = LanguageService.Instance.CurrentLanguage;
+            LanguageService.Instance.ApplyLanguage(language);
+            var info = new DeviceInfo(Endpoint(DeviceProtocolKind.Mtk, DeviceTransportKind.Usb, "usb:mtk"), model);
+            model.Devices.Add(info);
+            model.SelectedDevice = info;
+            var view = CreateView(model);
+            var window = new Window { Content = view, Width = 960, Height = 800 };
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                Assert.DoesNotContain(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == meidLabel && text.IsEffectivelyVisible);
+                Assert.DoesNotContain(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == socidLabel && text.IsEffectivelyVisible);
+
+                info.SetMtkInfo(new UotanStudio.Comm.Protocols.Mtk.MtkDeviceInfo(0x8A00, 0x0001, 1, 2, 0x17,
+                    Meid: [0xA1, 0xB2, 0xC3, 0xD4], Socid: [0x0F]));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == meidLabel && text.IsEffectivelyVisible);
+                Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == socidLabel && text.IsEffectivelyVisible);
+                Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == "a1b2c3d4" && text.IsEffectivelyVisible);
+                Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == "0f" && text.IsEffectivelyVisible);
+            }
+            finally
+            {
+                window.Close();
+                LanguageService.Instance.ApplyLanguage(previousLanguage);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     private static DetectedDevice Endpoint(DeviceProtocolKind protocol, DeviceTransportKind transport, string key) => new()
     {
         Key = key,

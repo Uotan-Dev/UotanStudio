@@ -11,10 +11,8 @@ using UotanStudio.ViewModels.Compare;
 
 namespace UotanStudio.Views.Compare;
 
-// 本分部承载 CompareView 的一组同类成员；类与其余分部合并后等价于原实现。
 public partial class CompareView
 {
-    // ===== 从行拖出到另一个目录（拖拽复制） =====
 
     /// <summary>按下时记录的拖拽候选（触发事件 + 行 + 起始点），移动超过阈值后才真正开始拖拽。</summary>
     private PointerPressedEventArgs? _dragTrigger;
@@ -55,18 +53,9 @@ public partial class CompareView
             return;
         }
 
-        // 输入框内按下：先按「文字选择」处理，但记录行锚点——指针移动到别的行时就升级为跨行选中，
-        // 与 Beyond Compare 里「拖动经过多行即选多行」的手感一致。
-        // A press inside an editor starts as text selection, but the row anchor is recorded: once the pointer reaches
-        // another row it turns into a cross-row selection, matching dragging over lines in Beyond Compare.
         _rangeList = list;
         _rangeAnchor = index;
 
-        // Multiple 模式下列表的点击是切换语义：点新行不会清掉旧选中，高亮会一路残留。
-        // 普通左键按下（无 Ctrl/Shift）在隧道阶段先清空旧选择，列表随后的处理只会选中按下的这一行。
-        // A Multiple-mode list toggles on click: pressing a new row keeps the old rows highlighted. A plain left
-        // press (no Ctrl/Shift) clears the old selection in the tunnel phase so the list's own handling selects only
-        // the pressed row.
         if (list.Selection is { } selection
             && (list.SelectionMode & SelectionMode.Multiple) != 0
             && !e.KeyModifiers.HasFlag(KeyModifiers.Control)
@@ -76,10 +65,6 @@ public partial class CompareView
             selection.Select(index);
         }
 
-        // 双击：目录行展开/折叠（对比中两侧同步），文件行在文件夹对比里开新标签的文件对比。
-        // 直接按 ClickCount 判定，不依赖手势事件的路由，避免列表项消费事件导致双击失效。
-        // Double-click: a folder row expands/collapses (both sides in a folder comparison) and a file row opens its
-        // comparison in a new tab while comparing. It is detected from ClickCount so no gesture routing can swallow it.
         if (e.ClickCount == 2)
         {
             ActivateRow(row, list);
@@ -91,8 +76,6 @@ public partial class CompareView
             return;
         }
 
-        // 只有文件/文件夹行可以拖出到另一个目录。
-        // Only file/folder rows can be dragged out into another directory.
         if (row.TreeNode is null)
         {
             return;
@@ -106,10 +89,10 @@ public partial class CompareView
     }
 
     /// <summary>
-    /// <para>移动超过阈值时开始拖拽：把该行的完整路径放进拖拽数据（文本格式），
-    /// 落到另一个文件夹行上即复制进该目录。</para>
     /// Starts a drag once the pointer moved past the threshold: the row's full path becomes the drag payload (text format),
     /// and dropping it on another folder row copies it into that folder.
+    /// <para>移动超过阈值时开始拖拽：把该行的完整路径放进拖拽数据（文本格式），
+    /// 落到另一个文件夹行上即复制进该目录。</para>
     /// </summary>
     private async void OnPreviewPointerMoved(object? sender, PointerEventArgs e)
     {
@@ -144,16 +127,14 @@ public partial class CompareView
 
         var transfer = new DataTransfer();
         transfer.Add(DataTransferItem.CreateText(path));
-        // 应用内拖拽额外记录路径，作为拖放数据格式差异的兜底。
-        // An in-view drag also records the path, covering platform differences in the payload's text format.
         _draggingPath = path;
         await DragDrop.DoDragDropAsync(trigger, transfer, DragDropEffects.Copy);
     }
 
     /// <summary>
-    /// <para>按住左键在某一行按下后拖过其它行 → 选中整段（跨行框选）；松开或移到行外即结束。</para>
     /// Dragging over other rows while the left button is held selects the whole range (cross-row selection); releasing or
     /// leaving the rows ends it.
+    /// <para>按住左键在某一行按下后拖过其它行 → 选中整段（跨行框选）；松开或移到行外即结束。</para>
     /// </summary>
     private void ExtendRangeSelection(PointerEventArgs e)
     {
@@ -163,9 +144,6 @@ public partial class CompareView
             return;
         }
 
-        // 指针下的元素给出当前行；行内的输入框/文本块都带行上下文，列表空白处则忽略。
-        // The element under the pointer gives the current row: editors and text blocks inside a row carry the row context,
-        // while empty list space is ignored.
         if (e.Source is not Control { DataContext: CompareRowViewModel row })
         {
             return;
@@ -240,12 +218,10 @@ public partial class CompareView
             : Path.Combine(root, node.RelativePath.Replace('/', Path.DirectorySeparatorChar));
     }
 
-    // ===== 右键菜单（条目操作与文本复制） =====
-
     /// <summary>
-    /// <para>文本对比：把选中行的文本复制到同一行的另一侧（右侧模板传入 Tag=Right）。</para>
     /// Text comparison: copies the selected rows' text to the same rows on the other side (the right template passes
     /// Tag=Right).
+    /// <para>文本对比：把选中行的文本复制到同一行的另一侧（右侧模板传入 Tag=Right）。</para>
     /// </summary>
     private void OnCopyTextToOtherSide(object? sender, RoutedEventArgs e)
     {
@@ -264,8 +240,8 @@ public partial class CompareView
         => await TransferComparedEntryAsync(sender, move: true);
 
     /// <summary>
-    /// <para>浏览状态：把该行条目复制/移动到相邻列的目录（Tag 给出方向）。</para>
     /// Browsing: copies or moves the row's entry into the neighbouring column's folder (the tag gives the direction).
+    /// <para>浏览状态：把该行条目复制/移动到相邻列的目录（Tag 给出方向）。</para>
     /// </summary>
     private async void OnCopyToNeighbourColumn(object? sender, RoutedEventArgs e)
         => await TransferToNeighbourAsync(sender, move: false);
@@ -405,8 +381,8 @@ public partial class CompareView
 
     /// <summary>在系统文件资源管理器中定位该行条目。</summary>
     /// <summary>
-    /// <para>浏览状态下「进入此文件夹」：把该列重新根到双击的目录（路径框同步为新路径）。</para>
     /// "Enter this folder" while browsing: re-roots the column at the chosen directory (the path box follows).
+    /// <para>浏览状态下「进入此文件夹」：把该列重新根到双击的目录（路径框同步为新路径）。</para>
     /// </summary>
     private async void OnEnterFolder(object? sender, RoutedEventArgs e)
     {
@@ -430,8 +406,6 @@ public partial class CompareView
         {
             if (OperatingSystem.IsWindows() && File.Exists(path))
             {
-                // Windows 上定位到文件本身；其他平台（或目录）直接打开所在目录。
-                // On Windows select the file itself; other platforms (or directories) open the containing folder.
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = "explorer.exe",
@@ -500,9 +474,9 @@ public partial class CompareView
     }
 
     /// <summary>
-    /// <para>执行一次不覆盖的复制/移动（复用资源管理器的传输实现），成功后刷新相关视图。</para>
     /// Runs one non-overwriting copy/move (reusing the explorer's transfer implementation) and refreshes the affected
     /// views afterwards.
+    /// <para>执行一次不覆盖的复制/移动（复用资源管理器的传输实现），成功后刷新相关视图。</para>
     /// </summary>
     private async Task TransferAsync(
         CompareViewModel vm,
@@ -523,10 +497,10 @@ public partial class CompareView
     }
 
     /// <summary>
-    /// <para>条目变化（复制/移动/删除/重命名/新建文件夹）后刷新视图：对比中重新比对两侧，
-    /// 浏览中重新加载该列。</para>
     /// Refreshes the view after an entry changed (copy/move/delete/rename/new folder): comparing re-runs the
     /// comparison and browsing reloads that column.
+    /// <para>条目变化（复制/移动/删除/重命名/新建文件夹）后刷新视图：对比中重新比对两侧，
+    /// 浏览中重新加载该列。</para>
     /// </summary>
     private async Task ReloadAfterEntryChangeAsync(CompareColumnViewModel? column)
     {
@@ -547,9 +521,6 @@ public partial class CompareView
             return;
         }
 
-        // 拿不到具体列（落点在工具栏/列间隔等）时刷新所有列，保证复制进去的文件一定出现在列表里。
-        // When no specific column could be resolved (the drop landed on the toolbar or a divider) every column is reloaded so the copied
-        // file always shows up.
         foreach (var visuals in _columnVisuals.ToList())
         {
             await visuals.Column.ReloadContentAsync();
@@ -567,17 +538,14 @@ public partial class CompareView
     }
 
     /// <summary>
-    /// <para>解析菜单/拖拽目标对应的条目：返回绝对路径、是否为目录与所在列。
-    /// 浏览行的节点自带绝对路径；对比行用点击那一侧的对比根目录加相对路径还原。</para>
     /// Resolves the entry behind a menu click or drop: absolute path, whether it is a directory and the owning column.
     /// A browsing row's node carries the absolute path; a compared row rebuilds it from the clicked side's comparison
     /// root plus the relative path.
+    /// <para>解析菜单/拖拽目标对应的条目：返回绝对路径、是否为目录与所在列。
+    /// 浏览行的节点自带绝对路径；对比行用点击那一侧的对比根目录加相对路径还原。</para>
     /// </summary>
     private (string? Path, bool IsDirectory, CompareColumnViewModel? Column) ResolveEntry(object? sender)
     {
-        // 优先使用右键时记录的上下文行（菜单项本身在弹出层里，取不到列）；直接调用（如拖放）时回退到 sender。
-        // The row recorded by the context request wins (menu items live in a popup and cannot resolve a column); a direct
-        // call (drops) falls back to the sender.
         var row = _contextRow
             ?? (sender as Control)?.DataContext as CompareRowViewModel;
         if (DataContext is not CompareViewModel vm || row?.TreeNode is not { } node)
@@ -620,10 +588,10 @@ public partial class CompareView
         => _contextColumn is { UsesRightCells: true } || IsRightTagged(sender);
 
     /// <summary>
-    /// <para>右键请求：行没有提供菜单（十六进制/元数据行、浏览状态下的文本行）时吞掉请求，
-    /// 避免弹出空菜单；其余情况交给行上挂的 <c>ContextMenu</c>。</para>
     /// Context request: when the row offers no menu (hex/metadata rows and text rows while browsing) the request is
     /// swallowed so no empty popup appears; otherwise the row's <c>ContextMenu</c> opens as usual.
+    /// <para>右键请求：行没有提供菜单（十六进制/元数据行、浏览状态下的文本行）时吞掉请求，
+    /// 避免弹出空菜单；其余情况交给行上挂的 <c>ContextMenu</c>。</para>
     /// </summary>
     private void OnRowContextRequested(object? sender, ContextRequestedEventArgs e)
     {
@@ -632,9 +600,6 @@ public partial class CompareView
             return;
         }
 
-        // 菜单项在弹出层里，取不到行列表祖先；这里记录右键目标（行 + 列），菜单命令据此定位文件。
-        // Menu items live in a popup and cannot find the row list through their ancestors, so the context request records
-        // the target (row + column) and the menu commands resolve the file from it.
         _contextRow = row;
         _contextColumn = FindColumnFor(control);
         if (row.Menu == CompareRowMenuKind.None)
@@ -644,16 +609,16 @@ public partial class CompareView
     }
 
     /// <summary>
-    /// <para>拖拽悬停事件：仅接受文件/文件夹路径的复制拖放（Avalonia 12 的
-    /// <c>DataTransfer</c> 数据载体与 <c>DataFormat.File</c> 格式）。
-    /// OS 拖拽（如 Windows 资源管理器）的文件格式可能以平台实例暴露，
-    /// <c>Contains(DataFormat.File)</c> 不命中，故再以 <c>TryGetFiles</c> 直接探测，
-    /// 保证光标与 Drop 的实际消费结果一致。</para>
     /// Drag-over event: accepts copy drops of file/folder paths only (Avalonia 12's
     /// <c>DataTransfer</c> payload with the <c>DataFormat.File</c> format).
     /// OS-originated drags (e.g. from Windows Explorer) may expose the file format as a
     /// platform instance that <c>Contains(DataFormat.File)</c> misses, so the handler also
     /// probes <c>TryGetFiles</c> directly, keeping the cursor in sync with what Drop consumes.
+    /// <para>拖拽悬停事件：仅接受文件/文件夹路径的复制拖放（Avalonia 12 的
+    /// <c>DataTransfer</c> 数据载体与 <c>DataFormat.File</c> 格式）。
+    /// OS 拖拽（如 Windows 资源管理器）的文件格式可能以平台实例暴露，
+    /// <c>Contains(DataFormat.File)</c> 不命中，故再以 <c>TryGetFiles</c> 直接探测，
+    /// 保证光标与 Drop 的实际消费结果一致。</para>
     /// </summary>
     private void OnDragOver(object? sender, DragEventArgs e)
     {
@@ -662,11 +627,11 @@ public partial class CompareView
     }
 
     /// <summary>
-    /// <para>判定拖放数据是否携带文件/文件夹路径：先检查通用文件格式（应用内/进程内拖拽），
-    /// 再以 <c>TryGetFiles</c> 直接探测（与 Drop 消费一致），最后扫描格式列表中的系统文件格式名。</para>
     /// Determines whether the drag payload carries file/folder paths: checks the universal file format
     /// first (in-process drags), then probes <c>TryGetFiles</c> directly (matching what Drop consumes),
     /// and finally scans the format list for the OS file-format name.
+    /// <para>判定拖放数据是否携带文件/文件夹路径：先检查通用文件格式（应用内/进程内拖拽），
+    /// 再以 <c>TryGetFiles</c> 直接探测（与 Drop 消费一致），最后扫描格式列表中的系统文件格式名。</para>
     /// </summary>
     private bool HasFilePayload(IDataTransfer transfer)
         => UotanStudio.Views.Controls.FileDropPaths.HasFilePayload(transfer, "CompareView")
@@ -674,13 +639,13 @@ public partial class CompareView
             || _draggingPath is not null;
 
     /// <summary>
-    /// <para>拖放事件：把拖入的文件/文件夹路径交给视图模型，每个路径占用一个文件列
-    /// （含 OS 拖拽的平台格式提取）。立即标记 <c>Handled</c> 并消费数据，再异步加载——避免异步
-    /// 异常导致拖放状态丢失。</para>
     /// Drop event: hands the dropped file/folder paths to the view model, where each path takes one file
     /// column (including platform-format extraction for OS drags). Marks <c>Handled</c> and consumes the
     /// payload immediately, then loads asynchronously — so an async failure cannot leave the drop
     /// unhandled.
+    /// <para>拖放事件：把拖入的文件/文件夹路径交给视图模型，每个路径占用一个文件列
+    /// （含 OS 拖拽的平台格式提取）。立即标记 <c>Handled</c> 并消费数据，再异步加载——避免异步
+    /// 异常导致拖放状态丢失。</para>
     /// </summary>
     private async void OnDrop(object? sender, DragEventArgs e)
     {
@@ -699,13 +664,6 @@ public partial class CompareView
             return;
         }
 
-        // 拖到某个文件夹行上 → 复制进该目录（从资源管理器或应用内拖一个文件到另一个目录即可完成复制）。
-        // Dropping onto a folder row copies into that folder (drag a file from the explorer or from the app onto another
-        // directory to copy it).
-        // 视图内拖拽（跨列复制）再按指针位置兜底：落在列表空白、列头、列间隔或工具栏上时同样能定位目标列，
-        // 否则「拖到另一列」会因为落点不在行上而毫无反应。
-        // An in-view drag (cross-column copy) also falls back to the pointer position so dropping on empty list space, a column header,
-        // a divider or the toolbar still resolves the target column instead of doing nothing.
         var dropTarget = ResolveDropTarget(e.Source, inViewDrag)
             ?? (inViewDrag ? ResolveInViewDropFolder(e.GetPosition(this)) : null);
         if (dropTarget is not null)
@@ -724,9 +682,6 @@ public partial class CompareView
                 }
             }
 
-            // 复制成功后自动刷新目标列（对比中重新比对、浏览中重新枚举目录内容），不需要再手动点刷新。
-            // After a successful copy the target column refreshes itself (re-compares while comparing, re-enumerates the folder while
-            // browsing), so no manual refresh is needed.
             if (copied)
             {
                 var column = ResolveEntry(e.Source) is var (_, _, resolved) ? resolved : null;
@@ -746,18 +701,18 @@ public partial class CompareView
     }
 
     /// <summary>
-    /// <para>解析拖拽落点：落在目录树行（目录）上时返回该目录的绝对路径，否则返回 <c>null</c>（按「加载为新列」处理）。</para>
     /// Resolves a drop target: a directory tree row yields that directory's absolute path, anything else returns
     /// <c>null</c> (handled as "load into columns").
+    /// <para>解析拖拽落点：落在目录树行（目录）上时返回该目录的绝对路径，否则返回 <c>null</c>（按「加载为新列」处理）。</para>
     /// </summary>
-    /// <param name="source"><para>拖放命中的元素。</para>The element hit by the drop.</param>
-    /// <param name="inViewDrag"><para>是否来自视图内的行拖拽（可放宽落点：同一列里的任何位置都算落到该列目录）。</para>Whether the drag started inside the view (its target may fall back to the column's own folder).</param>
+    /// <param name="source">The element hit by the drop. <para>拖放命中的元素。</para></param>
+    /// <param name="inViewDrag">Whether the drag started inside the view (its target may fall back to the column's own folder). <para>是否来自视图内的行拖拽（可放宽落点：同一列里的任何位置都算落到该列目录）。</para></param>
     /// <summary>
-    /// <para>视图内拖拽按指针位置兜底定位目标目录：先用指针所在列的目录，再退一步取「不是拖拽来源列」的第一个目录列。</para>
     /// Position-based fallback for an in-view drag: first the folder of the column under the pointer, then the first folder column that
     /// is not the drag source.
+    /// <para>视图内拖拽按指针位置兜底定位目标目录：先用指针所在列的目录，再退一步取「不是拖拽来源列」的第一个目录列。</para>
     /// </summary>
-    /// <param name="position"><para>指针在视图内的坐标。</para>The pointer position inside the view.</param>
+    /// <param name="position">The pointer position inside the view. <para>指针在视图内的坐标。</para></param>
     private string? ResolveInViewDropFolder(Point position)
     {
         var column = ResolveColumnAt(position);
@@ -806,8 +761,6 @@ public partial class CompareView
         if (source is not Control { DataContext: CompareRowViewModel row } control
             || row.TreeNode is not { IsDirectory: true } node)
         {
-            // 视图内拖拽落在非目录行上时，退化为「落到该行所在列的目录」。
-            // An in-view drag dropped on a non-folder row falls back to the folder of that row's column.
             if (inViewDrag && source is Control controlOnRow
                 && FindColumnFor(controlOnRow) is { } fallbackColumn
                 && Directory.Exists(fallbackColumn.Path))
@@ -838,20 +791,20 @@ public partial class CompareView
     }
 
     /// <summary>
-    /// <para>从拖放数据提取文件/文件夹路径：先按通用文件格式取条目，失败时再按平台文件
-    /// 格式（<c>FileDrop</c>）取条目数据（宽容枚举 <see cref="IStorageItem"/>）。</para>
     /// Extracts file/folder paths from the drag payload: first via the universal file format, then
     /// via the platform file format (<c>FileDrop</c>) reading the item data as an enumerable of
     /// <see cref="IStorageItem"/>.
+    /// <para>从拖放数据提取文件/文件夹路径：先按通用文件格式取条目，失败时再按平台文件
+    /// 格式（<c>FileDrop</c>）取条目数据（宽容枚举 <see cref="IStorageItem"/>）。</para>
     /// </summary>
     private static IReadOnlyList<string> TryExtractPaths(IDataTransfer transfer)
         => UotanStudio.Views.Controls.FileDropPaths.TryExtractPaths(transfer, "CompareView");
 
     /// <summary>
-    /// <para>从拖放数据取路径：优先平台文件格式（资源管理器等外部拖拽），其次文本格式
-    /// （视图内从行拖出的负载，必须是真实存在的路径）。</para>
     /// Extracts paths from a drag payload: the platform file formats first (external drags such as Explorer), then the
     /// text format (an in-view row drag, which must name an existing path).
+    /// <para>从拖放数据取路径：优先平台文件格式（资源管理器等外部拖拽），其次文本格式
+    /// （视图内从行拖出的负载，必须是真实存在的路径）。</para>
     /// </summary>
     private IReadOnlyList<string> ExtractDropPaths(IDataTransfer transfer)
     {
@@ -866,8 +819,6 @@ public partial class CompareView
             return [text];
         }
 
-        // 应用内拖拽：拖放数据的文本格式取不到时用拖出时记录的路径。
-        // In-view drags: when the payload's text format cannot be read, use the path recorded when the drag started.
         if (_draggingPath is { } recorded && (File.Exists(recorded) || Directory.Exists(recorded)))
         {
             return [recorded];

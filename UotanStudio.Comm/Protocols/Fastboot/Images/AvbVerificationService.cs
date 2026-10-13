@@ -96,34 +96,61 @@ public sealed class AvbHashDescriptor(
 /// </summary>
 internal sealed class AvbVerificationResult
 {
-    /// <summary>Gets or sets whether hash verification succeeded. 哈希校验是否成功。</summary>
+    /// <summary>
+    /// Gets or sets whether hash verification succeeded.
+    /// <para>哈希校验是否成功。</para>
+    /// </summary>
     public bool Success { get; set; }
 
-    /// <summary>Gets or sets a human-readable message. 人类可读消息。</summary>
+    /// <summary>
+    /// Gets or sets a human-readable message.
+    /// <para>人类可读消息。</para>
+    /// </summary>
     public string Message { get; set; } = string.Empty;
 
-    /// <summary>Gets or sets the algorithm type (uint, 0-6). 算法类型（uint，0-6）。</summary>
+    /// <summary>
+    /// Gets or sets the algorithm type (uint, 0-6).
+    /// <para>算法类型（uint，0-6）。</para>
+    /// </summary>
     public uint AlgorithmType { get; set; }
 
     /// <summary>Gets or sets the hash stored in the vbmeta header. vbmeta 头中存储的哈希。</summary>
     public byte[]? StoredHash { get; set; }
 
-    /// <summary>Gets or sets the digest recomputed from the image. 从镜像重新计算的摘要。</summary>
+    /// <summary>
+    /// Gets or sets the digest recomputed from the image.
+    /// <para>从镜像重新计算的摘要。</para>
+    /// </summary>
     public byte[]? ComputedHash { get; set; }
 
-    /// <summary>Gets or sets whether the recomputed digest matched the stored hash. 重新计算的摘要是否匹配。</summary>
+    /// <summary>
+    /// Gets or sets whether the recomputed digest matched the stored hash.
+    /// <para>重新计算的摘要是否匹配。</para>
+    /// </summary>
     public bool HashVerificationSucceeded { get; set; }
 
-    /// <summary>Gets or sets the signature extracted from the vbmeta image. 从 vbmeta 提取的签名。</summary>
+    /// <summary>
+    /// Gets or sets the signature extracted from the vbmeta image.
+    /// <para>从 vbmeta 提取的签名。</para>
+    /// </summary>
     public byte[]? Signature { get; set; }
 
-    /// <summary>Gets or sets the parsed vbmeta header (Firmware type). 解析出的 vbmeta 头（Firmware 类型）。</summary>
+    /// <summary>
+    /// Gets or sets the parsed vbmeta header (Firmware type).
+    /// <para>解析出的 vbmeta 头（Firmware 类型）。</para>
+    /// </summary>
     public AvbVBMetaImageHeader? Header { get; set; }
 
-    /// <summary>Gets or sets the hash descriptors found in the vbmeta. 在 vbmeta 中找到的哈希描述符。</summary>
+    /// <summary>
+    /// Gets or sets the hash descriptors found in the vbmeta.
+    /// <para>在 vbmeta 中找到的哈希描述符。</para>
+    /// </summary>
     public IReadOnlyList<AvbHashDescriptor> Descriptors { get; set; } = [];
 
-    /// <summary>Gets or sets whether a valid AVB footer was found. 是否找到有效的 AVB footer。</summary>
+    /// <summary>
+    /// Gets or sets whether a valid AVB footer was found.
+    /// <para>是否找到有效的 AVB footer。</para>
+    /// </summary>
     public bool HasFooter { get; set; }
 
     /// <summary>Gets or sets the AVB footer if present (Firmware type). AVB footer（Firmware 类型）。</summary>
@@ -136,19 +163,34 @@ internal sealed class AvbVerificationResult
 /// </summary>
 internal sealed class AvbSignatureResult
 {
-    /// <summary>Gets or sets whether signature verification succeeded. 签名验证是否成功。</summary>
+    /// <summary>
+    /// Gets or sets whether signature verification succeeded.
+    /// <para>签名验证是否成功。</para>
+    /// </summary>
     public bool Success { get; set; }
 
-    /// <summary>Gets or sets a human-readable message. 人类可读消息。</summary>
+    /// <summary>
+    /// Gets or sets a human-readable message.
+    /// <para>人类可读消息。</para>
+    /// </summary>
     public string Message { get; set; } = string.Empty;
 
-    /// <summary>Gets or sets the algorithm name. 算法名称。</summary>
+    /// <summary>
+    /// Gets or sets the algorithm name.
+    /// <para>算法名称。</para>
+    /// </summary>
     public string AlgorithmName { get; set; } = string.Empty;
 
-    /// <summary>Gets or sets the signature. 签名。</summary>
+    /// <summary>
+    /// Gets or sets the signature.
+    /// <para>签名。</para>
+    /// </summary>
     public byte[]? Signature { get; set; }
 
-    /// <summary>Gets or sets the public key. 公钥。</summary>
+    /// <summary>
+    /// Gets or sets the public key.
+    /// <para>公钥。</para>
+    /// </summary>
     public byte[]? PublicKey { get; set; }
 }
 

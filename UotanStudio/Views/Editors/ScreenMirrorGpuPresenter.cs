@@ -15,27 +15,11 @@ using UotanStudio.Media.Decoding.VideoToolbox;
 
 namespace UotanStudio.Views.Editors;
 
-/// <summary>Uploads compact video planes to the existing Skia GPU context, like scrcpy's YUV renderer.</summary>
-/// <summary>把紧凑视频平面上传到既有 Skia GPU 上下文，类似 scrcpy 的 YUV 渲染器。</summary>
-/// <remarks>
-/// <para>
-/// Images are immutable. Scene operations retain them until the compositor releases them.
-/// At most three frames may be live; backpressure drops only decoded presentation frames.
-/// Zero-copy <see cref="VaDmaBufVideoFrame"/> surfaces are imported on the render thread and their
-/// native resources are recycled on the next draw; if a session closes before that flush, the
-/// residual GL textures are bounded by the ring depth and the VA surface itself is released by the
-/// decoder reset. Shared-texture and IOSurface frames bypass the Skia lease entirely: they are imported
-/// into a composition drawing surface hosted by the video control, so the recycle queue keeps draining
-/// through the registered draw operation even while the compositor owns the picture.
-/// </para>
-/// <para>
-/// 图像不可变。场景操作会保留它们直到合成器释放。至多三帧存活；背压只丢弃解码呈现帧。
-/// 零拷贝的 <see cref="VaDmaBufVideoFrame"/> 表面在渲染线程导入，其原生资源在下一次绘制时回收；
-/// 若会话在回收前关闭，残留 GL 纹理以环深度为界，VA 表面本身由解码器重置释放。共享纹理与 IOSurface 帧
-/// 完全绕开 Skia 租约：它们被导入由视频控件托管的合成绘图表面，因此即便画面由合成器持有，
-/// 回收队列仍会经已注册的绘制操作继续排空。
-/// </para>
-/// </remarks>
+/// <summary>
+/// Uploads compact video planes to the existing Skia GPU context and imports shared surfaces
+/// through a composition drawing surface.
+/// <para>把紧凑视频平面上传到既有 Skia GPU 上下文，并经合成绘图表面导入共享表面。</para>
+/// </summary>
 internal sealed class ScreenMirrorGpuPresenter : IDisposable
 {
     private readonly Lock _gate = new();
@@ -80,10 +64,13 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     /// <para>视频控件挂载时采样的合成器外部图像导入能力快照；首次挂载前或合成器无互操作时为
     /// <see langword="null"/>。</para>
     /// </summary>
+    /// <value>
+    /// The captured capability snapshot or <see langword="null"/>.
+    /// <para>已采集的能力快照或 <see langword="null"/>。</para>
+    /// </value>
     internal CompositionInterop? Composition { get; private set; }
 
-    /// <summary>Raised on the UI thread after the composition presentation path failed; the session should disable GPU export.</summary>
-    /// <summary>合成呈现路径失败后在 UI 线程触发；会话应禁用 GPU 导出。</summary>
+    /// <summary>Raised after the composition presentation path failed; the session should disable GPU export.<para>合成呈现路径失败后触发；会话应禁用 GPU 导出。</para></summary>
     internal event EventHandler? CompositionFailed;
 
     /// <summary>
@@ -91,15 +78,31 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     /// decode loops wait for it before choosing export options.
     /// <para>合成互操作探测是否已完成过一次（无论有无能力）；解码循环在选择导出选项前等待它。</para>
     /// </summary>
+    /// <value>
+    /// True once at least one probe has finished.
+    /// <para>至少一次探测完成后的取值。</para>
+    /// </value>
     internal bool CompositionProbeCompleted => Volatile.Read(ref _compositionProbeCompleted) != 0;
 
-    /// <summary>Human-readable presentation path for diagnostics: composition, Skia GPU or bitmap.</summary>
-    /// <summary>用于诊断的呈现路径可读名称：合成、Skia GPU 或位图。</summary>
+    /// <summary>
+    /// Human-readable presentation path for diagnostics: composition, Skia GPU or bitmap.
+    /// <para>用于诊断的呈现路径可读名称：合成、Skia GPU 或位图。</para>
+    /// </summary>
+    /// <value>
+    /// The name of the active presentation path.
+    /// <para>当前呈现路径的名称。</para>
+    /// </value>
     internal string PresentationPath => UsesCompositionSurface ? "Composition (GPU zero-copy)"
         : _available ? Backend : "Bitmap";
 
-    /// <summary>Whether composition-owned frames currently cover the video area.</summary>
-    /// <summary>当前是否由合成器持有的帧覆盖视频区域。</summary>
+    /// <summary>
+    /// Whether composition-owned frames currently cover the video area.
+    /// <para>当前是否由合成器持有的帧覆盖视频区域。</para>
+    /// </summary>
+    /// <value>
+    /// True while a healthy composition surface is held.
+    /// <para>持有健康的合成表面时为真。</para>
+    /// </value>
     internal bool UsesCompositionSurface
     {
         get { lock (_gate) return _surface is not null && !_closed && !_compositionFailed; }
@@ -111,6 +114,10 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     /// <para>探测合成器 GPU 互操作并在 <paramref name="host"/> 内托管合成绘图表面；仅限 UI 线程。
     /// 结果经 <see cref="Composition"/> 暴露。</para>
     /// </summary>
+    /// <param name="host">
+    /// The visual whose compositor receives the probing and the hosted surface.
+    /// <para>其合成器接受探测并承载该表面的可视对象。</para>
+    /// </param>
     internal async Task AttachCompositionVisualAsync(Visual host)
     {
         Dispatcher.UIThread.VerifyAccess();
@@ -194,8 +201,8 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     }
 
     /// <summary>
-    /// Re-letterboxes the composition surface after the host control or the video size changed; UI thread only.
-    /// <para>宿主控件或视频尺寸变化后重新按信箱模式布局合成表面；仅限 UI 线程。</para>
+    /// Re-letterboxes the composition surface after the container bounds or the video size changed; UI thread only.
+    /// <para>容器边界或视频尺寸变化后重新按信箱模式布局合成表面；仅限 UI 线程。</para>
     /// </summary>
     internal void UpdateCompositionLayout()
     {
@@ -229,7 +236,11 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     /// always returned to the decoder ring, whether or not presentation succeeded.
     /// <para>经合成表面呈现 Windows 共享纹理帧；无论呈现成败，帧的槽位都会归还解码器环。</para>
     /// </summary>
-    /// <returns><see langword="true"/> when the frame was queued for presentation.</returns>
+    /// <param name="frame">
+    /// The shared-texture frame taken from the decoder ring.
+    /// <para>取自解码器环的共享纹理帧。</para>
+    /// </param>
+    /// <returns><see langword="true"/> when the frame was queued for presentation.<para>帧已入队呈现时为 <see langword="true"/>。</para></returns>
     [SupportedOSPlatform("windows")]
     internal bool PublishSharedTexture(D3D11SharedVideoFrame frame)
     {
@@ -247,7 +258,11 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     /// released back to VideoToolbox's pool.
     /// <para>经合成表面呈现 macOS IOSurface 帧；像素缓冲总会归还 VideoToolbox 的缓冲池。</para>
     /// </summary>
-    /// <returns><see langword="true"/> when the frame was queued for presentation.</returns>
+    /// <param name="frame">
+    /// The IOSurface frame taken from the pixel-buffer pool.
+    /// <para>取自像素缓冲池的 IOSurface 帧。</para>
+    /// </param>
+    /// <returns><see langword="true"/> when the frame was queued for presentation.<para>帧已入队呈现时为 <see langword="true"/>。</para></returns>
     [SupportedOSPlatform("macos")]
     internal bool PublishIosurface(IosurfaceVideoFrame frame)
     {
@@ -299,10 +314,6 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             var surface = _surface;
             if (_closed || interop is null || surface is null || Volatile.Read(ref _compositionGeneration) != generation)
                 return;
-            // A fresh IOSurface backs every frame, so the import cannot be cached: dispose it after the
-            // update so the pixel buffer can return to the decoder pool before MarkPresented recycles it.
-            // 每帧都是新的 IOSurface，因此导入无法缓存：更新完成后先释放导入，让像素缓冲在
-            // MarkPresented 回收前归还解码器池。
             var image = interop.ImportImage(new PlatformHandle(frame.Iosurface, KnownPlatformGraphicsExternalImageHandleTypes.IOSurfaceRef),
                 new PlatformGraphicsExternalImageProperties
                 {
@@ -414,8 +425,18 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         return true;
     }
 
-    /// <summary>Publishes a zero-copy exported surface; the presenter owns the frame until recycled.</summary>
-    /// <summary>发布零拷贝导出表面；回收前由呈现器持有该帧。</summary>
+    /// <summary>
+    /// Publishes a zero-copy exported surface; the presenter owns the frame until recycled.
+    /// <para>发布零拷贝导出表面；回收前由呈现器持有该帧。</para>
+    /// </summary>
+    /// <param name="frame">
+    /// The exported dma-buf frame to retain until the next draw recycles it.
+    /// <para>要保留到下一次绘制回收的导出 dma-buf 帧。</para>
+    /// </param>
+    /// <returns>
+    /// True when the frame was consumed, false when the presenter is closed or failed.
+    /// <para>帧被消费时为真，呈现器已关闭或失败时为假。</para>
+    /// </returns>
     [SupportedOSPlatform("linux")]
     internal bool PublishDmabuf(VaDmaBufVideoFrame frame)
     {
@@ -493,8 +514,10 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         public Task Update { get; set; } = Task.CompletedTask;
     }
 
-    /// <summary>Snapshot of the compositor's external-image import capability.</summary>
-    /// <summary>合成器外部图像导入能力的快照。</summary>
+    /// <summary>
+    /// Snapshot of the compositor's external-image import capability.
+    /// <para>合成器外部图像导入能力的快照。</para>
+    /// </summary>
     /// <param name="WindowsKeyedMutex">
     /// The compositor imports global D3D11 shared textures synchronized by keyed mutex.
     /// <para>合成器可导入以键互锁同步的全局 D3D11 共享纹理。</para>
@@ -550,7 +573,22 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         }
     }
 
-    /// <summary>One ref-counted presentable frame; Release hands native resources back on the render thread.</summary>
+    /// <summary>
+    /// One ref-counted presentable frame; Release hands native resources back on the render thread.
+    /// <para>一个引用计数的可呈现帧；Release 在渲染线程归还原生资源。</para>
+    /// </summary>
+    /// <param name="width">
+    /// Frame width in pixels.
+    /// <para>以像素计的帧宽。</para>
+    /// </param>
+    /// <param name="height">
+    /// Frame height in pixels.
+    /// <para>以像素计的帧高。</para>
+    /// </param>
+    /// <param name="sequence">
+    /// Monotonic sequence number identifying the frame.
+    /// <para>标识该帧的单调序列号。</para>
+    /// </param>
     internal abstract class PresentedImage(int width, int height, long sequence)
     {
         private int _references = 1;
@@ -567,7 +605,10 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         public abstract void Draw(SKCanvas canvas, Rect bounds, double opacity, GRContext? gpu);
     }
 
-    /// <summary>One ref-counted immutable copy of BGRA or NV12 planes. No full-size BGRA conversion for NV12.</summary>
+    /// <summary>
+    /// One ref-counted immutable copy of BGRA or NV12 planes. No full-size BGRA conversion for NV12.
+    /// <para>BGRA 或 NV12 平面的一个引用计数不可变副本；NV12 不做全尺寸 BGRA 转换。</para>
+    /// </summary>
     internal sealed class VideoImage : PresentedImage
     {
         internal static readonly Lazy<SKRuntimeEffect> Effect = new(() =>
@@ -623,9 +664,6 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
 
         protected override void Recycle()
         {
-            // GPU-backed textures must be deleted with their context current, so their disposal joins the
-            // render-thread recycle queue; the frame slot is released immediately regardless.
-            // GPU 纹理必须在上下文当前时删除，因此其释放进入渲染线程回收队列；帧槽位无论如何立即归还。
             if (_textureContext is null || _owner is null)
             {
                 _textureUv?.Dispose();
@@ -701,7 +739,10 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         }
     }
 
-    /// <summary>Presents an exported VA surface without downloading it: layers are imported lazily on the render thread.</summary>
+    /// <summary>
+    /// Presents an exported VA surface without downloading it: layers are imported lazily on the render thread.
+    /// <para>呈现导出的 VA 表面而不下载它：各图层在渲染线程上惰性导入。</para>
+    /// </summary>
     [SupportedOSPlatform("linux")]
     private sealed class DmaBufVideoImage : PresentedImage
     {

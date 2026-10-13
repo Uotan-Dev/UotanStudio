@@ -9,12 +9,12 @@ using UotanStudio.Services.Mcp;
 namespace UotanStudio.Services;
 
 /// <summary>
-/// <para>应用程序设置数据模型，包含所有需要持久化的设置项。</para>
 /// Application settings data model, containing all settings that need to be persisted.
+/// <para>应用程序设置数据模型，包含所有需要持久化的设置项。</para>
 /// </summary>
 public class AppSettings : IJsonOnDeserialized
 {
-    /// <summary>Discards the removed executable override while preserving unrelated extension settings.</summary>
+    /// <summary>Discards the HDC path keys kept in extension data and initializes missing collections.<para>移除扩展数据里残留的 HDC 路径键，并初始化缺失的集合。</para></summary>
     void IJsonOnDeserialized.OnDeserialized()
     {
         AdditionalSettings?.Remove("hdcPath");
@@ -26,11 +26,19 @@ public class AppSettings : IJsonOnDeserialized
         PairedNetworkTargets ??= [];
     }
 
-    /// <summary>USB backend policy, applied at the next application startup.</summary>
+    /// <summary>
+    /// USB backend policy, applied at the next application startup.
+    /// <para>USB 后端策略，在下次应用启动时生效。</para>
+    /// </summary>
+    /// <value>The persisted device-communication policy. <para>持久化的设备通信策略。</para></value>
     [JsonPropertyName("deviceCommunication")]
     public global::UotanStudio.Comm.DeviceCommunicationConfiguration DeviceCommunication { get; set; } = new();
 
-    /// <summary>Maximum concurrent firmware workers. Missing or invalid persisted values use the detected physical core count.</summary>
+    /// <summary>
+    /// Maximum concurrent firmware workers. Missing or invalid persisted values use the detected physical core count.
+    /// <para>并发固件工作线程上限；缺失或无效的持久值使用检测到的物理核心数。</para>
+    /// </summary>
+    /// <value>The worker count ceiling. <para>工作线程数量上限。</para></value>
     [JsonPropertyName("firmwareParallelism")]
     public int FirmwareParallelism
     {
@@ -40,6 +48,7 @@ public class AppSettings : IJsonOnDeserialized
     } = global::UotanStudio.Firmware.Core.FirmwareParallelism.DefaultWorkers;
 
     /// <summary>Copies settings with independently editable collections.<para>复制设置，隔离可编辑集合。</para></summary>
+    /// <returns>The copied settings instance. <para>复制出的设置实例。</para></returns>
     internal AppSettings Copy()
     {
         var copy = (AppSettings)MemberwiseClone();
@@ -54,231 +63,308 @@ public class AppSettings : IJsonOnDeserialized
     }
 
     /// <summary>
-    /// <para>获取或设置新建 EROFS 镜像是否使用 legacy（pre-5.13）布局，供旧内核挂载。</para>
     /// Gets or sets whether newly built EROFS images use the legacy (pre-5.13) layout for older kernels.
+    /// <para>获取或设置新建 EROFS 镜像是否使用 legacy（pre-5.13）布局，供旧内核挂载。</para>
     /// </summary>
+    /// <value>True when new images use the legacy layout. <para>为真时新镜像采用 legacy 布局。</para></value>
     [JsonPropertyName("erofsLegacyCompatibility")]
     public bool ErofsLegacyCompatibility { get; set; } =
         global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultLegacyCompatibility;
 
     /// <summary>
-    /// <para>获取或设置 EROFS 受保留重建是否在解包时采集的压缩估算之间搜索最小镜像；开启后一次重建最多完整
-    /// 构建三次，且只对开启状态下解包的快照生效。</para>
-    /// Gets or sets whether a preserved EROFS rebuild searches the compression estimates captured at extraction
-    /// for the smallest image; enabling it may build the whole image up to three times and only affects
-    /// snapshots extracted while the setting was on.
+    /// Gets or sets whether a preserved EROFS rebuild searches the captured compression estimates for the smallest image.
+    /// <para>获取或设置 EROFS 受保留重建是否在采集到的压缩估算之间搜索最小镜像。</para>
     /// </summary>
+    /// <value>True when the smallest-image search runs. <para>为真时执行最小镜像搜索。</para></value>
     [JsonPropertyName("erofsRebuildOptimization")]
     public bool ErofsRebuildOptimization { get; set; } =
         global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultRebuildOptimization;
 
     /// <summary>
-    /// <para>获取或设置当前语言的文化名称（如 "en-US"、"zh-CN"）。空字符串表示跟随系统。</para>
-    /// Gets or sets the culture name of the current language (e.g., "en-US", "zh-CN"). Empty string means follow system.
+    /// Gets or sets the culture name of the current language, such as "en-US" or "zh-CN"; empty follows the system.
+    /// <para>获取或设置当前语言的文化名称，例如 "en-US"、"zh-CN"；空字符串表示跟随系统。</para>
     /// </summary>
+    /// <value>The culture name, or an empty string to follow the system. <para>文化名称，空字符串表示跟随系统。</para></value>
     [JsonPropertyName("cultureName")]
     public string CultureName { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>获取或设置主题模式。</para>
     /// Gets or sets the theme mode.
+    /// <para>获取或设置主题模式。</para>
     /// </summary>
+    /// <value>The selected theme mode. <para>选定的主题模式。</para></value>
     [JsonPropertyName("themeMode")]
     [JsonConverter(typeof(JsonStringEnumConverter<ThemeMode>))]
     public ThemeMode ThemeMode { get; set; }
 
     /// <summary>
-    /// <para>获取或设置是否启用自动保存。</para>
     /// Gets or sets whether auto-save is enabled.
+    /// <para>获取或设置是否启用自动保存。</para>
     /// </summary>
+    /// <value>True when edits are saved automatically. <para>为真时自动保存修改。</para></value>
     [JsonPropertyName("autoSave")]
     public bool AutoSave { get; set; }
 
     /// <summary>
-    /// <para>获取或设置默认解包工具路径。</para>
     /// Gets or sets the default unpack tool path.
+    /// <para>获取或设置默认解包工具路径。</para>
     /// </summary>
+    /// <value>The configured tool path, or an empty string. <para>配置的工具路径，或空字符串。</para></value>
     [JsonPropertyName("unpackToolPath")]
     public string UnpackToolPath { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>获取或设置临时文件目录。</para>
     /// Gets or sets the temporary file directory.
+    /// <para>获取或设置临时文件目录。</para>
     /// </summary>
+    /// <value>The configured directory, or an empty string. <para>配置的目录，或空字符串。</para></value>
     [JsonPropertyName("tempDirectory")]
     public string TempDirectory { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>获取或设置解包后是否自动校验。</para>
     /// Gets or sets whether to auto-verify after unpacking.
+    /// <para>获取或设置解包后是否自动校验。</para>
     /// </summary>
+    /// <value>True when unpacking is followed by verification. <para>为真时解包后自动校验。</para></value>
     [JsonPropertyName("autoVerifyAfterUnpack")]
     public bool AutoVerifyAfterUnpack { get; set; } = true;
 
     /// <summary>
-    /// <para>获取或设置 ADB 路径。</para>
     /// Gets or sets the ADB path.
+    /// <para>获取或设置 ADB 路径。</para>
     /// </summary>
+    /// <value>The configured ADB path, or an empty string. <para>配置的 ADB 路径，或空字符串。</para></value>
     [JsonPropertyName("adbPath")]
     public string AdbPath { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>获取或设置 Fastboot 路径。</para>
     /// Gets or sets the Fastboot path.
+    /// <para>获取或设置 Fastboot 路径。</para>
     /// </summary>
+    /// <value>The configured Fastboot path, or an empty string. <para>配置的 Fastboot 路径，或空字符串。</para></value>
     [JsonPropertyName("fastbootPath")]
     public string FastbootPath { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>获取或设置设备超时时间（秒）。</para>
     /// Gets or sets the device timeout in seconds.
+    /// <para>获取或设置设备超时时间（秒）。</para>
     /// </summary>
+    /// <value>The timeout length in seconds. <para>以秒计的超时长度。</para></value>
     [JsonPropertyName("deviceTimeoutSeconds")]
     public int DeviceTimeoutSeconds { get; set; } = 30;
 
     /// <summary>
-    /// <para>获取或设置烧录前是否自动备份。</para>
     /// Gets or sets whether to auto-backup before flashing.
+    /// <para>获取或设置烧录前是否自动备份。</para>
     /// </summary>
+    /// <value>True when flashing is preceded by a backup. <para>为真时烧录前先备份。</para></value>
     [JsonPropertyName("autoBackupBeforeFlash")]
     public bool AutoBackupBeforeFlash { get; set; }
 
     /// <summary>
-    /// <para>获取或设置是否启用网格对齐。</para>
-    /// Gets or sets whether snap-to-grid is enabled.
+    /// Gets or sets whether expert flashing controls are enabled: raw-address reads and writes, secure-boot
+    /// configuration writes, OEM key programming, BootROM bypass and diagnostic crash.
+    /// <para>获取或设置是否启用专家级烧录控制：原始地址读写、安全配置写入、OEM 密钥烧录、BootROM 绕过与诊断崩溃。</para>
     /// </summary>
+    /// <value>True when the expert control groups are enabled. <para>为真时启用专家级控制分组。</para></value>
+    [JsonPropertyName("flashExpertMode")]
+    public bool FlashExpertMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether snap-to-grid is enabled.
+    /// <para>获取或设置是否启用网格对齐。</para>
+    /// </summary>
+    /// <value>True when positions snap to the grid. <para>为真时坐标对齐到网格。</para></value>
     [JsonPropertyName("snapToGrid")]
     public bool SnapToGrid { get; set; } = true;
 
     /// <summary>
-    /// <para>获取或设置网格大小。</para>
     /// Gets or sets the grid size.
+    /// <para>获取或设置网格大小。</para>
     /// </summary>
+    /// <value>The grid spacing. <para>网格间距。</para></value>
     [JsonPropertyName("gridSize")]
     public double GridSize { get; set; } = 20;
 
     /// <summary>
-    /// <para>获取或设置连接线样式索引。</para>
     /// Gets or sets the connection line style index.
+    /// <para>获取或设置连接线样式索引。</para>
     /// </summary>
+    /// <value>The index into the connection styles. <para>连接样式列表中的索引。</para></value>
     [JsonPropertyName("connectionStyleIndex")]
     public int ConnectionStyleIndex { get; set; }
 
     /// <summary>
-    /// <para>获取或设置最近打开的解决方案路径列表（最新在前）。</para>
     /// Gets or sets the list of recently opened solution paths (most recent first).
+    /// <para>获取或设置最近打开的解决方案路径列表（最新在前）。</para>
     /// </summary>
+    /// <value>The remembered solution paths. <para>记住的解决方案路径。</para></value>
     [JsonPropertyName("recentProjects")]
     public List<string> RecentProjects { get; set; } = [];
 
-    /// <summary>Stable node keys pinned in the toolbox, independent of project workflow data.</summary>
+    /// <summary>
+    /// Stable node keys pinned in the toolbox, independent of project workflow data.
+    /// <para>固定在工具箱中的稳定节点键，与工程工作流数据无关。</para>
+    /// </summary>
+    /// <value>The pinned node keys. <para>被固定的节点键。</para></value>
     public List<string> FavoriteNodeTypes { get; set; } = [];
 
-    /// <summary>Recently inserted node keys, newest first.</summary>
+    /// <summary>
+    /// Recently inserted node keys, newest first.
+    /// <para>最近插入的节点键，最新在前。</para>
+    /// </summary>
+    /// <value>The remembered node keys. <para>记住的节点键。</para></value>
     public List<string> RecentNodeTypes { get; set; } = [];
 
-    /// <summary>Expanded toolbox category and family identities.</summary>
+    /// <summary>
+    /// Expanded toolbox category and family identities.
+    /// <para>已展开的工具箱分类与族群标识。</para>
+    /// </summary>
+    /// <value>The expanded category and family identities. <para>展开的分类与族群标识。</para></value>
     public List<string> ExpandedNodeCategories { get; set; } = [];
 
     /// <summary>
-    /// <para>获取或设置配对成功后记住的网络调试目标，用于重启后按 IP 重新发现 adbd 的安全连接端口。</para>
     /// Gets or sets the network debugging targets remembered after pairing, used to re-discover each
     /// daemon's secure connect port by IP address after a restart.
+    /// <para>获取或设置配对成功后记住的网络调试目标，用于重启后按 IP 重新发现 adbd 的安全连接端口。</para>
     /// </summary>
+    /// <value>The remembered pairing targets. <para>记住的配对目标。</para></value>
     [JsonPropertyName("pairedNetworkTargets")]
     public List<PairedNetworkTarget> PairedNetworkTargets { get; set; } = [];
 
     /// <summary>
-    /// <para>获取或设置设为"当前签名"的 ADB 密钥库条目 Id；空字符串表示使用启动自动生成的运行时身份。</para>
     /// Gets or sets the Id of the ADB key library entry set as the "current signature"; empty string means the runtime identity auto-generated at startup.
+    /// <para>获取或设置设为"当前签名"的 ADB 密钥库条目 Id；空字符串表示使用启动自动生成的运行时身份。</para>
     /// </summary>
+    /// <value>The selected ADB key Id, or an empty string. <para>选定的 ADB 密钥 Id，或空字符串。</para></value>
     public string AdbDefaultKeyId { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>获取或设置设为"当前签名"的 HDC 密钥库条目 Id；空字符串表示使用启动自动生成的运行时身份。</para>
     /// Gets or sets the Id of the HDC key library entry set as the "current signature"; empty string means the runtime identity auto-generated at startup.
+    /// <para>获取或设置设为"当前签名"的 HDC 密钥库条目 Id；空字符串表示使用启动自动生成的运行时身份。</para>
     /// </summary>
+    /// <value>The selected HDC key Id, or an empty string. <para>选定的 HDC 密钥 Id，或空字符串。</para></value>
     public string HdcDefaultKeyId { get; set; } = string.Empty;
 
-    /// <summary>Preserves settings from temporarily unavailable features without activating them.</summary>
+    /// <summary>
+    /// Preserves settings from temporarily unavailable features without activating them.
+    /// <para>保留暂时不可用功能的设置项，但不启用它们。</para>
+    /// </summary>
+    /// <value>The unmatched JSON extension data, or null. <para>未匹配的 JSON 扩展数据，或 null。</para></value>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? AdditionalSettings { get; set; }
 
     /// <summary>
-    /// <para>获取或设置是否启用调试模式（开启后日志显示 Trace/Debug 级别详细诊断信息）。</para>
     /// Gets or sets whether debug mode is enabled (when on, logs show Trace/Debug level diagnostic details).
+    /// <para>获取或设置是否启用调试模式（开启后日志显示 Trace/Debug 级别详细诊断信息）。</para>
     /// </summary>
+    /// <value>True when Trace/Debug details are logged. <para>为真时记录 Trace/Debug 级别细节。</para></value>
     [JsonPropertyName("debugMode")]
     public bool DebugMode { get; set; }
 
     /// <summary>
-    /// <para>获取或设置 scrcpy 投屏视频码率（bps）。</para>
-    /// Gets or sets the scrcpy mirroring video bit rate (bps).
+    /// Gets or sets the screen mirroring video bit rate in bits per second.
+    /// <para>获取或设置投屏视频码率（比特每秒）。</para>
     /// </summary>
+    /// <value>The configured video bit rate. <para>配置的视频码率。</para></value>
     [JsonPropertyName("screenMirrorBitRate")]
     public int ScreenMirrorBitRate { get; set; } = 8_000_000;
 
     /// <summary>
-    /// <para>获取或设置 scrcpy 投屏最大帧率（0 表示不限制）。</para>
-    /// Gets or sets the scrcpy mirroring max frame rate (0 = no limit).
+    /// Gets or sets the screen mirroring maximum frame rate; zero means no limit.
+    /// <para>获取或设置投屏最大帧率，零表示不限制。</para>
     /// </summary>
+    /// <value>The configured frame-rate ceiling. <para>配置的帧率上限。</para></value>
     [JsonPropertyName("screenMirrorMaxFps")]
     public int ScreenMirrorMaxFps { get; set; } = 60;
 
     /// <summary>
-    /// <para>获取或设置 scrcpy 投屏最大尺寸（0 表示不限制）。</para>
-    /// Gets or sets the scrcpy mirroring max size (0 = no limit).
+    /// Gets or sets the screen mirroring maximum size; zero means no limit.
+    /// <para>获取或设置投屏最大尺寸，零表示不限制。</para>
     /// </summary>
+    /// <value>The configured size ceiling. <para>配置的尺寸上限。</para></value>
     [JsonPropertyName("screenMirrorMaxSize")]
     public int ScreenMirrorMaxSize { get; set; }
 
     /// <summary>
-    /// <para>获取或设置 scrcpy 投屏视频编码格式（"h264" 或 "h265"）。</para>
-    /// Gets or sets the scrcpy mirroring video codec ("h264" or "h265").
+    /// Gets or sets the screen mirroring video codec, "h264" or "h265".
+    /// <para>获取或设置投屏视频编码格式，"h264" 或 "h265"。</para>
     /// </summary>
+    /// <value>The configured codec identifier. <para>配置的视频编码标识。</para></value>
     [JsonPropertyName("screenMirrorVideoCodec")]
     public string ScreenMirrorVideoCodec { get; set; } = "h264";
 
     /// <summary>
-    /// <para>获取或设置是否启用 scrcpy 投屏音频转发。</para>
-    /// Gets or sets whether scrcpy mirroring forwards audio.
+    /// Gets or sets whether screen mirroring forwards audio.
+    /// <para>获取或设置投屏是否转发音频。</para>
     /// </summary>
+    /// <value>True when audio is forwarded. <para>为真时转发音频。</para></value>
     [JsonPropertyName("screenMirrorAudioEnabled")]
     public bool ScreenMirrorAudioEnabled { get; set; }
-    /// <summary>Video decoder backend. 视频解码后端。</summary>
+    /// <summary>
+    /// Gets or sets the video decoder backend.
+    /// <para>获取或设置视频解码后端。</para>
+    /// </summary>
+    /// <value>The selected video decoder backend. <para>选定的视频解码后端。</para></value>
     public UotanStudio.Media.Decoding.VideoDecoderBackend ScreenMirrorDecoderBackend { get; set; }
-    /// <summary>Source color matrix override. 源色彩矩阵覆盖。</summary>
+    /// <summary>
+    /// Gets or sets the source color matrix override.
+    /// <para>获取或设置源色彩矩阵覆盖。</para>
+    /// </summary>
+    /// <value>The color matrix override. <para>色彩矩阵的覆盖值。</para></value>
     public UotanStudio.Media.Decoding.VideoColorMatrix ScreenMirrorColorMatrix { get; set; }
-    /// <summary>Source color range override. 源色彩范围覆盖。</summary>
+    /// <summary>
+    /// Gets or sets the source color range override.
+    /// <para>获取或设置源色彩范围覆盖。</para>
+    /// </summary>
+    /// <value>The color range override. <para>色彩范围的覆盖值。</para></value>
     public UotanStudio.Media.Decoding.VideoColorRange ScreenMirrorColorRange { get; set; }
-    /// <summary>Audio codec. 音频编码格式。</summary>
+    /// <summary>
+    /// Gets or sets the audio codec name.
+    /// <para>获取或设置音频编码格式。</para>
+    /// </summary>
+    /// <value>The configured audio codec identifier. <para>配置的音频编码标识。</para></value>
     public string ScreenMirrorAudioCodec { get; set; } = "aac";
-    /// <summary>Audio decoder backend. 音频解码后端。</summary>
+    /// <summary>
+    /// Gets or sets the audio decoder backend.
+    /// <para>获取或设置音频解码后端。</para>
+    /// </summary>
+    /// <value>The selected audio decoder backend. <para>选定的音频解码后端。</para></value>
     public UotanStudio.Media.Audio.AudioDecoderBackend ScreenMirrorAudioBackend { get; set; }
-    /// <summary>Playback volume. 播放音量。</summary>
+    /// <summary>
+    /// Gets or sets the playback volume.
+    /// <para>获取或设置播放音量。</para>
+    /// </summary>
+    /// <value>The configured playback volume. <para>配置的播放音量。</para></value>
     public float ScreenMirrorVolume { get; set; } = 1;
-    /// <summary>Enable remote input. 是否允许远程输入。</summary>
+    /// <summary>
+    /// Gets or sets whether remote input is allowed.
+    /// <para>获取或设置是否允许远程输入。</para>
+    /// </summary>
+    /// <value>True when remote input is accepted. <para>为真时接受远程输入。</para></value>
     public bool ScreenMirrorControl { get; set; } = true;
     /// <summary>
-    /// <para>获取或设置投屏 GPU 零拷贝呈现偏好：Auto 按能力探测，On 强制启用（不支持时回落 NV12 回读），Off 强制沿用回读路径。</para>
     /// Gets or sets the screen mirror GPU zero-copy presentation preference: Auto probes capability, On forces the
     /// export path (falling back to NV12 readback when unsupported), Off forces the readback path.
+    /// <para>获取或设置投屏 GPU 零拷贝呈现偏好：Auto 按能力探测，On 强制启用（不支持时回落 NV12 回读），Off 强制沿用回读路径。</para>
     /// </summary>
+    /// <value>The preferred GPU zero-copy path. <para>偏好的 GPU 零拷贝路径。</para></value>
     public GpuExportPreference ScreenMirrorGpuExport { get; set; }
 
     /// <summary>
-    /// <para>获取或设置 MCP 服务器连接列表（设置页维护，MCP 客户端按名称调用其工具）。</para>
-    /// Gets or sets the MCP server connection list (maintained by the settings page; MCP clients
-    /// call their tools by name).
+    /// Gets or sets the MCP server connection entries.
+    /// <para>获取或设置 MCP 服务器连接条目。</para>
     /// </summary>
+    /// <value>The configured server entries. <para>已配置的服务器条目。</para></value>
     [JsonPropertyName("mcpServers")]
     public List<McpServerConfig> McpServers { get; set; } = [];
 
     /// <summary>
-    /// <para>获取或设置是否把本应用的固件能力暴露为 MCP 服务器（端口见 <see cref="McpExposePort"/>）。</para>
     /// Gets or sets whether to expose this application's firmware capabilities as an MCP server
     /// (port in <see cref="McpExposePort"/>).
+    /// <para>获取或设置是否把本应用的固件能力暴露为 MCP 服务器（端口见 <see cref="McpExposePort"/>）。</para>
     /// </summary>
+    /// <value>True when the MCP endpoint is exposed. <para>为真时暴露 MCP 服务端点。</para></value>
     [JsonPropertyName("mcpExposeEnabled")]
     public bool McpExposeEnabled { get; set; }
 
@@ -286,25 +372,28 @@ public class AppSettings : IJsonOnDeserialized
     public const int DefaultMcpExposePort = 18321;
 
     /// <summary>
-    /// <para>获取或设置 MCP 服务器暴露端口。</para>
     /// Gets or sets the MCP server exposure port.
+    /// <para>获取或设置 MCP 服务器暴露端口。</para>
     /// </summary>
+    /// <value>The TCP port the MCP server listens on. <para>MCP 服务器监听的 TCP 端口。</para></value>
     [JsonPropertyName("mcpExposePort")]
     public int McpExposePort { get; set; } = DefaultMcpExposePort;
 
     /// <summary>
-    /// Gets or sets the directory the embedded MCP server confines every client-supplied path to;
-    /// empty leaves the server unrestricted, exactly as before this setting existed.
-    /// <para>获取或设置内嵌 MCP 服务器对客户端路径限制的根目录；空字符串表示不限制，与本设置出现前的行为一致。</para>
+    /// Gets or sets the directory the embedded MCP server confines every client-supplied path to; empty
+    /// leaves the server unrestricted.
+    /// <para>获取或设置内嵌 MCP 服务器限制客户端路径的根目录；空字符串表示不限制。</para>
     /// </summary>
+    /// <value>The confinement root directory, or an empty string. <para>限制根目录，或空字符串。</para></value>
     [JsonPropertyName("mcpExposeRootDirectory")]
     public string McpExposeRootDirectory { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets whether the embedded MCP server registers the flashing, wiping and reboot tools;
-    /// <see langword="false"/> keeps the destructive tools absent, mirroring the CLI's <c>--allow-flash</c> gate.
-    /// <para>获取或设置内嵌 MCP 服务器是否注册刷写、擦除与重启类工具；<see langword="false"/> 时这些破坏性工具不会暴露，与命令行的 <c>--allow-flash</c> 门控一致。</para>
+    /// <see langword="false"/> keeps those destructive tools absent.
+    /// <para>获取或设置内嵌 MCP 服务器是否注册刷写、擦除与重启类工具；<see langword="false"/> 时不暴露这些破坏性工具。</para>
     /// </summary>
+    /// <value>True when destructive tools are registered. <para>为真时注册破坏性工具。</para></value>
     [JsonPropertyName("mcpExposeAllowFlash")]
     public bool McpExposeAllowFlash { get; set; }
 }
@@ -324,19 +413,19 @@ public enum GpuExportPreference
 }
 
 /// <summary>
-/// A network debugging target remembered after a successful pairing, so the host can re-discover
-/// its secure connect port by IP address instead of asking the user to scan again.
-/// <para>记住配对成功的网络调试目标，使宿主能按 IP 地址重新发现其安全连接端口，而无需用户再次扫码。</para>
+/// A network debugging target remembered after a successful pairing for IP-based re-discovery of
+/// its secure connect port.
+/// <para>记住配对成功的网络调试目标，便于按 IP 地址重新发现其安全连接端口。</para>
 /// </summary>
-/// <param name="Address">The <c>host:port</c> endpoint as last observed.
-/// <para>最后一次观测到的 <c>host:port</c> 端点。</para></param>
+/// <param name="Address">The endpoint address as last observed.
+/// <para>最后一次观测到的端点地址。</para></param>
 /// <param name="RequiresTls">Whether the endpoint needs the TLS transport recorded at pairing time.
 /// <para>该端点是否需要使用配对时记录的 TLS 传输。</para></param>
 public sealed record PairedNetworkTarget(string Address, bool RequiresTls);
 
 /// <summary>
-/// <para><see cref="AppSettings"/> 的 JSON 序列化上下文，为 AOT 兼容提供源生成支持。</para>
 /// JSON serialization context for <see cref="AppSettings"/>, providing source generation support for AOT compatibility.
+/// <para><see cref="AppSettings"/> 的 JSON 序列化上下文，为 AOT 兼容提供源生成支持。</para>
 /// </summary>
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(Workspace.WorkspaceSessionSnapshot))]
@@ -353,8 +442,8 @@ public sealed record PairedNetworkTarget(string Address, bool RequiresTls);
 internal partial class AppSettingsJsonContext : JsonSerializerContext;
 
 /// <summary>
-/// <para>设置持久化服务，负责应用程序设置的序列化、反序列化及文件存储。</para>
 /// Settings persistence service, responsible for serialization, deserialization, and file storage of application settings.
+/// <para>设置持久化服务，负责应用程序设置的序列化、反序列化及文件存储。</para>
 /// </summary>
 public class SettingsPersistenceService
 {
@@ -364,15 +453,17 @@ public class SettingsPersistenceService
     private readonly string _settingsFilePath;
 
     /// <summary>
-    /// <para>获取设置持久化服务的单例实例。</para>
     /// Gets the singleton instance of the settings persistence service.
+    /// <para>获取设置持久化服务的单例实例。</para>
     /// </summary>
+    /// <value>The lazily created singleton. <para>惰性创建的单例实例。</para></value>
     public static SettingsPersistenceService Instance => LazyInstance.Value;
 
     /// <summary>
-    /// <para>获取设置文件的完整路径。</para>
     /// Gets the full path of the settings file.
+    /// <para>获取设置文件的完整路径。</para>
     /// </summary>
+    /// <value>The absolute file path used for persistence. <para>用于持久化的绝对文件路径。</para></value>
     public string SettingsFilePath => _settingsFilePath;
 
     private SettingsPersistenceService()
@@ -384,12 +475,12 @@ public class SettingsPersistenceService
     }
 
     /// <summary>
-    /// <para>从文件加载应用程序设置。若文件不存在或已损坏，则返回默认设置。</para>
     /// Loads application settings from file. Returns default settings if the file does not exist or is corrupted.
+    /// <para>从文件加载应用程序设置。若文件不存在或已损坏，则返回默认设置。</para>
     /// </summary>
     /// <returns>
-    /// <para>加载的 <see cref="AppSettings"/> 实例；加载失败时返回默认值实例。</para>
     /// The loaded <see cref="AppSettings"/> instance; returns a default instance on failure.
+    /// <para>加载的 <see cref="AppSettings"/> 实例；加载失败时返回默认值实例。</para>
     /// </returns>
     public AppSettings LoadSettings()
     {
@@ -416,16 +507,16 @@ public class SettingsPersistenceService
     }
 
     /// <summary>
-    /// <para>将应用程序设置序列化并保存到文件。</para>
     /// Serializes and saves application settings to file.
+    /// <para>将应用程序设置序列化并保存到文件。</para>
     /// </summary>
     /// <param name="settings">
-    /// <para>要保存的应用程序设置实例。</para>
     /// The application settings instance to save.
+    /// <para>要保存的应用程序设置实例。</para>
     /// </param>
     /// <exception cref="ArgumentNullException">
-    /// <para>当 <paramref name="settings"/> 为 null 时抛出。</para>
     /// Thrown when <paramref name="settings"/> is null.
+    /// <para>当 <paramref name="settings"/> 为 null 时抛出。</para>
     /// </exception>
     public void SaveSettings(AppSettings settings)
         => TrySaveSettings(settings, out _);
@@ -451,7 +542,7 @@ public class SettingsPersistenceService
             }
             catch
             {
-                try { File.Delete(tempPath); } catch { /* cleanup best-effort */ }
+                try { File.Delete(tempPath); } catch { }
                 throw;
             }
             return true;
@@ -470,13 +561,13 @@ public class SettingsPersistenceService
     }
 
     /// <summary>
-    /// <para>更新最近打开的解决方案列表：以磁盘上最新设置为基础合并写入，避免覆盖其他设置项。</para>
     /// Updates the recently opened solutions list: merges on top of the latest settings on disk so other
     /// settings are never overwritten.
+    /// <para>更新最近打开的解决方案列表：以磁盘上最新设置为基础合并写入，避免覆盖其他设置项。</para>
     /// </summary>
     /// <param name="recentProjects">
-    /// <para>新的最近打开路径列表（最新在前）。</para>
     /// The new recent project paths (most recent first).
+    /// <para>新的最近打开路径列表（最新在前）。</para>
     /// </param>
     public void UpdateRecentProjects(List<string> recentProjects)
     {
@@ -500,21 +591,21 @@ public class SettingsPersistenceService
     }
 
     /// <summary>
-    /// <para>更新设为"当前签名"的默认密钥 Id：以磁盘上最新设置为基础合并写入，避免覆盖其他设置项。</para>
     /// Updates the default key Id set as the "current signature": merges on top of the latest settings on
     /// disk so other settings are never overwritten.
+    /// <para>更新设为"当前签名"的默认密钥 Id：以磁盘上最新设置为基础合并写入，避免覆盖其他设置项。</para>
     /// </summary>
     /// <param name="kind">
-    /// <para>密钥类型，"Adb" 写入 <see cref="AdbDefaultKeyId"/>，"Hdc" 写入 <see cref="HdcDefaultKeyId"/>。</para>
     /// The key kind: "Adb" writes <see cref="AdbDefaultKeyId"/>, "Hdc" writes <see cref="HdcDefaultKeyId"/>.
+    /// <para>密钥类型，"Adb" 写入 <see cref="AdbDefaultKeyId"/>，"Hdc" 写入 <see cref="HdcDefaultKeyId"/>。</para>
     /// </param>
     /// <param name="keyId">
-    /// <para>默认密钥 Id；null 视为空字符串（恢复使用运行时身份）。</para>
     /// The default key Id; null is treated as an empty string (fall back to the runtime identity).
+    /// <para>默认密钥 Id；null 视为空字符串（恢复使用运行时身份）。</para>
     /// </param>
     /// <returns>
-    /// <para>是否保存成功。</para>
     /// Whether the settings were saved successfully.
+    /// <para>是否保存成功。</para>
     /// </returns>
     public bool UpdateDefaultKeyId(string kind, string? keyId)
     {
@@ -535,12 +626,12 @@ public class SettingsPersistenceService
     }
 
     /// <summary>
-    /// <para>重置所有设置为默认值并保存到文件。</para>
     /// Resets all settings to default values and saves to file.
+    /// <para>重置所有设置为默认值并保存到文件。</para>
     /// </summary>
     /// <returns>
-    /// <para>包含默认值的新 <see cref="AppSettings"/> 实例。</para>
     /// A new <see cref="AppSettings"/> instance with default values.
+    /// <para>包含默认值的新 <see cref="AppSettings"/> 实例。</para>
     /// </returns>
     public AppSettings ResetToDefaults()
     {

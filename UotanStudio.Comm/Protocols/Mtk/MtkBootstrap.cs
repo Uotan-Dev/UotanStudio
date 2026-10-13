@@ -168,18 +168,8 @@ public static partial class MtkBootstrap
             await UploadBootResourcesAsync(session, device, options.BootResourceProvider,
                 ResolveBootResourceOrder(resourceOrder, options.BootResourceProvider, device),
                 cancellationToken).ConfigureAwait(false);
-            var bootRomResponder = options.BootRomSlaResponder ?? options.SlaKeyProvider?.ResolveSlaResponder(device);
-            if (bootRomResponder is { } responder)
-            {
-                await session.UploadDownloadAgentWithSlaAsync(stageOne, first.LoadAddress, checked((int)stageOne.Length),
-                    responder, checked((int)first.SignatureLength), options.SlaTimeoutMs,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                await session.UploadDownloadAgentAsync(stageOne, first.LoadAddress, checked((int)stageOne.Length),
-                    checked((int)first.SignatureLength), cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
+            await session.UploadDownloadAgentAsync(stageOne, first.LoadAddress, checked((int)stageOne.Length),
+                checked((int)first.SignatureLength), cancellationToken: cancellationToken).ConfigureAwait(false);
             await session.StartDownloadAgentAsync(cancellationToken).ConfigureAwait(false);
             if (protocol == MtkDaProtocol.Legacy)
             {

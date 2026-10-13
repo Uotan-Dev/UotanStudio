@@ -7,26 +7,26 @@ using UotanStudio.Services.Projects;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>输出节点视图模型，提供日志输出、进度报告和结果保存功能。</para>
 /// Output node view model, providing log output, progress report, and result saving capabilities.
+/// <para>输出节点视图模型，提供日志输出、进度报告和结果保存功能。</para>
 /// </summary>
 public class OutputNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
-    /// <para>创建具有指定标题的输出节点。</para>
     /// Creates an output node with the specified title.
+    /// <para>创建具有指定标题的输出节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public OutputNodeViewModel(string title) : base(title, NodeCategory.Output)
     {
     }
 
     /// <summary>
-    /// <para>创建默认的日志输出节点。</para>
     /// Creates a default log output node.
+    /// <para>创建默认的日志输出节点。</para>
     /// </summary>
     public static OutputNodeViewModel CreateLogNode()
     {
@@ -42,8 +42,8 @@ public class OutputNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的进度报告节点。</para>
     /// Creates a default progress report node.
+    /// <para>创建默认的进度报告节点。</para>
     /// </summary>
     public static OutputNodeViewModel CreateProgressNode()
     {
@@ -58,8 +58,8 @@ public class OutputNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的结果保存节点。</para>
     /// Creates a default result save node.
+    /// <para>创建默认的结果保存节点。</para>
     /// </summary>
     public static OutputNodeViewModel CreateSaveNode()
     {
@@ -77,17 +77,17 @@ public class OutputNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的输出逻辑：Feedback.Log.Write 写日志、Feedback.Progress.Report 上报进度、File.Artifact.Publish 保存文件。</para>
     /// Dispatches the output logic by the node type key (TypeKey): Feedback.Log.Write writes a log entry, Feedback.Progress.Report reports
     /// progress, and File.Artifact.Publish writes a file.
+    /// <para>按节点类型键（TypeKey）分发对应的输出逻辑：Feedback.Log.Write 写日志、Feedback.Progress.Report 上报进度、File.Artifact.Publish 保存文件。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {

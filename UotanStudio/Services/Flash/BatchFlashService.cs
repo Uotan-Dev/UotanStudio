@@ -5,38 +5,31 @@ using UotanStudio.ViewModels.Devices;
 namespace UotanStudio.Services.Flash;
 
 /// <summary>
-/// <para>批量刷写服务：把多分区镜像按顺序逐分区刷写到设备，复用
-/// <see cref="FlashService.FlashImageAsync"/> 现有公共刷写 API；单分区失败仅记日志警告并继续
-/// 后续分区，最终汇总成功/失败数量。</para>
-/// Batch flash service: flashes multiple partition images to a device sequentially by reusing the
-/// existing public <see cref="FlashService.FlashImageAsync"/> API; a single-partition failure only
+/// Flashes multiple partition images to a device sequentially; a single-partition failure only
 /// logs a warning and continues with the next partition, then summarizes succeeded/failed counts.
+/// <para>批量刷写服务：把多分区镜像按顺序逐分区刷写到设备；单分区失败仅记日志警告并继续后续分区，
+/// 最终汇总成功/失败数量。</para>
 /// </summary>
 public static class BatchFlashService
 {
     /// <summary>
-    /// <para>顺序刷写由调用方筛选出的选中分区镜像；任一分区失败不会中断后续分区。每个分区的进度经
-    /// <paramref name="progress"/> 回报，同时发送 <see cref="FlashProgressMessage"/> 供输出面板展示。
-    /// 每个分区在开始前和结束后各写一条日志，内容同时给出镜像文件名与目标分区名，逐条即可还原本次刷写
-    /// 清单。</para>
-    /// Flashes the selected partition images filtered by the caller in order; a single-partition failure
-    /// never aborts the rest. Per-partition progress is reported through <paramref name="progress"/> and
-    /// broadcast as <see cref="FlashProgressMessage"/> for the output panel. Each partition also writes
-    /// one log line when it starts and one when it finishes, both naming the image file and the target
-    /// partition, so the run can be traced image by image.
+    /// Flashes the given partition images in order; a single-partition failure never aborts the
+    /// rest, and per-partition progress is reported through <paramref name="progress"/> and
+    /// broadcast as <see cref="FlashProgressMessage"/>.
+    /// <para>顺序刷写给定的分区镜像；任一分区失败都不会中断其余分区，逐分区进度经
+    /// <paramref name="progress"/> 回报并以 <see cref="FlashProgressMessage"/> 广播。</para>
     /// </summary>
-    /// <param name="device"><para>目标设备。</para>The target device.</param>
+    /// <param name="device">The target device. <para>目标设备。</para></param>
     /// <param name="entries">
-    /// <para>调用方筛选后的选中分区列表：(分区名, 镜像文件完整路径)。</para>
-    /// The caller-filtered selected partitions to flash: (partition name, full image file path).
+    /// The partitions to flash: (partition name, full image file path).
+    /// <para>待刷写分区列表：(分区名, 镜像文件完整路径)。</para>
     /// </param>
-    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
-    /// <param name="ct"><para>取消令牌；取消后停止刷写剩余分区。</para>
-    /// Cancellation token; cancels the remaining partitions when requested.</param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token; stops the remaining partitions when requested. <para>取消令牌；请求取消后停止刷写剩余分区。</para></param>
     /// <returns>
-    /// <para>汇总结果：全部分区成功时 <see cref="FlashResult.Success"/> 为 true，否则为 false 并列出失败分区。</para>
-    /// Aggregate result: <see cref="FlashResult.Success"/> is true when every partition succeeded,
-    /// otherwise false with the failed partitions listed.
+    /// Aggregate result: success only when every partition succeeded, otherwise the failed
+    /// partitions are listed.
+    /// <para>汇总结果：仅当全部分区成功时为成功，否则列出失败分区。</para>
     /// </returns>
     public static async Task<FlashResult> FlashSelectedAsync(
         DeviceInfo device,

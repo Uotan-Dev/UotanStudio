@@ -2,14 +2,15 @@ using System.Globalization;
 
 namespace UotanStudio.Services.Devices;
 
-/// <summary>Queries and parses system properties using caller-owned command execution and localization.</summary>
+/// <summary>Queries and parses device system properties using injected command execution and text lookup.<para>使用注入的命令执行与文本查询委托读取并解析设备系统属性。</para></summary>
 internal static class DevicePropertyReader
 {
     /// <summary>
-    /// <para>清理 shell 输出：去除空行并合并空白，错误标记归一化为 "--"。</para>
-    /// Cleans shell output: strips blank lines, collapses whitespace, normalizes error
-    /// markers to "--".
+    /// Cleans shell output: strips blank lines, collapses whitespace, normalizes error markers to "--".
+    /// <para>清理 shell 输出：去除空行、合并空白，并把错误标记归一化为 "--"。</para>
     /// </summary>
+    /// <param name="raw">Raw command output text.<para>原始命令输出文本。</para></param>
+    /// <returns>The collapsed single-line value, or "--" when the output is empty or reports an error.<para>折叠后的单行值；输出为空或报错时返回 "--"。</para></returns>
     private static string Clean(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
@@ -30,9 +31,11 @@ internal static class DevicePropertyReader
     }
 
     /// <summary>
-    /// <para>从冒号分隔的输出中取冒号后的值（如 "Physical size: 1080x2340" -> "1080x2340"）。</para>
-    /// Extracts the last colon-delimited segment (e.g. "Physical size: 1080x2340" -> "1080x2340").
+    /// Extracts the value after the last colon in colon-delimited output.
+    /// <para>从冒号分隔的输出中提取最后一个冒号之后的值。</para>
     /// </summary>
+    /// <param name="raw">Raw command output text.<para>原始命令输出文本。</para></param>
+    /// <returns>The trailing segment after the final colon, or "--" when the input is blank.<para>最后一个冒号之后的片段；输入为空时返回 "--"。</para></returns>
     private static string ColonValue(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
@@ -45,9 +48,12 @@ internal static class DevicePropertyReader
     }
 
     /// <summary>
-    /// <para>批量查询 ADB 设备属性并解析电池、内存、磁盘信息。</para>
     /// Queries ADB device properties and parses battery, memory and disk details.
+    /// <para>批量查询 ADB 设备属性并解析电池、内存、磁盘信息。</para>
     /// </summary>
+    /// <param name="run">Runs a shell command on the device and returns its raw output.<para>在设备上执行 shell 命令并返回原始输出。</para></param>
+    /// <param name="getString">Resolves a localized resource key into display text.<para>将本地化资源键解析为显示文本。</para></param>
+    /// <returns>A key-to-value map of device properties and derived detail strings.<para>设备属性与派生详情字符串的键值映射。</para></returns>
     internal static Dictionary<string, string> ReadAdbProperties(Func<string, string> run, Func<string, string> getString)
     {
         string Get(string cmd)
@@ -92,16 +98,13 @@ internal static class DevicePropertyReader
     }
 
     /// <summary>
-    /// <para>汇总 ADB 侧的 Bootloader 锁状态信号：任一权威属性证明已解锁即判为已解锁，否则存在上锁证据时判为上锁，
-    /// 全部缺失时返回 "--"。解锁证据优先合并，因为部分 OEM 设备解锁后仍继续上报 locked 的 <c>ro.boot.vbmeta.device_state</c>。
-    /// <c>ro.boot.verifiedbootstate</c> 的 red 表示设备已被破坏，不构成锁状态结论；华为设备上报的
-    /// <c>ro.fastboot.unlock</c> 只有 true 表示解锁，其余取值按上锁处理。</para>
-    /// Aggregates the ADB bootloader lock-state signals: any authoritative unlocked signal wins, otherwise
-    /// existing locked evidence means locked, and no evidence at all yields "--". Unlocked evidence is merged
-    /// first because some OEM devices keep reporting ro.boot.vbmeta.device_state as locked after an unlock.
-    /// verifiedbootstate "red" means a corrupt device and yields no lock-state verdict; the Huawei
-    /// ro.fastboot.unlock signal means unlocked only for "true" and every other reported value means locked.
+    /// Aggregates ADB bootloader lock-state signals into an unlocked, locked, or unknown verdict. Unlocked evidence
+    /// wins because some devices keep reporting a locked vbmeta state after unlocking.
+    /// <para>汇总 ADB 侧的 Bootloader 锁状态信号，得出已解锁、已上锁或未知的结论。解锁证据优先，因为部分设备解锁后仍上报 locked 的 vbmeta 状态。</para>
     /// </summary>
+    /// <param name="get">Runs a property query and returns the cleaned value.<para>执行属性查询并返回清理后的值。</para></param>
+    /// <param name="getString">Resolves a localized resource key into display text.<para>将本地化资源键解析为显示文本。</para></param>
+    /// <returns>The localized unlocked or locked label, or "--" when no signal is present.<para>本地化的解锁或上锁标签；无信号时返回 "--"。</para></returns>
     private static string ReadBlState(Func<string, string> get, Func<string, string> getString)
     {
         var lockstate = get("getprop ro.secureboot.lockstate").ToLowerInvariant();
@@ -120,9 +123,11 @@ internal static class DevicePropertyReader
     }
 
     /// <summary>
-    /// <para>解析 A/B 槽位号为可读字符串。</para>
     /// Parses an A/B slot id into a human-readable value.
+    /// <para>解析 A/B 槽位号为可读字符串。</para>
     /// </summary>
+    /// <param name="slot">Raw slot suffix value.<para>原始槽位后缀值。</para></param>
+    /// <returns>Slot A or Slot B, and "--" when the slot cannot be recognised.<para>识别出的 A 或 B 槽位；无法识别时返回 "--"。</para></returns>
     internal static string ParseSlot(string slot)
     {
         if (string.IsNullOrEmpty(slot))
@@ -137,9 +142,12 @@ internal static class DevicePropertyReader
     }
 
     /// <summary>
-    /// <para>将 /proc/uptime 的秒数格式化为可读的开机时长。</para>
     /// Formats the /proc/uptime seconds into a human-readable power-on duration.
+    /// <para>将 /proc/uptime 的秒数格式化为可读的开机时长。</para>
     /// </summary>
+    /// <param name="raw">The uptime output text.<para>uptime 的输出文本。</para></param>
+    /// <param name="getString">Resolves a localized resource key into display text.<para>将本地化资源键解析为显示文本。</para></param>
+    /// <returns>A day, hour, minute and second duration string, or "--" when parsing fails.<para>按时分秒拼接的时长字符串；解析失败时返回 "--"。</para></returns>
     internal static string FormatUptime(string raw, Func<string, string> getString)
     {
         if (raw is null or "--")
@@ -162,9 +170,11 @@ internal static class DevicePropertyReader
     }
 
     /// <summary>
-    /// <para>解析 dumpsys battery 输出，返回（电量百分比, 电压/温度文本）。</para>
-    /// Parses dumpsys battery output; returns (level percent, voltage/temperature text).
+    /// Parses dumpsys battery output into a level and a voltage with temperature text.
+    /// <para>解析 dumpsys battery 输出，得到电量百分比与电压温度文本。</para>
     /// </summary>
+    /// <param name="info">dumpsys battery output text.<para>dumpsys battery 的输出文本。</para></param>
+    /// <returns>The battery level percentage together with the voltage and temperature text.<para>电量百分比，以及电压与温度组成的说明文本。</para></returns>
     internal static (int Level, string Text) ParseBattery(string info)
     {
         List<string> values = [];
@@ -203,9 +213,11 @@ internal static class DevicePropertyReader
     }
 
     /// <summary>
-    /// <para>解析 /proc/meminfo 中 MemTotal/MemAvailable，返回（占用百分比, 已用/总量文本）。</para>
-    /// Parses MemTotal/MemAvailable from /proc/meminfo; returns (usage percent, used/total text).
+    /// Parses MemTotal and MemAvailable from /proc/meminfo into a usage percentage and text.
+    /// <para>解析 /proc/meminfo 的 MemTotal 与 MemAvailable，得到占用百分比与说明文本。</para>
     /// </summary>
+    /// <param name="info">/proc/meminfo output text.<para>/proc/meminfo 的输出文本。</para></param>
+    /// <returns>The memory usage percentage together with the used and total text.<para>内存占用百分比，以及已用量与总量的说明文本。</para></returns>
     internal static (int Level, string Text) ParseMem(string info)
     {
         long total = 0, available = 0;
@@ -245,9 +257,11 @@ internal static class DevicePropertyReader
     }
 
     /// <summary>
-    /// <para>解析 df 输出中目标挂载点所在行，返回（占用百分比, 已用/总量文本）。</para>
-    /// Parses the target mount line from df output; returns (usage percent, used/total text).
+    /// Parses the target mount line from df output into a usage percentage and text.
+    /// <para>解析 df 输出中的目标挂载行，得到占用百分比与说明文本。</para>
     /// </summary>
+    /// <param name="info">df output text for the candidate mount points.<para>候选挂载点相关的 df 输出文本。</para></param>
+    /// <returns>The disk usage percentage together with the used and total text.<para>磁盘占用百分比，以及已用量与总量的说明文本。</para></returns>
     internal static (int Level, string Text) ParseDisk(string info)
     {
         string? target = null;
@@ -267,7 +281,6 @@ internal static class DevicePropertyReader
             return (-1, "--");
         }
 
-        // 列顺序：Filesystem Size Used Avail Use% Mounted
         var columns = target.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (columns.Length < 5
             || !double.TryParse(columns[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var blocks)

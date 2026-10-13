@@ -1,6 +1,7 @@
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Hash.Crc32;
+using UotanStudio.Hash.Crc32c;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

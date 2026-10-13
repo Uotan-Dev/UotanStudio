@@ -2,10 +2,8 @@ using System.Security.Cryptography;
 
 namespace UotanStudio.Services.Patching;
 
-/// <summary>
-/// Shared staging for a graph and its composites. Files publish only after the root graph succeeds.
-/// Each replacement is atomic; a multi-file commit uses rollback, not crash-atomic directory swapping.
-/// </summary>
+/// <summary>Shared staging for a graph and its composites. Files publish only after the root graph succeeds.<para>为节点图及其复合体提供共用暂存。只有根节点图成功后文件才发布。</para></summary>
+/// <param name="preview">When true, staged data is discarded instead of published.<para>为 true 时暂存数据被丢弃而不发布。</para></param>
 public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
 {
     private static readonly SemaphoreSlim PublicationGate = new(1, 1);
@@ -20,23 +18,31 @@ public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
     private bool _disposed;
     private bool _hadConflict;
 
-    /// <summary>Whether the root run must discard staged data instead of publishing it.</summary>
+    /// <summary>Whether the root run must discard staged data instead of publishing it.<para>根执行是否必须丢弃暂存数据而不发布。</para></summary>
+    /// <value>True for a preview-only run.<para>仅预览的运行为 true。</para></value>
     public bool Preview { get; } = preview;
 
-    /// <summary>Current publication outcome.</summary>
+    /// <summary>Current publication outcome.<para>当前的发布结果。</para></summary>
+    /// <value>The outcome recorded for this execution.<para>为该执行记录的结果。</para></value>
     public PatchRunOutcome Outcome { get; private set; }
 
-    /// <summary>Finalized file effects, captured once before staging cleanup.</summary>
+    /// <summary>Finalized file effects, captured once before staging cleanup.<para>已定稿的文件效果，在暂存清理前一次性捕获。</para></summary>
+    /// <value>The captured change list.<para>捕获到的变更列表。</para></value>
     public IReadOnlyList<PatchChange> Changes { get; private set; } = [];
 
-    /// <summary>Creates a directory input tied to this execution.</summary>
+    /// <summary>Creates a directory input tied to this execution.<para>创建绑定到该执行的目录输入。</para></summary>
+    /// <param name="root">The directory selected for the workspace.<para>为工作区选择的目录。</para></param>
+    /// <returns>The confined workspace for this execution.<para>该执行的受限工作区。</para></returns>
     public PatchWorkspace OpenWorkspace(string root)
     {
         CheckOpen();
         return new PatchWorkspace(this, root);
     }
 
-    /// <summary>Checks the staged view, including newly added and deleted files.</summary>
+    /// <summary>Checks the staged view, including newly added and deleted files.<para>检查暂存视图，包括新添加与已删除的文件。</para></summary>
+    /// <param name="path">The confined path to check.<para>要检查的受限路径。</para></param>
+    /// <param name="token">The cancellation token.<para>取消令牌。</para></param>
+    /// <returns>True when the staged view reports the path as an existing file.<para>暂存视图报告该路径为已存在的文件时为 true。</para></returns>
     public async Task<bool> ExistsAsync(string path, CancellationToken token)
     {
         await _gate.WaitAsync(token).ConfigureAwait(false);
@@ -53,7 +59,10 @@ public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
         finally { _gate.Release(); }
     }
 
-    /// <summary>Reads original or staged text, recording the original dependency for conflict checks.</summary>
+    /// <summary>Reads original or staged text, recording the original dependency for conflict checks.<para>读取原始或暂存文本，并记录原始依赖用于冲突检查。</para></summary>
+    /// <param name="path">The confined path to read.<para>要读取的受限路径。</para></param>
+    /// <param name="token">The cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The decoded text document with its observed hash.<para>带观测哈希的解码文本文档。</para></returns>
     public async Task<PatchTextDocument> ReadTextAsync(string path, CancellationToken token)
     {
         await _gate.WaitAsync(token).ConfigureAwait(false);
@@ -72,7 +81,10 @@ public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
         finally { _gate.Release(); }
     }
 
-    /// <summary>Hashes a file without buffering it and includes it in the read dependency set.</summary>
+    /// <summary>Hashes a file without buffering it and includes it in the read dependency set.<para>不对文件整体缓冲地计算哈希，并将其纳入读取依赖集合。</para></summary>
+    /// <param name="path">The confined path to hash.<para>要计算哈希的受限路径。</para></param>
+    /// <param name="token">The cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The SHA-256 hexadecimal digest of the file.<para>该文件的 SHA-256 十六进制摘要。</para></returns>
     public async Task<string> HashAsync(string path, CancellationToken token)
     {
         await _gate.WaitAsync(token).ConfigureAwait(false);
@@ -87,7 +99,12 @@ public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
         finally { _gate.Release(); }
     }
 
-    /// <summary>Stages encoded configuration, retaining a bounded before/after preview.</summary>
+    /// <summary>Stages encoded configuration, retaining a bounded before/after preview.<para>暂存编码后的配置，并保留有界的变更前后可视内容。</para></summary>
+    /// <param name="path">The confined target path.<para>受限的目标路径。</para></param>
+    /// <param name="text">The configuration text to encode.<para>要编码的配置文本。</para></param>
+    /// <param name="encoding">The encoding name for the text.<para>文本的编码名称。</para></param>
+    /// <param name="mode">The required file-mode precondition.<para>要求的文件模式前置条件。</para></param>
+    /// <param name="token">The cancellation token.<para>取消令牌。</para></param>
     public async Task StageTextAsync(string path, string text, string encoding, PatchFileMode mode, CancellationToken token)
     {
         await _gate.WaitAsync(token).ConfigureAwait(false);
@@ -117,7 +134,12 @@ public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
         finally { _gate.Release(); }
     }
 
-    /// <summary>Stages a bounded-stream copy from an original or staged source.</summary>
+    /// <summary>Stages a bounded-stream copy from an original or staged source.<para>从原始或已暂存的源暂存有界流拷贝。</para></summary>
+    /// <param name="source">The confined source path to read.<para>要读取的受限源路径。</para></param>
+    /// <param name="target">The confined destination path.<para>受限的目标路径。</para></param>
+    /// <param name="mode">The required file-mode precondition.<para>要求的文件模式前置条件。</para></param>
+    /// <param name="expectedSourceHash">The SHA-256 guard for the source bytes.<para>源字节的 SHA-256 守卫。</para></param>
+    /// <param name="token">The cancellation token.<para>取消令牌。</para></param>
     public async Task StageCopyAsync(string source, string target, PatchFileMode mode, string expectedSourceHash, CancellationToken token)
     {
         await _gate.WaitAsync(token).ConfigureAwait(false);
@@ -140,7 +162,10 @@ public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
         finally { _gate.Release(); }
     }
 
-    /// <summary>Stages removal. Missing files are already applied unless an old hash is required.</summary>
+    /// <summary>Stages removal. Missing files are already applied unless an old hash is required.<para>暂存删除操作。除非要求旧哈希校验，缺失文件视为已应用。</para></summary>
+    /// <param name="path">The confined path to delete.<para>要删除的受限路径。</para></param>
+    /// <param name="expectedHash">The SHA-256 guard for the current bytes, or empty to skip it.<para>当前字节的 SHA-256 守卫；为空则跳过校验。</para></param>
+    /// <param name="token">The cancellation token.<para>取消令牌。</para></param>
     public async Task StageDeleteAsync(string path, string expectedHash, CancellationToken token)
     {
         await _gate.WaitAsync(token).ConfigureAwait(false);
@@ -155,7 +180,10 @@ public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
         finally { _gate.Release(); }
     }
 
-    /// <summary>Validates that the graph changed only the explicitly listed relative paths.</summary>
+    /// <summary>Validates that the graph changed only the explicitly listed relative paths.<para>校验节点图只改动了显式列出的相对路径。</para></summary>
+    /// <param name="workspace">The workspace whose root confines the listed paths.<para>其根目录约束所列路径的工作区。</para></param>
+    /// <param name="expectedPaths">The relative paths allowed to change.<para>允许发生改动的相对路径。</para></param>
+    /// <param name="token">The cancellation token.<para>取消令牌。</para></param>
     public async Task VerifyChangesAsync(PatchWorkspace workspace, IReadOnlyCollection<string> expectedPaths, CancellationToken token)
     {
         await _gate.WaitAsync(token).ConfigureAwait(false);
@@ -511,7 +539,7 @@ public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
         catch (UnauthorizedAccessException) { }
     }
 
-    /// <summary>Discards unpublished staging. Recovery backups are outside this private directory.</summary>
+    /// <summary>Discards unpublished staging. Recovery backups are outside this private directory.<para>丢弃未发布的暂存内容。恢复备份位于该私有目录之外。</para></summary>
     public ValueTask DisposeAsync()
     {
         if (_disposed) { return ValueTask.CompletedTask; }

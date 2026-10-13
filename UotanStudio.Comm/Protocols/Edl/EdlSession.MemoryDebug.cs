@@ -1,4 +1,4 @@
-using UotanStudio.Comm.Protocols.Edl.Reenum;
+using UotanStudio.Comm.Protocols.Edl;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -126,10 +126,12 @@ public sealed partial class EdlSession
 
     /// <summary>
     /// Attempts the RESET that leaves memory-debug mode without replacing the exception the caller is
-    /// already unwinding: the wire-level cleanup failure is swallowed by the protocol, while a refused
-    /// session state or gate still surfaces so the caller can report why no reset happened.
-    /// <para>尝试以 RESET 离开内存调试模式，且不会取代调用方正在展开的异常：链路层面的清理失败由协议
-    /// 自行吞掉，而会话状态或操作门的拒绝仍会上浮，让调用方能够报告复位为何没有发生。</para>
+    /// already unwinding.
+    /// <para>尝试以 RESET 离开内存调试模式，且不会取代调用方正在展开的异常。</para>
+    /// The wire-level cleanup failure is swallowed by the protocol, while a refused session state or
+    /// gate still surfaces so the caller can report why no reset happened.
+    /// <para>链路层面的清理失败由协议自行吞掉，而会话状态或操作门的拒绝仍会上浮，让调用方能够报告
+    /// 复位为何没有发生。</para>
     /// </summary>
     /// <exception cref="InvalidOperationException">The session already reached Firehose, so the link is
     /// not a Sahara memory-debug link. <para>会话已经抵达 Firehose，因此该链路并非 Sahara 内存调试链路。</para></exception>
@@ -144,12 +146,12 @@ public sealed partial class EdlSession
     }
 
     /// <summary>
-    /// Collects the whole crashdump region table into <paramref name="outputDirectory"/> using the
-    /// protocol-owned publication discipline: each region lands in a sibling partial file and is
-    /// renamed over its target path only after the complete dump, and the link ends with a Sahara RESET.
-    /// <para>按协议自有的发布规则把整张 crashdump 区域表收集到
-    /// <paramref name="outputDirectory"/>：每个区域先落在同级的 partial 文件，只有完整转储后才重命名
-    /// 覆盖其目标路径，且链路以一次 Sahara RESET 结束。</para>
+    /// Collects the whole crashdump region table into <paramref name="outputDirectory"/>.
+    /// <para>把整张 crashdump 区域表收集到 <paramref name="outputDirectory"/>。</para>
+    /// Each region lands in a sibling partial file and is renamed over its target path only after the
+    /// complete dump, and the link ends with a Sahara RESET.
+    /// <para>每个区域先落在同级的 partial 文件，只有完整转储后才重命名覆盖其目标路径，且链路以一次
+    /// Sahara RESET 结束。</para>
     /// </summary>
     /// <remarks>
     /// <para>Prefer <see cref="DumpMemoryRegionAsync(SaharaMemoryRegion,Stream,CancellationToken)"/> when

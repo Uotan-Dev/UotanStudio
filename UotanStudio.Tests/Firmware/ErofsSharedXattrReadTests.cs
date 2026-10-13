@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -71,11 +72,24 @@ public class ErofsSharedXattrReadTests
             MetaBlkAddr = 1,
             XattrBlkAddr = 4
         }.WriteTo(image.AsSpan(1024, 128));
-        new ErofsInode { Mode = ErofsInode.ModeDirectory, Size = 26, U = 6, Nlink = 2 }.WriteTo(image.AsSpan(block, 32));
+        new ErofsInode
+        {
+            Mode = ErofsInode.ModeDirectory,
+            Size = 26,
+            Idata = new ErofsFlatIdata { BlockAddress = 6 },
+            Nlink = 2
+        }.WriteTo(image.AsSpan(block, 32));
         for (int i = 0; i < 2; i++)
         {
             int inodeOffset = block + 32 + i * 64;
-            new ErofsInode { Mode = ErofsInode.ModeRegularFile, Size = 5, U = (uint)(2 + i), Nlink = 1, XattrICount = 2 }
+            new ErofsInode
+            {
+                Mode = ErofsInode.ModeRegularFile,
+                Size = 5,
+                Idata = new ErofsFlatIdata { BlockAddress = (uint)(2 + i) },
+                Nlink = 1,
+                XattrICount = 2
+            }
                 .WriteTo(image.AsSpan(inodeOffset, 32));
             image[inodeOffset + 32 + 4] = 1;
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(inodeOffset + 32 + 12), (block - 8) / 4);

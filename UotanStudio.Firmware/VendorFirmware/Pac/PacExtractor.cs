@@ -1,4 +1,6 @@
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Hash.Crc16;
+
 namespace UotanStudio.Firmware.VendorFirmware.Pac;
 
 /// <summary>

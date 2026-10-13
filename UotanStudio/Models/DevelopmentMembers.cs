@@ -1,16 +1,16 @@
 namespace UotanStudio.Models;
 
 /// <summary>
-/// <para>开发成员清单（设置页「开发成员」区块数据源，静态只读，AOT 友好）。</para>
-/// Developer catalog (data source for the settings page's developer section; static and read-only,
-/// AOT friendly).
+/// Static read-only catalog of development team members.
+/// <para>静态只读的开发成员清单。</para>
 /// </summary>
 public static class DevelopmentMembers
 {
     /// <summary>
-    /// <para>获取开发成员清单。</para>
     /// Gets the developer catalog.
+    /// <para>获取开发成员清单。</para>
     /// </summary>
+    /// <value>The read-only list of development team members.<para>只读的开发成员列表。</para></value>
     public static IReadOnlyList<DevelopmentMember> All { get; } =
     [
         new DevelopmentMember

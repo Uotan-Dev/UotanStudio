@@ -3,7 +3,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.Core.Checksums;
+using UotanStudio.Hash.Crc32;
 
 namespace UotanStudio.Firmware.VendorFirmware.Amlogic;
 

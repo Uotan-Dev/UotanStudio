@@ -4,6 +4,7 @@ using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -157,11 +158,13 @@ public class ErofsTests
             return output.ToArray();
         }
 
-        var singleBlock = Build(o => o.MaxPclusterSize = o.BlockSize);
+        var multiBlock = Build(o => o.MaxPclusterSize = o.BlockSize * 64);
         var defaultPcluster = Build(o => { });
 
-        Assert.True(defaultPcluster.Length < singleBlock.Length / 2,
-            $"default {defaultPcluster.Length} should be well below single-block {singleBlock.Length}.");
+        Assert.True(defaultPcluster.Length > multiBlock.Length,
+            $"default {defaultPcluster.Length} (one pcluster per block) should exceed the {multiBlock.Length} "
+            + "bytes a 64-block pcluster limit needs, since merging clusters across blocks is what shrinks "
+            + "the index and the padding.");
 
         var parser = new ErofsParser(defaultPcluster);
         Assert.Equal(text, Encoding.UTF8.GetString(parser.ReadFileBytes("text")));
@@ -344,8 +347,10 @@ public class ErofsTests
 
         var iFormat = BinaryPrimitives.ReadUInt16LittleEndian(
             image.AsSpan((int)superblock.GetInodeOffset(entry.Nid), 2));
-        Assert.Equal(ErofsInode.AdviseBitNlinkOneOrDotOmitted, iFormat);
+        Assert.Equal(0, iFormat & ErofsInode.AdviseBitNlinkOneOrDotOmitted);
+        Assert.Equal(0, iFormat & ~ErofsInode.AdviseAll);
         Assert.Equal(ErofsInode.DataLayoutFlat, (ushort)(iFormat & ErofsInode.DataLayoutMask));
+        Assert.Equal(1UL, entry.LinkCount);
     }
 
     [Theory]
@@ -438,18 +443,21 @@ public class ErofsTests
 
         new ErofsInode
         {
-            Advise = ErofsInode.DataLayoutFlat,
+            IFormat = ErofsInode.DataLayoutFlat,
+            DataLayout = ErofsDataLayout.Flat,
             Mode = ErofsInode.ModeDirectory,
             Size = blockSize,
-            U = 2,
+            Idata = new ErofsFlatIdata { BlockAddress = 2 },
             Nlink = 2,
         }.WriteTo(image.AsSpan(blockSize));
 
         new ErofsInode
         {
-            Advise = 0x0A,
+            IFormat = 0x0A,
+            DataLayout = (ErofsDataLayout)(0x0A >> ErofsInode.DataLayoutShift),
             Mode = ErofsInode.ModeRegularFile,
             Size = 1,
+            Nlink = 0,
         }.WriteTo(image.AsSpan(blockSize + ErofsInode.CompactSize));
 
         var dirOffset = 2 * blockSize;

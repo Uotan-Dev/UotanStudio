@@ -11,16 +11,17 @@ namespace UotanStudio.Comm.Devices.Discovery;
 /// </summary>
 public static class UsbProtocolClassifier
 {
+    private const ushort QualcommVid = 0x05C6;
+    private const ushort MediaTekVid = 0x0E8D;
+    private const ushort SonyVid = 0x0FCE;
+    private const ushort SierraVid = 0x1199;
+    private const ushort NetgearVid = 0x0846;
+    private const ushort ZteVid = 0x19D2;
+
     /// <summary>
-    /// Classifies the device as <c>edl</c>, <c>mtk</c> or <c>rkdl</c> from its bootrom VID/PID pair —
-    /// the MediaTek branch also accepts the OEM rebranded download ports the reference client filters
-    /// on (LG 0x1004, OPPO 0x22D9, Sony 0x0FCE) — otherwise from the first interface matching a known
-    /// debug-bridge triple (<c>ff/42/1</c> adb, <c>ff/42/3</c> fastboot, <c>ff/50/1</c> hdc); when no
-    /// per-interface enumeration took place it falls back to the flattened interface descriptor.
-    /// <para>先按 bootrom 的 VID/PID 对分类为 <c>edl</c>、<c>mtk</c> 或 <c>rkdl</c>——联发科分支同时接受
-    /// 参考客户端过滤所用的 OEM 换牌下载端口（LG 0x1004、OPPO 0x22D9、Sony 0x0FCE）；否则按首个匹配已知
-    /// 调试桥三元组（<c>ff/42/1</c> adb、<c>ff/42/3</c> fastboot、<c>ff/50/1</c> hdc）的接口分类；
-    /// 未做逐接口枚举时回退到扁平化的接口描述符。</para>
+    /// Classifies the device as <c>edl</c>, <c>mtk</c> or <c>rkdl</c> from its bootrom VID/PID pair,
+    /// otherwise from the first interface matching a known debug-bridge triple.
+    /// <para>先按 bootrom 的 VID/PID 对把设备分类为 <c>edl</c>、<c>mtk</c> 或 <c>rkdl</c>，否则按首个匹配已知调试桥三元组的接口分类。</para>
     /// </summary>
     /// <param name="device">
     /// The enumerated USB device. <para>已枚举的 USB 设备。</para>
@@ -100,18 +101,53 @@ public static class UsbProtocolClassifier
             _ => null
         };
 
+    /// <summary>
+    /// Maps a bootrom VID/PID pair to <c>edl</c>, <c>mtk</c> or <c>rkdl</c>, covering Qualcomm and
+    /// MediaTek bootrom and download ports plus Rockchip loader ports.
+    /// <para>把 bootrom 的 VID/PID 对映射到 <c>edl</c>、<c>mtk</c> 或 <c>rkdl</c>，覆盖高通与联发科的 bootrom/下载端口以及瑞芯微 loader 端口。</para>
+    /// </summary>
+    /// <param name="vendorId">
+    /// USB vendor id. <para>USB 厂商 ID。</para>
+    /// </param>
+    /// <param name="productId">
+    /// USB product id, or null when the node carries none. <para>USB 产品 ID；节点未携带时为 null。</para>
+    /// </param>
+    /// <returns>
+    /// The bootrom protocol name, or <see langword="null"/> when the pair is not in any of the tables.
+    /// <para>bootrom 协议名；该组合不在任何表内时返回 <see langword="null"/>。</para>
+    /// </returns>
     private static string? ClassifyBootrom(ushort vendorId, ushort? productId)
     {
         var product = productId ?? 0;
-        if (vendorId == 0x05C6 && product is 0x9008 or 0x9006 or 0x900E or 0x901D or 0x9307)
+        if (vendorId == QualcommVid &&
+            product is 0x9006 or 0x9008 or 0x900E or 0x901D or 0x9025 or 0x9307)
+        {
             return "edl";
-        if (vendorId == 0x0E8D && product is 0x0003 or 0x2000 or 0x2001)
+        }
+
+        if (vendorId == SonyVid && product is 0x9DDE or 0xADE3 or 0xADE5 or 0xADED)
+        {
+            return "edl";
+        }
+
+        if ((vendorId == SierraVid && product is 0x9062 or 0x9070 or 0x9090)
+            || (vendorId == NetgearVid && product == 0x68E0)
+            || (vendorId == ZteVid && product == 0x0076))
+        {
+            return "edl";
+        }
+
+        if (MtkFactory.IsMtkBootromPort(vendorId, product))
+        {
             return "mtk";
-        if (MtkFactory.IsOemDownloadPort(vendorId, product))
-            return "mtk";
+        }
+
         if (vendorId == RkdlConstants.RockchipVid &&
             ((product >> 8) != 0 || RkdlConstants.KnownLoaderProductIds.Contains(product)))
+        {
             return "rkdl";
+        }
+
         return null;
     }
 }

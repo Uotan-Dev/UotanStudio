@@ -13,46 +13,46 @@ using UotanStudio.Services.Projects;
 namespace UotanStudio.Views.Shell;
 
 /// <summary>
-/// <para>新建表单的语义模式：顶部菜单入口创建新解决方案；已打开解决方案的入口创建子项目。</para>
 /// Semantic mode of the new-project form: the File-menu entry creates a new solution; the entry on an
 /// open solution creates a sub-project.
+/// <para>新建表单的语义模式：顶部菜单入口创建新解决方案；已打开解决方案的入口创建子项目。</para>
 /// </summary>
 public enum NewProjectWindowMode
 {
-    /// <summary><para>新建解决方案（首个子项目与解决方案同名）。</para>New solution (first sub-project shares its name).</summary>
+    /// <summary>New solution (first sub-project shares its name). <para>新建解决方案（首个子项目与解决方案同名）。</para></summary>
     Solution = 0,
 
-    /// <summary><para>向当前解决方案添加子项目。</para>Add a sub-project to the current solution.</summary>
+    /// <summary>Add a sub-project to the current solution. <para>向当前解决方案添加子项目。</para></summary>
     SubProject
 }
 
 /// <summary>
-/// <para>新建项目表单的提交结果；仅在点击创建且校验通过后非空。
-/// <see cref="ContainerKind"/> 为 <see cref="ContainerKind.None"/> 时 <see cref="SelectedImagePaths"/>
-/// 承载普通多选镜像；为容器时 <see cref="ContainerPath"/> 指向容器文件，
-/// <see cref="SelectedZipMembers"/> / <see cref="SelectedPartitions"/> 承载勾选的内部条目。</para>
 /// Submitted new-project form result; non-null only after Create is clicked with valid input.
 /// When <see cref="ContainerKind"/> is <see cref="ContainerKind.None"/>, <see cref="SelectedImagePaths"/>
 /// carries plain multi-selected images; for containers, <see cref="ContainerPath"/> points at the
 /// container file and <see cref="SelectedZipMembers"/> / <see cref="SelectedPartitions"/> carry the
 /// selected inner entries.
+/// <para>新建项目表单的提交结果；仅在点击创建且校验通过后非空。
+/// <see cref="ContainerKind"/> 为 <see cref="ContainerKind.None"/> 时 <see cref="SelectedImagePaths"/>
+/// 承载普通多选镜像；为容器时 <see cref="ContainerPath"/> 指向容器文件，
+/// <see cref="SelectedZipMembers"/> / <see cref="SelectedPartitions"/> 承载勾选的内部条目。</para>
 /// </summary>
-/// <param name="ProjectName"><para>解决方案/子项目名称。</para>Solution or sub-project name.</param>
+/// <param name="ProjectName">Solution or sub-project name. <para>解决方案/子项目名称。</para></param>
 /// <param name="Location">
-/// <para>组合后的完整目录（<c>基础目录/名称</c>），必须不存在或为空。</para>
 /// Combined full directory (<c>base/name</c>); must be missing or empty.
+/// <para>组合后的完整目录（<c>基础目录/名称</c>），必须不存在或为空。</para>
 /// </param>
-/// <param name="ContainerKind"><para>单文件容器类型（无/ super / payload / zip）。</para>Single-file container kind (none / super / payload / zip).</param>
-/// <param name="ContainerPath"><para>容器文件路径；非容器时为 null。</para>Container file path; null when not a container.</param>
-/// <param name="SelectedImagePaths"><para>普通多选镜像的完整路径。</para>Full paths of plain multi-selected images.</param>
-/// <param name="SelectedZipMembers"><para>ZIP 容器中勾选的条目完整路径。</para>Selected ZIP member full paths.</param>
+/// <param name="ContainerKind">Single-file container kind (none / super / payload / zip). <para>单文件容器类型（无/ super / payload / zip）。</para></param>
+/// <param name="ContainerPath">Container file path; null when not a container. <para>容器文件路径；非容器时为 null。</para></param>
+/// <param name="SelectedImagePaths">Full paths of plain multi-selected images. <para>普通多选镜像的完整路径。</para></param>
+/// <param name="SelectedZipMembers">Selected ZIP member full paths. <para>ZIP 容器中勾选的条目完整路径。</para></param>
 /// <param name="SelectedPartitions">
-/// <para>勾选的分区名（super 逻辑分区或 payload 分区，按 <see cref="ContainerKind"/> 区分）。</para>
 /// Selected partition names (super logical partitions or payload partitions, per <see cref="ContainerKind"/>).
+/// <para>勾选的分区名（super 逻辑分区或 payload 分区，按 <see cref="ContainerKind"/> 区分）。</para>
 /// </param>
-/// <param name="UnpackImages"><para>是否解压镜像。</para>Whether to unpack images.</param>
-/// <param name="UnpackFully"><para>是否把解出的受支持 img 继续解压为同名文件夹。</para>Whether to unpack extracted supported imgs into same-name folders.</param>
-/// <param name="MergeMyPartitions"><para>解包完成后是否把 my_* 分区树合并进 system。</para>Whether my_* partition trees are merged into system after unpacking.</param>
+/// <param name="UnpackImages">Whether to unpack images. <para>是否解压镜像。</para></param>
+/// <param name="UnpackFully">Whether to unpack extracted supported imgs into same-name folders. <para>是否把解出的受支持 img 继续解压为同名文件夹。</para></param>
+/// <param name="MergeMyPartitions">Whether my_* partition trees are merged into system after unpacking. <para>解包完成后是否把 my_* 分区树合并进 system。</para></param>
 public sealed record NewProjectFormResult(
     string ProjectName,
     string Location,
@@ -68,13 +68,13 @@ public sealed record NewProjectFormResult(
     bool MergeMyPartitions = false);
 
 /// <summary>
-/// <para>新建项目配置窗口；维护表单与文件选择，通过 <see cref="CreateAsync"/> 等待调用方完成创建和解包后关闭。
-/// 操作期间保留模态窗口并显示进度。位置显示组合后的完整目录（<c>基础目录/名称</c>）并随名称联动；
-/// 单个 super / payload.bin / zip 选中时在后台分析内部结构并把分区/镜像条目加入勾选列表。</para>
 /// New project form; holds local selections, outputs <see cref="Result"/> on create so the caller
 /// creates the project and runs unpacking. The location shows the combined full directory
 /// (<c>base/name</c>) synced with the name; a single super / payload.bin / zip selection triggers a
 /// background structure analysis whose partitions/images join the selectable list.
+/// <para>新建项目配置窗口；维护表单与文件选择，通过 <see cref="CreateAsync"/> 等待调用方完成创建和解包后关闭。
+/// 操作期间保留模态窗口并显示进度。位置显示组合后的完整目录（<c>基础目录/名称</c>）并随名称联动；
+/// 单个 super / payload.bin / zip 选中时在后台分析内部结构并把分区/镜像条目加入勾选列表。</para>
 /// </summary>
 public partial class NewProjectWindow : Window
 {
@@ -128,7 +128,7 @@ public partial class NewProjectWindow : Window
         }
     }
 
-    /// <summary><para>阶段切换时清空样本与统计文本。</para>Clears samples and the stats text on stage transitions.</summary>
+    /// <summary>Clears samples and the stats text on stage transitions. <para>阶段切换时清空样本与统计文本。</para></summary>
     public void ResetProgressStats()
     {
         _progressGeneration++;
@@ -171,29 +171,29 @@ public partial class NewProjectWindow : Window
         }
     }
 
-    /// <summary><para>表单提交结果；取消或关闭时保持为空。</para>Form result; stays null on cancel/close.</summary>
+    /// <summary>Form result; stays null on cancel/close. <para>表单提交结果；取消或关闭时保持为空。</para></summary>
     public NewProjectFormResult? Result { get; private set; }
 
     /// <summary>
-    /// <para>无参构造（供 XAML 运行时加载器识别）：等价于 Solution 模式 + 应用所在目录默认值。</para>
     /// Parameterless constructor (recognized by the XAML runtime loader): equivalent to Solution
     /// mode with the app-directory defaults.
+    /// <para>无参构造（供 XAML 运行时加载器识别）：等价于 Solution 模式 + 应用所在目录默认值。</para>
     /// </summary>
     public NewProjectWindow() : this(NewProjectWindowMode.Solution, null, null)
     {
     }
 
     /// <summary>
-    /// <para>初始化新建表单：位置默认 <c>&lt;baseDirectory&gt;/&lt;默认名&gt;</c>，
-    /// 默认名为基础目录下第一个空闲的 NewProjectN（<paramref name="reservedNames"/> 亦视为占用）。</para>
     /// Initializes the form: the location defaults to <c>&lt;baseDirectory&gt;/&lt;default name&gt;</c>,
     /// where the default name is the first free NewProjectN under the base directory (names in
     /// <paramref name="reservedNames"/> count as taken too).
+    /// <para>初始化新建表单：位置默认 <c>&lt;baseDirectory&gt;/&lt;默认名&gt;</c>，
+    /// 默认名为基础目录下第一个空闲的 NewProjectN（<paramref name="reservedNames"/> 亦视为占用）。</para>
     /// </summary>
-    /// <param name="mode"><para>表单语义模式。</para>Semantic mode of the form.</param>
+    /// <param name="mode">Semantic mode of the form. <para>表单语义模式。</para></param>
     /// <param name="baseDirectory">
-    /// <para>默认基础目录；null 时使用应用所在目录（工具箱同级）。</para>
     /// Default base directory; null uses the app directory (next to the toolbox).
+    /// <para>默认基础目录；null 时使用应用所在目录（工具箱同级）。</para>
     /// </param>
     /// <param name="reservedNames">
     /// <para>额外视为占用的名称（如现有子项目名）。</para>Additional taken names (e.g. existing sub-projects).</param>
@@ -239,10 +239,10 @@ public partial class NewProjectWindow : Window
         UpdateCreateEnabled();
     }
 
-    /// <summary><para>表单语义模式。</para>Semantic mode of the form.</summary>
+    /// <summary>Semantic mode of the form. <para>表单语义模式。</para></summary>
     public NewProjectWindowMode Mode { get; }
 
-    /// <summary><para>默认名探测时额外视为占用的名称。</para>Names treated as taken when probing the default name.</summary>
+    /// <summary>Names treated as taken when probing the default name. <para>默认名探测时额外视为占用的名称。</para></summary>
     private string[] ReservedNames { get; }
 
     private async void OnBrowseLocationClick(object? sender, RoutedEventArgs e)
@@ -369,11 +369,11 @@ public partial class NewProjectWindow : Window
     }
 
     /// <summary>
-    /// <para>设置列表条目并刷新列布局；恰好一个普通文件时在后台分析容器结构，
-    /// 分析成功后以分组条目重建列表（取消前一次未完成的分析）。</para>
     /// Sets list entries and refreshes columns; when exactly one plain file is present, its container
     /// structure is analyzed in the background and, on success, the list is rebuilt with grouped
     /// entries (a previous in-flight analysis is cancelled by generation).
+    /// <para>设置列表条目并刷新列布局；恰好一个普通文件时在后台分析容器结构，
+    /// 分析成功后以分组条目重建列表（取消前一次未完成的分析）。</para>
     /// </summary>
     private async void SetImages(NewProjectImageEntry[] images)
     {
@@ -424,8 +424,8 @@ public partial class NewProjectWindow : Window
     }
 
     /// <summary>
-    /// <para>以原包复制选项和内部条目重建列表，复用自适应多列布局。</para>
     /// Rebuilds the adaptive columns with an original-file copy option and selectable inner entries.
+    /// <para>以原包复制选项和内部条目重建列表，复用自适应多列布局。</para>
     /// </summary>
     private void ApplyContainerStructure(string containerPath, ContainerStructure structure)
     {
@@ -454,7 +454,7 @@ public partial class NewProjectWindow : Window
         UpdateSelectAll();
     }
 
-    /// <summary><para>分组头的本地化标题。</para>Localized group-header label.</summary>
+    /// <summary>Localized group-header label. <para>分组头的本地化标题。</para></summary>
     private static string GroupLabelFor(ContainerKind kind, string containerPath)
     {
         var name = Path.GetFileName(containerPath);
@@ -508,13 +508,13 @@ public partial class NewProjectWindow : Window
     }
 
     /// <summary>
-    /// <para>刷新「合并my_分区到system」选项的可见性：仅在勾选两个解包选项、且勾选条目里
-    /// system 分区（可带槽位后缀）与至少一个同槽位的 my_ 前缀分区成对出现时显示；
-    /// 条件破坏时隐藏并重置勾选。</para>
     /// Refreshes the visibility of the merge-my-partitions option: shown only when both unpack options
     /// are checked and the selected entries pair a system partition (a slot suffix such as system_a
     /// still names it) with at least one my_ prefixed partition of the same slot; a broken condition
     /// hides the option and resets its check state.
+    /// <para>刷新「合并my_分区到system」选项的可见性：仅在勾选两个解包选项、且勾选条目里
+    /// system 分区（可带槽位后缀）与至少一个同槽位的 my_ 前缀分区成对出现时显示；
+    /// 条件破坏时隐藏并重置勾选。</para>
     /// </summary>
     private void UpdateMergeOption()
     {
@@ -547,8 +547,8 @@ public partial class NewProjectWindow : Window
     }
 
     /// <summary>
-    /// <para>名称变化时始终联动位置后缀（基础目录 + 当前名称）。</para>
     /// Name changes always re-sync the location as base directory + current name.
+    /// <para>名称变化时始终联动位置后缀（基础目录 + 当前名称）。</para>
     /// </summary>
     private void OnProjectNameChanged(object? sender, TextChangingEventArgs e)
     {
@@ -574,7 +574,7 @@ public partial class NewProjectWindow : Window
         UpdateCreateEnabled();
     }
 
-    /// <summary><para>按基础目录 + 当前名称刷新位置显示。</para>Refreshes the location display from base directory + current name.</summary>
+    /// <summary>Refreshes the location display from base directory + current name. <para>按基础目录 + 当前名称刷新位置显示。</para></summary>
     private void UpdateLocationText()
     {
         var name = ProjectNameBox.Text?.Trim();
@@ -697,17 +697,17 @@ public partial class NewProjectWindow : Window
     }
 
     /// <summary>
-    /// <para>刷新「创建」按钮的可用性：只有名称与位置都合法时才允许提交，未填写完整时直接禁用按钮，
-    /// 不再在输入框下方用红字提示。</para>
     /// Refreshes the Create button state: submitting is allowed only when both the name and the location are
     /// valid, so an incomplete form disables the button instead of showing inline error text.
+    /// <para>刷新「创建」按钮的可用性：只有名称与位置都合法时才允许提交，未填写完整时直接禁用按钮，
+    /// 不再在输入框下方用红字提示。</para>
     /// </summary>
     private void UpdateCreateEnabled() => CreateButton.IsEnabled = IsFormValid();
 
     /// <summary>
-    /// <para>表单是否可提交：名称非空且合法、未被占用，位置非空且目录不存在或为空。</para>
     /// Whether the form can be submitted: the name is non-empty, valid and not taken; the location is
     /// non-empty and points at a missing or empty directory.
+    /// <para>表单是否可提交：名称非空且合法、未被占用，位置非空且目录不存在或为空。</para>
     /// </summary>
     private bool IsFormValid()
     {
@@ -723,15 +723,15 @@ public partial class NewProjectWindow : Window
 }
 
 /// <summary>
-/// <para>新建项目列表条目：普通镜像文件、容器内部条目或分组头。</para>
 /// New-project list entry: a plain image file, a container inner entry, or a group header.
+/// <para>新建项目列表条目：普通镜像文件、容器内部条目或分组头。</para>
 /// </summary>
 internal sealed partial class NewProjectImageEntry : ObservableObject
 {
-    /// <summary><para>分组头行（不可勾选）。</para>Group-header row (not selectable).</summary>
+    /// <summary>Group-header row (not selectable). <para>分组头行（不可勾选）。</para></summary>
     public static NewProjectImageEntry GroupHeader(string label) => new(label, isGroupHeader: true);
 
-    /// <summary><para>普通镜像文件条目。</para>Plain image-file entry.</summary>
+    /// <summary>Plain image-file entry. <para>普通镜像文件条目。</para></summary>
     public NewProjectImageEntry(string filePath, string format = "—", bool isRemoteSource = false)
     {
         FilePath = filePath;
@@ -742,7 +742,7 @@ internal sealed partial class NewProjectImageEntry : ObservableObject
         IsRemoteSource = isRemoteSource;
     }
 
-    /// <summary><para>容器内部条目（分区名或 ZIP 内路径）。</para>Container inner entry (partition name or ZIP path).</summary>
+    /// <summary>Container inner entry (partition name or ZIP path). <para>容器内部条目（分区名或 ZIP 内路径）。</para></summary>
     public NewProjectImageEntry(string innerName, string format, string containerPath, bool fromPayload, string? displayName = null, string? payloadMemberPath = null)
     {
         FilePath = null;
@@ -764,34 +764,34 @@ internal sealed partial class NewProjectImageEntry : ObservableObject
         IsGroupHeader = isGroupHeader;
     }
 
-    /// <summary><para>普通镜像的完整路径；内部条目与分组头为 null。</para>Full path of a plain image; null for inner entries and group headers.</summary>
+    /// <summary>Full path of a plain image; null for inner entries and group headers. <para>普通镜像的完整路径；内部条目与分组头为 null。</para></summary>
     public string? FilePath { get; }
 
-    /// <summary><para>条目标识：ZIP 条目始终保留完整内部路径用于提取。</para>Entry identity; ZIP members retain their full archive paths for extraction.</summary>
+    /// <summary>Entry identity; ZIP members retain their full archive paths for extraction. <para>条目标识：ZIP 条目始终保留完整内部路径用于提取。</para></summary>
     public string Name { get; }
 
-    /// <summary><para>ZIP 条目默认显示文件名，重名时显示完整内部路径。</para>ZIP filename, expanded to the full member path when filenames collide.</summary>
+    /// <summary>ZIP filename, expanded to the full member path when filenames collide. <para>ZIP 条目默认显示文件名，重名时显示完整内部路径。</para></summary>
     public string DisplayName { get; }
 
-    /// <summary><para>所属容器路径（悬停提示用）。</para>Owning container path (used for tooltips).</summary>
+    /// <summary>Owning container path (used for tooltips). <para>所属容器路径（悬停提示用）。</para></summary>
     public string ContainerPath { get; }
 
-    /// <summary><para>格式列显示文本。</para>Format column text.</summary>
+    /// <summary>Format column text. <para>格式列显示文本。</para></summary>
     public string Format { get; }
 
-    /// <summary><para>是否来自 payload 的分区（ZIP 模式下区分 ZIP 成员与 payload 分区）。</para>Whether the entry is a payload partition (distinguishes ZIP members in zip mode).</summary>
+    /// <summary>Whether the entry is a payload partition (distinguishes ZIP members in zip mode). <para>是否来自 payload 的分区（ZIP 模式下区分 ZIP 成员与 payload 分区）。</para></summary>
     public bool FromPayload { get; }
 
     /// <summary>Whether this row represents the complete remote source package.</summary>
     public bool IsRemoteSource { get; }
 
-    /// <summary><para>是否分组头行。</para>Whether this is a group-header row.</summary>
+    /// <summary>Whether this is a group-header row. <para>是否分组头行。</para></summary>
     public bool IsGroupHeader { get; }
 
-    /// <summary><para>是否可勾选（分组头不可）。</para>Whether the entry is selectable (group headers are not).</summary>
+    /// <summary>Whether the entry is selectable (group headers are not). <para>是否可勾选（分组头不可）。</para></summary>
     public bool IsSelectable => !IsGroupHeader;
 
-    /// <summary><para>悬停提示：普通文件显示完整路径，内部条目显示容器路径。</para>Tooltip: full path for plain files, container path for inner entries.</summary>
+    /// <summary>Tooltip: full path for plain files, container path for inner entries. <para>悬停提示：普通文件显示完整路径，内部条目显示容器路径。</para></summary>
     public string Tip => FilePath ?? ContainerPath + "!/" + (PayloadMemberPath is null ? "" : PayloadMemberPath + "!/") + Name;
 
     /// <summary>Containing Payload member path for the full nested location tooltip.</summary>

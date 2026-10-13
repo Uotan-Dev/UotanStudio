@@ -15,8 +15,8 @@ using UotanStudio.ViewModels.Shell;
 namespace UotanStudio.ViewModels.Nodes;
 
 /// <summary>
-/// <para>节点编辑器主视图模型，管理节点画布、连接线、工具箱、选择状态与工作流执行。</para>
 /// Main view model for the node editor, managing the node canvas, connections, toolbox, selection state, and workflow execution.
+/// <para>节点编辑器主视图模型，管理节点画布、连接线、工具箱、选择状态与工作流执行。</para>
 /// </summary>
 public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 {
@@ -64,32 +64,32 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     private bool _suppressPropertyTracking;
 
     /// <summary>
-    /// <para>统一日志服务实例，节点编辑器与执行引擎共享。</para>
     /// Unified log service instance, shared between the node editor and the execution engine.
+    /// <para>统一日志服务实例，节点编辑器与执行引擎共享。</para>
     /// </summary>
     private readonly Services.LogService _log = Services.LogService.Instance;
 
     /// <summary>
-    /// <para>节点工作流执行引擎实例，按需懒构造。</para>
     /// Node workflow execution engine instance, lazily constructed on demand.
+    /// <para>节点工作流执行引擎实例，按需懒构造。</para>
     /// </summary>
     private Services.Execution.NodeExecutionEngine? _engine;
 
     /// <summary>
-    /// <para>执行取消令牌源。</para>
     /// Cancellation token source for execution.
+    /// <para>执行取消令牌源。</para>
     /// </summary>
     private CancellationTokenSource? _runCts;
 
     /// <summary>
-    /// <para>工具箱搜索防抖取消令牌源。</para>
     /// Cancellation token source for toolbox search debounce.
+    /// <para>工具箱搜索防抖取消令牌源。</para>
     /// </summary>
     private CancellationTokenSource? _searchDebounceCts;
 
     /// <summary>
-    /// <para>获取或设置画布上的节点集合。</para>
     /// Gets or sets the collection of nodes on the canvas.
+    /// <para>获取或设置画布上的节点集合。</para>
     /// </summary>
     public ObservableCollection<NodeViewModels.FlowNodeViewModel> Nodes
     {
@@ -112,8 +112,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     } = [];
 
     /// <summary>
-    /// <para>获取或设置节点间的连接线集合。</para>
     /// Gets or sets the collection of connections between nodes.
+    /// <para>获取或设置节点间的连接线集合。</para>
     /// </summary>
     public ObservableCollection<NodeViewModels.NodeConnectionViewModel> Connections
     {
@@ -168,8 +168,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>获取或设置画布的缩放级别。</para>
     /// Gets or sets the zoom level of the canvas.
+    /// <para>获取或设置画布的缩放级别。</para>
     /// </summary>
     public double Zoom
     {
@@ -178,8 +178,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     } = 1.0;
 
     /// <summary>
-    /// <para>获取或设置是否显示小地图。</para>
     /// Gets or sets whether to show the minimap.
+    /// <para>获取或设置是否显示小地图。</para>
     /// </summary>
     public bool ShowMinimap
     {
@@ -188,8 +188,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     } = true;
 
     /// <summary>
-    /// <para>获取或设置节点搜索文本。</para>
     /// Gets or sets the node search text.
+    /// <para>获取或设置节点搜索文本。</para>
     /// </summary>
     public string SearchText
     {
@@ -225,8 +225,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>获取或设置执行状态文本。</para>
     /// Gets or sets the execution status text.
+    /// <para>获取或设置执行状态文本。</para>
     /// </summary>
     public string ExecutionStatus
     {
@@ -235,14 +235,14 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     } = LanguageService.Instance.GetString("Node_StatusReady");
 
     /// <summary>
-    /// <para>获取节点工具箱分类列表（全量，由插件注册填充）。</para>
     /// Gets the full list of node toolbox categories, populated from registered plugins.
+    /// <para>获取节点工具箱分类列表（全量，由插件注册填充）。</para>
     /// </summary>
     public ObservableCollection<NodeToolboxCategory> ToolboxCategories { get; } = [];
 
     /// <summary>
-    /// <para>获取搜索过滤后的工具箱分类视图，UI 绑定此项。</para>
     /// Gets the search-filtered toolbox category view bound by the UI.
+    /// <para>获取搜索过滤后的工具箱分类视图，UI 绑定此项。</para>
     /// </summary>
     public ObservableCollection<NodeToolboxCategory> VisibleToolboxCategories
     {
@@ -251,8 +251,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     } = [];
 
     /// <summary>
-    /// <para>获取或设置当前选中的节点，绑定到属性面板。</para>
     /// Gets or sets the currently selected node, bound to the properties panel.
+    /// <para>获取或设置当前选中的节点，绑定到属性面板。</para>
     /// </summary>
     public NodeViewModels.FlowNodeViewModel? SelectedNode
     {
@@ -267,8 +267,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>获取或设置执行进度（0.0 ~ 1.0）。</para>
     /// Gets or sets the execution progress (0.0 ~ 1.0).
+    /// <para>获取或设置执行进度（0.0 ~ 1.0）。</para>
     /// </summary>
     public double ExecutionProgress
     {
@@ -277,8 +277,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>获取或设置是否正在执行工作流。</para>
     /// Gets or sets whether a workflow is currently executing.
+    /// <para>获取或设置是否正在执行工作流。</para>
     /// </summary>
     public bool IsExecuting
     {
@@ -340,8 +340,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public string CodeRuntimeDisabledText => PluginWorkspace.CodeRuntimeDisabledText;
 
     /// <summary>
-    /// <para>执行期间订阅 LogService 的退订委托。</para>
     /// Unsubscribe delegate for the LogService subscription during execution.
+    /// <para>执行期间订阅 LogService 的退订委托。</para>
     /// </summary>
 
     private Action? _executionLogUnsubscribe;
@@ -359,20 +359,20 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public bool CanUndo => !IsExecuting && _undoStack.Count > 0;
 
     /// <summary>
-    /// <para>获取是否能执行重做操作。</para>
     /// Gets whether a redo operation is available.
+    /// <para>获取是否能执行重做操作。</para>
     /// </summary>
     public bool CanRedo => !IsExecuting && _redoStack.Count > 0;
 
     /// <summary>
-    /// <para>获取待处理连接视图模型，管理拖拽连线状态。</para>
     /// Gets the pending connection view model, managing the drag-connection state.
+    /// <para>获取待处理连接视图模型，管理拖拽连线状态。</para>
     /// </summary>
     public PendingConnectionViewModel PendingConnection { get; }
 
     /// <summary>
-    /// <para>初始化节点编辑器视图模型，从插件注册表构建工具箱，并初始化搜索过滤视图。</para>
     /// Initializes the node editor view model, building the toolbox from the plugin registry, and initializing the search-filter view.
+    /// <para>初始化节点编辑器视图模型，从插件注册表构建工具箱，并初始化搜索过滤视图。</para>
     /// </summary>
     public NodeEditorViewModel(bool showVisualPluginWorkspace = true)
     {
@@ -424,16 +424,16 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>响应节点编辑器动作消息，执行撤销/重做/剪切/复制/粘贴/删除/全选等编辑操作。</para>
     /// Responds to node-editor action messages, performing undo/redo/cut/copy/paste/delete/select-all edit operations.
+    /// <para>响应节点编辑器动作消息，执行撤销/重做/剪切/复制/粘贴/删除/全选等编辑操作。</para>
     /// </summary>
     /// <param name="recipient">
-    /// <para>消息接收者。</para>
     /// The message recipient.
+    /// <para>消息接收者。</para>
     /// </param>
     /// <param name="message">
-    /// <para>包含动作类型的消息。</para>
     /// The message containing the action type.
+    /// <para>包含动作类型的消息。</para>
     /// </param>
     private void OnNodeEditorAction(object recipient, NodeEditorActionMessage message)
     {
@@ -495,13 +495,13 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>将命令推入撤销栈并执行，同时清空重做栈。当撤销栈达到深度上限时丢弃最旧命令。</para>
     /// Pushes a command onto the undo stack, executes it, and clears the redo stack. Drops the oldest
     /// command when the undo stack reaches its depth limit.
+    /// <para>将命令推入撤销栈并执行，同时清空重做栈。当撤销栈达到深度上限时丢弃最旧命令。</para>
     /// </summary>
     /// <param name="command">
-    /// <para>要执行的命令。</para>
     /// The command to execute.
+    /// <para>要执行的命令。</para>
     /// </param>
     private void ExecuteCommand(NodeViewModels.EditorCommands.IEditorCommand command)
     {
@@ -527,8 +527,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>撤销最近一次编辑操作。</para>
     /// Undoes the most recent edit operation.
+    /// <para>撤销最近一次编辑操作。</para>
     /// </summary>
     public void Undo()
     {
@@ -561,8 +561,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>重做最近一次被撤销的编辑操作。</para>
     /// Redoes the most recently undone edit operation.
+    /// <para>重做最近一次被撤销的编辑操作。</para>
     /// </summary>
     public void Redo()
     {
@@ -594,12 +594,12 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>赋予节点通过可撤销命令入栈的编辑操作，供批量操作合并为单个命令使用。</para>
     /// Records an edit via a command pushed onto the stack; used to merge batch operations into one command.
+    /// <para>赋予节点通过可撤销命令入栈的编辑操作，供批量操作合并为单个命令使用。</para>
     /// </summary>
     /// <param name="command">
-    /// <para>要执行的命令。</para>
     /// The command to execute.
+    /// <para>要执行的命令。</para>
     /// </param>
     public void Record(NodeViewModels.EditorCommands.IEditorCommand command)
     {
@@ -607,8 +607,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>将选中节点序列化到剪贴板（简易内存剪贴板）。</para>
     /// Serializes selected nodes to the clipboard (simple in-memory clipboard).
+    /// <para>将选中节点序列化到剪贴板（简易内存剪贴板）。</para>
     /// </summary>
     private void CopySelectedToClipboard()
     {
@@ -624,8 +624,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>从剪贴板粘贴节点，复制到原位置偏移。</para>
     /// Pastes nodes from the clipboard, offset from their original positions.
+    /// <para>从剪贴板粘贴节点，复制到原位置偏移。</para>
     /// </summary>
     private void PasteFromClipboard()
     {
@@ -967,12 +967,12 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>将指定节点添加到画布。</para>
     /// Adds the specified node to the canvas.
+    /// <para>将指定节点添加到画布。</para>
     /// </summary>
     /// <param name="node">
-    /// <para>要添加的节点。</para>
     /// The node to add.
+    /// <para>要添加的节点。</para>
     /// </param>
     public void AddNode(NodeViewModels.FlowNodeViewModel node, bool preserveLocation = false)
     {
@@ -991,16 +991,16 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>在两个连接器之间创建连接。</para>
     /// Creates a connection between two connectors.
+    /// <para>在两个连接器之间创建连接。</para>
     /// </summary>
     /// <param name="source">
-    /// <para>源连接器（输出端口）。</para>
     /// The source connector (output port).
+    /// <para>源连接器（输出端口）。</para>
     /// </param>
     /// <param name="target">
-    /// <para>目标连接器（输入端口）。</para>
     /// The target connector (input port).
+    /// <para>目标连接器（输入端口）。</para>
     /// </param>
     public void CreateConnection(NodeViewModels.NodeConnectorViewModel source, NodeViewModels.NodeConnectorViewModel target)
     {
@@ -1095,12 +1095,12 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>选中指定节点，同时清除其他节点的选中状态。</para>
     /// Selects the specified node, clearing the selection state of others.
+    /// <para>选中指定节点，同时清除其他节点的选中状态。</para>
     /// </summary>
     /// <param name="node">
-    /// <para>要选中的节点；<c>null</c> 表示清空选择。</para>
     /// The node to select; <c>null</c> clears the selection.
+    /// <para>要选中的节点；<c>null</c> 表示清空选择。</para>
     /// </param>
     public void SelectNode(NodeViewModels.FlowNodeViewModel? node)
     {
@@ -1108,8 +1108,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>异步执行节点工作流。基于拓扑排序依次执行节点，并将上游输出注入下游输入。</para>
     /// Asynchronously executes the node workflow. Nodes are executed in topological order; upstream outputs are injected into downstream inputs.
+    /// <para>异步执行节点工作流。基于拓扑排序依次执行节点，并将上游输出注入下游输入。</para>
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanRun))]
     private Task RunAsync() => ExecuteGraphAsync(false);
@@ -1232,8 +1232,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>停止正在执行的节点工作流。</para>
     /// Stops the currently executing node workflow.
+    /// <para>停止正在执行的节点工作流。</para>
     /// </summary>
     [RelayCommand(CanExecute = nameof(IsExecuting))]
     private void Stop()
@@ -1244,8 +1244,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>清空画布上的所有节点和连接线。</para>
     /// Clears all nodes and connections on the canvas.
+    /// <para>清空画布上的所有节点和连接线。</para>
     /// </summary>
     [RelayCommand]
     public void Clear()
@@ -1339,8 +1339,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>执行日志条目回调：按来源过滤（Engine、NodeEditor 或任一节点 Title），并调度到 UI 线程追加。</para>
     /// Execution log entry callback: filters by source (Engine, NodeEditor, or any node Title) and appends on the UI thread.
+    /// <para>执行日志条目回调：按来源过滤（Engine、NodeEditor 或任一节点 Title），并调度到 UI 线程追加。</para>
     /// </summary>
     private void OnExecutionLogEnqueued(object? sender, LogEntry entry)
     {
@@ -1367,8 +1367,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>查找拥有指定连接器的节点实例 ID。若无匹配则返回 <c>null</c>。</para>
     /// Finds the node instance ID that owns the specified connector. Returns <c>null</c> if no match.
+    /// <para>查找拥有指定连接器的节点实例 ID。若无匹配则返回 <c>null</c>。</para>
     /// </summary>
     private string? FindOwnerInstanceId(NodeViewModels.NodeConnectorViewModel connector)
     {
@@ -1419,16 +1419,16 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>从工作流快照重建画布：清空当前节点与连接，按 DTO 重建节点，再尝试匹配重建连接。</para>
     /// Rebuilds the canvas from a workflow snapshot: clears current nodes/connections, rebuilds nodes from DTOs, then attempts to rebuild connections.
+    /// <para>从工作流快照重建画布：清空当前节点与连接，按 DTO 重建节点，再尝试匹配重建连接。</para>
     /// </summary>
     /// <param name="snapshot">
-    /// <para>工作流快照。</para>
     /// The workflow snapshot.
+    /// <para>工作流快照。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步操作的任务。</para>
     /// A task representing the async operation.
+    /// <para>表示异步操作的任务。</para>
     /// </returns>
     public Task LoadFromAsync(Services.Projects.WorkflowSnapshot snapshot)
     {

@@ -7,12 +7,12 @@ using UotanStudio.Services.Devices;
 namespace UotanStudio.ViewModels.Devices;
 
 /// <summary>
-/// <para>设备信息模型（包装 DeviceMonitorService 枚举出的 DetectedDevice）。</para>
 /// Device info model (wrapping a DetectedDevice enumerated by DeviceMonitorService).
+/// <para>设备信息模型（包装 DeviceMonitorService 枚举出的 DetectedDevice）。</para>
 /// </summary>
 /// <remarks>
-/// <para>初始化设备信息。</para>
 /// Initializes the device info.
+/// <para>初始化设备信息。</para>
 /// </remarks>
 public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceViewModel? owner = null) : ViewModelBase
 {
@@ -45,6 +45,10 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
             MtkHardware = string.Empty;
             MtkFirmware = string.Empty;
             MtkSecurityBits = string.Empty;
+            MtkBootLoaderVersion = string.Empty;
+            MtkBootRomVersion = string.Empty;
+            MtkMeidHex = string.Empty;
+            MtkSocidHex = string.Empty;
             EdlSerialPort = string.Empty;
             EdlSaharaVersion = string.Empty;
             EdlMaxCommandLength = string.Empty;
@@ -71,7 +75,9 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
                 nameof(EdlProgrammer), nameof(EdlStorageType), nameof(EdlStorageSerial),
                 nameof(EdlStorageFirmware), nameof(EdlStorageManufacturer), nameof(EdlPageSize),
                 nameof(EdlSectorSize), nameof(EdlCapacity), nameof(EdlMaxPayload),
-                nameof(IsMtk), nameof(HasMtkInfo)
+                nameof(IsMtk), nameof(HasMtkInfo), nameof(MtkHardware), nameof(MtkFirmware),
+                nameof(MtkSecurityBits), nameof(MtkBootLoaderVersion), nameof(MtkBootRomVersion),
+                nameof(MtkMeidHex), nameof(MtkSocidHex)
             })
                 OnPropertyChanged(property);
             owner?.NotifyConnectionChanged(this);
@@ -94,10 +100,10 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     }
 
     /// <summary>
-    /// <para>获取或设置当前条目是否为全局选中设备（顶栏选择器打勾标记；
-    /// 选中状态变化由 <see cref="DeviceViewModel"/> 统一通知）。</para>
     /// Gets or sets whether this entry is the globally selected device (top-bar selector
     /// check mark; selection changes are notified by <see cref="DeviceViewModel"/>).
+    /// <para>获取或设置当前条目是否为全局选中设备（顶栏选择器打勾标记；
+    /// 选中状态变化由 <see cref="DeviceViewModel"/> 统一通知）。</para>
     /// </summary>
     public bool IsSelected
     {
@@ -106,16 +112,16 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     }
 
     /// <summary>
-    /// <para>由 <see cref="DeviceViewModel"/> 在选中设备变化时调用，刷新打勾绑定。</para>
     /// Called by <see cref="DeviceViewModel"/> when the selected device changes, refreshing
     /// the check-mark binding.
+    /// <para>由 <see cref="DeviceViewModel"/> 在选中设备变化时调用，刷新打勾绑定。</para>
     /// </summary>
     internal void NotifySelectionChanged() => IsSelected = owner is not null && ReferenceEquals(owner.SelectedDevice, this);
 
     /// <summary>
-    /// <para>选中本设备（顶栏选择器点选入口；无宿主 <see cref="DeviceViewModel"/> 的临时实例不可执行）。</para>
     /// Selects this device (top-bar selector entry point; not executable for temporary
     /// instances without an owning <see cref="DeviceViewModel"/>).
+    /// <para>选中本设备（顶栏选择器点选入口；无宿主 <see cref="DeviceViewModel"/> 的临时实例不可执行）。</para>
     /// </summary>
     [RelayCommand]
     private void Select()
@@ -151,9 +157,9 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public string Mode => Device.ProtocolLabel;
 
     /// <summary>
-    /// <para>EDL 端点走 QDLoader 串口驱动回退时的 COM 端口号；原生 USB 传输时为空。</para>
     /// The COM port number when the EDL endpoint uses the QDLoader serial-driver fallback;
     /// empty over a native USB transport.
+    /// <para>EDL 端点走 QDLoader 串口驱动回退时的 COM 端口号；原生 USB 传输时为空。</para>
     /// </summary>
     public string EdlSerialPort { get; private set => SetProperty(ref field, value); } = string.Empty;
 
@@ -197,14 +203,14 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         : $"{Serial} - {Model} ({State})";
 
     /// <summary>
-    /// <para>设备列表条目标题：优先型号，型号未知时回退序列号。</para>
     /// Device list entry title: the model when known, otherwise the serial.
+    /// <para>设备列表条目标题：优先型号，型号未知时回退序列号。</para>
     /// </summary>
     public string ListTitle => string.IsNullOrEmpty(Model) ? Serial : Model;
 
     /// <summary>
-    /// <para>设备列表条目副标题：序列号与状态的组合，供条目第二行显示。</para>
     /// Device list entry subtitle: serial plus state for the entry's second row.
+    /// <para>设备列表条目副标题：序列号与状态的组合，供条目第二行显示。</para>
     /// </summary>
     public string ListSubtitle => string.IsNullOrEmpty(State) ? Serial : $"{Serial} · {State}";
 
@@ -246,8 +252,8 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public bool IsFastboot => Device.Protocol == DeviceProtocolKind.Fastboot;
 
     /// <summary>
-    /// <para>是否支持重启到 fastbootd（ADB 或 Fastboot 协议）。</para>
     /// Whether rebooting into fastbootd is supported (ADB or Fastboot protocol).
+    /// <para>是否支持重启到 fastbootd（ADB 或 Fastboot 协议）。</para>
     /// </summary>
     public bool SupportsFastbootd => IsAdb || IsFastboot;
 
@@ -274,87 +280,87 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public bool HasEdlProtocol => IsEdl && EdlProtocol != EdlProtocolState.Unknown;
 
     /// <summary>
-    /// <para>EDL 徽章文本：已校验协议时在 EDL 后追加 Sahara/Firehose 模式。</para>
     /// EDL badge text: appends the Sahara/Firehose mode after EDL once verified.
+    /// <para>EDL 徽章文本：已校验协议时在 EDL 后追加 Sahara/Firehose 模式。</para>
     /// </summary>
     public string EdlBadge => HasEdlProtocol ? $"EDL · {EdlProtocol}" : "EDL";
 
     /// <summary>
-    /// <para>Sahara HELLO 上报的协议版本，未采集时为空。</para>
     /// The Sahara HELLO-reported protocol version; empty until collected.
+    /// <para>Sahara HELLO 上报的协议版本，未采集时为空。</para>
     /// </summary>
     public string EdlSaharaVersion { get; private set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>Sahara HELLO 上报的最大命令长度（max_cmd_len），未采集时为空。</para>
     /// The Sahara HELLO-reported maximum command length (max_cmd_len); empty until collected.
+    /// <para>Sahara HELLO 上报的最大命令长度（max_cmd_len），未采集时为空。</para>
     /// </summary>
     public string EdlMaxCommandLength { get; private set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>Firehose configure 上报的编程器版本，未采集时为空。</para>
     /// The programmer version reported by Firehose configure; empty until collected.
+    /// <para>Firehose configure 上报的编程器版本，未采集时为空。</para>
     /// </summary>
     public string EdlFirehoseVersion { get; private set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>Firehose 编程器文件名，未采集时为空。</para>
     /// The Firehose programmer file name; empty until collected.
+    /// <para>Firehose 编程器文件名，未采集时为空。</para>
     /// </summary>
     public string EdlProgrammer { get; private set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>存储类型（优先 getstorageinfo，其次 configure），未采集时为空。</para>
     /// The storage type (getstorageinfo first, then configure); empty until collected.
+    /// <para>存储类型（优先 getstorageinfo，其次 configure），未采集时为空。</para>
     /// </summary>
     public string EdlStorageType { get; private set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>存储序列号，未采集时为空。</para>
     /// The storage serial number; empty until collected.
+    /// <para>存储序列号，未采集时为空。</para>
     /// </summary>
     public string EdlStorageSerial { get; private set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>存储固件版本，未采集时为空。</para>
     /// The storage firmware version; empty until collected.
+    /// <para>存储固件版本，未采集时为空。</para>
     /// </summary>
     public string EdlStorageFirmware { get; private set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>存储厂商标识，未采集时为空。</para>
     /// The storage manufacturer identifier; empty until collected.
+    /// <para>存储厂商标识，未采集时为空。</para>
     /// </summary>
     public string EdlStorageManufacturer { get; private set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>存储页大小（字节），未采集时为空。</para>
     /// The storage page size in bytes; empty until collected.
+    /// <para>存储页大小（字节），未采集时为空。</para>
     /// </summary>
     public string EdlPageSize { get; private set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>存储块大小（字节），未采集时为空。</para>
     /// The storage block size in bytes; empty until collected.
+    /// <para>存储块大小（字节），未采集时为空。</para>
     /// </summary>
     public string EdlSectorSize { get; private set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>存储总容量（二进制 GiB 及原始字节数），未采集时为空。</para>
     /// The total storage capacity (binary GiB plus raw bytes); empty until collected.
+    /// <para>存储总容量（二进制 GiB 及原始字节数），未采集时为空。</para>
     /// </summary>
     public string EdlCapacity { get; private set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>Firehose 协商的最大载荷（字节），未采集时为空。</para>
     /// The Firehose-negotiated maximum payload in bytes; empty until collected.
+    /// <para>Firehose 协商的最大载荷（字节），未采集时为空。</para>
     /// </summary>
     public string EdlMaxPayload { get; private set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>将探测附加采集到的只读 EDL 详情写入模型；null 表示本次未采集到，保留原值。</para>
     /// Records the read-only EDL details collected alongside the probe; null means nothing was
     /// collected this time and existing values are kept.
+    /// <para>将探测附加采集到的只读 EDL 详情写入模型；null 表示本次未采集到，保留原值。</para>
     /// </summary>
     /// <param name="details">The collected snapshot, or null. <para>采集到的快照，或 null。</para></param>
     internal void SetEdlDetails(EdlDetailsSnapshot? details)
@@ -415,22 +421,48 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public bool IsMtk => Device.Protocol == DeviceProtocolKind.Mtk;
 
     /// <summary>
-    /// <para>MTK 硬件代码与子代码（<c>0x8A00 / 0x0001</c>），未查询时为空。</para>
     /// The MediaTek hardware code and subcode (<c>0x8A00 / 0x0001</c>); empty until queried.
+    /// <para>MTK 硬件代码与子代码（<c>0x8A00 / 0x0001</c>），未查询时为空。</para>
     /// </summary>
     public string MtkHardware { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>MTK 硬件与软件版本，未查询时为空。</para>
     /// The MediaTek hardware and software revisions; empty until queried.
+    /// <para>MTK 硬件与软件版本，未查询时为空。</para>
     /// </summary>
     public string MtkFirmware { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>MTK 目标安全位（<c>SBC/SLA/DAA/CERT</c> 置位情况），未查询时为空。</para>
     /// The MediaTek target security bits (<c>SBC/SLA/DAA/CERT</c>); empty until queried.
+    /// <para>MTK 目标安全位（<c>SBC/SLA/DAA/CERT</c> 置位情况），未查询时为空。</para>
     /// </summary>
     public string MtkSecurityBits { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// The MediaTek bootloader version byte (<c>0x1D</c>); empty when the handshake reported none.
+    /// <para>MTK bootloader 版本字节（<c>0x1D</c>），握手未上报时为空。</para>
+    /// </summary>
+    public string MtkBootLoaderVersion { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// The MediaTek Boot ROM version byte (<c>0xFF</c>); empty when the handshake reported none.
+    /// <para>MTK Boot ROM 版本字节（<c>0xFF</c>），握手未上报时为空。</para>
+    /// </summary>
+    public string MtkBootRomVersion { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// The MediaTek media device identifier (MEID, command <c>E1</c>) in lowercase hexadecimal; empty when
+    /// the handshake reported none.
+    /// <para>MTK 媒体设备标识（MEID，命令 <c>E1</c>）的小写十六进制，握手未上报时为空。</para>
+    /// </summary>
+    public string MtkMeidHex { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// The MediaTek secure on-chip identifier (SOCID, command <c>E7</c>) in lowercase hexadecimal; empty when
+    /// the handshake reported none.
+    /// <para>MTK 安全片上标识（SOCID，命令 <c>E7</c>）的小写十六进制，握手未上报时为空。</para>
+    /// </summary>
+    public string MtkSocidHex { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>是否已查询到 MTK 身份信息。 Whether MediaTek identity info has been queried.</summary>
     public bool HasMtkInfo => MtkHardware.Length > 0;
@@ -440,7 +472,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// Records the MediaTek identity and security bits obtained from one read-only Boot ROM
     /// handshake; the values themselves are technical strings and the labels come from the view.
     /// </summary>
-    /// <param name="info">The identity reported by the target. <para>目标上报的身份。</param>
+    /// <param name="info">The identity reported by the target. <para>目标上报的身份。</para></param>
     internal void SetMtkInfo(MtkDeviceInfo info)
     {
         ArgumentNullException.ThrowIfNull(info);
@@ -451,6 +483,14 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         MtkSecurityBits = string.Create(System.Globalization.CultureInfo.InvariantCulture,
             $"SBC={(info.SecureBootEnabled ? 1 : 0)} SLA={(info.SerialLinkAuthenticationRequired ? 1 : 0)} " +
             $"DAA={(info.DownloadAgentAuthenticationRequired ? 1 : 0)} CERT={(info.RootCertificateRequired ? 1 : 0)}");
+        MtkBootLoaderVersion = info.BlVersion is { } blVersion
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"0x{blVersion:X2}")
+            : string.Empty;
+        MtkBootRomVersion = info.BromVersion is { } bromVersion
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"0x{bromVersion:X2}")
+            : string.Empty;
+        MtkMeidHex = info.Meid is { } meid ? Convert.ToHexStringLower(meid) : string.Empty;
+        MtkSocidHex = info.Socid is { } socid ? Convert.ToHexStringLower(socid) : string.Empty;
         OnPropertyChanged(nameof(HasMtkInfo));
     }
 
@@ -470,104 +510,104 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public bool IsSerial => Device.Transport == DeviceTransportKind.Serial;
 
     /// <summary>
-    /// <para>设备品牌（ro.product.brand）。</para>
     /// Device brand (ro.product.brand).
+    /// <para>设备品牌（ro.product.brand）。</para>
     /// </summary>
     public string Brand { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>系统 SDK 版本（ro.build.version.sdk）。</para>
     /// System SDK version (ro.build.version.sdk).
+    /// <para>系统 SDK 版本（ro.build.version.sdk）。</para>
     /// </summary>
     public string SdkVersion { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>设备代号（ro.product.device / fastboot product）。</para>
     /// Device codename (ro.product.device / fastboot product).
+    /// <para>设备代号（ro.product.device / fastboot product）。</para>
     /// </summary>
     public string CodeName { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>CPU ABI（ro.product.cpu.abi）。</para>
     /// CPU ABI (ro.product.cpu.abi).
+    /// <para>CPU ABI（ro.product.cpu.abi）。</para>
     /// </summary>
     public string CpuAbi { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>SoC/主板平台代号（ro.board.platform）。</para>
     /// SoC/board platform code (ro.board.platform).
+    /// <para>SoC/主板平台代号（ro.board.platform）。</para>
     /// </summary>
     public string CpuCode { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>内核版本（uname -r）。</para>
     /// Kernel version (uname -r).
+    /// <para>内核版本（uname -r）。</para>
     /// </summary>
     public string Kernel { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>屏幕分辨率（wm size）。</para>
     /// Screen resolution (wm size).
+    /// <para>屏幕分辨率（wm size）。</para>
     /// </summary>
     public string Resolution { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>屏幕像素密度（wm density）。</para>
     /// Screen pixel density (wm density).
+    /// <para>屏幕像素密度（wm density）。</para>
     /// </summary>
     public string Density { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>主板/SoC 序列号。</para>
     /// Board/SoC serial number.
+    /// <para>主板/SoC 序列号。</para>
     /// </summary>
     public string BoardId { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>Bootloader 锁定状态。</para>
     /// Bootloader lock state.
+    /// <para>Bootloader 锁定状态。</para>
     /// </summary>
     public string BlStatus { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>当前 A/B 槽位（如 _a/_b）。</para>
     /// Current A/B slot (e.g. _a/_b).
+    /// <para>当前 A/B 槽位（如 _a/_b）。</para>
     /// </summary>
     public string Slot { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>开机时长（uptime）。</para>
     /// Power-on time (uptime).
+    /// <para>开机时长（uptime）。</para>
     /// </summary>
     public string PowerOnTime { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>编译/构建增量版本号。</para>
     /// Compile/build incremental version.
+    /// <para>编译/构建增量版本号。</para>
     /// </summary>
     public string CompileVersion { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>VNDK 版本。</para>
     /// VNDK version.
+    /// <para>VNDK 版本。</para>
     /// </summary>
     public string VndkVersion { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>存储类型（UFS/EMMC，来自 fastboot variant）。</para>
     /// Storage type (UFS/EMMC, from fastboot variant).
+    /// <para>存储类型（UFS/EMMC，来自 fastboot variant）。</para>
     /// </summary>
     public string DiskType { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>fastboot 是否为 user-space（fastbootd）。</para>
     /// Whether fastboot is user-space (fastbootd).
+    /// <para>fastboot 是否为 user-space（fastbootd）。</para>
     /// </summary>
     public string IsUserspace { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>电池电量百分比，-1 表示不可用。</para>
     /// Battery level percent (-1 = unavailable).
+    /// <para>电池电量百分比，-1 表示不可用。</para>
     /// </summary>
     public int BatteryLevel
     {
@@ -585,14 +625,14 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public bool HasBattery => BatteryLevel >= 0;
 
     /// <summary>
-    /// <para>电池状态文本（电压/温度）。</para>
     /// Battery status text (voltage/temperature).
+    /// <para>电池状态文本（电压/温度）。</para>
     /// </summary>
     public string BatteryText { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>内存占用百分比，-1 表示不可用。</para>
     /// Memory usage percent (-1 = unavailable).
+    /// <para>内存占用百分比，-1 表示不可用。</para>
     /// </summary>
     public int MemLevel
     {
@@ -610,14 +650,14 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public bool HasMem => MemLevel >= 0;
 
     /// <summary>
-    /// <para>内存使用文本（已用/总量）。</para>
     /// Memory usage text (used/total).
+    /// <para>内存使用文本（已用/总量）。</para>
     /// </summary>
     public string MemText { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// <para>磁盘占用百分比，-1 表示不可用。</para>
     /// Disk usage percent (-1 = unavailable).
+    /// <para>磁盘占用百分比，-1 表示不可用。</para>
     /// </summary>
     public int DiskLevel
     {
@@ -635,14 +675,14 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public bool HasDisk => DiskLevel >= 0;
 
     /// <summary>
-    /// <para>资源使用信息（电池/内存/存储）是否至少一项可用。</para>
     /// Whether at least one of battery/memory/storage resource metrics is available.
+    /// <para>资源使用信息（电池/内存/存储）是否至少一项可用。</para>
     /// </summary>
     public bool HasResourceInfo => HasSystemInfo && (HasBattery || HasMem || HasDisk);
 
     /// <summary>
-    /// <para>磁盘占用文本（已用/总量）。</para>
     /// Disk usage text (used/total).
+    /// <para>磁盘占用文本（已用/总量）。</para>
     /// </summary>
     public string DiskText { get; set => SetProperty(ref field, value); } = string.Empty;
 }

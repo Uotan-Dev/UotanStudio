@@ -10,6 +10,7 @@ namespace UotanStudio.Tests.Services;
 /// <para>固化声明的 MCP 工具目录：名称唯一且为 snake_case，刷写门控仅限三个改动设备的工具，且每个声明的节点
 /// 对应物都能在节点注册表中解析。</para>
 /// </summary>
+[Collection("MCP tool generation")]
 public sealed class PluginToolDescriptorTests
 {
     [Fact]

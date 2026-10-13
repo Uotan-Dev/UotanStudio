@@ -53,11 +53,8 @@ internal static class ApkV1Signer
     }
 
     /// <summary>
-    /// Builds the signature file (.SF). The main section carries the digest of the whole
-    /// MANIFEST.MF (the verification path preferred by Android) and, when v2/v3 is enabled,
-    /// the X-Android-APK-Signed attribute protecting those schemes from stripping.
-    /// <para>构建签名文件（.SF）。主段携带整个 MANIFEST.MF 的摘要（Android 优先校验路径）；
-    /// 当启用 v2/v3 时附带 X-Android-APK-Signed 属性，防止对应方案被剥离。</para>
+    /// Builds the v1 signature file (.SF) for the given manifest bytes.
+    /// <para>为给定清单字节构建 v1 签名文件（.SF）。</para>
     /// </summary>
     /// <param name="manifestBytes">Complete MANIFEST.MF bytes.
     /// <para>完整的 MANIFEST.MF 字节。</para></param>
@@ -105,10 +102,10 @@ internal static class ApkV1Signer
     }
 
     /// <summary>
-    /// Signs the signature file with the user's custom key, producing a PKCS#7 CMS
-    /// ContentInfo in DER encoding (detached, like apksig). Uses the platform
-    /// SignedCms implementation, AOT-compatible and cross-platform.
-    /// <para>使用用户自定义密钥对签名文件签名，产出 DER 编码的 PKCS#7 CMS ContentInfo（分离 SF，与 apksig 一致）。
+    /// Signs the signature file with the user's custom key, producing a detached PKCS#7 CMS
+    /// ContentInfo in DER encoding. Uses the platform SignedCms implementation,
+    /// AOT-compatible and cross-platform.
+    /// <para>使用用户自定义密钥对签名文件签名，产出 DER 编码的分离式 PKCS#7 CMS ContentInfo。
     /// 使用平台 SignedCms 实现，AOT 兼容且跨平台。</para>
     /// </summary>
     /// <param name="sfBytes">Complete signature file bytes to sign.

@@ -6,15 +6,16 @@ using UotanStudio.Firmware.OtaDelta.Dat;
 
 namespace UotanStudio.Services.Firmware;
 
-/// <summary>Builds image and Android DAT outputs on disk. 在磁盘上构建镜像与 Android DAT 产物。</summary>
+/// <summary>Builds image and Android DAT outputs on disk.<para>在磁盘上构建镜像与 Android DAT 产物。</para></summary>
 internal static class ImageOutputService
 {
     /// <summary>
-    /// <para>返回该条目打包后会写出的目标文件（<paramref name="paths"/> 的输出目录内），
-    /// 供写入前的重名覆盖确认使用。</para>
-    /// Returns the files a pack operation would publish under the operation's output directory, so the
-    /// caller can confirm overwriting same-named files before writing.
+    /// Lists the files a pack operation publishes under its output directory before any writing starts.
+    /// <para>列出打包操作在开始写入前会在其输出目录下写出的目标文件。</para>
     /// </summary>
+    /// <param name="paths">Operation paths naming the output root and entry name. <para>指明输出根目录与条目名的操作路径。</para></param>
+    /// <param name="operation">Pack mode: img, dat or br. <para>打包方式：img、dat 或 br。</para></param>
+    /// <returns>The absolute paths that would be published, empty for other modes. <para>将被写出的绝对路径，其他方式为空。</para></returns>
     internal static IReadOnlyList<string> GetPlannedOutputs(ImageOperationPaths paths, string operation) => operation switch
     {
         "img" => [Path.Combine(paths.OutputRoot, paths.Name + ".img")],
@@ -24,11 +25,14 @@ internal static class ImageOutputService
     };
 
     /// <summary>
-    /// <para>构建 img/dat/br 产物。img 路径直接返回打包服务的结果，因此受保留重建产出的等价元数据得以保留；
-    /// dat/br 路径的最终产物是 DAT 与压缩流，不是文件系统镜像，所以如实返回全不评估的结果。</para>
-    /// Builds the img, DAT or Brotli output. The img path returns the packing result directly so the equivalence
-    /// metadata of a preserved rebuild survives; the DAT and Brotli paths publish a DAT stream rather than a
-    /// filesystem image, so they honestly return an all-unevaluated result.</summary>
+    /// Builds the img, DAT or Brotli output for one entry under its planned paths.
+    /// <para>为单个条目在其预定路径下构建 img、dat 或 br 产物。</para>
+    /// </summary>
+    /// <param name="paths">Operation paths for the entry. <para>该条目的操作路径。</para></param>
+    /// <param name="operation">Output kind: img, dat or br. <para>产物种类：img、dat 或 br。</para></param>
+    /// <param name="brotliLevel">Brotli compression level applied to the br output. <para>施加于 br 产物的 Brotli 压缩级别。</para></param>
+    /// <param name="progress">Optional byte-progress reporter, null when progress is not tracked. <para>可选的字节进度回调，不跟踪进度时为 null。</para></param>
+    /// <returns>The build outcome; the img path carries the packing result. <para>构建结果；img 路径附带打包服务的结果。</para></returns>
     internal static FirmwareOpResult Build(ImageOperationPaths paths, string operation, int brotliLevel, IProgress<FileSystemByteProgress>? progress = null)
     {
         if (operation is not ("img" or "dat" or "br")) throw new ArgumentOutOfRangeException(nameof(operation));
@@ -39,8 +43,6 @@ internal static class ImageOutputService
             return PackingService.BuildImage(paths.UnpackedDirectory, Path.Combine(paths.OutputRoot, paths.Name + ".img"), progress: progress);
         }
 
-        // Intermediate images stay on disk; no whole-image byte arrays.
-        // 中间镜像使用磁盘暂存，不将完整镜像读入内存。
         var staging = Path.Combine(paths.OutputRoot, ".build-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(staging);
         try
@@ -79,8 +81,6 @@ internal static class ImageOutputService
         }
         finally
         {
-            // Preserve recovery files if publishing or rollback could not complete.
-            // 发布或回滚未完成时保留恢复文件。
             if (Directory.Exists(staging) && !Directory.EnumerateFiles(staging, ".backup-*").Any())
                 Directory.Delete(staging, recursive: true);
         }

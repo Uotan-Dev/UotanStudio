@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.FileSystem.Metadata;
+using UotanStudio.Hash.Crc32c;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;
 

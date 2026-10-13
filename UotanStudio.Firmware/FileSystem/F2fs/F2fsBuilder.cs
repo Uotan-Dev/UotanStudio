@@ -6,6 +6,7 @@ using UotanStudio.Firmware.FileSystem.F2fs.Models;
 using UotanStudio.Firmware.FileSystem.Metadata;
 using UotanStudio.Firmware.FileSystem.Native;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
+using UotanStudio.Hash.F2fsDentryHash;
 
 namespace UotanStudio.Firmware.FileSystem.F2fs;
 
@@ -792,7 +793,7 @@ public sealed partial class F2fsBuilder
 
     /// <summary>
     /// Maps the compression algorithm to the inode extra-attribute identifier.
-    /// <para>把压缩算法映射为 inode 扩展属性中的内核算法标识。</para>
+    /// <para>把压缩算法映射为 inode 扩展属性中的算法标识。</para>
     /// </summary>
     private static byte KernelCompressionAlgorithmId(CompressionAlgorithm algorithm) => algorithm switch
     {
@@ -950,7 +951,7 @@ public sealed partial class F2fsBuilder
                 : (byte)((child.Mode & InodeTypeBits.FormatMask) switch { InodeTypeBits.CharDevice => 3, InodeTypeBits.BlockDevice => 4, InodeTypeBits.Fifo => 5, InodeTypeBits.Socket => 6, _ => 1 });
             var entry = new F2fsDirectoryEntry
             {
-                HashCode = ComputeDentryHash(child.Name),
+                HashCode = F2fsDentryHash.Compute(child.Name),
                 Ino = child.Ino,
                 NameLen = (ushort)Encoding.UTF8.GetByteCount(child.Name),
                 FileType = type,
@@ -1003,22 +1004,22 @@ public sealed partial class F2fsBuilder
     }
 
     /// <summary>
-    /// dir_buckets(level, dir_level=0) from the kernel f2fs.h.
-    /// <para>dir_buckets(level, dir_level=0)（内核 fs/f2fs/f2fs.h）。</para>
+    /// Number of buckets at a directory hash level: 2^level below half the maximum hash depth, otherwise 2^(half - 1).
+    /// <para>目录哈希层级的桶数：低于最大哈希深度一半时为 2^level，否则为 2^(一半 - 1)。</para>
     /// </summary>
     private static uint DirBuckets(uint level)
         => level < MaxDirHashDepth / 2 ? 1u << (int)level : 1u << (int)(MaxDirHashDepth / 2 - 1);
 
     /// <summary>
-    /// bucket_blocks(level) from the kernel f2fs.h.
-    /// <para>bucket_blocks(level)（内核 fs/f2fs/f2fs.h）。</para>
+    /// Number of blocks per bucket at a directory hash level: two below half the maximum hash depth, four otherwise.
+    /// <para>目录哈希层级中每个桶占用的块数：低于最大哈希深度一半时为 2，否则为 4。</para>
     /// </summary>
     private static uint BucketBlocks(uint level)
         => level < MaxDirHashDepth / 2 ? 2u : 4u;
 
     /// <summary>
-    /// dir_block_index(level, dir_level=0, idx) from the kernel f2fs.h.
-    /// <para>dir_block_index(level, dir_level=0, idx)（内核 fs/f2fs/f2fs.h）。</para>
+    /// Computes the block index of one bucket at a directory hash level.
+    /// <para>计算目录哈希层级中某个桶所在的块下标。</para>
     /// </summary>
     private static uint DirBlockIndex(uint level, uint bucket)
     {
@@ -1352,8 +1353,8 @@ public sealed partial class F2fsBuilder
         => (ushort)(plan.SegmentEntries.TryGetValue(segno, out var entries) ? entries.Count : 0);
 
     /// <summary>
-    /// Resolves a data block's owner: the inode itself for the direct (i_addr) range, or the covering direct node beyond it; ofs_in_node is the logical index inside that node's address array (as validated by fsck's sanity_check_nid).
-    /// <para>数据块归属解析：直接区（i_addr）归 inode 自身，dnode 区归对应 direct 节点； ofs_in_node 为该节点地址数组内的逻辑下标（fsck sanity_check_nid 依据）。</para>
+    /// Resolves a data block's owner: the inode itself for the direct (i_addr) range, or the covering direct node beyond it; ofs_in_node is the logical index inside that node's address array.
+    /// <para>数据块归属解析：直接区（i_addr）归 inode 自身，dnode 区归对应 direct 节点；ofs_in_node 为该节点地址数组内的逻辑下标。</para>
     /// </summary>
     private static uint ResolveOwnerNid(BuildNode node, int logical, out int ofsInNode)
     {

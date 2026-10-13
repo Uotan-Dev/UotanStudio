@@ -1,6 +1,6 @@
 namespace UotanStudio.Services.Firmware;
 
-/// <summary>Restores existing extraction contents on failure. 解包失败时恢复既有目录内容。</summary>
+/// <summary>Restores existing extraction contents on failure.<para>解包失败时恢复既有目录内容。</para></summary>
 internal static class ExtractionDirectory
 {
     internal static async Task<FirmwareOpResult> ReplaceAsync(string target, Func<Task<FirmwareOpResult>> extract)
@@ -23,8 +23,6 @@ internal static class ExtractionDirectory
         }
         finally
         {
-            // Large extraction trees must not be deleted on the caller's UI thread.
-            // 大型解包目录的清理和回滚不能阻塞调用方的 UI 线程。
             await Task.Run(() =>
             {
                 if (!success)

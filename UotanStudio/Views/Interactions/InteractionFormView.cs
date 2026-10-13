@@ -13,7 +13,10 @@ using UotanStudio.Services.Interactions;
 
 namespace UotanStudio.Views.Interactions;
 
-/// <summary>Renders a bounded declarative form in either a dialog or an embedded host.</summary>
+/// <summary>
+/// Renders a bounded declarative form in either a dialog or an embedded host.
+/// <para>在对话框或内嵌承载区域中渲染有界的声明式表单。</para>
+/// </summary>
 public sealed class InteractionFormView : UserControl
 {
     private readonly InteractionFormState _state;

@@ -6,7 +6,7 @@ using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Edl.Auth;
 using UotanStudio.Comm.Protocols.Edl.Programmer;
-using UotanStudio.Comm.Protocols.Edl.Reenum;
+using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.Streaming;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
@@ -29,6 +29,7 @@ public sealed partial class EdlSession : IProtocolSession
     private PhysicalDeviceIdentity? _relinkIdentity;
     private TransportGeneration? _relinkGeneration;
     private TimeSpan _relinkTimeout = TimeSpan.FromSeconds(30);
+    private EdlRelinkOffer? _lastRelinkOffer;
     private string? _programmerSha256Hex;
     private string? _programmerFileName;
 
@@ -122,9 +123,31 @@ public sealed partial class EdlSession : IProtocolSession
     /// Gets the latest relink offer published after initialization failed or reconnection became required.
     /// <para>获取初始化失败或需要重连后发布的最近重链提议。</para>
     /// </summary>
-    /// <value>The offer, or <see langword="null"/> until a failure occurs with attached endpoint evidence.
-    /// <para>重链提议；在具备已附加端点证据的失败发生前为 <see langword="null"/>。</para></value>
-    public EdlRelinkOffer? LastRelinkOffer { get; private set; }
+    /// <value>The offer, or <see langword="null"/> until a failure occurs with attached endpoint evidence and
+    /// after a caller took it with <see cref="TakeRelinkOffer"/>. Reading this property never consumes the offer;
+    /// the handover happens exactly once through <see cref="TakeRelinkOffer"/>.
+    /// <para>重链提议；在具备已附加端点证据的失败发生前，以及调用方经 <see cref="TakeRelinkOffer"/> 取走之后，
+    /// 为 <see langword="null"/>。读取本属性不会消费提议；提议本身由 <see cref="TakeRelinkOffer"/>
+    /// 恰好交接一次。</para></value>
+    public EdlRelinkOffer? LastRelinkOffer => _lastRelinkOffer;
+
+    /// <summary>
+    /// Takes the pending relink offer and clears it, so exactly one caller can act on the published evidence.
+    /// <para>取出待处理的重链提议并清空，使恰好一个调用方能够依据已发布的证据行动。</para>
+    /// </summary>
+    /// <remarks>The handover is atomic: concurrent takers see the offer once, and a later failure publishes a
+    /// fresh offer with its deadline measured from that failure. Taking an offer from a session that has already
+    /// been disposed is allowed and intentional, because the lease owner disposes the session while the
+    /// re-enumeration evidence must still survive into the next operation. The session never re-opens a
+    /// transport itself; only the caller holding a device controller can act on the returned offer.</remarks>
+    /// <returns>The offer that had not been consumed yet, or <see langword="null"/> when no failure published one
+    /// or an earlier caller already took it.
+    /// <para>尚未被消费的提议；没有失败发布过提议，或已被更早的调用方取走时为 <see langword="null"/>。</para></returns>
+    public EdlRelinkOffer? TakeRelinkOffer()
+    {
+        EdlRelinkOffer? taken = null;
+        return Interlocked.Exchange(ref _lastRelinkOffer, taken);
+    }
 
     /// <summary>
     /// Gets the capability snapshot negotiated by the latest Firehose configure, bound to the
@@ -465,6 +488,9 @@ public sealed partial class EdlSession : IProtocolSession
 
         var authenticationRequested = options?.Vip is not null || options?.XiaomiAuthenticationProvider is not null
             || options?.ProjectAuthentication is not null || options?.SendOnePlusNetType == true;
+        var skipResponse = options?.SkipResponseOnReadWrite ?? false;
+        Firehose!.Configuration.SkipResponseOnErase = skipResponse;
+        Firehose.Configuration.SkipResponseOnReadWrite = skipResponse;
         var lastAuthStage = EdlAuthStage.NotRequired;
         try
         {
@@ -682,6 +708,11 @@ public sealed partial class EdlSession : IProtocolSession
 
     /// <summary>Publishes a relink offer when endpoint evidence was attached before the failure.
     /// <para>当失败前附加了端点证据时发布重链提议。</para></summary>
+    /// <remarks>The published offer replaces any earlier one a caller has not taken yet, so a consumer that
+    /// never takes an offer cannot accumulate them; each failure republishes with a deadline measured from
+    /// that failure rather than from the first.
+    /// <para>发布的提议会替换调用方尚未取走的更早提议，因此从不取走提议的消费者不会累积提议；
+    /// 每次失败都重新发布，截止时间按该次失败而非首次失败计算。</para></remarks>
     private void PublishRelinkOffer()
     {
         if (_relinkEndpoint is not { } endpoint)
@@ -689,7 +720,7 @@ public sealed partial class EdlSession : IProtocolSession
             return;
         }
 
-        LastRelinkOffer = new EdlRelinkOffer
+        Interlocked.Exchange(ref _lastRelinkOffer, new EdlRelinkOffer
         {
             PreviousEndpoint = endpoint,
             Identity = _relinkIdentity,
@@ -697,7 +728,7 @@ public sealed partial class EdlSession : IProtocolSession
             LastIdentity = Sahara?.DeviceIdentity,
             Timeout = _relinkTimeout,
             Correlation = CorrelationEvidence(_relinkIdentity)
-        };
+        });
     }
 
     private static ModeTransitionEvidence? CorrelationEvidence(PhysicalDeviceIdentity? identity) => identity switch

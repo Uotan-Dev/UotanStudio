@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Hash.Xxh32;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Models;
 
@@ -23,9 +24,33 @@ public sealed class ErofsXattrEntry
 
     /// <summary>The on-disk <c>e_name_index</c> byte identifying the name's prefix origin.
     /// <para>磁盘上的 <c>e_name_index</c> 字节，标识名称前缀的来源。</para></summary>
-    /// <value>Default prefix index (1..7), or a long-prefix index with the <c>0x80</c> flag set.
-    /// <para>默认前缀索引（1..7），或置有 <c>0x80</c> 标志位的长前缀索引。</para></value>
+    /// <value>Default prefix index (1..6), or a long-prefix index with the <c>0x80</c> flag set.
+    /// <para>默认前缀索引（1..6），或置有 <c>0x80</c> 标志位的长前缀索引。</para></value>
     public byte NameIndex { get; init; }
+}
+
+/// <summary>
+/// Result of encoding one inode's extended attributes: the inline ibody that follows the inode record and
+/// the long-prefix table records the image must carry when any name needed a long prefix. The table is
+/// shared per image, so the writer flushes the union of every inode's records once.
+/// <para>编码单个 inode 扩展属性的结果：紧随 inode 记录的 inline ibody，以及任一名称需要长前缀时镜像
+/// 必须携带的长前缀表记录。该表为镜像级共享，写出方把每个 inode 的记录取并集后一次写出。</para>
+/// </summary>
+public sealed class ErofsXattrEncoding
+{
+    /// <summary>Gets the 4-byte aligned inline ibody, including its 12-byte header.
+    /// <para>获取 4 字节对齐的 inline ibody，含 12 字节头部。</para></summary>
+    public required byte[] Ibody { get; init; }
+
+    /// <summary>Gets the long-prefix records the encoded names registered, in table order; empty when
+    /// every name matched a built-in short prefix.
+    /// <para>获取编码名称登记的长前缀记录，按表序；全部名称命中内置短前缀时为空。</para></summary>
+    public required IReadOnlyList<(byte BaseIndex, string Infix)> PrefixTable { get; init; }
+
+    /// <summary>Gets the name-filter word written into the ibody header, or zero when filtering was not
+    /// requested or no name contributed a bit.
+    /// <para>获取写入 ibody 头部的名称过滤字；未请求过滤或无名称贡献位时为零。</para></summary>
+    public uint NameFilter { get; init; }
 }
 
 internal static class ErofsXattr
@@ -40,16 +65,29 @@ internal static class ErofsXattr
 
     public const byte LongPrefixMask = 0x7f;
 
-    private const int SharedIdUnitSize = sizeof(uint);
+    /// <summary>Unit the shared-xattr id counts in: one id is a slot of four bytes inside the shared area.
+    /// <para>共享 xattr id 的计数单位：一个 id 即共享区内一个四字节槽位。</para></summary>
+    internal const int SharedIdUnitSize = sizeof(uint);
 
 
     public const byte NameIndexUser = 1;
     public const byte NameIndexPosixAclAccess = 2;
     public const byte NameIndexPosixAclDefault = 3;
     public const byte NameIndexTrusted = 4;
-    public const byte NameIndexLustre = 5;
+
+    /// <summary>Name index 5 is declared by <c>EROFS_XATTR_INDEX_LUSTRE</c> but upstream
+    /// <c>xattr_types[]</c> leaves its slot empty, so it names no namespace and must neither be written
+    /// nor resolved. <para>名称索引 5 虽由 <c>EROFS_XATTR_INDEX_LUSTRE</c> 声明，但上游
+    /// <c>xattr_types[]</c> 让其槽位为空，因此它不指名任何命名空间，既不可写出也不可解析。</para></summary>
+    public const byte ReservedNameIndex = 5;
+
     public const byte NameIndexSecurity = 6;
-    public const byte NameIndexSystem = 7;
+
+    /// <summary>Highest name index the default prefix table defines, matching
+    /// <c>EROFS_XATTR_INDEX_SECURITY</c> (<c>include/erofs_fs.h</c>).
+    /// <para>默认前缀表定义的名称索引上限，与 <c>EROFS_XATTR_INDEX_SECURITY</c>
+    /// （<c>include/erofs_fs.h</c>）一致。</para></summary>
+    public const byte MaxNameIndex = NameIndexSecurity;
 
     private static readonly string[] DefaultPrefixes =
     [
@@ -58,14 +96,90 @@ internal static class ErofsXattr
         "system.posix_acl_access",
         "system.posix_acl_default",
         "trusted.",
-        "lustre.",
+        string.Empty,
         "security.",
-        "system.",
     ];
 
     /// <summary>
-    /// Total inline-xattr ibody size in bytes, matching the kernel's erofs_xattr_ibody_size: 12 + 4 * (icount - 1); 0 when icount is 0 (no inline xattr).
-    /// <para>inline xattr ibody 总大小（字节），与内核 erofs_xattr_ibody_size 一致： 12 + 4 * (icount - 1)；icount 为 0 时返回 0（无 inline xattr）。</para>
+    /// Reconstructs the full prefix text a table record stands for: the built-in prefix its base index
+    /// names, followed by its infix. This is the text an attribute name must start with to be encoded
+    /// through that record.
+    /// <para>重建表记录所代表的完整前缀文本：其 base index 所指名的内置前缀后接其 infix。属性名必须以该
+    /// 文本开头才会经该记录编码。</para>
+    /// </summary>
+    /// <param name="record">Table record as stored on disk.<para>磁盘上存储的表记录。</para></param>
+    /// <returns>The full prefix text.<para>完整前缀文本。</para></returns>
+    internal static string PrefixText((byte BaseIndex, string Infix) record)
+        => (TryGetDefaultPrefix(record.BaseIndex, out var basePrefix) ? basePrefix : string.Empty) + record.Infix;
+
+    /// <summary>
+    /// Splits a whole prefix text into the table record that stores it: the built-in prefix the text
+    /// starts with becomes the base index and everything after it the infix, or base index zero for the
+    /// hidden internal namespace when no built-in prefix matches. A caller that already knows the exact
+    /// prefix uses this to register it verbatim, because the automatic splitter only registers prefixes
+    /// that leave a name behind and would otherwise shorten a configured prefix.
+    /// <para>把完整前缀文本拆成存储它的表记录：文本开头命中的内置前缀成为 base index，其后全部成为
+    /// infix；未命中任何内置前缀时 base index 为零，即内部隐藏命名空间。已确切知道前缀的调用方借此逐字
+    /// 注册它，因为自动拆分只登记会留下名称的前缀，否则会缩短配置的前缀。</para>
+    /// </summary>
+    /// <param name="prefix">Whole prefix text to store.<para>待存储的完整前缀文本。</para></param>
+    /// <returns>The record that reconstructs <paramref name="prefix"/> through <see cref="PrefixText"/>.
+    /// <para>经 <see cref="PrefixText"/> 可还原 <paramref name="prefix"/> 的记录。</para></returns>
+    internal static (byte BaseIndex, string Infix) SplitPrefix(string prefix)
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+        for (byte i = 1; i < DefaultPrefixes.Length; i++)
+        {
+            var candidate = DefaultPrefixes[i];
+            if (candidate.Length > 0 && prefix.StartsWith(candidate, StringComparison.Ordinal))
+            {
+                return (i, prefix[candidate.Length..]);
+            }
+        }
+
+        return (0, prefix);
+    }
+
+    /// <summary>Seed mixed with an entry's base prefix index before hashing its name into
+    /// <c>h_name_filter</c> (<c>EROFS_XATTR_FILTER_SEED</c>).
+    /// <para>把条目的基准前缀索引混入 <c>h_name_filter</c> 之前用于哈希其名称的种子
+    /// （<c>EROFS_XATTR_FILTER_SEED</c>）。</para></summary>
+    internal const uint NameFilterSeed = 0x25BBE08F;
+
+    /// <summary>Bit count of the name filter, so the hash is taken modulo this many bits
+    /// (<c>EROFS_XATTR_FILTER_BITS</c>).
+    /// <para>名称过滤器的位数，哈希即依此取模（<c>EROFS_XATTR_FILTER_BITS</c>）。</para></summary>
+    internal const int NameFilterBits = 32;
+
+    /// <summary>
+    /// Builds the <c>h_name_filter</c> word for one inode's xattr names. A bit is raised for every name
+    /// the inode can answer, then complemented, because the kernel reads a raised bit as "definitely
+    /// absent" and uses that to skip lookups (<c>lib/xattr.c</c>).
+    /// <para>为单个 inode 的 xattr 名称构造 <c>h_name_filter</c> 字。可应答的每个名称置一位，随后取反，
+    /// 因为内核把置起的位读作"一定不存在"并据此跳过查找（<c>lib/xattr.c</c>）。</para>
+    /// </summary>
+    /// <param name="namesAndBaseIndexes">Each xattr's full name paired with the built-in prefix index whose
+    /// text its hash skips. <para>每个 xattr 的完整名称，以及其哈希所跳过的内置前缀文本的索引。</para></param>
+    /// <returns>The filter word, or zero when no name contributed a bit.
+    /// <para>过滤字；无名称贡献位时为零。</para></returns>
+    internal static uint ComputeNameFilter(IReadOnlyList<(string Name, byte BaseIndex)> namesAndBaseIndexes)
+    {
+        ArgumentNullException.ThrowIfNull(namesAndBaseIndexes);
+        var bits = 0u;
+        foreach (var (name, baseIndex) in namesAndBaseIndexes)
+        {
+            var basePrefix = TryGetDefaultPrefix(baseIndex, out var prefix) ? prefix : string.Empty;
+            var tail = name.Length >= basePrefix.Length ? name[basePrefix.Length..] : name;
+            var hash = Xxh32.Compute(Encoding.UTF8.GetBytes(tail), NameFilterSeed + baseIndex);
+            bits |= 1u << (int)(hash & (NameFilterBits - 1));
+        }
+
+        return ~bits;
+    }
+
+    /// <summary>
+    /// Returns the total inline-xattr ibody size in bytes for the given entry count.
+    /// <para>返回给定条目数下 inline xattr ibody 的总字节大小。</para>
     /// </summary>
     /// <param name="icount">Inline xattr entry count read from the inode; zero or a negative value means the inode carries no inline xattr area.
     /// <para>取自 inode 的 inline xattr 条目数；为 0 或负数表示该 inode 没有 inline xattr 区。</para></param>
@@ -82,12 +196,12 @@ internal static class ErofsXattr
     /// Default short-prefix lookup: maps a name index to its default prefix string (e.g. 1 → "user.").
     /// <para>默认短前缀查找：将名称索引映射到默认前缀字符串（如 1 → "user."）。</para>
     /// </summary>
-    /// <param name="nameIndex">On-disk name index with no long-prefix flag applied; values below eight address the built-in table.
-    /// <para>未置长前缀标志的磁盘名称索引；小于 8 时指向内置表。</para></param>
+    /// <param name="nameIndex">On-disk name index with no long-prefix flag applied; values below seven address the built-in table.
+    /// <para>未置长前缀标志的磁盘名称索引；小于 7 时指向内置表。</para></param>
     /// <param name="prefix">Matched prefix text, or <c>string.Empty</c> when the index is unknown or refers to the empty slot 0.
     /// <para>匹配到的前缀文本；索引未知或指向空槽 0 时为 <c>string.Empty</c>。</para></param>
-    /// <returns><see langword="true"/> when a non-empty default prefix was found, which is index 1 through 7.
-    /// <para>找到非空默认前缀（索引 1 到 7）时返回 <see langword="true"/>。</para></returns>
+    /// <returns><see langword="true"/> when a non-empty default prefix was found, which is index 1 through 6.
+    /// <para>找到非空默认前缀（索引 1 到 6）时返回 <see langword="true"/>。</para></returns>
     public static bool TryGetDefaultPrefix(byte nameIndex, out string prefix)
     {
         if (nameIndex < DefaultPrefixes.Length)
@@ -146,17 +260,61 @@ internal static class ErofsXattr
     /// <para>4 字节对齐的 ibody：12 个零字节头部，随后每个条目一条对齐记录，记录内含 UTF-8 短名与原始值。</para></returns>
     public static byte[] EncodeInline(IReadOnlyList<ErofsXattrEntry> entries)
     {
+        var encoding = Encode(entries, null);
+        if (encoding.PrefixTable.Count > 0)
+        {
+            throw new FileSystemUnsupportedFeatureException(
+                $"EROFS xattr name requires a long-prefix table, which this build does not carry; " +
+                $"first offending name: '{encoding.PrefixTable[0].Infix}'.");
+        }
+        return encoding.Ibody;
+    }
+
+    /// <summary>
+    /// Encodes entries into an inline xattr ibody and the long-prefix table the image must carry.
+    /// <para>把条目列表编码为 inline xattr ibody，并给出镜像必须携带的长前缀表。</para>
+    /// </summary>
+    public static ErofsXattrEncoding Encode(IReadOnlyList<ErofsXattrEntry> entries,
+        IReadOnlyList<(byte BaseIndex, string Infix)>? inheritedPrefixes, bool nameFilter = false)
+    {
         ArgumentNullException.ThrowIfNull(entries);
+        var prefixes = new List<(byte BaseIndex, string Infix)>(inheritedPrefixes ?? []);
+        var registered = new List<string>(prefixes.Select(PrefixText));
+        var filtered = new List<(string Name, byte BaseIndex)>(nameFilter ? entries.Count : 0);
         var body = new List<byte>(HeaderSize + entries.Count * 8);
         body.AddRange(new byte[HeaderSize]);
         foreach (var entry in entries)
         {
             ArgumentNullException.ThrowIfNull(entry);
-            if (!TrySplitShortName(entry.Name, out var nameIndex, out var shortName))
+            ValidateEntryNameIndex(entry.NameIndex);
+            byte nameIndex;
+            string shortName;
+            byte filterBaseIndex;
+            if (TrySplitShortName(entry.Name, out var defaultIndex, out var defaultShort))
+            {
+                nameIndex = defaultIndex;
+                shortName = defaultShort;
+                filterBaseIndex = defaultIndex;
+            }
+            else if (FindLongPrefix(entry.Name, registered, prefixes, out var longIndex, out var longShort,
+                out var longBaseIndex))
+            {
+                nameIndex = (byte)(LongPrefixFlag | longIndex);
+                shortName = longShort;
+                filterBaseIndex = longBaseIndex;
+            }
+            else if (RegisterLongPrefix(entry.Name, prefixes, registered, out var newIndex, out var newShort,
+                out var newBaseIndex))
+            {
+                nameIndex = (byte)(LongPrefixFlag | newIndex);
+                shortName = newShort;
+                filterBaseIndex = newBaseIndex;
+            }
+            else
             {
                 throw new FileSystemUnsupportedFeatureException(
-                    $"EROFS xattr name '{entry.Name}' does not match a built-in short prefix " +
-                    "(user./trusted./security./system. etc.); long-prefix tables are not supported by the writer.");
+                    $"EROFS xattr name '{entry.Name}' cannot be encoded: it matches no built-in short prefix " +
+                    "and its longest registerable prefix exceeds the on-disk infix limit of 255 bytes.");
             }
 
             var nameBytes = Encoding.UTF8.GetBytes(shortName);
@@ -169,6 +327,11 @@ internal static class ErofsXattr
             if (value.Length > ushort.MaxValue)
             {
                 throw new FileSystemCorruptedException($"EROFS xattr value for '{entry.Name}' exceeds 65535 bytes.");
+            }
+
+            if (nameFilter)
+            {
+                filtered.Add((entry.Name, filterBaseIndex));
             }
 
             var start = body.Count;
@@ -185,14 +348,173 @@ internal static class ErofsXattr
             }
         }
 
+        var nameFilterWord = nameFilter ? ComputeNameFilter(filtered) : 0u;
         var ibody = body.ToArray();
+        if (nameFilterWord != 0)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(ibody, nameFilterWord);
+        }
 
         if (ibody.Length % 4 != 0)
         {
             throw new FileSystemCorruptedException("EROFS xattr ibody must be 4-byte aligned.");
         }
 
+        return new ErofsXattrEncoding
+        {
+            Ibody = ibody,
+            PrefixTable = prefixes,
+            NameFilter = nameFilterWord,
+        };
+    }
+
+    /// <summary>
+    /// Serializes the long-prefix table: each record is an LE16 size followed by the base-index byte and the
+    /// infix bytes, each padded to the next multiple of four, matching what
+    /// <see cref="ParsePrefixTable"/> reads back.
+    /// <para>序列化长前缀表：每条记录为 LE16 尺寸、base-index 字节与 infix 字节，补齐到 4 的倍数，与
+    /// <see cref="ParsePrefixTable"/> 的读取互逆。</para>
+    /// </summary>
+    public static byte[] EncodePrefixTable(IReadOnlyList<(byte BaseIndex, string Infix)> prefixes)
+    {
+        ArgumentNullException.ThrowIfNull(prefixes);
+        if (prefixes.Count > 128)
+        {
+            throw new FileSystemCorruptedException("EROFS xattr prefix count exceeds its seven-bit index.");
+        }
+
+        var table = new List<byte>(prefixes.Count * 8);
+        foreach (var (baseIndex, infix) in prefixes)
+        {
+            var infixBytes = Encoding.UTF8.GetBytes(infix);
+            if (infixBytes.Length > byte.MaxValue)
+            {
+                throw new FileSystemCorruptedException($"EROFS xattr prefix '{infix}' exceeds 255 bytes.");
+            }
+
+            var size = 1 + infixBytes.Length;
+            var start = table.Count;
+            table.Add((byte)size);
+            table.Add((byte)(size >> 8));
+            table.Add(baseIndex);
+            table.AddRange(infixBytes);
+            while ((table.Count - start) % EntryAlignment != 0)
+            {
+                table.Add(0);
+            }
+        }
+
+        return table.ToArray();
+    }
+
+    /// <summary>
+    /// Encodes an inline ibody that names one shared xattr slot instead of carrying entries itself.
+    /// <para>编码一条只指名一个共享 xattr 槽位、不自带条目的 inline ibody。</para>
+    /// </summary>
+    /// <param name="sharedId">Slot the inode's xattrs were packed into.
+    /// <para>该 inode 的 xattr 被打包进的槽位。</para></param>
+    /// <param name="nameFilter">Name-filter word for the shared entry set, or zero when the set is not
+    /// filtered. <para>该共享条目集合的名称过滤字；集合未过滤时为零。</para></param>
+    /// <returns>The ibody bytes for a single shared reference.
+    /// <para>单条共享引用的 ibody 字节。</para></returns>
+    public static byte[] EncodeSharedIbody(uint sharedId, uint nameFilter = 0)
+    {
+        var ibody = new byte[GetIbodySize(2)];
+        BinaryPrimitives.WriteUInt32LittleEndian(ibody, nameFilter);
+        ibody[4] = 1;
+        BinaryPrimitives.WriteUInt32LittleEndian(ibody.AsSpan(HeaderSize), sharedId);
         return ibody;
+    }
+
+    /// <summary>
+    /// Finds the longest registered long prefix the name starts with; a longer record wins so the stored
+    /// short name stays the shortest the table allows.
+    /// <para>查找名称所匹配的已注册长前缀中最长者；记录越长优先级越高，使存储的短名尽量短。</para>
+    /// </summary>
+    /// <param name="name">Full attribute name.<para>完整属性名。</para></param>
+    /// <param name="registered">Full prefix texts the table already carries, in table order.
+    /// <para>表中已携带的完整前缀文本，按表序。</para></param>
+    /// <param name="prefixes">Table records the registered texts came from, so the winning record's base
+    /// index can be reported for the name filter.<para>已注册文本所来源的表记录，以便为名称过滤器报告
+    /// 命中记录的 base index。</para></param>
+    /// <param name="index">Table index of the winning record.<para>命中记录的表索引。</para></param>
+    /// <param name="shortName">Name remainder the inode stores.<para>inode 存储的名称余部。</para></param>
+    /// <param name="baseIndex">Built-in prefix index the winning record extends, which is what the name
+    /// filter hashes past.<para>命中记录所扩展的内置前缀索引，名称过滤器即哈希其后的部分。</para></param>
+    /// <returns><see langword="true"/> when a registered prefix matched.
+    /// <para>某个已注册前缀命中时为 <see langword="true"/>。</para></returns>
+    private static bool FindLongPrefix(string name, List<string> registered,
+        List<(byte BaseIndex, string Infix)> prefixes, out int index, out string shortName, out byte baseIndex)
+    {
+        index = -1;
+        shortName = string.Empty;
+        baseIndex = 0;
+        var matched = 0;
+        for (var i = 0; i < registered.Count; i++)
+        {
+            var prefix = registered[i];
+            if (prefix.Length > matched && name.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                index = i;
+                matched = prefix.Length;
+                baseIndex = i < prefixes.Count ? prefixes[i].BaseIndex : (byte)0;
+            }
+        }
+
+        if (index < 0)
+        {
+            return false;
+        }
+
+        shortName = name.Substring(matched);
+        return true;
+    }
+
+    /// <summary>
+    /// Registers the longest prefix of an unmatched name that the on-disk record can still hold: the
+    /// record extends the built-in short prefix the name carries (or the hidden internal namespace when
+    /// it carries none), and the infix after that base stays below the 255-byte limit. A name whose
+    /// infix cannot fit registers nothing.
+    /// <para>为未命中名称注册其磁盘记录仍能容纳的最长前缀：记录扩展名称所携带的内置短前缀（无则
+    /// 使用内部隐藏命名空间），其后 infix 不超过 255 字节。infix 放不下的名称不做注册。</para>
+    /// </summary>
+    private static bool RegisterLongPrefix(string name, List<(byte BaseIndex, string Infix)> prefixes,
+        List<string> registered, out int index, out string shortName, out byte baseIndex)
+    {
+        index = -1;
+        shortName = string.Empty;
+        baseIndex = 0;
+        var baseLength = 0;
+        for (byte i = 1; i < DefaultPrefixes.Length; i++)
+        {
+            var prefix = DefaultPrefixes[i];
+            if (prefix.Length > 0 && name.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                baseIndex = i;
+                baseLength = prefix.Length;
+                break;
+            }
+        }
+
+        var lastDot = name.LastIndexOf('.');
+        var limit = Math.Min(lastDot < 0 ? name.Length : lastDot + 1, baseLength + byte.MaxValue - 1);
+        for (var end = Math.Min(name.Length, limit); end > baseLength; end--)
+        {
+            var candidate = name.Substring(0, end);
+            var infix = candidate.Substring(baseLength);
+            if (Encoding.UTF8.GetByteCount(infix) > byte.MaxValue - 1)
+            {
+                continue;
+            }
+
+            prefixes.Add((baseIndex, infix));
+            registered.Add(candidate);
+            index = prefixes.Count - 1;
+            shortName = name.Substring(end);
+            return shortName.Length > 0;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -290,8 +612,8 @@ internal static class ErofsXattr
     }
 
     /// <summary>
-    /// Byte offset of a shared xattr entry within the shared xattr area = sharedId * 4 (kernel erofs_xattr_iter_shared: pos = xattr_blkaddr * block_size + xattr_shared_xattrs[i] * sizeof(__le32)).
-    /// <para>共享 xattr 条目在共享 xattr 区内的字节偏移 = sharedId * 4（内核 erofs_xattr_iter_shared：pos = xattr_blkaddr * block_size + xattr_shared_xattrs[i] * sizeof(__le32)）。</para>
+    /// Returns the byte offset of a shared xattr entry within the shared xattr area.
+    /// <para>返回共享 xattr 条目在共享 xattr 区内的字节偏移。</para>
     /// </summary>
     /// <param name="sharedId">One id read from the ibody's shared id array, which is itself a slot index counted in 4-byte units.
     /// <para>取自 ibody 共享 id 数组的单个 id，它本身就是以 4 字节为单位的槽号。</para></param>
@@ -312,11 +634,14 @@ internal static class ErofsXattr
     /// <para>由 <see cref="ParsePrefixTable"/> 得到的表；镜像未定义时为 <see langword="null"/>，此时带长前缀的名称无法解析。</para></param>
     /// <returns>The default prefix of the resolved base index, then the long-prefix infix when present, then the decoded short name.
     /// <para>解析出的基准索引对应的默认前缀，其次是长前缀 infix（存在时），最后是解码后的短名。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The name index is 5, above 6, names an unknown long prefix,
+    /// or names no default prefix.<para>名称索引为 5、大于 6、指名未知长前缀，或未指名任何默认前缀。</para></exception>
     public static string ResolveName(
         byte nameIndex,
         ReadOnlySpan<byte> rawName,
         IReadOnlyList<(byte BaseIndex, string Infix)>? prefixTable)
     {
+        ValidateNameIndex(nameIndex);
         var name = Extraction.PortableExtractionPaths.NameEncoding.GetString(rawName);
 
         if ((nameIndex & LongPrefixFlag) != 0)
@@ -335,6 +660,58 @@ internal static class ErofsXattr
 
         return TryGetDefaultPrefix(nameIndex, out var prefix)
             ? prefix + name : throw new FileSystemCorruptedException("EROFS xattr refers to an unknown namespace.");
+    }
+
+    /// <summary>
+    /// Rejects an <c>e_name_index</c> that names no default namespace: the format defines 1 through 6
+    /// (<c>include/erofs_fs.h</c>), upstream <c>xattr_types[]</c> leaves slot 5 empty, and index 0 is the
+    /// hidden namespace a long-prefix record extends. A long-prefix index is a table position, so only its
+    /// table bounds are checked, by the resolver that owns the table.
+    /// <para>拒绝不指名任何默认命名空间的 <c>e_name_index</c>：格式定义 1 到 6
+    /// （<c>include/erofs_fs.h</c>），上游 <c>xattr_types[]</c> 让槽位 5 留空，索引 0 是长前缀记录所扩展的
+    /// 内部隐藏命名空间。长前缀索引是表内位置，只由持有该表的解析方检查其表边界。</para>
+    /// </summary>
+    /// <param name="nameIndex">On-disk <c>e_name_index</c>.<para>磁盘上的 <c>e_name_index</c>。</para></param>
+    /// <exception cref="FileSystemCorruptedException">A plain index is 5 or above 7.
+    /// <para>非长前缀索引为 5 或大于等于 7。</para></exception>
+    internal static void ValidateNameIndex(byte nameIndex)
+    {
+        if ((nameIndex & LongPrefixFlag) != 0)
+        {
+            return;
+        }
+
+        if (nameIndex > MaxNameIndex || nameIndex == ReservedNameIndex)
+        {
+            throw new FileSystemCorruptedException(
+                $"EROFS xattr name index {nameIndex} does not name a defined namespace.");
+        }
+    }
+
+    /// <summary>
+    /// Rejects a caller-declared <see cref="ErofsXattrEntry.NameIndex"/> that names no default namespace,
+    /// so an entry cannot silently be encoded under an index the format does not define. Zero means the
+    /// caller did not declare one, and a long-prefix index is a table position the encoder re-derives from
+    /// the name, so neither is checked here.
+    /// <para>拒绝调用方声明的不指名任何默认命名空间的 <see cref="ErofsXattrEntry.NameIndex"/>，使条目不会在
+    /// 格式未定义的索引下被静默编码。零表示调用方未声明，长前缀索引是编码器按名称重新推导的表内位置，
+    /// 两者都不在此检查。</para>
+    /// </summary>
+    /// <param name="nameIndex">Declared <c>e_name_index</c>.<para>声明的 <c>e_name_index</c>。</para></param>
+    /// <exception cref="FileSystemUnsupportedFeatureException">A plain declared index is 5 or above 7.
+    /// <para>声明的非长前缀索引为 5 或大于等于 7。</para></exception>
+    private static void ValidateEntryNameIndex(byte nameIndex)
+    {
+        if (nameIndex == 0 || (nameIndex & LongPrefixFlag) != 0)
+        {
+            return;
+        }
+
+        if (nameIndex > MaxNameIndex || nameIndex == ReservedNameIndex)
+        {
+            throw new FileSystemUnsupportedFeatureException(
+                $"EROFS xattr name index {nameIndex} does not name a defined namespace.");
+        }
     }
 
     /// <summary>

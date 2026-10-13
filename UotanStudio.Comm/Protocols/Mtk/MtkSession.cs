@@ -208,14 +208,8 @@ public sealed partial class MtkSession : IProtocolSession
     }
 
     /// <summary>
-    /// Opens a session over a transport already bound to the command endpoints of the described
-    /// USB device, verifying the descriptor-level mode and command-interface selection before any
-    /// protocol byte is exchanged. A logging-only endpoint, an expected-mode mismatch, or an
-    /// ambiguous command interface is rejected without device I/O; the classification and the
-    /// selection are recorded as session evidence either way.
-    /// <para>在已绑定到所描述 USB 设备命令端点的传输上打开会话，并在交换任何协议字节之前校验描述符级模式与
-    /// 命令接口选择。仅日志端点、期望模式不符或命令接口存在歧义都会在无设备 I/O 的情况下被拒绝；
-    /// 无论如何，分类与选择结果都会记入会话证据。</para>
+    /// Opens a session over a transport already bound to the command endpoints of the described USB device, verifying the descriptor-level mode and command-interface selection before any protocol byte is exchanged. Ambiguous or unexpected interfaces are rejected without device I/O.
+    /// <para>在已绑定到所描述 USB 设备命令端点的传输上开会话，在任何协议字节交互之前先校验描述符层面的模式与命令接口选择。接口歧义或不符合预期时直接拒绝，不进行设备 I/O。</para>
     /// </summary>
     /// <param name="transport">An open transport bound to the caller-selected endpoints.
     /// 已绑定到调用方所选端点的打开传输。</param>
@@ -398,10 +392,10 @@ public sealed partial class MtkSession : IProtocolSession
     /// </returns>
     public Task UploadDownloadAgentAsync(Stream image, uint loadAddress, int length, int signatureLength = 0,
         IProgress<long>? progress = null, CancellationToken cancellationToken = default)
-        => UploadDownloadAgentCoreAsync(image, loadAddress, length, signatureLength, progress, null, 0, cancellationToken);
+        => UploadDownloadAgentCoreAsync(image, loadAddress, length, signatureLength, progress, cancellationToken);
 
     private async Task UploadDownloadAgentCoreAsync(Stream image, uint loadAddress, int length, int signatureLength,
-        IProgress<long>? progress, IMtkBootRomSlaResponder? responder, int slaTimeoutMs, CancellationToken cancellationToken)
+        IProgress<long>? progress, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(image);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(length);
@@ -432,24 +426,7 @@ public sealed partial class MtkSession : IProtocolSession
                 await EchoUInt32Async((uint)signatureLength, cancellationToken).ConfigureAwait(false);
                 var requestStatus = BinaryPrimitives.ReadUInt16BigEndian(
                     await ReadAsync(2, _timeoutMs, cancellationToken).ConfigureAwait(false));
-                if (requestStatus == 0x1D0D && responder is not null)
-                {
-                    NoteUploadStage(MtkDaUploadStage.SlaChallenge);
-                    RecordSlaEvidence(MtkSlaFlowKind.BootRomSla, MtkSlaEvidenceStage.DeviceRequired,
-                        ClassifySlaResponder(responder), null, CommandOutcomeKind.Completed,
-                        "sla-required; the target reported 0x1D0D on the DA upload request.");
-                    await RespondToBootRomSlaOwnedAsync(responder, slaTimeoutMs, cancellationToken).ConfigureAwait(false);
-                }
-                else
-                {
-                    if (requestStatus == 0x1D0D)
-                    {
-                        RecordSlaFailure(MtkSlaFlowKind.BootRomSla, responder: null, MtkSlaEvidenceStage.Rejected,
-                            "SlaNoProvider", null,
-                            "The target required SLA and no response provider was supplied; no challenge response bytes were written.");
-                    }
-                    CheckStatus(requestStatus, "DA upload request");
-                }
+                CheckStatus(requestStatus, "DA upload request");
 
                 NoteUploadStage(MtkDaUploadStage.DataTransferring);
                 var buffer = ArrayPool<byte>.Shared.Rent(AgentChunkLength);
@@ -620,8 +597,9 @@ public sealed partial class MtkSession : IProtocolSession
     /// Bounds one boot-protocol receive before any buffer is allocated. Every length reaching the
     /// boot readers originates from device-reported counts, so the ceiling is checked first and
     /// matches the largest bounded agent or storage packet the protocol families negotiate.
-    /// 在分配任何缓冲区之前约束单次 boot 协议接收。到达 boot 读取器的长度都来自设备上报的计数，
+    /// <para>在分配任何缓冲区之前约束单次 boot 协议接收。到达 boot 读取器的长度都来自设备上报的计数，
     /// 因此先校验上限，其值等于各协议族协商的最大有界代理或存储包。
+    /// </para>
     /// </summary>
     /// <param name="count">The requested byte count. 请求的字节数。</param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="count"/> is negative or above
@@ -676,7 +654,8 @@ public sealed partial class MtkSession : IProtocolSession
     /// <summary>
     /// Advances the recorded bring-up stage; stages are monotonic so a later protocol family
     /// cannot rewind the frozen failure context of an earlier attempt.
-    /// 推进记录的启动阶段；阶段单调递增，因此后续协议族不会回退早期尝试的定格失败上下文。
+    /// <para>推进记录的启动阶段；阶段单调递增，因此后续协议族不会回退早期尝试的定格失败上下文。
+    /// </para>
     /// </summary>
     /// <param name="stage">The stage being entered. 正在进入的阶段。</param>
     internal void NoteUploadStage(MtkDaUploadStage stage)
@@ -690,7 +669,8 @@ public sealed partial class MtkSession : IProtocolSession
     /// <summary>
     /// Freezes the current stage and the exception-classified outcome into
     /// <see cref="LastUploadResult"/> before the caller transitions to the faulted state.
-    /// 在调用方转入故障状态之前，把当前阶段与按异常分类的结果定格进 <see cref="LastUploadResult"/>。
+    /// <para>在调用方转入故障状态之前，把当前阶段与按异常分类的结果定格进 <see cref="LastUploadResult"/>。
+    /// </para>
     /// </summary>
     /// <param name="error">The observed failure. 观察到的失败。</param>
     internal void CaptureUploadFailure(Exception error)
@@ -737,8 +717,9 @@ public sealed partial class MtkSession : IProtocolSession
     /// Records a descriptor-level mode classification performed by an adoption path such as the
     /// device session factory; an <see cref="MtkUsbMode.Unknown"/> result is kept as evidence and
     /// never upgraded or downgraded by enumeration position.
-    /// 记录由接管路径（如设备会话工厂）执行的描述符级模式分类；<see cref="MtkUsbMode.Unknown"/>
+    /// <para>记录由接管路径（如设备会话工厂）执行的描述符级模式分类；<see cref="MtkUsbMode.Unknown"/>
     /// 结果仅作为证据保留，绝不按枚举位置升级或降级。
+    /// </para>
     /// </summary>
     /// <param name="classification">The classification with its reason. 带原因的分类结果。</param>
     internal void NoteModeDiscovery(MtkModeClassification classification)

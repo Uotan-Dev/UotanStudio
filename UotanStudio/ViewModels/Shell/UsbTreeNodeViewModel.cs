@@ -6,12 +6,12 @@ using UotanStudio.Services;
 namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
-/// <para>USB 拓扑树中一个节点的视图模型。所有显示文本都按后端能力生成：后端原理上拿不到的字段显示
-/// 「该后端不提供」，只有后端确实上报且为空时才显示「无」，避免界面把采集能力说成设备事实。</para>
 /// View model for one node of the USB topology tree. Every displayed text is generated against the
 /// backend capabilities: fields the backend cannot obtain in principle render as "not provided by this
 /// backend", and only values the backend really reported as empty render as "none", so the UI never
 /// turns a collection limit into a claim about the device.
+/// <para>USB 拓扑树中一个节点的视图模型。所有显示文本都按后端能力生成：后端原理上拿不到的字段显示
+/// 「该后端不提供」，只有后端确实上报且为空时才显示「无」，避免界面把采集能力说成设备事实。</para>
 /// </summary>
 public sealed partial class UsbTreeNodeViewModel : ObservableObject
 {
@@ -26,24 +26,24 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     [ObservableProperty] private bool _isExpanded;
 
     /// <summary>
-    /// <para>创建拓扑节点视图模型。</para>
     /// Creates a topology node view model.
+    /// <para>创建拓扑节点视图模型。</para>
     /// </summary>
     /// <param name="node">
-    /// <para>底层扁平节点。</para>
     /// The underlying flat node.
+    /// <para>底层扁平节点。</para>
     /// </param>
     /// <param name="capabilities">
-    /// <para>产出该节点的后端能力，决定各字段的「不提供」措辞。</para>
     /// The capabilities of the backend that produced this node, which decide the "not provided" wording.
+    /// <para>产出该节点的后端能力，决定各字段的「不提供」措辞。</para>
     /// </param>
     /// <param name="children">
-    /// <para>已构建的子节点视图模型。</para>
     /// The already-built child view models.
+    /// <para>已构建的子节点视图模型。</para>
     /// </param>
     /// <param name="depth">
-    /// <para>节点深度，根为 0；用于默认展开策略。</para>
     /// The node depth with the root at 0, used by the default expansion policy.
+    /// <para>节点深度，根为 0；用于默认展开策略。</para>
     /// </param>
     public UsbTreeNodeViewModel(UsbTopologyNode node, UsbTopologyCapabilities capabilities,
         IReadOnlyList<UsbTreeNodeViewModel> children, int depth)
@@ -100,15 +100,15 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     /// The row identity line: VID:PID, serial number and speed.</summary>
     public string MetaText => JoinNonEmpty(IdentityText, SerialText, SpeedText);
 
-    /// <summary><para>行内是否存在标识信息。</para>Whether the row identity line has anything to show.</summary>
+    /// <summary>Whether the row identity line has anything to show. <para>行内是否存在标识信息。</para></summary>
     public bool HasMeta => MetaText.Length > 0;
 
     /// <summary>
-    /// <para>驱动绑定文本（内核服务与 INF）。<see cref="UsbTopologyCapabilities.SupportsDriverInfo"/> 为
-    /// <see langword="false"/> 时给出「该后端不提供」而非空白。</para>
     /// The driver-binding text (kernel service and INF). Renders "not provided by this backend" instead
     /// of a blank when <see cref="UsbTopologyCapabilities.SupportsDriverInfo"/> is
     /// <see langword="false"/>.
+    /// <para>驱动绑定文本（内核服务与 INF）。<see cref="UsbTopologyCapabilities.SupportsDriverInfo"/> 为
+    /// <see langword="false"/> 时给出「该后端不提供」而非空白。</para>
     /// </summary>
     public string DriverText => !_capabilities.SupportsDriverInfo
         ? Localized("UsbTree_NotProvided")
@@ -135,17 +135,17 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     /// The second row line: driver and interface diagnostics.</summary>
     public string DiagnosticsText => JoinNonEmpty(DriverText, InterfaceText);
 
-    /// <summary><para>行内第二行是否存在内容。</para>Whether the second row line has anything to show.</summary>
+    /// <summary>Whether the second row line has anything to show. <para>行内第二行是否存在内容。</para></summary>
     public bool HasDiagnostics => DiagnosticsText.Length > 0;
 
-    /// <summary><para>实例标识文本。</para>The instance id text.</summary>
+    /// <summary>The instance id text. <para>实例标识文本。</para></summary>
     public string InstanceIdText => Node.InstanceId;
 
     /// <summary><para>父实例标识文本；顶层节点显示「无」。</para>
     /// The parent instance id text; a root node shows "none".</summary>
     public string ParentInstanceIdText => OrNone(Node.ParentInstanceId);
 
-    /// <summary><para>本地化的节点角色文本。</para>The localized node role text.</summary>
+    /// <summary>The localized node role text. <para>本地化的节点角色文本。</para></summary>
     public string KindText => Localized(Node.Kind switch
     {
         UsbTopologyNodeKind.HostController => "UsbTree_Kind_HostController",
@@ -162,7 +162,7 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
         ? Localized("UsbTree_None")
         : UsbVendorTable.TryGetVendor(vendor) is { Length: > 0 } name ? name : $"{vendor:X4}";
 
-    /// <summary><para>安装类名，受驱动能力门控。</para>The installer class, gated by the driver capability.</summary>
+    /// <summary>The installer class, gated by the driver capability. <para>安装类名，受驱动能力门控。</para></summary>
     public string ClassNameText => GateDriverInfo(Node.ClassName);
 
     /// <summary><para>安装类 GUID，受驱动能力门控。</para>
@@ -185,23 +185,23 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
         ? Localized("UsbTree_NotProvided")
         : Node.ProblemCode is uint code ? $"0x{code:X8}" : Localized("UsbTree_None");
 
-    /// <summary><para>容器 ID 文本。</para>The container id text.</summary>
+    /// <summary>The container id text. <para>容器 ID 文本。</para></summary>
     public string ContainerIdText => Node.ContainerId is Guid container
         ? container.ToString("D")
         : Localized("UsbTree_None");
 
-    /// <summary><para>物理位置路径列表，逐行展示。</para>The physical location paths, one per line.</summary>
+    /// <summary>The physical location paths, one per line. <para>物理位置路径列表，逐行展示。</para></summary>
     public string LocationPathsText => JoinLines(Node.LocationPaths);
 
-    /// <summary><para>硬件 ID 列表，逐行展示。</para>The hardware ids, one per line.</summary>
+    /// <summary>The hardware ids, one per line. <para>硬件 ID 列表，逐行展示。</para></summary>
     public string HardwareIdsText => JoinLines(Node.HardwareIds);
 
-    /// <summary><para>兼容 ID 列表，逐行展示。</para>The compatible ids, one per line.</summary>
+    /// <summary>The compatible ids, one per line. <para>兼容 ID 列表，逐行展示。</para></summary>
     public string CompatibleIdsText => JoinLines(Node.CompatibleIds);
 
     /// <summary>
-    /// <para>已注册的设备接口类 GUID 列表，受接口 GUID 能力门控。</para>
     /// The registered device-interface GUIDs, gated by the device-interface capability.
+    /// <para>已注册的设备接口类 GUID 列表，受接口 GUID 能力门控。</para>
     /// </summary>
     public string DeviceInterfaceGuidsText => Node.DeviceInterfaceGuids.Count > 0
         ? string.Join("\n", Node.DeviceInterfaceGuids.Select(guid => guid.ToString("D")))
@@ -209,7 +209,7 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
             ? Localized("UsbTree_None")
             : Localized("UsbTree_NotProvided");
 
-    /// <summary><para>接口三元组详情文本。</para>The interface-triple detail text.</summary>
+    /// <summary>The interface-triple detail text. <para>接口三元组详情文本。</para></summary>
     public string InterfaceDetailText => Node.InterfaceClass is { } cls
         ? FormatTriple(cls, Node.InterfaceSubClass, Node.InterfaceProtocol)
         : _capabilities.SupportsInterfaceNodes
@@ -217,10 +217,10 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
             : Localized("UsbTree_NotProvided");
 
     /// <summary>
-    /// <para>「ADB 接口类未注册」告警。只有在后端确实上报设备接口 GUID 时才可能给出，否则界面会对
-    /// 驱动注册情况说谎。</para>
     /// The "ADB interface class not registered" warning, possible only when the backend really reports
     /// device-interface GUIDs; otherwise the UI would be lying about the driver registration.
+    /// <para>「ADB 接口类未注册」告警。只有在后端确实上报设备接口 GUID 时才可能给出，否则界面会对
+    /// 驱动注册情况说谎。</para>
     /// </summary>
     public string AdbWarningText => _capabilities.SupportsDeviceInterfaceGuids &&
         string.Equals(Node.Protocol, AdbProtocol, StringComparison.OrdinalIgnoreCase) &&
@@ -228,12 +228,12 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
             ? Localized("UsbTree_AdbInterfaceMissing")
             : string.Empty;
 
-    /// <summary><para>是否需要显示 ADB 接口类告警。</para>Whether the ADB interface-class warning shows.</summary>
+    /// <summary>Whether the ADB interface-class warning shows. <para>是否需要显示 ADB 接口类告警。</para></summary>
     public bool HasAdbWarning => AdbWarningText.Length > 0;
 
     /// <summary>
-    /// <para>语言切换后重算所有依赖本地化的显示文本。</para>
     /// Recomputes every localization-dependent display text after a language change.
+    /// <para>语言切换后重算所有依赖本地化的显示文本。</para>
     /// </summary>
     internal void RefreshTexts()
     {
@@ -264,9 +264,9 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     }
 
     /// <summary>
-    /// <para>语言切换后重算本节点与全部后代节点依赖本地化的显示文本。</para>
     /// Recomputes the localization-dependent display texts of this node and every descendant after a
     /// language change.
+    /// <para>语言切换后重算本节点与全部后代节点依赖本地化的显示文本。</para>
     /// </summary>
     internal void RefreshTextsRecursively()
     {

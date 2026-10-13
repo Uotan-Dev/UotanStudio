@@ -1,4 +1,4 @@
-using UotanStudio.Comm.Diagnostics;
+﻿using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Transports.Abstractions;
 
@@ -69,6 +69,46 @@ public class FirehoseConfiguration
     /// </summary>
     /// <value>The upper bound reported by the programmer; defaults to 1048576. <para>programmer 报告的上限；默认 1048576。</para></value>
     public long MaxPayloadSizeToTargetSupported { get; set; } = 1048576;
+
+    /// <summary>
+    /// Gets or sets the explicit upper bound for one program write chunk in bytes. The effective chunk
+    /// is the smaller of this bound and the negotiated <see cref="MaxPayloadSizeToTarget"/>, so raising
+    /// it only exposes more of what the target already agreed to.
+    /// <para>获取或设置单个编程写入块（字节）的显式上限。实际块大小取本上限与协商后的
+    /// <see cref="MaxPayloadSizeToTarget"/> 的较小值，因此上调只会暴露目标已同意的更多容量。</para>
+    /// </summary>
+    /// <value>The write-chunk bound in bytes; defaults to 1048576, the historical hard cap. Values must
+    /// be a multiple of 512 between 512 and 16777216 inclusive.
+    /// <para>写入块上限（字节）；默认 1048576，即历史硬上限。取值须为 512 的倍数且介于 512 与
+    /// 16777216（含）之间。</para></value>
+    public long MaxProgramChunkBytes { get; set; } = 1048576;
+
+    /// <summary>
+    /// Gets or sets the NAND <c>PAGES_PER_BLOCK</c> configure attribute, emitted into configure only
+    /// when the storage is NAND. Zero omits the attribute.
+    /// <para>获取或设置 NAND 的 <c>PAGES_PER_BLOCK</c> configure 属性，仅在存储为 NAND 时写入；
+    /// 为 0 时省略该属性。</para>
+    /// </summary>
+    /// <value>The pages per NAND block, 1 through 65535 when emitted; 0 (default) omits the attribute.
+    /// <para>NAND 每块页数；输出时为 1 至 65535；默认 0 表示省略该属性。</para></value>
+    public long NandPagesPerBlock { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether read and write command headers may proceed without a target response, for loaders that never acknowledge reads or writes. The raw data and final acknowledgement are still consumed; only the status-only erase header tolerates the absent acknowledgement. No timeout is shortened.
+    /// <para>获取或设置读/写命令头是否可在无目标响应的情况下继续，用于从不确认读写操作的 loader。原始数据与最终确认仍会消费；仅状态性的 erase 头容忍缺失的确认。不缩短任何超时。</para>
+    /// </summary>
+    /// <value>False by default (strict waiting); true lets a status-only erase command complete without
+    /// reading a response. <para>默认为 false（严格等待）；为 true 时允许仅状态的 erase 命令在不读取
+    /// 响应的情况下完成。</para></value>
+    public bool SkipResponseOnErase { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether <c>&lt;program&gt;</c> and <c>&lt;read&gt;</c> headers may proceed without reading the raw-mode acknowledgement, for loaders that never send a header response. The raw payload and final acknowledgement are still consumed and no timeout is shortened.
+    /// <para>获取或设置 <c>&lt;program&gt;</c> 与 <c>&lt;read&gt;</c> 命令头是否可在不读取原始模式确认的情况下继续，用于从不发送头响应的 loader。原始载荷与最终确认仍会照旧消费，且不缩短任何超时。</para>
+    /// </summary>
+    /// <value>False by default (strict waiting); true skips only the program/read header wait.
+    /// <para>默认为 false（严格等待）；为 true 时仅跳过 program/read 的头等待。</para></value>
+    public bool SkipResponseOnReadWrite { get; set; }
 
     /// <summary>
     /// Gets or sets the maximum payload from target (bytes).
@@ -268,10 +308,10 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     private const int DisposalGateTimeoutMs = 250;
 
     /// <summary>
-    /// <para>能力发现用的单次 <c>&lt;nop&gt;</c> 往返时限；到点即放弃并保持原有严格门控，
-    /// 绝不让一次发现把刷写拖成分钟级等待。</para>
     /// Per-round bound for the capability-discovery <c>&lt;nop&gt;</c>; expiry abandons discovery and
     /// keeps the gating exactly as strict as before, so one probe never stalls a flash for minutes.
+    /// <para>能力发现用的单次 <c>&lt;nop&gt;</c> 往返时限；到点即放弃并保持原有严格门控，
+    /// 绝不让一次发现把刷写拖成分钟级等待。</para>
     /// </summary>
     private const int CapabilityDiscoveryTimeoutMs = 5000;
 
@@ -836,10 +876,17 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <param name="writeTimeoutMs">Optional write timeout in milliseconds. 可选的写入超时（毫秒）。</param>
     /// <param name="logObserver">Optional bounded collector for logs belonging to this command.</param>
     /// <param name="blockObserver">Optional bounded collector for structured authentication fields.</param>
+    /// <param name="skipResponseAcknowledgement">When non-<see langword="null"/> (mirrors <c>--skipresponse</c>
+    /// for loaders that never acknowledge reads or writes), only the command bytes are written and this
+    /// synthetic acknowledgement is returned instead of reading any target response. Its raw-mode bit must
+    /// already match what the command's data phase expects, and no timeout is shortened.
+    /// <para>非 <see langword="null"/> 时（对从不确认读写的 loader 对应 <c>--skipresponse</c>），只写入命令
+    /// 字节并返回该合成确认，而不读取任何目标响应。其原始模式位必须已与命令数据阶段所需一致，且不会缩短
+    /// 任何超时。</para></param>
     /// <returns>The Firehose response. Firehose 响应。</returns>
     private async Task<FirehoseResponse> SendCommandAndWaitResponseAsync(string xml, CancellationToken cancellationToken,
         int? responseTimeoutMs = null, int? writeTimeoutMs = null, Action<string>? logObserver = null,
-        Action<FirehoseDataBlock>? blockObserver = null)
+        Action<FirehoseDataBlock>? blockObserver = null, FirehoseResponse? skipResponseAcknowledgement = null)
     {
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
@@ -847,6 +894,11 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         {
             var xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
             await WriteDataAsync(xmlBytes, writeTimeoutMs ?? GetZlpTimeoutMs(), cancellationToken);
+            if (skipResponseAcknowledgement is not null)
+            {
+                return skipResponseAcknowledgement;
+            }
+
             return await ReceiveResponseAsync(cancellationToken, responseTimeoutMs, logObserver, blockObserver);
         }
         catch (Exception ex)
@@ -856,6 +908,18 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             throw;
         }
     }
+
+    /// <summary>
+    /// Builds the synthetic acknowledgement returned when a status-only command is issued under the
+    /// <c>--skipresponse</c> contract. The erase command needs no raw mode, so the returned instance keeps
+    /// <see cref="FirehoseResponse.IsRawMode"/> clear.
+    /// <para>构造在 <c>--skipresponse</c> 约定下发放仅状态命令时返回的合成确认。erase 命令不需要原始模式，
+    /// 因此返回实例保持 <see cref="FirehoseResponse.IsRawMode"/> 为假。</para>
+    /// </summary>
+    /// <returns>A synthetic acknowledged response. <para>一个已确认的合成响应。</para></returns>
+    private static FirehoseResponse SkipResponseAcknowledgement(bool rawMode)
+        => new() { IsAck = true, RawValue = "ACK", IsRawMode = rawMode };
+
 
     /// <summary>
     /// Gets the write (ZLP) timeout for the configured storage type.
@@ -898,6 +962,16 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <para>获取 program/read/erase 命令输出的有效槽位编号。</para>
     /// </summary>
     private int? EffectiveSlot => Configuration.Slot != 0 ? Configuration.Slot : null;
+
+    /// <summary>
+    /// Gets the NAND pages-per-block value carried on program/read/erase commands, or zero on storage that is
+    /// not NAND.
+    /// <para>获取随 program/read/erase 命令下发的 NAND 每块页数；非 NAND 存储时为零。</para>
+    /// </summary>
+    private long NandPagesPerBlockHint => Configuration.StorageType == FirehoseStorageType.Nand
+        && Configuration.NandPagesPerBlock > 0
+            ? Configuration.NandPagesPerBlock
+            : 0;
 
     /// <summary>
     /// Writes data to the transport.
@@ -1036,8 +1110,42 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             throw new EdlException(EdlErrorCode.InvalidParameter, "The negotiated payload cannot hold one sector.");
         }
 
-        var bounded = Math.Min(Configuration.MaxPayloadSizeToTarget, 1024 * 1024);
+        ValidateProgramChunkBound();
+        var bounded = Math.Min(Configuration.MaxPayloadSizeToTarget, Configuration.MaxProgramChunkBytes);
+        if (bounded < Configuration.SectorSize)
+        {
+            throw new EdlException(EdlErrorCode.InvalidParameter,
+                "The effective write chunk is smaller than one sector.");
+        }
+
         return checked((int)(bounded - (bounded % Configuration.SectorSize)));
+    }
+
+    /// <summary>
+    /// Validates the explicit write-chunk bound before any program byte is produced. The bound must be a
+    /// 512-byte multiple inside <c>512..16777216</c> and may not exceed the size the programmer reported
+    /// it supports (<see cref="FirehoseConfiguration.MaxPayloadSizeToTargetSupported"/>), so an override
+    /// can only widen toward an already-negotiated capacity, never beyond it.
+    /// <para>在生成任何编程字节之前校验显式写入块上限。该上限须为 512 的倍数、落在 512 至 16777216
+    /// 之间，且不得超过 programmer 报告的支持大小
+    /// （<see cref="FirehoseConfiguration.MaxPayloadSizeToTargetSupported"/>），因此覆盖只能朝已协商的
+    /// 容量放宽，绝不超出。</para>
+    /// </summary>
+    private void ValidateProgramChunkBound()
+    {
+        var bound = Configuration.MaxProgramChunkBytes;
+        if (bound is < 512 or > 16777216 || (bound & 511) != 0)
+        {
+            throw new EdlException(EdlErrorCode.InvalidParameter,
+                "The write-chunk bound must be a 512-byte multiple between 512 and 16777216 bytes.");
+        }
+
+        if (bound > 1048576 && Configuration.MaxPayloadSizeToTargetSupported > 0
+            && bound > Configuration.MaxPayloadSizeToTargetSupported)
+        {
+            throw new EdlException(EdlErrorCode.InvalidParameter,
+                "A raised write-chunk bound may not exceed the payload size the programmer reported as supported.");
+        }
     }
 
     private static void RequireRawMode(FirehoseResponse response, EdlErrorCode errorCode)
@@ -1050,20 +1158,22 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
     /// <summary>
     /// Disposes the protocol and retires the operation gate's wait handle.
-    /// The gate is taken with a bounded wait rather than by peeking its free-permit count: a holder
-    /// blocked inside a long native transfer cannot be outwaited here, and retiring a gate an
-    /// in-flight operation still owns would make that operation throw
-    /// <see cref="ObjectDisposedException"/> while it returns its permit. When the wait expires the
-    /// gate is deliberately left alive, trading one wait handle the garbage collector eventually
-    /// reclaims against a corrupted transfer. Every later call tries again until the gate really is
-    /// retired, so a lease that finishes after this call still lets a repeated
-    /// <see cref="Dispose()"/> reclaim the handle.
-    /// <para>释放协议并归还操作门的等待句柄。取闸使用有限等待，而不是查看空闲许可数：阻塞在长
-    /// 原生传输里的持有者不可能在这里等到，而处置一个仍被在途操作占用的门会让该操作在归还许可时
-    /// 抛出 <see cref="ObjectDisposedException"/>。等待到期时门被刻意保持存活，用一个终会被垃圾
-    /// 回收器收回的等待句柄换取一次不被破坏的传输。之后的每次调用都会重新尝试，直到门真正被归还，
-    /// 因此在本次调用之后才结束的租约仍能让重复的 <see cref="Dispose()"/> 回收该句柄。</para>
+    /// <para>释放协议并归还操作门的等待句柄。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>The gate is taken with a bounded wait rather than by peeking its free-permit count: a holder
+    /// blocked inside a long native transfer cannot be outwaited here, and retiring a gate an in-flight
+    /// operation still owns would make that operation throw <see cref="ObjectDisposedException"/> while it
+    /// returns its permit. When the wait expires the gate is deliberately left alive, trading one wait handle
+    /// the garbage collector eventually reclaims against a corrupted transfer. Every later call tries again
+    /// until the gate really is retired, so a lease that finishes after this call still lets a repeated
+    /// <see cref="Dispose()"/> reclaim the handle.</para>
+    /// <para>取闸使用有限等待，而不是查看空闲许可数：阻塞在长原生传输里的持有者不可能在这里等到，而
+    /// 处置一个仍被在途操作占用的门会让该操作在归还许可时抛出 <see cref="ObjectDisposedException"/>。
+    /// 等待到期时门被刻意保持存活，用一个终会被垃圾回收器收回的等待句柄换取一次不被破坏的传输。
+    /// 之后的每次调用都会重新尝试，直到门真正被归还，因此在本次调用之后才结束的租约仍能让重复的
+    /// <see cref="Dispose()"/> 回收该句柄。</para>
+    /// </remarks>
     public void Dispose()
     {
         _disposed = true;

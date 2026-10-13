@@ -12,9 +12,8 @@ namespace UotanStudio.Firmware.AndroidMeta.Apk;
 public sealed record JksEntry(int Tag, string Alias, DateTimeOffset Creation, byte[]? ProtectedPrivateKey, IReadOnlyList<byte[]> Certificates);
 
 /// <summary>
-/// Reads back JKS v1 keystores (magic 0xFEEDFEED) with the upstream integrity digest; used to
-/// verify generated keystores. Supports both private-key and trusted-certificate entries.
-/// <para>按上游完整性摘要读取 JKS v1 密钥库（magic 0xFEEDFEED）；用于校验生成的密钥库。支持私钥条目与受信证书条目。</para>
+/// Reads JKS v1 keystores (magic 0xFEEDFEED), verifying the trailing integrity digest.
+/// <para>读取 JKS v1 密钥库（magic 0xFEEDFEED）并校验尾部完整性摘要。</para>
 /// </summary>
 internal static class JksKeyStoreReader
 {
@@ -23,7 +22,7 @@ internal static class JksKeyStoreReader
     /// <para>解析全部条目并校验尾部完整性摘要。</para>
     /// </summary>
     /// <param name="data">Complete keystore bytes (for example the output of <see cref="JksKeyStoreWriter.Build"/>); the caller keeps ownership. <para>完整密钥库字节（例如 <see cref="JksKeyStoreWriter.Build"/> 的输出）；所有权归调用方。</para></param>
-    /// <param name="password">Keystore password, converted with the upstream big-endian UTF-16 pairing and keyed into the trailing "Mighty Aphrodite" SHA-1 digest. <para>密钥库密码，按上游大端 UTF-16 双字节编码并参与尾部 "Mighty Aphrodite" SHA-1 keyed 摘要。</para></param>
+    /// <param name="password">Keystore password, encoded as big-endian UTF-16 pairs and keyed into the trailing "Mighty Aphrodite" SHA-1 digest. <para>密钥库密码，按大端 UTF-16 双字节编码并参与尾部 "Mighty Aphrodite" SHA-1 keyed 摘要。</para></param>
     /// <returns>All entries in file order; private-key entries keep the encrypted blob and are not decrypted here. <para>按文件顺序的全部条目；私钥条目保留加密数据块，此处不执行解密。</para></returns>
     /// <exception cref="InvalidDataException">The magic, version, entry count, a block length or the trailing digest is invalid; a digest mismatch reports a wrong password or a tampered keystore. <para>魔数、版本、条目数、某块长度或尾部摘要非法；摘要不匹配表示密码错误或密钥库被篡改。</para></exception>
     /// <exception cref="EndOfStreamException">The buffer ends in the middle of a field. <para>缓冲区在字段中间结束。</para></exception>
@@ -80,10 +79,9 @@ internal static class JksKeyStoreReader
 
     /// <summary>
     /// Recovers the plaintext PKCS#8 private key from the KeyProtector blob stored in a tag-1
-    /// entry (salt || XOR keystream ciphertext || SHA-1 integrity digest), mirroring upstream
-    /// KeyProtector.recover.
+    /// entry (salt || XOR keystream ciphertext || SHA-1 integrity digest).
     /// <para>从 tag-1 条目存储的 KeyProtector 数据块（盐 || XOR 密钥流密文 || SHA-1 完整性摘要）
-    /// 恢复明文 PKCS#8 私钥，对应上游 KeyProtector.recover。</para>
+    /// 恢复明文 PKCS#8 私钥。</para>
     /// </summary>
     /// <param name="protectedKey">The <see cref="JksEntry.ProtectedPrivateKey"/> blob. <para>JksEntry.ProtectedPrivateKey 数据块。</para></param>
     /// <param name="password">Keystore password used when the entry was written. <para>写入条目时使用的密钥库密码。</para></param>
@@ -128,8 +126,8 @@ internal static class JksKeyStoreReader
         finally { CryptographicOperations.ZeroMemory(passwordBytes); }
     }
 
-    /// <summary>The upstream pre-keyed digest: SHA1(passwordBytes || "Mighty Aphrodite").</summary>
-    /// <para>上游 keyed 摘要：SHA1(passwordBytes || "Mighty Aphrodite")。</para>
+    /// <summary>The keystore integrity digest: SHA1(passwordBytes || "Mighty Aphrodite").</summary>
+    /// <para>密钥库完整性摘要：SHA1(passwordBytes || "Mighty Aphrodite")。</para>
     internal static IncrementalHash IntegrityDigest(string password)
     {
         var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
@@ -140,8 +138,8 @@ internal static class JksKeyStoreReader
         return hash;
     }
 
-    /// <summary>Upstream passwordToBytes: every char as a big-endian 16-bit pair (high byte first).</summary>
-    /// <para>上游 passwordToBytes：每个字符按大端 16 位写出（高字节在前）。</para>
+    /// <summary>Encodes every password char as a big-endian 16-bit pair (high byte first).</summary>
+    /// <para>将密码的每个字符按大端 16 位写出（高字节在前）。</para>
     internal static byte[] EncodePassword(string password)
     {
         var bytes = new byte[checked(password.Length * 2)];
@@ -226,11 +224,11 @@ internal static class JksKeyStoreReader
 }
 
 /// <summary>
-/// Writes JKS v1 keystores fully compatible with the upstream JavaKeyStore format: big-endian
-/// framing, modified UTF-8 aliases, KeyProtector-protected PKCS#8 private keys and the trailing
-/// "Mighty Aphrodite" SHA-1 keyed digest. AOT-safe and reflection-free.
-/// <para>写出与上游 JavaKeyStore 完全兼容的 JKS v1 密钥库：大端框架、修改版 UTF-8 别名、
-/// KeyProtector 保护的 PKCS#8 私钥与尾部 "Mighty Aphrodite" SHA-1 keyed 摘要。AOT 安全、零反射。</para>
+/// Writes JKS v1 keystores: big-endian framing, modified UTF-8 aliases, KeyProtector-protected
+/// PKCS#8 private keys and the trailing "Mighty Aphrodite" SHA-1 keyed digest. AOT-safe and
+/// reflection-free.
+/// <para>写出 JKS v1 密钥库：大端框架、修改版 UTF-8 别名、KeyProtector 保护的 PKCS#8 私钥
+/// 与尾部 "Mighty Aphrodite" SHA-1 keyed 摘要。AOT 安全、零反射。</para>
 /// </summary>
 public static class JksKeyStoreWriter
 {
@@ -407,9 +405,9 @@ public static class JksKeyStoreWriter
 }
 
 /// <summary>
-/// Big-endian fixed-width writers used by <see cref="JksKeyStoreWriter"/> when framing the
-/// upstream JKS layout; kept file-local because no other type writes big-endian JKS fields.
-/// <para>供 <see cref="JksKeyStoreWriter"/> 按上游 JKS 布局写出定宽大端字段；因没有其他类型写出大端 JKS 字段而保持文件局部。</para>
+/// Big-endian fixed-width writers used by <see cref="JksKeyStoreWriter"/> when framing JKS
+/// fields; kept file-local because no other type writes big-endian JKS fields.
+/// <para>供 <see cref="JksKeyStoreWriter"/> 写出 JKS 定宽大端字段；因没有其他类型写出大端 JKS 字段而保持文件局部。</para>
 /// </summary>
 file static class JksBigEndianWriterExtensions
 {

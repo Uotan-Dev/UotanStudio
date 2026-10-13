@@ -111,6 +111,18 @@ public sealed record FlashItemEvidence
     public long? ElapsedMs { get; init; }
 
     /// <summary>
+    /// Gets the command document the bundle built for this item.
+    /// <para>获取本包为该条目构造的命令文档。</para>
+    /// </summary>
+    /// <value>
+    /// The exact document for a wipe or a digest-bound program item, so the emitted command stays inspectable
+    /// in the evidence; <see langword="null"/> for items whose document the protocol builds itself.
+    /// <para>擦写或摘要绑定编程条目的精确文档，使已发出的命令在证据中仍可检视；对于命令文档由协议自行构造的
+    /// 条目为 <see langword="null"/>。</para>
+    /// </value>
+    public string? CommandXml { get; init; }
+
+    /// <summary>
     /// Projects this item onto the shared evidence vocabulary.
     /// <para>把本条目投影到共享证据词汇。</para>
     /// </summary>

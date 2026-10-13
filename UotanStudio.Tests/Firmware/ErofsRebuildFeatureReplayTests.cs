@@ -6,6 +6,7 @@ using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Metadata;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
@@ -136,20 +137,79 @@ public sealed class ErofsRebuildFeatureReplayTests
     }
 
     [Fact]
-    public void Capture_Restore_SourceWithNlinkOneAdvice_ReplaysDotOmittedEnabledAndKeepsInodeBit()
+    public void Restore_InheritedDeclarationWithoutModernLayout_KeepsDeclaredBitVerbatim()
+    {
+        using var source = new TempDirectory();
+        var payload = Enumerable.Repeat((byte)0x37, 20 * 1024).ToArray();
+        source.WriteBytes("data.bin", payload);
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            BlockSize = BlockSize,
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            MaxPclusterSize = BlockSize,
+            UseCompactedIndexes = false,
+            Features = Declare(ErofsFeature.Lz4ZeroPadding, ErofsFeature.CompressionConfigs),
+        });
+        var sourceSuperblock = ErofsSuperblock.FromImage(image);
+        Assert.Equal(ModernIncompat, sourceSuperblock.FeatureIncompat);
+        using (var probe = new ErofsParser(image))
+        {
+            Assert.True(probe.MaxCompressedPclusterBytes() <= BlockSize,
+                $"the declared configuration record must not license a multi-block frame while the pcluster cap is one block; saw {probe.MaxCompressedPclusterBytes()}.");
+        }
+
+        var replay = Replay(image, source.Path);
+        uint? profileIncompat = replay.Profile.FeatureIncompat;
+        Assert.Equal(sourceSuperblock.FeatureIncompat, profileIncompat);
+        Assert.True(replay.Restored.FeaturesAuthoritative);
+
+        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuiltSuperblock = ErofsSuperblock.FromImage(rebuilt);
+        Assert.Equal(ModernIncompat, rebuiltSuperblock.FeatureIncompat);
+        Assert.Equal(1 << (int)ErofsCompressionAlgorithm.Lz4, rebuiltSuperblock.AvailableComprAlgs);
+        Assert.Equal(14, ReadConfigurationLength(rebuilt, rebuiltSuperblock));
+        Assert.Equal((ushort)1, ReadPclusterBlocks(rebuilt, rebuiltSuperblock));
+        using var parser = new ErofsParser(rebuilt);
+        Assert.True(parser.MaxCompressedPclusterBytes() <= BlockSize,
+            $"an inherited declaration without a modern layout must still keep every frame inside one block; saw {parser.MaxCompressedPclusterBytes()}.");
+        Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
+    }
+
+    [Fact]
+    public void Capture_Restore_SourceWithoutTheAdviseBit_ReplaysDotOmittedDisabledAndKeepsInodeBitClear()
     {
         using var source = BuildAdviceFixture(false, out var image);
         var census = AdviceBitCensus(image);
         Assert.True(census.Files > 0);
-        Assert.Equal(census.Files, census.WithAdviceBit);
+        Assert.Equal(0, census.WithAdviceBit);
 
         var replay = Replay(image, source.Path);
-        Assert.Equal(ErofsTriStateFeature.Enabled.ToString(),
+        Assert.Equal(ErofsTriStateFeature.Disabled.ToString(),
             JsonNode.Parse(ToJson(replay.Profile))!.AsObject()["dotOmitted"]!.GetValue<string>());
-        Assert.Equal(ErofsTriStateFeature.Enabled, replay.Restored.DotOmitted);
+        Assert.Equal(ErofsTriStateFeature.Disabled, replay.Restored.DotOmitted);
 
         var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
-        Assert.Equal(census.Files, AdviceBitCensus(rebuilt).WithAdviceBit);
+        Assert.Equal(0, AdviceBitCensus(rebuilt).WithAdviceBit);
+        using var parser = new ErofsParser(rebuilt);
+        Assert.Equal(
+            1UL,
+            parser.EnumerateEntries().Where(candidate => !candidate.IsDirectory).ToArray()[0].LinkCount);
+    }
+
+    [Fact]
+    public void Build_TargetDeclaredToDefineTheAdviseBit_WritesItOnEverySingleLinkedFile()
+    {
+        using var source = BuildAdviceFixture(false, out _);
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            MaxPclusterSize = 4 * BlockSize,
+            NlinkOneAdviseSupported = true,
+        });
+
+        var census = AdviceBitCensus(image, allowUnreadableFormat: true);
+        Assert.True(census.Files > 0);
+        Assert.Equal(census.Files, census.WithAdviceBit);
     }
 
     [Fact]
@@ -174,7 +234,7 @@ public sealed class ErofsRebuildFeatureReplayTests
     {
         using var source = BuildAdviceFixture(false, out var image);
         var census = AdviceBitCensus(image);
-        Assert.Equal(census.Files, census.WithAdviceBit);
+        Assert.Equal(0, census.WithAdviceBit);
 
         var replay = Replay(image, source.Path);
         replay.Restored.DotOmitted = ErofsTriStateFeature.Disabled;
@@ -224,8 +284,7 @@ public sealed class ErofsRebuildFeatureReplayTests
     [InlineData(ErofsSuperblock.IncompatChunkedFile, "chunked_file")]
     [InlineData(ErofsSuperblock.IncompatXattrPrefixes, "xattr_prefixes")]
     [InlineData(ErofsSuperblock.Incompat48Bit, "48bit")]
-    public void Restore_ProfileWithReadOnlyIncompatBit_ThrowsUnsupportedFeatureNamingUpstream(uint incompat,
-        string upstreamName)
+    public void Restore_ProfileWithInheritedIncompatBit_KeepsTheDeclaredBit(uint incompat, string upstreamName)
     {
         var parameters = new ErofsRebuildParameters
         {
@@ -233,17 +292,81 @@ public sealed class ErofsRebuildFeatureReplayTests
             Compress = true,
             Algorithm = "Lz4",
             SuperblockChecksum = true,
-            LegacyCompatibility = true,
+            LegacyCompatibility = false,
             FeatureCompat = ErofsSuperblock.CompatSbChecksum,
             FeatureIncompat = incompat,
         };
 
-        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(
+        var options = ErofsRebuildMetadata.Restore(parameters);
+
+        Assert.Equal(incompat, options.Features.IncompatBits & incompat);
+        Assert.Contains(upstreamName, ErofsSuperblock.DescribeIncompat(incompat), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Restore_InodeAlgorithmWithoutConfigurationRecord_ThrowsCorruptionNamingAlgorithmAndPath()
+    {
+        var parameters = new ErofsRebuildParameters
+        {
+            BlockSize = BlockSize,
+            Compress = true,
+            Algorithm = "Lz4",
+            LegacyCompatibility = true,
+        };
+        parameters.Codecs.Add(new ErofsRebuildCodec
+        {
+            Algorithm = "Lz4",
+            BlockSize = BlockSize,
+            MaxPclusterSize = BlockSize,
+            Lz4MaxDistance = 65535,
+        });
+        parameters.Inodes.Add(new ErofsRebuildInode
+        {
+            Nid = 9,
+            Path = "packed.bin",
+            Compressed = true,
+            Algorithm = "Zstd",
+            LogicalClusterSize = BlockSize,
+        });
+
+        var error = Assert.Throws<FileSystemCorruptedException>(
             () => ErofsRebuildMetadata.Restore(parameters));
 
-        Assert.Contains(upstreamName, error.Message, StringComparison.Ordinal);
-        Assert.Contains("ErofsFeatures=!", error.Message, StringComparison.Ordinal);
-        Assert.Equal(upstreamName, ErofsFeatureTable.ReadOnlyIncompatNames(incompat));
+        Assert.Contains("Zstd", error.Message, StringComparison.Ordinal);
+        Assert.Contains("packed.bin", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Restore_InodeAlgorithmMatchingConfigurationRecord_KeepsRecordAndCodecTogether()
+    {
+        var parameters = new ErofsRebuildParameters
+        {
+            BlockSize = BlockSize,
+            Compress = true,
+            Algorithm = "Lz4",
+            LegacyCompatibility = true,
+        };
+        parameters.Codecs.Add(new ErofsRebuildCodec
+        {
+            Algorithm = "Lz4",
+            BlockSize = BlockSize,
+            MaxPclusterSize = BlockSize,
+            Lz4MaxDistance = 65535,
+        });
+        parameters.Inodes.Add(new ErofsRebuildInode
+        {
+            Nid = 9,
+            Path = "packed.bin",
+            Compressed = true,
+            Algorithm = "Lz4",
+            LogicalClusterSize = BlockSize,
+        });
+
+        var restored = ErofsRebuildMetadata.Restore(parameters);
+
+        Assert.True(restored.SourceInodes!.ContainsKey(9));
+        Assert.Equal(ErofsCompressionAlgorithm.Lz4, restored.SourceInodes[9].SourceAlgorithm);
+        Assert.NotNull(restored.SourceCompressionOptions);
     }
 
     [Fact]
@@ -319,14 +442,53 @@ public sealed class ErofsRebuildFeatureReplayTests
         image = new ErofsBuilder().Build(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
+            MaxPclusterSize = legacy ? BlockSize : 4 * BlockSize,
             LegacyCompatibility = legacy,
         });
         return source;
     }
 
-    private static (int Files, int WithAdviceBit) AdviceBitCensus(byte[] image)
+    private static (int Files, int WithAdviceBit) AdviceBitCensus(byte[] image, bool allowUnreadableFormat = false)
     {
         var superblock = ErofsSuperblock.FromImage(image);
+        if (allowUnreadableFormat)
+        {
+            var rawFiles = 0;
+            var rawMarked = 0;
+            var limit = image.Length - superblock.MetadataByteOffset;
+            for (long nid = 0; nid * ErofsSuperblock.CompactInodeSize + 32 <= limit; nid++)
+            {
+                var slot = (int)(superblock.MetadataByteOffset + nid * ErofsSuperblock.CompactInodeSize);
+                var format = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(slot));
+                var mode = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(slot + 4));
+                if (format == 0 || (mode & 0xF000) == 0)
+                {
+                    continue;
+                }
+
+                var isDirectory = (mode & 0xF000) == 0x4000;
+                if (isDirectory)
+                {
+                    continue;
+                }
+
+                var wideNlink = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(slot + 6));
+                var nlinkIsOne = (format & ErofsInode.AdviseBitNlinkOneOrDotOmitted) != 0 && wideNlink == 0;
+                if (!nlinkIsOne && wideNlink != 1)
+                {
+                    continue;
+                }
+
+                rawFiles++;
+                if (nlinkIsOne)
+                {
+                    rawMarked++;
+                }
+            }
+
+            return (rawFiles, rawMarked);
+        }
+
         using var parser = new ErofsParser(image);
         var files = 0;
         var marked = 0;
@@ -347,6 +509,90 @@ public sealed class ErofsRebuildFeatureReplayTests
         }
 
         return (files, marked);
+    }
+
+    [Fact]
+    public void Capture_Restore_XattrFilterAndSharedEaSource_RecomputesBothDimensions()
+    {
+        using var source = new TempDirectory();
+        var payload = Enumerable.Repeat((byte)0x2C, 2048).ToArray();
+        source.WriteBytes("a.bin", payload);
+        source.WriteBytes("b.bin", payload);
+        IReadOnlyList<ErofsXattrEntry> shared =
+        [
+            new ErofsXattrEntry { Name = "user.role", Value = "system"u8.ToArray() },
+        ];
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            XattrNameFilter = true,
+            IshareXattrs = true,
+            Metabox = true,
+            MetaboxRequired = true,
+            FileXattrs = new Dictionary<string, IReadOnlyList<ErofsXattrEntry>>
+            {
+                ["a.bin"] = shared,
+                ["b.bin"] = shared,
+            },
+        });
+        var sourceSuperblock = ErofsSuperblock.FromImage(image);
+        Assert.True((sourceSuperblock.FeatureCompat & ErofsSuperblock.CompatXattrFilter) != 0);
+        Assert.True((sourceSuperblock.FeatureCompat & ErofsSuperblock.CompatIshareXattrs) != 0);
+        Assert.True((sourceSuperblock.FeatureCompat & ErofsSuperblock.CompatSharedEaInMetabox) != 0);
+
+        var replay = Replay(image, source.Path);
+        Assert.True(replay.Restored.XattrNameFilter);
+        Assert.True(replay.Restored.IshareXattrs);
+
+        replay.Restored.FileXattrs = new Dictionary<string, IReadOnlyList<ErofsXattrEntry>>
+        {
+            ["a.bin"] = shared,
+            ["b.bin"] = shared,
+        };
+
+        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuiltSuperblock = ErofsSuperblock.FromImage(rebuilt);
+
+        Assert.True((rebuiltSuperblock.FeatureCompat & ErofsSuperblock.CompatXattrFilter) != 0);
+        Assert.True((rebuiltSuperblock.FeatureCompat & ErofsSuperblock.CompatIshareXattrs) != 0);
+        Assert.True((rebuiltSuperblock.FeatureCompat & ErofsSuperblock.CompatSharedEaInMetabox) != 0);
+
+        using var parser = new ErofsParser(rebuilt);
+        foreach (var name in new[] { "a.bin", "b.bin" })
+        {
+            var file = parser.EnumerateFiles().Single(entry => entry.Path.EndsWith(name, StringComparison.Ordinal));
+            Assert.Contains(file.Xattrs ?? [], x => x.Name == "user.role");
+        }
+    }
+
+    [Fact]
+    public void Capture_Restore_IshareFingerprintPrefix_ReRegistersItAndRecomputesTheDigest()
+    {
+        using var source = new TempDirectory();
+        var payload = Enumerable.Repeat((byte)0x5D, 4096).ToArray();
+        source.WriteBytes("data.bin", payload);
+        const string prefix = "erofs.fingerprint.v1";
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            IshareXattrs = true,
+            IshareXattrPrefix = prefix,
+        });
+        var sourceSuperblock = ErofsSuperblock.FromImage(image);
+        Assert.True((sourceSuperblock.FeatureCompat & ErofsSuperblock.CompatIshareXattrs) != 0);
+        Assert.Equal(1, sourceSuperblock.XattrPrefixCount);
+        Assert.True(sourceSuperblock.IshareXattrPrefixId < sourceSuperblock.XattrPrefixCount);
+        Assert.Equal(0, sourceSuperblock.IshareXattrPrefixId & ErofsXattr.LongPrefixFlag);
+
+        var replay = Replay(image, source.Path);
+        Assert.Equal(prefix, replay.Restored.IshareXattrPrefix);
+
+        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        using var parser = new ErofsParser(rebuilt);
+        var file = parser.EnumerateFiles().Single(entry => entry.Path.EndsWith("data.bin", StringComparison.Ordinal));
+        var fingerprint = Assert.Single(file.Xattrs ?? [], x => x.Name == prefix);
+        var expected = new byte[7 + 32];
+        "sha256:"u8.CopyTo(expected);
+        System.Security.Cryptography.SHA256.HashData(payload).CopyTo(expected, 7);
+        Assert.Equal(expected, fingerprint.Value);
     }
 
     private static ushort ReadConfigurationLength(byte[] image, ErofsSuperblock superblock)

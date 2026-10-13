@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.FileSystem.Ext4.Journal;
+using UotanStudio.Hash.Crc32c;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;
 
@@ -254,8 +254,8 @@ public sealed partial class Ext4Builder
     }
 
     /// <summary>
-    /// Computes and writes the CRC32c inode checksum, matching e2fsprogs ext2fs_inode_csum: seed = crc32c(~0, uuid), then the LE32 inode number, LE32 i_generation and the whole inode are fed in (with checksum_lo at 124 / checksum_hi at 130 cleared first).
-    /// <para>计算并写入 inode 的 CRC32c 校验和。</para>
+    /// Computes and writes the CRC32c inode checksum: seed = crc32c(~0, uuid), then the LE32 inode number, LE32 i_generation and the whole inode with checksum_lo at 124 / checksum_hi at 130 cleared first.
+    /// <para>计算并写入 inode 的 CRC32c 校验和：以 crc32c(~0, uuid) 为种子，依次喂入 LE32 inode 号、LE32 i_generation 与整个 inode（校验和字段 124/130 先清零）。</para>
     /// </summary>
     [System.Runtime.CompilerServices.SkipLocalsInit]
     private static void WriteInodeChecksum(byte[] inode, uint inodeNumber, byte[] uuid)

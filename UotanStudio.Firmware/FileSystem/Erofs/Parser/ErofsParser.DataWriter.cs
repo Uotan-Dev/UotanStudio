@@ -2,13 +2,15 @@ using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UnifiedDataLayout = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsDataLayout;
+using UnifiedInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Parser;
 
 /// <summary>
-/// EROFS parser part that copies inode data out of the image: it checks every offset and length against the image size, dispatches on the inline, flat, chunk-based and compressed layouts, and reports kernel pcluster coverage deficits.
+/// EROFS parser part that copies inode data out of the image: it checks every offset and length against the image size, dispatches on the inline, flat, chunk-based and compressed layouts, and reports pcluster coverage deficits against the legacy decoding rules.
 /// <para>EROFS 解析器的组成部分，负责把 inode 数据从镜像中取出：先用镜像大小校验每个偏移与长度，
-/// 再按 inline、flat、chunk-based 与压缩布局分派，并报告内核对 pcluster 的覆盖缺口。</para>
+/// 再按 inline、flat、chunk-based 与压缩布局分派，并按旧版解码规则报告 pcluster 的覆盖缺口。</para>
 /// </summary>
 public sealed partial class ErofsParser
 {
@@ -20,7 +22,7 @@ public sealed partial class ErofsParser
         }
     }
 
-    private void WriteFileData(ulong nid, ErofsInode inode, Stream output)
+    private void WriteFileData(ulong nid, UnifiedInode inode, Stream output)
     {
         _readCancellation.ThrowIfCancellationRequested();
         if (_readCancellation.CanBeCanceled)
@@ -36,18 +38,18 @@ public sealed partial class ErofsParser
 
         switch (inode.DataLayout)
         {
-            case ErofsInode.DataLayoutInline:
+            case UnifiedDataLayout.Inline:
 
                 WriteInlineData(nid, inode, output);
                 break;
-            case ErofsInode.DataLayoutFlat:
+            case UnifiedDataLayout.Flat:
                 WriteFlatData(inode, output);
                 break;
-            case ErofsInode.DataLayoutChunkBased:
+            case UnifiedDataLayout.ChunkBased:
                 WriteChunkData(nid, inode, output);
                 break;
-            case ErofsInode.DataLayoutCompressed:
-            case ErofsInode.DataLayoutCompactIndexes:
+            case UnifiedDataLayout.Compressed:
+            case UnifiedDataLayout.CompactIndexes:
                 WriteCompressedData(nid, inode, output);
                 break;
             default:
@@ -56,7 +58,7 @@ public sealed partial class ErofsParser
         }
     }
 
-    private void WriteInlineData(ulong nid, ErofsInode inode, Stream output)
+    private void WriteInlineData(ulong nid, UnifiedInode inode, Stream output)
     {
         var length = checked((long)inode.Size);
         if (length == 0)
@@ -67,7 +69,7 @@ public sealed partial class ErofsParser
         var flatLength = (long)(inode.Size / (ulong)_blockSize * (ulong)_blockSize);
         if (flatLength > 0)
         {
-            var flatStart = checked(inode.RawBlockAddress * _blockSize);
+            var flatStart = checked(inode.AddressField() * _blockSize);
             CheckRange(flatStart, flatLength, "Tailpacked flat file data");
             CopyFromSource(output, flatStart, flatLength);
         }
@@ -89,7 +91,7 @@ public sealed partial class ErofsParser
         }
     }
 
-    private void WriteFlatData(ErofsInode inode, Stream output)
+    private void WriteFlatData(UnifiedInode inode, Stream output)
     {
         var length = (long)inode.Size;
         if (length == 0)
@@ -97,7 +99,7 @@ public sealed partial class ErofsParser
             return;
         }
 
-        var start = checked(inode.RawBlockAddress * _blockSize);
+        var start = checked(inode.AddressField() * _blockSize);
         CheckRange(start, length, "File data");
         CopyFromSource(output, start, length);
     }
@@ -106,7 +108,7 @@ public sealed partial class ErofsParser
     /// Reads a chunk-based file (EROFS_INODE_CHUNK_BASED): assembles data chunk by chunk from the chunk index table.
     /// <para>读取 chunk-based 文件（EROFS_INODE_CHUNK_BASED）：按 chunk 索引表逐块拼接数据。</para>
     /// </summary>
-    private void WriteChunkData(ulong nid, ErofsInode inode, Stream output)
+    private void WriteChunkData(ulong nid, UnifiedInode inode, Stream output)
     {
         var length = checked((long)inode.Size);
         if (length == 0)
@@ -226,14 +228,14 @@ public sealed partial class ErofsParser
     /// logical clusters produced by the HEAD1 codec (LZ4 for LZ4SC, raw DEFLATE for ZLIB4C). Semi
     /// detection requires big-pcluster indexing (the CBLKCNT marker on the first NONHEAD lcluster), a
     /// zero head clusterofs, and a non-interlaced, non-tailpacked pcluster; PLAIN heads that encode a
-    /// LZMA or ZSTD stream stay fully raw (SHIFTED) per the kernel semantics.
+    /// LZMA or ZSTD stream stay fully raw (SHIFTED).
     /// <para>通过紧凑或完整的 EROFS 簇索引读取压缩文件数据，含 LZ4SC 与 ZLIB4C 半压缩 pcluster：
     /// 当 PLAIN head lcluster 后跟随 NONHEAD lcluster 时，首逻辑簇按 pcluster 起点的原始字节直接输出，
     /// 其余逻辑簇由 HEAD1 编解码器解压产出（LZ4SC 为 LZ4，ZLIB4C 为原始 DEFLATE）。半压缩识别要求
     /// big-pcluster 索引（首个 NONHEAD 携带 CBLKCNT 标记）、head 的 clusterofs 为 0，且非 interlaced、
-    /// 非尾部打包；编码 LZMA 或 ZSTD 流的 PLAIN head 按内核语义仍整体视为明文（SHIFTED）。</para>
+    /// 非尾部打包；编码 LZMA 或 ZSTD 流的 PLAIN head 仍整体视为明文（SHIFTED）。</para>
     /// </summary>
-    private void WriteCompressedData(ulong nid, ErofsInode inode, Stream output,
+    private void WriteCompressedData(ulong nid, UnifiedInode inode, Stream output,
         CompressionObserver? observer = null, CancellationToken cancellationToken = default,
         ExtentWriteScratch? extentScratch = null)
     {
@@ -266,7 +268,7 @@ public sealed partial class ErofsParser
         var interlaced = (advise & ZErofsMapHeader.AdviseInterlacedPcluster) != 0;
 
         var indexBase = headerOffset + ZErofsMapHeader.Size;
-        var indexLength = inode.DataLayout == ErofsInode.DataLayoutCompactIndexes
+        var indexLength = inode.DataLayout == UnifiedDataLayout.CompactIndexes
             ? checked((long)totalIdx * CompactIndexSlotSize + CompactIndexWindowPadding)
             : checked((long)totalIdx * ZErofsLclusterIndex.Size + FullIndexStartPad);
         var cachedIndex = new IndexReadWindow(this, nid, indexBase,
@@ -330,13 +332,13 @@ public sealed partial class ErofsParser
     /// <para>解码压缩映射头并处理两类绕过 lcluster 循环的布局：fragment inode 从 packed inode 读取，
     /// 携带 extent 的压缩 inode 交给 extent 遍历处理。返回 true 表示其中一种布局已消费本次请求。</para>
     /// </summary>
-    private bool TryWriteNonLclusterLayout(ulong nid, ErofsInode inode, Stream output,
+    private bool TryWriteNonLclusterLayout(ulong nid, UnifiedInode inode, Stream output,
         CompressionObserver? observer, CancellationToken cancellationToken,
         out ZErofsMapHeader header, out long headerOffset, ExtentWriteScratch? extentScratch = null)
     {
         var inodeLoc = InodeOffset(nid);
 
-        headerOffset = AlignUp(inodeLoc + inode.OnDiskSize + inode.XattrTotalSize, 8);
+        headerOffset = AlignUp(inodeLoc + inode.OnDiskSize + inode.XattrISize, 8);
         var headerBytes = ReadInodeMetadata(nid, headerOffset, ZErofsMapHeader.Size, "compressed map header");
         header = ZErofsMapHeader.FromBytes(headerBytes);
 
@@ -352,7 +354,7 @@ public sealed partial class ErofsParser
             return true;
         }
 
-        if (inode.DataLayout == ErofsInode.DataLayoutCompressed && header.HasExtents)
+        if (inode.DataLayout == UnifiedDataLayout.Compressed && header.HasExtents)
         {
             if (observer is not null)
             {
@@ -436,7 +438,7 @@ public sealed partial class ErofsParser
         if (context.FragmentPcluster && isLastExtent)
         {
             var fragmentOffset = (ulong)context.Header.FragmentOff;
-            if (inode.DataLayout == ErofsInode.DataLayoutCompressed)
+            if (inode.DataLayout == UnifiedDataLayout.Compressed)
             {
                 fragmentOffset |= (ulong)lc.Pblk << 32;
             }
@@ -621,7 +623,11 @@ public sealed partial class ErofsParser
             }
         }
 
-        var compressedByteLen = iteration.IsTailPacked ? context.Header.IdataSize : checked(compressedBlocks * _blockSize);
+        var compressedByteLen = iteration.IsTailPacked
+            ? context.Header.IdataSize
+            : head1NotBig || plainOrHead2NotBig
+                ? checked(1 << context.LclusterBits)
+                : checked(compressedBlocks * _blockSize);
         if (compressedByteLen <= 0 || !iteration.IsTailPacked && lc.Pblk < 0 || compressedByteLen > ErofsCompression.MaxPclusterSize)
         {
             throw new FileSystemCorruptedException($"Invalid compressed pcluster for nid {context.Nid}.");
@@ -631,6 +637,12 @@ public sealed partial class ErofsParser
         {
             throw new FileSystemCorruptedException(
                 $"Semi-compressed pcluster {lcn} of nid {context.Nid} has no encoded tail after its raw head cluster ({compressedByteLen} disk bytes, {iteration.SemiRawLength} raw bytes).");
+        }
+
+        if (headType == LclusterTypePlain && llen > compressedByteLen)
+        {
+            throw new FileSystemCorruptedException(
+                $"Invalid PLAIN head lcluster {lcn} of nid {context.Nid}: logical length {llen} exceeds physical length {compressedByteLen}.");
         }
 
         var pblkStart = iteration.IsTailPacked
@@ -715,7 +727,7 @@ public sealed partial class ErofsParser
     private sealed class CompressedWriteContext
     {
         public required ulong Nid { get; init; }
-        public required ErofsInode Inode { get; init; }
+        public required UnifiedInode Inode { get; init; }
         public required ZErofsMapHeader Header { get; init; }
         public required long HeaderOffset { get; init; }
         public required ushort Advise { get; init; }
@@ -846,11 +858,11 @@ public sealed partial class ErofsParser
     /// Returns the largest logical <c>clusterofs</c> among all compressed head lclusters, i.e. the
     /// greatest nonzero SourceOffset modulo the logical cluster size. Standards-conforming images
     /// place every head lcluster at its cluster start (clusterofs == 0); only byte-granular packing
-    /// (the dense planner) produces a non-zero clusterofs, which legacy Linux 5.4 / 5.10 decoders
+    /// (the dense planner) produces a non-zero clusterofs, which the legacy (pre-5.13) decoders
     /// cannot address.
     /// <para>返回所有压缩 head lcluster 中最大的逻辑 clusterofs，即 SourceOffset 对逻辑簇大小取模的
     /// 最大值。符合规范的镜像把每个 head lcluster 放在其逻辑簇起点（clusterofs == 0）；只有按
-    /// 字节粒度打包（dense 规划器）才会产生非零 clusterofs，这是 legacy Linux 5.4 / 5.10 解码器
+    /// 字节粒度打包（dense 规划器）才会产生非零 clusterofs，这是 legacy（pre-5.13）解码器
     /// 无法寻址的布局。</para>
     /// </summary>
     internal int MaxCompressedClusterOfs()
@@ -874,9 +886,9 @@ public sealed partial class ErofsParser
     /// <summary>
     /// Returns the largest compressed stream (in bytes) among all pclusters. A value above the block
     /// size proves the image stores a genuine multi-block big pcluster, whose index head carries the
-    /// CBLKCNT marker so the kernel spans several physical blocks in one extent.
+    /// CBLKCNT marker so one extent spans several physical blocks.
     /// <para>返回所有 pcluster 中最大的压缩流字节数。大于块大小即证明镜像存储了真正的多块 big
-    /// pcluster：其索引 head 携带 CBLKCNT 标记，使内核单个 extent 跨越多个物理块。</para>
+    /// pcluster：其索引 head 携带 CBLKCNT 标记，使单个 extent 跨越多个物理块。</para>
     /// </summary>
     internal int MaxCompressedPclusterBytes()
     {
@@ -898,15 +910,15 @@ public sealed partial class ErofsParser
 
     /// <summary>
     /// Returns the largest shortfall, over all compressed pclusters, between the output a
-    /// pre-big-pcluster kernel demands (covered whole logical clusters, unclamped by i_size) and
+    /// legacy (pre-big-pcluster) decoder demands (covered whole logical clusters, unclamped by i_size) and
     /// the bytes the stored stream actually decodes to. Zero is required for images that must
-    /// mount on Linux 5.4 / 5.10; a positive value reproduces the device-side
-    /// "failed to decompress %d in[...] out[...]" corruption. Modern (big-pcluster) kernels clamp
+    /// mount on legacy (pre-5.13) implementations; a positive value reproduces the device-side
+    /// "failed to decompress %d in[...] out[...]" corruption. Big-pcluster-aware decoders clamp
     /// the final extent to i_size, so images using that layout can legitimately report a deficit.
-    /// <para>返回所有压缩 pcluster 中，“pre-big-pcluster 内核要求的输出（覆盖的整逻辑簇数，不按
-    /// i_size 裁剪）”与“实际解压字节数”之间的最大缺口。需要在 Linux 5.4 / 5.10 上挂载的镜像必须
-    /// 为 0；大于 0 即复现设备端 "failed to decompress %d in[...] out[...]" 故障。现代
-    /// （big-pcluster）内核会把最后一个 extent 裁剪到 i_size，因此采用该布局的镜像出现缺口属正常。</para>
+    /// <para>返回所有压缩 pcluster 中，“legacy（pre-big-pcluster）解码器要求的输出（覆盖的整逻辑簇数，不按
+    /// i_size 裁剪）”与“实际解压字节数”之间的最大缺口。需要在 legacy（pre-5.13）实现上挂载的镜像必须
+    /// 为 0；大于 0 即复现设备端 "failed to decompress %d in[...] out[...]" 故障。支持
+    /// big-pcluster 的解码器会把最后一个 extent 裁剪到 i_size，因此采用该布局的镜像出现缺口属正常。</para>
     /// </summary>
     internal int MaxPclusterKernelCoverageDeficit()
     {
@@ -927,8 +939,8 @@ public sealed partial class ErofsParser
     }
 
     /// <summary>Diagnostic companion to <see cref="MaxPclusterKernelCoverageDeficit"/> listing every
-    /// compressed extent whose kernel-expected output exceeds its decoded bytes.
-    /// <para><see cref="MaxPclusterKernelCoverageDeficit"/> 的诊断伴侣，列出所有内核期望输出大于实际
+    /// compressed extent whose legacy-expected output exceeds its decoded bytes.
+    /// <para><see cref="MaxPclusterKernelCoverageDeficit"/> 的诊断伴侣，列出所有旧版期望输出大于实际
     /// 解压字节数的压缩 extent。</para></summary>
     internal List<(string Path, int Expected, int Decoded)> PclusterKernelCoverageDeficits()
     {
@@ -953,8 +965,8 @@ public sealed partial class ErofsParser
     }
 
     /// <summary>Diagnostic companion listing one file's logical cluster index entries exactly as a
-    /// kernel decodes them, to compare a rebuild's index against the verified source image.
-    /// <para>诊断伴侣：按内核的解码方式列出指定文件的每个逻辑簇索引项，用于把重建镜像的索引与已校验
+    /// conformant decoder reads them, to compare a rebuild's index against the verified source image.
+    /// <para>诊断伴侣：按合规解码器的读取方式列出指定文件的每个逻辑簇索引项，用于把重建镜像的索引与已校验
     /// 的源镜像逐项对照。</para></summary>
     internal List<(long Lcn, byte Type, int ClusterOfs, long Pblk, uint Delta0, uint Delta1)> DumpIndexClusters(string path)
     {
@@ -982,9 +994,9 @@ public sealed partial class ErofsParser
         return report;
     }
 
-    private List<(long Lcn, byte Type, int ClusterOfs, long Pblk, uint Delta0, uint Delta1)> IndexRows(ulong nid, ErofsInode inode)
+    private List<(long Lcn, byte Type, int ClusterOfs, long Pblk, uint Delta0, uint Delta1)> IndexRows(ulong nid, UnifiedInode inode)
     {
-        var headerOffset = AlignUp(InodeOffset(nid) + inode.OnDiskSize + inode.XattrTotalSize, 8);
+        var headerOffset = AlignUp(InodeOffset(nid) + inode.OnDiskSize + inode.XattrISize, 8);
         var header = ZErofsMapHeader.FromBytes(ReadInodeMetadata(nid, headerOffset, ZErofsMapHeader.Size, "compressed map header"));
         var lclusterBits = _superblock.BlockSizeBits + (header.ClusterBits & ZErofsMapHeader.LclusterBitsMask);
         var totalIdx = ErofsCompression.PclusterCount(inode.Size, 1 << lclusterBits);
@@ -1027,25 +1039,25 @@ public sealed partial class ErofsParser
     {
         var nid = FindFile(path);
         var inode = ReadInode(nid);
-        return AlignUp(InodeOffset(nid) + inode.OnDiskSize + inode.XattrTotalSize, 8);
+        return AlignUp(InodeOffset(nid) + inode.OnDiskSize + inode.XattrISize, 8);
     }
 
     /// <summary>
     /// Reads a COMRESSED_FULL inode whose map header carries extent metadata: the index area is
-    /// a sorted array of variable-size z_erofs_extent records (fs/erofs/zmap.c z_erofs_map_blocks_ext).
+    /// a sorted array of variable-size z_erofs_extent records.
     /// The encoded and decoded extent buffers come from <paramref name="scratch"/>, which the caller
     /// owns for the whole walk so consecutive extents reuse them.
     /// <para>读取携带 extent 元数据的 COMRESSED_FULL inode：索引区为按逻辑偏移排序的可变长度
-    /// z_erofs_extent 记录数组（fs/erofs/zmap.c z_erofs_map_blocks_ext）。压缩与解码缓冲来自
+    /// z_erofs_extent 记录数组。压缩与解码缓冲来自
     /// <paramref name="scratch"/>，由调用方在整个遍历期间持有，使相邻 extent 复用同一对缓冲。</para>
     /// </summary>
-    private void WriteExtentsData(ulong nid, ErofsInode inode, ZErofsMapHeader header, byte[] headerBytes,
+    private void WriteExtentsData(ulong nid, UnifiedInode inode, ZErofsMapHeader header, byte[] headerBytes,
         long headerOffset, Stream output, ExtentWriteScratch scratch, CancellationToken cancellationToken)
     {
         var extentCount = (ulong)(BinaryPrimitives.ReadUInt32LittleEndian(headerBytes)
             | ((ulong)header.ExtentsHi << 32));
-        var recSize = 4 << ((header.Advise >> ZErofsMapHeader.ExtRecSizeBit) & ZErofsMapHeader.ExtRecSizeMask);
-        var extentsBase = checked((long)AlignUp(headerOffset + ZErofsMapHeader.Size, recSize));
+        var recSize = ZErofsMapHeader.ExtentRecordSize(header.Advise);
+        var extentsBase = ZErofsMapHeader.ExtentAreaBase(headerOffset, recSize);
         if (recSize is 4 or 8)
         {
             WriteShortExtentsData(nid, inode, header, extentsBase, recSize, output, scratch, cancellationToken);
@@ -1137,7 +1149,7 @@ public sealed partial class ErofsParser
             | (recordSize > 16 ? (ulong)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(16)) << 32 : 0)));
     }
 
-    private void WriteShortExtentsData(ulong nid, ErofsInode inode, ZErofsMapHeader header,
+    private void WriteShortExtentsData(ulong nid, UnifiedInode inode, ZErofsMapHeader header,
         long indexStart, int recordSize, Stream output, ExtentWriteScratch scratch, CancellationToken cancellationToken)
     {
         if (inode.Size == 0)
@@ -1210,7 +1222,7 @@ public sealed partial class ErofsParser
         }
     }
 
-    private void WritePlainExtent(ulong nid, ErofsInode inode, byte[] record, int recSize,
+    private void WritePlainExtent(ulong nid, UnifiedInode inode, byte[] record, int recSize,
         long logicalOffset, long logicalLength, long physicalOffset, Stream output, CancellationToken cancellationToken)
     {
         if (logicalLength <= 0)
@@ -1243,7 +1255,7 @@ public sealed partial class ErofsParser
     /// <paramref name="scratch"/> 配对缓冲，仅在某个 extent 需要更多字节时就地扩容，因此连续
     /// extent 不再产生额外的池往返。</para>
     /// </summary>
-    private void WriteCompressedExtent(ulong nid, ErofsInode inode, byte[] record, int recSize,
+    private void WriteCompressedExtent(ulong nid, UnifiedInode inode, byte[] record, int recSize,
         long logicalOffset, long logicalLength, ErofsAlgorithm algorithm, Stream output,
         ExtentWriteScratch scratch, CancellationToken cancellationToken,
         long? physicalOverride = null)
@@ -1350,7 +1362,7 @@ public sealed partial class ErofsParser
             throw new FileSystemCorruptedException("Fragment inode without a packed inode (s_packed_nid == 0).");
         }
 
-        ErofsInode packed;
+        UnifiedInode packed;
         lock (_streamLock)
         {
             _packedInode ??= ReadInode(packedNid);
@@ -1379,9 +1391,9 @@ public sealed partial class ErofsParser
             return;
         }
 
-        var inlineAll = packed.DataLayout == ErofsInode.DataLayoutInline &&
-                        packed.RawBlockAddress == uint.MaxValue;
-        if (packed.DataLayout == ErofsInode.DataLayoutInline && !inlineAll)
+        var inlineAll = packed.DataLayout == UnifiedDataLayout.Inline &&
+                        packed.AddressField() == uint.MaxValue;
+        if (packed.DataLayout == UnifiedDataLayout.Inline && !inlineAll)
         {
 
             var flatLength = packedSize / _blockSize * _blockSize;
@@ -1389,7 +1401,7 @@ public sealed partial class ErofsParser
             return;
         }
 
-        if (packed.DataLayout == ErofsInode.DataLayoutInline)
+        if (packed.DataLayout == UnifiedDataLayout.Inline)
         {
 
             var start = checked(InodeOffset(packedNid) + packed.InlineDataOffset + (long)fragmentOff);
@@ -1405,7 +1417,7 @@ public sealed partial class ErofsParser
             return;
         }
 
-        if (packed.DataLayout != ErofsInode.DataLayoutFlat)
+        if (packed.DataLayout != UnifiedDataLayout.Flat)
         {
             throw new FileSystemUnsupportedFeatureException($"Unsupported packed inode layout {packed.DataLayout} for nid {packedNid}.");
         }
@@ -1413,9 +1425,9 @@ public sealed partial class ErofsParser
         WritePackedRange((long)fragmentOff, length, packedSize, packed, packedNid, inlineStartIsFlat: true, output);
     }
 
-    private long CompressedIndexEnd(ulong nid, ErofsInode inode, long headerOffset, int count, int clusterBits)
+    private long CompressedIndexEnd(ulong nid, UnifiedInode inode, long headerOffset, int count, int clusterBits)
     {
-        if (inode.DataLayout == ErofsInode.DataLayoutCompressed)
+        if (inode.DataLayout == UnifiedDataLayout.Compressed)
             return checked(headerOffset + ZErofsMapHeader.Size + FullIndexStartPad + (long)count * 8);
         var header = ZErofsMapHeader.FromBytes(ReadInodeMetadata(nid, headerOffset, ZErofsMapHeader.Size, "inline index header"));
         var start = headerOffset + ZErofsMapHeader.Size;
@@ -1438,7 +1450,7 @@ public sealed partial class ErofsParser
     private FileStream? _packedData;
     private bool _loadingPackedData;
 
-    private void CopyCompressedPackedRange(ulong nid, ErofsInode inode, long offset, long length, Stream output)
+    private void CopyCompressedPackedRange(ulong nid, UnifiedInode inode, long offset, long length, Stream output)
     {
         lock (_streamLock)
         {
@@ -1482,7 +1494,7 @@ public sealed partial class ErofsParser
         long offset,
         long length,
         long flatLength,
-        ErofsInode packed,
+        UnifiedInode packed,
         ulong packedNid,
         bool inlineStartIsFlat,
         Stream output)
@@ -1492,7 +1504,7 @@ public sealed partial class ErofsParser
         if (pos < flatLength)
         {
             var flatBytes = Math.Min(remaining, flatLength - pos);
-            var flatStart = checked(packed.RawBlockAddress * _blockSize + pos);
+            var flatStart = checked(packed.AddressField() * _blockSize + pos);
             CheckRange(flatStart, flatBytes, "Packed fragment data");
             CopyFromSource(output, flatStart, flatBytes);
             remaining -= flatBytes;

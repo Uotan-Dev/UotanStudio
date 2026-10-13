@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Security.Cryptography;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.TestDoubles;
@@ -11,78 +10,6 @@ public sealed class MtkPreloaderServiceTests
 {
     private const byte PreloaderRead32 = 0xD1;
     private const byte PreloaderWrite32 = 0xD4;
-
-    [Fact]
-    public async Task DumpInternalFlashAsync_CompleteWindow_PublishesByteExactFileAndRemovesStaging()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreatePreloaderSessionAsync(transport);
-        var expected = FlashPattern(16);
-        EnqueuePreloaderRead(transport, PreloaderRead32, 0x0000_0000, 4, expected);
-        var before = transport.Writes.Count;
-        using var directory = new TempDirectory();
-        var destination = Path.Combine(directory.Path, "iflash.bin");
-        var reports = new List<FlashProgress>();
-
-        var record = await MtkPreloaderService.DumpInternalFlashAsync(session, 0x0000_0000, 16, 16,
-            confirmFlashMapping: false, destination, new ListProgress(reports),
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(expected, File.ReadAllBytes(destination));
-        Assert.Equal(16, record.ByteLength);
-        Assert.Equal(16, record.RequestedBytes);
-        Assert.Equal(16, record.StepBytes);
-        Assert.Equal(0x0000_0000u, record.StartOffset);
-        Assert.Equal(destination, record.DestinationPath);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(expected)), record.Sha256Hex);
-        Assert.Equal(100, reports[^1].Percent);
-        Assert.Single(Directory.GetFiles(directory.Path));
-        Assert.True(transport.Writes.Count > before);
-    }
-
-    [Fact]
-    public async Task DumpInternalFlashAsync_ShortReadFault_KeepsExistingFileAndRemovesStaging()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreatePreloaderSessionAsync(transport);
-        var first = FlashPattern(16);
-        EnqueuePreloaderRead(transport, PreloaderRead32, 0x0000_0000, 4, first);
-        transport.Enqueue([PreloaderRead32]);
-        transport.Enqueue(BigEndian(0x10));
-        transport.Enqueue(BigEndian(4));
-        transport.Enqueue([0x00, 0x00]);
-        transport.Enqueue(new byte[8]);
-        using var directory = new TempDirectory();
-        var destination = Path.Combine(directory.Path, "iflash.bin");
-        var existing = "PRE-EXISTING IMAGE"u8.ToArray();
-        File.WriteAllBytes(destination, existing);
-
-        await Assert.ThrowsAsync<MtkProtocolException>(() => MtkPreloaderService.DumpInternalFlashAsync(
-            session, 0x0000_0000, 32, 16, confirmFlashMapping: false, destination, null,
-            TestContext.Current.CancellationToken));
-
-        Assert.Equal(existing, File.ReadAllBytes(destination));
-        Assert.Single(Directory.GetFileSystemEntries(directory.Path));
-        Assert.Equal(MtkSessionState.Faulted, session.State);
-    }
-
-    [Fact]
-    public async Task DumpInternalFlashAsync_PreCancelledToken_WritesNothingAndKeepsDirectoryClean()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreatePreloaderSessionAsync(transport);
-        var before = transport.Writes.Count;
-        using var directory = new TempDirectory();
-        using var cancellation = new CancellationTokenSource();
-        await cancellation.CancelAsync();
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => MtkPreloaderService.DumpInternalFlashAsync(
-            session, 0x0000_0000, 16, 16, confirmFlashMapping: false,
-            Path.Combine(directory.Path, "iflash.bin"), null, cancellation.Token));
-
-        Assert.Equal(before, transport.Writes.Count);
-        Assert.Empty(Directory.GetFiles(directory.Path));
-    }
 
     [Fact]
     public async Task PeekWindowAsync_KnownWindow_ReturnsReferenceLittleEndianBytes()
@@ -302,80 +229,6 @@ public sealed class MtkPreloaderServiceTests
         Assert.Equal(MtkSessionState.Bootloader, session.State);
     }
 
-    [Fact]
-    public async Task DumpBromAsync_SubWindow_PublishesByteExactFileAndRemovesStaging()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreatePreloaderSessionAsync(transport);
-        var expected = new byte[0x40];
-        for (var word = 0; word < 0x10; word++)
-        {
-            var value = (uint)(0x0102_0304 + word * 0x0101_0101);
-            EnqueuePreloaderRead(transport, PreloaderRead32, (uint)(word * 4), 1, BigEndian(value));
-            BinaryPrimitives.WriteUInt32LittleEndian(expected.AsSpan(word * 4), value);
-        }
-
-        using var directory = new TempDirectory();
-        var destination = Path.Combine(directory.Path, "brom.bin");
-        var reports = new List<FlashProgress>();
-
-        var record = await MtkPreloaderService.DumpBromAsync(session, destination, new ListProgress(reports),
-            TestContext.Current.CancellationToken, new MtkDaMemoryRange(0x0000_0000, 0x40));
-
-        Assert.Equal(expected, File.ReadAllBytes(destination));
-        Assert.Equal(0x40, record.ByteLength);
-        Assert.Equal(0x40, record.RequestedBytes);
-        Assert.Equal(MtkDaMemoryAccess.DumpStepBytes, record.StepBytes);
-        Assert.Equal(0x0000_0000u, record.StartOffset);
-        Assert.Equal("BROM", record.RegionName);
-        Assert.Equal(destination, record.DestinationPath);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(expected)), record.Sha256Hex);
-        Assert.Equal(100, reports[^1].Percent);
-        Assert.Single(Directory.GetFiles(directory.Path));
-    }
-
-    [Fact]
-    public async Task DumpBromAsync_ShortReadFault_KeepsExistingFileAndRemovesStaging()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreatePreloaderSessionAsync(transport);
-        EnqueuePreloaderRead(transport, PreloaderRead32, 0x0000_0000, 1, [0x44, 0x33, 0x22, 0x11]);
-        transport.Enqueue([PreloaderRead32]);
-        transport.Enqueue(BigEndian(0x0000_0004));
-        transport.Enqueue(BigEndian(1));
-        transport.Enqueue([0x00, 0x00]);
-        transport.Enqueue([0x11, 0x22, 0x33]);
-        transport.Enqueue([0x00, 0x00]);
-        using var directory = new TempDirectory();
-        var destination = Path.Combine(directory.Path, "brom.bin");
-        var existing = "PRE-EXISTING IMAGE"u8.ToArray();
-        File.WriteAllBytes(destination, existing);
-
-        await Assert.ThrowsAsync<MtkProtocolException>(() => MtkPreloaderService.DumpBromAsync(session, destination,
-            null, TestContext.Current.CancellationToken, new MtkDaMemoryRange(0x0000_0000, 0x40)));
-
-        Assert.Equal(existing, File.ReadAllBytes(destination));
-        Assert.Single(Directory.GetFileSystemEntries(directory.Path));
-        Assert.Equal(MtkSessionState.Faulted, session.State);
-    }
-
-    [Fact]
-    public async Task DumpBromAsync_PreCancelledToken_WritesNothingAndKeepsDirectoryClean()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreatePreloaderSessionAsync(transport);
-        var before = transport.Writes.Count;
-        using var directory = new TempDirectory();
-        using var cancellation = new CancellationTokenSource();
-        await cancellation.CancelAsync();
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => MtkPreloaderService.DumpBromAsync(
-            session, Path.Combine(directory.Path, "brom.bin"), null, cancellation.Token));
-
-        Assert.Equal(before, transport.Writes.Count);
-        Assert.Empty(Directory.GetFiles(directory.Path));
-    }
-
     private static async Task<MtkSession> CreatePreloaderSessionAsync(ScriptedCommTransport transport)
     {
         transport.Enqueue(
@@ -420,17 +273,6 @@ public sealed class MtkPreloaderServiceTests
         }
 
         transport.Enqueue([0x00, 0x00]);
-    }
-
-    private static byte[] FlashPattern(int length)
-    {
-        var bytes = new byte[length];
-        for (var index = 0; index < length; index++)
-        {
-            bytes[index] = (byte)(index * 5 + 1);
-        }
-
-        return bytes;
     }
 
     private sealed class ListProgress(List<FlashProgress> reports) : IProgress<FlashProgress>

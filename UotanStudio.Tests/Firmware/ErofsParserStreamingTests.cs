@@ -4,6 +4,7 @@ using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -111,19 +112,21 @@ public class ErofsParserStreamingTests
 
         new ErofsInode
         {
-            Advise = ErofsInode.DataLayoutFlat,
+            IFormat = ErofsInode.DataLayoutFlat,
+            DataLayout = ErofsDataLayout.Flat,
             Mode = ErofsInode.ModeDirectory,
             Size = blockSize,
-            U = 3,
+            Idata = new ErofsFlatIdata { BlockAddress = 3 },
             Nlink = 2,
         }.WriteTo(image.AsSpan(blockSize));
 
         new ErofsInode
         {
-            Advise = ErofsInode.DataLayoutCompressed | ErofsInode.FlagExtended,
+            IFormat = ErofsInode.DataLayoutCompressed | ErofsInode.FlagExtended,
+            DataLayout = ErofsDataLayout.Compressed,
             Mode = ErofsInode.ModeRegularFile,
             Size = (ulong)payload.Length,
-            U = 1,
+            Idata = new ErofsCompressedIdata { Blocks = 1 },
             Nlink = 1,
         }.WriteTo(image.AsSpan(blockSize + ErofsInode.CompactSize));
 

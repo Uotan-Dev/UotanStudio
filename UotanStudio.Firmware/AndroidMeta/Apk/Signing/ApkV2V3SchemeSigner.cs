@@ -11,12 +11,12 @@ namespace UotanStudio.Firmware.AndroidMeta.Apk.Signing;
 /// </summary>
 public static class ApkV2V3SchemeSigner
 {
-    /// <summary>SDK range for v3 signers without explicit rotation (apksigner defaults).
-    /// <para>无显式密钥轮换时 v3 签名者的 SDK 范围（apksigner 默认值）。</para></summary>
+    /// <summary>SDK range for v3 signers without explicit rotation.
+    /// <para>无显式密钥轮换时 v3 签名者的 SDK 范围。</para></summary>
     public const int V3DefaultMinSdk = 28;
 
-    /// <summary>Upper SDK bound of a v3 signer when no explicit range is given (apksigner default).
-    /// <para>未显式指定范围时 v3 签名者保护的最高 SDK（apksigner 默认值）。</para></summary>
+    /// <summary>Upper SDK bound of a v3 signer when no explicit range is given.
+    /// <para>未显式指定范围时 v3 签名者保护的最高 SDK。</para></summary>
     public const int V3DefaultMaxSdk = int.MaxValue;
 
     /// <summary>

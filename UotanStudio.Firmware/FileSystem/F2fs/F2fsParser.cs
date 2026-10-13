@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.FileSystem.F2fs.Models;
+using UotanStudio.Hash.Crc32;
 
 namespace UotanStudio.Firmware.FileSystem.F2fs;
 
@@ -44,14 +44,8 @@ public sealed record F2fsFileEntry(string Path, long Size, uint Inode, F2fsParse
 }
 
 /// <summary>
-/// Read-only parser for raw F2FS images: superblock, checkpoint pack, NAT, inode nodes, dentry
-/// blocks, xattrs and compressed clusters. All block reads are bounds-checked against the image
-/// length, only a 4096-byte block size is accepted, and every offset decoded from the image is
-/// validated before use. The parser owns its underlying stream and releases it on
-/// <see cref="Dispose"/>; concurrent callers are serialized on an internal stream lock.
-/// <para>原始 F2FS 镜像的只读解析器：超级块、checkpoint pack、NAT、inode 节点、dentry 块、xattr
-/// 与压缩簇。所有块读取都按镜像长度做边界检查，仅接受 4096 字节块大小，从镜像解出的每个偏移都会
-/// 先校验再使用。解析器持有底层流并在 <see cref="Dispose"/> 时释放；并发调用由内部流锁串行化。</para>
+/// Read-only parser for raw F2FS images: superblock, checkpoint pack, NAT, inode nodes, dentry blocks, xattrs and compressed clusters. All block reads are bounds-checked, only a 4096-byte block size is accepted, and the parser owns and releases its stream.
+/// <para>原始 F2FS 镜像的只读解析器：超级块、检查点包、NAT、inode 节点、dentry 块、xattr 与压缩簇。所有块读取均做上限检查，仅接受 4096 字节块大小，且解析器自行持有并释放其流。</para>
 /// </summary>
 /// <example>
 /// <code>
@@ -1076,8 +1070,8 @@ public sealed class F2fsParser : IDisposable
     }
 
     /// <summary>
-    /// kernel: 0=LZO,1=LZ4,2=ZSTD,3=LZORLE。
-    /// <para>将 inode extra attributes 内的内核算法 ID 映射为 CompressionAlgorithm。</para>
+    /// Maps the algorithm id stored in the inode extra attributes: 0=LZO, 1=LZ4, 2=ZSTD, 3=LZORLE.
+    /// <para>把 inode extra attributes 中的算法 ID 映射为 CompressionAlgorithm：0=LZO、1=LZ4、2=ZSTD、3=LZORLE。</para>
     /// </summary>
     private static CompressionAlgorithm MapCompressAlgorithm(byte kernelAlgorithmId)
         => kernelAlgorithmId switch

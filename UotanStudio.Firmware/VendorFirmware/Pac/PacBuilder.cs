@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Hash.Crc16;
 
 namespace UotanStudio.Firmware.VendorFirmware.Pac;
 

@@ -11,6 +11,8 @@ namespace UotanStudio.Tests.Firmware;
 /// <summary>Checks Linux EROFS compression configuration records. <para>检查 Linux EROFS 压缩配置记录。</para></summary>
 public class ErofsCompressionConfigurationTests
 {
+    private const int BlockSize = 4096;
+
     [Theory]
     [InlineData(ErofsCompressionAlgorithm.Lzma, false, 0)]
     [InlineData(ErofsCompressionAlgorithm.Deflate, false, 0)]
@@ -71,13 +73,100 @@ public class ErofsCompressionConfigurationTests
         source.WriteBytes("data.bin", payload);
         var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
         {
+            BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
+            MaxPclusterSize = 1 << 20,
             Lz4MaxDistance = (ushort)lz4MaxDistance
         });
         var superblock = ErofsSuperblock.FromImage(image);
+        Assert.NotEqual(0u, superblock.FeatureIncompat & ErofsSuperblock.IncompatBigPcluster);
         var configurationOffset = 1024 + 128 + superblock.SbExtSlots * 16;
         Assert.Equal(14, BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(configurationOffset)));
         Assert.Equal(expected, BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(configurationOffset + 2, 2)));
+        Assert.Equal((1 << 20) / BlockSize, BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(configurationOffset + 4, 2)));
+    }
+
+    [Fact]
+    public void Build_DefaultPclusterSizeWithLz4_DeclaresCompressionConfigsDistinctFromLegacy()
+    {
+        using var source = new TempDirectory();
+        var payload = Enumerable.Repeat((byte)0x53, 20 * 1024).ToArray();
+        source.WriteBytes("data.bin", payload);
+        var options = new ErofsOptions
+        {
+            BlockSize = BlockSize,
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+        };
+        var image = new ErofsBuilder().Build(source.Path, options);
+        var superblock = ErofsSuperblock.FromImage(image);
+
+        Assert.Equal(BlockSize, options.MaxPclusterSize);
+        Assert.False(options.FeaturesAuthoritative);
+
+        Assert.NotEqual(0u, superblock.FeatureIncompat & ErofsSuperblock.IncompatBigPcluster);
+        Assert.NotEqual(0u, superblock.FeatureIncompat & ErofsSuperblock.IncompatLz4_0Padding);
+        Assert.NotEqual(ErofsCompression.Lz4DistanceMax, superblock.AvailableComprAlgs);
+
+        var configurationOffset = 1024 + 128 + superblock.SbExtSlots * 16;
+        var declared = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(configurationOffset));
+        Assert.Equal(14, declared);
+
+        using var parser = new ErofsParser(image);
+        Assert.True(parser.MaxCompressedPclusterBytes() <= BlockSize,
+            $"an undeclared big_pcluster default must keep every frame inside one block; maxBytes={parser.MaxCompressedPclusterBytes()}.");
+        Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
+    }
+
+    [Fact]
+    public void Build_LegacyCompatibilityWithDefaultPclusterSize_LeavesTheSharedBitClear()
+    {
+        using var source = new TempDirectory();
+        var payload = Enumerable.Repeat((byte)0x53, 20 * 1024).ToArray();
+        source.WriteBytes("data.bin", payload);
+        var options = new ErofsOptions
+        {
+            BlockSize = BlockSize,
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            LegacyCompatibility = true,
+        };
+        var image = new ErofsBuilder().Build(source.Path, options);
+        var superblock = ErofsSuperblock.FromImage(image);
+
+        Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, superblock.FeatureIncompat);
+        Assert.Equal(0u, superblock.FeatureIncompat & ErofsSuperblock.IncompatBigPcluster);
+        Assert.Equal(ErofsCompression.Lz4DistanceMax, superblock.AvailableComprAlgs);
+
+        var configurationOffset = 1024 + 128 + superblock.SbExtSlots * 16;
+        var declared = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(configurationOffset));
+        Assert.False(declared is 14 or 6, "a legacy one-block LZ4 build unexpectedly carried a compression configuration record.");
+    }
+
+    [Fact]
+    public void Build_PclusterSizeAboveOneBlock_DeclaresBigPclusterAndConfigRecords()
+    {
+        using var source = new TempDirectory();
+        var payload = Enumerable.Repeat((byte)0x63, 20 * 1024).ToArray();
+        source.WriteBytes("data.bin", payload);
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            BlockSize = BlockSize,
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            MaxPclusterSize = 4 * BlockSize,
+        });
+        var superblock = ErofsSuperblock.FromImage(image);
+
+        Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatBigPcluster,
+            superblock.FeatureIncompat);
+        Assert.Equal(1 << (int)ErofsCompressionAlgorithm.Lz4, superblock.AvailableComprAlgs);
+
+        var configurationOffset = 1024 + 128 + superblock.SbExtSlots * 16;
+        Assert.Equal(14, BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(configurationOffset)));
+        Assert.Equal(ErofsCompression.Lz4DistanceMax,
+            BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(configurationOffset + 2, 2)));
+        Assert.Equal(4, BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(configurationOffset + 4, 2)));
+
+        using var parser = new ErofsParser(image);
+        Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
     }
 
     [Fact]
@@ -143,7 +232,12 @@ public class ErofsCompressionConfigurationTests
             LegacyCompatibility = true,
             SuperblockChecksum = superblockChecksum,
             SourceMtimeFeature = mtime,
+
             SourceXattrFilterFeature = true,
+            FileXattrs = new Dictionary<string, IReadOnlyList<ErofsXattrEntry>>
+            {
+                ["data.bin"] = [new ErofsXattrEntry { Name = "user.role", Value = "system"u8.ToArray() }],
+            },
         });
         var superblock = ErofsSuperblock.FromImage(image);
         Assert.Equal(expectedCompat, superblock.FeatureCompat);

@@ -1,5 +1,5 @@
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.Core.Checksums;
+using UotanStudio.Hash.Crc32c;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;
 

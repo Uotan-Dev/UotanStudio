@@ -2,20 +2,38 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Models;
 
 /// <summary>
 /// Single source of truth mapping each <see cref="ErofsFeature"/> to its on-disk word, bit, upstream
-/// name, oldest mounting kernel and writer capability, mirroring the erofs-utils feature list. Capability
-/// belongs to the physical bit, so every name aliasing one bit shares it.
+/// name, oldest mounting kernel and writer capability, mirroring the erofs-utils feature list. Names that
+/// alias one bit share that bit's kernel floor, while capability belongs to the name: a bit the writer can
+/// lay out through one name marks the other name <see cref="ErofsFeatureCapability.Contextual"/>, because
+/// whether that face is writable depends on fields the feature word does not carry.
 /// <para>把每个 <see cref="ErofsFeature"/> 映射到磁盘字、位、上游名称、最老可挂载内核与写入方能力的唯一真值表，
-/// 与 erofs-utils 的特性名单一致。能力归属于物理位，因此共用一位的每个名称也共用该能力。</para>
+/// 与 erofs-utils 的特性名单一致。共用一位的名称共享该位的内核下限，而能力归属于名称：写入方能经某个名称落盘的位，
+/// 会把另一个名称标为 <see cref="ErofsFeatureCapability.Contextual"/>，因为该面能否写出取决于特性字未携带的字段。</para>
 /// </summary>
 internal static class ErofsFeatureTable
 {
+    /// <summary>Oldest kernel erofs-utils requires of a bitmap carrying MicroLZMA, read from
+    /// <c>dump/main.c</c> when it raises the floor from <c>s_available_compr_algs</c>.
+    /// <para>erofs-utils 依据 <c>s_available_compr_algs</c> 抬高下限时为携带 MicroLZMA 的位图要求的最老内核，取自
+    /// <c>dump/main.c</c>。</para></summary>
+    private const int LzmaKernelFloor = 516;
+
+    /// <summary>Oldest kernel erofs-utils requires of a bitmap carrying DEFLATE.<para>erofs-utils 为携带 DEFLATE
+    /// 的位图要求的最老内核。</para></summary>
+    private const int DeflateKernelFloor = 606;
+
+    /// <summary>Oldest kernel erofs-utils requires of a bitmap carrying Zstandard.<para>erofs-utils 为携带
+    /// Zstandard 的位图要求的最老内核。</para></summary>
+    private const int ZstdKernelFloor = 610;
+
     /// <summary>One row of the upstream feature list.<para>上游特性表中的一行。</para></summary>
     /// <param name="Feature">Logical identifier.<para>逻辑标识。</para></param>
     /// <param name="IsCompat">Whether the word is <c>s_feature_compat</c>.<para>该位属于 <c>s_feature_compat</c> 时为真。</para></param>
     /// <param name="Bit">Physical bit value.<para>物理位值。</para></param>
     /// <param name="Name">Upstream feature name as erofs-utils prints it.<para>erofs-utils 输出的上游特性名。</para></param>
     /// <param name="Kernel">Oldest mounting kernel, encoded as major * 100 + minor.<para>最老可挂载内核，编码为 major * 100 + minor。</para></param>
-    /// <param name="Capability">Whether the managed writer can emit the structures behind the bit.<para>受管写入方能否输出该位背后的结构。</para></param>
+    /// <param name="Capability">Whether the managed writer can emit the structures this name stands for, given
+    /// the bit it shares.<para>结合该名称所共用的位，受管写入方能否输出该名称所指的结构。</para></param>
     internal sealed record Descriptor(ErofsFeature Feature, bool IsCompat, uint Bit, string Name, int Kernel,
         ErofsFeatureCapability Capability);
 
@@ -28,11 +46,11 @@ internal static class ErofsFeatureTable
         new(ErofsFeature.BigPcluster, false, ErofsSuperblock.IncompatBigPcluster, "big_pcluster", 513,
             ErofsFeatureCapability.Emittable),
         new(ErofsFeature.ChunkedFile, false, ErofsSuperblock.IncompatChunkedFile, "chunked_file", 515,
-            ErofsFeatureCapability.ReadOnlyForEmit),
+            ErofsFeatureCapability.Emittable),
         new(ErofsFeature.DeviceTable, false, ErofsSuperblock.IncompatDeviceTable, "device_table", 516,
             ErofsFeatureCapability.Emittable),
         new(ErofsFeature.CompressionHead2, false, ErofsSuperblock.IncompatCompressHead2, "compr_head2", 516,
-            ErofsFeatureCapability.Emittable),
+            ErofsFeatureCapability.Contextual),
         new(ErofsFeature.Ztailpacking, false, ErofsSuperblock.IncompatZtailpacking, "ztailpacking", 517,
             ErofsFeatureCapability.Emittable),
         new(ErofsFeature.Fragments, false, ErofsSuperblock.IncompatFragments, "fragments", 601,
@@ -40,9 +58,9 @@ internal static class ErofsFeatureTable
         new(ErofsFeature.Dedupe, false, ErofsSuperblock.IncompatDedupe, "dedupe", 601,
             ErofsFeatureCapability.Emittable),
         new(ErofsFeature.XattrPrefixes, false, ErofsSuperblock.IncompatXattrPrefixes, "xattr_prefixes", 604,
-            ErofsFeatureCapability.ReadOnlyForEmit),
+            ErofsFeatureCapability.Emittable),
         new(ErofsFeature.FortyEightBit, false, ErofsSuperblock.Incompat48Bit, "48bit", 615,
-            ErofsFeatureCapability.ReadOnlyForEmit),
+            ErofsFeatureCapability.Emittable),
         new(ErofsFeature.Metabox, false, ErofsSuperblock.IncompatMetabox, "metabox", 617,
             ErofsFeatureCapability.Emittable),
         new(ErofsFeature.SuperblockChecksum, true, ErofsSuperblock.CompatSbChecksum, "sb_csum", 0,
@@ -52,11 +70,11 @@ internal static class ErofsFeatureTable
         new(ErofsFeature.XattrFilter, true, ErofsSuperblock.CompatXattrFilter, "xattr_filter", 0,
             ErofsFeatureCapability.Emittable),
         new(ErofsFeature.SharedEaInMetabox, true, ErofsSuperblock.CompatSharedEaInMetabox, "shared_ea_in_metabox", 0,
-            ErofsFeatureCapability.ReadOnlyForEmit),
+            ErofsFeatureCapability.Contextual),
         new(ErofsFeature.PlainXattrPrefixes, true, ErofsSuperblock.CompatPlainXattrPfx, "plain_xattr_pfx", 0,
-            ErofsFeatureCapability.ReadOnlyForEmit),
+            ErofsFeatureCapability.Contextual),
         new(ErofsFeature.SharedInodeXattrs, true, ErofsSuperblock.CompatIshareXattrs, "ishare_xattrs", 0,
-            ErofsFeatureCapability.ReadOnlyForEmit),
+            ErofsFeatureCapability.Emittable),
     ];
 
     /// <summary>Every row, in upstream bit order.<para>按上游位顺序排列的全部行。</para></summary>
@@ -74,12 +92,48 @@ internal static class ErofsFeatureTable
     internal static bool IsCompat(ErofsFeature feature)
         => Row(feature).IsCompat;
 
-    /// <summary>Reports whether the writer can emit the structures behind a bit.<para>判断写入方能否输出该位背后的结构。</para></summary>
-    /// <param name="feature">Identifier to test.<para>待测标识。</para></param>
-    /// <returns>The capability shared by every name aliasing the feature's physical
-    /// bit.<para>共用该物理位的每个名称共享的能力。</para></returns>
-    internal static ErofsFeatureCapability CapabilityOf(ErofsFeature feature)
-        => Row(feature).Capability;
+    /// <summary>Every upstream name sharing one physical bit in one feature word.<para>列出某个特性字内共用同一物理位的全部上游名称。</para></summary>
+    /// <param name="bit">Physical bit value as it appears in its word.<para>磁盘上该字中的物理位值。</para></param>
+    /// <param name="isCompat">Word to search: <see langword="true"/> selects <c>s_feature_compat</c> and
+    /// <see langword="false"/> selects <c>s_feature_incompat</c>, since one value appears in both
+    /// words.<para>待检索的字：<see langword="true"/> 选 <c>s_feature_compat</c>，<see langword="false"/> 选
+    /// <c>s_feature_incompat</c>，因为同一数值在两个字中都会出现。</para></param>
+    /// <returns>The names in table order, so an alias pair reads as <c>compr_cfgs/big_pcluster</c> once joined,
+    /// or an empty list when no row carries that bit in the selected word.
+    /// <para>按表序的名称，因此别名对连接后即 <c>compr_cfgs/big_pcluster</c>；选定字中没有行携带该位时返回空表。</para></returns>
+    internal static IReadOnlyList<string> AliasNames(uint bit, bool isCompat)
+        => [.. Descriptors
+            .Where(row => row.IsCompat == isCompat && row.Bit == bit)
+            .Select(row => row.Name)];
+
+    /// <summary>Names one physical incompat bit under the layout context that produced it.<para>按产出该位的布局上下文为物理 incompat 位命名。</para></summary>
+    /// <param name="bit">Physical bit as it appears in <c>s_feature_incompat</c>.<para>磁盘 <c>s_feature_incompat</c>
+    /// 中的物理位。</para></param>
+    /// <param name="extraDeviceCount">Extra-device slots the image or build plan carries, read from
+    /// <c>s_extra_devices</c>. It is the context that tells the device table and the second compressed-inode
+    /// head format apart, because both name bit 0x00000008 and only the device table has on-disk structures the
+    /// writer lays out.<para>镜像或构建计划携带的额外设备槽位数，取自 <c>s_extra_devices</c>。正是该上下文区分设备表与
+    /// 第二种压缩 inode 头部：二者同指 0x00000008 位，而只有设备表拥有写入方能够落盘的磁盘结构。</para></param>
+    /// <returns><c>device_table</c> for bit 0x00000008 with a positive <paramref name="extraDeviceCount"/> and
+    /// <c>compr_head2</c> for that bit without any extra device; the joined alias names for the pairs sharing
+    /// 0x00000002 and 0x00000020; the single upstream name of every other known bit; and the hexadecimal value
+    /// for a bit the table does not carry.<para>0x00000008 位在 <paramref name="extraDeviceCount"/> 为正时返回
+    /// <c>device_table</c>，无额外设备时返回 <c>compr_head2</c>；0x00000002 与 0x00000020 的别名对返回连接后的名称；
+    /// 其余已知位返回其唯一上游名；表中未收录的位返回十六进制值。</para></returns>
+    internal static string NameForIncompatBit(uint bit, int extraDeviceCount)
+    {
+        if (bit == ErofsSuperblock.IncompatDeviceTable)
+        {
+            return extraDeviceCount > 0
+                ? NameOf(ErofsFeature.DeviceTable)
+                : NameOf(ErofsFeature.CompressionHead2);
+        }
+
+        var aliases = AliasNames(bit, false);
+        return aliases.Count == 0
+            ? $"0x{bit:x8}"
+            : string.Join("/", aliases);
+    }
 
     /// <summary>Upstream name of a logical identifier.<para>逻辑标识的上游名称。</para></summary>
     /// <param name="feature">Identifier to name.<para>待命名的标识。</para></param>
@@ -103,7 +157,7 @@ internal static class ErofsFeatureTable
     /// <returns>The major version, or zero when no incompat floor applies.
     /// <para>主版本号；无 incompat 下限时为零。</para></returns>
     internal static int MinimumKernelMajor(uint compatBits, uint incompatBits)
-        => MinimumKernel(compatBits, incompatBits) / 100;
+        => MinimumKernel(incompatBits, 0, false) / 100;
 
     /// <summary>Oldest mounting kernel across declared words, as a minor component.<para>声明字中最老可挂载内核的次版本。</para></summary>
     /// <param name="compatBits">Declared compat word.<para>已声明的 compat 字。</para></param>
@@ -111,7 +165,41 @@ internal static class ErofsFeatureTable
     /// <returns>The minor version, or zero when no incompat floor applies.
     /// <para>次版本号；无 incompat 下限时为零。</para></returns>
     internal static int MinimumKernelMinor(uint compatBits, uint incompatBits)
-        => MinimumKernel(compatBits, incompatBits) % 100;
+        => MinimumKernel(incompatBits, 0, false) % 100;
+
+    /// <summary>Oldest mounting kernel of a decoded superblock, as a major component.<para>解码超级块的最老可挂载内核主版本。</para></summary>
+    /// <param name="compatBits">Decoded compat word. Compat rows carry no kernel floor, mirroring the
+    /// <c>lkver</c> of zero upstream, so the word cannot raise the estimate.<para>解码得到的 compat 字。compat 行没有
+    /// 内核下限，与上游置零的 <c>lkver</c> 一致，因此该字不会抬高估计值。</para></param>
+    /// <param name="incompatBits">Decoded incompat word.<para>解码得到的 incompat 字。</para></param>
+    /// <param name="availableComprAlgs">The <c>s_available_compr_algs</c> bitmap. erofs-utils raises the floor
+    /// from it once per algorithm: MicroLZMA to 5.16, DEFLATE to 6.6 and Zstandard to 6.10.<para>
+    /// <c>s_available_compr_algs</c> 位图。erofs-utils 会按算法抬高下限：MicroLZMA 至 5.16、DEFLATE 至 6.6、Zstandard
+    /// 至 6.10。</para></param>
+    /// <param name="hasCompressionConfigs">Whether compression configuration records follow the superblock. The
+    /// same two bytes hold the legacy LZ4 maximum distance while no records exist, so the bitmap raises no floor
+    /// unless it names records.<para>超级块之后是否紧跟压缩配置记录。无记录时同样两字节存放的是 legacy LZ4 最大距离，
+    /// 因此该位图在不指向记录时不抬高下限。</para></param>
+    /// <returns>The major version, or zero when neither the incompat word nor the algorithm bitmap applies a
+    /// floor.<para>主版本号；incompat 字与算法位图都无下限时为零。</para></returns>
+    internal static int MinimumKernelMajor(uint compatBits, uint incompatBits, ushort availableComprAlgs,
+        bool hasCompressionConfigs)
+        => MinimumKernel(incompatBits, availableComprAlgs, hasCompressionConfigs) / 100;
+
+    /// <summary>Oldest mounting kernel of a decoded superblock, as a minor component.<para>解码超级块的最老可挂载内核次版本。</para></summary>
+    /// <param name="compatBits">Decoded compat word, which carries no kernel
+    /// floor.<para>解码得到的 compat 字，不含内核下限。</para></param>
+    /// <param name="incompatBits">Decoded incompat word.<para>解码得到的 incompat 字。</para></param>
+    /// <param name="availableComprAlgs">The <c>s_available_compr_algs</c> bitmap read as an algorithm set only
+    /// when <paramref name="hasCompressionConfigs"/> holds.<para>仅当 <paramref name="hasCompressionConfigs"/>
+    /// 成立时按算法集合读取的 <c>s_available_compr_algs</c> 位图。</para></param>
+    /// <param name="hasCompressionConfigs">Whether compression configuration records follow the
+    /// superblock.<para>超级块之后是否紧跟压缩配置记录。</para></param>
+    /// <returns>The minor version, or zero when neither the incompat word nor the algorithm bitmap applies a
+    /// floor.<para>次版本号；incompat 字与算法位图都无下限时为零。</para></returns>
+    internal static int MinimumKernelMinor(uint compatBits, uint incompatBits, ushort availableComprAlgs,
+        bool hasCompressionConfigs)
+        => MinimumKernel(incompatBits, availableComprAlgs, hasCompressionConfigs) % 100;
 
     /// <summary>Formats declared words as upstream names, aliasing names for shared bits printed together.
     /// <para>把声明字格式化为上游名称，共用位的别名名一并输出。</para></summary>
@@ -120,44 +208,24 @@ internal static class ErofsFeatureTable
     /// <returns>Comma-joined names, or <c>"none"</c> when both words are empty.
     /// <para>以逗号连接的上游名；两字皆空时返回 <c>"none"</c>。</para></returns>
     internal static string Describe(uint compatBits, uint incompatBits)
-    {
-        var names = new List<string>();
-        if (incompatBits != 0)
-        {
-            names.Add(Label(incompatBits, ErofsSuperblock.IncompatLz4_0Padding, "lz4_0padding"));
-            names.Add(Label(incompatBits, ErofsSuperblock.IncompatBigPcluster, "compr_cfgs/big_pcluster"));
-            names.Add(Label(incompatBits, ErofsSuperblock.IncompatChunkedFile, "chunked_file"));
-            names.Add(Label(incompatBits, ErofsSuperblock.IncompatDeviceTable, "device_table/compr_head2"));
-            names.Add(Label(incompatBits, ErofsSuperblock.IncompatZtailpacking, "ztailpacking"));
-            names.Add(Label(incompatBits, ErofsSuperblock.IncompatFragments, "fragments/dedupe"));
-            names.Add(Label(incompatBits, ErofsSuperblock.IncompatXattrPrefixes, "xattr_prefixes"));
-            names.Add(Label(incompatBits, ErofsSuperblock.Incompat48Bit, "48bit"));
-            names.Add(Label(incompatBits, ErofsSuperblock.IncompatMetabox, "metabox"));
-        }
-        if (compatBits != 0)
-        {
-            names.Add(Label(compatBits, ErofsSuperblock.CompatSbChecksum, "sb_csum"));
-            names.Add(Label(compatBits, ErofsSuperblock.CompatMtime, "mtime"));
-            names.Add(Label(compatBits, ErofsSuperblock.CompatXattrFilter, "xattr_filter"));
-            names.Add(Label(compatBits, ErofsSuperblock.CompatSharedEaInMetabox, "shared_ea_in_metabox"));
-            names.Add(Label(compatBits, ErofsSuperblock.CompatPlainXattrPfx, "plain_xattr_pfx"));
-            names.Add(Label(compatBits, ErofsSuperblock.CompatIshareXattrs, "ishare_xattrs"));
-        }
-        var present = names.Where(name => name.Length > 0).ToArray();
-        return present.Length == 0 ? "none" : string.Join(",", present);
-    }
+        => JoinWords(DescribeWord(incompatBits, false, null), DescribeWord(compatBits, true, null));
 
-    /// <summary>Names the incompat bits a writer cannot re-emit.<para>列出写入方无法重新输出的 incompat 位名称。</para></summary>
-    /// <param name="incompatBits">Incompat word to inspect.<para>待检查的 incompat 字。</para></param>
-    /// <returns>Comma-joined upstream names, or an empty string when every declared bit is
-    /// emittable.<para>以逗号连接的上游名；所有声明位均可写出时为空串。</para></returns>
-    internal static string ReadOnlyIncompatNames(uint incompatBits)
-        => string.Join(",", Descriptors
-            .Where(row => !row.IsCompat && row.Capability == ErofsFeatureCapability.ReadOnlyForEmit
-                && (incompatBits & row.Bit) != 0)
-            .Select(row => row.Name));
+    /// <summary>Formats declared words as upstream names, resolving the bit shared by the device table and the
+    /// second compressed-inode head format through the layout context instead of printing both names.
+    /// <para>把声明字格式化为上游名称，并用布局上下文解析设备表与第二种压缩 inode 头部共用的位，而不是同时输出两名。</para></summary>
+    /// <param name="compatBits">Declared compat word.<para>已声明的 compat 字。</para></param>
+    /// <param name="incompatBits">Declared incompat word.<para>已声明的 incompat 字。</para></param>
+    /// <param name="extraDeviceCount">Extra-device slot count read from <c>s_extra_devices</c>, which names the
+    /// shared 0x00000008 bit.<para>取自 <c>s_extra_devices</c> 的额外设备槽位数，用于命名共用的 0x00000008 位。</para></param>
+    /// <returns>Comma-joined names, or <c>"none"</c> when both words are empty.
+    /// <para>以逗号连接的上游名；两字皆空时返回 <c>"none"</c>。</para></returns>
+    internal static string Describe(uint compatBits, uint incompatBits, int extraDeviceCount)
+        => JoinWords(DescribeWord(incompatBits, false, extraDeviceCount),
+            DescribeWord(compatBits, true, null));
 
-    /// <summary>Applies an upstream-style feature edit script to a baseline declaration.<para>把上游风格的特性编辑序列应用到基线声明。</para></summary>
+    /// <summary>Applies an upstream-style feature edit script to a baseline declaration, dropping the notes about
+    /// bits that carry more than one upstream name.
+    /// <para>把上游风格的特性编辑序列应用到基线声明，并省略关于携带多个上游名的位的提示。</para></summary>
     /// <param name="text">Comma-separated tokens; a bare name sets a bit, a leading <c>!</c> clears one,
     /// and <c>auto</c> returns the derived declaration. Matching is case-insensitive against the upstream
     /// names.
@@ -172,27 +240,69 @@ internal static class ErofsFeatureTable
     /// <para>所有记号均解析并成功应用时为 <see langword="true"/>。</para></returns>
     internal static bool TryApplyEdits(string? text, uint baseCompat, uint baseIncompat, out uint compat,
         out uint incompat, out string? error)
+        => TryApplyEdits(text, baseCompat, baseIncompat, out compat, out incompat, out error, out _);
+
+    /// <summary>Applies an upstream-style feature edit script to a baseline declaration and reports the aliases each
+    /// edited bit carries. Edits address physical bits, so a token naming one alias edits every name sharing that
+    /// bit, and <paramref name="aliasNotice"/> lists all of them.
+    /// <para>把上游风格的特性编辑序列应用到基线声明，并报告每个被编辑位携带的别名。编辑针对物理位进行，因此指名某个别名的
+    /// 记号会同时改动共用该位的全部名称，<paramref name="aliasNotice"/> 会列出全部名称。</para></summary>
+    /// <param name="text">Comma-separated tokens; a bare name sets a bit, a leading <c>!</c> clears one,
+    /// and <c>auto</c> returns the derived declaration. Matching is case-insensitive against the upstream
+    /// names.
+    /// <para>以逗号分隔的记号：裸名置位，前导 <c>!</c> 清位，<c>auto</c> 回到推导式声明；匹配对上游名忽略大小写。</para></param>
+    /// <param name="baseCompat">Compat word to start from.<para>起始的 compat 字。</para></param>
+    /// <param name="baseIncompat">Incompat word to start from.<para>起始的 incompat 字。</para></param>
+    /// <param name="compat">Resulting compat word.<para>结果的 compat 字。</para></param>
+    /// <param name="incompat">Resulting incompat word.<para>结果的 incompat 字。</para></param>
+    /// <param name="error">Rejected token text, or <see langword="null"/> on success.
+    /// <para>被拒绝的记号文本；成功时为 <see langword="null"/>。</para></param>
+    /// <param name="aliasNotice">Semicolon-joined notes naming every bit an edited token shares with other upstream
+    /// names, one note per edited bit, or <see langword="null"/> when no edited bit is aliased. An incompat word
+    /// alone cannot tell which face of a shared bit the declaration means, so the full alias list is what tells the
+    /// operator that clearing <c>dedupe</c> also clears <c>fragments</c> and that clearing <c>compr_head2</c> also
+    /// clears <c>device_table</c>.
+    /// <para>以分号连接的提示，为被编辑记号共用的每个位列出其全部上游名称，每个被编辑位一条；当没有编辑到共用位时为
+    /// <see langword="null"/>。仅凭 incompat 字无法判断声明指的是共用位的哪一面，因此完整别名列表才能告知操作者：清除
+    /// <c>dedupe</c> 会一并清除 <c>fragments</c>，清除 <c>compr_head2</c> 也会一并清除 <c>device_table</c>。</para></param>
+    /// <returns><see langword="true"/> when every token resolved and the script applied.
+    /// <para>所有记号均解析并成功应用时为 <see langword="true"/>。</para></returns>
+    internal static bool TryApplyEdits(string? text, uint baseCompat, uint baseIncompat, out uint compat,
+        out uint incompat, out string? error, out string? aliasNotice)
     {
         compat = baseCompat;
         incompat = baseIncompat;
         error = null;
-        if (string.IsNullOrWhiteSpace(text)) return true;
+        aliasNotice = null;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return true;
+        }
+
+        var notices = new List<string>();
+        var noted = new HashSet<(bool IsCompat, uint Bit)>();
         foreach (var raw in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var token = raw;
             var clear = token.StartsWith('!');
-            if (clear) token = token[1..].Trim();
+            if (clear)
+            {
+                token = token[1..].Trim();
+            }
+
             if (token.Length == 0)
             {
                 error = raw;
                 return false;
             }
+
             if (string.Equals(token, "auto", StringComparison.OrdinalIgnoreCase) && !clear)
             {
                 compat = baseCompat;
                 incompat = baseIncompat;
                 continue;
             }
+
             var row = Descriptors.FirstOrDefault(candidate => string.Equals(candidate.Name, token,
                 StringComparison.OrdinalIgnoreCase));
             if (row is null)
@@ -200,6 +310,7 @@ internal static class ErofsFeatureTable
                 error = raw;
                 return false;
             }
+
             if (row.IsCompat)
             {
                 compat = clear ? compat & ~row.Bit : compat | row.Bit;
@@ -208,26 +319,95 @@ internal static class ErofsFeatureTable
             {
                 incompat = clear ? incompat & ~row.Bit : incompat | row.Bit;
             }
+
+            var aliases = AliasNames(row.Bit, row.IsCompat);
+            if (aliases.Count > 1 && noted.Add((row.IsCompat, row.Bit)))
+            {
+                var word = row.IsCompat ? "compat" : "incompat";
+                var effect = clear ? "cleared" : "declared";
+                notices.Add($"EROFS token '{raw}' edits {word} bit 0x{row.Bit:x8}; every name sharing that bit "
+                    + $"({string.Join("/", aliases)}) is {effect} with it");
+            }
         }
 
+        aliasNotice = notices.Count == 0 ? null : string.Join("; ", notices);
         return true;
     }
 
     private static Descriptor Row(ErofsFeature feature)
         => Descriptors.First(row => row.Feature == feature);
 
-    private static int MinimumKernel(uint compatBits, uint incompatBits)
+    private static int MinimumKernel(uint incompatBits, ushort availableComprAlgs, bool hasCompressionConfigs)
     {
         var oldest = 0;
         foreach (var row in Descriptors)
         {
-            if (row.IsCompat || (incompatBits & row.Bit) == 0) continue;
-            if (row.Kernel > oldest) oldest = row.Kernel;
+            if (row.IsCompat || (incompatBits & row.Bit) == 0)
+            {
+                continue;
+            }
+
+            if (row.Kernel > oldest)
+            {
+                oldest = row.Kernel;
+            }
+        }
+
+        if (!hasCompressionConfigs)
+        {
+            return oldest;
+        }
+
+        return Math.Max(oldest, AlgorithmKernelFloor(availableComprAlgs));
+    }
+
+    private static int AlgorithmKernelFloor(ushort availableComprAlgs)
+    {
+        var oldest = 0;
+        if ((availableComprAlgs & (1 << (int)ErofsAlgorithm.Lzma)) != 0)
+        {
+            oldest = Math.Max(oldest, LzmaKernelFloor);
+        }
+
+        if ((availableComprAlgs & (1 << (int)ErofsAlgorithm.Deflate)) != 0)
+        {
+            oldest = Math.Max(oldest, DeflateKernelFloor);
+        }
+
+        if ((availableComprAlgs & (1 << (int)ErofsAlgorithm.Zstd)) != 0)
+        {
+            oldest = Math.Max(oldest, ZstdKernelFloor);
         }
 
         return oldest;
     }
 
-    private static string Label(uint word, uint bit, string name)
-        => (word & bit) == 0 ? string.Empty : name;
+    private static string JoinWords(string incompatNames, string compatNames)
+    {
+        if (incompatNames.Length == 0)
+        {
+            return compatNames.Length == 0 ? "none" : compatNames;
+        }
+
+        return compatNames.Length == 0 ? incompatNames : $"{incompatNames},{compatNames}";
+    }
+
+    private static string DescribeWord(uint word, bool isCompat, int? extraDeviceCount)
+    {
+        var names = new List<string>();
+        var named = new HashSet<uint>();
+        foreach (var row in Descriptors)
+        {
+            if (row.IsCompat != isCompat || (word & row.Bit) == 0 || !named.Add(row.Bit))
+            {
+                continue;
+            }
+
+            names.Add(extraDeviceCount is { } count
+                ? NameForIncompatBit(row.Bit, count)
+                : string.Join("/", AliasNames(row.Bit, isCompat)));
+        }
+
+        return string.Join(",", names);
+    }
 }

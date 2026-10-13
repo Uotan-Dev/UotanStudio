@@ -6,26 +6,26 @@ using UotanStudio.Services.Firmware;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>CPIO 操作节点视图模型，提供 CPIO/TAR 归档的解包与打包功能。</para>
 /// CPIO operation node view model, providing CPIO/TAR archive unpacking and packing capabilities.
+/// <para>CPIO 操作节点视图模型，提供 CPIO/TAR 归档的解包与打包功能。</para>
 /// </summary>
 public class CpioNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
-    /// <para>创建具有指定标题的 CPIO 操作节点。</para>
     /// Creates a CPIO operation node with the specified title.
+    /// <para>创建具有指定标题的 CPIO 操作节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public CpioNodeViewModel(string title) : base(title, NodeCategory.Firmware)
     {
     }
 
     /// <summary>
-    /// <para>创建默认的 CPIO 解包节点。</para>
     /// Creates a default CPIO unpack node.
+    /// <para>创建默认的 CPIO 解包节点。</para>
     /// </summary>
     public static CpioNodeViewModel CreateCpioUnpackNode()
     {
@@ -40,8 +40,8 @@ public class CpioNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的 CPIO 打包节点。</para>
     /// Creates a default CPIO pack node.
+    /// <para>创建默认的 CPIO 打包节点。</para>
     /// </summary>
     public static CpioNodeViewModel CreateCpioPackNode()
     {
@@ -57,18 +57,18 @@ public class CpioNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的 CPIO 逻辑：Firmware.Cpio.Unpack 解包 CPIO/TAR 归档、
-    /// Firmware.Cpio.Pack 将目录打包为 CPIO 归档。</para>
     /// Dispatches CPIO logic by the node type key (TypeKey): Firmware.Cpio.Unpack unpacks a CPIO/TAR archive,
     /// and Firmware.Cpio.Pack packs a directory into a CPIO archive.
+    /// <para>按节点类型键（TypeKey）分发对应的 CPIO 逻辑：Firmware.Cpio.Unpack 解包 CPIO/TAR 归档、
+    /// Firmware.Cpio.Pack 将目录打包为 CPIO 归档。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {

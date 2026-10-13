@@ -112,6 +112,52 @@ public sealed class RawProgramEntry
     public string SourceFile { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the write digest declared by the manifest for this program entry.
+    /// <para>获取或设置清单为本 program 条目声明的写入摘要。</para>
+    /// </summary>
+    /// <value>
+    /// Value of the digest attribute, or <see langword="null"/> when the entry is not digest-bound. When
+    /// present it must be the hexadecimal SHA-256 of exactly the bytes the program path puts on the wire, and
+    /// the bundle refuses to write before comparing them.
+    /// <para>digest 属性的值；条目不受摘要约束时为 <see langword="null"/>。存在时必须等于即将上线字节的
+    /// SHA-256 十六进制表示，且本包在写入前必须完成比对。</para>
+    /// </value>
+    public string? Digest { get; set; }
+
+    /// <summary>
+    /// Gets or sets the base64 signature of <see cref="Digest"/> declared by the manifest.
+    /// <para>获取或设置清单声明的、针对 <see cref="Digest"/> 的 Base64 签名。</para>
+    /// </summary>
+    /// <value>
+    /// Value of the digest_signature attribute, or <see langword="null"/> when absent. A digest-bound entry
+    /// without a signature stays executable by the ordinary program path, because the target never receives a
+    /// signature it did not ask for.
+    /// <para>digest_signature 属性的值，缺失时为 <see langword="null"/>。没有签名的摘要绑定条目仍按普通
+    /// 编程路径执行，因为目标不会接收它并未请求的签名。</para>
+    /// </value>
+    public string? DigestSignature { get; set; }
+
+    /// <summary>
+    /// Gets or sets the declared signature size in bytes.
+    /// <para>获取或设置声明的签名字节大小。</para>
+    /// </summary>
+    /// <value>
+    /// Value of the signature_size attribute; 0 when the XML omits it, and the bundle requires it to equal the
+    /// decoded length of <see cref="DigestSignature"/> before emitting a signed digest command.
+    /// <para>signature_size 属性的值；XML 未给出时为 0，且在发出带签名的摘要命令之前必须等于
+    /// <see cref="DigestSignature"/> 的解码长度。</para>
+    /// </value>
+    public long SignatureSize { get; set; }
+
+    /// <summary>
+    /// Gets whether this entry declares a write digest that must be verified before and after programming.
+    /// <para>获取本条目是否声明了必须在编程前后校验的写入摘要。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when <see cref="Digest"/> carries a non-blank value.
+    /// <para><see cref="Digest"/> 含非空白值时为 <see langword="true"/>。</para></value>
+    public bool IsDigestBound => !string.IsNullOrWhiteSpace(Digest);
+
+    /// <summary>
     /// Returns a string representation of the raw program entry.
     /// <para>返回 rawprogram 条目的字符串表示。</para>
     /// </summary>

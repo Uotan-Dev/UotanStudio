@@ -1,7 +1,5 @@
-using System.Buffers.Binary;
 using System.Security.Cryptography;
 using UotanStudio.Comm.Protocols.Common.Evidence;
-using UotanStudio.Comm.Protocols.Mtk.HwCrypto;
 using UotanStudio.Comm.Protocols.Mtk.Security;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
@@ -198,87 +196,6 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Closes or opens the secure-boot configuration through the Legacy agent.
-    /// <para>通过 Legacy 代理关闭或打开安全启动配置。</para></summary>
-    /// <remarks>
-    /// The read, decode and rewrite follow Library/Hardware/seccfg.py:78-102 and the write-back follows
-    /// Library/DA/legacy/extension/legacy.py:193-200. Writing is destructive and irreversible, so a
-    /// false <paramref name="confirmWrite"/> performs the read and the whole computation and then stops
-    /// before any write command is sent.
-    /// 读取与重写遵循 Library/Hardware/seccfg.py:78-102，写回遵循
-    /// Library/DA/legacy/extension/legacy.py:193-200。写入是破坏性且不可逆的操作，因此 <paramref
-    /// name="confirmWrite"/> 为 false 时会完成读取与全部计算，并在发送任何写入命令之前停止。
-    /// </remarks>
-    /// <param name="intent">The documented state transition. 已记载的状态转换。</param>
-    /// <param name="partitionId">The discovered Legacy physical region holding the configuration GPT.
-    /// <para>承载配置 GPT 的已发现 Legacy 物理区域。</para></param>
-    /// <param name="confirmWrite">The explicit caller opt-in that authorizes the partition write.
-    /// <para>授权分区写入的显式调用方选择。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>The write receipt when authorized; a refusal throws instead of returning a partial
-    /// result. <para>已授权时返回写入回执；拒绝会抛出异常，而不是返回部分结果。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="intent"/> is undefined.
-    /// <para><paramref name="intent"/> 未定义。</para></exception>
-    /// <exception cref="UnauthorizedAccessException"><paramref name="confirmWrite"/> is
-    /// <see langword="false"/>; no bytes were written and the session keeps its stage.
-    /// <para><paramref name="confirmWrite"/> 为 <see langword="false"/>；未写入任何字节，会话保持原阶段。</para></exception>
-    /// <exception cref="NotSupportedException">The stored hash could not be resolved through the
-    /// target SEJ engine, or the located range exceeds the four MiB ceiling; the session keeps its
-    /// stage in every case.
-    /// <para>无法经目标 SEJ 引擎解析存储摘要，或定位到的范围超过 4 MiB 上限；每种情况下会话都保持原阶段。</para></exception>
-    /// <exception cref="InvalidOperationException">The configuration already has the requested state.
-    /// <para>配置已处于请求的状态。</para></exception>
-    /// <exception cref="MtkProtocolException">Any exchange failed; the Legacy family faults.
-    /// <para>任一交互失败；Legacy 家族进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public async Task<MtkSecCfgWriteResult> ApplyLegacySecCfgAsync(MtkSecCfgLockIntent intent, byte partitionId,
-        bool confirmWrite, CancellationToken cancellationToken = default)
-    {
-        if (!Enum.IsDefined(intent))
-        {
-            throw new ArgumentOutOfRangeException(nameof(intent));
-        }
-
-        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            try
-            {
-                var (view, image) = await ReadLegacySecCfgOwnedAsync(partitionId, cancellationToken).ConfigureAwait(false);
-                IMtkSejRegisterAccess? registerAccess = null;
-                if (view.Version4 is not null && view.Version4.HashKind != MtkSecCfgHashKind.Software)
-                {
-                    registerAccess = new SejRegisterAccess(ReadLegacySecurityRegisterAsync,
-                        WriteLegacySecurityRegisterAsync);
-                }
-
-                var replacement = await CreateSecCfgReplacementAsync(view, image, intent, registerAccess,
-                    cancellationToken).ConfigureAwait(false);
-                return await WriteLegacySecCfgOwnedAsync(view, replacement, confirmWrite, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            catch (Exception exception) when (IsSecurityPolicyRefusal(exception))
-            {
-                RecordSecurityEvidence("legacy-seccfg-apply", CommandOutcomeKind.Rejected,
-                    $"The secure-boot configuration request was refused before any byte was sent: {exception.Message}");
-                throw;
-            }
-            catch
-            {
-                FaultLegacy();
-                throw;
-            }
-        }
-        finally
-        {
-            _operation.Release();
-        }
-    }
-
     /// <summary>Writes a caller-supplied secure-boot configuration image through the Legacy agent.
     /// <para>通过 Legacy 代理写入调用方提供的安全启动配置镜像。</para></summary>
     /// <remarks>
@@ -350,101 +267,6 @@ public sealed partial class MtkSession
                 RecordSecurityEvidence("legacy-seccfg-write", CommandOutcomeKind.Rejected,
                     $"The supplied {format} image was refused before any byte was written.");
                 throw;
-            }
-            catch
-            {
-                FaultLegacy();
-                throw;
-            }
-        }
-        finally
-        {
-            _operation.Release();
-        }
-    }
-
-    /// <summary>Loads one documented key class into the Legacy agent's SEJ registers.
-    /// <para>把一类已记载的密钥加载到 Legacy 代理的 SEJ 寄存器。</para></summary>
-    /// <remarks>
-    /// The Legacy extension supplies the software one-time-program key to the SEJ engine through the
-    /// register-write command, eight doublewords in little-endian byte order at the SEJ base offsets
-    /// 0x60 through 0x7C (Library/Hardware/hwcrypto_sej.py:66-73 and :613-622 with
-    /// Library/DA/legacy/extension/legacy.py:117-137 and Library/DA/legacy/dalegacy_lib.py:101-108).
-    /// The replay-protected key class is refused on this family: the Legacy extension has no key
-    /// submission command at all, only the host-side generator
-    /// (Library/DA/legacy/extension/legacy.py:224-363), so framing one would require inventing bytes.
-    /// Legacy 扩展通过寄存器写命令把软件一次性编程密钥交给 SEJ 引擎：按小端字节序的 8 个双字写入 SEJ 基址
-    /// 偏移 0x60 至 0x7C（Library/Hardware/hwcrypto_sej.py:66-73 与 :613-622，配合
-    /// Library/DA/legacy/extension/legacy.py:117-137 与
-    /// Library/DA/legacy/dalegacy_lib.py:101-108）。本家族拒绝重放保护密钥类别：Legacy 扩展完全没有密钥
-    /// 提交命令，只有主机侧生成器（Library/DA/legacy/extension/legacy.py:224-363），因此为其构造帧将需要
-    /// 编造字节。
-    /// </remarks>
-    /// <param name="request">The key class request; only the software one-time-program class is
-    /// accepted here. 密钥类别请求；此处只接受软件一次性编程类别。</param>
-    /// <param name="confirmWrite">The explicit caller opt-in that authorizes the register writes.
-    /// <para>授权寄存器写入的显式调用方选择。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>A receipt naming the class, the key digest and the unit count.
-    /// <para>写明类别、密钥摘要与单元数量的回执。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="request"/> is null.
-    /// <para><paramref name="request"/> 为 null。</para></exception>
-    /// <exception cref="NotSupportedException">The request uses a key class the Legacy extension never
-    /// submits. <para>请求使用 Legacy 扩展从不提交的密钥类别。</para></exception>
-    /// <exception cref="ArgumentException">The key length, class or base address does not match the
-    /// documented class. <para>密钥长度、类别或基址与已记载类别不符。</para></exception>
-    /// <exception cref="UnauthorizedAccessException"><paramref name="confirmWrite"/> is
-    /// <see langword="false"/>; no bytes were sent.
-    /// <para><paramref name="confirmWrite"/> 为 <see langword="false"/>；未发送任何字节。</para></exception>
-    /// <exception cref="InvalidOperationException">Legacy storage is not ready.
-    /// <para>Legacy 存储未就绪。</para></exception>
-    /// <exception cref="MtkProtocolException">A register write was not acknowledged; the Legacy family
-    /// faults. <para>某次寄存器写入未被确认；Legacy 家族进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public async Task<MtkOemKeyReceipt> ProgramLegacyOemKeyAsync(MtkOemKeyRequest request, bool confirmWrite,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        var key = request.DecodeKey();
-        if (request.Kind != MtkOemKeyKind.SoftwareOneTimeProgramKey)
-        {
-            throw new NotSupportedException(
-                "The Legacy extension submits no key material to the agent, so this key class has no documented framing.");
-        }
-
-        if (!confirmWrite)
-        {
-            throw new UnauthorizedAccessException(
-                "Key programming changes device state and requires an explicit confirmation.");
-        }
-
-        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            RequireState(MtkSessionState.LegacyStorageReady);
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                var baseAddress = request.SejBaseAddress!.Value;
-                var addresses = new List<uint>(MtkOemKeyRegisterWindow.SlotCount);
-                for (var slot = 0; slot < MtkOemKeyRegisterWindow.SlotCount; slot++)
-                {
-                    var address = checked(baseAddress + MtkOemKeyRegisterWindow.Offsets[slot]);
-                    await WriteLegacySecurityRegisterAsync(address,
-                        BinaryPrimitives.ReadUInt32LittleEndian(key.AsSpan(slot * MtkEfuseAccess.CellLength)),
-                        cancellationToken).ConfigureAwait(false);
-                    addresses.Add(address);
-                }
-
-                var receipt = new MtkOemKeyReceipt(MtkOemKeyKind.SoftwareOneTimeProgramKey,
-                    Convert.ToHexString(SHA256.HashData(key)), addresses.Count, null);
-                RecordSecurityEvidence("legacy-key-program", CommandOutcomeKind.Completed,
-                    $"Wrote {addresses.Count} SEJ registers from 0x{addresses[0]:X8}.");
-                return receipt;
             }
             catch
             {

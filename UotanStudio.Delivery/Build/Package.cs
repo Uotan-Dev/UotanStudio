@@ -15,22 +15,22 @@ using UotanStudio.Firmware.OtaDelta.Diff;
 
 namespace UotanStudio.Services.Delivery;
 
-/// <summary><para>ZIP 交付的元数据与用户自有签名证书。</para>Metadata and user-owned certificate for ZIP delivery.</summary>
+/// <summary>Metadata and user-owned certificate for ZIP delivery. <para>ZIP 交付的元数据与用户自有签名证书。</para></summary>
 internal sealed record DeliveryPackageOptions
 {
-    /// <summary><para>是否按 A/B OTA 包布局输出（需配合 Payload 模式）。</para>Whether to output an A/B OTA package layout (requires Payload mode).</summary>
+    /// <summary>Whether to output an A/B OTA package layout (requires Payload mode). <para>是否按 A/B OTA 包布局输出（需配合 Payload 模式）。</para></summary>
     public bool Ota { get; init; }
-    /// <summary><para>外层签名证书路径。</para>Path of the outer signing certificate.</summary>
+    /// <summary>Path of the outer signing certificate. <para>外层签名证书路径。</para></summary>
     public string CertificatePath { get; init; } = "";
-    /// <summary><para>外层签名私钥路径。</para>Path of the outer signing private key.</summary>
+    /// <summary>Path of the outer signing private key. <para>外层签名私钥路径。</para></summary>
     public string SigningKeyPath { get; init; } = "";
-    /// <summary><para>OTA 元数据 <c>post-build</c> 指纹。</para>OTA metadata <c>post-build</c> fingerprint.</summary>
+    /// <summary>OTA metadata <c>post-build</c> fingerprint. <para>OTA 元数据 <c>post-build</c> 指纹。</para></summary>
     public string BuildFingerprint { get; init; } = "";
-    /// <summary><para>OTA 元数据 <c>post-build-incremental</c> 值。</para>OTA metadata <c>post-build-incremental</c> value.</summary>
+    /// <summary>OTA metadata <c>post-build-incremental</c> value. <para>OTA 元数据 <c>post-build-incremental</c> 值。</para></summary>
     public string Incremental { get; init; } = "";
-    /// <summary><para>OTA 元数据 <c>post-sdk-level</c> 值。</para>OTA metadata <c>post-sdk-level</c> value.</summary>
+    /// <summary>OTA metadata <c>post-sdk-level</c> value. <para>OTA 元数据 <c>post-sdk-level</c> 值。</para></summary>
     public uint SdkLevel { get; init; }
-    /// <summary><para>原 ROM 的 Edify 更新器路径；仅用于 Recovery DAT 包，为空时沿所选 DAT 文件发现 META-INF。</para>Path of the original ROM's Edify updater for Recovery DAT packages only; empty discovers META-INF alongside the selected DAT files.</summary>
+    /// <summary>Path of the original ROM's Edify updater for Recovery DAT packages only; empty discovers META-INF alongside the selected DAT files. <para>原 ROM 的 Edify 更新器路径；仅用于 Recovery DAT 包，为空时沿所选 DAT 文件发现 META-INF。</para></summary>
     public string RecoveryUpdaterPath { get; init; } = "";
 }
 
@@ -39,8 +39,8 @@ internal sealed record DeliveryPackageOptions
 internal static partial class DeliveryPackageBuilder
 {
     /// <summary>
-    /// <para>校验 ZIP 交付计划：签名证书/私钥配对、OTA 元数据、Recovery 包约束与 DAT 分组完整性。</para>
     /// Validates the ZIP delivery plan: certificate/key pairing, OTA metadata, Recovery constraints, and DAT group integrity.
+    /// <para>校验 ZIP 交付计划：签名证书/私钥配对、OTA 元数据、Recovery 包约束与 DAT 分组完整性。</para>
     /// </summary>
     internal static void Validate(DeliveryPlan plan)
     {
@@ -62,8 +62,8 @@ internal static partial class DeliveryPackageBuilder
     }
 
     /// <summary>
-    /// <para>构建并写出 ZIP 交付：A/B OTA（含元数据与 ranges）、Recovery 包（含 DAT/IMG 成员）或组织式 Super 的 Recovery 入口文件。</para>
     /// Builds and writes the ZIP delivery: an A/B OTA (with metadata and ranges), a Recovery package (DAT/IMG members), or the Recovery entry files of an organized Super delivery.
+    /// <para>构建并写出 ZIP 交付：A/B OTA（含元数据与 ranges）、Recovery 包（含 DAT/IMG 成员）或组织式 Super 的 Recovery 入口文件。</para>
     /// </summary>
     internal static async Task BuildAsync(DeliveryPlan plan, string stage, string images, CancellationToken token,
         IProgress<DeliveryProgress>? progress = null, IDeliverySigningKeyProvider? signingKeys = null)
@@ -195,13 +195,13 @@ internal static partial class DeliveryPackageBuilder
     }
 
     /// <summary>
-    /// <para>遍历中央目录，返回每个 stored 条目的数据起点与原始长度。大小与本地头偏移取自中央目录记录，ZIP64
-    /// 加宽的字段按扩展块内的固定顺序还原，因此条目本地头改用数据描述符承载大小（4 GiB 及以上的条目）时同样成立；
-    /// 非 stored 条目无法按偏移直读，仍会被拒绝。</para>
     /// Walks the central directory and returns the data offset and uncompressed size of every stored entry. Sizes and
     /// local header offsets come from the central directory records with ZIP64-widened fields restored in the order the
     /// extra block fixes, so entries whose local header carries a data descriptor instead of sizes (any entry of 4 GiB
     /// or more) resolve as well; entries that are not stored cannot be read by raw offset and are still rejected.
+    /// <para>遍历中央目录，返回每个 stored 条目的数据起点与原始长度。大小与本地头偏移取自中央目录记录，ZIP64
+    /// 加宽的字段按扩展块内的固定顺序还原，因此条目本地头改用数据描述符承载大小（4 GiB 及以上的条目）时同样成立；
+    /// 非 stored 条目无法按偏移直读，仍会被拒绝。</para>
     /// </summary>
     /// <param name="path">Archive to inspect. <para>要检查的归档路径。</para></param>
     /// <returns>Data offset and uncompressed size keyed by entry name. <para>按条目名索引的数据起点与原始长度。</para></returns>
@@ -236,9 +236,9 @@ internal static partial class DeliveryPackageBuilder
     }
 
     /// <summary>
-    /// <para>按 ZIP64 扩展字段的固定顺序还原被加宽的原始长度与本地头偏移，只读取中央目录记录中对应 32 位字段为占位值的项。</para>
     /// Restores the widened uncompressed size and local header offset from the ZIP64 extra field in its fixed order,
     /// reading only the items whose 32-bit counterparts in the central directory record hold their placeholders.
+    /// <para>按 ZIP64 扩展字段的固定顺序还原被加宽的原始长度与本地头偏移，只读取中央目录记录中对应 32 位字段为占位值的项。</para>
     /// </summary>
     /// <param name="header">Central directory record. <para>中央目录记录。</para></param>
     /// <param name="extra">Entry extra block. <para>条目扩展块。</para></param>
@@ -274,8 +274,8 @@ internal static partial class DeliveryPackageBuilder
     }
 
     /// <summary>
-    /// <para>从扩展块游标处读取一个 8 字节 ZIP64 值并前移游标。</para>
     /// Reads one eight-byte ZIP64 value at the extra-block cursor and advances the cursor.
+    /// <para>从扩展块游标处读取一个 8 字节 ZIP64 值并前移游标。</para>
     /// </summary>
     private static ulong ReadZip64Value(ReadOnlySpan<byte> extra, ref int cursor, int end)
     {
@@ -286,11 +286,11 @@ internal static partial class DeliveryPackageBuilder
     }
 
     /// <summary>
-    /// <para>读取条目本地头并返回其数据区起点，本地头的名称与扩展字段长度决定该偏移，与本地头是否承载大小无关。
-    /// 读取后归档流位置还原到调用前的位置，调用方可以继续顺序遍历中央目录。</para>
     /// Reads an entry's local header and returns the start of its data, which the local name and extra lengths fix
     /// regardless of whether the local header itself carries the sizes. The archive position is restored afterwards so
     /// the caller can keep walking the central directory sequentially.
+    /// <para>读取条目本地头并返回其数据区起点，本地头的名称与扩展字段长度决定该偏移，与本地头是否承载大小无关。
+    /// 读取后归档流位置还原到调用前的位置，调用方可以继续顺序遍历中央目录。</para>
     /// </summary>
     /// <param name="archive">Archive stream, left at its previous position. <para>归档流，调用后仍停在原位置。</para></param>
     /// <param name="localHeaderStart">Absolute offset of the local header. <para>本地头的绝对偏移。</para></param>
@@ -313,14 +313,14 @@ internal static partial class DeliveryPackageBuilder
     private const string MetadataEntryName = "META-INF/com/android/metadata";
 
     /// <summary>
-    /// <para>就地改写 stored 条目内容后修复其 CRC-32：读回条目字节重算校验值，同时写回本地文件头（偏移 +14）与
-    /// 中央目录记录（偏移 +16）。ZIP64 归档下中央目录起点取自 ZIP64 结束记录，条目的真实大小与本地头偏移取自其
-    /// ZIP64 扩展字段；CRC-32 字段本身不被 ZIP64 加宽，因此只有这 8 个字节改变。</para>
     /// Repairs the CRC-32 of a stored entry whose bytes were overwritten in place: the entry is read back, the
     /// checksum recomputed, and the value written to both the local file header (offset +14) and its central
     /// directory record (offset +16). For ZIP64 archives the central directory start comes from the ZIP64
     /// end-of-central-directory record and the entry's true sizes and local header offset come from its ZIP64 extra
     /// field; CRC-32 fields are never widened by ZIP64, so only those eight bytes change.
+    /// <para>就地改写 stored 条目内容后修复其 CRC-32：读回条目字节重算校验值，同时写回本地文件头（偏移 +14）与
+    /// 中央目录记录（偏移 +16）。ZIP64 归档下中央目录起点取自 ZIP64 结束记录，条目的真实大小与本地头偏移取自其
+    /// ZIP64 扩展字段；CRC-32 字段本身不被 ZIP64 加宽，因此只有这 8 个字节改变。</para>
     /// </summary>
     /// <param name="path">Archive patched in place. <para>被就地修复的归档路径。</para></param>
     /// <param name="entryName">Stored entry whose content was rewritten. <para>内容被就地改写的存储条目名。</para></param>
@@ -345,9 +345,9 @@ internal static partial class DeliveryPackageBuilder
     }
 
     /// <summary>
-    /// <para>从尾部有界窗口定位中央目录起点与条目数，经典字段为占位值时经 ZIP64 定位器与 ZIP64 结束记录取回真实值。</para>
     /// Locates the central directory start and entry count from a bounded tail window, falling back to the ZIP64
     /// locator and ZIP64 end-of-central-directory record when the classic fields hold their placeholders.
+    /// <para>从尾部有界窗口定位中央目录起点与条目数，经典字段为占位值时经 ZIP64 定位器与 ZIP64 结束记录取回真实值。</para>
     /// </summary>
     private static long LocateCentralDirectory(Stream archive, out int entryCount)
     {
@@ -408,11 +408,11 @@ internal static partial class DeliveryPackageBuilder
     }
 
     /// <summary>
-    /// <para>遍历中央目录，按名称解析目标存储条目的本地头起点、记录起点、数据起点与原始长度；ZIP64 加宽的字段按
-    /// 扩展字段内的固定顺序还原，且只接受可寻址的 stored 条目。</para>
     /// Walks the central directory to resolve the named stored entry's local header start, record start, data start
     /// and uncompressed length, restoring ZIP64-widened fields from the entry extra block and accepting only
     /// seekable stored entries.
+    /// <para>遍历中央目录，按名称解析目标存储条目的本地头起点、记录起点、数据起点与原始长度；ZIP64 加宽的字段按
+    /// 扩展字段内的固定顺序还原，且只接受可寻址的 stored 条目。</para>
     /// </summary>
     private static (long LocalHeaderStart, long CentralDirectoryStart, long DataStart, long UncompressedSize) LocateStoredEntry(
         Stream archive, long directoryStart, int entryCount, string entryName)
@@ -478,9 +478,9 @@ internal static partial class DeliveryPackageBuilder
     }
 
     /// <summary>
-    /// <para>从 ZIP64 条目扩展字段按固定顺序还原被加宽的值（原始长度、压缩长度、本地头偏移），只读取实际为占位值的槽位。</para>
     /// Restores the widened values from a ZIP64 entry extra block in its fixed order (uncompressed size, compressed
     /// size, local header offset), consuming a slot only when that field still holds its placeholder.
+    /// <para>从 ZIP64 条目扩展字段按固定顺序还原被加宽的值（原始长度、压缩长度、本地头偏移），只读取实际为占位值的槽位。</para>
     /// </summary>
     private static (long UncompressedSize, long CompressedSize, long LocalHeaderStart) ReadZip64Extra(
         ReadOnlySpan<byte> extra, long uncompressedSize, long compressedSize, long localHeaderStart)
@@ -604,7 +604,7 @@ internal static partial class DeliveryPackageBuilder
     internal static bool IsRecoveryArtifact(string fileName) =>
         fileName.EndsWith(".img", StringComparison.OrdinalIgnoreCase) || IsDatArtifact(fileName);
 
-    /// <summary><para>判断两个文件名是否同属一个 DAT 分区组。</para>Determines whether two filenames belong to the same DAT partition set.</summary>
+    /// <summary>Determines whether two filenames belong to the same DAT partition set. <para>判断两个文件名是否同属一个 DAT 分区组。</para></summary>
     internal static bool SameDatSet(string first, string second) => IsDatArtifact(first) && IsDatArtifact(second)
         && string.Equals(DatStem(first), DatStem(second), StringComparison.OrdinalIgnoreCase);
 
@@ -672,15 +672,15 @@ internal static partial class DeliveryPackageBuilder
     }
 
     /// <summary>
-    /// <para>把整个文件作为 stored 条目写入归档，条目大小在本地文件头中直接可读。复制按
-    /// <see cref="AddHashedMemberAsync"/> 的分块循环形状进行，逐块检查取消令牌，因此超过 4 GiB 的
-    /// <c>payload.bin</c> 在传输中途仍可取消。这里不把摘要顺带算出来：OTA 归档的 stored 成员没有逐成员校验清单，
-    /// payload.bin 的摘要已经由 payload_properties.txt 交付。</para>
     /// Writes a whole file as a stored entry whose sizes are readable from its local file header. The copy follows the
     /// chunked loop shape of <see cref="AddHashedMemberAsync"/>, checking the cancellation token per block, so a
     /// <c>payload.bin</c> beyond 4 GiB stays cancellable while it transfers. No digest is folded into the loop: the OTA
     /// archive keeps no per-member checksum list, and payload.bin's hash is already delivered through
     /// payload_properties.txt.
+    /// <para>把整个文件作为 stored 条目写入归档，条目大小在本地文件头中直接可读。复制按
+    /// <see cref="AddHashedMemberAsync"/> 的分块循环形状进行，逐块检查取消令牌，因此超过 4 GiB 的
+    /// <c>payload.bin</c> 在传输中途仍可取消。这里不把摘要顺带算出来：OTA 归档的 stored 成员没有逐成员校验清单，
+    /// payload.bin 的摘要已经由 payload_properties.txt 交付。</para>
     /// </summary>
     private static async Task WriteStoredAsync(ZipArchive zip, string name, string path, CancellationToken token)
     {
@@ -689,10 +689,10 @@ internal static partial class DeliveryPackageBuilder
     }
 
     /// <summary>
-    /// <para>把流内容作为 stored 条目写入归档，写入完成后才释放条目流以确定大小与 CRC-32；转移按 1 MiB 分块并
-    /// 逐块响应取消。</para>
     /// Writes stream content as a stored entry, releasing the entry stream only after the data so sizes and CRC-32 are
     /// final; the transfer moves in 1 MiB blocks and honours cancellation block by block.
+    /// <para>把流内容作为 stored 条目写入归档，写入完成后才释放条目流以确定大小与 CRC-32；转移按 1 MiB 分块并
+    /// 逐块响应取消。</para>
     /// </summary>
     private static async Task WriteStoredAsync(ZipArchive zip, string name, Stream source, CancellationToken token)
     {
@@ -715,8 +715,8 @@ internal static partial class DeliveryPackageBuilder
     }
 
     /// <summary>
-    /// <para>按 Android 整文件格式用外层证书/私钥对 ZIP 做评论签名；证书与私钥必须匹配且 ZIP 无既有评论。</para>
     /// Signs a ZIP comment using Android's whole-file format with the outer certificate/key; the key must match the certificate and the ZIP must have no existing comment.
+    /// <para>按 Android 整文件格式用外层证书/私钥对 ZIP 做评论签名；证书与私钥必须匹配且 ZIP 无既有评论。</para>
     /// </summary>
     internal static async Task SignAsync(string path, DeliveryPackageOptions options, CancellationToken token,
         IDeliverySigningKeyProvider? signingKeys = null)

@@ -1,26 +1,4 @@
-using System.Security.Cryptography;
-
 namespace UotanStudio.Comm.Protocols.Mtk;
-
-/// <summary>
-/// Resolves the BootROM SLA responder for a target from user-supplied key material. The
-/// library never bundles keys; a provider returns null when it has nothing for the chip.
-/// <para>按用户提供密钥材料解析目标芯片的 BootROM SLA 响应器。库不捆绑任何密钥；
-/// 无对应芯片材料时返回 null。</para>
-/// </summary>
-public interface IMtkSlaKeyProvider
-{
-    /// <summary>Gets a responder able to answer the SLA challenge of this device, or null.
-    /// The returned responder owns any key material it carries and is <see cref="IDisposable"/>;
-    /// release it once the exchange is finished.
-    /// <para>获取能应答该设备 SLA 挑战的响应器，无则返回 null。返回的响应器拥有其密钥材料并实现
-    /// <see cref="IDisposable"/>；交换结束后应释放它。</para></summary>
-    /// <param name="device">Identity whose hardware code and subcode select the key material.
-    /// <para>以其硬件代码与子代码选择密钥材料的身份。</para></param>
-    /// <returns>A responder for this device, or <see langword="null"/> when no key material matches.
-    /// <para>该设备的响应器；无匹配密钥材料时返回 <see langword="null"/>。</para></returns>
-    IMtkBootRomSlaResponder? ResolveSlaResponder(MtkDeviceInfo device);
-}
 
 /// <summary>
 /// Resolves the vendor-issued DAA resources (root certificate for 0xE0 / authentication file
@@ -51,17 +29,10 @@ public interface IMtkDaaResourceProvider
 }
 
 /// <summary>
-/// File-directory key store following the mtkclient keys-directory convention: RSA private
-/// keys named <c>sla_&lt;hwcode&gt;.pem</c> (optionally <c>sla_&lt;hwcode&gt;_&lt;subcode&gt;.pem</c>,
-/// the more specific file wins) and DAA resources named <c>daa_cert_&lt;hwcode&gt;.bin</c> /
-/// <c>daa_auth_&lt;hwcode&gt;.bin</c>. Identifiers are matched case-insensitively; nothing is
-/// downloaded, generated or inferred beyond the file naming.
-/// <para>按 mtkclient keys 目录习惯的文件目录密钥库：RSA 私钥命名为
-/// <c>sla_&lt;hwcode&gt;.pem</c>（可选更具体的 <c>sla_&lt;hwcode&gt;_&lt;subcode&gt;.pem</c>，
-/// 以更具体者为准），DAA 资源命名为 <c>daa_cert_&lt;hwcode&gt;.bin</c> /
-/// <c>daa_auth_&lt;hwcode&gt;.bin</c>。标识不区分大小写；除文件命名外不做任何下载、生成或推断。</para>
+/// File-directory key store following the mtkclient keys-directory convention: RSA private keys named <c>sla_ hwcode .pem</c> (optionally <c>sla_ hwcode _ subcode .pem</c>, the more specific file wins) and DAA resources named <c>daa_cert_ hwcode .bin</c> and <c>daa_auth_ hwcode .bin</c>. Identifiers match case-insensitively; nothing is downloaded, generated or inferred.
+/// <para>遵循 mtkclient 密钥目录约定的文件目录密钥库：RSA 私钥命名为 <c>sla_ hwcode .pem</c>（可选 <c>sla_ hwcode _ subcode .pem</c>，更具体的文件优先），DAA 资源命名为 <c>daa_cert_ hwcode .bin</c> 与 <c>daa_auth_ hwcode .bin</c>。标识符大小写不敏感；不下载、不生成、不推断。</para>
 /// </summary>
-public sealed class MtkDirectoryKeyStore : IMtkSlaKeyProvider, IMtkDaaResourceProvider, IMtkBootResourceProvider
+public sealed class MtkDirectoryKeyStore : IMtkDaaResourceProvider, IMtkBootResourceProvider
 {
     private readonly string _directory;
 
@@ -75,54 +46,6 @@ public sealed class MtkDirectoryKeyStore : IMtkSlaKeyProvider, IMtkDaaResourcePr
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         _directory = directory;
-    }
-
-    /// <summary>Resolves an SLA responder from a matching <c>sla_*.pem</c> key, loading it into an RSA
-    /// instance the returned responder owns.
-    /// <para>从匹配的 <c>sla_*.pem</c> 密钥解析 SLA 响应器，并把加载后的 RSA 实例所有权交给返回的响应器。</para></summary>
-    /// <param name="device">Identity whose hardware code and subcode select the key file.
-    /// <para>以其硬件代码与子代码选择密钥文件的身份。</para></param>
-    /// <returns>A responder that owns the imported key, or <see langword="null"/> when no file matches or the
-    /// key file is missing, unreadable or cryptographically invalid. Releasing the responder with
-    /// <see cref="IDisposable.Dispose"/> releases that key, so discard the responder once the exchange
-    /// is finished. A PEM payload the RSA importer rejects outright, or a key outside the supported
-    /// widths, surfaces <see cref="ArgumentException"/> instead of a null result.
-    /// <para>拥有导入密钥所有权的响应器；无匹配文件，或密钥文件缺失、不可读、密码学上无效时返回
-    /// <see langword="null"/>。通过 <see cref="IDisposable.Dispose"/> 释放响应器即会释放该密钥，
-    /// 因此交换结束后应丢弃响应器。RSA 导入器直接拒绝的 PEM 内容，或不受支持宽度的密钥，
-    /// 会抛出 <see cref="ArgumentException"/> 而不是返回 null。</para></returns>
-    /// <exception cref="ArgumentException">The key file content is not a parseable PEM payload, or the
-    /// imported key is not 1024, 2048, 3072 or 4096 bits.
-    /// <para>密钥文件内容不是可解析的 PEM 载荷，或导入的密钥不是 1024、2048、3072 或 4096 位。</para></exception>
-    public IMtkBootRomSlaResponder? ResolveSlaResponder(MtkDeviceInfo device)
-    {
-        var specific = KeyPath($"sla_{device.HardwareCode:x4}_{device.HardwareSubCode:x4}.pem");
-        var generic = KeyPath($"sla_{device.HardwareCode:x4}.pem");
-        var path = specific ?? generic;
-        if (path is null)
-        {
-            return null;
-        }
-
-        RSA? rsa = null;
-        try
-        {
-            rsa = RSA.Create();
-            rsa.ImportFromPem(File.ReadAllText(path));
-            var responder = new MtkBootRomRsaSlaResponder(rsa, device, ownsKey: true);
-            rsa = null;
-            return responder;
-        }
-        catch (Exception ex) when (ex is IOException or FormatException or CryptographicException)
-        {
-            rsa?.Dispose();
-            return null;
-        }
-        catch
-        {
-            rsa?.Dispose();
-            throw;
-        }
     }
 
     /// <summary>Reads <c>daa_cert_&lt;hwcode&gt;.bin</c> from the keys directory for the device.

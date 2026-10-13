@@ -75,6 +75,26 @@ public sealed partial class FlashBundleOrchestrator
         return [.. filtered];
     }
 
+    private static List<WipeManifestEntry> FilterWipeEntries(
+        List<WipeManifestEntry> entries, FlashBundleOptions options)
+    {
+        IEnumerable<WipeManifestEntry> filtered = entries;
+
+        if (options.Labels is { Count: > 0 })
+        {
+            var labelSet = new HashSet<string>(options.Labels, StringComparer.OrdinalIgnoreCase);
+            filtered = filtered.Where(e => labelSet.Contains(e.Label));
+        }
+
+        if (options.NotLabels is { Count: > 0 })
+        {
+            var notLabelSet = new HashSet<string>(options.NotLabels, StringComparer.OrdinalIgnoreCase);
+            filtered = filtered.Where(e => !notLabelSet.Contains(e.Label));
+        }
+
+        return [.. filtered];
+    }
+
     private static string? ResolveUfsProvisionPath(FlashBundleOptions options)
     {
         if (!string.IsNullOrEmpty(options.UfsProvisionPath))

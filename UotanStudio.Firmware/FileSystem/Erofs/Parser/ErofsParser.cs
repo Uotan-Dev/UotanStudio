@@ -1,9 +1,11 @@
 using System.Buffers;
 using System.Buffers.Binary;
-using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Hash.Crc32c;
+using UnifiedDataLayout = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsDataLayout;
+using UnifiedInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Parser;
 
@@ -71,29 +73,29 @@ public sealed record ErofsFileEntry(
     /// <summary>Mode type bits select symbolic link. <para>模式类型位选中符号链接。</para></summary>
     /// <value><see langword="true"/> when this entry is a symlink.
     /// <para>该条目为符号链接时为 <see langword="true"/>。</para></value>
-    public bool IsSymlink => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeSymlink;
+    public bool IsSymlink => (Mode & UnifiedInode.ModeTypeMask) == UnifiedInode.ModeSymlink;
 
     /// <summary>Mode type bits select a directory. <para>模式类型位选中目录。</para></summary>
     /// <value><see langword="true"/> when this entry is a directory.
     /// <para>该条目为目录时为 <see langword="true"/>。</para></value>
-    public bool IsDirectory => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeDirectory;
+    public bool IsDirectory => (Mode & UnifiedInode.ModeTypeMask) == UnifiedInode.ModeDirectory;
 
     /// <summary>Mode type bits select a character device. <para>模式类型位选中字符设备。</para></summary>
     /// <value><see langword="true"/> for character device entries.
     /// <para>条目为字符设备时为 <see langword="true"/>。</para></value>
-    public bool IsCharacterDevice => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeCharacterDevice;
+    public bool IsCharacterDevice => (Mode & UnifiedInode.ModeTypeMask) == UnifiedInode.ModeCharacterDevice;
 
     /// <summary>Mode type bits select a block device. <para>模式类型位选中块设备。</para></summary>
     /// <value><see langword="true"/> for block device entries. <para>条目为块设备时为 <see langword="true"/>。</para></value>
-    public bool IsBlockDevice => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeBlockDevice;
+    public bool IsBlockDevice => (Mode & UnifiedInode.ModeTypeMask) == UnifiedInode.ModeBlockDevice;
 
     /// <summary>Mode type bits select a FIFO. <para>模式类型位选中 FIFO。</para></summary>
     /// <value><see langword="true"/> for FIFO entries. <para>条目为 FIFO 时为 <see langword="true"/>。</para></value>
-    public bool IsFifo => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeFifo;
+    public bool IsFifo => (Mode & UnifiedInode.ModeTypeMask) == UnifiedInode.ModeFifo;
 
     /// <summary>Mode type bits select a socket. <para>模式类型位选中套接字。</para></summary>
     /// <value><see langword="true"/> for socket entries. <para>条目为套接字时为 <see langword="true"/>。</para></value>
-    public bool IsSocket => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeSocket;
+    public bool IsSocket => (Mode & UnifiedInode.ModeTypeMask) == UnifiedInode.ModeSocket;
 
     /// <summary>True for the four device/FIFO/socket types that carry no data content.
     /// <para>对无数据内容的设备、FIFO、套接字四类为真。</para></summary>
@@ -121,8 +123,8 @@ public sealed partial class ErofsParser : IDisposable
     private const int CopyBufferSize = 1 << 20;
 
     /// <summary>
-    /// <para>超级块 CRC32c 种子，与 Linux 内核 EROFS 校验一致，构建器侧使用相同值。</para>
-    /// Superblock CRC32c seed used by the Linux kernel EROFS checksum, mirroring the builder.
+    /// Superblock CRC32c seed used by the EROFS checksum, mirroring the builder.
+    /// <para>超级块 CRC32c 种子，与构建器侧使用相同值。</para>
     /// </summary>
     private const uint SuperblockChecksumSeed = 0x5045B54Au;
 
@@ -150,7 +152,8 @@ public sealed partial class ErofsParser : IDisposable
     private long _pathCharacters;
     private List<string> _directoryPaths = [];
     private readonly List<ErofsFileEntry> _directoryEntries = [];
-    private ErofsInode? _packedInode;
+    private UnifiedInode? _packedInode;
+    private UnifiedInode? _rootInode;
 
     /// <summary>
     /// Creates a parser from image bytes (the array is wrapped in a memory stream without copying; validates the magic at offset 1024).
@@ -254,9 +257,6 @@ public sealed partial class ErofsParser : IDisposable
     /// <summary>
     /// Creates a parser for a multi-device image from one stream per device id, with unlimited budgets.
     /// <para>为多设备镜像创建解析器，每个设备 id 对应一条流，预算不受限。</para>
-    /// Index 0 is the primary image; the parser disposes the extra device streams when disposed and
-    /// leaves the primary stream open.
-    /// <para>索引 0 为主镜像；释放解析器时二级设备流随之关闭，主流保持打开。</para>
     /// </summary>
     /// <param name="deviceStreams">
     /// Device streams indexed by device id; the count must equal the extra-device count in the
@@ -277,9 +277,6 @@ public sealed partial class ErofsParser : IDisposable
     /// <summary>
     /// Creates a budgeted, cancellable parser for a multi-device image from one stream per device id.
     /// <para>为多设备镜像创建带预算、可取消的解析器，每个设备 id 对应一条流。</para>
-    /// Index 0 is the primary image; the parser disposes the extra device streams when disposed and
-    /// leaves the primary stream open.
-    /// <para>索引 0 为主镜像；释放解析器时二级设备流随之关闭，主流保持打开。</para>
     /// </summary>
     /// <param name="deviceStreams">
     /// Device streams indexed by device id; the count must equal the extra-device count in the
@@ -538,6 +535,26 @@ public sealed partial class ErofsParser : IDisposable
     }
 
     /// <summary>
+    /// Root of the unified inode tree the directory walk builds, which carries parent/child links and
+    /// the build-time fields the public listing does not expose.
+    /// <para>目录遍历构建的统一 inode 树根节点，携带父子链接与公开清单不暴露的构建期字段。</para>
+    /// </summary>
+    /// <value><see langword="null"/> when the root inode is not a directory, or when the walk found the
+    /// root already visited; otherwise the root node after <see cref="EnumerateFiles"/> or
+    /// <see cref="EnumerateEntries"/> has run, which this accessor triggers on demand.
+    /// <para>根 inode 不是目录，或遍历发现根已被访问时为 <see langword="null"/>；否则在
+    /// <see cref="EnumerateFiles"/> 或 <see cref="EnumerateEntries"/> 运行后为根节点，本访问器会按需触发遍历。</para></value>
+    internal UnifiedInode? RootInode
+    {
+        get
+        {
+            _readCancellation.ThrowIfCancellationRequested();
+            _fileTable ??= EnumerateFilesCore();
+            return _rootInode;
+        }
+    }
+
+    /// <summary>
     /// Reads a single file and returns its bytes.
     /// <para>读取单个文件内容并返回字节数组。</para>
     /// </summary>
@@ -587,7 +604,7 @@ public sealed partial class ErofsParser : IDisposable
     /// Whether the inode is a special file with no data content (char/block device, FIFO, socket).
     /// <para>判定 inode 是否为无数据内容的特殊文件（字符/块设备、FIFO、套接字）。</para>
     /// </summary>
-    private static bool IsSpecialFile(ErofsInode inode)
+    private static bool IsSpecialFile(UnifiedInode inode)
         => inode.IsCharacterDevice || inode.IsBlockDevice || inode.IsFifo || inode.IsSocket;
 
     /// <summary>
@@ -752,11 +769,12 @@ public sealed partial class ErofsParser : IDisposable
 
         var advise = BinaryPrimitives.ReadUInt16LittleEndian(
             ReadBytes(metaboxOffset, 2, "METABOX inode advise"));
-        var inodeSize = (advise & ErofsInode.FlagExtended) != 0 ? ErofsInode.ExtendedSize : ErofsInode.CompactSize;
+        var inodeSize = (advise & UnifiedInode.FlagExtended) != 0 ? UnifiedInode.ExtendedSize : UnifiedInode.CompactSize;
         if (metaboxOffset > _imageSize - inodeSize)
             throw new FileSystemCorruptedException("METABOX inode exceeds the image bounds.");
 
-        var inode = ErofsInode.FromBytes(ReadBytes(metaboxOffset, inodeSize, "METABOX inode"));
+        var inode = UnifiedInode.FromBytes(
+            ReadBytes(metaboxOffset, inodeSize, "METABOX inode"), metaboxNid, _superblock.BlockSizeBits, inMetabox: true);
         var dataSize = (long)inode.Size;
         if (dataSize <= 0) return [];
         if (dataSize > MaxMetadataComponentSize)
@@ -765,22 +783,22 @@ public sealed partial class ErofsParser : IDisposable
         using var buffer = new MemoryStream();
         switch (inode.DataLayout)
         {
-            case ErofsInode.DataLayoutInline:
+            case UnifiedDataLayout.Inline:
                 {
                     var inlineStart = metaboxOffset + inode.InlineDataOffset;
                     CheckRange(inlineStart, dataSize, "METABOX inline data");
                     CopyFromSource(buffer, inlineStart, dataSize);
                     break;
                 }
-            case ErofsInode.DataLayoutFlat:
+            case UnifiedDataLayout.Flat:
                 {
-                    var start = checked(inode.RawBlockAddress * _blockSize);
+                    var start = checked(inode.AddressField() * _blockSize);
                     CheckRange(start, dataSize, "METABOX flat data");
                     CopyFromSource(buffer, start, dataSize);
                     break;
                 }
-            case ErofsInode.DataLayoutCompressed:
-            case ErofsInode.DataLayoutCompactIndexes:
+            case UnifiedDataLayout.Compressed:
+            case UnifiedDataLayout.CompactIndexes:
                 {
                     using var bounded = new CountingWriteStream(buffer, dataSize, leaveOpen: true, _readCancellation);
                     WriteCompressedData(metaboxNid, inode, bounded, cancellationToken: _readCancellation);
@@ -945,12 +963,13 @@ public sealed partial class ErofsParser : IDisposable
         var result = new List<ErofsFileEntry>();
         var visitedDirectories = new HashSet<ulong>();
         var directories = new List<string>();
-        WalkDirectory(_superblock.RootNid64, string.Empty, visitedDirectories, result, directories);
+        _rootInode = WalkDirectory(_superblock.RootNid64, string.Empty, visitedDirectories, result, directories);
         _directoryPaths = directories;
         return result;
     }
 
-    private void WalkDirectory(ulong nid, string prefix, HashSet<ulong> visitedDirectories, List<ErofsFileEntry> result, List<string> directories)
+    private UnifiedInode? WalkDirectory(ulong nid, string prefix, HashSet<ulong> visitedDirectories,
+        List<ErofsFileEntry> result, List<string> directories)
     {
         _readCancellation.ThrowIfCancellationRequested();
         if (!visitedDirectories.Add(nid))
@@ -959,23 +978,18 @@ public sealed partial class ErofsParser : IDisposable
             {
                 throw new FileSystemCorruptedException("EROFS directory aliases or cycles cannot be captured losslessly.");
             }
-            return;
+            return null;
         }
 
         var inode = ReadInode(nid);
         if (!inode.IsDirectory)
         {
-            return;
+            return null;
         }
 
-        _directoryEntries.Add(new(prefix.Length == 0 ? "." : prefix, (long)inode.Size, nid)
+        inode.Name = LastPathComponent(prefix);
+        _directoryEntries.Add(ProjectEntry(prefix.Length == 0 ? "." : prefix, inode, deviceId: 0) with
         {
-            Mode = inode.Mode,
-            Uid = inode.Uid,
-            Gid = inode.Gid,
-            LinkCount = inode.Nlink,
-            MTime = inode.CTime,
-            MTimeNanoseconds = inode.CTimeNsec,
             Xattrs = ReadXattrs(nid, inode)
         });
 
@@ -990,7 +1004,7 @@ public sealed partial class ErofsParser : IDisposable
             }
             _visitedEntries++;
             _pathCharacters += candidatePath.Length;
-            if (entry.FileType == ErofsInode.FileTypeDirectory)
+            if (entry.FileType == UnifiedInode.FileTypeDirectory)
             {
 
                 if (entry.Nid == nid)
@@ -1000,28 +1014,26 @@ public sealed partial class ErofsParser : IDisposable
 
                 var directoryPath = candidatePath;
                 directories.Add(directoryPath);
-                WalkDirectory(entry.Nid, directoryPath, visitedDirectories, result, directories);
+                var child = WalkDirectory(entry.Nid, directoryPath, visitedDirectories, result, directories);
+                if (child is not null)
+                {
+                    child.Parent = inode;
+                    inode.Children.Add(child);
+                }
                 continue;
             }
 
-            if (entry.FileType == ErofsInode.FileTypeRegularFile ||
-                entry.FileType == ErofsInode.FileTypeSymlink ||
-                entry.FileType is ErofsInode.FileTypeCharacterDevice or
-                    ErofsInode.FileTypeBlockDevice or ErofsInode.FileTypeFifo or
-                    ErofsInode.FileTypeSocket)
+            if (entry.FileType == UnifiedInode.FileTypeRegularFile ||
+                entry.FileType == UnifiedInode.FileTypeSymlink ||
+                entry.FileType is UnifiedInode.FileTypeCharacterDevice or
+                    UnifiedInode.FileTypeBlockDevice or UnifiedInode.FileTypeFifo or
+                    UnifiedInode.FileTypeSocket)
             {
                 var fileInode = ReadInode(entry.Nid);
-                var path = candidatePath;
-                var fileEntry = new ErofsFileEntry(path, (long)fileInode.Size, entry.Nid)
-                {
-                    Mode = fileInode.Mode,
-                    DeviceId = fileInode.U,
-                    Uid = fileInode.Uid,
-                    Gid = fileInode.Gid,
-                    LinkCount = fileInode.Nlink,
-                    MTime = fileInode.CTime,
-                    MTimeNanoseconds = fileInode.CTimeNsec,
-                };
+                fileInode.Name = entry.Name;
+                fileInode.Parent = inode;
+                inode.Children.Add(fileInode);
+                var fileEntry = ProjectEntry(candidatePath, fileInode, fileInode.AddressField());
                 if (fileInode.IsSymlink)
                 {
 
@@ -1045,6 +1057,38 @@ public sealed partial class ErofsParser : IDisposable
                 result.Add(fileEntry);
             }
         }
+
+        return inode;
+    }
+
+    /// <summary>
+    /// Projects one tree node into the caller-visible listing record, so the walk's single decoded
+    /// inode describes both the tree and the entry.
+    /// <para>把一个树节点投影为调用方可见的清单记录，使遍历解码出的同一个 inode 同时描述树与条目。</para>
+    /// </summary>
+    /// <param name="path">Slash-separated image path of the entry. <para>条目的 '/' 分隔镜像路径。</para></param>
+    /// <param name="inode">Tree node being projected. <para>被投影的树节点。</para></param>
+    /// <param name="deviceId">Value reported as the entry's <c>i_u</c> field; zero for directory entries,
+    /// which the flat listing never carried. <para>作为条目 <c>i_u</c> 字段报告的值；目录条目为零，扁平清单
+    /// 从不携带该字段。</para></param>
+    /// <returns>The listing record built from <paramref name="inode"/>.
+    /// <para>由 <paramref name="inode"/> 构建的清单记录。</para></returns>
+    private static ErofsFileEntry ProjectEntry(string path, UnifiedInode inode, uint deviceId)
+        => new(path, (long)inode.Size, inode.Nid)
+        {
+            Mode = inode.Mode,
+            DeviceId = deviceId,
+            Uid = inode.Uid,
+            Gid = inode.Gid,
+            LinkCount = inode.Nlink,
+            MTime = inode.CTime,
+            MTimeNanoseconds = inode.CTimeNsec,
+        };
+
+    private static string LastPathComponent(string path)
+    {
+        var slash = path.LastIndexOf('/');
+        return slash < 0 ? path : path[(slash + 1)..];
     }
 
     private static string? ReadSymlinkTarget(Stream content)
@@ -1064,7 +1108,7 @@ public sealed partial class ErofsParser : IDisposable
     /// </summary>
     internal bool RequireCompleteMetadata { get; init; }
 
-    private List<ErofsXattrEntry> ReadXattrs(ulong nid, ErofsInode inode)
+    private List<ErofsXattrEntry> ReadXattrs(ulong nid, UnifiedInode inode)
     {
         var result = new List<ErofsXattrEntry>();
         if (inode.XattrICount == 0)
@@ -1078,8 +1122,8 @@ public sealed partial class ErofsParser : IDisposable
             var metaboxResident = _hasMetabox && (nid & NidMetaboxFlag) != 0;
             var ibodyOffset = checked((metaboxResident ? MetaboxOffset(nid) : _superblock.GetInodeOffset(nid)) + inode.OnDiskSize);
             var ibody = metaboxResident
-                ? ReadMetaboxBytes(ibodyOffset, inode.XattrTotalSize, "xattr ibody")
-                : ReadBytes(ibodyOffset, inode.XattrTotalSize, "xattr ibody");
+                ? ReadMetaboxBytes(ibodyOffset, inode.XattrISize, "xattr ibody")
+                : ReadBytes(ibodyOffset, inode.XattrISize, "xattr ibody");
             var prefixTable = LoadXattrPrefixTable();
             var entries = ErofsXattr.ParseInline(ibody, inode.XattrICount, prefixTable);
             result.AddRange(entries);
@@ -1219,7 +1263,7 @@ public sealed partial class ErofsParser : IDisposable
         throw new FileNotFoundException($"File not found in erofs image: '{path}'.", path);
     }
 
-    private ErofsInode ReadInode(ulong nid)
+    private UnifiedInode ReadInode(ulong nid)
     {
 
         if (_hasMetabox && (nid & NidMetaboxFlag) != 0)
@@ -1235,12 +1279,12 @@ public sealed partial class ErofsParser : IDisposable
                     $"METABOX slot index {slotIndex} (offset {slotOffset}) is out of range (metabox data size {_metaboxData.Length}).");
 
             var metaboxAdvise = BinaryPrimitives.ReadUInt16LittleEndian(_metaboxData.AsSpan((int)slotOffset, 2));
-            var metaboxInodeSize = (metaboxAdvise & ErofsInode.FlagExtended) != 0
-                ? ErofsInode.ExtendedSize : ErofsInode.CompactSize;
+            var metaboxInodeSize = (metaboxAdvise & UnifiedInode.FlagExtended) != 0
+                ? UnifiedInode.ExtendedSize : UnifiedInode.CompactSize;
             if (slotOffset > _metaboxData.Length - metaboxInodeSize)
                 throw new FileSystemCorruptedException($"METABOX inode nid 0x{nid:X16} exceeds its data stream.");
-            return ResolveTimestamp(ErofsInode.FromBytes(
-                _metaboxData.AsSpan((int)slotOffset, metaboxInodeSize)));
+            return ResolveTimestamp(UnifiedInode.FromBytes(
+                _metaboxData.AsSpan((int)slotOffset, metaboxInodeSize), nid, _superblock.BlockSizeBits, inMetabox: true));
         }
 
         var offset = _superblock.GetInodeOffset(nid);
@@ -1249,16 +1293,16 @@ public sealed partial class ErofsParser : IDisposable
             throw new FileSystemCorruptedException($"Inode nid {nid} is out of range.");
         }
 
-        var available = (int)Math.Min(ErofsInode.ExtendedSize, _imageSize - offset);
+        var available = (int)Math.Min(UnifiedInode.ExtendedSize, _imageSize - offset);
         var data = ReadBytes(offset, available, $"Inode nid {nid}");
         var advise = BinaryPrimitives.ReadUInt16LittleEndian(data);
-        var inodeSize = (advise & ErofsInode.FlagExtended) != 0 ? ErofsInode.ExtendedSize : ErofsInode.CompactSize;
+        var inodeSize = (advise & UnifiedInode.FlagExtended) != 0 ? UnifiedInode.ExtendedSize : UnifiedInode.CompactSize;
         if (inodeSize > data.Length)
         {
             throw new FileSystemCorruptedException($"Inode nid {nid} exceeds the image bounds.");
         }
 
-        return ResolveTimestamp(ErofsInode.FromBytes(data.AsSpan(0, inodeSize)));
+        return ResolveTimestamp(UnifiedInode.FromBytes(data.AsSpan(0, inodeSize), nid, _superblock.BlockSizeBits));
     }
 
     private long MetaboxOffset(ulong nid)
@@ -1298,18 +1342,18 @@ public sealed partial class ErofsParser : IDisposable
 
     private int DirectoryBlockSize => _superblock.DirBlkBits == 0 ? _blockSize : 1 << _superblock.DirBlkBits;
 
-    private List<ErofsDirectoryEntry> ReadDirectory(ulong nid, ErofsInode inode)
+    private List<ErofsDirectoryEntry> ReadDirectory(ulong nid, UnifiedInode inode)
     {
         var dirBlockSize = DirectoryBlockSize;
-        if (inode.DataLayout is not (ErofsInode.DataLayoutFlat or ErofsInode.DataLayoutInline))
+        if (inode.DataLayout is not (UnifiedDataLayout.Flat or UnifiedDataLayout.Inline))
         {
 
             throw new FileSystemUnsupportedFeatureException($"Unsupported directory data layout {inode.DataLayout} for nid {nid}.");
         }
 
-        var flatStart = checked(inode.RawBlockAddress * _blockSize);
+        var flatStart = checked(inode.AddressField() * _blockSize);
         var length = checked((long)inode.Size);
-        var flatLength = inode.DataLayout == ErofsInode.DataLayoutInline
+        var flatLength = inode.DataLayout == UnifiedDataLayout.Inline
             ? length / _blockSize * _blockSize : length;
         if (flatLength > 0) CheckRange(flatStart, flatLength, "Directory data");
         if (length > MaxMetadataComponentSize)
@@ -1345,20 +1389,28 @@ public sealed partial class ErofsParser : IDisposable
     }
 
     /// <summary>
-    /// Parses one directory block: compact dirents per the kernel erofs_fill_dentries semantics first; falls back to dense parsing (long-name head slots) when the first entry's nameoff carries the dense high-bit flag (0x8000).
-    /// <para>解析单块目录数据：优先按内核 erofs_fill_dentries 语义解析 compact dirent； 若首条目 nameoff 带 dense 高位标记（0x8000）则回退到 dense 解析（长名头槽位）。</para>
+    /// Parses one directory block with the compact dirent semantics: a directory block is exactly a dirent
+    /// array followed by the contiguous name
+    /// area, and a malformed nameoff is corruption rather than an alternate layout.
+    /// <para>按 compact dirent 语义解析单个目录块：目录块就是 dirent 数组后接连续
+    /// 名称区，非法的 nameoff 属损坏而不是另一种布局。</para>
     /// </summary>
+    /// <param name="block">Raw directory block bytes, at least one dirent header long.
+    /// <para>目录块的原始字节，长度至少为一条 dirent 头部。</para></param>
+    /// <param name="blockSize">Directory block size in bytes, unused by the compact layout because the
+    /// payload length is derived from the dirent count.
+    /// <para>目录块字节大小；紧凑布局不使用该值，因为负载长度由 dirent 数量推导。</para></param>
+    /// <param name="totalLength">Length of the payload this block belongs to, unused for the same reason.
+    /// <para>该块所属负载的长度；同样不使用。</para></param>
+    /// <returns>The entries decoded from <paramref name="block"/>, in on-disk order.
+    /// <para>从 <paramref name="block"/> 解码出的条目，按磁盘顺序。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The block is truncated, a nameoff is not contiguous
+    /// with the previous entry, a nameoff carries an undefined bit, or a name length exceeds the block.
+    /// <para>块被截断、nameoff 与前一条目不连续、nameoff 携带未定义的位，或名称长度超出该块。</para></exception>
     private static List<ErofsDirectoryEntry> ParseDirectoryData(ReadOnlySpan<byte> block, int blockSize, long totalLength)
     {
-        if (block.Length >= ErofsDirectoryEntry.DirentSize)
-        {
-            var firstNameOff = BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(8, 2));
-            if ((firstNameOff & ErofsDirectoryEntry.NameOffHeadFlag) != 0)
-            {
-                return ErofsDirectoryEntry.ParseDenseBlock(block, blockSize);
-            }
-        }
-
+        _ = blockSize;
+        _ = totalLength;
         return ErofsDirectoryEntry.ParseBlock(block);
     }
 

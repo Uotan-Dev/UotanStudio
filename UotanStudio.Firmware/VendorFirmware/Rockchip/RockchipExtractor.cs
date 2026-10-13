@@ -2,8 +2,8 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Hash.RockchipCrc32;
 
 namespace UotanStudio.Firmware.VendorFirmware.Rockchip;
 

@@ -312,5 +312,5 @@ internal static partial class DexWriter
     }
 
     private static uint Adler32(ReadOnlySpan<byte> data)
-        => Core.Checksums.Adler32.Compute(data);
+        => UotanStudio.Hash.Adler32.Adler32.Compute(data);
 }

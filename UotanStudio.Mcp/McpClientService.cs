@@ -17,7 +17,7 @@ namespace UotanStudio.Mcp;
 /// </summary>
 public sealed class McpClientService
 {
-    /// <summary><para>全局单例。</para>The global singleton.</summary>
+    /// <summary>The global singleton. <para>全局单例。</para></summary>
     /// <value>The shared client service holding every lazily opened connection to external MCP servers.
     /// <para>共享的客户端服务，持有到外部 MCP 服务器的全部懒建立连接。</para></value>
     public static McpClientService Instance { get; } = new();
@@ -104,10 +104,10 @@ public sealed class McpClientService
     /// string text = await McpClientService.Instance.CallToolAsync(
     ///     "docs", "search", """{"query":"payload"}""", CancellationToken.None);
     /// </code></example>
-    /// <param name="serverName"><para>服务器名称。</para>Server name.</param>
-    /// <param name="toolName"><para>工具名称。</para>Tool name.</param>
-    /// <param name="argumentsJson"><para>工具实参 JSON（可为 <c>null</c> 表示无参数）。</para>Tool arguments JSON (may be <c>null</c> for none).</param>
-    /// <param name="cancellationToken"><para>取消令牌。</para>Cancellation token.</param>
+    /// <param name="serverName">Server name. <para>服务器名称。</para></param>
+    /// <param name="toolName">Tool name. <para>工具名称。</para></param>
+    /// <param name="argumentsJson">Tool arguments JSON (may be <c>null</c> for none). <para>工具实参 JSON（可为 <c>null</c> 表示无参数）。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The concatenated text of text blocks and embedded text resources, trimmed, or <c>"(no text content)"</c> when the result carried none.
     /// <para>文本块与内嵌文本资源拼接并去除尾端空白后的结果；结果不含文本时返回 <c>"(no text content)"</c>。</para></returns>
     /// <exception cref="InvalidOperationException">No config carries that name, the server is disabled, or <paramref name="argumentsJson"/> is a JSON value that is not an object.

@@ -4,19 +4,13 @@ using System.Security.Cryptography.X509Certificates;
 namespace UotanStudio.Firmware.AndroidMeta.Apk;
 
 /// <summary>
-/// One signer's custom key material: user-provided private key and X.509 certificate chain.
-/// No keys are bundled; every path is supplied by the user.
-/// <para>单个签名者的自定义密钥材料：由用户提供的私钥与 X.509 证书链。不内置任何密钥，全部路径由用户指定。</para>
+/// One signer's custom key material: a user-provided private key and X.509 certificate chain, with no bundled keys.
+/// <para>单个签名者的自定义密钥材料：由用户提供的私钥与 X.509 证书链，不内置任何密钥。</para>
 /// </summary>
 public sealed class ApkSignerKeyMaterial : IDisposable
 {
-    /// <summary>
-    /// <c>EphemeralKeySet</c> keeps private keys off disk, but AppleCrypto rejects it, so macOS falls back to
-    /// <c>DefaultKeySet</c>. Only the public key and the certificate bytes are consumed here, so the temporary key
-    /// material created by the fallback is never exported.
-    /// <para><c>EphemeralKeySet</c> 可以避免私钥落盘，但 AppleCrypto 不支持该标志，因此 macOS 回退到
-    /// <c>DefaultKeySet</c>。此处只消费公钥与证书字节，回退产生的临时密钥材料不会被导出。</para>
-    /// </summary>
+    /// <summary>Storage flags used when a user certificate has to be loaded on the running platform.<para>在运行平台上加载用户证书时使用的存储标志。</para></summary>
+    /// <value>Ephemeral key set on Windows, otherwise the default key set. <para>Windows 上为临时密钥集，其余平台为默认密钥集。</para></value>
     internal static X509KeyStorageFlags PrivateKeyStorageFlags => OperatingSystem.IsWindows()
         ? X509KeyStorageFlags.EphemeralKeySet
         : X509KeyStorageFlags.DefaultKeySet;
@@ -55,25 +49,20 @@ public sealed class ApkSignerKeyMaterial : IDisposable
     public IReadOnlyList<X509Certificate2> CertificateChain { get; }
 
     /// <summary>
-    /// Loads custom key material from user-supplied files: private key (PKCS#8 plain/encrypted,
-    /// PKCS#1 or SEC1, PEM or DER) and certificate (PEM / DER / PFX). All inputs come from the user.
-    /// <para>从用户提供的文件加载自定义密钥材料：私钥（PKCS#8 明文/加密、PKCS#1 或 SEC1，PEM 或 DER）
-    /// 与证书（PEM/DER/PFX）。输入全部由用户提供。</para>
+    /// Loads custom key material from user-supplied files: private key (PKCS#8 plain or encrypted,
+    /// PKCS#1 or SEC1, PEM or DER) and certificate (PEM, DER or PFX).
+    /// <para>从用户提供的文件加载自定义密钥材料：私钥（PKCS#8 明文或加密、PKCS#1 或 SEC1，PEM 或 DER）
+    /// 与证书（PEM、DER 或 PFX）。</para>
     /// </summary>
-    /// <param name="keyPath">Private key file path (.pk8/.key/.pem).
-    /// <para>私钥文件路径（.pk8/.key/.pem）。</para></param>
-    /// <param name="keyPassword">Optional private key password (encrypted PKCS#8).
-    /// <para>可选私钥密码（加密 PKCS#8）。</para></param>
-    /// <param name="certPath">Certificate file path (.pem/.crt/.cer/.der/.pfx/.p12).
-    /// <para>证书文件路径。</para></param>
-    /// <param name="certPassword">Optional certificate (PFX) password.
-    /// <para>可选证书（PFX）密码。</para></param>
-    /// <returns>Loaded material whose key and certificate Subject Public Key Info were verified to
-    /// be byte-identical; the caller owns the returned instance and must dispose it.
-    /// <para>已加载的密钥材料；其公钥信息与证书逐字节一致的校验已通过；实例由调用方持有并负责释放。</para></returns>
+    /// <param name="keyPath">Private key file, in PEM or DER form. <para>私钥文件，PEM 或 DER 形式。</para></param>
+    /// <param name="keyPassword">Optional private key password for an encrypted PKCS#8 key. <para>加密 PKCS#8 私钥的可选密码。</para></param>
+    /// <param name="certPath">Certificate file, in PEM, DER or PFX form. <para>证书文件，PEM、DER 或 PFX 形式。</para></param>
+    /// <param name="certPassword">Optional certificate password for a PFX container. <para>PFX 容器的可选证书密码。</para></param>
+    /// <returns>Loaded material whose public key was verified to match the certificate; the instance must be disposed.
+    /// <para>已加载的密钥材料；其公钥已与证书核对一致；该实例需要释放。</para></returns>
     /// <exception cref="FileNotFoundException"><paramref name="keyPath"/> or <paramref name="certPath"/> is blank or does not exist. <para><paramref name="keyPath"/> 或 <paramref name="certPath"/> 为空或不存在。</para></exception>
     /// <exception cref="InvalidDataException">Either input file exceeds 4 MiB. <para>任一输入文件超过 4 MiB。</para></exception>
-    /// <exception cref="CryptographicException">The key cannot be imported with the given password or format, the certificate block is malformed, or the key does not match the certificate. <para>无法按给定密码或格式导入私钥、证书块格式错误，或私钥与证书不匹配。</para></exception>
+    /// <exception cref="CryptographicException">The key cannot be imported, the certificate block is malformed, or key and certificate do not match. <para>私钥无法导入、证书块格式错误，或私钥与证书不匹配。</para></exception>
     /// <exception cref="FormatException">A PEM key body is not valid Base64. <para>PEM 私钥正文不是有效的 Base64。</para></exception>
     public static ApkSignerKeyMaterial Load(string keyPath, string? keyPassword, string certPath, string? certPassword)
     {

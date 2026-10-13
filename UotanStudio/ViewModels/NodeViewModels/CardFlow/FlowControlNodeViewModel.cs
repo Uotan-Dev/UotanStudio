@@ -5,26 +5,26 @@ using UotanStudio.Services.Execution;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>流程控制节点视图模型，提供开始、结束、条件分支、循环、延迟、并行和终止功能。</para>
 /// Flow control node view model, providing start, end, conditional branch, loop, delay, parallel, and termination capabilities.
+/// <para>流程控制节点视图模型，提供开始、结束、条件分支、循环、延迟、并行和终止功能。</para>
 /// </summary>
 public class FlowControlNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
-    /// <para>创建具有指定标题的流程控制节点。</para>
     /// Creates a flow control node with the specified title.
+    /// <para>创建具有指定标题的流程控制节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public FlowControlNodeViewModel(string title) : base(title, NodeCategory.Flow)
     {
     }
 
     /// <summary>
-    /// <para>创建默认的开始节点（工作流入口）。</para>
     /// Creates a default start node (workflow entry point).
+    /// <para>创建默认的开始节点（工作流入口）。</para>
     /// </summary>
     public static FlowControlNodeViewModel CreateStartNode()
     {
@@ -38,8 +38,8 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的结束节点（工作流出口）。</para>
     /// Creates a default end node (workflow exit point).
+    /// <para>创建默认的结束节点（工作流出口）。</para>
     /// </summary>
     public static FlowControlNodeViewModel CreateEndNode()
     {
@@ -53,8 +53,8 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的条件分支节点，根据布尔输入选择执行路径。</para>
     /// Creates a default branch node that selects execution paths based on a boolean input.
+    /// <para>创建默认的条件分支节点，根据布尔输入选择执行路径。</para>
     /// </summary>
     public static FlowControlNodeViewModel CreateBranchNode()
     {
@@ -71,8 +71,8 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的循环节点，按指定次数重复执行子流程。</para>
     /// Creates a default loop node that repeats a sub-flow a specified number of times.
+    /// <para>创建默认的循环节点，按指定次数重复执行子流程。</para>
     /// </summary>
     public static FlowControlNodeViewModel CreateLoopNode()
     {
@@ -90,8 +90,8 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的延迟节点，在流程中暂停指定毫秒数。</para>
     /// Creates a default delay node that pauses the flow for a specified number of milliseconds.
+    /// <para>创建默认的延迟节点，在流程中暂停指定毫秒数。</para>
     /// </summary>
     public static FlowControlNodeViewModel CreateDelayNode()
     {
@@ -107,8 +107,8 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的并行执行节点，同时运行多个子流程。</para>
     /// Creates a default parallel node that runs multiple sub-flows concurrently.
+    /// <para>创建默认的并行执行节点，同时运行多个子流程。</para>
     /// </summary>
     public static FlowControlNodeViewModel CreateParallelNode()
     {
@@ -124,8 +124,8 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的终止节点，立即中止整个工作流执行。</para>
     /// Creates a default terminate node that immediately aborts the entire workflow execution.
+    /// <para>创建默认的终止节点，立即中止整个工作流执行。</para>
     /// </summary>
     public static FlowControlNodeViewModel CreateTerminateNode()
     {
@@ -140,21 +140,16 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的流程控制逻辑：Flow.Execution.Start/End 标记、Flow.Condition.Branch 按条件选路径（引擎据此跳过未选分支子图）、
-    /// Flow.Collection.Loop 校验迭代次数（引擎据此迭代执行 Body 子图并逐次写入 Index 输出）、Flow.Execution.Delay 延迟、
-    /// Flow.Execution.Parallel 分派并行语义（引擎并发执行各分支子图）、Flow.Execution.Terminate 中止整个工作流。</para>
-    /// Dispatches flow-control logic by the node type key (TypeKey): Flow.Execution.Start/End are markers, Flow.Condition.Branch selects a path
-    /// by condition (the engine skips the untaken branch sub-graph), Flow.Collection.Loop validates the iteration count (the engine
-    /// iterates the Body sub-graph writing the Index output per iteration), Flow.Execution.Delay pauses, Flow.Execution.Parallel dispatches
-    /// concurrency semantics (the engine runs branch sub-graphs concurrently), and Flow.Execution.Terminate aborts the workflow.
+    /// Executes the flow-control node according to its type key.
+    /// <para>按节点类型键执行对应的流程控制节点。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {

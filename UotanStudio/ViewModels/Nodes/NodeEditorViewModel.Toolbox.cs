@@ -103,7 +103,8 @@ public partial class NodeEditorViewModel
         }
     }
 
-    /// <summary>Records deliberate toolbox insertion; previews and deserialization do not alter recent items.</summary>
+    /// <summary>Records deliberate toolbox insertion; previews and deserialization do not alter recent items.<para>记录刻意的工具箱插入；预览与反序列化不会改变最近使用项。</para></summary>
+    /// <param name="typeKey">Stable type key of the inserted node.<para>被插入节点的稳定类型键。</para></param>
     public void RecordToolboxUse(string typeKey)
     {
         if (!NodeFactoryRegistrar.Descriptors.Any(descriptor => descriptor.TypeKey == typeKey))
@@ -168,7 +169,10 @@ public partial class NodeEditorViewModel
     }
 }
 
-/// <summary>A toolbox category or object family. Search results retain concrete items without nesting.</summary>
+/// <summary>A toolbox category or object family. Search results retain concrete items without nesting.<para>工具箱分类或对象族。搜索结果保留具体条目而不嵌套。</para></summary>
+/// <param name="name">Display name of the category.<para>分类的显示名称。</para></param>
+/// <param name="category">Node category this entry groups by.<para>此条目据以分组的节点类别。</para></param>
+/// <param name="items">Items shown inside the category.<para>分类内展示的条目。</para></param>
 public sealed class NodeToolboxCategory(string name, NodeCategory category, ObservableCollection<NodeToolboxItem> items) : ViewModelBase
 {
     public string Name { get; } = name;
@@ -192,7 +196,7 @@ public sealed class NodeToolboxCategory(string name, NodeCategory category, Obse
     }
 }
 
-/// <summary>One concrete operation, with searchable contract identity and a persistent favorite action.</summary>
+/// <summary>One concrete operation, with searchable contract identity and a persistent favorite action.<para>单个具体操作，带有可搜索的契约标识与可持久化的收藏动作。</para></summary>
 public sealed class NodeToolboxItem : ViewModelBase
 {
     private readonly IReadOnlyList<string> _keywords = [];
@@ -250,11 +254,15 @@ public sealed class NodeToolboxItem : ViewModelBase
         }
     }
 
-    /// <summary>Finds localized names, technical identities and aliases without depending on the active category.</summary>
+    /// <summary>Finds localized names, technical identities and aliases without depending on the active category.<para>在不依赖当前分类的情况下匹配本地化名称、技术标识与别名。</para></summary>
+    /// <param name="keyword">Search text compared case-insensitively.<para>按不区分大小写方式比较的搜索文本。</para></param>
+    /// <returns>True when a name, family or alias contains the keyword.<para>名称、族名或别名包含该关键字时为 True。</para></returns>
     public bool Matches(string keyword) => Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)
         || FamilyName.Contains(keyword, StringComparison.OrdinalIgnoreCase)
         || _keywords.Any(value => value.Contains(keyword, StringComparison.OrdinalIgnoreCase));
 }
 
-/// <summary>A named creation preset that changes data defaults without introducing another operation identity.</summary>
+/// <summary>A named creation preset that changes data defaults without introducing another operation identity.<para>命名创建预设，只改变数据默认值，不引入新的操作标识。</para></summary>
+/// <param name="Name">Display name of the preset.<para>预设的显示名称。</para></param>
+/// <param name="CreateCommand">Command that creates the preset node.<para>创建预设节点的命令。</para></param>
 public sealed record NodeToolboxPreset(string Name, IRelayCommand CreateCommand);

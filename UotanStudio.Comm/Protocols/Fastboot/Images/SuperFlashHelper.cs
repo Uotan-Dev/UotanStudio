@@ -362,7 +362,10 @@ internal sealed class SuperFlashHelper(FastbootSession session, string mainParti
         }
     }
 
-    /// <summary>Best-effort deletion of a temp partition file. 尽力删除临时分区文件。</summary>
+    /// <summary>
+    /// Best-effort deletion of a temp partition file.
+    /// <para>尽力删除临时分区文件。</para>
+    /// </summary>
     private static void TryDeleteTempFile(string path)
     {
         try
@@ -374,6 +377,9 @@ internal sealed class SuperFlashHelper(FastbootSession session, string mainParti
         }
     }
 
-    /// <summary>Bounded copy buffer size in bytes. 有界复制缓冲区大小（字节）。</summary>
+    /// <summary>
+    /// Bounded copy buffer size in bytes.
+    /// <para>有界复制缓冲区大小（字节）。</para>
+    /// </summary>
     private const int CopyBufferSize = 1024 * 1024;
 }

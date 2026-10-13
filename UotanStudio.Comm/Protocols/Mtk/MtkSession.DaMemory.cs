@@ -11,13 +11,13 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// 按会话为每条命令所选的单一扩展。</para>
 /// </summary>
 /// <remarks>
-/// <para>The reference dispatcher is <c>peek</c>, <c>peek_reg</c>, <c>poke</c> and <c>dump_brom</c> in
-/// Library/DA/mtk_daloader.py:322-336, :338-354 and :364-372; the per-family extensions are
+/// <para>The reference dispatcher is <c>peek</c>, <c>peek_reg</c> and <c>poke</c> in
+/// Library/DA/mtk_daloader.py:322-336 and :364-372; the per-family extensions are
 /// Library/DA/xflash/extension/xflash.py:315-366 and :652-659,
 /// Library/DA/xml/extension/v6.py:498-536, :542-590 and :610-616, and
 /// Library/DA/legacy/extension/legacy.py:96-141 and :364-365.</para>
-/// <para>参考分发器为 Library/DA/mtk_daloader.py:322-336、:338-354 与 :364-372 中的 <c>peek</c>、
-/// <c>peek_reg</c>、<c>poke</c> 与 <c>dump_brom</c>；各家族扩展为
+/// <para>参考分发器为 Library/DA/mtk_daloader.py:322-336 与 :364-372 中的 <c>peek</c>、
+/// <c>peek_reg</c> 与 <c>poke</c>；各家族扩展为
 /// Library/DA/xflash/extension/xflash.py:315-366 与 :652-659、
 /// Library/DA/xml/extension/v6.py:498-536、:542-590 与 :610-616，以及
 /// Library/DA/legacy/extension/legacy.py:96-141 与 :364-365。</para>
@@ -167,11 +167,11 @@ public sealed partial class MtkSession
     /// <remarks>
     /// The framing is the documented bulk write: selector plus status, the <c>0x0F0003</c> code plus
     /// status, one eight-byte little-endian address frame, one four-byte length frame, the data frame
-    /// and a final status (Library/DA/xflash/extension/xflash.py:337-343 with :302-313).
+    /// and a final status (Library/DA/xflash/extension/xflash.py:334-342 with :302-313).
     /// Writing device memory is destructive and irreversible, so the exchange is only attempted when
     /// the caller confirms it, exactly like the secure-boot configuration writes.
     /// 帧结构即已记载的批量写入：选择器与状态、<c>0x0F0003</c> 控制码与状态、一个八字节小端地址帧、一个
-    /// 四字节长度帧、数据帧与最终状态（Library/DA/xflash/extension/xflash.py:337-343，配合 :302-313）。
+    /// 四字节长度帧、数据帧与最终状态（Library/DA/xflash/extension/xflash.py:334-342，配合 :302-313）。
     /// 写入设备内存是破坏性且不可逆的操作，因此仅在调用方确认后才发起交换，与安全启动配置写入一致。
     /// </remarks>
     /// <param name="address">The start address of the window. 窗口起始地址。</param>
@@ -218,81 +218,6 @@ public sealed partial class MtkSession
                 RecordSecurityEvidence("da-memory-write", CommandOutcomeKind.Completed,
                     $"xflash poke 0x{address:X8}: {data.Length} bytes written.");
                 return data.Length;
-            }
-            catch
-            {
-                FaultXFlashSecurity();
-                throw;
-            }
-        }
-        finally
-        {
-            _operation.Release();
-        }
-    }
-
-    /// <summary>Captures the reference boot-ROM window through the XFlash register read framing.
-    /// <para>通过 XFlash 寄存器读取帧结构采集参考 boot-ROM 窗口。</para></summary>
-    /// <remarks>
-    /// The reference loop walks <c>0x0</c> through <c>0x200000</c> in <c>0x40</c> steps and calls
-    /// <c>readmem(addr, 0x10)</c> per step (Library/DA/mtk_daloader.py:338-354). The XFlash
-    /// <c>readmem</c> keeps the doubleword count below <c>0x20</c> in one register read per doubleword,
-    /// so one documented step is sixteen register exchanges, not one bulk frame
-    /// (Library/DA/xflash/extension/xflash.py:352-366 with :325-332). Each value is re-emitted in
-    /// little-endian order, which is byte-identical to the reply frame.
-    /// 参考循环从 <c>0x0</c> 走到 <c>0x200000</c>，步长 <c>0x40</c>，每步调用 <c>readmem(addr, 0x10)</c>
-    /// （Library/DA/mtk_daloader.py:338-354）。XFlash 的 <c>readmem</c> 在双字数低于 <c>0x20</c> 时按每个双字
-    /// 一次寄存器读取处理，因此一个已记载步长对应十六次寄存器交互，而不是一次批量帧读取
-    /// （Library/DA/xflash/extension/xflash.py:352-366，配合 :325-332）。每个取值按小端重新输出，与回复帧逐字相同。
-    /// </remarks>
-    /// <param name="destination">A writable, caller-owned stream; it may hold partial data on failure.
-    /// <para>调用方持有的可写流；失败时可能包含部分数据。</para></param>
-    /// <param name="range">An optional step-aligned sub-window; <see langword="null"/> captures the whole
-    /// documented boot-ROM window. 可选的步长对齐子窗口；<see langword="null"/> 采集完整的已记载 boot-ROM 窗口。</param>
-    /// <param name="progress">Optional cumulative captured bytes, reported once per step.
-    /// <para>可选的累计采集字节数，每步上报一次。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>The captured byte count. 已采集的字节数。</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="destination"/> is null.
-    /// <para><paramref name="destination"/> 为 null。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="destination"/> is not writable, or the range is
-    /// not step-aligned. <para><paramref name="destination"/> 不可写，或范围未按步长对齐。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The range is empty, oversized or leaves the 32-bit
-    /// address space. <para>范围为空、超限或越出 32 位地址空间。</para></exception>
-    /// <exception cref="InvalidOperationException">DA2 has not started or the channel is gone.
-    /// <para>DA2 未启动或通道已失效。</para></exception>
-    /// <exception cref="MtkProtocolException">A register exchange was invalid; the XFlash family faults.
-    /// <para>某次寄存器交互无效；XFlash 家族进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public Task<long> DumpXFlashBromAsync(Stream destination, MtkDaMemoryRange? range = null,
-        IProgress<long>? progress = null, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(destination);
-        var window = ResolveDaMemoryRange(range);
-        return DumpXFlashBromOwnedAsync(destination, window, progress, cancellationToken);
-    }
-
-    private async Task<long> DumpXFlashBromOwnedAsync(Stream destination, MtkDaMemoryRange range,
-        IProgress<long>? progress, CancellationToken cancellationToken)
-    {
-        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var channel = RequireXFlashSecurityCustomStage();
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                var captured = await DumpRangeOwnedAsync(destination, range,
-                    (word, token) => ReadXFlashSecurityRegisterAsync(channel, word, token), progress,
-                    cancellationToken).ConfigureAwait(false);
-                RecordSecurityEvidence("da-memory-dump", CommandOutcomeKind.Completed,
-                    $"xflash capture 0x{range.StartAddress:X8}+0x{range.LengthBytes:X} in " +
-                    $"{range.LengthBytes / MtkDaMemoryAccess.DumpStepBytes} steps.");
-                return captured;
             }
             catch
             {
@@ -460,77 +385,6 @@ public sealed partial class MtkSession
                 RecordSecurityEvidence("da-memory-write", CommandOutcomeKind.Completed,
                     $"legacy poke 0x{address:X8}: {payload.Length} bytes written.");
                 return payload.Length;
-            }
-            catch
-            {
-                FaultLegacy();
-                throw;
-            }
-        }
-        finally
-        {
-            _operation.Release();
-        }
-    }
-
-    /// <summary>Captures the reference boot-ROM window through the Legacy register-read command.
-    /// <para>通过 Legacy 寄存器读命令采集参考 boot-ROM 窗口。</para></summary>
-    /// <remarks>
-    /// The Legacy <c>readmem</c> used by the reference dump loop reads one big-endian register value per
-    /// doubleword and never a bulk frame (Library/DA/legacy/extension/legacy.py:96-105 with
-    /// Library/DA/mtk_daloader.py:338-354), so each <c>0x40</c> step is sixteen register exchanges and
-    /// each value is re-emitted little-endian.
-    /// 参考采集循环所用的 Legacy <c>readmem</c> 每个双字读取一个大端寄存器取值，从不使用批量帧
-    /// （Library/DA/legacy/extension/legacy.py:96-105，配合 Library/DA/mtk_daloader.py:338-354），因此每个
-    /// <c>0x40</c> 步长是十六次寄存器交互，且每个取值按小端重新输出。
-    /// </remarks>
-    /// <param name="destination">A writable, caller-owned stream; it may hold partial data on failure.
-    /// <para>调用方持有的可写流；失败时可能包含部分数据。</para></param>
-    /// <param name="range">An optional step-aligned sub-window; <see langword="null"/> captures the whole
-    /// documented boot-ROM window. 可选的步长对齐子窗口；<see langword="null"/> 采集完整的已记载 boot-ROM 窗口。</param>
-    /// <param name="progress">Optional cumulative captured bytes, reported once per step.
-    /// <para>可选的累计采集字节数，每步上报一次。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>The captured byte count. 已采集的字节数。</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="destination"/> is null.
-    /// <para><paramref name="destination"/> 为 null。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="destination"/> is not writable, or the range is
-    /// not step-aligned. <para><paramref name="destination"/> 不可写，或范围未按步长对齐。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The range is empty, oversized or leaves the 32-bit
-    /// address space. <para>范围为空、超限或越出 32 位地址空间。</para></exception>
-    /// <exception cref="InvalidOperationException">Legacy storage is not ready.
-    /// <para>Legacy 存储未就绪。</para></exception>
-    /// <exception cref="MtkProtocolException">A register exchange was not acknowledged; the Legacy family
-    /// faults. <para>某次寄存器交互未被确认；Legacy 家族进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public Task<long> DumpLegacyBromAsync(Stream destination, MtkDaMemoryRange? range = null,
-        IProgress<long>? progress = null, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(destination);
-        var window = ResolveDaMemoryRange(range);
-        return DumpLegacyBromOwnedAsync(destination, window, progress, cancellationToken);
-    }
-
-    private async Task<long> DumpLegacyBromOwnedAsync(Stream destination, MtkDaMemoryRange range,
-        IProgress<long>? progress, CancellationToken cancellationToken)
-    {
-        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            RequireState(MtkSessionState.LegacyStorageReady);
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                var captured = await DumpRangeOwnedAsync(destination, range, ReadLegacyDaMemoryWordAsync, progress,
-                    cancellationToken).ConfigureAwait(false);
-                RecordSecurityEvidence("da-memory-dump", CommandOutcomeKind.Completed,
-                    $"legacy capture 0x{range.StartAddress:X8}+0x{range.LengthBytes:X} in " +
-                    $"{range.LengthBytes / MtkDaMemoryAccess.DumpStepBytes} steps.");
-                return captured;
             }
             catch
             {
@@ -739,78 +593,6 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Captures the reference boot-ROM window through the XML register-read command.
-    /// <para>通过 XML 自定义寄存器读取命令采集参考 boot-ROM 窗口。</para></summary>
-    /// <remarks>
-    /// The XML <c>readmem</c> keeps a doubleword count below <c>0x20</c> in one
-    /// <c>CMD:CUSTOMREGR</c> exchange per doubleword, so the documented <c>readmem(addr, 0x10)</c> step is
-    /// sixteen register exchanges (Library/DA/xml/extension/v6.py:577-590 with :519-536 and
-    /// Library/DA/mtk_daloader.py:338-354).
-    /// XML 的 <c>readmem</c> 在双字数低于 <c>0x20</c> 时按每个双字一次 <c>CMD:CUSTOMREGR</c> 交互处理，因此已记载的
-    /// <c>readmem(addr, 0x10)</c> 步长对应十六次寄存器交互
-    /// （Library/DA/xml/extension/v6.py:577-590，配合 :519-536 与 Library/DA/mtk_daloader.py:338-354）。
-    /// </remarks>
-    /// <param name="destination">A writable, caller-owned stream; it may hold partial data on failure.
-    /// <para>调用方持有的可写流；失败时可能包含部分数据。</para></param>
-    /// <param name="range">An optional step-aligned sub-window; <see langword="null"/> captures the whole
-    /// documented boot-ROM window. 可选的步长对齐子窗口；<see langword="null"/> 采集完整的已记载 boot-ROM 窗口。</param>
-    /// <param name="progress">Optional cumulative captured bytes, reported once per step.
-    /// <para>可选的累计采集字节数，每步上报一次。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>The captured byte count. 已采集的字节数。</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="destination"/> is null.
-    /// <para><paramref name="destination"/> 为 null。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="destination"/> is not writable, or the range is
-    /// not step-aligned. <para><paramref name="destination"/> 不可写，或范围未按步长对齐。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The range is empty, oversized or leaves the 32-bit
-    /// address space. <para>范围为空、超限或越出 32 位地址空间。</para></exception>
-    /// <exception cref="InvalidOperationException">No XML DA control stage is attached.
-    /// <para>未附加 XML DA 控制阶段。</para></exception>
-    /// <exception cref="MtkProtocolException">A message or reply width was invalid; the XML family faults.
-    /// <para>某条消息或回复宽度无效；XML 家族进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public Task<long> DumpXmlBromAsync(Stream destination, MtkDaMemoryRange? range = null,
-        IProgress<long>? progress = null, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(destination);
-        var window = ResolveDaMemoryRange(range);
-        return DumpXmlBromOwnedAsync(destination, window, progress, cancellationToken);
-    }
-
-    private async Task<long> DumpXmlBromOwnedAsync(Stream destination, MtkDaMemoryRange range,
-        IProgress<long>? progress, CancellationToken cancellationToken)
-    {
-        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var channel = RequireXmlDaMemoryStage();
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                var captured = await DumpRangeOwnedAsync(destination, range,
-                    (word, token) => ReadXmlDaMemoryRegisterOwnedAsync(channel, word, token), progress,
-                    cancellationToken).ConfigureAwait(false);
-                RecordSecurityEvidence("da-memory-dump", CommandOutcomeKind.Completed,
-                    $"xml capture 0x{range.StartAddress:X8}+0x{range.LengthBytes:X} in " +
-                    $"{range.LengthBytes / MtkDaMemoryAccess.DumpStepBytes} steps.");
-                return captured;
-            }
-            catch
-            {
-                FaultXml();
-                throw;
-            }
-        }
-        finally
-        {
-            _operation.Release();
-        }
-    }
-
     /// <summary>Rejects a device-memory write before any byte leaves the host.
     /// <para>在任何字节离开主机之前拒绝设备内存写入。</para></summary>
     /// <param name="confirmWrite">The caller-supplied opt-in. 调用方提供的选择。</param>
@@ -826,18 +608,39 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Checks that a requested window stays inside the 32-bit agent address space.
-    /// <para>校验请求的窗口保持在 32 位代理地址空间内。</para></summary>
+    /// <summary>Checks that a requested window stays inside the 32-bit agent address space and away from
+    /// the eFuse window. <para>校验请求的窗口保持在 32 位代理地址空间内，并避开 eFuse 窗口。</para></summary>
+    /// <remarks>
+    /// The eFuse span is excluded here because peek and poke are the ordinary memory paths: the reference
+    /// reads that window only where it names it as its own memory-dump region
+    /// (Library/DA/mtk_da_handler.py:794-795 and :808-809), so no window reaching into it is accepted.
+    /// The replay-protected area keeps the same discipline from the other side: it is addressed only
+    /// through its own commands (MtkRpmbAccess.cs). No write to the eFuse span is offered by any path,
+    /// because the reference never sends the OTP program commands it declares
+    /// (Library/DA/legacy/dalegacy_param.py:105-110 with the interface variants at :18-23 and :38-43).
+    /// 此处排除 eFuse 范围，是因为 peek 与 poke 属于普通内存路径：参考只在该范围被显式命名为内存转储区域时读取它
+    /// （Library/DA/mtk_da_handler.py:794-795 与 :808-809），因此此处不接受任何伸入该范围的窗口。
+    /// 重放保护区域从另一侧保持同样的纪律：只经其专用命令寻址（MtkRpmbAccess.cs）。任何路径都不提供对
+    /// eFuse 范围的写入，因为参考从不发送它声明的 OTP 编程命令
+    /// （Library/DA/legacy/dalegacy_param.py:105-110，接口变体见 :18-23 与 :38-43）。
+    /// </remarks>
     /// <param name="address">The inclusive start address. 起始（含）地址。</param>
     /// <param name="lengthBytes">The byte count to cover. 需要覆盖的字节数。</param>
-    /// <exception cref="ArgumentOutOfRangeException">The end address would leave the 32-bit range.
-    /// <para>结束地址将越出 32 位范围。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The end address would leave the 32-bit range, or the
+    /// window reaches into the eFuse window. <para>结束地址将越出 32 位范围，或窗口伸入 eFuse 窗口。</para></exception>
     private static void RequireDaMemoryWindow(uint address, int lengthBytes)
     {
         if ((ulong)address + (ulong)(uint)lengthBytes > 0x1_0000_0000UL)
         {
             throw new ArgumentOutOfRangeException(nameof(address), address,
                 "The requested range leaves the 32-bit download-agent address space.");
+        }
+
+        if (MtkDaMemoryAccess.IntersectsEfuseWindow(address, (long)address + lengthBytes))
+        {
+            throw new ArgumentOutOfRangeException(nameof(address), address,
+                "Ordinary download-agent memory access does not reach the eFuse window; capture it as an " +
+                "explicit eFuse region instead.");
         }
     }
 
@@ -1003,49 +806,6 @@ public sealed partial class MtkSession
         }
 
         return length == data.Length ? data : data[..length];
-    }
-
-    /// <summary>Walks a capture window step by step, writing one step per documented command.
-    /// <para>逐步遍历采集窗口，按已记载的每条命令写入一个步长。</para></summary>
-    /// <param name="destination">The writable destination. 可写的目标流。</param>
-    /// <param name="range">The validated capture window. 已校验的采集窗口。</param>
-    /// <param name="readWord">The family's doubleword reader. 该家族的双字读取器。</param>
-    /// <param name="progress">Optional cumulative captured bytes. 可选的累计采集字节数。</param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>The captured byte count. 已采集的字节数。</returns>
-    /// <exception cref="ArgumentException"><paramref name="destination"/> is not writable.
-    /// <para><paramref name="destination"/> 不可写。</para></exception>
-    /// <exception cref="MtkProtocolException">A word reply was not one doubleword wide.
-    /// <para>某次字回复宽度不是一个双字。</para></exception>
-    private static async Task<long> DumpRangeOwnedAsync(Stream destination, MtkDaMemoryRange range,
-        Func<uint, CancellationToken, Task<byte[]>> readWord, IProgress<long>? progress,
-        CancellationToken cancellationToken)
-    {
-        if (!destination.CanWrite)
-        {
-            throw new ArgumentException("The capture destination is not writable.", nameof(destination));
-        }
-
-        var captured = 0L;
-        for (var step = 0; step < range.LengthBytes; step += MtkDaMemoryAccess.DumpStepBytes)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            for (var word = 0; word < MtkDaMemoryAccess.DumpStepWords; word++)
-            {
-                var bytes = await readWord(
-                    checked(range.StartAddress + (uint)(step + word * MtkDaMemoryAccess.RegisterCellBytes)),
-                    cancellationToken).ConfigureAwait(false);
-                RequireDaMemoryReplyLength(bytes.Length, MtkDaMemoryAccess.RegisterCellBytes,
-                    "download-agent capture word");
-                await destination.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
-                captured = checked(captured + bytes.Length);
-            }
-
-            progress?.Report(captured);
-        }
-
-        return captured;
     }
 
     /// <summary>Checks a device reply length against the request that produced it.

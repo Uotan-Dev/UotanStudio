@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UnifiedDataLayout = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsDataLayout;
+using UnifiedInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Parser;
 
@@ -33,7 +35,7 @@ public sealed partial class ErofsParser
     /// </summary>
     private LclusterEntry LoadLcluster(
         ulong nid,
-        ErofsInode inode,
+        UnifiedInode inode,
         long headerOffset,
         ushort advise,
         int lclusterBits,
@@ -51,7 +53,7 @@ public sealed partial class ErofsParser
     /// </summary>
     private LclusterEntry LoadLcluster(
         ulong nid,
-        ErofsInode inode,
+        UnifiedInode inode,
         long headerOffset,
         ushort advise,
         int lclusterBits,
@@ -64,7 +66,7 @@ public sealed partial class ErofsParser
     {
 
         indexBase = headerOffset + ZErofsMapHeader.Size;
-        if (inode.DataLayout == ErofsInode.DataLayoutCompactIndexes)
+        if (inode.DataLayout == UnifiedDataLayout.CompactIndexes)
         {
             compacted4bInitial = (int)(((32 - indexBase % 32) / 4) & 7);
             compacted2b = 0;
@@ -82,12 +84,12 @@ public sealed partial class ErofsParser
     }
 
     /// <summary>
-    /// Decodes a single logical-cluster entry from the compact index (bit-level), ported from the kernel z_erofs_load_compact_lcluster + decode_compactedbits, including the big-pcluster lookback branch.
-    /// <para>解码紧凑索引中的单个逻辑簇条目（位级），移植自内核 z_erofs_load_compact_lcluster + decode_compactedbits，含 big-pcluster 回看分支。</para>
+    /// Decodes a single logical-cluster entry from the compact index (bit-level), including the big-pcluster lookback branch.
+    /// <para>解码紧凑索引中的单个逻辑簇条目（位级），含 big-pcluster 回看分支。</para>
     /// </summary>
     private LclusterEntry LoadCompactLcluster(
         ulong nid,
-        ErofsInode inode,
+        UnifiedInode inode,
         long headerOffset,
         ushort advise,
         int lclusterBits,
@@ -243,10 +245,10 @@ public sealed partial class ErofsParser
     }
 
     /// <summary>
-    /// Decodes a full (8-byte) compressed index entry, ported from the kernel z_erofs_load_full_lcluster.
-    /// <para>解码完整（8 字节）压缩索引条目，移植自内核 z_erofs_load_full_lcluster。</para>
+    /// Decodes a full (8-byte) compressed index entry.
+    /// <para>解码完整（8 字节）压缩索引条目。</para>
     /// </summary>
-    private LclusterEntry LoadFullLcluster(ulong nid, ErofsInode inode, long headerOffset, int lclusterBits, long lcn, IndexReadWindow? cachedIndex = null)
+    private LclusterEntry LoadFullLcluster(ulong nid, UnifiedInode inode, long headerOffset, int lclusterBits, long lcn, IndexReadWindow? cachedIndex = null)
     {
         var indexOffset = headerOffset + ZErofsMapHeader.Size + FullIndexStartPad + lcn * ZErofsLclusterIndex.Size;
         if (indexOffset < 0 || indexOffset > InodeMetadataLength(nid) - ZErofsLclusterIndex.Size)
@@ -259,23 +261,18 @@ public sealed partial class ErofsParser
             ? ReadInodeMetadata(nid, indexOffset, ZErofsLclusterIndex.Size, "full index entry")
             : cachedIndex.Get(indexOffset - headerOffset - ZErofsMapHeader.Size, ZErofsLclusterIndex.Size, out relative);
         var entry = ZErofsLclusterIndex.FromBytes(bytes.AsSpan(relative, ZErofsLclusterIndex.Size));
+        entry.ValidateAdvise();
         if (entry.IsNonHead)
         {
-
             if ((entry.Delta0 & ZErofsLclusterIndex.LiD0CblkCnt) != 0)
             {
-                return new LclusterEntry(LclusterTypeNonHead, 1 << lclusterBits, delta0: 1, delta1: 0, pblk: 0, compressedBlocks: entry.Delta0 & ~ZErofsLclusterIndex.LiD0CblkCnt);
+                return new LclusterEntry(LclusterTypeNonHead, 1 << lclusterBits, delta0: 1, delta1: 0, pblk: 0, compressedBlocks: ZErofsLclusterIndex.CompressedBlockCount(entry.Delta0));
             }
 
             return new LclusterEntry(LclusterTypeNonHead, 1 << lclusterBits, delta0: entry.Delta0, delta1: entry.Delta1, pblk: 0, compressedBlocks: 0);
         }
 
         var type = entry.IsHead2 ? LclusterTypeHead2 : (entry.IsPlain ? LclusterTypePlain : LclusterTypeHead1);
-        if (entry.IsHole)
-        {
-            return new LclusterEntry(type, entry.ClusterOfs, delta0: 0, delta1: 0, pblk: -1, compressedBlocks: 0);
-        }
-
         return new LclusterEntry(type, entry.ClusterOfs, delta0: 0, delta1: 0, pblk: entry.Blkaddr, compressedBlocks: 0);
     }
 

@@ -14,16 +14,16 @@ internal static class DeliveryValidation
             .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// <para>判断名称是否为可发布的脚本文件名（updater-script、update-binary 或 .sh/.bat/.txt）。</para>
     /// Determines whether a name is a publishable script filename (updater-script, update-binary, or .sh/.bat/.txt).
+    /// <para>判断名称是否为可发布的脚本文件名（updater-script、update-binary 或 .sh/.bat/.txt）。</para>
     /// </summary>
     internal static bool IsScriptName(string name) => IsName(name) && (name == "updater-script" || name == "update-binary"
         || name.EndsWith(".sh", StringComparison.Ordinal) || name.EndsWith(".bat", StringComparison.Ordinal)
         || name.EndsWith(".txt", StringComparison.Ordinal));
 
     /// <summary>
-    /// <para>判断数值是否为合法文件/项名称：ASCII 字母数字、下划线、连字符或点，不含 Windows 保留设备名。</para>
     /// Determines whether a value is a valid file/entry name: ASCII alphanumerics, underscore, hyphen, or dot, excluding Windows reserved device names.
+    /// <para>判断数值是否为合法文件/项名称：ASCII 字母数字、下划线、连字符或点，不含 Windows 保留设备名。</para>
     /// </summary>
     internal static bool IsName(string value, int maximum = 100)
     {
@@ -40,26 +40,26 @@ internal static class DeliveryValidation
     }
 
     /// <summary>
-    /// <para>判断数值是否为合法分区名：最长 36 个 ASCII 字母数字或下划线，payload 模式额外允许连字符。</para>
     /// Determines whether a value is a valid partition name: up to 36 ASCII alphanumerics or underscores, plus hyphens in payload mode.
+    /// <para>判断数值是否为合法分区名：最长 36 个 ASCII 字母数字或下划线，payload 模式额外允许连字符。</para>
     /// </summary>
     internal static bool IsPartition(string value, bool payload = false) => value is not null && value.Length is > 0 and <= 36
         && value[0] != '-'
         && value.All(c => char.IsAsciiLetterOrDigit(c) || c == '_' || payload && c == '-');
 
     /// <summary>
-    /// <para>校验交付计划的输出方式、镜像归属、容器、脚本与生成条目的一致性。
-    /// 仅生成 Super_Empty 时 Empty 与 Zstd 互斥，且唯一生成条目是 super_empty.img；便携 Zstd 只作可选覆盖，
-    /// 提供时路径必须存在，缺失时由工具服务自动下载钉住版本兜底。</para>
     /// Validates the plan's output mode, image membership, container, scripts, and generated entries.
     /// Super size must be entered explicitly because no guessed default can match every device: the value is baked into
     /// the LP geometry and the generated scripts compare it against the device reading.
     /// With Super_Empty only, Empty excludes Zstd and the sole generated entry is super_empty.img; a portable
     /// Zstd is an optional override whose provided paths must exist, otherwise the tool service downloads the
     /// pinned release.
+    /// <para>校验交付计划的输出方式、镜像归属、容器、脚本与生成条目的一致性。
+    /// 仅生成 Super_Empty 时 Empty 与 Zstd 互斥，且唯一生成条目是 super_empty.img；便携 Zstd 只作可选覆盖，
+    /// 提供时路径必须存在，缺失时由工具服务自动下载钉住版本兜底。</para>
     /// </summary>
-    /// <param name="plan"><para>要校验的交付计划。</para>The delivery plan to validate.</param>
-    /// <param name="sources"><para>是否校验源文件的存在与大小。</para>Whether to check source files for existence and size.</param>
+    /// <param name="plan">The delivery plan to validate. <para>要校验的交付计划。</para></param>
+    /// <param name="sources">Whether to check source files for existence and size. <para>是否校验源文件的存在与大小。</para></param>
     internal static void Validate(DeliveryPlan plan, bool sources = true)
     {
         plan = plan.ForOutput();
@@ -138,8 +138,8 @@ internal static class DeliveryValidation
     }
 
     /// <summary>
-    /// <para>校验单个源镜像存在、非符号链接、长度与声明一致且非空（除非允许空）。</para>
     /// Validates a single source image exists, is not a symlink, matches its declared length, and is non-empty unless allowed.
+    /// <para>校验单个源镜像存在、非符号链接、长度与声明一致且非空（除非允许空）。</para>
     /// </summary>
     internal static void CheckSource(DeliveryFile file, bool allowEmpty = false)
     {

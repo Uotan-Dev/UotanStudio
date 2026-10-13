@@ -14,8 +14,8 @@ namespace UotanStudio.Services.Delivery;
 internal static class DeliveryPayloadBuilder
 {
     /// <summary>
-    /// <para>校验 Payload 计划：版本、签名文件、块大小、时间戳、压缩方式、postinstall 配置及分区的唯一性。</para>
     /// Validates the Payload plan: version, signature, block size, timestamp, compression, postinstall config, and partition uniqueness.
+    /// <para>校验 Payload 计划：版本、签名文件、块大小、时间戳、压缩方式、postinstall 配置及分区的唯一性。</para>
     /// </summary>
     internal static void Validate(DeliveryPlan plan)
     {
@@ -36,8 +36,8 @@ internal static class DeliveryPayloadBuilder
     }
 
     /// <summary>
-    /// <para>读取动态分区配置文件（super_partition_groups 等）为 DynamicPartitionMetadata；缺失或含 Super 成员时按规则返回或报错。</para>
     /// Reads the dynamic partition config file (super_partition_groups etc.) into DynamicPartitionMetadata; returns null when absent, otherwise errors on rule violations.
+    /// <para>读取动态分区配置文件（super_partition_groups 等）为 DynamicPartitionMetadata；缺失或含 Super 成员时按规则返回或报错。</para>
     /// </summary>
     internal static DynamicPartitionMetadata? ReadDynamicLayout(DeliveryPlan plan, IReadOnlyDictionary<string, long> lengths)
     {
@@ -94,8 +94,8 @@ internal static class DeliveryPayloadBuilder
     }
 
     /// <summary>
-    /// <para>根据计划内选中的动态分区与 Super 分组配置生成 update_engine 的动态分区配置文件文本。</para>
     /// Generates the update_engine dynamic partition configuration text from the plan's selected Super members and groups.
+    /// <para>根据计划内选中的动态分区与 Super 分组配置生成 update_engine 的动态分区配置文件文本。</para>
     /// </summary>
     internal static string GenerateDynamicLayout(DeliveryPlan plan)
     {
@@ -122,14 +122,14 @@ internal static class DeliveryPayloadBuilder
     }
 
     /// <summary>
-    /// <para>构建完整 Payload 到输出文件，并按 update_engine 约定写出 payload 的属性哈希文件；可选使用所选私钥签名。
-    /// 写盘侧套一层 <see cref="HashingWriteStream"/>，FILE_HASH 直接由写出的字节算出，因此不会第二次全量读取刚写完的
-    /// payload.bin；METADATA_HASH 需要成品清单里元数据区的那段字节，所以只对元数据区做一次有界读取，无法并入写侧。</para>
     /// Builds a full payload to the output file and writes the update_engine property hashes, optionally signed with the
     /// selected private key. The write side is wrapped in a <see cref="HashingWriteStream"/> so FILE_HASH comes straight
     /// off the bytes as they leave the builder, which keeps the freshly written payload.bin from being read in full a
     /// second time; METADATA_HASH needs the metadata region of the finished manifest, so that region alone is re-read
     /// through a bounded pass and cannot be fused into the write stream.
+    /// <para>构建完整 Payload 到输出文件，并按 update_engine 约定写出 payload 的属性哈希文件；可选使用所选私钥签名。
+    /// 写盘侧套一层 <see cref="HashingWriteStream"/>，FILE_HASH 直接由写出的字节算出，因此不会第二次全量读取刚写完的
+    /// payload.bin；METADATA_HASH 需要成品清单里元数据区的那段字节，所以只对元数据区做一次有界读取，无法并入写侧。</para>
     /// </summary>
     internal static async Task BuildAsync(DeliveryPlan plan, string output, IProgress<DeliveryProgress>? progress,
         CancellationToken token, IDeliverySigningKeyProvider? signingKeys = null)
@@ -178,8 +178,8 @@ internal static class DeliveryPayloadBuilder
     }
 
     /// <summary>
-    /// <para>按 Payload 选项加载并校验签名密钥：要求 RSA 2048/4096 位，且指纹与所选一致。</para>
     /// Loads and validates the signing key per the Payload options: RSA 2048/4096-bit, matching the selected fingerprint.
+    /// <para>按 Payload 选项加载并校验签名密钥：要求 RSA 2048/4096 位，且指纹与所选一致。</para>
     /// </summary>
     internal static RSA? LoadSigningKey(DeliveryPayloadOptions options, IDeliverySigningKeyProvider? signingKeys = null)
     {
@@ -198,13 +198,13 @@ internal static class DeliveryPayloadBuilder
     }
 
     /// <summary>
-    /// <para>写出 update_engine 的四个属性：FILE_HASH 与 FILE_SIZE 取自写入 payload.bin 时顺带算出的整份摘要，
-    /// 只有 METADATA_HASH 需要再读一次元数据区（24 字节头加上头部声明的元数据长度），其余字节不做二次读取。
-    /// 传入的摘要与长度必须描述磁盘上已经写好的那份文件；一旦对不上，说明写出与落盘不一致，交付直接中止。</para>
     /// Writes the four update_engine properties: FILE_HASH and FILE_SIZE come from the whole-file digest folded out of
     /// the write pass, and only METADATA_HASH re-reads the metadata region (the 24-byte header plus the metadata length it
     /// declares), leaving every other byte unread a second time. The supplied digest and length must describe the file as
     /// it now stands on disk; a mismatch means the written bytes and the published file disagree, and the delivery aborts.
+    /// <para>写出 update_engine 的四个属性：FILE_HASH 与 FILE_SIZE 取自写入 payload.bin 时顺带算出的整份摘要，
+    /// 只有 METADATA_HASH 需要再读一次元数据区（24 字节头加上头部声明的元数据长度），其余字节不做二次读取。
+    /// 传入的摘要与长度必须描述磁盘上已经写好的那份文件；一旦对不上，说明写出与落盘不一致，交付直接中止。</para>
     /// </summary>
     private static async Task WritePropertiesAsync(string image, string properties, byte[] fileHash, long fileSize, CancellationToken token)
     {

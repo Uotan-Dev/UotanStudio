@@ -422,4 +422,78 @@ public class StreamingProtocolTests
         Assert.Empty(transport.Writes);
     }
 
+    [Theory]
+    [InlineData(512u)]
+    [InlineData(2048u)]
+    [InlineData(4096u)]
+    [InlineData(8192u)]
+    public void TryGetReportedSectorBytes_SingleAdvertisedSize_ReportsThatSize(uint reported)
+    {
+        var device = DeviceWithSectorSizes([reported]);
+
+        Assert.True(device.TryGetReportedSectorBytes(out var sectorBytes));
+        Assert.Equal((int)reported, sectorBytes);
+    }
+
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(768u)]
+    [InlineData(256u)]
+    [InlineData(131072u)]
+    [InlineData(2147483647u)]
+    public void TryGetReportedSectorBytes_ImplausibleAdvertisedSize_RefusesInsteadOfGuessing(uint reported)
+    {
+        var device = DeviceWithSectorSizes([reported]);
+
+        Assert.False(device.TryGetReportedSectorBytes(out var sectorBytes));
+        Assert.Equal(0, sectorBytes);
+    }
+
+    [Fact]
+    public void TryGetReportedSectorBytes_EmptySectorTable_RefusesInsteadOfGuessing()
+    {
+        var device = DeviceWithSectorSizes([]);
+
+        Assert.False(device.TryGetReportedSectorBytes(out var sectorBytes));
+        Assert.Equal(0, sectorBytes);
+    }
+
+    [Fact]
+    public void TryGetReportedSectorBytes_TwoDistinctSizes_RefusesAmbiguousGeometry()
+    {
+        var device = DeviceWithSectorSizes([512u, 2048u]);
+
+        Assert.False(device.TryGetReportedSectorBytes(out var sectorBytes));
+        Assert.Equal(0, sectorBytes);
+    }
+
+    [Fact]
+    public async Task HelloAsync_SingleReportedSectorSize_ExposesSizeThroughCachedDevice()
+    {
+        using var transport = new ScriptedCommTransport();
+        transport.OnWrite = frame =>
+        {
+            Assert.Equal(StreamingConstants.DiagHelloCommand, StreamingTestDiag.DecodeRequest(frame)[0]);
+            return [StreamingTestDiag.Reply(StreamingTestDiag.HelloResponse(sectorSizes: [2048u]))];
+        };
+        using var protocol = new StreamingProtocol(transport);
+
+        var device = await protocol.HelloAsync(TestContext.Current.CancellationToken);
+
+        Assert.Same(device, protocol.Device);
+        Assert.True(device.TryGetReportedSectorBytes(out var sectorBytes));
+        Assert.Equal(2048, sectorBytes);
+    }
+
+    private static StreamingDeviceInfo DeviceWithSectorSizes(uint[] sectorSizes) => new(
+        Command: StreamingConstants.DiagHelloResponse,
+        Version: StreamingConstants.DiagHostVersion,
+        CompatibleVersion: 0x23,
+        MaxPreferredBlockSize: 131072,
+        BaseFlashAddress: 0,
+        FlashId: [0x4E, 0x41, 0x4E, 0x44],
+        WindowSize: 4,
+        NumberOfSectors: (ushort)sectorSizes.Length,
+        SectorSizes: sectorSizes,
+        FeatureBits: 0x03);
 }

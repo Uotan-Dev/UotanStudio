@@ -36,12 +36,15 @@ internal static class DeviceToolFactory
                 Name = "list_devices",
                 Description = "List USB endpoints UotanStudio can drive directly, each labelled with the "
                     + "protocol its descriptors identify (adb, fastboot, edl, mtk, rkdl, hdc) and VID/PID, "
-                    + "serial and interface codes. The summary carries a per-protocol count and how many "
-                    + "endpoints were suppressed. Endpoints the classifier cannot identify (hubs, keyboards, "
-                    + "webcams, mice, other console or host-controller interfaces) are omitted by default; "
-                    + "pass detailed=true to get the full inventory, which also adds each device path and "
-                    + "stable device key. Reuse a listed serial or device key as the target parameter of the "
-                    + "fastboot tools when more than one fastboot device is attached.",
+                    + "serial and interface codes. Endpoints labelled adb, fastboot and mtk are the "
+                    + "ones this server can transact with through the adb_*, fastboot_* and mtk_* "
+                    + "tools; edl, rkdl and hdc endpoints are labelled only, because no tool here drives them. "
+                    + "The summary carries a per-protocol count and how many endpoints were suppressed. "
+                    + "Endpoints the classifier cannot identify (hubs, keyboards, webcams, mice, other "
+                    + "console or host-controller interfaces) are omitted by default; pass detailed=true to "
+                    + "get the full inventory, which also adds each device path and stable device key. Reuse "
+                    + "a listed serial or device key as the target parameter of the adb_*, fastboot_* "
+                    + "and mtk_* tools when more than one such device is attached.",
                 ReadOnly = true,
                 Idempotent = true,
                 OpenWorld = true,
@@ -313,15 +316,15 @@ internal static class DeviceToolFactory
 internal static class DeviceToolHandlers
 {
     /// <summary>
-    /// <para>构建经过协议分类的 USB 端点清单；默认丢弃无法分类的端点并统计数量，只有
-    /// <paramref name="detailed"/> 为 <see langword="true"/> 时才返回全部端点及设备路径与设备键。</para>
     /// Builds the protocol-classified USB inventory, dropping endpoints the classifier cannot identify by
     /// default and counting them in the summary; only a <paramref name="detailed"/> request returns every
     /// endpoint together with its OS device path and stable device key.
+    /// <para>构建经过协议分类的 USB 端点清单；默认丢弃无法分类的端点并统计数量，只有
+    /// <paramref name="detailed"/> 为 <see langword="true"/> 时才返回全部端点及设备路径与设备键。</para>
     /// </summary>
-    /// <param name="manager"><para>提供清单的设备网关。</para>The device gateway supplying the inventory.</param>
-    /// <param name="detailed"><para>是否返回完整清单与路径字段。</para>Whether the full inventory including path fields is requested.</param>
-    /// <param name="cancellationToken"><para>每次取用下一个端点前检查的令牌。</para>Token checked before each further endpoint is read.</param>
+    /// <param name="manager">The device gateway supplying the inventory. <para>提供清单的设备网关。</para></param>
+    /// <param name="detailed">Whether the full inventory including path fields is requested. <para>是否返回完整清单与路径字段。</para></param>
+    /// <param name="cancellationToken">Token checked before each further endpoint is read. <para>每次取用下一个端点前检查的令牌。</para></param>
     /// <returns><para>带按协议计数与丢弃数量的清单结果。</para>The inventory result carrying the per-protocol
     /// counts and the suppressed endpoint count.</returns>
     public static async Task<ToolResult> ListDevicesAsync(
@@ -587,13 +590,13 @@ internal static class DeviceToolHandlers
         }, cancellationToken).ConfigureAwait(false);
 
     /// <summary>
-    /// <para>把协议进度目标转为 Fastboot 下载的字节进度接收端；没有进度令牌时返回
-    /// <see langword="null"/>，下载路径因此不产生上报开销。</para>
     /// Converts the protocol progress sink into the Fastboot download's byte-count sink; without a progress
     /// token this returns <see langword="null"/> so the download skips reporting overhead.
+    /// <para>把协议进度目标转为 Fastboot 下载的字节进度接收端；没有进度令牌时返回
+    /// <see langword="null"/>，下载路径因此不产生上报开销。</para>
     /// </summary>
-    /// <param name="progress"><para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para>The MCP-bound progress instance, possibly <see langword="null"/>.</param>
-    /// <returns><para>供 Fastboot 下载上报累计字节数的接收端。</para>A cumulative byte sink for the Fastboot download.</returns>
+    /// <param name="progress">The MCP-bound progress instance, possibly <see langword="null"/>. <para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para></param>
+    /// <returns>A cumulative byte sink for the Fastboot download. <para>供 Fastboot 下载上报累计字节数的接收端。</para></returns>
     private static IProgress<long>? ToByteProgress(IProgress<ProgressNotificationValue>? progress) =>
         progress is null
             ? null

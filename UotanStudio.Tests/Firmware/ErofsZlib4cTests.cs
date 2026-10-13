@@ -3,6 +3,7 @@ using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -150,9 +151,9 @@ public sealed class ErofsZlib4cTests
         var blockSize = 1 << (int)blockBits;
         var metaBlkaddr = BinaryPrimitives.ReadUInt32LittleEndian(baseImage.AsSpan(1024 + 40, 4));
         var inodeLoc = (long)metaBlkaddr * blockSize + (long)nid * ErofsSuperblock.CompactInodeSize;
-        var inode = ErofsInode.FromBytes(baseImage.AsSpan((int)inodeLoc, ErofsInode.ExtendedSize));
+        var inode = ErofsInode.FromBytes(baseImage.AsSpan((int)inodeLoc, ErofsInode.ExtendedSize), nid, (int)blockBits);
         Assert.True(inode.IsCompressed);
-        Assert.Equal(ErofsInode.DataLayoutCompressed, inode.DataLayout);
+        Assert.Equal(ErofsDataLayout.Compressed, inode.DataLayout);
         var headerOffset = (inodeLoc + inode.InlineDataOffset + 7) & ~7;
         Assert.Equal((byte)ErofsAlgorithm.Lzma, baseImage[(int)headerOffset + 6]);
         var clusterBits = baseImage[(int)headerOffset + 7] & ZErofsMapHeader.LclusterBitsMask;
@@ -210,7 +211,7 @@ public sealed class ErofsZlib4cTests
         Assert.Equal(BlockSize, blockSize);
         var metaBlkaddr = BinaryPrimitives.ReadUInt32LittleEndian(baseImage.AsSpan(1024 + 40, 4));
         var inodeLoc = (long)metaBlkaddr * blockSize + (long)nid * ErofsSuperblock.CompactInodeSize;
-        var inode = ErofsInode.FromBytes(baseImage.AsSpan((int)inodeLoc, ErofsInode.ExtendedSize));
+        var inode = ErofsInode.FromBytes(baseImage.AsSpan((int)inodeLoc, ErofsInode.ExtendedSize), nid, (int)blockBits);
         Assert.True(inode.IsCompressed);
         var headerOffset = (inodeLoc + inode.InlineDataOffset + 7) & ~7;
         Assert.Equal((byte)algorithm, baseImage[(int)headerOffset + 6]);

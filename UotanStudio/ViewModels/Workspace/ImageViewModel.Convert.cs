@@ -10,27 +10,27 @@ namespace UotanStudio.ViewModels.Workspace;
 
 internal partial class ImageViewModel
 {
-    /// <summary><para>稀疏转换方向标识（资源管理器「稀疏转换」）。</para>Sparse conversion direction key (explorer "sparse convert").</summary>
+    /// <summary>Sparse conversion direction key (explorer "sparse convert"). <para>稀疏转换方向标识（资源管理器「稀疏转换」）。</para></summary>
     internal const string ConvertSparse = "sparse";
 
-    /// <summary><para>IMG→DAT 转换方向标识。</para>IMG-to-DAT conversion direction key.</summary>
+    /// <summary>IMG-to-DAT conversion direction key. <para>IMG→DAT 转换方向标识。</para></summary>
     internal const string ConvertImgToDat = "dat";
 
-    /// <summary><para>IMG→BR 转换方向标识。</para>IMG-to-BR conversion direction key.</summary>
+    /// <summary>IMG-to-BR conversion direction key. <para>IMG→BR 转换方向标识。</para></summary>
     internal const string ConvertImgToBr = "br";
 
     /// <summary>
-    /// <para>格式转换的预期结果描述，用于执行前的确认对话框。</para>
     /// The expected result of a format conversion, used by the pre-action confirmation dialog.
+    /// <para>格式转换的预期结果描述，用于执行前的确认对话框。</para>
     /// </summary>
     internal sealed record FormatConversionPreview(string Operation, string OutputDirectory, IReadOnlyList<string> OutputPaths);
 
     /// <summary>
-    /// <para>计算一次格式转换的预期结果，供右键菜单弹出确认对话框展示操作内容与预期输出文件。</para>
     /// Computes the expected result of a format conversion for the context-menu confirmation dialog
     /// (operation description and expected output files).
+    /// <para>计算一次格式转换的预期结果，供右键菜单弹出确认对话框展示操作内容与预期输出文件。</para>
     /// </summary>
-    /// <param name="sourcePath"><para>源镜像的绝对路径。</para>Absolute path of the source image.</param>
+    /// <param name="sourcePath">Absolute path of the source image. <para>源镜像的绝对路径。</para></param>
     /// <param name="direction"><para>转换方向：<see cref="ConvertSparse"/>、<see cref="ConvertImgToDat"/>、<see cref="ConvertImgToBr"/>。</para>
     /// Conversion direction: <see cref="ConvertSparse"/>, <see cref="ConvertImgToDat"/> or <see cref="ConvertImgToBr"/>.</param>
     /// <returns>预期输出描述；源不属于活动子项目等校验不通过时抛出异常。</returns>
@@ -69,8 +69,8 @@ internal partial class ImageViewModel
     /// Runs one image format conversion and reports byte progress to the image manager panel's
     /// progress display (percentage, visual progress, speed, processed size and estimated time left).
     /// </summary>
-    /// <param name="sourcePath"><para>源镜像的绝对路径。</para>Absolute path of the source image.</param>
-    /// <param name="direction"><para>转换方向（同 <see cref="GetFormatConversionPreview"/>）。</para>Conversion direction (same as <see cref="GetFormatConversionPreview"/>).</param>
+    /// <param name="sourcePath">Absolute path of the source image. <para>源镜像的绝对路径。</para></param>
+    /// <param name="direction">Conversion direction (same as <see cref="GetFormatConversionPreview"/>). <para>转换方向（同 <see cref="GetFormatConversionPreview"/>）。</para></param>
     /// <returns>本次转换产出到 <c>output/</c> 的绝对路径列表。</returns>
     /// <exception cref="IOException">源不属于活动子项目或转换失败时抛出。</exception>
     internal async Task<IReadOnlyList<string>> RunExplorerFormatConversionAsync(string sourcePath, string direction)
@@ -285,9 +285,9 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>包装流并统计已读字节，供无进度回调的读取方（稀疏写出、Brotli 压缩）按字节上报进度。</para>
     /// Wraps a stream and counts read bytes so readers without a progress hook (sparse writing,
     /// Brotli compression) can report byte progress; reports the local count (0..total).
+    /// <para>包装流并统计已读字节，供无进度回调的读取方（稀疏写出、Brotli 压缩）按字节上报进度。</para>
     /// </summary>
     private sealed class ProgressReadStream : Stream
     {

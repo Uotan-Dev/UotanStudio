@@ -5,15 +5,15 @@ using Xunit;
 namespace UotanStudio.Tests.Services;
 
 /// <summary>
-/// <para>验证 <see cref="ImageInputService"/> 迁出的格式探测、内容优先的文件系统探测与源路径解析行为：
-/// 扩展名优先、魔数判定、头部读取失败回退、未知输入返回 unknown、小文件头部截断语义、
-/// <c>ContainsFileSystem</c> 对 EXT/EROFS/F2FS/FAT/exFAT 及 sparse/payload/super 容器的判定，
-/// 以及源路径解析的存在性校验。不初始化 UI、不触碰 ProjectContextService。</para>
 /// Validates the format-probing, content-first filesystem probing and source-path-resolution behavior
 /// migrated to <see cref="ImageInputService"/>: extension-first rules, magic matching, header-read
 /// fallback, unknown inputs, small-file header truncation semantics, <c>ContainsFileSystem</c> decisions
 /// for EXT/EROFS/F2FS/FAT/exFAT and for sparse/payload/super containers, and existence validation for
 /// source path resolution. No UI initialization and no ProjectContextService usage.
+/// <para>验证 <see cref="ImageInputService"/> 迁出的格式探测、内容优先的文件系统探测与源路径解析行为：
+/// 扩展名优先、魔数判定、头部读取失败回退、未知输入返回 unknown、小文件头部截断语义、
+/// <c>ContainsFileSystem</c> 对 EXT/EROFS/F2FS/FAT/exFAT 及 sparse/payload/super 容器的判定，
+/// 以及源路径解析的存在性校验。不初始化 UI、不触碰 ProjectContextService。</para>
 /// </summary>
 public sealed class ImageInputServiceTests
 {

@@ -12,6 +12,7 @@ namespace UotanStudio.Tests.Services;
 /// <para>固化协议层暴露的 MCP 工具目录：每个已注册工具的 <c>inputSchema</c> 都必须给出客户端可传的参数，
 /// 且不得包含由 SDK 自行绑定的环境参数。</para>
 /// </summary>
+[Collection("MCP tool generation")]
 public sealed class McpToolCatalogTests : IDisposable
 {
     private static readonly HashSet<string> AmbientParameterNames = new(StringComparer.OrdinalIgnoreCase)
@@ -59,6 +60,8 @@ public sealed class McpToolCatalogTests : IDisposable
         "adb_qr_pairing_code",
         "adb_pair_qr",
         "fastboot_variables",
+        "mtk_identify",
+        "mtk_peek",
         "delivery_validate",
         "delivery_list_outputs",
         "delivery_build",

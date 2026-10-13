@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -98,25 +98,58 @@ public static partial class FirehoseXmlBuilder
     }
 
     /// <summary>
-    /// Builds a wipe pseudo-command: a &lt;program&gt; that writes zeros to the first N sectors
-    /// of a partition (mirrors fh_loader --wipefirst).
-    /// <para>构建擦写伪命令：通过 &lt;program&gt; 向分区首部写入零字节（对齐 fh_loader
-    /// --wipefirst）。</para>
+    /// Builds the wipe command document: a &lt;program&gt; that overwrites N sectors with zeros.
+    /// <para>构建擦写命令文档：一个用零字节覆盖 N 个扇区的 &lt;program&gt;。</para>
     /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
-    /// <param name="numPartitionSectors">The number of sectors to wipe. <para>待擦写扇区数。</para></param>
-    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
-    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
-    /// <param name="zeroFilename">The filename identifier for the zeros payload. <para>零字节负载的文件名标识。</para></param>
+    /// <remarks>
+    /// <para>Firehose has no dedicated wipe element, so a wipe is expressed as an ordinary program of a zero
+    /// buffer, filling every partial write chunk with zero bytes. Every sector bound is range-checked with
+    /// <see langword="checked"/> arithmetic before any text is appended, so a refused request cannot leave a
+    /// partially built document behind.</para>
+    /// <para>Firehose 并没有专门的擦写元素，擦写被表达为对零缓冲区的普通编程，并把每个不完整的写入块用
+    /// 零字节补齐。所有扇区边界都会在追加任何文本之前以 <see langword="checked"/> 算术完成范围校验，
+    /// 因此被拒绝的请求不会留下构造到一半的文档。</para>
+    /// The caller owns the destructive decision: <c>UotanStudio.Comm.Protocols.Edl.FlashBundle</c> resolves the
+    /// target region against reported storage geometry and requires an explicit confirmation before reaching
+    /// this emitter, because the emitted command overwrites data and is not reversible.
+    /// <para>破坏性决定由调用方持有：<c>UotanStudio.Comm.Protocols.Edl.FlashBundle</c> 会依据上报的存储
+    /// 几何解析目标区域，并在到达本发射器之前要求显式确认，因为本命令会覆盖数据且不可回退。</para>
+    /// </remarks>
+    /// <param name="sectorSizeInBytes">The sector size in bytes; between 1 and 65536.
+    /// <para>扇区大小（字节）；介于 1 与 65536。</para></param>
+    /// <param name="numPartitionSectors">The number of sectors to wipe; must be positive.
+    /// <para>待擦写扇区数；必须为正。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number or LUN; must be non-negative.
+    /// <para>物理分区编号或 LUN；必须非负。</para></param>
+    /// <param name="startSector">The resolved absolute starting sector; must be non-negative.
+    /// <para>已解析的绝对起始扇区；必须非负。</para></param>
+    /// <param name="zeroFilename">The filename identifier for the zeros payload; blank selects
+    /// <c>Zeros16KB.bin</c>. <para>零字节负载的文件名标识；空白时选用 <c>Zeros16KB.bin</c>。</para></param>
     /// <param name="slot">Optional slot number. <para>可选槽位编号。</para></param>
     /// <returns>The wipe (program-with-zeros) XML string. <para>擦写（写零编程）XML 字符串。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="sectorSizeInBytes"/> is outside 1 through
+    /// 65536, <paramref name="numPartitionSectors"/> is not positive, <paramref name="physicalPartitionNumber"/>
+    /// or <paramref name="startSector"/> or <paramref name="slot"/> is negative, or
+    /// <paramref name="zeroFilename"/> is longer than 255 characters.
+    /// <para><paramref name="sectorSizeInBytes"/> 不在 1 至 65536 之间，<paramref name="numPartitionSectors"/>
+    /// 非正，<paramref name="physicalPartitionNumber"/>、<paramref name="startSector"/> 或
+    /// <paramref name="slot"/> 为负，或 <paramref name="zeroFilename"/> 超过 255 个字符。</para></exception>
+    /// <exception cref="OverflowException">The end sector or the wiped byte total overflows <see cref="long"/>.
+    /// <para>结束扇区或擦写字节总量超出 <see cref="long"/> 范围。</para></exception>
     public static string BuildWipe(long sectorSizeInBytes, long numPartitionSectors,
         int physicalPartitionNumber, long startSector,
         string zeroFilename = "Zeros16KB.bin", int? slot = null)
     {
-        if (string.IsNullOrEmpty(zeroFilename))
+        _ = ValidateProgramRange(sectorSizeInBytes, numPartitionSectors, physicalPartitionNumber, startSector, slot);
+        if (string.IsNullOrWhiteSpace(zeroFilename))
         {
             zeroFilename = "Zeros16KB.bin";
+        }
+
+        if (zeroFilename.Length > 255)
+        {
+            throw new ArgumentOutOfRangeException(nameof(zeroFilename),
+                "The zeros payload filename exceeds the 255-character manifest bound.");
         }
 
         var sb = new StringBuilder();
@@ -136,6 +169,7 @@ public static partial class FirehoseXmlBuilder
         sb.Append(EdlConstants.DataClose);
         return sb.ToString();
     }
+
 
     /// <summary>
     /// Builds the &lt;setbootablestoragedrive&gt; XML command.

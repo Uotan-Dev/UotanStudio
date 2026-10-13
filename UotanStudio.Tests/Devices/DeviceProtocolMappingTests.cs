@@ -102,11 +102,17 @@ public class DeviceProtocolMappingTests
         var device = new DeviceInfo([first, second]);
 
         Assert.False(device.HasMtkInfo);
-        device.SetMtkInfo(new UotanStudio.Comm.Protocols.Mtk.MtkDeviceInfo(0x8A00, 0x0001, 1, 2, 0x17));
+        device.SetMtkInfo(new UotanStudio.Comm.Protocols.Mtk.MtkDeviceInfo(0x8A00, 0x0001, 1, 2, 0x17,
+            BlVersion: 0x1D, BromVersion: 0xFF,
+            Meid: [0xA1, 0xB2, 0xC3, 0xD4], Socid: [0x0F]));
         Assert.True(device.HasMtkInfo);
         Assert.Equal("0x8A00 / 0x0001", device.MtkHardware);
         Assert.Equal("1 / 2", device.MtkFirmware);
         Assert.Equal("SBC=1 SLA=1 DAA=1 CERT=1", device.MtkSecurityBits);
+        Assert.Equal("0x1D", device.MtkBootLoaderVersion);
+        Assert.Equal("0xFF", device.MtkBootRomVersion);
+        Assert.Equal("a1b2c3d4", device.MtkMeidHex);
+        Assert.Equal("0f", device.MtkSocidHex);
 
         device.SelectedConnection = second;
 
@@ -114,6 +120,46 @@ public class DeviceProtocolMappingTests
         Assert.Equal(string.Empty, device.MtkHardware);
         Assert.Equal(string.Empty, device.MtkFirmware);
         Assert.Equal(string.Empty, device.MtkSecurityBits);
+        Assert.Equal(string.Empty, device.MtkBootLoaderVersion);
+        Assert.Equal(string.Empty, device.MtkBootRomVersion);
+        Assert.Equal(string.Empty, device.MtkMeidHex);
+        Assert.Equal(string.Empty, device.MtkSocidHex);
+    }
+
+    [Fact]
+    public void MtkInfo_HandshakeWithoutVersionBytes_LeavesTheVersionRowsEmpty()
+    {
+        var device = new DeviceInfo([new DetectedDevice
+        {
+            Key = "mtk:only",
+            Serial = "only",
+            Protocol = DeviceProtocolKind.Mtk,
+            Transport = DeviceTransportKind.Usb
+        }]);
+
+        device.SetMtkInfo(new UotanStudio.Comm.Protocols.Mtk.MtkDeviceInfo(0x8A00, 0x0001, 1, 2, 0x17));
+
+        Assert.True(device.HasMtkInfo);
+        Assert.Equal(string.Empty, device.MtkBootLoaderVersion);
+        Assert.Equal(string.Empty, device.MtkBootRomVersion);
+    }
+
+    [Fact]
+    public void MtkInfo_HandshakeWithoutIdentifiers_LeavesTheIdentifierRowsEmpty()
+    {
+        var device = new DeviceInfo([new DetectedDevice
+        {
+            Key = "mtk:only",
+            Serial = "only",
+            Protocol = DeviceProtocolKind.Mtk,
+            Transport = DeviceTransportKind.Usb
+        }]);
+
+        device.SetMtkInfo(new UotanStudio.Comm.Protocols.Mtk.MtkDeviceInfo(0x8A00, 0x0001, 1, 2, 0x17,
+            BlVersion: 0x1D, BromVersion: 0xFF));
+
+        Assert.Equal(string.Empty, device.MtkMeidHex);
+        Assert.Equal(string.Empty, device.MtkSocidHex);
     }
 
     [Theory]

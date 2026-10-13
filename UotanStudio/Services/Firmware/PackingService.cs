@@ -12,20 +12,22 @@ using UotanStudio.ViewModels.Workspace;
 namespace UotanStudio.Services.Firmware;
 
 /// <summary>
-/// <para>打包服务，桥接 <see cref="ProjectSettingViewModel"/> 的面板设置到
-/// EXT4/EROFS/boot 镜像的构建调用。</para>
-/// Packing service, bridging <see cref="ProjectSettingViewModel"/> panel settings to
-/// EXT4/EROFS/F2FS/boot image build calls.
+/// Packing service that builds an image from a source directory according to recorded directory metadata
+/// or the given packing settings.
+/// <para>打包服务：依据记录的目录元数据或给定的打包设置，把源目录构建为镜像。</para>
 /// </summary>
 internal static class PackingService
 {
     /// <summary>
-    /// Builds an image using directory metadata, or project settings when metadata is absent. The returned
-    /// host result keeps the library metadata, so the equivalence report of a preserved filesystem rebuild
-    /// survives into the caller instead of being flattened into a summary string.
-    /// <para>按目录元数据构建镜像；无元数据时使用项目打包设置。返回的宿主结果保留库侧元数据，因此受保留
-    /// 文件系统重建的等价报告能抵达调用方，而不会被压成一段摘要文本。</para>
+    /// Builds an image from directory metadata when present, otherwise from the given packing settings,
+    /// keeping the metadata of a preserved rebuild in the result.
+    /// <para>有目录元数据时按其构建镜像，否则使用给定的打包设置；结果中保留受保留重建的元数据。</para>
     /// </summary>
+    /// <param name="sourceDirectory">Directory whose contents are packed. <para>待打包内容的源目录。</para></param>
+    /// <param name="outputPath">Path of the image to write. <para>待写出镜像的路径。</para></param>
+    /// <param name="settings">Packing settings, null to fall back to the shared instance. <para>打包设置，为 null 时回退到共享实例。</para></param>
+    /// <param name="progress">Optional byte-progress reporter, null when progress is not tracked. <para>可选的字节进度回调，不跟踪进度时为 null。</para></param>
+    /// <returns>The build result, carrying a failure summary when packing is refused. <para>构建结果，打包被拒绝时携带失败摘要。</para></returns>
     public static FirmwareOpResult BuildImage(
         string sourceDirectory,
         string outputPath,
@@ -40,34 +42,17 @@ internal static class PackingService
             using var metadataScope = RepackMetadata.UseContext(
                 UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(sourceDirectory));
             var metadata = RepackMetadata.Read(sourceDirectory);
-            // 文件系统镜像重建上报真实字节进度；其他元数据分发分支按源目录估算做阶段式上报。
-            // Filesystem image rebuilds report real byte progress; other metadata-dispatch branches
-            // fall back to a stage-based estimate over the source directory size.
             var imageProgress = FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
             if (metadata is not null)
             {
                 if (!metadata.CanPackDirectory) return FirmwareOpResult.Fail(metadata.PackingNotes);
-                // 打包设置面板的稀疏/压缩等参数覆盖解包产出的元数据（仅文件系统镜像）。
-                // Let the packing-settings panel override the unpacked metadata for filesystem images.
                 var estimated = EstimateSourceBytes(sourceDirectory);
                 imageProgress.Report((0, estimated));
-                // EXT4、EROFS 与 F2FS 的打包器在保留元数据重建期间自行上报真实字节，收尾时再补一条估算样本
-                // 会以另一个分母重算速度，并把已完成校验的阶段标签拉回构建阶段。
-                // The EXT4, EROFS and F2FS packers report real bytes during a preserved-metadata rebuild; a
-                // closing estimate sample would rescale the speed against a different total and pull the
-                // completed verification stage label back to the build stage.
                 var reportsOwnBytes = metadata.FormatName is "EXT4" or "EROFS" or "F2FS";
                 var focused = hasExplicitSettings
                     && metadata.FormatName is "EXT4" or "EROFS" or "F2FS" or "Android Sparse Image (simg)";
                 if (focused)
                 {
-                    // 仅当用户真正切换了文件系统格式（EROFS ↔ EXT4）时申请打包覆盖走全新目录打包；
-                    // 目标格式与原格式相同时直接走保留元数据重建路径，精确还原
-                    // SELinux/capability/hardlink/symlink，避免覆盖导致降级后丢失安全上下文。
-                    // The target format chose in the panel; only a real format switch (EROFS ↔ EXT4)
-                    // requests packing overrides (and a fresh build). When the target equals the source
-                    // format we reuse the preserved-metadata rebuild to restore
-                    // SELinux/capability/hardlink/symlink exactly instead of downgrading the output.
                     var targetFormat = settings!.TypeEXT4 ? "EXT4" : settings.TypeF2FS ? "F2FS" : "EROFS";
                     if (targetFormat == metadata.FormatName
                         && !(targetFormat == "F2FS" && settings.HasF2fsCompressionOverride)
@@ -118,8 +103,12 @@ internal static class PackingService
         }
     }
 
-    /// <summary>Estimates the source directory byte total as the progress denominator.</summary>
-    /// <summary>以源目录文件大小之和作为进度分母的估算值。</summary>
+    /// <summary>
+    /// Estimates the progress denominator from the summed byte size of the source directory files.
+    /// <para>以源目录内各文件字节大小之和估算进度分母。</para>
+    /// </summary>
+    /// <param name="sourceDirectory">Directory whose files are summed. <para>求和大小的目录。</para></param>
+    /// <returns>The summed byte size, at least one. <para>字节大小总和，至少为一。</para></returns>
     private static long EstimateSourceBytes(string sourceDirectory)
     {
         long total = 0;
@@ -132,10 +121,13 @@ internal static class PackingService
     }
 
     /// <summary>
-    /// Maps packing-settings panel values to option overrides for a filesystem image.
-    /// <para>将打包设置面板的值映射为文件系统镜像的选项覆盖。</para>
+    /// Maps packing-setting values to the option overrides used for one filesystem image build.
+    /// <para>把打包设置的取值映射为单次文件系统镜像构建所用的选项覆盖。</para>
     /// </summary>
-    private static IReadOnlyDictionary<string, string> BuildOverrideOptions(ProjectSettingViewModel settings, string format)
+    /// <param name="settings">The packing settings to read. <para>待读取的打包设置。</para></param>
+    /// <param name="format">Target filesystem name: EXT4, F2FS or EROFS. <para>目标文件系统名：EXT4、F2FS 或 EROFS。</para></param>
+    /// <returns>The override options keyed by option name. <para>按选项名索引的覆盖值。</para></returns>
+    internal static IReadOnlyDictionary<string, string> BuildOverrideOptions(ProjectSettingViewModel settings, string format)
     {
         var options = format switch
         {
@@ -165,12 +157,11 @@ internal static class PackingService
             },
         };
 
-        // 特性位覆盖只在用户填写时下发，空值时该键保持缺席，写入方继续按源镜像继承特性位。
-        // The feature-bit override is forwarded only when the user typed one; with an empty value the key
-        // stays absent so the writer keeps inheriting the source image's feature bits.
-        if (format is not "EXT4" and not "F2FS" && settings.HasErofsFeatureOverride)
+        if (format == "EROFS"
+            && settings.HasErofsFeatureOverride
+            && !string.IsNullOrWhiteSpace(settings.ErofsFeatureOverrides))
         {
-            options["ErofsFeatures"] = settings.ErofsFeatureOverrides;
+            options["ErofsFeatures"] = settings.ErofsFeatureOverrides.Trim();
         }
 
         return options;
@@ -225,27 +216,25 @@ internal static class PackingService
     {
         var options = new ErofsOptions
         {
-            // Legacy layout follows the app-level setting (synced to the shared default at startup
-            // and on change) so both the packing panel and repack honor the same user choice.
-            // legacy 布局跟随应用层设置（启动与变更时同步到共享默认值），使打包面板与重打包
-            // 遵循同一用户选择。
             LegacyCompatibility = UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility,
-            // The panel selects the codec and, for LZ4, the block encoder through the shared selector
-            // vocabulary so the picker drives the builder directly.
-            // 面板通过共享的选择器词表选择编解码器，并在 LZ4 下选择块编码器，使下拉框直接驱动构建器。
         };
         (options.Algorithm, options.Lz4HighCompression) = ErofsAlgorithmSelectors.Parse(settings.SelectedErofsAlgorithm);
-        // A modern codec implies the modern (5.13+) layout: legacy EROFS only encodes LZ4, so the
-        // panel's legacy toggle is dropped for LZMA/DEFLATE/ZSTD selections rather than silently
-        // rebuilding as LZ4. HC carries the same implication from a density angle — legacy caps
-        // every pcluster at one physical block, so HC saves only bytes that always round up to
-        // the same block count, and forcing modern is what makes HC actually shrink the image.
-        // 选择现代编解码器即隐含现代（5.13+）布局：legacy erofs 仅编码 LZ4，因此对
-        // LZMA/DEFLATE/ZSTD 面板的 legacy 开关会被放弃，而不是静默改回 LZ4 重建。HC 从密度角度
-        // 也有同样的隐含要求：legacy 把每个 pcluster 限死在一个物理块，HC 省下的字节一定会被舍入
-        // 到同样的块数，强制现代布局才能让 HC 真正缩小镜像。
-        if (options.Algorithm != ErofsCompressionAlgorithm.Lz4 || options.Lz4HighCompression) options.LegacyCompatibility = false;
+        if (options.Algorithm != ErofsCompressionAlgorithm.Lz4 || options.Lz4HighCompression)
+        {
+            options.LegacyCompatibility = false;
+            options.MaxPclusterSize = ErofsOptions.MaximumPclusterSize;
+        }
+
         options.CompressionLevel = settings.EROFSComGrade;
+
+        if (settings.HasErofsFeatureOverride && !string.IsNullOrWhiteSpace(settings.ErofsFeatureOverrides))
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Packing",
+                $"EROFS feature declaration '{settings.ErofsFeatureOverrides.Trim()}' is ignored for a directory build; " +
+                "it edits the declaration recorded from a preserved source image.  " +
+                $"EROFS 特性声明 '{settings.ErofsFeatureOverrides.Trim()}' 在目录构建中会被忽略；它编辑的是自保留源镜像" +
+                "记录下来的声明。");
+        }
 
         LogService.Instance.Write(LogLevel.Info, "Packing",
             $"Building EROFS image (algo={settings.SelectedErofsAlgorithm}, level={options.CompressionLevel})  " +

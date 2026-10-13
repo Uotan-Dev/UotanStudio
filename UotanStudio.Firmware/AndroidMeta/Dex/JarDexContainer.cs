@@ -4,80 +4,74 @@ using UotanStudio.Firmware.Core.IO;
 namespace UotanStudio.Firmware.AndroidMeta.Dex;
 
 /// <summary>
-/// <para>JAR/ZIP 容器内 DEX 与资源条目的种类。</para>
 /// The kind of an entry inside a JAR/ZIP container.
+/// <para>JAR/ZIP 容器内 DEX 与资源条目的种类。</para>
 /// </summary>
 public enum JarEntryKind
 {
     /// <summary>
-    /// <para>DEX 字节码条目（classes*.dex）。</para>
     /// A DEX bytecode entry (classes*.dex).
+    /// <para>DEX 字节码条目（classes*.dex）。</para>
     /// </summary>
     Dex,
 
     /// <summary>
-    /// <para>v1/JAR 签名工件（META-INF 下的清单、签名与证书），只读展示。</para>
     /// A v1/JAR signature artifact (manifest, signature or certificate under META-INF); read-only.
+    /// <para>v1/JAR 签名工件（META-INF 下的清单、签名与证书），只读展示。</para>
     /// </summary>
     Signature,
 
     /// <summary>
-    /// <para>普通资源条目，可导出与替换。</para>
     /// A plain resource entry that can be extracted and replaced.
+    /// <para>普通资源条目，可导出与替换。</para>
     /// </summary>
     Resource,
 }
 
 /// <summary>
-/// <para>JAR/ZIP 容器内的条目摘要信息。</para>
 /// Summary information of an entry inside a JAR/ZIP container.
+/// <para>JAR/ZIP 容器内的条目摘要信息。</para>
 /// </summary>
 /// <param name="Name">
-/// <para>条目完整名称（ZIP 内路径，正斜杠分隔）。</para>
 /// The full entry name (ZIP-internal path, forward-slash separated).
+/// <para>条目完整名称（ZIP 内路径，正斜杠分隔）。</para>
 /// </param>
 /// <param name="Length">
-/// <para>条目解压后的字节数。</para>
 /// The uncompressed entry size in bytes.
+/// <para>条目解压后的字节数。</para>
 /// </param>
 /// <param name="Kind">
-/// <para>条目种类。</para>
 /// The entry kind.
+/// <para>条目种类。</para>
 /// </param>
 public sealed record JarEntryInfo(string Name, long Length, JarEntryKind Kind);
 
 /// <summary>
-/// <para>JAR/ZIP 容器（含 .jar/.apk）中 DEX 与资源条目的读取、写回与替换。
-/// 所有条目读取有界；写回经同目录临时文件重建 ZIP 后原子替换，仅修改目标条目。
-/// 签名工件（META-INF）只读：写回会使既有 v1/v2/v3 签名失效，应由签名流程剥离重建。</para>
-/// Reads, writes back and replaces DEX and resource entries inside a JAR/ZIP container
-/// (.jar/.apk). All entry reads are bounded; write-back rebuilds the ZIP through a
-/// same-directory temporary file and commits atomically, touching only the target entry.
-/// Signature artifacts (META-INF) are read-only: any write invalidates existing v1/v2/v3
-/// signatures, which the signing flow strips and rebuilds.
+/// Reads, writes back and replaces DEX and resource entries inside a JAR/ZIP container (.jar/.apk). All entry reads are bounded; write-back rebuilds the ZIP through a same-directory temporary file and commits atomically. META-INF signatures are read-only, since any write invalidates existing signatures.
+/// <para>读取、回写与替换 JAR/ZIP 容器（.jar/.apk）内的 DEX 与资源条目。所有条目读取有界；回写通过同目录临时文件重建 ZIP 并原子提交。META-INF 签名只读，任何写入都会使既有签名失效。</para>
 /// </summary>
 public static class JarDexContainer
 {
     /// <summary>
-    /// <para>单个条目的解压大小上限（256 MiB，与 DEX/AXML/ARSC 元数据上限口径一致）。</para>
     /// The maximum uncompressed size of a single entry (256 MiB, aligned with the
     /// DEX/AXML/ARSC metadata cap).
+    /// <para>单个条目的解压大小上限（256 MiB，与 DEX/AXML/ARSC 元数据上限口径一致）。</para>
     /// </summary>
     public const long MaxEntryBytes = 256L * 1024 * 1024;
 
     /// <summary>
-    /// <para>容器内条目数量上限。</para>
     /// The maximum number of entries in one container.
+    /// <para>容器内条目数量上限。</para>
     /// </summary>
     public const int MaxEntryCount = 65536;
 
     /// <summary>
-    /// <para>判断给定路径扩展名是否为受支持的 DEX 容器（.jar/.apk）。</para>
     /// Whether the given path extension is a supported DEX container (.jar/.apk).
+    /// <para>判断给定路径扩展名是否为受支持的 DEX 容器（.jar/.apk）。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>文件名或完整路径。</para>
     /// A file name or full path.
+    /// <para>文件名或完整路径。</para>
     /// </param>
     /// <returns><see langword="true"/> for a <c>.jar</c> or <c>.apk</c> extension, compared without
     /// case sensitivity; a <see langword="null"/> value or an extension-less name gives
@@ -92,13 +86,13 @@ public static class JarDexContainer
     }
 
     /// <summary>
-    /// <para>枚举容器内全部条目（按名称排序）；超出数量上限时抛出格式异常。</para>
     /// Enumerates all entries in the container (name-ordered); throws a format exception
     /// when the entry count exceeds the cap.
+    /// <para>枚举容器内全部条目（按名称排序）；超出数量上限时抛出格式异常。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>容器文件路径。</para>
     /// The container file path.
+    /// <para>容器文件路径。</para>
     /// </param>
     /// <returns>The list of entry summaries. <para>条目摘要列表。</para></returns>
     /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
@@ -122,12 +116,12 @@ public static class JarDexContainer
     }
 
     /// <summary>
-    /// <para>列出容器内全部 DEX 条目名（根级 classes*.dex，按名称自然排序）。</para>
     /// Lists all DEX entry names in the container (root-level classes*.dex, name-ordered).
+    /// <para>列出容器内全部 DEX 条目名（根级 classes*.dex，按名称自然排序）。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>容器文件路径。</para>
     /// The container file path.
+    /// <para>容器文件路径。</para>
     /// </param>
     /// <returns>The list of DEX entry names. <para>DEX 条目名列表。</para></returns>
     /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
@@ -152,12 +146,12 @@ public static class JarDexContainer
     }
 
     /// <summary>
-    /// <para>判断条目名是否为根级 classes*.dex（允许 classes.dex、classes2.dex…）。</para>
     /// Whether the entry name is a root-level classes*.dex (classes.dex, classes2.dex, ...).
+    /// <para>判断条目名是否为根级 classes*.dex（允许 classes.dex、classes2.dex…）。</para>
     /// </summary>
     /// <param name="entryName">
-    /// <para>条目名。</para>
     /// The entry name.
+    /// <para>条目名。</para>
     /// </param>
     /// <returns><see langword="true"/> only for such a name; a <see langword="null"/> value, a name
     /// containing <c>/</c>, or extra characters between <c>classes</c> and <c>.dex</c> that are not
@@ -183,14 +177,14 @@ public static class JarDexContainer
     }
 
     /// <summary>
-    /// <para>判断条目是否为 v1/JAR 签名工件（META-INF 下的清单、SF、RSA/DSA/EC 与 SF 以外的
-    /// 标准签名扩展）。</para>
     /// Whether the entry is a v1/JAR signature artifact (manifest, SF, RSA/DSA/EC and related
     /// standard signature extensions under META-INF).
+    /// <para>判断条目是否为 v1/JAR 签名工件（META-INF 下的清单、SF、RSA/DSA/EC 与 SF 以外的
+    /// 标准签名扩展）。</para>
     /// </summary>
     /// <param name="entryName">
-    /// <para>条目名。</para>
     /// The entry name.
+    /// <para>条目名。</para>
     /// </param>
     /// <returns><see langword="true"/> for <c>META-INF/MANIFEST.MF</c> or a <c>META-INF/</c> entry
     /// whose extension is <c>SF</c>, <c>RSA</c>, <c>DSA</c> or <c>EC</c>; comparison ignores case and
@@ -224,20 +218,20 @@ public static class JarDexContainer
     }
 
     /// <summary>
-    /// <para>有界读取容器内指定条目的全部字节。</para>
     /// Reads the full bytes of one entry, with a bounded length.
+    /// <para>有界读取容器内指定条目的全部字节。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>容器文件路径。</para>
     /// The container file path.
+    /// <para>容器文件路径。</para>
     /// </param>
     /// <param name="entryName">
-    /// <para>条目名。</para>
     /// The entry name.
+    /// <para>条目名。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// <para>取消令牌。</para>
     /// The cancellation token.
+    /// <para>取消令牌。</para>
     /// </param>
     /// <returns>The entry bytes. <para>条目字节。</para></returns>
     /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
@@ -259,27 +253,24 @@ public static class JarDexContainer
     }
 
     /// <summary>
-    /// <para>把修改后的 DEX 字节写回容器内指定条目：以同目录临时文件流式重建 ZIP（其余条目
-    /// 按原始压缩方式逐条复制），全部成功后原子替换源文件。</para>
-    /// Writes the modified DEX bytes back into one container entry: rebuilds the ZIP through a
-    /// same-directory temporary file (other entries are copied one by one with their original
-    /// compression method) and atomically replaces the source file on success.
+    /// Writes modified DEX bytes back into one container entry.
+    /// <para>把修改后的 DEX 字节写回容器内指定条目。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>容器文件路径。</para>
     /// The container file path.
+    /// <para>容器文件路径。</para>
     /// </param>
     /// <param name="entryName">
-    /// <para>要替换的条目名。</para>
     /// The entry name to replace.
+    /// <para>要替换的条目名。</para>
     /// </param>
     /// <param name="entryBytes">
-    /// <para>新的条目字节（DEX 重建输出）。</para>
     /// The new entry bytes (the rebuilt DEX output).
+    /// <para>新的条目字节（DEX 重建输出）。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// <para>取消令牌。</para>
     /// The cancellation token.
+    /// <para>取消令牌。</para>
     /// </param>
     public static void WriteBack(string path, string entryName, byte[] entryBytes, CancellationToken cancellationToken = default)
     {
@@ -287,25 +278,25 @@ public static class JarDexContainer
     }
 
     /// <summary>
-    /// <para>导出容器内的资源条目到目标文件（目标目录自动创建，写入有界并原子提交）。</para>
     /// Extracts a resource entry to the target file (the directory is created; the write is
     /// bounded and committed atomically).
+    /// <para>导出容器内的资源条目到目标文件（目标目录自动创建，写入有界并原子提交）。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>容器文件路径。</para>
     /// The container file path.
+    /// <para>容器文件路径。</para>
     /// </param>
     /// <param name="entryName">
-    /// <para>资源条目名。</para>
     /// The resource entry name.
+    /// <para>资源条目名。</para>
     /// </param>
     /// <param name="outputPath">
-    /// <para>输出文件路径。</para>
     /// The output file path.
+    /// <para>输出文件路径。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// <para>取消令牌。</para>
     /// The cancellation token.
+    /// <para>取消令牌。</para>
     /// </param>
     public static void ExtractResource(string path, string entryName, string outputPath, CancellationToken cancellationToken = default)
     {
@@ -334,25 +325,25 @@ public static class JarDexContainer
     }
 
     /// <summary>
-    /// <para>用本地文件内容替换容器内资源条目（读取有界，经临时文件原子写回）。</para>
     /// Replaces a resource entry with the content of a local file (bounded read, atomic
     /// write-back through a temporary file).
+    /// <para>用本地文件内容替换容器内资源条目（读取有界，经临时文件原子写回）。</para>
     /// </summary>
     /// <param name="path">
-    /// <para>容器文件路径。</para>
     /// The container file path.
+    /// <para>容器文件路径。</para>
     /// </param>
     /// <param name="entryName">
-    /// <para>资源条目名。</para>
     /// The resource entry name.
+    /// <para>资源条目名。</para>
     /// </param>
     /// <param name="sourceFilePath">
-    /// <para>替换内容的本地文件路径。</para>
     /// The local file providing the replacement content.
+    /// <para>替换内容的本地文件路径。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// <para>取消令牌。</para>
     /// The cancellation token.
+    /// <para>取消令牌。</para>
     /// </param>
     public static void ReplaceResource(string path, string entryName, string sourceFilePath, CancellationToken cancellationToken = default)
     {
@@ -374,21 +365,21 @@ public static class JarDexContainer
     }
 
     /// <summary>
-    /// <para>把新建条目（含 DEX 与资源）连同全部既有条目写入新容器（临时文件原子提交）。</para>
     /// Writes a set of entries (DEX and resources) into a new container (atomic commit via a
     /// temporary file).
+    /// <para>把新建条目（含 DEX 与资源）连同全部既有条目写入新容器（临时文件原子提交）。</para>
     /// </summary>
     /// <param name="outputPath">
-    /// <para>输出容器路径。</para>
     /// The output container path.
+    /// <para>输出容器路径。</para>
     /// </param>
     /// <param name="entries">
-    /// <para>条目名与内容的有序集合。</para>
     /// The ordered set of entry names and contents.
+    /// <para>条目名与内容的有序集合。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// <para>取消令牌。</para>
     /// The cancellation token.
+    /// <para>取消令牌。</para>
     /// </param>
     public static void WriteNew(string outputPath, IReadOnlyList<(string Name, byte[] Content)> entries, CancellationToken cancellationToken = default)
     {

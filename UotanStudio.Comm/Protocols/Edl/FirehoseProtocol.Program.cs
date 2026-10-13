@@ -113,8 +113,10 @@ public sealed partial class FirehoseProtocol
         {
             var credential = await GetOnePlusCommandTokenOwnedAsync("program", cancellationToken).ConfigureAwait(false);
             var xml = FirehoseXmlBuilder.BuildProgram(Configuration.SectorSize, numSectors, filename, physicalPartition, startSector,
-                slot: EffectiveSlot, publicKey: credential.PublicKey, token: credential.Token);
-            var ready = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
+                slot: EffectiveSlot, publicKey: credential.PublicKey, token: credential.Token,
+                pagesPerBlock: NandPagesPerBlockHint);
+            var ready = await SendCommandAndWaitResponseAsync(xml, cancellationToken,
+                skipResponseAcknowledgement: Configuration.SkipResponseOnReadWrite ? SkipResponseAcknowledgement(true) : null);
             responseReceived = true;
             RequireRawMode(ready, EdlErrorCode.ProgramFailed);
             transferStarted = true;
@@ -346,8 +348,10 @@ public sealed partial class FirehoseProtocol
         await RequireDestructiveCapabilityAsync(EdlFirehoseCommand.Erase, cancellationToken).ConfigureAwait(false);
         startSector.ValidateRange(numSectors);
         ValidateStorageRange(0, numSectors, physicalPartition);
-        var xml = FirehoseXmlBuilder.BuildErase(Configuration.SectorSize, numSectors, physicalPartition, startSector, EffectiveSlot);
-        return await SendCommandAndWaitResponseAsync(xml, cancellationToken, GetEraseTimeoutMs());
+        var xml = FirehoseXmlBuilder.BuildErase(Configuration.SectorSize, numSectors, physicalPartition, startSector,
+            EffectiveSlot, NandPagesPerBlockHint);
+        return await SendCommandAndWaitResponseAsync(xml, cancellationToken, GetEraseTimeoutMs(),
+            skipResponseAcknowledgement: Configuration.SkipResponseOnErase ? SkipResponseAcknowledgement(false) : null);
     }
 
     /// <summary>
@@ -453,9 +457,8 @@ public sealed partial class FirehoseProtocol
     }
 
     /// <summary>
-    /// Wipes the first N sectors of a partition by programming zeros (mirrors fh_loader
-    /// --wipefirst).
-    /// <para>通过编程零字节擦写分区首部 N 个扇区（对齐 fh_loader --wipefirst）。</para>
+    /// Wipes the first N sectors of a partition by programming zeros.
+    /// <para>通过编程零字节擦写分区首部 N 个扇区。</para>
     /// </summary>
     /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
     /// <param name="numSectors">The number of sectors to wipe. <para>待擦写扇区数。</para></param>
@@ -555,34 +558,64 @@ public sealed partial class FirehoseProtocol
     /// </summary>
     private sealed class ZeroFilledStream : Stream
     {
-        /// <summary>Gets whether the stream can be read. 流是否可读。</summary>
+        /// <summary>
+        /// Gets whether the stream can be read.
+        /// <para>流是否可读。</para>
+        /// </summary>
         public override bool CanRead => true;
-        /// <summary>Gets whether the stream can seek. 流是否可寻址。</summary>
+        /// <summary>
+        /// Gets whether the stream can seek.
+        /// <para>流是否可寻址。</para>
+        /// </summary>
         public override bool CanSeek => false;
-        /// <summary>Gets whether the stream can be written. 流是否可写。</summary>
+        /// <summary>
+        /// Gets whether the stream can be written.
+        /// <para>流是否可写。</para>
+        /// </summary>
         public override bool CanWrite => false;
-        /// <summary>Gets the stream length (not supported). 流长度（不支持）。</summary>
+        /// <summary>
+        /// Gets the stream length (not supported).
+        /// <para>流长度（不支持）。</para>
+        /// </summary>
         public override long Length => throw new NotSupportedException();
-        /// <summary>Gets or sets the stream position (not supported). 流位置（不支持）。</summary>
+        /// <summary>
+        /// Gets or sets the stream position (not supported).
+        /// <para>流位置（不支持）。</para>
+        /// </summary>
         public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
 
-        /// <summary>Reads zeros into the buffer. 将零读入缓冲。</summary>
+        /// <summary>
+        /// Reads zeros into the buffer.
+        /// <para>将零读入缓冲。</para>
+        /// </summary>
         public override int Read(byte[] buffer, int offset, int count)
         {
             Array.Clear(buffer, offset, count);
             return count;
         }
 
-        /// <summary>Flush (no-op). 刷新（空操作）。</summary>
+        /// <summary>
+        /// Flush (no-op).
+        /// <para>刷新（空操作）。</para>
+        /// </summary>
         public override void Flush() { }
 
-        /// <summary>Seek (not supported). 寻址（不支持）。</summary>
+        /// <summary>
+        /// Seek (not supported).
+        /// <para>寻址（不支持）。</para>
+        /// </summary>
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
 
-        /// <summary>SetLength (not supported). 设置长度（不支持）。</summary>
+        /// <summary>
+        /// SetLength (not supported).
+        /// <para>设置长度（不支持）。</para>
+        /// </summary>
         public override void SetLength(long value) => throw new NotSupportedException();
 
-        /// <summary>Write (not supported). 写入（不支持）。</summary>
+        /// <summary>
+        /// Write (not supported).
+        /// <para>写入（不支持）。</para>
+        /// </summary>
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

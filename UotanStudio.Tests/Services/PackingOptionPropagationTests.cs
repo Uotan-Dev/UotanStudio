@@ -301,7 +301,10 @@ public sealed class PackingOptionPropagationTests
         }
 
         using var inheritedParser = new ErofsParser(inheritedPath);
-        Assert.Equal(ErofsTriStateFeature.Enabled, inheritedParser.ReadRebuildOptions().DotOmitted);
+        var inheritedOptions = inheritedParser.ReadRebuildOptions();
+        Assert.False(inheritedOptions.LegacyCompatibility);
+        Assert.Equal(ErofsTriStateFeature.Disabled, inheritedOptions.DotOmitted);
+        Assert.Equal(0x3U, ReadErofsIncompat(inheritedPath));
     }
 
     [Fact]

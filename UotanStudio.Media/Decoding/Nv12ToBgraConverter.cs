@@ -193,18 +193,13 @@ public static unsafe class Nv12ToBgraConverter
         var uvPlane = src + (long)nv12Stride * height;
         var uvStride = nv12Stride;
 
-        // Bilinear chroma weights: even chroma rows/cols weigh the earlier sample 3/4 and the
-        // next 1/4 (pixel centers sit at 1/4 and 3/4 inside each chroma cell); the last chroma
-        // row/column clamps to its own sample, mirroring clamping texture addressing.
-        // 双线性色度权重：偶数色度行/列按前一样本 3/4、后一样本 1/4 加权（像素中心位于色度单元
-        // 的 1/4 与 3/4 处）；最后一行/列钳制到自身样本，与纹理寻址的钳制语义一致。
         for (var row = 0; row < height; row++)
         {
             var yRow = yPlane + (long)row * nv12Stride;
             var chromaRow = row >> 1;
             var uvRow = uvPlane + (long)chromaRow * uvStride;
             var uvRowNext = uvRow + ((chromaRow + 1 < (height + 1) >> 1) ? uvStride : 0);
-            var verticalWeight = (row & 1) != 0 ? 1 : 0; // 0 = upper sample, 1 = blend 1:1
+            var verticalWeight = (row & 1) != 0 ? 1 : 0;
             var dstRow = dst + (long)row * dstStride;
 
             int col = 0;
@@ -213,10 +208,6 @@ public static unsafe class Nv12ToBgraConverter
                 for (; col <= width - 4; col += 4)
                 {
                     var y = Vector128.Create((int)yRow[col], yRow[col + 1], yRow[col + 2], yRow[col + 3]);
-                    // Chroma cells: cols 0-1 -> cell 0, cols 2-3 -> cell 1; bilinear weights are
-                    // computed scalar-side (cheap: two cells per four pixels) then widened.
-                    // 色度单元：列 0-1 对应单元 0，列 2-3 对应单元 1；双线性权重按标量计算
-                    // （开销小：每四个像素只涉及两个单元），再扩宽进向量。
                     var cell = col >> 1;
                     var d0 = SampleChroma(uvRow, uvRowNext, cell, width, verticalWeight) - 128;
                     var e0 = SampleChroma(uvRow + 1, uvRowNext + 1, cell, width, verticalWeight) - 128;

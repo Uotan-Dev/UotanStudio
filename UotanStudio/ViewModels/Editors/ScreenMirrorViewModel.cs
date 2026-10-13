@@ -16,9 +16,9 @@ using UotanStudio.Services.Mirroring;
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
-/// <para>scrcpy 投屏文档：部署服务端、解码视频流，并交接到 GPU 呈现器或位图回退。</para>
 /// scrcpy screen-mirror document: deploys the server, decodes the H.264/H.265
 /// video stream and hands frames to GPU presentation or the bitmap fallback.
+/// <para>scrcpy 投屏文档：部署服务端、解码视频流，并交接到 GPU 呈现器或位图回退。</para>
 /// </summary>
 /// <remarks>
 /// <para>
@@ -56,26 +56,30 @@ public partial class ScreenMirrorViewModel : Document
     public event EventHandler? AudioSinkOpened;
 
     /// <summary>
-    /// <para>设备端复制或请求回传的剪贴板文本，从控制消息泵线程触发；订阅方负责切回 UI 线程写入本地剪贴板。</para>
     /// Clipboard text copied on the device or returned for an explicit request, raised from the control-message
     /// pump thread; subscribers marshal to the UI thread before touching the local clipboard.
+    /// <para>设备端复制或请求回传的剪贴板文本，从控制消息泵线程触发；订阅方负责切回 UI 线程写入本地剪贴板。</para>
     /// </summary>
     public event EventHandler<string>? DeviceClipboardReceived;
 
-    /// <summary>Gets the total decoded audio frames; 0 while audio is off or unsupported.</summary>
-    /// <summary>获取累计解码音频帧数；音频关闭或编码不受支持时为 0。</summary>
+    /// <summary>Gets the total decoded audio frames; 0 while audio is off or unsupported.
+    /// <para>获取累计解码音频帧数；音频关闭或编码不受支持时为 0。</para>
+    /// </summary>
     public long AudioDecodedFrames => Interlocked.Read(ref _audioDecodedFrames);
 
-    /// <summary>Gets the decoded audio sample rate; 0 until the first decoded frame.</summary>
-    /// <summary>获取解码音频采样率；首帧解码前为 0。</summary>
+    /// <summary>Gets the decoded audio sample rate; 0 until the first decoded frame.
+    /// <para>获取解码音频采样率；首帧解码前为 0。</para>
+    /// </summary>
     public int AudioSampleRate => Volatile.Read(ref _audioSampleRate);
 
-    /// <summary>Gets the decoded audio channel count; 0 until the first decoded frame.</summary>
-    /// <summary>获取解码音频声道数；首帧解码前为 0。</summary>
+    /// <summary>Gets the decoded audio channel count; 0 until the first decoded frame.
+    /// <para>获取解码音频声道数；首帧解码前为 0。</para>
+    /// </summary>
     public int AudioChannels => Volatile.Read(ref _audioChannels);
 
-    /// <summary>Gets whether the session requested an audio stream.</summary>
-    /// <summary>获取本会话是否请求了音频流。</summary>
+    /// <summary>Gets whether the session requested an audio stream.
+    /// <para>获取本会话是否请求了音频流。</para>
+    /// </summary>
     public bool AudioEnabled => StreamOptions?.Audio ?? false;
 
     /// <summary>Raised on the UI thread when a GPU frame is available or the fallback bitmap is updated; not a display-present timestamp.</summary>
@@ -107,10 +111,10 @@ public partial class ScreenMirrorViewModel : Document
     private string _deviceName = string.Empty;
 
     /// <summary>
-    /// <para>按序列号解析设备并启动投屏（部署/连接在后台线程执行）。</para>
     /// Resolves the device by serial and starts mirroring (deploy/connect runs on a background thread).
+    /// <para>按序列号解析设备并启动投屏（部署/连接在后台线程执行）。</para>
     /// </summary>
-    /// <param name="serial"><para>目标设备序列号。</para>The target device serial.</param>
+    /// <param name="serial">The target device serial. <para>目标设备序列号。</para></param>
     public void StartForDevice(string serial)
     {
         if (_disposed || _client is not null || Interlocked.CompareExchange(ref _starting, 1, 0) != 0) return;
@@ -225,9 +229,9 @@ public partial class ScreenMirrorViewModel : Document
     }
 
     /// <summary>
-    /// <para>工作区文档关闭时的清理入口：停止解码循环并断开所有 socket。</para>
     /// Cleanup entry invoked by the workspace when the document closes: stops
     /// the decode loop and disconnects every socket.
+    /// <para>工作区文档关闭时的清理入口：停止解码循环并断开所有 socket。</para>
     /// </summary>
     public void Cleanup()
     {
@@ -292,16 +296,16 @@ public partial class ScreenMirrorViewModel : Document
     }
 
     /// <summary>
-    /// <para>注入触摸事件（视频像素坐标）。</para>
     /// Injects a touch event (video pixel coordinates).
+    /// <para>注入触摸事件（视频像素坐标）。</para>
     /// </summary>
-    /// <param name="action"><para>动作：按下/抬起/移动。</para>Motion action: down/up/move.</param>
-    /// <param name="pointerId"><para>指针 ID（鼠标为 <see cref="ScrcpyConstants.PointerIdMouse"/>）。</para>Pointer id (<see cref="ScrcpyConstants.PointerIdMouse"/> for mouse).</param>
-    /// <param name="x"><para>视频像素坐标 X。</para>Video pixel X.</param>
-    /// <param name="y"><para>视频像素坐标 Y。</para>Video pixel Y.</param>
-    /// <param name="width"><para>解码帧宽度。</para>Decoded frame width.</param>
-    /// <param name="height"><para>解码帧高度。</para>Decoded frame height.</param>
-    /// <param name="buttons"><para>当前按键状态掩码。</para>Current button state mask.</param>
+    /// <param name="action">Motion action: down/up/move. <para>动作：按下/抬起/移动。</para></param>
+    /// <param name="pointerId">Pointer id (<see cref="ScrcpyConstants.PointerIdMouse"/> for mouse). <para>指针 ID（鼠标为 <see cref="ScrcpyConstants.PointerIdMouse"/>）。</para></param>
+    /// <param name="x">Video pixel X. <para>视频像素坐标 X。</para></param>
+    /// <param name="y">Video pixel Y. <para>视频像素坐标 Y。</para></param>
+    /// <param name="width">Decoded frame width. <para>解码帧宽度。</para></param>
+    /// <param name="height">Decoded frame height. <para>解码帧高度。</para></param>
+    /// <param name="buttons">Current button state mask. <para>当前按键状态掩码。</para></param>
     /// <param name="actionButton">Button that changed on press/release; zero for movement or cancellation.</param>
     public void InjectTouch(byte action, long pointerId, int x, int y, int width, int height, uint buttons, uint actionButton = 0)
         => SendControl(ScrcpyControlMessageWriter.InjectTouchEvent(action, pointerId, x, y, width, height,
@@ -309,14 +313,14 @@ public partial class ScreenMirrorViewModel : Document
             actionButton: actionButton, buttons: buttons));
 
     /// <summary>
-    /// <para>注入滚轮事件（视频像素坐标）。</para>
     /// Injects a scroll event (video pixel coordinates).
+    /// <para>注入滚轮事件（视频像素坐标）。</para>
     /// </summary>
-    /// <param name="x"><para>视频像素坐标 X。</para>Video pixel X.</param>
-    /// <param name="y"><para>视频像素坐标 Y。</para>Video pixel Y.</param>
-    /// <param name="width"><para>解码帧宽度。</para>Decoded frame width.</param>
-    /// <param name="height"><para>解码帧高度。</para>Decoded frame height.</param>
-    /// <param name="delta"><para>滚动刻度：正数向下滚动。</para>Scroll ticks: positive scrolls down.</param>
+    /// <param name="x">Video pixel X. <para>视频像素坐标 X。</para></param>
+    /// <param name="y">Video pixel Y. <para>视频像素坐标 Y。</para></param>
+    /// <param name="width">Decoded frame width. <para>解码帧宽度。</para></param>
+    /// <param name="height">Decoded frame height. <para>解码帧高度。</para></param>
+    /// <param name="delta">Scroll ticks: positive scrolls down. <para>滚动刻度：正数向下滚动。</para></param>
     public void InjectScroll(int x, int y, int width, int height, float delta)
         => SendControl(ScrcpyControlMessageWriter.InjectScrollEvent(
             x, y, width, height,
@@ -325,42 +329,42 @@ public partial class ScreenMirrorViewModel : Document
             -delta));
 
     /// <summary>
-    /// <para>注入 Android 键码事件。</para>
     /// Injects an Android keycode event.
+    /// <para>注入 Android 键码事件。</para>
     /// </summary>
-    /// <param name="action"><para>动作：按下/抬起。</para>Action: down/up.</param>
-    /// <param name="keyCode"><para>Android 键码。</para>Android keycode.</param>
-    /// <param name="metaState"><para>修饰键掩码。</para>Modifier mask.</param>
+    /// <param name="action">Action: down/up. <para>动作：按下/抬起。</para></param>
+    /// <param name="keyCode">Android keycode. <para>Android 键码。</para></param>
+    /// <param name="metaState">Modifier mask. <para>修饰键掩码。</para></param>
     public void InjectKeyCode(byte action, int keyCode, int metaState)
         => SendControl(ScrcpyControlMessageWriter.InjectKeyCode(action, keyCode, 0, metaState));
 
     /// <summary>
-    /// <para>注入 UTF-8 文本。</para>
     /// Injects UTF-8 text.
+    /// <para>注入 UTF-8 文本。</para>
     /// </summary>
-    /// <param name="text"><para>要注入的文本（≤300 字节）。</para>Text to inject (≤300 bytes).</param>
+    /// <param name="text">Text to inject (≤300 bytes). <para>要注入的文本（≤300 字节）。</para></param>
     public void InjectText(string text)
         => SendControl(ScrcpyControlMessageWriter.InjectText(text));
 
     /// <summary>
-    /// <para>把文本写入设备剪贴板，可选择直接粘贴到焦点输入框。控制通道未就绪时静默忽略，与触摸注入一致。</para>
     /// Writes text to the device clipboard, optionally pasting into the focused field; ignored while the control
     /// channel is unavailable, matching touch injection.
+    /// <para>把文本写入设备剪贴板，可选择直接粘贴到焦点输入框。控制通道未就绪时静默忽略，与触摸注入一致。</para>
     /// </summary>
-    /// <param name="text"><para>要送往设备的文本（UTF-8 上限 300 字节）。</para>Text to send (300 UTF-8 byte cap).</param>
-    /// <param name="paste"><para>是否在设备端同时粘贴。</para>Whether the device also pastes it.</param>
+    /// <param name="text">Text to send (300 UTF-8 byte cap). <para>要送往设备的文本（UTF-8 上限 300 字节）。</para></param>
+    /// <param name="paste">Whether the device also pastes it. <para>是否在设备端同时粘贴。</para></param>
     public void SendClipboard(string text, bool paste) => SendSession(client => client.SendClipboard(text, paste));
 
     /// <summary>
-    /// <para>请求设备回传剪贴板；结果经 <see cref="DeviceClipboardReceived"/> 送达。</para>
     /// Requests the device clipboard; the answer arrives on <see cref="DeviceClipboardReceived"/>.
+    /// <para>请求设备回传剪贴板；结果经 <see cref="DeviceClipboardReceived"/> 送达。</para>
     /// </summary>
     public void RequestClipboard() => SendSession(client => client.RequestClipboard());
 
-    /// <summary><para>发送一次 Android「返回」按压。</para>Sends one Android BACK press.</summary>
+    /// <summary>Sends one Android BACK press. <para>发送一次 Android「返回」按压。</para></summary>
     public void SendBack() => SendSession(client => client.SendBack());
 
-    /// <summary><para>切换设备屏幕电源状态。</para>Toggles the device screen power.</summary>
+    /// <summary>Toggles the device screen power. <para>切换设备屏幕电源状态。</para></summary>
     public void ToggleDisplayPower() => SendSession(client => client.ToggleDisplayPower());
 
     private void SendSession(Action<Services.Mirroring.ManagedMirrorSession> send)
@@ -411,9 +415,6 @@ public partial class ScreenMirrorViewModel : Document
                 "AV1" or "AV01" => VideoCodecId.Av1,
                 _ => throw new NotSupportedException($"Unsupported video codec '{metadata.CodecName}'."),
             };
-            // The composition capability probe completes when the mirror control attaches to the visual
-            // tree; give it a short grace period so GPU export can be requested from the first frame.
-            // 合成能力探测在投屏控件挂载到可视树后完成；留出短暂宽限期，让 GPU 导出能从首帧起生效。
             long probeDeadline = Environment.TickCount64 + 3000;
             while (!GpuPresenter.CompositionProbeCompleted && Environment.TickCount64 < probeDeadline) Thread.Sleep(25);
             using var decoder = VideoDecoderFactory.Create(codec, ActiveDecoderOptions);
@@ -492,8 +493,9 @@ public partial class ScreenMirrorViewModel : Document
         ScheduleRenderLocked(next);
     }
 
-    /// <summary>Routes exported VA surfaces to the GPU presenter; the presenter clears the flag when it cannot present them.</summary>
-    /// <summary>把导出的 VA 表面路由到 GPU 呈现器；呈现器在无法呈现时会清除该标志。</summary>
+    /// <summary>Routes exported VA surfaces to the GPU presenter; the presenter clears the flag when it cannot present them.
+    /// <para>把导出的 VA 表面路由到 GPU 呈现器；呈现器在无法呈现时会清除该标志。</para>
+    /// </summary>
     [SupportedOSPlatform("linux")]
     private void EnableVaApiZeroCopy(VaApiVideoDecoder decoder)
     {
@@ -501,8 +503,9 @@ public partial class ScreenMirrorViewModel : Document
         decoder.GpuExportEnabled = true;
     }
 
-    /// <summary>Hands a zero-copy exported surface to the GPU presenter, disabling export when it cannot be presented.</summary>
-    /// <summary>把零拷贝导出表面交给 GPU 呈现器；无法呈现时禁用导出路径。</summary>
+    /// <summary>Hands a zero-copy exported surface to the GPU presenter, disabling export when it cannot be presented.
+    /// <para>把零拷贝导出表面交给 GPU 呈现器；无法呈现时禁用导出路径。</para>
+    /// </summary>
     [SupportedOSPlatform("linux")]
     private void PublishDmabufFrame(VaDmaBufVideoFrame frame, VaApiVideoDecoder decoder)
     {
@@ -518,8 +521,9 @@ public partial class ScreenMirrorViewModel : Document
         ScheduleRender();
     }
 
-    /// <summary>Routes Windows shared-texture frames to the composition presenter; export is disabled when it cannot be presented.</summary>
-    /// <summary>把 Windows 共享纹理帧交给合成呈现器；无法呈现时禁用导出。</summary>
+    /// <summary>Routes Windows shared-texture frames to the composition presenter; export is disabled when it cannot be presented.
+    /// <para>把 Windows 共享纹理帧交给合成呈现器；无法呈现时禁用导出。</para>
+    /// </summary>
     [SupportedOSPlatform("windows")]
     private void EnableSharedTextureExport(MediaFoundationGpuVideoDecoder decoder)
     {
@@ -547,8 +551,9 @@ public partial class ScreenMirrorViewModel : Document
         ScheduleRender();
     }
 
-    /// <summary>Routes macOS IOSurface frames to the composition presenter; export is disabled when it cannot be presented.</summary>
-    /// <summary>把 macOS IOSurface 帧交给合成呈现器；无法呈现时禁用导出。</summary>
+    /// <summary>Routes macOS IOSurface frames to the composition presenter; export is disabled when it cannot be presented.
+    /// <para>把 macOS IOSurface 帧交给合成呈现器；无法呈现时禁用导出。</para>
+    /// </summary>
     [SupportedOSPlatform("macos")]
     private void EnableIosurfaceExport(VideoToolboxVideoDecoder decoder)
     {
@@ -669,8 +674,9 @@ public partial class ScreenMirrorViewModel : Document
     private static string GetLocalizedString(string key)
         => UotanStudio.Services.LanguageService.Instance.GetString(key);
 
-    /// <summary>Builds server options from the persisted app settings.</summary>
-    /// <summary>按持久化应用设置构建服务端选项。</summary>
+    /// <summary>Builds server options from the persisted app settings.
+    /// <para>按持久化应用设置构建服务端选项。</para>
+    /// </summary>
     private ScrcpyServerOptions CreateOptionsFromSettings()
     {
         _activeSettings = PendingSettings.Copy();

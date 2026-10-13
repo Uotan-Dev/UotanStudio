@@ -7,8 +7,8 @@ namespace UotanStudio.Services.Delivery;
 internal static class DeliveryPostinstall
 {
     /// <summary>
-    /// <para>在不执行宿主机程序的前提下读取 update_engine postinstall 配置文件，校验键归属与取值并返回按分区索引的配置。</para>
     /// Reads an update_engine postinstall config without executing host programs, validating key ownership and values, and returns per-partition configs.
+    /// <para>在不执行宿主机程序的前提下读取 update_engine postinstall 配置文件，校验键归属与取值并返回按分区索引的配置。</para>
     /// </summary>
     internal static Dictionary<string, PartitionUpdate> Read(string path, IEnumerable<string> partitions)
     {

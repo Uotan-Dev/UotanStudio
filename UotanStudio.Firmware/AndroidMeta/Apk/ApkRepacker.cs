@@ -16,38 +16,37 @@ internal sealed class ApkRepackOptions
     /// Alignment for stored native libraries in bytes (0 disables; 16384 for 16 KiB page devices).
     /// <para>native 库存储对齐字节数（0 为不对齐；16 KiB 页设备用 16384）。</para>
     /// </summary>
-    /// <value>For <c>.so</c> entries a value above 0 stores them uncompressed and pads the data start to this boundary with an alignment extra field (header id 0xd935); 1 stores without padding; 0 or below sends <c>.so</c> files through the normal deflate path. Defaults to 4096.
-    /// <para>对 <c>.so</c> 条目：大于 0 时不压缩存储，并用对齐扩展字段（头 id 0xd935）把数据起点填充到该边界；1 为存储但不填充；0 或负值使 <c>.so</c> 走常规 deflate 路径。默认 4096。</para></value>
+    /// <value>Above 0 stores native libraries uncompressed and pads the data start to this boundary; 0 uses the deflate path.
+    /// <para>大于 0 时不压缩存储 native 库并把数据起点填充到该边界；0 时走 deflate 路径。</para></value>
     public int NativeLibraryAlignmentBytes { get; set; } = 4096;
 
     /// <summary>
-    /// Stores resources.arsc uncompressed with 4-byte alignment (required when targetSdkVersion >= 30).
-    /// <para>以未压缩 + 4 字节对齐存储 resources.arsc（targetSdkVersion >= 30 时必需）。</para>
+    /// Stores the resource table uncompressed with 4-byte alignment (required when targetSdkVersion >= 30).
+    /// <para>以未压缩 + 4 字节对齐存储资源表（targetSdkVersion >= 30 时必需）。</para>
     /// </summary>
-    /// <value>When <see langword="true"/> the <c>resources.arsc</c> entry (case-insensitive name) is stored with a 4-byte alignment extra field; false deflates it like ordinary entries.
-    /// <para>为 <see langword="true"/> 时，<c>resources.arsc</c> 条目（按名称不区分大小写）带 4 字节对齐扩展字段存储；false 时与普通条目一样 deflate。</para></value>
+    /// <value>When <see langword="true"/> the resource table entry is stored with a 4-byte alignment extra field; false deflates it.
+    /// <para>为 <see langword="true"/> 时资源表条目带 4 字节对齐扩展字段存储；false 时按 deflate 压缩。</para></value>
     public bool StoreResourcesArsc { get; set; } = true;
 
     /// <summary>
-    /// Removes v1 signature entries (META-INF MANIFEST.MF/*.SF/*.RSA/*.DSA/*.EC) that are
-    /// already present in the input, so re-signing does not fail verification.
-    /// <para>移除输入中既有的 v1 签名条目（META-INF MANIFEST.MF/*.SF/*.RSA/*.DSA/*.EC），避免重新签名后校验失败。</para>
+    /// Removes the v1 signature entries already present in the input so re-signing does not fail verification.
+    /// <para>移除输入中既有的 v1 签名条目，避免重新签名后校验失败。</para>
     /// </summary>
-    /// <value>When <see langword="true"/> entry collection skips files under <c>META-INF/</c> matching the v1 signature name patterns; false carries them over like any other file.
-    /// <para>为 <see langword="true"/> 时，收集条目阶段跳过 <c>META-INF/</c> 下命中 v1 签名命名模式的文件；false 时与其它文件一并打包。</para></value>
+    /// <value>When <see langword="true"/> collection skips <c>META-INF/</c> files matching v1 signature patterns.
+    /// <para>为 <see langword="true"/> 时收集阶段跳过 <c>META-INF/</c> 下命中 v1 签名模式的文件。</para></value>
     public bool StripSignatureEntries { get; set; } = true;
 
     /// <summary>Deflate level for compressed entries.
     /// <para>压缩条目的 deflate 级别。</para></summary>
-    /// <value>Applied to every deflated entry; entries forced to store mode (<c>resources.arsc</c> and aligned <c>.so</c> files) are never compressed. Defaults to <see cref="System.IO.Compression.CompressionLevel.Optimal"/>.
-    /// <para>用于所有 deflate 条目；强制存储的条目（<c>resources.arsc</c> 与对齐的 <c>.so</c>）不被压缩。默认 <see cref="System.IO.Compression.CompressionLevel.Optimal"/>。</para></value>
+    /// <value>Applied to every deflated entry; store-mode entries are never compressed.
+    /// <para>用于所有 deflate 条目；强制存储的条目不被压缩。</para></value>
     public CompressionLevel CompressionLevel { get; set; } = CompressionLevel.Optimal;
 }
 
 /// <summary>
 /// Repacks an unpacked APK directory back into an installable APK: a streaming ZIP writer with
-/// entry alignment (zipalign semantics), deterministic entry ordering and atomic output commit.
-/// <para>把解包后的 APK 目录重建为可安装 APK：流式 ZIP 写入器，带条目对齐（zipalign 语义）、
+/// entry alignment, deterministic entry ordering and atomic output commit.
+/// <para>把解包后的 APK 目录重建为可安装 APK：流式 ZIP 写入器，带条目对齐、
 /// 确定性条目顺序与输出原子提交。</para>
 /// </summary>
 internal static class ApkRepacker
@@ -64,10 +63,10 @@ internal static class ApkRepacker
     /// and atomically replaces the target on success.
     /// <para>把目录重打包为 APK 文件。输出先写入同级临时文件，成功后原子替换目标。</para>
     /// </summary>
-    /// <param name="inputDirectory">Existing directory enumerated recursively; every file becomes an entry whose name is the <c>/</c>-separated relative path, written in ordinal-sorted order. <para>递归枚举的已存在目录；每个文件成为一个条目，条目名为以 <c>/</c> 分隔的相对路径，按序数排序写出。</para></param>
-    /// <param name="outputPath">Destination APK path; an existing file is replaced only after the archive is fully written, and the parent directory is created when missing. <para>目标 APK 路径；仅在归档完整写出后才替换既有文件，缺失的父目录会被创建。</para></param>
-    /// <param name="options">Repacking options; <see langword="null"/> uses the <see cref="ApkRepackOptions"/> defaults. <para>重打包选项；为 null 时使用 <see cref="ApkRepackOptions"/> 默认值。</para></param>
-    /// <param name="cancellationToken">Observed during collection and per-entry writing; failure or cancellation deletes the temporary file and leaves the existing output untouched. <para>在条目收集与逐条写入期间生效；失败或取消时删除临时文件并保持既有输出不动。</para></param>
+    /// <param name="inputDirectory">Existing directory enumerated recursively; each file becomes an entry named by its relative path. <para>递归枚举的已存在目录；每个文件成为以其相对路径命名的条目。</para></param>
+    /// <param name="outputPath">Destination APK path; an existing file is replaced only after the archive is fully written. <para>目标 APK 路径；仅在归档完整写出后才替换既有文件。</para></param>
+    /// <param name="options">Repacking options; <see langword="null"/> uses the <see cref="ApkRepackOptions"/> defaults. <para>重打包选项；为 <see langword="null"/> 时使用 <see cref="ApkRepackOptions"/> 默认值。</para></param>
+    /// <param name="cancellationToken">Observed during collection and per-entry writing; cancellation leaves the existing output untouched. <para>在条目收集与逐条写入期间生效；取消时保持既有输出不动。</para></param>
     /// <exception cref="DirectoryNotFoundException"><paramref name="inputDirectory"/> is blank or does not exist. <para><paramref name="inputDirectory"/> 为空或不存在。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="outputPath"/> is blank. <para><paramref name="outputPath"/> 为空白。</para></exception>
     /// <exception cref="InvalidDataException">The input directory holds no files, more than 65535 entries, or any entry or archive beyond the 32-bit ZIP limits. <para>输入目录没有文件、条目超过 65535 个，或有条目/整包超出 32 位 ZIP 上限。</para></exception>

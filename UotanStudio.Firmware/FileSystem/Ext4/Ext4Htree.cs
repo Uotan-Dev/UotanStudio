@@ -1,8 +1,9 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.FileSystem.Ext4.Models;
+using UotanStudio.Hash.Crc32c;
+using UotanStudio.Hash.HalfMd4Hash;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4;
 
@@ -26,145 +27,9 @@ internal static class Ext4Htree
 
     public const int DirentTailSize = 12;
 
-    private static readonly uint[] DefaultHashInit = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476];
-
-    private const uint Md4K2 = 0x5A82_7999;
-    private const uint Md4K3 = 0x6ED9_EBA1;
-
     /// <summary>
-    /// Computes the ext4 Half-MD4 hash of a directory name (buf[1] &amp; ~1), matching the EXT2_HASH_HALF_MD4 branch of e2fsprogs ext2fs_dirhash: an all-zero seed selects the default MD4 init vector and the name is transformed in 32-byte chunks.
-    /// <para>计算目录名的 ext4 Half-MD4 哈希（返回 buf[1] &amp; ~1）。</para>
-    /// </summary>
-    /// <param name="name">Directory entry name; it is UTF-8 encoded and consumed in 32-byte chunks.
-    /// <para>目录项名称；先按 UTF-8 编码，再以 32 字节分块消费。</para></param>
-    /// <param name="seed">At least four seed words from the superblock hash seed; an all-zero vector selects the default MD4 initial state.
-    /// <para>超级块哈希种子中至少四个种子词；全零向量改用默认 MD4 初始状态。</para></param>
-    /// <returns>The directory hash, which is state word 1 with its least significant bit cleared.
-    /// <para>目录哈希值，即清除最低有效位后的状态字 1。</para></returns>
-    public static uint HalfMd4Hash(string name, uint[] seed)
-    {
-        ArgumentNullException.ThrowIfNull(seed);
-        if (seed.Length < 4)
-        {
-            throw new ArgumentException("Hash seed must have at least 4 elements.", nameof(seed));
-        }
-
-        var buf = new uint[4];
-        var seedIsZero = true;
-        for (var i = 0; i < 4; i++)
-        {
-            buf[i] = seed[i];
-            seedIsZero &= seed[i] == 0;
-        }
-
-        if (seedIsZero)
-        {
-            Array.Copy(DefaultHashInit, buf, 4);
-        }
-
-        var nameBytes = Encoding.UTF8.GetBytes(name);
-        var offset = 0;
-        var remaining = nameBytes.Length;
-        while (remaining > 0)
-        {
-            var words = Str2HashBuf(nameBytes, offset, remaining);
-            HalfMd4Transform(buf, words);
-            offset += 32;
-            remaining -= 32;
-        }
-
-        return buf[1] & 0xFFFF_FFFE;
-    }
-
-    /// <summary>
-    /// Converts name bytes into up to 8 uint32 words (little-endian accumulation + length padding), matching e2fsprogs str2hashbuf(num=8).
-    /// <para>将名字字节转为最多 8 个 uint32 词（小端累积 + 长度填充），与 e2fsprogs str2hashbuf(num=8) 一致。</para>
-    /// </summary>
-    private static uint[] Str2HashBuf(byte[] name, int offset, int len)
-    {
-        var pad = (uint)(len | (len << 8) | (len << 16) | (len << 24));
-        var words = new uint[8];
-        var val = pad;
-        var count = 0;
-        var limit = Math.Min(len, 32);
-        for (var i = 0; i < limit; i++)
-        {
-            val = name[offset + i] + (val << 8);
-            if ((i & 3) == 3)
-            {
-                words[count++] = val;
-                val = pad;
-            }
-        }
-
-        if ((limit & 3) != 0)
-        {
-            words[count++] = val;
-        }
-
-        while (count < 8)
-        {
-            words[count++] = pad;
-        }
-
-        return words;
-    }
-
-    /// <summary>
-    /// Truncated MD4 transform, line-for-line equivalent to e2fsprogs halfMD4Transform.
-    /// <para>截断 MD4 变换，与 e2fsprogs halfMD4Transform 逐行一致。</para>
-    /// </summary>
-    private static void HalfMd4Transform(uint[] buf, uint[] input)
-    {
-        var a = buf[0];
-        var b = buf[1];
-        var c = buf[2];
-        var d = buf[3];
-
-        a = RotateLeft(a + F(b, c, d) + input[0], 3);
-        d = RotateLeft(d + F(a, b, c) + input[1], 7);
-        c = RotateLeft(c + F(d, a, b) + input[2], 11);
-        b = RotateLeft(b + F(c, d, a) + input[3], 19);
-        a = RotateLeft(a + F(b, c, d) + input[4], 3);
-        d = RotateLeft(d + F(a, b, c) + input[5], 7);
-        c = RotateLeft(c + F(d, a, b) + input[6], 11);
-        b = RotateLeft(b + F(c, d, a) + input[7], 19);
-
-        a = RotateLeft(a + G(b, c, d) + input[1] + Md4K2, 3);
-        d = RotateLeft(d + G(a, b, c) + input[3] + Md4K2, 5);
-        c = RotateLeft(c + G(d, a, b) + input[5] + Md4K2, 9);
-        b = RotateLeft(b + G(c, d, a) + input[7] + Md4K2, 13);
-        a = RotateLeft(a + G(b, c, d) + input[0] + Md4K2, 3);
-        d = RotateLeft(d + G(a, b, c) + input[2] + Md4K2, 5);
-        c = RotateLeft(c + G(d, a, b) + input[4] + Md4K2, 9);
-        b = RotateLeft(b + G(c, d, a) + input[6] + Md4K2, 13);
-
-        a = RotateLeft(a + H(b, c, d) + input[3] + Md4K3, 3);
-        d = RotateLeft(d + H(a, b, c) + input[7] + Md4K3, 9);
-        c = RotateLeft(c + H(d, a, b) + input[2] + Md4K3, 11);
-        b = RotateLeft(b + H(c, d, a) + input[6] + Md4K3, 15);
-        a = RotateLeft(a + H(b, c, d) + input[1] + Md4K3, 3);
-        d = RotateLeft(d + H(a, b, c) + input[5] + Md4K3, 9);
-        c = RotateLeft(c + H(d, a, b) + input[0] + Md4K3, 11);
-        b = RotateLeft(b + H(c, d, a) + input[4] + Md4K3, 15);
-
-        buf[0] += a;
-        buf[1] += b;
-        buf[2] += c;
-        buf[3] += d;
-    }
-
-    private static uint F(uint x, uint y, uint z) => z ^ (x & (y ^ z));
-
-    private static uint G(uint x, uint y, uint z) => (x & y) + ((x ^ y) & z);
-
-    private static uint H(uint x, uint y, uint z) => x ^ y ^ z;
-
-    private static uint RotateLeft(uint value, int bits) => (value << bits) | (value >> (32 - bits));
-
-    /// <summary>
-    /// Parses the dx_entry list from the dx_root in directory block 0, returning (hash, block) for every child block. entry[0]'s hash is not stored on disk (its area holds limit/count), so 0 is reported; its block points at the first child.
-    /// <para>从目录块 0 解析 dx_root 的 dx_entry 列表：返回每个子块（叶块/索引块）的 (hash, block)。</para>
+    /// Parses the dx_entry list from the dx_root in directory block 0.
+    /// <para>从目录块 0 的 dx_root 解析 dx_entry 列表。</para>
     /// </summary>
     /// <param name="block0">Bytes of directory logical block 0; the leading "." and ".." records, the dx_root_info and the count/limit area are validated before any entry is read.
     /// <para>目录逻辑块 0 的字节；读取条目前先校验开头的 "." 与 ".." 记录、dx_root_info 以及 count/limit 区。</para></param>
@@ -281,7 +146,7 @@ internal static class Ext4Htree
         var hashed = new List<(uint Hash, string Name, uint Inode, byte FileType)>(entries.Count);
         foreach (var (name, inode, fileType) in entries)
         {
-            hashed.Add((HalfMd4Hash(name, hashSeed), name, inode, fileType));
+            hashed.Add((HalfMd4Hash.Compute(name, hashSeed), name, inode, fileType));
         }
 
         hashed.Sort(static (x, y) =>
@@ -433,7 +298,7 @@ internal static class Ext4Htree
 
     /// <summary>
     /// Builds the child list of a dx block: child i maps to leaf (start + i) at block leafBlockBase + start + i.
-    /// <para>生成某个 dx 块的子项列表：子项 i 对应第 (start + i) 个叶块，block = leafBlockBase + start + i； 子项 0 的 hash 未使用，子项 i ≥ 1 的 hash 为对应叶块首条目的哈希（与上一叶末条同值时 +1，见 e2fsprogs）。</para>
+    /// <para>生成某个 dx 块的子项列表：子项 i 对应第 (start + i) 个叶块，block = leafBlockBase + start + i；子项 0 的 hash 未使用，子项 i ≥ 1 的 hash 为对应叶块首条目的哈希（与上一叶末条同值时 +1）。</para>
     /// </summary>
     private static List<(uint Hash, uint Block)> BuildChildEntryList(
         List<uint> leafFirstHashes,
@@ -555,8 +420,8 @@ internal static class Ext4Htree
     }
 
     /// <summary>
-    /// Writes the 12-byte struct ext2_dir_entry_tail at the end of a directory leaf block and computes the dirent checksum matching e2fsprogs ext2fs_dirent_csum: seed = crc32c(~0, uuid), then the LE32 inode number, LE32 i_generation and the block bytes from its start up to (excluding) the tail.
-    /// <para>在目录叶块尾部写入 struct ext2_dir_entry_tail（12 字节）并计算 dirent 校验和。</para>
+    /// Writes the 12-byte <c>ext2_dir_entry_tail</c> at the end of a directory leaf block and computes the dirent checksum: seed = crc32c(~0, uuid), then the LE32 inode number, LE32 i_generation and the block bytes from its start up to (excluding) the tail.
+    /// <para>在目录叶块尾部写入 12 字节的 <c>ext2_dir_entry_tail</c> 并计算 dirent 校验和：以 crc32c(~0, uuid) 为种子，依次喂入 LE32 inode 号、LE32 i_generation 与自块首到尾结构之前的字节。</para>
     /// </summary>
     [System.Runtime.CompilerServices.SkipLocalsInit]
     private static void WriteDirentTail(byte[] block, int endCap, uint directoryInode, byte[]? uuid, uint generation)
@@ -581,8 +446,8 @@ internal static class Ext4Htree
     private static void WriteU32(byte[] bytes, int offset, uint value) => ByteWriter.WriteUInt32LE(bytes, offset, value);
 
     /// <summary>
-    /// Writes dx_tail and computes checksum matching e2fsprogs 1.47.4 ext2fs_dx_csum. dx_tail is at countOffset + limit * DxEntrySize.
-    /// <para>写入 dx_tail 结构并计算校验和。</para>
+    /// Writes dx_tail and computes its checksum. dx_tail is at countOffset + limit * DxEntrySize.
+    /// <para>写入 dx_tail 结构并计算其校验和。dx_tail 位于 countOffset + limit * DxEntrySize。</para>
     /// </summary>
     [System.Runtime.CompilerServices.SkipLocalsInit]
     private static void WriteDxTail(byte[] block, int countOffset, int count, int limit, uint directoryInode, byte[]? uuid, uint generation)

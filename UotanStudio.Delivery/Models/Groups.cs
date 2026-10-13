@@ -18,8 +18,8 @@ internal sealed record DeliveryGroup
 internal static class DeliveryGroups
 {
     /// <summary>
-    /// <para>把逐行“组名 容量字节 分区1 分区2 …”文本解析为分组列表；校验组名、容量与分区是否合法且不重复。</para>
     /// Parses per-line "group size partitions…" text into a list of groups, validating names, sizes, and partitions for uniqueness.
+    /// <para>把逐行“组名 容量字节 分区1 分区2 …”文本解析为分组列表；校验组名、容量与分区是否合法且不重复。</para>
     /// </summary>
     internal static List<DeliveryGroup> Parse(string text)
     {
@@ -46,8 +46,8 @@ internal static class DeliveryGroups
         $"{g.Name} {g.Size.ToString(CultureInfo.InvariantCulture)} {string.Join(' ', g.Partitions)}"));
 
     /// <summary>
-    /// <para>从源容器元数据重建分组：Payload 来源解析动态分区配置，Super 来源解析 LP 元数据中的分组与分区归属。</para>
     /// Rebuilds groups from source container metadata: Payload sources parse the dynamic partition config, Super sources parse LP metadata groups and memberships.
+    /// <para>从源容器元数据重建分组：Payload 来源解析动态分区配置，Super 来源解析 LP 元数据中的分组与分区归属。</para>
     /// </summary>
     internal static List<DeliveryGroup> FromSource(DeliverySourceContainerSettings settings)
     {

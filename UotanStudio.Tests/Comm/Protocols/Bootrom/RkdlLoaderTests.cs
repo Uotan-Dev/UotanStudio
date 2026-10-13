@@ -3,20 +3,17 @@ using System.Diagnostics;
 using System.Text;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Transports.Abstractions;
-using UotanStudio.Firmware.Core.Checksums;
+using UotanStudio.Hash.RockchipCrc32;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
 namespace UotanStudio.Tests.Comm.Protocols.Bootrom;
 
 /// <summary>
-/// RKBOOT loader image parsing and 0x0471/0x0472 loader download tests. An RC4 encrypted loader
-/// must be rejected before any vendor request reaches the device: the entry payloads are sent
-/// verbatim and this repository has no RC4 segment decryption, so sending the ciphertext would let
-/// the device boot garbage while <c>DownloadBootLoader</c> still reported a positive byte count.
-/// <para>RKBOOT loader 镜像解析与 0x0471/0x0472 loader 下载测试。RC4 加密的 loader 必须在任何
-/// vendor 请求到达设备之前被拒绝：条目负载是原样发送的，且本仓库没有 RC4 段解密能力，因此发送密文
-/// 会让设备启动垃圾数据，而 <c>DownloadBootLoader</c> 仍然报告一个正字节数。</para>
+/// RKBOOT loader image parsing and 0x0471/0x0472 loader download tests. RC4-encrypted loaders are
+/// rejected before any vendor request, since entry payloads go out verbatim.
+/// <para>RKBOOT loader 镜像解析与 0x0471/0x0472 loader 下载测试。RC4 加密的 loader 会在任何 vendor
+/// 请求前被拒绝，因为条目负载原样发送。</para>
 /// </summary>
 public class RkdlLoaderTests
 {

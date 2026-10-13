@@ -13,6 +13,7 @@ namespace UotanStudio.Tests.Services;
 /// Verifies the MCP path sandbox containment and flash-tool gating.
 /// <para>验证 MCP 路径沙箱包含关系与刷写工具门控。</para>
 /// </summary>
+[Collection("MCP tool generation")]
 public class McpSandboxTests : IDisposable
 {
     private readonly string _root;

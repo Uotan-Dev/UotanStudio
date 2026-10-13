@@ -7,26 +7,26 @@ using UotanStudio.Services.Execution;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>扩展数据处理节点视图模型，提供拼接、切片、加密、压缩与字节序转换功能。</para>
 /// Extended data processing node view model, providing concat, slice, encrypt, compress, and byte-order conversion capabilities.
+/// <para>扩展数据处理节点视图模型，提供拼接、切片、加密、压缩与字节序转换功能。</para>
 /// </summary>
 public class ExtendedDataNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
-    /// <para>创建具有指定标题的扩展数据处理节点。</para>
     /// Creates an extended data processing node with the specified title.
+    /// <para>创建具有指定标题的扩展数据处理节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public ExtendedDataNodeViewModel(string title) : base(title, NodeCategory.Data)
     {
     }
 
     /// <summary>
-    /// <para>创建默认的数据拼接节点。</para>
     /// Creates a default concat node that joins two data streams.
+    /// <para>创建默认的数据拼接节点。</para>
     /// </summary>
     public static ExtendedDataNodeViewModel CreateConcatNode()
     {
@@ -42,8 +42,8 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的数据切片节点，提取字节区间。</para>
     /// Creates a default slice node that extracts a byte range.
+    /// <para>创建默认的数据切片节点，提取字节区间。</para>
     /// </summary>
     public static ExtendedDataNodeViewModel CreateSliceNode()
     {
@@ -60,8 +60,8 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的加密节点，使用指定算法加密数据。</para>
     /// Creates a default encrypt node that encrypts data with a specified algorithm.
+    /// <para>创建默认的加密节点，使用指定算法加密数据。</para>
     /// </summary>
     public static ExtendedDataNodeViewModel CreateEncryptNode()
     {
@@ -84,8 +84,8 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的压缩节点，使用指定算法压缩数据。</para>
     /// Creates a default compress node that compresses data with a specified algorithm.
+    /// <para>创建默认的压缩节点，使用指定算法压缩数据。</para>
     /// </summary>
     public static ExtendedDataNodeViewModel CreateCompressNode()
     {
@@ -107,8 +107,8 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的字节序转换节点。</para>
     /// Creates a default byte-swap node that converts between byte orders.
+    /// <para>创建默认的字节序转换节点。</para>
     /// </summary>
     public static ExtendedDataNodeViewModel CreateByteSwapNode()
     {
@@ -123,18 +123,18 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的扩展数据处理逻辑：Data.Bytes.Concat 拼接、Data.Bytes.Slice 切片、Data.Cipher.Encrypt 加密、
-    /// Data.Compression.Compress 压缩、Data.Bytes.Swap 字节序转换。</para>
     /// Dispatches extended data-processing logic by the node type key (TypeKey): Data.Bytes.Concat concatenates, Data.Bytes.Slice extracts
     /// a range, Data.Cipher.Encrypt encrypts, Data.Compression.Compress compresses, and Data.Bytes.Swap converts byte order.
+    /// <para>按节点类型键（TypeKey）分发对应的扩展数据处理逻辑：Data.Bytes.Concat 拼接、Data.Bytes.Slice 切片、Data.Cipher.Encrypt 加密、
+    /// Data.Compression.Compress 压缩、Data.Bytes.Swap 字节序转换。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {

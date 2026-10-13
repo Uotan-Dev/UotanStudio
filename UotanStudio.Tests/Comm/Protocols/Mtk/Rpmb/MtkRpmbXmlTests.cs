@@ -10,7 +10,6 @@ public sealed class MtkRpmbXmlTests
 {
     private const string ReadCommand = "<da><version>1.0</version><command>CMD:CUSTOMRPMBR</command></da>";
     private const string UfsReadCommand = "<da><version>1.0</version><command>CMD:CUSTOMURPMBR</command></da>";
-    private const string WriteCommand = "<da><version>1.0</version><command>CMD:CUSTOMRPMBW</command></da>";
     private const string Prolog = "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
 
     [Fact]
@@ -185,74 +184,6 @@ public sealed class MtkRpmbXmlTests
         Assert.Equal(16, transport.Writes.Count - before);
     }
 
-    [Fact]
-    public async Task WriteXmlRpmbFramesAsync_OptInDisabled_RefusesBeforeIo()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await MtkRpmbTestHarness.CreateXmlRpmbSessionAsync(transport);
-        using var source = new MemoryStream(MtkRpmbTestHarness.RpmbFrame(0xEE));
-        var before = transport.Writes.Count;
-
-        await Assert.ThrowsAsync<NotSupportedException>(() => session.WriteXmlRpmbFramesAsync(
-            new MtkRpmbFrameRange(0, 1), source, new MtkRpmbOptions(), TestContext.Current.CancellationToken));
-
-        Assert.Equal(before, transport.Writes.Count);
-    }
-
-    [Fact]
-    public async Task WriteXmlRpmbFramesAsync_OptInEnabled_SendsCommandSectorAndFrame()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await MtkRpmbTestHarness.CreateXmlRpmbSessionAsync(transport);
-        MtkRpmbTestHarness.EnqueueXmlRpmbWriteReply(transport);
-        var frame = MtkRpmbTestHarness.RpmbFrame(0xEE);
-        using var source = new MemoryStream(frame);
-        var before = transport.Writes.Count;
-
-        var result = await session.WriteXmlRpmbFramesAsync(new MtkRpmbFrameRange(2, 1), source,
-            new MtkRpmbOptions { AllowAuthenticatedWrites = true }, TestContext.Current.CancellationToken);
-
-        Assert.Equal(ExpectedCommand(WriteCommand), transport.Writes[before + 1]);
-        Assert.Equal([2, 0, 0, 0], transport.Writes[before + 3]);
-        Assert.Equal(frame, transport.Writes[before + 5]);
-        Assert.Equal(10, transport.Writes.Count - before);
-        Assert.True(result.IsComplete);
-        Assert.Equal(MtkSessionState.XmlStorageGeometryKnown, session.State);
-    }
-
-    [Fact]
-    public async Task WriteXmlRpmbFramesAsync_ShortSource_StopsWithoutReplay()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await MtkRpmbTestHarness.CreateXmlRpmbSessionAsync(transport);
-        using var source = new MemoryStream(new byte[80]);
-        var before = transport.Writes.Count;
-
-        await Assert.ThrowsAsync<EndOfStreamException>(() => session.WriteXmlRpmbFramesAsync(
-            new MtkRpmbFrameRange(0, 1), source, new MtkRpmbOptions { AllowAuthenticatedWrites = true },
-            TestContext.Current.CancellationToken));
-
-        Assert.Equal(before, transport.Writes.Count);
-        Assert.Equal(MtkSessionState.Faulted, session.State);
-    }
-
-    [Fact]
-    public async Task WriteXmlRpmbFramesAsync_DeviceRefusal_StopsWithoutRetry()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await MtkRpmbTestHarness.CreateXmlRpmbSessionAsync(transport);
-        MtkRpmbTestHarness.EnqueueXmlRpmbWriteReply(transport, 5);
-        using var source = new MemoryStream([.. MtkRpmbTestHarness.RpmbFrame(0x11), .. MtkRpmbTestHarness.RpmbFrame(0x22)]);
-
-        var result = await session.WriteXmlRpmbFramesAsync(new MtkRpmbFrameRange(0, 2), source,
-            new MtkRpmbOptions { AllowAuthenticatedWrites = true }, TestContext.Current.CancellationToken);
-
-        Assert.Single(result.Frames);
-        Assert.Equal(MtkRpmbFrameStatus.WriteFailure, result.Frames[0].Outcome.Status);
-        Assert.False(result.IsComplete);
-        Assert.Equal(256, source.Position);
-        Assert.Equal(MtkSessionState.XmlStorageGeometryKnown, session.State);
-    }
 
     [Fact]
     public async Task ReadXmlRpmbFramesAsync_OtherRegionValidationStillRefusesRpmb()

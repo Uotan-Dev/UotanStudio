@@ -113,13 +113,8 @@ public sealed class FlashBundleResult
     public List<string> Warnings { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets program payload bytes with a final device ACK, including completed sparse
-    /// extents of a later-failed entry and successful wipes. Excludes sparse holes, metadata,
-    /// erase/patch commands and unacknowledged transfers. This is not readback verification;
-    /// an interrupted transfer may have changed additional device bytes.
-    /// <para>获取或设置已获得设备最终 ACK 的 program 载荷字节数，包含后续失败条目中已完成的
-    /// sparse 区段以及成功的 wipe。不包含 sparse 空洞、元数据、erase/patch 命令以及未确认的
-    /// 传输。这不是回读校验；被中断的传输可能已改变更多设备字节。</para>
+    /// Gets or sets the program payload bytes with a final device ACK, including completed sparse extents of a later-failed entry and successful wipes. Excludes sparse holes, metadata, erase and patch commands, and unacknowledged transfers. This is not readback verification.
+    /// <para>获取或设置获得设备最终 ACK 的 program 载荷字节，包含后续失败条目中已完成的稀疏 extent 与成功的擦除。不含稀疏空洞、元数据、erase/patch 命令与未确认传输。这不等于回读校验。</para>
     /// </summary>
     /// <value>Acknowledged payload bytes accumulated with checked arithmetic; zero for offline inspection results.
     /// <para>以 checked 算术累加的已确认载荷字节数；离线检查结果为零。</para></value>
@@ -220,6 +215,24 @@ public sealed class FlashBundleResult
     internal List<FlashItemEvidence> ItemsSource { get; } = [];
 
     internal void Record(FlashItemEvidence item) => ItemsSource.Add(item);
+
+    /// <summary>
+    /// Gets the report of what the bundle would wipe for each <c>&lt;wipe&gt;</c> element of the manifest.
+    /// <para>获取本包针对清单中每个 <c>&lt;wipe&gt;</c> 元素将要擦除内容的报告。</para>
+    /// </summary>
+    /// <value>
+    /// One preview per parsed wipe request, in document order. A refused request carries its reason and no
+    /// command document; an authorised request carries the exact program-with-zeros document that the wipe step
+    /// sends. Previews are produced before any wipe write, including a run that stops in dry-run mode.
+    /// <para>每个已解析擦写请求一条预览，按文档顺序排列。被拒绝的请求带有拒绝理由且没有命令文档；获授权的
+    /// 请求带有擦写步骤实际发送的精确写零编程文档。预览在任何擦写写入之前产生，包含停在 dry-run 模式的
+    /// 运行。</para>
+    /// </value>
+    public IReadOnlyList<FlashWipePreview> WipePreviews => WipePreviewsSource;
+
+    internal List<FlashWipePreview> WipePreviewsSource { get; } = [];
+
+    internal void RecordWipePreview(FlashWipePreview preview) => WipePreviewsSource.Add(preview);
 
     /// <summary>
     /// Returns a string representation of the result.

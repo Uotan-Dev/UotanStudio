@@ -81,8 +81,6 @@ public class DecodedVideoFrame : IDisposable
             throw new ArgumentNullException(nameof(buffer));
         }
 
-        // Borrowed native frames pass an empty array; their length is validated by the derived type.
-        // 借用的原生帧传入空数组，长度由派生类型自行校验。
         if (buffer.Length > 0 && (length < 0 || length > buffer.Length))
         {
             throw new ArgumentOutOfRangeException(nameof(length));

@@ -49,9 +49,9 @@ internal sealed partial class DeliveryImage : ObservableObject
         OnPropertyChanged(nameof(DisplaySize));
     }
     /// <summary>
+    /// Probes the source format and returns its established label: entries are still persisted and shown
     /// <para>探测源镜像格式并取既有标签：条目仍按标签持久化与显示，格式判定来自
     /// <see cref="ImageInputService.ProbeFormat"/>。</para>
-    /// Probes the source format and returns its established label: entries are still persisted and shown
     /// by label, while the decision itself comes from <see cref="ImageInputService.ProbeFormat"/>.</summary>
     private static string DetectSourceFormat(string path)
     {

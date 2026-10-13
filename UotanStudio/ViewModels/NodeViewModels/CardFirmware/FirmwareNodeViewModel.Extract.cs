@@ -8,8 +8,8 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 public partial class FirmwareNodeViewModel
 {
     /// <summary>
-    /// <para>创建默认的分区提取节点。</para>
     /// Creates a default partition extraction node.
+    /// <para>创建默认的分区提取节点。</para>
     /// </summary>
     public static FirmwareNodeViewModel CreateExtractNode()
     {

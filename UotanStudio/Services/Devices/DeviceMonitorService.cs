@@ -4,87 +4,106 @@ using UotanStudio.Comm.Protocols.Edl;
 namespace UotanStudio.Services.Devices;
 
 /// <summary>
-/// <para>设备传输类型。</para>
 /// Device transport kind.
+/// <para>设备传输类型。</para>
 /// </summary>
 public enum DeviceTransportKind
 {
-    /// <summary>Transport not recognized by this client.</summary>
+    /// <summary>Transport not recognized here.<para>未被识别出的传输类型。</para></summary>
     Unknown = -1,
-    /// <summary>USB 直连。 Direct USB.</summary>
+    /// <summary>Direct USB connection.<para>USB 直连。</para></summary>
     Usb,
-    /// <summary>网络（adb server / TCP）。 Network (adb server / TCP).</summary>
+    /// <summary>Network transport through an adb server or TCP.<para>经 adb server 或 TCP 的网络传输。</para></summary>
     Tcp,
-    /// <summary>串口。 Serial port.</summary>
+    /// <summary>Serial port connection.<para>串口连接。</para></summary>
     Serial,
 }
 
 /// <summary>
-/// <para>设备协议类型。</para>
 /// Device protocol kind.
+/// <para>设备协议类型。</para>
 /// </summary>
 public enum DeviceProtocolKind
 {
-    /// <summary>ADB（system/recovery/sideload）。 ADB mode.</summary>
+    /// <summary>ADB mode (system, recovery or sideload).<para>ADB 模式（system、recovery、sideload）。</para></summary>
     Adb,
-    /// <summary>Fastboot（bootloader/fastbootd）。 Fastboot mode.</summary>
+    /// <summary>Fastboot mode (bootloader or fastbootd).<para>Fastboot 模式（bootloader 或 fastbootd）。</para></summary>
     Fastboot,
-    /// <summary>高通 EDL（9008）。 Qualcomm EDL.</summary>
+    /// <summary>Qualcomm EDL (9008).<para>高通 EDL（9008）。</para></summary>
     Edl,
-    /// <summary>瑞芯微 bootrom/loader（rockusb）。 Rockchip bootrom/loader.</summary>
+    /// <summary>Rockchip bootrom or loader (rockusb).<para>瑞芯微 bootrom/loader（rockusb）。</para></summary>
     Rkdl,
-    /// <summary>联发科 BootROM/DA（mtk）。 MediaTek BootROM or download-agent mode.</summary>
+    /// <summary>MediaTek BootROM or download-agent mode.<para>联发科 BootROM/DA（mtk）模式。</para></summary>
     Mtk,
-    /// <summary>OpenHarmony HDC（USB 直连或经本机 hdc server）。 OpenHarmony HDC (USB direct or via the local hdc server).</summary>
+    /// <summary>OpenHarmony HDC, over direct USB or the local hdc server.<para>OpenHarmony HDC，USB 直连或经本机 hdc server。</para></summary>
     Hdc,
 }
 
 /// <summary>
-/// <para>由设备监视服务枚举出的一台设备。</para>
 /// A single device enumerated by the device monitor service.
+/// <para>由设备监视服务枚举出的一台设备。</para>
 /// </summary>
 public sealed class DetectedDevice
 {
-    /// <summary>稳定键（USB DeviceKey 或 "tcp:host:port"）。 Stable key.</summary>
+    /// <summary>Stable key: the USB device key or <c>tcp:host:port</c>.<para>稳定键：USB 设备键或 <c>tcp:host:port</c>。</para></summary>
+    /// <value>The key that re-opens this endpoint.<para>用于重新打开该端点的键。</para></value>
     public required string Key { get; init; }
-    /// <summary>序列号或显示标识。 Serial or display identity.</summary>
+    /// <summary>Serial number or display identity.<para>序列号或显示标识。</para></summary>
+    /// <value>The serial text of this endpoint.<para>该端点的序列号文本。</para></value>
     public required string Serial { get; init; }
-    /// <summary>协议类型。 Protocol kind.</summary>
+    /// <summary>Protocol kind.<para>协议类型。</para></summary>
+    /// <value>The protocol this endpoint speaks.<para>该端点使用的协议。</para></value>
     public required DeviceProtocolKind Protocol { get; init; }
-    /// <summary>传输类型。 Transport kind.</summary>
+    /// <summary>Transport kind.<para>传输类型。</para></summary>
+    /// <value>The transport this endpoint is reached over.<para>访问该端点所使用的传输。</para></value>
     public required DeviceTransportKind Transport { get; init; }
-    /// <summary>Verified physical identity shared by protocol endpoints, or null when unavailable.</summary>
+    /// <summary>Verified physical identity shared by protocol endpoints, or <c>null</c> when unavailable.<para>已核实的物理身份，由多个协议端点共享；不可得时为 <c>null</c>。</para></summary>
+    /// <value>The shared physical device identity, or <c>null</c>.<para>共享的物理设备身份，或为 <c>null</c>。</para></value>
     public string? PhysicalId { get; init; }
     /// <summary>
-    /// <para>server 为该端点解析出的网络端点，用于把同一设备的多条传输并入一张卡；两条端点共享同一别名时
-    /// 才写入，绝不按地址形状推断。</para>
     /// Network endpoint the server resolved for this endpoint, written on every transport that shares
-    /// it so several routes to one device merge into a single card; never inferred from address shape.
+    /// it so several routes to one device merge into one group; never inferred from address shape.
+    /// <para>server 为该端点解析出的网络端点，共享同一别名的多条传输并入同一分组；绝不按地址形状推断。</para>
     /// </summary>
+    /// <value>
+    /// The resolved network alias, or <c>null</c>.
+    /// <para>解析出的网络别名，或为 <c>null</c>。</para>
+    /// </value>
     public string? NetworkAlias { get; init; }
     /// <summary>
-    /// <para>本行所属设备的稳定分组键：优先别名，其次 USB 物理身份，最后回退到端点自身键。</para>
     /// Stable grouping key for the device this row belongs to: the alias first, then the USB physical
     /// identity, then the endpoint's own key.
+    /// <para>本行所属设备的稳定分组键：优先别名，其次 USB 物理身份，最后回退到端点自身键。</para>
     /// </summary>
+    /// <value>
+    /// The alias, physical identity or own key used to group endpoints.
+    /// <para>用于归并端点的别名、物理身份或自身键。</para>
+    /// </value>
     public string GroupId => NetworkAlias ?? PhysicalId ?? Key;
-    /// <summary>状态文本（device/offline/fastboot/edl/maskrom/loader…）。 State text.</summary>
+    /// <summary>State text (device, offline, fastboot, edl, maskrom, loader and so on).<para>状态文本（device、offline、fastboot、edl、maskrom、loader 等）。</para></summary>
+    /// <value>The state string obtained from enumeration.<para>枚举得到的状态字符串。</para></value>
     public string State { get; set; } = string.Empty;
-    /// <summary>The observed EDL protocol, independent of USB presence.</summary>
+    /// <summary>The observed EDL protocol, independent of USB presence.<para>观察到的 EDL 协议，与 USB 在位状态无关。</para></summary>
+    /// <value>The EDL protocol state observed for this device.<para>为该设备观察到的 EDL 协议状态。</para></value>
     public EdlProtocolState EdlProtocol { get; set; }
-    /// <summary>USB 厂商 ID（非 USB 为 0）。 USB vendor ID.</summary>
+    /// <summary>USB vendor ID, zero for non-USB endpoints.<para>USB 厂商 ID，非 USB 端点为 0。</para></summary>
+    /// <value>The USB vendor identifier.<para>USB 厂商标识。</para></value>
     public ushort VendorId { get; init; }
-    /// <summary>USB 产品 ID（非 USB 为 0）。 USB product ID.</summary>
+    /// <summary>USB product ID, zero for non-USB endpoints.<para>USB 产品 ID，非 USB 端点为 0。</para></summary>
+    /// <value>The USB product identifier.<para>USB 产品标识。</para></value>
     public ushort ProductId { get; init; }
-    /// <summary>显示名称。 Display name.</summary>
+    /// <summary>Display name of this endpoint.<para>该端点的显示名称。</para></summary>
+    /// <value>The display text of this endpoint.<para>该端点的显示文本。</para></value>
     public string DisplayName => Transport == DeviceTransportKind.Tcp
         ? $"{Serial} (network)"
         : $"{Serial} ({State})";
 
-    /// <summary>Connection choice shown when one physical device exposes several protocols.</summary>
+    /// <summary>Connection choice for one physical device that exposes several protocols.<para>一台物理设备暴露多种协议时用于区分连接的标签。</para></summary>
+    /// <value>The protocol, transport and serial label.<para>协议、传输与序列号组成的标签。</para></value>
     public string ConnectionLabel => $"{ProtocolLabel} · {Transport} · {Serial}";
 
-    /// <summary>Whether discovery identified a debug bridge server endpoint.</summary>
+    /// <summary>Whether discovery identified a debug bridge server endpoint.<para>发现过程是否识别出调试桥 server 端点。</para></summary>
+    /// <value><see langword="true"/> when the endpoint was found through a server.<para>端点经 server 发现时为 <see langword="true"/>。</para></value>
     public bool UsesServer => Protocol switch
     {
         DeviceProtocolKind.Adb => Key.StartsWith("adb:", StringComparison.Ordinal),
@@ -92,7 +111,8 @@ public sealed class DetectedDevice
         _ => false
     };
 
-    /// <summary>Protocol and route label, independent of the device's physical transport.</summary>
+    /// <summary>Protocol and route label, independent of the device's physical transport.<para>协议与路由标签，与设备的物理传输方式无关。</para></summary>
+    /// <value>The protocol and route label text.<para>协议与路由标签文本。</para></value>
     public string ProtocolLabel => Protocol switch
     {
         DeviceProtocolKind.Adb => UsesServer ? "ADB server" : "ADB",
@@ -106,23 +126,18 @@ public sealed class DetectedDevice
 }
 
 /// <summary>
-/// <para>设备监视服务：启动时全量扫描 USB 设备，随后响应 USB 热插拔与 adb server 设备变更，
-/// 并提供手动强制刷新。设备枚举与协议会话完全基于 UotanStudio.Comm；与官方 adb server 的
-/// 交互（网络设备、状态查询、重启、shell）经 Comm 的 <c>AdbServerServices</c> 完成。</para>
-/// Device monitor service: performs a full USB scan on startup, then reacts to USB
-/// hotplug events and adb-server device changes, plus a manual force-refresh. Enumeration
-/// and protocol sessions go through UotanStudio.Comm; interaction with the official adb
-/// server (network devices, state queries, reboots, shell) uses Comm's AdbServerServices.
+/// Device monitor service: performs a full USB scan on startup, then reacts to USB hotplug
+/// events and adb-server device changes, plus a manual force-refresh.
+/// <para>设备监视服务：启动时全量扫描 USB 设备，随后响应 USB 热插拔与 adb server 设备变更，并提供手动强制刷新。</para>
 /// </summary>
 public sealed partial class DeviceMonitorService : IDisposable
 {
     /// <summary>
-    /// <para>创建一个由调用方持有的独立设备监视实例。桌面 GUI 由组合根（<c>App</c>）拥有唯一的
-    /// 监视实例；无头/CLI 等独立进程路径各自 <c>Create()</c> 一个，类型本身不提供全局服务定位单例。</para>
-    /// Creates a caller-owned monitor instance. The desktop GUI keeps the single instance owned by the
-    /// composition root (<c>App</c>); headless/CLI processes each <c>Create()</c> their own, so the type
-    /// exposes no global service-locator singleton.
+    /// Creates an independent monitor instance owned by the requesting code; the type exposes no
+    /// global service-locator singleton.
+    /// <para>创建一个由请求代码独立持有的监视实例；该类型不暴露全局服务定位单例。</para>
     /// </summary>
+    /// <returns>A new monitor instance.<para>新建的监视实例。</para></returns>
     public static DeviceMonitorService Create() => new();
 
     private readonly DeviceController _controller;

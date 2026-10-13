@@ -7,13 +7,10 @@ using Xunit;
 namespace UotanStudio.Tests.Comm.Protocols.Edl.FlashBundle;
 
 /// <summary>
-/// EDL flash-bundle tests: rawprogram/patch XML parsing tolerance and
-/// <see cref="FlashBundleOrchestrator"/> orchestration (program/erase/patch order asserted
-/// through the scripted transport write sequence; the device is treated as already running a
-/// Firehose programmer, so no programmer image is uploaded).
-/// <para>EDL 刷写包测试：rawprogram/patch XML 解析容错与 <see cref="FlashBundleOrchestrator"/>
-/// 编排（通过脚本化传输写入序列断言 program/erase/patch 顺序；设备视为已在运行 Firehose
-/// programmer，因此不上传 programmer 镜像）。</para>
+/// EDL flash-bundle tests: rawprogram/patch XML parsing tolerance and program/erase/patch order
+/// checked through a scripted transport write sequence.
+/// <para>EDL 刷写包测试：rawprogram/patch XML 解析容错，以及通过脚本化传输写入序列校验
+/// program/erase/patch 顺序。</para>
 /// </summary>
 public class FlashBundleOrchestratorTests
 {
@@ -153,6 +150,79 @@ public class FlashBundleOrchestratorTests
         Assert.Equal(bootImage, transport.Writes[4]);
 
         Assert.Contains("<configure", Encoding.UTF8.GetString(transport.Writes[1]), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FlashBundleAsync_NandPagesPerBlockOption_ReachesConfigurationWithoutLeakingIntoEmmcConfigure()
+    {
+        using var dir = new TempDirectory();
+        var rawPath = dir.Write("rawprogram0.xml", SinglePartitionRawProgram("boot.img", 4));
+        dir.WriteBytes("boot.img", new byte[4096 * 4]);
+        var transport = CreateBundleTransport(commandAckCount: 1);
+        using var session = CreateSession(transport);
+        var orchestrator = new FlashBundleOrchestrator(session);
+
+        var result = await orchestrator.FlashBundleAsync(new FlashBundleOptions
+        {
+            RawProgramPath = rawPath,
+            ImageDirectory = dir.Path,
+            NandPagesPerBlock = 64
+        }, null, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, string.Join("; ", result.Errors));
+        Assert.Equal(64, session.Firehose!.Configuration.NandPagesPerBlock);
+        var configure = Encoding.UTF8.GetString(transport.Writes[1]);
+        Assert.Contains("<configure", configure, StringComparison.Ordinal);
+        Assert.DoesNotContain("PAGES_PER_BLOCK", configure, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(65536)]
+    [InlineData(-1)]
+    public async Task FlashBundleAsync_OutOfRangeNandPagesPerBlock_RefusesWithoutDeviceIo(long pagesPerBlock)
+    {
+        using var dir = new TempDirectory();
+        var rawPath = dir.Write("rawprogram0.xml", SinglePartitionRawProgram("boot.img", 4));
+        dir.WriteBytes("boot.img", new byte[4096 * 4]);
+        var transport = CreateBundleTransport(commandAckCount: 1);
+        using var session = CreateSession(transport);
+        var orchestrator = new FlashBundleOrchestrator(session);
+
+        var result = await orchestrator.FlashBundleAsync(new FlashBundleOptions
+        {
+            RawProgramPath = rawPath,
+            ImageDirectory = dir.Path,
+            NandPagesPerBlock = pagesPerBlock
+        }, null, TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("pages-per-block", string.Join(" ", result.Errors), StringComparison.Ordinal);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Theory]
+    [InlineData(1000)]
+    [InlineData(511)]
+    [InlineData(16777728)]
+    public async Task FlashBundleAsync_InvalidMaxProgramChunkOverride_RefusesWithoutDeviceIo(long chunkBytes)
+    {
+        using var dir = new TempDirectory();
+        var rawPath = dir.Write("rawprogram0.xml", SinglePartitionRawProgram("boot.img", 4));
+        dir.WriteBytes("boot.img", new byte[4096 * 4]);
+        var transport = CreateBundleTransport(commandAckCount: 1);
+        using var session = CreateSession(transport);
+        var orchestrator = new FlashBundleOrchestrator(session);
+
+        var result = await orchestrator.FlashBundleAsync(new FlashBundleOptions
+        {
+            RawProgramPath = rawPath,
+            ImageDirectory = dir.Path,
+            MaxProgramChunkBytes = chunkBytes
+        }, null, TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("write-chunk override", string.Join(" ", result.Errors), StringComparison.Ordinal);
+        Assert.Empty(transport.Writes);
     }
 
     [Fact]

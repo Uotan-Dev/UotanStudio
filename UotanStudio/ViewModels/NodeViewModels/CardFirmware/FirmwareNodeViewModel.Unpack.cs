@@ -10,11 +10,8 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 
 public partial class FirmwareNodeViewModel
 {
-    /// <summary>
-    /// <para>创建默认的固件解包节点。</para>
-    /// Creates a default firmware unpack node.
-    /// </summary>
-    /// <returns>配置好输入输出端口的固件解包节点。</returns>
+    /// <summary>Creates a default firmware unpack node.<para>创建默认的固件解包节点。</para></summary>
+    /// <returns>The firmware unpack node with its input and output ports.<para>配置好输入输出端口的固件解包节点。</para></returns>
     public static FirmwareNodeViewModel CreateUnpackNode()
     {
         var node = new FirmwareNodeViewModel("Unpack Firmware")

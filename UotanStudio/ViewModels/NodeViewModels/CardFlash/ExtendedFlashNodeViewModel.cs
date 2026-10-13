@@ -8,28 +8,28 @@ using UotanStudio.ViewModels.Devices;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>扩展烧录操作节点视图模型，提供 bootloader 刷写、全部擦除、OTA 侧载与固件覆盖功能，
-/// 均接入真实后端服务。</para>
 /// Extended flash operation node view model, providing bootloader flashing, full erase, OTA sideload,
 /// and firmware overwrite capabilities, all wired to the real backend services.
+/// <para>扩展烧录操作节点视图模型，提供 bootloader 刷写、全部擦除、OTA 侧载与固件覆盖功能，
+/// 均接入真实后端服务。</para>
 /// </summary>
 public class ExtendedFlashNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
-    /// <para>创建具有指定标题的扩展烧录操作节点。</para>
     /// Creates an extended flash operation node with the specified title.
+    /// <para>创建具有指定标题的扩展烧录操作节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public ExtendedFlashNodeViewModel(string title) : base(title, NodeCategory.Flash)
     {
     }
 
     /// <summary>
-    /// <para>创建默认的全部擦除节点，擦除设备上的所有分区。</para>
     /// Creates a default erase-all node that wipes every partition on the device.
+    /// <para>创建默认的全部擦除节点，擦除设备上的所有分区。</para>
     /// </summary>
     public static ExtendedFlashNodeViewModel CreateEraseAllNode()
     {
@@ -44,8 +44,8 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的 OTA 侧载节点，通过 sideload 推送 OTA 包。</para>
     /// Creates a default OTA sideload node that pushes an OTA package via sideload.
+    /// <para>创建默认的 OTA 侧载节点，通过 sideload 推送 OTA 包。</para>
     /// </summary>
     public static ExtendedFlashNodeViewModel CreateOtaSideloadNode()
     {
@@ -61,23 +61,16 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的扩展烧录逻辑：Device.Partition.Flash 刷写 bootloader 分区、
-    /// Device.Storage.EraseAll 调 <see cref="FlashService.EraseAllAsync"/>、Device.Ota.Sideload 调
-    /// <see cref="FlashService.FlashSideloadAsync"/>、Device.Partition.Flash 覆盖指定分区。
-    /// 设备缺失时告警并短路。</para>
-    /// Dispatches extended flash logic by the node type key (TypeKey): Device.Partition.Flash flashes the
-    /// bootloader partition, Device.Storage.EraseAll calls <see cref="FlashService.EraseAllAsync"/>,
-    /// Device.Ota.Sideload calls <see cref="FlashService.FlashSideloadAsync"/>, and
-    /// Device.Partition.Flash overwrites the selected partition. A missing device logs a warning and
-    /// short-circuits.
+    /// Executes the extended flash node, such as erasing all storage or sideloading an OTA package.
+    /// <para>执行扩展烧录节点，例如全盘擦除或侧载 OTA 包。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {

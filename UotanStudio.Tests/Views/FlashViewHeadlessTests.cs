@@ -7,8 +7,6 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using UotanStudio.Comm.Protocols.Edl.Auth;
 using UotanStudio.Comm.Protocols.Mtk;
-using UotanStudio.Comm.Protocols.Mtk.Exploit;
-using UotanStudio.Comm.Protocols.Mtk.Security;
 using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
@@ -426,14 +424,11 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     Assert.Contains(pane, poke.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
                     Assert.Contains(pane, memcpy.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
                     var peek = view.FindControl<Button>("EdlPeekButton")!;
-                    var vip = view.FindControl<Button>("ChooseEdlVipTableButton")!;
                     var factoryReset = view.FindControl<Button>("EdlFactoryResetButton")!;
                     Assert.Contains(pane, peek.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
-                    Assert.Contains(pane, vip.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
                     Assert.Contains(pane, factoryReset.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
                     Assert.NotNull(view.FindControl<TextBox>("EdlPeekAddressBox"));
                     Assert.NotNull(view.FindControl<TextBox>("EdlPeekLengthBox"));
-                    Assert.NotNull(view.FindControl<TextBlock>("EdlVipTableText"));
                 }
                 finally
                 {
@@ -445,24 +440,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
         }
 
         await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-    }
-
-    [Fact]
-    public async Task EdlVipTableFileProvider_OpenTableAsync_ServesSignedTableAndNullForChainedTables()
-    {
-        var provider = new EdlVipTableFileProvider([1, 2, 3, 4, 5]);
-        using var first = Assert.IsType<MemoryStream>(await provider.OpenTableAsync(0,
-            TestContext.Current.CancellationToken));
-        Assert.Equal([1, 2, 3, 4, 5], first.ToArray());
-        using var second = Assert.IsType<MemoryStream>(await provider.OpenTableAsync(0,
-            TestContext.Current.CancellationToken));
-        Assert.Equal([1, 2, 3, 4, 5], second.ToArray());
-        Assert.NotSame(first, second);
-        Assert.Null(await provider.OpenTableAsync(1, TestContext.Current.CancellationToken));
-        Assert.Null(await provider.OpenTableAsync(2, TestContext.Current.CancellationToken));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new EdlVipTableFileProvider([]));
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new EdlVipTableFileProvider(new byte[EdlVipTableFileProvider.SignedTableMaximumBytes + 1]));
     }
 
     [Fact]
@@ -855,28 +832,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Theory]
-    [InlineData("0", "16", true, 0, 16)]
-    [InlineData(" 4 ", " 1 ", true, 4, 1)]
-    [InlineData("0", "0", false, 0, 0)]
-    [InlineData("-1", "8", false, 0, 0)]
-    [InlineData("0", "-8", false, 0, 0)]
-    [InlineData("0x4", "8", false, 0, 0)]
-    [InlineData("", "8", false, 0, 0)]
-    [InlineData("8", null, false, 0, 0)]
-    public void TryReadEfuseWindow_BoxTexts_AcceptOnlyANonNegativeStartAndAPositiveCount(
-        string? start, string? count, bool expected, int expectedStart, int expectedCount)
-    {
-        var parsed = FlashView.TryReadEfuseWindow(start, count, out var startIndex, out var cellCount);
-
-        Assert.Equal(expected, parsed);
-        if (expected)
-        {
-            Assert.Equal(expectedStart, startIndex);
-            Assert.Equal(expectedCount, cellCount);
-        }
-    }
-
-    [Theory]
     [InlineData("60000", true, 60000)]
     [InlineData(" 1 ", true, 1)]
     [InlineData("86400000", true, 86400000)]
@@ -912,10 +867,10 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
         => Assert.Equal(expected, FlashView.NormalizeEdlSlot(text));
 
     [Theory]
-    [InlineData("en-US", "Repair partition table", "Collect memory dump (Sahara debug mode)")]
-    [InlineData("zh-CN", "修复分区表", "采集内存转储（Sahara 调试模式）")]
-    public async Task EdlStorageMaintenanceButtons_InBothLanguages_PublishLocalizedLabels(
-        string language, string repairLabel, string dumpLabel)
+    [InlineData("en-US", "Repair partition table")]
+    [InlineData("zh-CN", "修复分区表")]
+    public async Task EdlRepairGptButton_InBothLanguages_PublishesLocalizedLabel(
+        string language, string repairLabel)
     {
         Task dispatch;
         using (ExecutionContext.SuppressFlow())
@@ -931,9 +886,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     window.Show();
                     Dispatcher.UIThread.RunJobs();
                     var repair = view.FindControl<Button>("EdlRepairGptButton")!;
-                    var dump = view.FindControl<Button>("EdlRamDumpButton")!;
                     Assert.Equal(repairLabel, repair.Content?.ToString());
-                    Assert.Equal(dumpLabel, dump.Content?.ToString());
                 }
                 finally
                 {
@@ -946,19 +899,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
         }
 
         await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-    }
-
-    [Fact]
-    public void ReadExploitFamily_SelectorIndex_NamesOnlyWhatTheUserPicked()
-    {
-        var families = Enum.GetValues<MtkExploitFamily>();
-
-        Assert.Null(FlashView.ReadExploitFamily(0));
-        Assert.Null(FlashView.ReadExploitFamily(-1));
-        Assert.Equal(families[0], FlashView.ReadExploitFamily(1));
-        Assert.Equal(families[^1], FlashView.ReadExploitFamily(families.Length));
-        Assert.Equal(MtkExploitFamily.Kamakiri, FlashView.ReadExploitFamily(
-            Array.IndexOf(families, MtkExploitFamily.Kamakiri) + 1));
     }
 
     [Theory]
@@ -995,12 +935,10 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Theory]
-    [InlineData("en-US", "Run BootROM bypass", "Read RPMB area", "Kamakiri (watchdog overflow)",
-        "Allow volatile security-control register writes (required by every bypass family)")]
-    [InlineData("zh-CN", "运行 BootROM 绕过", "读取 RPMB 区域", "Kamakiri（看门狗溢出）",
-        "允许易失安全控制寄存器写入（所有绕过家族都需要）")]
-    public async Task MtkUsbOnlyActions_LocalizedControls_FollowTheLanguageAndEnumOrder(
-        string language, string bypassLabel, string rpmbLabel, string familyItem, string volatileLabel)
+    [InlineData("en-US", "Read RPMB area")]
+    [InlineData("zh-CN", "读取 RPMB 区域")]
+    public async Task MtkUsbOnlyActions_LocalizedControls_FollowTheLanguage(
+        string language, string rpmbLabel)
     {
         Task dispatch;
         using (ExecutionContext.SuppressFlow())
@@ -1015,49 +953,21 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 {
                     window.Show();
                     Dispatcher.UIThread.RunJobs();
-                    var bypass = view.FindControl<Button>("MtkBypassButton")!;
                     var rpmb = view.FindControl<Button>("MtkRpmbReadButton")!;
                     var row = view.FindControl<StackPanel>("MtkUsbOnlyRow")!;
-                    var families = view.FindControl<ComboBox>("MtkExploitFamilyBox")!;
-                    var volatileBox = view.FindControl<CheckBox>("MtkExploitVolatileBox")!;
-                    Assert.Equal(bypassLabel, bypass.Content?.ToString());
                     Assert.Equal(rpmbLabel, rpmb.Content?.ToString());
-                    Assert.Equal(volatileLabel, volatileBox.Content?.ToString());
-                    Assert.Contains(bypass, row.Children);
                     Assert.Contains(rpmb, row.Children);
-                    Assert.Equal(familyItem, families.Items[1]?.ToString());
-                    Assert.Equal(0, families.SelectedIndex);
-                    Assert.Equal(Enum.GetNames<MtkExploitFamily>().Length, families.Items.Count - 1);
                 }
                 finally
                 {
                     window.Close();
                     LanguageService.Instance.ApplyLanguage(previousLanguage);
                 }
-
                 return Task.CompletedTask;
             }, TestContext.Current.CancellationToken);
         }
 
         await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-    }
-
-    [Theory]
-    [InlineData("0", true, 0u)]
-    [InlineData(" 3 ", true, 3u)]
-    [InlineData("255", true, 255u)]
-    [InlineData("-1", false, 0u)]
-    [InlineData("", false, 0u)]
-    [InlineData("abc", false, 0u)]
-    [InlineData("3.5", false, 0u)]
-    [InlineData("4294967296", false, 0u)]
-    public void TryReadSecCfgPartition_TextForms_AcceptsOnlyPlainNonNegativeNumbers(
-        string? text, bool expected, uint expectedId)
-    {
-        var parsed = FlashView.TryReadSecCfgPartition(text, out var partitionId);
-
-        Assert.Equal(expected, parsed);
-        Assert.Equal(expected ? expectedId : 0u, partitionId);
     }
 
     [Theory]
@@ -1082,71 +992,11 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     var dump = view.FindControl<Button>("MtkFullDumpButton")!;
                     Assert.Equal(dumpLabel, dump.Content?.ToString());
                     var pane = view.FindControl<StackPanel>("MtkPane")!;
-                    Assert.Contains(dump, pane.Children);
-                    Assert.DoesNotContain(dump, view.FindControl<StackPanel>("EdlPane")!.Children);
-                    Assert.True(
-                        pane.Children.IndexOf(dump) <
-                        pane.Children.IndexOf(view.FindControl<Button>("MtkSecCfgReadButton")!),
-                        "The read-only user-area dump has to stay with the storage group, above the security controls.");
-                }
-                finally
-                {
-                    window.Close();
-                    LanguageService.Instance.ApplyLanguage(previousLanguage);
-                }
-
-                return Task.CompletedTask;
-            }, TestContext.Current.CancellationToken);
-        }
-
-        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-    }
-
-    [Theory]
-    [InlineData("en-US", "Read secure-boot configuration", "Write secure-boot lock state", "Lock (state 1)",
-        "Unlock (state 3)", "Read eFuse cell range", "Preview OEM key submission")]
-    [InlineData("zh-CN", "读取安全启动配置", "写入安全启动锁定状态", "上锁（状态 1）",
-        "解锁（状态 3）", "读取 eFuse 单元区间", "预览 OEM 密钥提交内容")]
-    public async Task MtkSecurityControls_LocalizedLabelsAndDefaults_MatchTheChosenLanguage(
-        string language, string readLabel, string applyLabel, string firstIntent, string secondIntent,
-        string efuseRangeLabel, string previewLabel)
-    {
-        Task dispatch;
-        using (ExecutionContext.SuppressFlow())
-        {
-            dispatch = fixture.DispatchAsync(() =>
-            {
-                var previousLanguage = LanguageService.Instance.CurrentLanguage;
-                LanguageService.Instance.ApplyLanguage(language);
-                var view = new FlashView();
-                var window = new Window { Content = view, Width = 960, Height = 800 };
-                try
-                {
-                    window.Show();
-                    Dispatcher.UIThread.RunJobs();
-                    var read = view.FindControl<Button>("MtkSecCfgReadButton")!;
-                    var apply = view.FindControl<Button>("MtkSecCfgApplyButton")!;
-                    var intents = view.FindControl<ComboBox>("MtkSecCfgLockBox")!;
-                    var partition = view.FindControl<TextBox>("MtkSecCfgPartitionBox")!;
-                    Assert.Equal(readLabel, read.Content?.ToString());
-                    Assert.Equal(applyLabel, apply.Content?.ToString());
-                    Assert.Equal("0", partition.Text);
-                    Assert.Equal([firstIntent, secondIntent], intents.Items.Cast<object?>().Select(item => item?.ToString()));
-                    Assert.Equal(0, intents.SelectedIndex);
-                    var pane = view.FindControl<StackPanel>("MtkPane")!;
-                    Assert.Contains(read, pane.Children);
-                    Assert.Contains(apply, pane.Children);
-                    Assert.NotNull(view.FindControl<Button>("MtkEfusePublicKeyButton"));
-                    Assert.Equal(efuseRangeLabel,
-                        view.FindControl<Button>("MtkEfuseRangeButton")!.Content?.ToString());
-                    Assert.Equal(previewLabel,
-                        view.FindControl<Button>("MtkOemKeyPreviewButton")!.Content?.ToString());
-                    Assert.Equal("0", view.FindControl<TextBox>("MtkEfuseStartBox")!.Text);
-                    Assert.Equal("16", view.FindControl<TextBox>("MtkEfuseCountBox")!.Text);
-                    var mtkPane = view.FindControl<StackPanel>("MtkPane")!;
-                    Assert.Contains(
-                        mtkPane.GetVisualAncestors(),
-                        ancestor => ReferenceEquals(ancestor, view.FindControl<ScrollViewer>("PageScroll")));
+                    Assert.Contains(pane, dump.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
+                    Assert.DoesNotContain(
+                        view.FindControl<StackPanel>("EdlPane")!,
+                        dump.GetVisualAncestors(),
+                        ReferenceEqualityComparer.Instance);
                 }
                 finally
                 {
@@ -1225,7 +1075,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     foreach (var name in new[]
                     {
                         "MtkMemoryAddressBox", "MtkMemoryLengthBox", "MtkMemoryRegisterBox", "MtkMemoryPeekButton",
-                        "MtkPokeDataBox", "MtkPokeConfirmBox", "MtkPokeButton", "MtkBromDumpButton"
+                        "MtkPokeDataBox", "MtkPokeConfirmBox", "MtkPokeButton"
                     })
                     {
                         var control = view.FindControl<Control>(name)!;
@@ -1242,84 +1092,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 finally
                 {
                     window.Close();
-                }
-
-                return Task.CompletedTask;
-            }, TestContext.Current.CancellationToken);
-        }
-
-        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-    }
-
-    [Fact]
-    public void BuildOemKeyRequest_SoftwareClassWithoutSejBase_RefusesBeforeAnySubmission()
-    {
-        Assert.Throws<ArgumentException>(() =>
-            FlashView.BuildOemKeyRequest(
-                Array.IndexOf(Enum.GetValues<MtkOemKeyKind>(), MtkOemKeyKind.SoftwareOneTimeProgramKey),
-                new string('A', 64), null));
-    }
-
-    [Fact]
-    public void BuildOemKeyRequest_MalformedKeyAndBase_TextFailuresSurfaceAsTheirOwnTypes()
-    {
-        var replayIndex = Array.IndexOf(Enum.GetValues<MtkOemKeyKind>(), MtkOemKeyKind.ReplayProtectedAreaKey);
-        Assert.Throws<ArgumentException>(() => FlashView.BuildOemKeyRequest(replayIndex, "ABC", null));
-        Assert.Throws<FormatException>(() => FlashView.BuildOemKeyRequest(replayIndex, new string('B', 64), "zzz"));
-    }
-
-    [Fact]
-    public void BuildOemKeyRequest_ReplayClassWithoutBase_AcceptsTheExactKeyLength()
-    {
-        var kinds = Enum.GetValues<MtkOemKeyKind>();
-
-        var request = FlashView.BuildOemKeyRequest(
-            Array.IndexOf(kinds, MtkOemKeyKind.ReplayProtectedAreaKey), "  " + new string('C', 64) + " ", null);
-
-        Assert.Equal(MtkOemKeyKind.ReplayProtectedAreaKey, request.Kind);
-        Assert.Null(request.SejBaseAddress);
-        Assert.Equal(32, request.DecodeKey().Length);
-        Assert.All(request.DecodeKey(), value => Assert.Equal((byte)0xCC, value));
-    }
-
-    [Theory]
-    [InlineData("en-US", "Program OEM key", "OEM key class",
-        new[] { "SEJ software one-time-program key", "RPMB key" })]
-    [InlineData("zh-CN", "写入 OEM 密钥", "OEM 密钥类别",
-        new[] { "SEJ 软件一次性编程密钥", "RPMB 密钥" })]
-    public async Task MtkOemKeyControls_LocalizedLabelsAndKindItems_MatchTheChosenLanguage(
-        string language, string programLabel, string kindLabel, string[] kindItems)
-    {
-        Task dispatch;
-        using (ExecutionContext.SuppressFlow())
-        {
-            dispatch = fixture.DispatchAsync(() =>
-            {
-                var previousLanguage = LanguageService.Instance.CurrentLanguage;
-                LanguageService.Instance.ApplyLanguage(language);
-                var view = new FlashView();
-                var window = new Window { Content = view, Width = 960, Height = 800 };
-                try
-                {
-                    window.Show();
-                    Dispatcher.UIThread.RunJobs();
-                    var program = view.FindControl<Button>("MtkOemKeyProgramButton")!;
-                    var kinds = view.FindControl<ComboBox>("MtkOemKeyKindBox")!;
-                    var key = view.FindControl<TextBox>("MtkOemKeyHexBox")!;
-                    Assert.Equal(programLabel, program.Content?.ToString());
-                    Assert.Equal(kindLabel, LanguageService.Instance.GetString("Flash_MtkOemKeyKind"));
-                    Assert.Equal(kindItems, kinds.Items.Cast<object?>().Select(item => item?.ToString()));
-                    Assert.Equal(0, kinds.SelectedIndex);
-                    Assert.True(string.IsNullOrEmpty(key.Text));
-                    var pane = view.FindControl<StackPanel>("MtkPane")!;
-                    Assert.Contains(program, pane.Children);
-                    Assert.Contains(key, pane.Children);
-                    Assert.NotNull(view.FindControl<TextBox>("MtkOemKeySejBaseBox"));
-                }
-                finally
-                {
-                    window.Close();
-                    LanguageService.Instance.ApplyLanguage(previousLanguage);
                 }
 
                 return Task.CompletedTask;
@@ -1621,7 +1393,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 Assert.False(view.FindControl<StackPanel>("MtkPreloaderPane")!.IsVisible);
                 var streamBox = view.FindControl<CheckBox>("EdlAllowStreamDloadBox")!;
                 Assert.NotEqual(true, streamBox.IsChecked);
-                Assert.NotEqual(true, view.FindControl<CheckBox>("MtkBruteVar1Box")!.IsChecked);
 
                 var storage = view.FindControl<ComboBox>("MtkStorageKindBox")!;
                 Assert.Equal(new[] { "eMMC", "UFS", "NOR", "NAND", "Auto" },
@@ -1640,8 +1411,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
 
                 Assert.Equal("0x0", view.FindControl<TextBox>("MtkPreloaderOffsetBox")!.Text);
                 Assert.Equal("0x1000", view.FindControl<TextBox>("MtkPreloaderLengthBox")!.Text);
-                Assert.Equal("0x100", view.FindControl<TextBox>("MtkPreloaderStepBox")!.Text);
-                Assert.NotNull(view.FindControl<Button>("MtkPreloaderDumpButton"));
                 Assert.NotNull(view.FindControl<Button>("MtkPreloaderPeekButton"));
                 Assert.NotNull(view.FindControl<Button>("MtkPreloaderWriteButton"));
                 Assert.NotNull(view.FindControl<Button>("MtkPreloaderReturnToBromButton"));
@@ -1708,7 +1477,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Fact]
-    public async Task MtkPreloaderPane_BootloaderJumpAndBromDump_GateWithExistingPreloaderControls()
+    public async Task MtkPreloaderPane_BootloaderJump_GateWithExistingPreloaderControls()
     {
         Task dispatch;
         using (ExecutionContext.SuppressFlow())
@@ -1720,9 +1489,7 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 var window = new Window { Content = view, Width = 960, Height = 800 };
                 var pane = view.FindControl<StackPanel>("MtkPreloaderPane")!;
                 var jump = view.FindControl<Button>("MtkPreloaderBootloaderJumpButton")!;
-                var dump = view.FindControl<Button>("MtkPreloaderBromDumpButton")!;
                 var existingJump = view.FindControl<Button>("MtkPreloaderJumpButton")!;
-                var existingDump = view.FindControl<Button>("MtkPreloaderDumpButton")!;
                 try
                 {
                     window.Show();
@@ -1738,7 +1505,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     Dispatcher.UIThread.RunJobs();
                     Assert.False(pane.IsVisible);
                     Assert.False(jump.IsEnabled);
-                    Assert.False(dump.IsEnabled);
 
                     model.SelectedDevice = new DeviceInfo(new DetectedDevice
                     {
@@ -1751,67 +1517,8 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                     Dispatcher.UIThread.RunJobs();
                     Assert.True(pane.IsVisible);
                     Assert.True(jump.IsEnabled);
-                    Assert.True(dump.IsEnabled);
                     Assert.Equal(existingJump.IsEnabled, jump.IsEnabled);
-                    Assert.Equal(existingDump.IsEnabled, dump.IsEnabled);
                     Assert.Contains(pane, jump.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
-                    Assert.Contains(pane, dump.GetVisualAncestors(), ReferenceEqualityComparer.Instance);
-                }
-                finally
-                {
-                    model.SelectedDevice = null;
-                    window.Close();
-                }
-
-                return Task.CompletedTask;
-            }, TestContext.Current.CancellationToken);
-        }
-
-        await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-    }
-
-    [Fact]
-    public async Task MtkBruteVar1Box_IsVisibleOnlyForKamakiriFamily()
-    {
-        Task dispatch;
-        using (ExecutionContext.SuppressFlow())
-        {
-            dispatch = fixture.DispatchAsync(() =>
-            {
-                var model = DeviceViewModel.EnsureInstance();
-                var view = new FlashView();
-                var window = new Window { Content = view, Width = 960, Height = 800 };
-                var box = view.FindControl<CheckBox>("MtkBruteVar1Box")!;
-                var family = view.FindControl<ComboBox>("MtkExploitFamilyBox")!;
-                try
-                {
-                    window.Show();
-                    model.SelectedDevice = new DeviceInfo(new DetectedDevice
-                    {
-                        Key = "mtk-brom",
-                        Serial = "brom",
-                        Protocol = DeviceProtocolKind.Mtk,
-                        Transport = DeviceTransportKind.Usb,
-                        State = "brom"
-                    });
-                    Dispatcher.UIThread.RunJobs();
-
-                    var kamakiriIndex = Array.IndexOf(Enum.GetNames<MtkExploitFamily>(),
-                        nameof(MtkExploitFamily.Kamakiri)) + 1;
-                    var kamakiri2Index = Array.IndexOf(Enum.GetNames<MtkExploitFamily>(),
-                        nameof(MtkExploitFamily.Kamakiri2)) + 1;
-
-                    family.SelectedIndex = kamakiriIndex;
-                    Dispatcher.UIThread.RunJobs();
-                    Assert.True(box.IsVisible);
-
-                    family.SelectedIndex = kamakiri2Index;
-                    Dispatcher.UIThread.RunJobs();
-                    Assert.False(box.IsVisible);
-
-                    family.SelectedIndex = 0;
-                    Dispatcher.UIThread.RunJobs();
-                    Assert.False(box.IsVisible);
                 }
                 finally
                 {
@@ -1846,13 +1553,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Fact]
-    public void ReadExploitFamily_KamakiriIndex_ReturnsKamakiri()
-    {
-        Assert.Null(FlashView.ReadExploitFamily(0));
-        Assert.Equal(MtkExploitFamily.Kamakiri, FlashView.ReadExploitFamily(1));
-    }
-
-    [Fact]
     public async Task MtkStreamingFlashControls_AreHiddenInsideTheirPanesByDefault()
     {
         Task dispatch;
@@ -1865,8 +1565,6 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
                 Assert.True(streamBox.IsVisible);
                 var mtkPane = view.FindControl<StackPanel>("MtkPane")!;
                 Assert.False(mtkPane.IsVisible);
-                var brute = view.FindControl<CheckBox>("MtkBruteVar1Box")!;
-                Assert.False(brute.IsVisible);
                 return Task.CompletedTask;
             }, TestContext.Current.CancellationToken);
         }

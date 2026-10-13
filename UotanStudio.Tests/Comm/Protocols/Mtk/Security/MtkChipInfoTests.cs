@@ -59,29 +59,6 @@ public sealed class MtkChipInfoTests
         Assert.Equal(expected, (uint)code);
     }
 
-    [Theory]
-    [InlineData(MtkXFlashUndocumentedSecurityControlCode.ReadOneTimeProgramZone, 0x01000Cu)]
-    [InlineData(MtkXFlashUndocumentedSecurityControlCode.WriteOneTimeProgramZone, 0x01000Du)]
-    [InlineData(MtkXFlashUndocumentedSecurityControlCode.WriteElectronicFuse, 0x01000Eu)]
-    [InlineData(MtkXFlashUndocumentedSecurityControlCode.ReadElectronicFuse, 0x01000Fu)]
-    [InlineData(MtkXFlashUndocumentedSecurityControlCode.ActivateOneTimeProgramZoneLock, 0x080003u)]
-    public void UndocumentedSecurityControlCode_DeclaresOnlyCataloguedValues(MtkXFlashUndocumentedSecurityControlCode code,
-        uint expected)
-    {
-        Assert.Equal(expected, (uint)code);
-    }
-
-    [Fact]
-    public void UndocumentedSecurityControl_Explain_RefusesToFrameWithoutInventingBytes()
-    {
-        var reason = MtkXFlashUndocumentedSecurityControl.Explain(
-            MtkXFlashUndocumentedSecurityControlCode.WriteElectronicFuse);
-
-        Assert.Contains("0x0001000E", reason, StringComparison.Ordinal);
-        Assert.Contains("no documented request or reply layout", reason, StringComparison.Ordinal);
-        Assert.Contains("request was refused", reason, StringComparison.Ordinal);
-    }
-
     [Fact]
     public void ChipIdReplyHex_IsUppercaseAndPreservesEveryReplyByte()
     {

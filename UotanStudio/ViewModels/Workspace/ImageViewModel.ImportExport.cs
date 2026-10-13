@@ -7,21 +7,21 @@ namespace UotanStudio.ViewModels.Workspace;
 internal partial class ImageViewModel
 {
     /// <summary>
-    /// <para>将若干外部文件复制进项目 <c>images/</c> 目录（重名自动加后缀），建立镜像条目并登记历史。</para>
     /// Copies the given external files into the project <c>images/</c> directory (auto-suffixing on name
     /// collision), creating image entries and recording history.
+    /// <para>将若干外部文件复制进项目 <c>images/</c> 目录（重名自动加后缀），建立镜像条目并登记历史。</para>
     /// </summary>
     /// <param name="paths">
-    /// <para>要导入的源文件路径列表。</para>
     /// Source file paths to import.
+    /// <para>要导入的源文件路径列表。</para>
     /// </param>
     /// <param name="progress">
-    /// <para>整体加权百分比（0–100）：按所有待复制文件总字节数折算，跨文件单调递增，不会回跳。</para>
     /// Overall weighted percentage (0–100) computed against the total bytes of all files; monotonic
+    /// <para>整体加权百分比（0–100）：按所有待复制文件总字节数折算，跨文件单调递增，不会回跳。</para>
     /// across files so the progress bar never jumps back.</param>
     /// <param name="byteProgress">
-    /// <para>整体字节进度：<c>Processed</c> 为累计已完成字节数，<c>Total</c> 为所有待复制文件总字节数。</para>
     /// Overall byte progress: <c>Processed</c> is accumulated completed bytes, <c>Total</c> is the
+    /// <para>整体字节进度：<c>Processed</c> 为累计已完成字节数，<c>Total</c> 为所有待复制文件总字节数。</para>
     /// total bytes of all files to copy.</param>
     public async Task ImportAsync(string[] paths, IProgress<double>? progress = null,
         IProgress<(long Processed, long Total)>? byteProgress = null, CancellationToken cancellationToken = default)
@@ -177,15 +177,12 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>把单个容器文件（super / payload.bin / zip）复制进项目 <c>images/</c> 目录并登记条目；
-    /// 格式列使用调用方给定的标签（普通导入的格式判定不识别容器类型）。</para>
-    /// Copies a single container file (super / payload.bin / zip) into the project <c>images/</c>
-    /// directory and registers its entry; the format column uses the caller-supplied label since the
-    /// plain import format detection does not recognize container types.
+    /// Imports a single container file into the project and registers its image entry.
+    /// <para>把单个容器文件导入工程并登记对应的镜像条目。</para>
     /// </summary>
-    /// <param name="sourcePath"><para>容器源文件路径。</para>Source container path.</param>
-    /// <param name="formatLabel"><para>格式列显示文本（super / payload / zip）。</para>Format column text (super / payload / zip).</param>
-    /// <returns><para>登记的镜像条目；未打开工程或源不存在时为 null。</para>The registered entry; null when no project is open or the source is missing.</returns>
+    /// <param name="sourcePath">Source container path. <para>容器源文件路径。</para></param>
+    /// <param name="formatLabel">Format column text (super / payload / zip). <para>格式列显示文本（super / payload / zip）。</para></param>
+    /// <returns>The registered entry; null when no project is open or the source is missing. <para>登记的镜像条目；未打开工程或源不存在时为 null。</para></returns>
     public async Task<ImageEntryViewModel?> ImportContainerAsync(string sourcePath, string formatLabel, IProgress<double>? progress = null,
         IProgress<(long Processed, long Total)>? byteProgress = null, CancellationToken cancellationToken = default)
     {
@@ -282,11 +279,11 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>把已在工程内（images/）的提取产物登记为镜像条目（不复制文件）。</para>
     /// Registers an extracted file already inside the project (images/) as an image entry (no copy).
+    /// <para>把已在工程内（images/）的提取产物登记为镜像条目（不复制文件）。</para>
     /// </summary>
-    /// <param name="absolutePath"><para>提取产物的绝对路径。</para>Absolute path of the extracted file.</param>
-    /// <returns><para>登记的镜像条目；路径不在工程内时为 null。</para>The registered entry; null when the path is outside the project.</returns>
+    /// <param name="absolutePath">Absolute path of the extracted file. <para>提取产物的绝对路径。</para></param>
+    /// <returns>The registered entry; null when the path is outside the project. <para>登记的镜像条目；路径不在工程内时为 null。</para></returns>
     public ImageEntryViewModel? AddExtractedImage(string absolutePath)
     {
         var context = ProjectContextService.Instance;
@@ -313,12 +310,12 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>将当前选中的镜像从项目目录复制到目标路径。</para>
     /// Copies the currently selected image from the project directory to the target path.
+    /// <para>将当前选中的镜像从项目目录复制到目标路径。</para>
     /// </summary>
     /// <param name="targetPath">
-    /// <para>导出目标文件路径。</para>
     /// The target export file path.
+    /// <para>导出目标文件路径。</para>
     /// </param>
     public async Task ExportAsync(string targetPath)
     {

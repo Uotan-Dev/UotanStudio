@@ -28,7 +28,14 @@ public partial class MainWindow : Window
 
     public MainWindow() : this(new MainViewModel()) { }
 
-    /// <summary>Creates a window that owns the explicitly supplied shell for its lifetime.</summary>
+    /// <summary>
+    /// Creates a window that owns the explicitly supplied shell for its lifetime.
+    /// <para>创建在其生命周期内持有显式提供的外壳的窗口。</para>
+    /// </summary>
+    /// <param name="viewModel">
+    /// The shell model instance this window owns for its lifetime.
+    /// <para>该窗口在其生命周期内持有的外壳模型实例。</para>
+    /// </param>
     internal MainWindow(MainViewModel viewModel)
     {
 

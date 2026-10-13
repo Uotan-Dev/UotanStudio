@@ -18,13 +18,13 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
     private readonly IScriptToolGateway _gateway;
 
     /// <summary>
-    /// <para>创建具有指定标题的设备服务节点。</para>
     /// Creates a device service node with the specified title.
+    /// <para>创建具有指定标题的设备服务节点。</para>
     /// </summary>
-    /// <param name="title"><para>节点的显示标题。</para>The display title of the node.</param>
+    /// <param name="title">The display title of the node. <para>节点的显示标题。</para></param>
     /// <param name="gateway">
-    /// <para>设备动作网关；为 <c>null</c> 时使用 <see cref="DeviceScriptToolGateway.Default"/>。</para>
     /// The device action gateway; uses <see cref="DeviceScriptToolGateway.Default"/> when <c>null</c>.
+    /// <para>设备动作网关；为 <c>null</c> 时使用 <see cref="DeviceScriptToolGateway.Default"/>。</para>
     /// </param>
     public DeviceServiceNodeViewModel(string title, IScriptToolGateway? gateway = null) : base(title, NodeCategory.Flash)
     {
@@ -32,8 +32,8 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的设备状态查询节点。</para>
     /// Creates a default device state query node.
+    /// <para>创建默认的设备状态查询节点。</para>
     /// </summary>
     public static DeviceServiceNodeViewModel CreateStateQueryNode()
     {
@@ -49,8 +49,8 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的分区表读取节点。</para>
     /// Creates a default partition table read node.
+    /// <para>创建默认的分区表读取节点。</para>
     /// </summary>
     public static DeviceServiceNodeViewModel CreatePartitionTableReadNode()
     {
@@ -72,8 +72,8 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的活动槽位查询节点。</para>
     /// Creates a default active slot query node.
+    /// <para>创建默认的活动槽位查询节点。</para>
     /// </summary>
     public static DeviceServiceNodeViewModel CreateSlotQueryNode()
     {
@@ -88,8 +88,8 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的活动槽位切换节点。</para>
     /// Creates a default active slot switch node.
+    /// <para>创建默认的活动槽位切换节点。</para>
     /// </summary>
     public static DeviceServiceNodeViewModel CreateSlotSwitchNode()
     {
@@ -104,8 +104,8 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的恢复模式擦除节点。</para>
     /// Creates a default recovery wipe node.
+    /// <para>创建默认的恢复模式擦除节点。</para>
     /// </summary>
     public static DeviceServiceNodeViewModel CreateRecoveryCleanNode()
     {
@@ -127,8 +127,8 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的 shell 命令执行节点。</para>
     /// Creates a default shell command execution node.
+    /// <para>创建默认的 shell 命令执行节点。</para>
     /// </summary>
     public static DeviceServiceNodeViewModel CreateShellCommandNode()
     {

@@ -67,4 +67,18 @@ public sealed record EdlInitializationOptions
     /// <see cref="SaharaMode.Command"/> 时，初始化经 Sahara exec 切换并暴露流式后端，而非配置
     /// Firehose。</para></value>
     public bool AllowStreamDload { get; init; }
+
+    /// <summary>Gets whether command headers for read, write and erase may proceed without waiting for a
+    /// target acknowledgement, for the small class of
+    /// Qualcomm loaders that never ACK reads or writes.
+    /// <para>获取读、写与 erase 命令头是否可在不等待目标确认的情况下继续，用于从不确认读写的小众 Qualcomm loader。</para></summary>
+    /// <value>False by default, preserving strict response waiting. When true it is copied to
+    /// <see cref="FirehoseConfiguration.SkipResponseOnErase"/> and
+    /// <see cref="FirehoseConfiguration.SkipResponseOnReadWrite"/> during initialization; the raw data and
+    /// the final completion of a read or write are still consumed, and no timeout is shortened.
+    /// <para>默认为 false，保持严格等待响应。为 true 时在初始化期间被复制到
+    /// <see cref="FirehoseConfiguration.SkipResponseOnErase"/> 与
+    /// <see cref="FirehoseConfiguration.SkipResponseOnReadWrite"/>；读写的原始数据与最终完成仍会被消费，
+    /// 且不会缩短任何超时。</para></value>
+    public bool SkipResponseOnReadWrite { get; init; }
 }

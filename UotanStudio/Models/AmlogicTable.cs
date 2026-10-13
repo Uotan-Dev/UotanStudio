@@ -4,108 +4,107 @@ using System.Text;
 namespace UotanStudio.Models;
 
 /// <summary>
-/// <para>Amlogic 厂商私有分区表条目（MBR 风格槽位 + 名称表名称）。</para>
 /// An Amlogic vendor partition-table entry (MBR-style slot plus a name-table name).
+/// <para>Amlogic 厂商私有分区表条目（MBR 风格槽位 + 名称表名称）。</para>
 /// </summary>
 public sealed class AmlogicPartition
 {
     /// <summary>
-    /// <para>是否可引导（0x80）。</para>
     /// Whether the partition is bootable (0x80).
+    /// <para>是否可引导（0x80）。</para>
     /// </summary>
+    /// <value>True when the bootable byte is set.<para>可引导字节被置位时为真。</para></value>
     public bool Bootable { get; init; }
 
     /// <summary>
-    /// <para>分区类型字节。</para>
     /// Partition type byte.
+    /// <para>分区类型字节。</para>
     /// </summary>
+    /// <value>The partition type byte of the slot.<para>槽位中的分区类型字节。</para></value>
     public byte Type { get; init; }
 
     /// <summary>
-    /// <para>起始 LBA。</para>
     /// Start LBA.
+    /// <para>起始 LBA。</para>
     /// </summary>
+    /// <value>The first LBA of the partition.<para>分区的起始 LBA。</para></value>
     public ulong StartLba { get; init; }
 
     /// <summary>
-    /// <para>大小（扇区数）。</para>
     /// Size in sectors.
+    /// <para>大小（扇区数）。</para>
     /// </summary>
+    /// <value>The partition size measured in sectors.<para>以扇区数计量的分区大小。</para></value>
     public ulong SizeSectors { get; init; }
 
     /// <summary>
-    /// <para>分区名称（来自名称表）。</para>
     /// Partition name (from the name table).
+    /// <para>分区名称（来自名称表）。</para>
     /// </summary>
+    /// <value>The name taken from the name table.<para>取自名称表的分区名称。</para></value>
     public string Name { get; init; } = string.Empty;
 }
 
 /// <summary>
-/// <para>解析出的 Amlogic 分区表信息。</para>
 /// Parsed Amlogic partition-table information.
+/// <para>解析出的 Amlogic 分区表信息。</para>
 /// </summary>
 public sealed class AmlogicTableInfo
 {
     /// <summary>
-    /// <para>磁盘签名（偏移 440，小端）。</para>
     /// Disk signature (offset 440, little-endian).
+    /// <para>磁盘签名（偏移 440，小端）。</para>
     /// </summary>
+    /// <value>The little-endian signature read at the disk-signature offset.<para>在磁盘签名偏移处读取的小端签名。</para></value>
     public uint DiskSignature { get; init; }
 
     /// <summary>
-    /// <para>分区列表。</para>
     /// Partition list.
+    /// <para>分区列表。</para>
     /// </summary>
+    /// <value>The partitions recovered from the image.<para>从镜像中恢复出的分区。</para></value>
     public IReadOnlyList<AmlogicPartition> Partitions { get; init; } = [];
 }
 
 /// <summary>
-/// <para>Amlogic 厂商私有分区表构建与解析：在 MBR 风格布局（446 偏移 4×16 字节槽位 + 0x55AA 签名 +
-/// 扩展分区 EBR 链）基础上，于镜像起始写入 <c>AMLPART!</c> 魔数，并把分区名称存放于镜像中
-/// 最后一个分区起始扇区处的名称表（每记录 128 字节，名称 36 个 UTF-16LE 单元）。
-/// 说明：Amlogic 老平台（meson8 等）的分区表承载于引导区/定制 MBR 布局，此实现是遵循该
-/// 约定的可往返表示（构建与解析自洽），非 AOSP 标准格式。</para>
-/// Amlogic vendor partition-table builder and parser: on top of the MBR-style layout (4×16-byte
-/// slots at 446 + 0x55AA signature + extended EBR chain) it writes an <c>AMLPART!</c> magic at the
-/// image start and stores partition names in a name table at the start sector of the last partition
-/// (128-byte records, names of 36 UTF-16LE units). Note: Amlogic legacy platforms (meson8 etc.)
-/// carried the partition table in a boot area / customized MBR layout; this is a round-trippable
-/// representation following that convention (builder and parser are self-consistent), not an AOSP
-/// standard format.
+/// Amlogic vendor partition-table builder and parser: MBR-style slots, an extended EBR chain, an
+/// <c>AMLPART!</c> magic at the image start and a name table for the partition names.
+/// <para>Amlogic 厂商分区表构建与解析：MBR 风格槽位、扩展 EBR 链、镜像起始的 <c>AMLPART!</c> 魔数，
+/// 以及存放分区名称的名称表。</para>
 /// </summary>
 public static class AmlogicTable
 {
-    /// <summary>扇区大小（字节）。 Sector size in bytes.</summary>
+    /// <summary>Sector size in bytes.<para>扇区大小（字节）。</para></summary>
     public const int SectorSize = 512;
 
-    /// <summary>魔数大小（字节）。 Magic size in bytes.</summary>
+    /// <summary>Magic size in bytes.<para>魔数大小（字节）。</para></summary>
     public const int MagicSize = 8;
 
-    /// <summary>磁盘签名偏移。 Disk-signature offset.</summary>
+    /// <summary>Disk-signature offset.<para>磁盘签名偏移。</para></summary>
     public const int DiskSignatureOffset = 440;
 
-    /// <summary>分区表偏移。 Partition-table offset.</summary>
+    /// <summary>Partition-table offset.<para>分区表偏移。</para></summary>
     public const int PartitionTableOffset = 446;
 
-    /// <summary>单个分区项大小（字节）。 Single partition-entry size in bytes.</summary>
+    /// <summary>Single partition-entry size in bytes.<para>单个分区项大小（字节）。</para></summary>
     public const int PartitionEntrySize = 16;
 
-    /// <summary>主分区槽位数量。 Primary partition slot count.</summary>
+    /// <summary>Primary partition slot count.<para>主分区槽位数量。</para></summary>
     public const int MaxPrimaryPartitions = 4;
 
-    /// <summary>名称表单记录大小（字节）。 Name-table record size in bytes.</summary>
+    /// <summary>Name-table record size in bytes.<para>名称表单记录大小（字节）。</para></summary>
     public const int NameRecordSize = 128;
 
-    /// <summary>名称最大 UTF-16 单元数。 Maximum name UTF-16 units.</summary>
+    /// <summary>Maximum name UTF-16 units.<para>名称最大 UTF-16 单元数。</para></summary>
     public const int MaxNameUnits = 36;
 
-    /// <summary>EBR 链最大深度（防环）。 Maximum EBR chain depth (cycle guard).</summary>
+    /// <summary>Maximum EBR chain depth used as a cycle guard.<para>EBR 链最大深度（防环）。</para></summary>
     public const int MaxEbrDepth = 64;
 
-    /// <summary>魔数（"AMLPART!"）。 Magic ("AMLPART!").</summary>
+    /// <summary>Magic bytes written at the image start.<para>写入镜像起始的魔数字节。</para></summary>
     public static readonly byte[] Magic = "AMLPART!"u8.ToArray();
 
-    /// <summary>默认分区类型。 Default partition type.</summary>
+    /// <summary>Default partition type.<para>默认分区类型。</para></summary>
     public const byte DefaultType = 0x83;
 
     private const byte SignatureLo = 0x55;
@@ -115,18 +114,24 @@ public static class AmlogicTable
     private const int SectorsPerTrack = 63;
 
     /// <summary>
-    /// <para>检查给定字节是否携带 Amlogic 魔数（"AMLPART!" @0）。</para>
     /// Checks whether the given bytes carry the Amlogic magic ("AMLPART!" @0).
+    /// <para>检查给定字节是否携带 Amlogic 魔数（"AMLPART!" @0）。</para>
     /// </summary>
+    /// <param name="data">The bytes to inspect.<para>待检查的字节。</para></param>
+    /// <returns>True when the magic is present at the start of the bytes.<para>字节起始处存在魔数时为真。</para></returns>
     public static bool HasMagic(ReadOnlySpan<byte> data) =>
         data.Length >= MagicSize && data[..MagicSize].SequenceEqual(Magic);
 
     /// <summary>
-    /// <para>由归一化条目构建 Amlogic 镜像：MBR 风格槽位（≤4 主分区，>4 走 EBR 链）+ 起始魔数 +
-    /// 名称表（位于最后一个分区起始扇区）。</para>
     /// Builds an Amlogic image from normalized entries: MBR-style slots (≤4 primaries, EBR chain
     /// above 4) plus the start magic and the name table (at the last partition's start sector).
+    /// <para>由归一化条目构建 Amlogic 镜像：MBR 风格槽位（≤4 主分区，>4 走 EBR 链）+ 起始魔数 +
+    /// 名称表（位于最后一个分区起始扇区）。</para>
     /// </summary>
+    /// <param name="diskSignature">Disk signature written at the disk-signature offset.<para>写入磁盘签名偏移处的磁盘签名。</para></param>
+    /// <param name="entries">Normalized partition entries to lay out.<para>待排布的归一化分区条目。</para></param>
+    /// <param name="bootableFlags">Bootable flag for each entry, or <see langword="null"/> when no entry is bootable.<para>逐项可引导标记，为空表示均不可引导。</para></param>
+    /// <returns>The image bytes holding the slots, magic and name table.<para>包含槽位、魔数与名称表的镜像字节。</para></returns>
     public static byte[] Build(uint diskSignature, IReadOnlyList<PartitionEntry> entries, IReadOnlyList<bool>? bootableFlags = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
@@ -235,12 +240,13 @@ public static class AmlogicTable
     }
 
     /// <summary>
-    /// <para>解析 Amlogic 镜像：校验魔数，读取磁盘签名与主分区槽位，沿 EBR 链收集逻辑分区，
-    /// 再从名称表（最后一个分区起始扇区）按顺序取回分区名称。</para>
-    /// Parses an Amlogic image: validates the magic, reads the disk signature and primary slots,
-    /// walks the EBR chain for logical partitions, then reads partition names in order from the
-    /// name table (at the last partition's start sector).
+    /// Parses an Amlogic image: validates the magic and MBR signature, reads the primary slots,
+    /// walks the EBR chain, and recovers names from the name table.
+    /// <para>解析 Amlogic 镜像：校验魔数与 MBR 签名，读取主分区槽位，沿 EBR 链收集逻辑分区，
+    /// 并从名称表取回分区名称。</para>
     /// </summary>
+    /// <param name="image">The image bytes to parse.<para>待解析的镜像字节。</para></param>
+    /// <returns>The disk signature and the recovered partition list.<para>磁盘签名与恢复出的分区列表。</para></returns>
     public static AmlogicTableInfo Parse(byte[] image)
     {
         ArgumentNullException.ThrowIfNull(image);

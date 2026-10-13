@@ -7,28 +7,28 @@ using UotanStudio.Services.Projects;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>扩展固件操作节点视图模型，生成 OTA 差分文件并保留不支持的旧构建节点身份以供加载。</para>
 /// Extended firmware operation node view model for OTA delta generation and loading unsupported legacy build nodes.
+/// <para>扩展固件操作节点视图模型，生成 OTA 差分文件并保留不支持的旧构建节点身份以供加载。</para>
 /// </summary>
 public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
 {
     public override bool IsUnavailable => TypeKey is "Build.Signature.Merge" or "Build.Slots.Merge";
 
     /// <summary>
-    /// <para>创建具有指定标题的扩展固件操作节点。</para>
     /// Creates an extended firmware operation node with the specified title.
+    /// <para>创建具有指定标题的扩展固件操作节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public ExtendedFirmwareNodeViewModel(string title) : base(title, NodeCategory.Firmware)
     {
     }
 
     /// <summary>
-    /// <para>创建默认的 OTA 差分包生成节点。</para>
     /// Creates a default OTA delta package generation node.
+    /// <para>创建默认的 OTA 差分包生成节点。</para>
     /// </summary>
     public static ExtendedFirmwareNodeViewModel CreateOtaDeltaNode()
     {
@@ -45,8 +45,8 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建仅供旧工作流恢复的签名拼接节点。</para>
     /// Creates the unsupported signature-append node for loading existing workflows.
+    /// <para>创建仅供旧工作流恢复的签名拼接节点。</para>
     /// </summary>
     public static ExtendedFirmwareNodeViewModel CreateMergeSignatureNode()
     {
@@ -62,8 +62,8 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建仅供旧工作流恢复的槽位拼接节点。</para>
     /// Creates the unsupported slot-concatenation node for loading existing workflows.
+    /// <para>创建仅供旧工作流恢复的槽位拼接节点。</para>
     /// </summary>
     public static ExtendedFirmwareNodeViewModel CreateMergeDualSlotNode()
     {
@@ -79,16 +79,16 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键生成 OTA 差分；旧签名与槽位拼接类型显式拒绝执行。</para>
     /// Generates an OTA delta by type key and explicitly rejects unsupported signature and slot concatenation types.
+    /// <para>按节点类型键生成 OTA 差分；旧签名与槽位拼接类型显式拒绝执行。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {

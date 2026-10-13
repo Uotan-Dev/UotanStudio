@@ -8,8 +8,8 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 public partial class FirmwareNodeViewModel
 {
     /// <summary>
-    /// <para>创建默认的签名验证节点。</para>
     /// Creates a default signature verification node.
+    /// <para>创建默认的签名验证节点。</para>
     /// </summary>
     public static FirmwareNodeViewModel CreateVerifyNode()
     {

@@ -3,23 +3,19 @@ using System.Security.Cryptography;
 namespace UotanStudio.Comm.Protocols.Adb.Pairing;
 
 /// <summary>
-/// Generates the one-time credentials encoded in a wireless-debugging QR pairing
-/// code: a random mDNS instance name and a random pairing password, plus the QR
-/// payload text in the Wi-Fi provisioning format Android expects
-/// (<c>WIFI:T:ADB;S:name;P:password;;</c>). New credentials must be generated for
-/// every pairing session so each displayed QR code is unique.
-/// <para>生成无线调试二维码配对的一次性凭据：随机的 mDNS 实例名与随机配对密码，
-/// 以及 Android 期望的 Wi-Fi 供应格式二维码文本
-/// （<c>WIFI:T:ADB;S:name;P:password;;</c>）。每次配会话都必须重新生成，
-/// 以保证展示的每个二维码都不同。</para>
+/// Generates the one-time credentials of a wireless-debugging QR pairing code and
+/// builds the matching <c>WIFI:T:ADB</c> payload text. Each pairing session needs
+/// fresh values.
+/// <para>生成无线调试二维码配对的一次性凭据，并构建与之匹配的 <c>WIFI:T:ADB</c>
+/// 负载文本。每次配对会话都需要新的值。</para>
 /// </summary>
 public static class AdbQrPairing
 {
     /// <summary>
-    /// Length of the first random segment of the mDNS instance name, matching the
-    /// layout used by the adb-qr reference implementation (ADB_WIFI_xxxxxxxxxxxxxx-yyyyyy).
-    /// <para>mDNS 实例名第一段随机串的长度，对齐 adb-qr 参考实现的布局
-    /// （ADB_WIFI_xxxxxxxxxxxxxx-yyyyyy）。</para>
+    /// Length of the first random segment of the mDNS instance name, whose layout is
+    /// <c>ADB_WIFI_xxxxxxxxxxxxxx-yyyyyy</c>.
+    /// <para>mDNS 实例名第一段随机串的长度，实例名布局为
+    /// <c>ADB_WIFI_xxxxxxxxxxxxxx-yyyyyy</c>。</para>
     /// </summary>
     public const int NamePrimaryLength = 14;
 
@@ -71,12 +67,15 @@ public static class AdbQrPairing
         return $"WIFI:T:ADB;S:{credentials.ServiceName};P:{credentials.Password};;";
     }
 
+    /// <summary>
+    /// Draws unbiased alphanumeric characters from a cryptographic random source.
+    /// <para>从密码学随机源取得无偏的字母数字字符。</para>
+    /// </summary>
+    /// <param name="length">Number of characters to draw. <para>需要取得的字符数。</para></param>
+    /// <returns>The drawn character string. <para>取得的字符串。</para></returns>
     private static string RandomString(int length)
     {
-        // 256 is not divisible by the alphabet size (62), so a plain modulo would bias the
-        // trailing letters; rejection sampling keeps every character uniform.
-        // 256 不能被字母表大小（62）整除，直接取模会使尾部字母出现偏多；拒绝采样保证每个字符均匀分布。
-        const int MaxUnbiased = 248; // 62 * 4, the largest multiple of the alphabet size within a byte.
+        const int MaxUnbiased = 248;
         var bytes = RandomNumberGenerator.GetBytes(length * 2);
         var chars = new char[length];
         var byteIndex = 0;
@@ -107,8 +106,8 @@ public static class AdbQrPairing
 /// （<c>_adb-tls-pairing._tcp</c>）与通过二维码共享的配对密码。</para>
 /// </summary>
 /// <param name="ServiceName">
-/// The mDNS service instance name, e.g. <c>ADB_WIFI_a1B2c3D4e5F6g7H-xy9Zwq</c>.
-/// <para>mDNS 服务实例名，例如 <c>ADB_WIFI_a1B2c3D4e5F6g7H-xy9Zwq</c>。</para>
+/// The mDNS service instance name, in the shape <c>ADB_WIFI_a1B2c3D4e5F6g7H-xy9Zwq</c>.
+/// <para>mDNS 服务实例名，形如 <c>ADB_WIFI_a1B2c3D4e5F6g7H-xy9Zwq</c>。</para>
 /// </param>
 /// <param name="Password">
 /// The pairing password (SPAKE2 shared secret input).

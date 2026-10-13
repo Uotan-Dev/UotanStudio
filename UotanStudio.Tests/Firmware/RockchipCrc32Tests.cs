@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.Core.Checksums;
+using UotanStudio.Hash.RockchipCrc32;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -35,8 +35,6 @@ public sealed class UsbProtocolClassifierMtkOemPortTests
 
     [Theory]
     [InlineData(0x0E8D, 0x6000)]
-    [InlineData(0x0E8D, 0x20FF)]
-    [InlineData(0x0E8D, 0x3000)]
     [InlineData(0x1004, 0x6001)]
     [InlineData(0x22D9, 0x0003)]
     [InlineData(0x0FCE, 0x0003)]

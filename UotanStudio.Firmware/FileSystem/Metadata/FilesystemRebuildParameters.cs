@@ -18,9 +18,9 @@ internal sealed class RebuildParameters
     public int? SparseBlockSize { get; set; }
     /// <summary>Gets the inode size in bytes (EXT4).<para>获取 inode 大小（字节，EXT4）。</para></summary>
     public int? InodeSize { get; set; }
-    /// <summary>Gets the EXT4 casefold filename encoding ID, when enabled in the source.</summary>
+    /// <summary>Gets the EXT4 casefold filename encoding ID, when enabled in the source. <para>获取 EXT4 大小写折叠文件名编码 ID（源中启用时）。</para></summary>
     public ushort? Ext4Encoding { get; set; }
-    /// <summary>Gets the EXT4 casefold encoding flags.</summary>
+    /// <summary>Gets the EXT4 casefold encoding flags. <para>获取 EXT4 大小写折叠编码标志。</para></summary>
     public ushort Ext4EncodingFlags { get; set; }
     /// <summary>Gets the captured EXT4 read-only policy.<para>获取捕获的 EXT4 只读策略。</para></summary>
     public bool? Ext4ReadOnly { get; set; }
@@ -73,13 +73,53 @@ internal sealed class ErofsRebuildParameters
     public bool UseCompactedIndexes { get; set; } = true;
     /// <summary>Gets whether whole-file fragments are enabled.<para>获取是否启用整文件碎片。</para></summary>
     public bool Fragments { get; set; }
+    /// <summary>
+    /// Gets the recorded all-fragments advise: whether a file shorter than one filesystem block is stored whole
+    /// in the packed fragment inode on top of the tail fragments that <see cref="Fragments"/> licenses. It is
+    /// the shape <c>mkfs.erofs -E all-fragments</c> selects, and it only has an effect while
+    /// <see cref="Fragments"/> is enabled.
+    /// <para>获取记录的 all-fragments advise：在 <see cref="Fragments"/> 许可的尾部碎片之外，是否把不足一个
+    /// 文件系统块的文件整份存放在 packed fragment inode 里。这正是 <c>mkfs.erofs -E all-fragments</c> 选用的
+    /// 形态，且只在 <see cref="Fragments"/> 开启时生效。</para>
+    /// </summary>
+    /// <value>The recorded flag, or <see langword="null"/> when the snapshot carries no entry for it; a null
+    /// value is read together with <see cref="Fragments"/>, because a profile without this dimension stores
+    /// whole sub-block files in the packed inode whenever <see cref="Fragments"/> is enabled.
+    /// <para>记录的值，或档案未携带该项时的 <see langword="null"/>；空值与 <see cref="Fragments"/> 一并读取，
+    /// 因为不携带本维度的档案在 <see cref="Fragments"/> 开启时同样把整份不足一块的文件存入 packed inode。</para></value>
+    public bool? AllFilesAsFragments { get; set; }
     /// <summary>Gets whether fragment deduplication is enabled.<para>获取是否启用碎片去重。</para></summary>
     public bool Dedup { get; set; }
+    /// <summary>
+    /// Gets the resolved <c>ErofsDedupeMode</c> member name for the dedupe dimension observed in the source
+    /// image, so a rebuild keeps comparing what the source compared instead of falling back to the whole-file
+    /// default. The name is stored as text so the document stays locale-free.
+    /// <para>获取源镜像中观测到的去重维度解析后的 <c>ErofsDedupeMode</c> 成员名，使重建继续比较源所比较的
+    /// 对象，而不是回落到整文件默认值。名称以文本保存，使文档不依赖语言环境。</para>
+    /// </summary>
+    /// <value><c>WholeFile</c> or <c>Pcluster</c>, or <see langword="null"/> when the snapshot predates this
+    /// field; a null value is restored as <c>WholeFile</c>, which is the repository's existing behavior.
+    /// <para>取值为 <c>WholeFile</c> 或 <c>Pcluster</c>；快照早于该字段时为 <see langword="null"/>，
+    /// 此时还原为 <c>WholeFile</c>，即仓库既有行为。</para></value>
+    public string? DedupeMode { get; set; }
     /// <summary>Gets whether the metabox feature is enabled.<para>获取是否启用 metabox 特性。</para></summary>
     public bool Metabox { get; set; }
+    /// <summary>
+    /// Gets whether the rebuilt image has to carry a metabox container even when the planned layout selects no
+    /// resident inode, so a declaration holding <c>EROFS_FEATURE_INCOMPAT_METABOX</c> always has the superblock
+    /// slot and <c>s_metabox_nid</c> behind it.
+    /// <para>获取重建镜像是否必须在规划的布局未选出常驻 inode 时仍建立 metabox 容器，使携带
+    /// <c>EROFS_FEATURE_INCOMPAT_METABOX</c> 的声明总是有超级块槽与 <c>s_metabox_nid</c> 在其背后。</para>
+    /// </summary>
+    /// <value>The recorded requirement, which has no effect while <see cref="Metabox"/> is off, or
+    /// <see langword="null"/> when the snapshot carries no entry for it; a null value is restored as no
+    /// requirement.
+    /// <para>记录的要求，在 <see cref="Metabox"/> 关闭时不起作用，或档案未携带该项时的
+    /// <see langword="null"/>；空值还原为无该要求。</para></value>
+    public bool? MetaboxRequired { get; set; }
     /// <summary>Gets the number of extra devices declared by the source.<para>获取源声明的额外设备数量。</para></summary>
     public int ExtraDeviceCount { get; set; }
-    /// <summary>Records the source device table; replayed file data is placed on the primary image.</summary>
+    /// <summary>Records the source device table; replayed file data is placed on the primary image. <para>记录源设备表；重放的文件数据放置在主镜像上。</para></summary>
     public List<ErofsRebuildDevice> SourceDevices { get; set; } = [];
     /// <summary>Gets whether the superblock checksum feature is written.<para>获取是否写出超级块校验和特性。</para></summary>
     public bool SuperblockChecksum { get; set; } = true;
@@ -87,10 +127,41 @@ internal sealed class ErofsRebuildParameters
     public bool MtimeFeature { get; set; }
     /// <summary>Gets whether the COMPAT_XATTRFILTER feature is declared.<para>获取是否声明 COMPAT_XATTRFILTER 特性。</para></summary>
     public bool XattrFilterFeature { get; set; }
-    /// <summary>Records whether the source placed shared xattrs in the metabox; the writer may use inline xattrs.</summary>
+    /// <summary>Records whether the source placed shared xattrs in the metabox; the writer may use inline xattrs. <para>记录源是否把共享 xattr 放在 metabox 中；写入器可改用内联 xattr。</para></summary>
     public bool SourceSharedEaInMetabox { get; set; }
-    /// <summary>Records whether the source metabox container was compressed; output geometry may differ.</summary>
+    /// <summary>
+    /// Gets whether the source image wrote per-inode xattr name filters, so a rebuild recomputes them
+    /// against the names it emits instead of losing the dimension.
+    /// <para>获取源镜像是否写入了逐 inode 的 xattr 名称过滤器，使重建按自己发出的名称重新计算，而不是
+    /// 丢掉该维度。</para>
+    /// </summary>
+    public bool? XattrNameFilter { get; set; }
+    /// <summary>
+    /// Gets the long-prefix name the source image recorded content fingerprints under, so a rebuild
+    /// re-registers the same prefix and its <c>ishare_xattr_prefix_id</c> resolves again.
+    /// <para>获取源镜像记录内容指纹所用的长前缀名称，使重建重新注册同一前缀并让
+    /// <c>ishare_xattr_prefix_id</c> 再次可解析。</para>
+    /// </summary>
+    public string? IshareXattrPrefix { get; set; }
+    /// <summary>
+    /// Gets whether the source image shared repeated xattr sets, so a rebuild re-runs the sharing pass
+    /// rather than leaving every set inline.
+    /// <para>获取源镜像是否共享了重复的 xattr 集合，使重建重跑共享化遍历而不是让每个集合都内联。</para>
+    /// </summary>
+    public bool? IshareXattrs { get; set; }
+    /// <summary>Records whether the source metabox container was compressed; output geometry may differ. <para>记录源 metabox 容器是否被压缩；输出几何信息可能不同。</para></summary>
     public bool SourceMetaboxCompressed { get; set; }
+    /// <summary>
+    /// Gets the start block of the source image's metadata area (<c>s_meta_blkaddr</c>), so a rebuild places
+    /// its inode table in the same separate zone the source used instead of silently returning the metadata
+    /// to the head of the image.
+    /// <para>获取源镜像元数据区的起始块（<c>s_meta_blkaddr</c>），使重建把 inode 表放回源所用的同一独立
+    /// 区块，而不是静默把元数据退回镜像头部之后。</para>
+    /// </summary>
+    /// <value>The recorded block number, or <see langword="null"/> when the snapshot predates this field;
+    /// a null value is restored as no metadata zone, which is the repository's existing behavior.
+    /// <para>记录的块号；快照早于该字段时为 <see langword="null"/>，此时还原为无元数据区，即仓库既有行为。</para></value>
+    public uint? MetaBlkAddr { get; set; }
     /// <summary>Gets the superblock epoch in seconds.<para>获取超级块 epoch（秒）。</para></summary>
     public ulong? BuildTime { get; set; }
     /// <summary>Gets the superblock fixed nanosecond component.<para>获取超级块固定纳秒分量。</para></summary>
@@ -165,19 +236,21 @@ internal sealed class ErofsRebuildParameters
     public List<ErofsRebuildCodec> Codecs { get; set; } = [];
     /// <summary>Gets the per-inode source storage strategy.<para>获取逐 inode 源存储策略。</para></summary>
     public List<ErofsRebuildInode> Inodes { get; set; } = [];
-    /// <summary>Gets the bounded per-codec compression candidate estimates sampled from the live source
-    /// parser at extraction. It is empty when the rebuild optimizer was disabled at extraction, when the
-    /// source declared no compression configuration record, or when the snapshot predates this field, so
-    /// such a rebuild keeps using the single inherited-profile build.
-    /// <para>获取解包时从活动源解析器采样的逐编解码有界压缩候选估算。若解包时重建优化器处于关闭状态、
-    /// 源未声明压缩配置记录，或快照早于该字段，本列表为空，此时重建继续使用单一继承档案构建。</para></summary>
+    /// <summary>Gets the source image's long xattr name prefix table, replayed so xattr names that needed a
+    /// long prefix encode against the same table instead of registering new records. It is empty when the
+    /// source image declared no long prefixes, or when the snapshot predates this field.
+    /// <para>获取源镜像的长 xattr 名称前缀表；重放它使原本依赖长前缀的 xattr 名称按同一张表编码，而不是注册
+    /// 新记录。源镜像未声明长前缀、或快照早于该字段时为空表。</para></summary>
+    public List<ErofsRebuildXattrPrefix> XattrPrefixes { get; set; } = [];
+    /// <summary>
+    /// Gets the bounded per-codec compression candidate estimates sampled from the live source parser at extraction. Empty when the rebuild optimizer was disabled, when the source declared no compression configuration record, or when the snapshot predates this field.
+    /// <para>获取解包时从在线源解析器采样的、按编解码器区分的有界压缩候选估计。重建优化器被关闭、源未声明压缩配置记录、或快照早于该字段时为空。</para>
+    /// </summary>
     public List<ErofsRebuildCompressionEstimate> CompressionEstimates { get; set; } = [];
-    /// <summary>Gets the authoritative source filesystem extent in bytes recorded at extraction, computed
-    /// from the superblock's 64-bit block count times the block size, or <see langword="null"/> when the
-    /// snapshot predates this field. The 32-bit superblock block count truncates images whose block count
-    /// exceeds it, so the rebuild size search compares against this value instead.
-    /// <para>获取解包时记录的源文件系统权威字节范围，由超级块 64 位块数乘以块大小算得；快照早于该字段时为
-    /// <see langword="null"/>。32 位超级块块数会在块数超出时截断，因此重建体积搜索改用本值。</para></summary>
+    /// <summary>
+    /// Gets the authoritative source filesystem size in bytes recorded at extraction, from the superblock's 64-bit block count times the block size. The 32-bit block count truncates large images, so the rebuild size search compares against this value.
+    /// <para>获取解包时记录的源文件系统权威字节大小，由超级块 64 位块数乘块大小得出。32 位块数会截断大镜像，因此重建的大小搜索与此值比对。</para>
+    /// </summary>
     public long? SourceFilesystemBytes { get; set; }
 }
 
@@ -232,10 +305,62 @@ internal sealed class ErofsRebuildInode
     public bool InlineData { get; set; }
     /// <summary>Gets the logical cluster size in bytes.<para>获取逻辑簇大小（字节）。</para></summary>
     public int LogicalClusterSize { get; set; }
-    /// <summary>Gets the original extent cluster size when rebuild uses a different geometry.</summary>
+    /// <summary>Gets the original extent cluster size when the rebuild uses a different geometry. <para>当重建使用不同几何信息时，获取原始的 extent 簇大小。</para></summary>
     public int? SourceExtentClusterSize { get; set; }
-    /// <summary>Gets the original extent record width in bytes.</summary>
+    /// <summary>Gets the original extent record width in bytes. <para>获取原始 extent 记录的字节宽度。</para></summary>
     public int? SourceExtentRecordSize { get; set; }
+    /// <summary>
+    /// Gets the resolved <c>ErofsFragmentShape</c> member name for the packed-inode placement the source inode
+    /// used. The name is stored as text so the document stays locale-free.
+    /// <para>获取源 inode 使用的 packed inode 存放形态解析后的 <c>ErofsFragmentShape</c> 成员名。名称以文本
+    /// 保存，使文档不依赖语言环境。</para>
+    /// </summary>
+    /// <value><c>None</c>, <c>WholeFile</c> or <c>Tail</c>, or <see langword="null"/> when the snapshot carries
+    /// no entry for it; a null value is read as <c>None</c>.
+    /// <para>取值为 <c>None</c>、<c>WholeFile</c> 或 <c>Tail</c>，或档案未携带该项时的
+    /// <see langword="null"/>；空值按 <c>None</c> 读取。</para></value>
+    public string? FragmentShape { get; set; }
+    /// <summary>
+    /// Gets the <c>ErofsCompressionAlgorithm</c> member name of the secondary algorithm that the source inode's
+    /// HEAD2 index rows name through the high nibble of <c>h_algorithmtype</c>. The name is stored as text so
+    /// the document stays locale-free.
+    /// <para>获取源 inode 的 HEAD2 索引行经 <c>h_algorithmtype</c> 高四位指名的第二算法的
+    /// <c>ErofsCompressionAlgorithm</c> 成员名。名称以文本保存，使文档不依赖语言环境。</para>
+    /// </summary>
+    /// <value>The secondary algorithm name, or <see langword="null"/> when the source emitted no HEAD2 index
+    /// rows or the snapshot carries no entry for it; a null value is restored as no secondary algorithm.
+    /// <para>第二算法名称，或源未发出 HEAD2 索引行、档案未携带该项时的 <see langword="null"/>；空值还原为无
+    /// 第二算法。</para></value>
+    public string? SecondaryAlgorithm { get; set; }
+    /// <summary>
+    /// Gets the log2 of the chunk size in filesystem blocks for a chunk-based source inode, or zero when the source file was not chunk-based. It replays h_clusterbits of a chunk-based inode, which stores the chunk size where other layouts store a logical cluster size.
+    /// <para>获取基于分块的源 inode 的分块大小（以文件系统块为单位的 log2），源文件非分块时为 0。它重放分块 inode 的 h_clusterbits——该字段存放分块大小，而其他布局存放逻辑簇大小。</para>
+    /// </summary>
+    /// <value>The chunk-size log2, or <c>0</c> for a file that was not chunk-based.
+    /// <para>chunk 大小的 log2，或非 chunk-based 文件的 <c>0</c>。</para></value>
+    public int ChunkBits { get; set; }
+}
+
+/// <summary>
+/// One long-prefix record of the source EROFS xattr prefix table: the built-in short prefix the record
+/// extends and the infix bytes that follow it. The pair is what the on-disk table stores, so replaying it
+/// lets xattr names encode against the same table instead of registering new records.
+/// <para>源 EROFS xattr 前缀表中的一条长前缀记录：记录所扩展的内置短前缀，以及其后的 infix 字节。
+/// 该对正是磁盘表所存内容，因此重放它能让 xattr 名称按同一张表编码而不是注册新记录。</para>
+/// </summary>
+internal sealed class ErofsRebuildXattrPrefix
+{
+    /// <summary>Gets the built-in short prefix index the record extends, or zero for the internal hidden
+    /// namespace. <para>获取记录所扩展的内置短前缀索引，内部隐藏命名空间为 0。</para></summary>
+    /// <value>A default prefix index, or <c>0</c> when the record carries the whole prefix itself.
+    /// <para>默认前缀索引；记录自带完整前缀时为 <c>0</c>。</para></value>
+    public byte BaseIndex { get; set; }
+
+    /// <summary>Gets the infix text sitting between the base prefix and the stored short name.
+    /// <para>获取位于基准前缀与磁盘短名之间的 infix 文本。</para></summary>
+    /// <value>The infix, or an empty string when the record introduces a whole prefix of its own.
+    /// <para>infix 文本；记录自行引入完整前缀时为空字符串。</para></value>
+    public string Infix { get; set; } = string.Empty;
 }
 
 /// <summary>

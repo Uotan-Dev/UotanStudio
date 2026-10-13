@@ -4,107 +4,114 @@ using System.Globalization;
 namespace UotanStudio.Models;
 
 /// <summary>
-/// <para>MBR 分区表条目（16 字节主分区槽位或 EBR 链中的逻辑分区）。</para>
 /// An MBR partition-table entry (16-byte primary slot or a logical partition in the EBR chain).
+/// <para>MBR 分区表条目（16 字节主分区槽位或 EBR 链中的逻辑分区）。</para>
 /// </summary>
 public sealed class MbrPartition
 {
     /// <summary>
-    /// <para>是否可引导（0x80）。</para>
     /// Whether the partition is bootable (0x80).
+    /// <para>是否可引导（0x80）。</para>
     /// </summary>
+    /// <value>True when the bootable flag is set.<para>可引导标志置位时为 true。</para></value>
     public bool Bootable { get; init; }
 
     /// <summary>
+    /// Partition type byte.
     /// <para>分区类型字节（如 0x83 Linux、0x07 NTFS）。</para>
-    /// Partition type byte (e.g. 0x83 Linux, 0x07 NTFS).
     /// </summary>
+    /// <value>The raw type byte of the slot.<para>槽位的原始类型字节。</para></value>
     public byte Type { get; init; }
 
     /// <summary>
-    /// <para>起始 LBA。</para>
     /// Start LBA.
+    /// <para>起始 LBA。</para>
     /// </summary>
+    /// <value>The first LBA of the partition.<para>分区的起始 LBA。</para></value>
     public ulong StartLba { get; init; }
 
     /// <summary>
-    /// <para>大小（扇区数）。</para>
     /// Size in sectors.
+    /// <para>大小（扇区数）。</para>
     /// </summary>
+    /// <value>The partition size counted in sectors.<para>分区大小，以扇区计数。</para></value>
     public ulong SizeSectors { get; init; }
 }
 
 /// <summary>
-/// <para>解析出的 MBR 分区表信息（主分区与扩展分区中的逻辑分区按顺序合并）。</para>
 /// Parsed MBR partition-table information (primary and extended logical partitions merged in order).
+/// <para>解析出的 MBR 分区表信息（主分区与扩展分区中的逻辑分区按顺序合并）。</para>
 /// </summary>
 public sealed class MbrTableInfo
 {
     /// <summary>
-    /// <para>磁盘签名（偏移 440，小端）。</para>
     /// Disk signature (offset 440, little-endian).
+    /// <para>磁盘签名（偏移 440，小端）。</para>
     /// </summary>
+    /// <value>The 32-bit disk signature.<para>32 位磁盘签名。</para></value>
     public uint DiskSignature { get; init; }
 
     /// <summary>
-    /// <para>分区列表。</para>
     /// Partition list.
+    /// <para>分区列表。</para>
     /// </summary>
+    /// <value>The merged partition entries in order.<para>按顺序合并后的分区条目。</para></value>
     public IReadOnlyList<MbrPartition> Partitions { get; init; } = [];
 }
 
 /// <summary>
-/// <para>经典 MBR 分区表构建与解析：0x55AA 签名、4 个 16 字节主分区槽位、扩展分区（0x05/0x0F/0x85）
-/// 经 EBR 链承载逻辑分区。整数均为小端。</para>
-/// Classic MBR partition-table builder and parser: 0x55AA signature, four 16-byte primary slots,
-/// extended partitions (0x05/0x0F/0x85) carrying logical partitions through an EBR chain.
-/// Integers are little-endian.
+/// Classic MBR partition-table builder and parser: 0x55AA signature, four 16-byte primary slots, and
+/// logical partitions carried through an extended EBR chain. Integers are little-endian.
+/// <para>经典 MBR 分区表构建与解析：0x55AA 签名、4 个 16 字节主分区槽位，逻辑分区经扩展分区 EBR 链承载。整数均为小端。</para>
 /// </summary>
 public static class MbrTable
 {
-    /// <summary>扇区大小（字节）。 Sector size in bytes.</summary>
+    /// <summary>Sector size in bytes.<para>扇区大小（字节）。</para></summary>
     public const int SectorSize = 512;
 
-    /// <summary>分区表在扇区内的字节偏移。 Partition-table byte offset within the sector.</summary>
+    /// <summary>Byte offset of the partition table within the sector.<para>分区表在扇区内的字节偏移。</para></summary>
     public const int PartitionTableOffset = 446;
 
-    /// <summary>单个分区项大小（字节）。 Single partition-entry size in bytes.</summary>
+    /// <summary>Single partition-entry size in bytes.<para>单个分区项大小（字节）。</para></summary>
     public const int PartitionEntrySize = 16;
 
-    /// <summary>主分区槽位数量。 Primary partition slot count.</summary>
+    /// <summary>Primary partition slot count.<para>主分区槽位数量。</para></summary>
     public const int MaxPrimaryPartitions = 4;
 
-    /// <summary>磁盘签名偏移。 Disk-signature offset.</summary>
+    /// <summary>Disk-signature offset.<para>磁盘签名偏移。</para></summary>
     public const int DiskSignatureOffset = 440;
 
-    /// <summary>签名低字节。 Signature low byte.</summary>
+    /// <summary>Signature low byte.<para>签名低字节。</para></summary>
     public const byte SignatureLo = 0x55;
 
-    /// <summary>签名高字节。 Signature high byte.</summary>
+    /// <summary>Signature high byte.<para>签名高字节。</para></summary>
     public const byte SignatureHi = 0xAA;
 
-    /// <summary>扩展分区类型字节集合。 Extended partition type bytes.</summary>
+    /// <summary>Extended partition type bytes.<para>扩展分区类型字节集合。</para></summary>
+    /// <value>The type bytes that mark an extended partition.<para>标识扩展分区的类型字节。</para></value>
     public static ReadOnlySpan<byte> ExtendedTypes => [0x05, 0x0F, 0x85];
 
-    /// <summary>默认 Linux 分区类型。 Default Linux partition type.</summary>
+    /// <summary>Default Linux partition type.<para>默认 Linux 分区类型。</para></summary>
     public const byte DefaultLinuxType = 0x83;
 
-    /// <summary>可引导标志。 Bootable flag.</summary>
+    /// <summary>Bootable flag.<para>可引导标志。</para></summary>
     public const byte BootableFlag = 0x80;
 
-    /// <summary>EBR 链最大深度（防环）。 Maximum EBR chain depth (cycle guard).</summary>
+    /// <summary>Maximum EBR chain depth, used as a cycle guard.<para>EBR 链最大深度，用于防止环路。</para></summary>
     public const int MaxEbrDepth = 64;
 
-    /// <summary>构建镜像的最大扇区数（64 MiB）。 Maximum built-image sector count (64 MiB).</summary>
+    /// <summary>Maximum built-image sector count, equivalent to 64 MiB.<para>构建镜像的最大扇区数，相当于 64 MiB。</para></summary>
     public const ulong MaxImageSectors = 64UL * 1024 * 1024 / SectorSize;
 
     private const int Heads = 255;
     private const int SectorsPerTrack = 63;
 
     /// <summary>
-    /// <para>检查给定字节是否携带 MBR 签名（0x55AA @510）。</para>
     /// Checks whether the given bytes carry the MBR signature (0x55AA @510).
+    /// <para>检查给定字节是否携带 MBR 签名（0x55AA @510）。</para>
     /// </summary>
+    /// <param name="data">The sector bytes to inspect. <para>要检查的扇区字节。</para></param>
+    /// <returns>True when the signature is present.<para>签名存在时为 true。</para></returns>
     public static bool HasSignature(ReadOnlySpan<byte> data) =>
         data.Length >= SectorSize && data[510] == SignatureLo && data[511] == SignatureHi;
 
@@ -112,6 +119,8 @@ public static class MbrTable
     /// Identifies a populated MBR partition table without mistaking a FAT volume boot record for a disk.
     /// <para>检查有效的非空 MBR 分区项，排除同样带有 55 AA 签名的 FAT 卷引导扇区。</para>
     /// </summary>
+    /// <param name="data">The sector bytes to inspect. <para>要检查的扇区字节。</para></param>
+    /// <returns>True when at least one usable partition entry is present.<para>存在至少一个可用分区项时为 true。</para></returns>
     public static bool HasPartitionTable(ReadOnlySpan<byte> data)
     {
         if (!HasSignature(data) || IsFatBootRecord(data))
@@ -166,9 +175,12 @@ public static class MbrTable
     }
 
     /// <summary>
-    /// <para>解析分区类型文本：支持 0x 十六进制与十进制，失败返回 <c>false</c>。</para>
     /// Parses a partition-type text: 0x-hex or decimal are supported; returns <c>false</c> on failure.
+    /// <para>解析分区类型文本：支持 0x 十六进制与十进制，失败返回 <c>false</c>。</para>
     /// </summary>
+    /// <param name="text">The partition-type text. <para>分区类型文本。</para></param>
+    /// <param name="type">The parsed type byte, zero on failure. <para>解析出的类型字节，失败时为 0。</para></param>
+    /// <returns>True when the text parsed; otherwise, false.<para>解析成功时为 true，否则为 false。</para></returns>
     public static bool TryParseType(string? text, out byte type)
     {
         type = 0;
@@ -187,13 +199,14 @@ public static class MbrTable
     }
 
     /// <summary>
-    /// <para>由归一化条目构建 MBR 镜像：不超过 4 个分区时全部为主分区；超过 4 个时前 3 个为主分区，
-    /// 第 4 槽为扩展分区，逻辑分区经 EBR 链承载（逻辑分区起始 LBA 必须 ≥ 1 且相邻分区之间
-    /// 至少间隔 1 个扇区留给下一个 EBR）。</para>
-    /// Builds an MBR image from normalized entries: up to 4 partitions become primary slots; above 4,
-    /// the first 3 are primary, slot 4 becomes the extended partition and logical partitions ride the
-    /// EBR chain (logical start LBAs must be ≥ 1 with at least one spare sector between neighbours).
+    /// Builds an MBR image from normalized entries: up to three primary slots, or three primaries plus
+    /// an extended EBR chain when more entries are supplied.
+    /// <para>由归一化条目构建 MBR 镜像：不超过 3 个条目时全部写入主分区槽位，超过 3 个时前 3 个为主分区，其余经扩展分区 EBR 链承载。</para>
     /// </summary>
+    /// <param name="diskSignature">The disk signature to store. <para>要写入的磁盘签名。</para></param>
+    /// <param name="entries">The partition entries to lay out. <para>要布局的分区条目。</para></param>
+    /// <param name="bootableFlags">Optional per-entry bootable flags matched by index. <para>可选的逐项可引导标志，按下标与条目对应。</para></param>
+    /// <returns>The MBR image bytes.<para>MBR 镜像字节。</para></returns>
     public static byte[] Build(uint diskSignature, IReadOnlyList<PartitionEntry> entries, IReadOnlyList<bool>? bootableFlags = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
@@ -307,12 +320,12 @@ public static class MbrTable
     }
 
     /// <summary>
-    /// <para>解析 MBR 镜像：校验签名，读取磁盘签名与主分区槽位，若存在扩展分区则沿 EBR 链
-    /// 收集逻辑分区（深度受限防环），主分区与逻辑分区按顺序合并返回。</para>
-    /// Parses an MBR image: validates the signature, reads the disk signature and primary slots,
-    /// walks the EBR chain for logical partitions when an extended partition exists (depth-bounded),
-    /// and returns primaries then logicals in order.
+    /// Parses an MBR image through a depth-bounded EBR walk. Primaries are returned before logical
+    /// partitions.
+    /// <para>解析 MBR 镜像，沿 EBR 链的遍历受深度限制。主分区先于逻辑分区返回。</para>
     /// </summary>
+    /// <param name="image">The MBR image bytes. <para>MBR 镜像字节。</para></param>
+    /// <returns>The parsed disk signature and partition list.<para>解析出的磁盘签名与分区列表。</para></returns>
     public static MbrTableInfo Parse(byte[] image)
     {
         ArgumentNullException.ThrowIfNull(image);

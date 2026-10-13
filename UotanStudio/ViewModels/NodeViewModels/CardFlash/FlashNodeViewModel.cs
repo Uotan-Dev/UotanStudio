@@ -9,27 +9,27 @@ using UotanStudio.ViewModels.Devices;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>烧录操作节点视图模型，提供设备连接、分区刷入、擦除和重启功能，均接入真实后端服务。</para>
 /// Flash operation node view model, providing device connection, partition flashing, erasing,
 /// and reboot capabilities, all wired to the real backend services.
+/// <para>烧录操作节点视图模型，提供设备连接、分区刷入、擦除和重启功能，均接入真实后端服务。</para>
 /// </summary>
 public class FlashNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
-    /// <para>创建具有指定标题的烧录操作节点。</para>
     /// Creates a flash operation node with the specified title.
+    /// <para>创建具有指定标题的烧录操作节点。</para>
     /// </summary>
     /// <param name="title">
-    /// <para>节点的显示标题。</para>
     /// The display title of the node.
+    /// <para>节点的显示标题。</para>
     /// </param>
     public FlashNodeViewModel(string title) : base(title, NodeCategory.Flash)
     {
     }
 
     /// <summary>
-    /// <para>创建默认的分区刷入节点。</para>
     /// Creates a default partition flash node.
+    /// <para>创建默认的分区刷入节点。</para>
     /// </summary>
     public static FlashNodeViewModel CreateFlashNode()
     {
@@ -47,8 +47,8 @@ public class FlashNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的擦除节点。</para>
     /// Creates a default erase node.
+    /// <para>创建默认的擦除节点。</para>
     /// </summary>
     public static FlashNodeViewModel CreateEraseNode()
     {
@@ -65,8 +65,8 @@ public class FlashNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的重启节点。</para>
     /// Creates a default reboot node.
+    /// <para>创建默认的重启节点。</para>
     /// </summary>
     public static FlashNodeViewModel CreateRebootNode()
     {
@@ -82,22 +82,22 @@ public class FlashNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的烧录逻辑：Device.Partition.Flash 调
-    /// <see cref="FlashService.FlashImageAsync"/>、Device.Partition.Erase 调
-    /// <see cref="FlashService.ErasePartitionAsync"/>、Device.Power.Reboot 调
-    /// <see cref="DeviceMonitorService.RebootAsync"/>。设备缺失时告警并短路。</para>
     /// Dispatches flash logic by the node type key (TypeKey): Device.Partition.Flash calls
     /// <see cref="FlashService.FlashImageAsync"/>, Device.Partition.Erase calls
     /// <see cref="FlashService.ErasePartitionAsync"/>, and Device.Power.Reboot calls
     /// <see cref="DeviceMonitorService.RebootAsync"/>. A missing device logs a warning and short-circuits.
+    /// <para>按节点类型键（TypeKey）分发对应的烧录逻辑：Device.Partition.Flash 调
+    /// <see cref="FlashService.FlashImageAsync"/>、Device.Partition.Erase 调
+    /// <see cref="FlashService.ErasePartitionAsync"/>、Device.Power.Reboot 调
+    /// <see cref="DeviceMonitorService.RebootAsync"/>。设备缺失时告警并短路。</para>
     /// </summary>
     /// <param name="context">
-    /// <para>执行上下文。</para>
     /// The execution context.
+    /// <para>执行上下文。</para>
     /// </param>
     /// <returns>
-    /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
+    /// <para>表示异步执行的任务。</para>
     /// </returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {

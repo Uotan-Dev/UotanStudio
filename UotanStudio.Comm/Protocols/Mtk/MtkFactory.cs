@@ -14,7 +14,10 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// </summary>
 internal sealed class MtkFactory : IProtocolFactory
 {
-    /// <summary>Gets the protocol name. 获取协议名称。</summary>
+    /// <summary>
+    /// Gets the protocol name.
+    /// <para>获取协议名称。</para>
+    /// </summary>
     public string ProtocolName => "mtk";
 
     /// <summary>
@@ -42,9 +45,28 @@ internal sealed class MtkFactory : IProtocolFactory
         }
     }
 
-    internal bool Matches(UsbDeviceInfo info) =>
-        info.VendorId == 0x0E8D && info.ProductId is 0x0003 or 0x2000 or 0x2001
-        || IsOemDownloadPort(info.VendorId, info.ProductId);
+    internal bool Matches(UsbDeviceInfo info) => IsMtkBootromPort(info.VendorId, info.ProductId);
+
+    /// <summary>
+    /// Reports whether the pair is a MediaTek boot download port this protocol can open a session on. The
+    /// reference client's own table (<c>mtkclient/config/usb_ids.py</c>, lines 2-9) lists <c>0x0E8D</c>
+    /// product ids <c>0x0003</c> (bootrom), <c>0x2000</c>, <c>0x2001</c>, <c>0x20FF</c> and <c>0x3000</c>
+    /// (preloader stages) plus <c>0x1004:0x6000</c>, <c>0x22D9:0x0006</c> and the Sony ids documented by
+    /// <see cref="IsOemDownloadPort"/>. Discovery and this factory share this single predicate so a port
+    /// reported as MediaTek is always openable as a MediaTek session.
+    /// <para>报告该组合是否为本协议可以建立会话的联发科启动下载端口。参考客户端自身的端口表
+    /// （<c>mtkclient/config/usb_ids.py</c> 第 2-9 行）列出 <c>0x0E8D</c> 下的 <c>0x0003</c>（bootrom）、
+    /// <c>0x2000</c>、<c>0x2001</c>、<c>0x20FF</c> 与 <c>0x3000</c>（preloader 阶段），再加上
+    /// <c>0x1004:0x6000</c>、<c>0x22D9:0x0006</c> 以及 <see cref="IsOemDownloadPort"/> 记载的索尼端口。
+    /// 发现层与本工厂共用这一个判定函数，因此被报为联发科的端口总能建立联发科会话。</para>
+    /// </summary>
+    /// <param name="vendorId">USB vendor id. <para>USB 厂商 ID。</para></param>
+    /// <param name="productId">USB product id. <para>USB 产品 ID。</para></param>
+    /// <returns><see langword="true"/> for a documented MediaTek download port.
+    /// <para>对已记载的联发科下载端口返回 <see langword="true"/>。</para></returns>
+    internal static bool IsMtkBootromPort(ushort vendorId, ushort productId) =>
+        (vendorId == 0x0E8D && productId is 0x0003 or 0x2000 or 0x2001 or 0x20FF or 0x3000)
+        || IsOemDownloadPort(vendorId, productId);
 
     /// <summary>
     /// Reports whether the pair is an OEM rebranding of a MediaTek boot download port. The reference

@@ -5,22 +5,18 @@ using UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 namespace UotanStudio.Services.Workspace;
 
 /// <summary>
-/// <para>JAR/APK 容器多 DEX 合并反汇编文本的共享生成器。DEX 编辑器的合并视图与项目范围格式适配
-/// 共用同一生成逻辑，保证同一容器两次文本化结果一致（项目范围导航依赖该可复现性）。</para>
-/// The shared generator of the merged multi-DEX disassembly text for JAR/APK containers. The DEX
-/// editor's merged view and the project-scope format adapter share this logic so the same container
-/// always yields identical text (project-scope navigation relies on that reproducibility).
+/// Generates the merged multi-DEX disassembly text for JAR/APK containers.
+/// <para>为 JAR/APK 容器生成多 DEX 的合并反汇编文本。</para>
 /// </summary>
 internal static class DexContainerSearchText
 {
     /// <summary>
-    /// <para>按条目顺序合并生成反汇编文本；可选回调按条目回调解析后的 DEX 模型（供统计聚合）。</para>
-    /// Builds the merged disassembly text in entry order; an optional callback receives each parsed
-    /// DEX model (for statistic aggregation).
+    /// Builds the merged disassembly text in entry order, handing each parsed DEX model to an optional callback.
+    /// <para>按条目顺序生成合并反汇编文本，并把每个解析出的 DEX 模型交给可选回调。</para>
     /// </summary>
-    /// <param name="containerPath">容器文件路径。<para>The container file path.</para></param>
-    /// <param name="onEntry">每条 DEX 解析完成后的回调。<para>Callback invoked after each DEX is parsed.</para></param>
-    /// <returns>按条目分节的合并反汇编文本。<para>The entry-sectioned merged disassembly text.</para></returns>
+    /// <param name="containerPath">The container file path. <para>容器文件路径。</para></param>
+    /// <param name="onEntry">Callback invoked after each DEX is parsed; <c>null</c> skips it. <para>每条 DEX 解析完成后的回调；为 <c>null</c> 时跳过。</para></param>
+    /// <returns>The entry-sectioned merged disassembly text. <para>按条目分节的合并反汇编文本。</para></returns>
     internal static string BuildMergedSource(string containerPath, Action<DexFile>? onEntry = null)
     {
         var entries = JarDexContainer.ListDexEntries(containerPath);

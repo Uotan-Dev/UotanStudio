@@ -69,7 +69,7 @@ public sealed partial class FlashBundleOrchestrator
                 var input = PrepareBundle(options[i], null, cancellationToken, remainingHandles, remainingEntries);
                 prepared.Add(input);
                 remainingHandles -= input.Sources?.Count ?? 0;
-                remainingEntries -= input.Programs.Count + (input.Patches?.Count ?? 0);
+                remainingEntries -= input.Programs.Count + (input.Patches?.Count ?? 0) + input.Wipes.Count;
                 if (input.Ufs is not null && i != options.Length - 1)
                 {
                     throw new InvalidDataException("Only the final package manifest may provision UFS.");
@@ -131,6 +131,7 @@ public sealed partial class FlashBundleOrchestrator
         ValidateOptions(options);
         RaiseProgress(progress, FlashBundlePhase.Parsing, "Parsing rawprogram XML...", 0, 0);
         var programs = FilterProgramEntries(RawProgramParser.Parse(options.RawProgramPath), options);
+        List<WipeManifestEntry> wipes = options.SkipWipe ? [] : WipeManifestParser.Parse(options.RawProgramPath);
         if (!options.SkipProgram)
         {
             ResolveSourceFiles(programs, options.ImageDirectory);
@@ -148,7 +149,8 @@ public sealed partial class FlashBundleOrchestrator
             RaiseProgress(progress, FlashBundlePhase.Parsing, "Parsing patch XML...", 0, 0);
             patches = FilterPatchEntries(PatchParser.Parse(options.PatchPath), options);
         }
-        if (programs.Count + (patches?.Count ?? 0) > maximumEntries)
+        wipes = FilterWipeEntries(wipes, options);
+        if (programs.Count + (patches?.Count ?? 0) + wipes.Count > maximumEntries)
         {
             throw new InvalidDataException("The package exceeds the selected manifest entry limit.");
         }
@@ -163,12 +165,12 @@ public sealed partial class FlashBundleOrchestrator
             }
         }
         var sources = options.SkipProgram ? null : FlashBundleSources.Open(programs, cancellationToken, maximumFiles);
-        return new PreparedBundle(programs, patches, ufs, sources, absentPrograms);
+        return new PreparedBundle(programs, patches, ufs, sources, wipes, absentPrograms);
     }
 
     private sealed record PreparedBundle(List<RawProgramEntry> Programs, List<PatchEntry>? Patches,
         UfsProvisionPlan? Ufs, FlashBundleSources? Sources,
-        List<RawProgramEntry>? AbsentPrograms = null) : IDisposable
+        List<WipeManifestEntry> Wipes, List<RawProgramEntry>? AbsentPrograms = null) : IDisposable
     {
         public void Dispose() => Sources?.Dispose();
     }

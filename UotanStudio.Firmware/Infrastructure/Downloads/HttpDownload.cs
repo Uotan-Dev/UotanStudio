@@ -4,8 +4,8 @@ using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.Infrastructure.Downloads;
 
-/// <summary><para>GitHub 加速镜像站点描述；BaseUrl 为空表示源站直连。</para>
-/// A GitHub accelerator mirror; an empty BaseUrl means the origin.</summary>
+/// <summary>A GitHub accelerator mirror; an empty BaseUrl means the origin.
+/// <para>GitHub 加速镜像站点描述；BaseUrl 为空表示源站直连。</para></summary>
 public sealed record GitHubMirrorSite
 {
     /// <summary>Display name of the mirror, used in logs and error text. <para>镜像站显示名称，用于日志与错误文本。</para></summary>
@@ -22,17 +22,17 @@ public sealed record GitHubMirrorSite
 }
 
 /// <summary>
-/// <para>统一的 HTTP 下载入口：GitHub 链接自动枚举镜像站并对镜像与源站测速，
-/// 按测速结果从快到慢依次尝试下载；非 GitHub 链接直接下载。</para>
 /// A single HTTP download entry point: GitHub URLs are expanded to mirrors plus the origin,
 /// speed-probed, and tried fastest-first; other URLs download directly.
+/// <para>统一的 HTTP 下载入口：GitHub 链接自动枚举镜像站并对镜像与源站测速，
+/// 按测速结果从快到慢依次尝试下载；非 GitHub 链接直接下载。</para>
 /// </summary>
 public static class HttpDownload
 {
     /// <summary>Browser User-Agent sent when caller headers do not provide one. <para>调用方标头未提供 User-Agent 时发送的浏览器标识。</para></summary>
     public const string DefaultBrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
-    /// <summary><para>镜像站测速的候选列表；源站直连始终参与测速。</para>
-    /// Candidate mirrors for speed probing; the origin always participates.</summary>
+    /// <summary>Candidate mirrors for speed probing; the origin always participates.
+    /// <para>镜像站测速的候选列表；源站直连始终参与测速。</para></summary>
     private static readonly List<GitHubMirrorSite> MirrorSites =
     [
         new() { Name = "GitHub 直连", BaseUrl = string.Empty, IsEnabled = true },
@@ -78,8 +78,8 @@ public static class HttpDownload
     private const int ParallelChunkBytes = 16 * 1024 * 1024;
     private const int ParallelWorkers = 8;
 
-    /// <summary><para>判断地址是否为 GitHub 文件（release/blob/raw 下载路径）。</para>
-    /// Whether the URL points at a GitHub file (release, blob or raw path).</summary>
+    /// <summary>Whether the URL points at a GitHub file (release, blob or raw path).
+    /// <para>判断地址是否为 GitHub 文件（release/blob/raw 下载路径）。</para></summary>
     /// <param name="uri">Absolute URL whose host is compared. <para>用于比对主机名的绝对地址。</para></param>
     /// <returns>
     /// <see langword="true"/> for <c>github.com</c>, <c>raw.githubusercontent.com</c> or <c>objects.githubusercontent.com</c>, compared without case sensitivity.
@@ -89,8 +89,8 @@ public static class HttpDownload
         || string.Equals(uri.Host, "raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase)
         || string.Equals(uri.Host, "objects.githubusercontent.com", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary><para>枚举一个地址的全部可用源：源站优先，GitHub 链接追加所有启用镜像。</para>
-    /// Enumerates every usable source for a URL: the origin first, then all enabled mirrors for GitHub links.</summary>
+    /// <summary>Enumerates every usable source for a URL: the origin first, then all enabled mirrors for GitHub links.
+    /// <para>枚举一个地址的全部可用源：源站优先，GitHub 链接追加所有启用镜像。</para></summary>
     /// <param name="url">The requested URL. <para>请求的目标地址。</para></param>
     /// <returns>
     /// The origin followed by mirror URLs built from enabled sites with a non-empty <see cref="GitHubMirrorSite.BaseUrl"/>;
@@ -108,8 +108,8 @@ public static class HttpDownload
         }
     }
 
-    /// <summary><para>把 GitHub 地址改写到某个镜像；非 GitHub 地址原样返回。</para>
-    /// Rewrites a GitHub URL onto a mirror; non-GitHub URLs are returned unchanged.</summary>
+    /// <summary>Rewrites a GitHub URL onto a mirror; non-GitHub URLs are returned unchanged.
+    /// <para>把 GitHub 地址改写到某个镜像；非 GitHub 地址原样返回。</para></summary>
     internal static Uri MirrorUrl(GitHubMirrorSite site, Uri url)
     {
         var target = string.Equals(url.Host, "github.com", StringComparison.OrdinalIgnoreCase)
@@ -118,10 +118,10 @@ public static class HttpDownload
         return new Uri(site.BaseUrl.TrimEnd('/') + "/" + target);
     }
 
-    /// <summary><para>对镜像站与源站测速（按拉取 256 KiB 的耗时排序），返回从快到慢的源列表；
-    /// 测速失败的源排在最后，测速整体失败时退化为源站优先的固定顺序。</para>
-    /// Speed-probes mirrors and the origin by fetching 256 KiB each and returns sources fastest-first;
-    /// failed probes sort last, and a wholly failed probe degrades to origin-first order.</summary>
+    /// <summary>Speed-probes mirrors and the origin by fetching 256 KiB each and returns sources fastest-first;
+    /// failed probes sort last, and a wholly failed probe degrades to origin-first order.
+    /// <para>对镜像站与源站测速（按拉取 256 KiB 的耗时排序），返回从快到慢的源列表；
+    /// 测速失败的源排在最后，测速整体失败时退化为源站优先的固定顺序。</para></summary>
     /// <param name="url">Requested URL whose sources are ranked. <para>需要排序候选源的请求地址。</para></param>
     /// <param name="client">Shared HTTP client used for the probe requests. <para>用于测速请求的共享 HTTP 客户端。</para></param>
     /// <param name="cancellationToken">Cancels probing; an already-cancelled token aborts before any request is sent. <para>取消测速；令牌已取消时不会发出任何请求。</para></param>
@@ -181,8 +181,8 @@ public static class HttpDownload
         }
     }
 
-    /// <summary><para>下载到目标文件：先按测速选择源，再依次尝试；返回最终使用的源地址。</para>
-    /// Downloads to a file: picks sources by speed probe, then tries each in order; returns the source used.</summary>
+    /// <summary>Downloads to a file: picks sources by speed probe, then tries each in order; returns the source used.
+    /// <para>下载到目标文件：先按测速选择源，再依次尝试；返回最终使用的源地址。</para></summary>
     /// <example>
     /// <code>
     /// using var client = new HttpClient();
@@ -226,8 +226,8 @@ public static class HttpDownload
         throw new IOException("Download failed: " + url + "\n" + string.Join("\n", errors));
     }
 
-    /// <summary><para>从单个源下载（支持范围并行的镜像同样走此路径），目标文件以原子替换提交。</para>
-    /// Downloads from one source (range-parallel where supported), committing the destination atomically.</summary>
+    /// <summary>Downloads from one source (range-parallel where supported), committing the destination atomically.
+    /// <para>从单个源下载（支持范围并行的镜像同样走此路径），目标文件以原子替换提交。</para></summary>
     /// <param name="client">HTTP client used for probing and the transfer. <para>用于探测与传输的 HTTP 客户端。</para></param>
     /// <param name="uri">Concrete source URL; no mirror selection happens here. <para>具体源地址；此处不再做镜像选源。</para></param>
     /// <param name="destination">Destination file path, replaced only after the whole payload has been verified as complete. <para>目标文件路径；仅在整份载荷完整写出后才被替换。</para></param>
@@ -354,8 +354,8 @@ public static class HttpDownload
 
     private static void TryDelete(string path) { try { File.Delete(path); } catch { } }
 
-    /// <summary><para>构造带浏览器式标头的 GET 请求，避免镜像站的机器人拦截。</para>
-    /// Builds a GET with browser-style headers to avoid mirror bot filtering.</summary>
+    /// <summary>Builds a GET with browser-style headers to avoid mirror bot filtering.
+    /// <para>构造带浏览器式标头的 GET 请求，避免镜像站的机器人拦截。</para></summary>
     /// <param name="uri">Request target; its scheme and authority become the referrer. <para>请求目标；其协议与主机部分将作为 Referer。</para></param>
     /// <param name="requestHeaders">
     /// Optional headers, one <c>Name: Value</c> pair per line, at most 16 KiB and 64 entries. A lone line containing <c>/</c>

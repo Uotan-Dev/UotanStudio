@@ -6,9 +6,7 @@ internal sealed class ErofsDirectoryEntry
 {
     public const int DirentSize = 12;
 
-    public const int DenseHeadSlots = 4;
-
-    public const ushort NameOffHeadFlag = 0x8000;
+    private const ushort NameOffLimit = 0x7FFF;
 
     public ulong Nid { get; set; }
 
@@ -46,18 +44,21 @@ internal sealed class ErofsDirectoryEntry
     }
 
     /// <summary>
-    /// Parses one compact directory block matching the Linux kernel erofs_fill_dentries semantics.
-    /// <para>解析一个 compact 目录块，语义与 Linux 内核 erofs_fill_dentries 一致： dirent 自块首顺序排列，de[0].nameoff 同时给出名称区起点与 dirent 数组字节数 （内核 erofs_readdir 校验其 ≥ 12、小于块长且为 12 的整数倍）；名称紧随 dirent 数组、按 dirent 顺序连续，第 i 项名称占 [nameoff[i], nameoff[i+1])；末项以块尾为界， 并按内核 strnlen 语义截断到首个 NUL。</para>
+    /// Parses one compact directory block and reports on-disk ordering and corruption.
+    /// <para>解析一个 compact 目录块，并按磁盘顺序返回条目、对损坏输入上报。</para>
     /// </summary>
     /// <param name="block">Directory block bytes whose first dirent nameoff selects both the start of the name
-    /// area and the byte size of the dirent array; a block shorter than <see cref="DirentSize"/> bytes, or a
-    /// nameoff below <see cref="DirentSize"/>, past the block end or not a multiple of
-    /// <see cref="DirentSize"/>, parses as an empty list.
+    /// area and the byte size of the dirent array; a block shorter than <see cref="DirentSize"/> bytes parses
+    /// as an empty list.
     /// <para>目录块字节；首条 dirent 的 nameoff 同时决定名称区起点与 dirent 数组的字节长度。块长不足
-    /// <see cref="DirentSize"/>，或 nameoff 小于 <see cref="DirentSize"/>、超出块尾、不是
-    /// <see cref="DirentSize"/> 的整数倍时，结果为空列表。</para></param>
-    /// <returns>The decoded entries in on-disk order, stopping at the first malformed name range.
-    /// <para>按磁盘顺序解码出的条目；遇到首个非法名称范围时停止。</para></returns>
+    /// <see cref="DirentSize"/> 字节时结果为空列表。</para></param>
+    /// <returns>The decoded entries in on-disk order.
+    /// <para>按磁盘顺序解码出的条目。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The first nameoff has bit 15 set, is below
+    /// <see cref="DirentSize"/>, is past the block end or is not a multiple of <see cref="DirentSize"/>; some
+    /// later nameoff is not the running name end; or a name length is zero, above 255, or runs past the block.
+    /// <para>首条 nameoff 置有第 15 位、小于 <see cref="DirentSize"/>、超出块尾或不是 <see cref="DirentSize"/>
+    /// 的整数倍；后续某条 nameoff 不等于运行中的名称结束位置；或名称长度为零、超过 255、或越出块外。</para></exception>
     public static List<ErofsDirectoryEntry> ParseBlock(ReadOnlySpan<byte> block)
     {
         var result = new List<ErofsDirectoryEntry>();
@@ -67,33 +68,29 @@ internal sealed class ErofsDirectoryEntry
         }
 
         var nameOff0 = BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(8, 2));
-        if (nameOff0 < DirentSize || nameOff0 > block.Length || nameOff0 % DirentSize != 0)
+        if (nameOff0 < DirentSize || nameOff0 > NameOffLimit || nameOff0 > block.Length || nameOff0 % DirentSize != 0)
         {
-            return result;
+            throw new FileSystemCorruptedException($"Invalid EROFS dirent array size {nameOff0}.");
         }
 
-        var position = 0;
-        while (position < nameOff0)
+        var expectedNameOff = (int)nameOff0;
+        for (var position = 0; position < nameOff0; position += DirentSize)
         {
             var nameOff = BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(position + 8, 2));
+            if (nameOff > NameOffLimit || nameOff != expectedNameOff)
+            {
+                throw new FileSystemCorruptedException(
+                    $"Non-contiguous EROFS dirent nameoff {nameOff}, expected {expectedNameOff}.");
+            }
 
             int nameLength;
             if (position + DirentSize < nameOff0)
             {
-
-
                 var nameEnd = BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(position + DirentSize + 8, 2));
                 nameLength = nameEnd - nameOff;
             }
             else
             {
-
-
-                if (nameOff >= block.Length)
-                {
-                    break;
-                }
-
                 var nameEnd = block.Length;
                 for (var p = nameOff; p < block.Length; p++)
                 {
@@ -107,10 +104,10 @@ internal sealed class ErofsDirectoryEntry
                 nameLength = nameEnd - nameOff;
             }
 
-
             if (nameLength is < 1 or > 255 || nameOff + nameLength > block.Length)
             {
-                break;
+                throw new FileSystemCorruptedException(
+                    $"Invalid EROFS dirent name length {nameLength} at nameoff {nameOff}.");
             }
 
             result.Add(new ErofsDirectoryEntry
@@ -122,179 +119,15 @@ internal sealed class ErofsDirectoryEntry
                 Name = UotanStudio.Firmware.FileSystem.Extraction.PortableExtractionPaths.NameEncoding.GetString(block.Slice(nameOff, nameLength)),
             });
 
-            position += DirentSize;
+            expectedNameOff = nameOff + nameLength;
         }
 
         return result;
     }
 
     /// <summary>
-    /// Parses one dense directory block using the actual length of block as the directory block size (for a full block this is the directory block size).
-    /// <para>解析一个 dense 目录块；块大小取 block 的实际长度（整块解析时即目录块大小）。</para>
-    /// </summary>
-    /// <param name="block">Bytes of the directory block; fewer than <see cref="DirentSize"/> bytes parse as an empty list.
-    /// <para>目录块的字节；少于 <see cref="DirentSize"/> 字节时解析结果为空列表。</para></param>
-    /// <returns>The decoded entries in on-disk order, empty when the block header is rejected.
-    /// <para>按磁盘顺序解码出的条目；块头被拒绝时为空列表。</para></returns>
-    public static List<ErofsDirectoryEntry> ParseDenseBlock(ReadOnlySpan<byte> block)
-        => ParseDenseBlock(block, block.Length);
-
-    /// <summary>
-    /// Fully parses one dense directory block (EROFS_FEATURE_INCOMPAT_DIRENT_DENSE semantics).
-    /// <para>完整解析一个 dense 目录块（EROFS_FEATURE_INCOMPAT_DIRENT_DENSE 语义）。</para>
-    /// </summary>
-    /// <param name="block">Bytes of the directory block; fewer than <see cref="DirentSize"/> bytes parse
-    /// as an empty list. <para>目录块的字节；少于 <see cref="DirentSize"/> 字节时解析结果为空列表。</para></param>
-    /// <param name="blockSize">Directory block size in bytes that locates the trailing head-slot
-    /// dirents; it may exceed <paramref name="block"/> for a truncated final block, and a value at or
-    /// below <see cref="DenseHeadSlots"/> * <see cref="DirentSize"/> parses as an empty list.
-    /// <para>用于定位块尾 head-slot dirent 的目录块大小（字节）；末尾块被截断时可大于 <paramref name="block"/>；
-    /// 不大于 <see cref="DenseHeadSlots"/> * <see cref="DirentSize"/> 时解析结果为空列表。</para></param>
-    /// <returns>The decoded entries in on-disk order, empty when the block header is rejected.
-    /// <para>按磁盘顺序解码出的条目；块头被拒绝时为空列表。</para></returns>
-    public static List<ErofsDirectoryEntry> ParseDenseBlock(ReadOnlySpan<byte> block, int blockSize)
-    {
-        var result = new List<ErofsDirectoryEntry>();
-        if (block.Length < DirentSize || blockSize <= DenseHeadSlots * DirentSize)
-        {
-            return result;
-        }
-
-        var de0 = BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(8, 2));
-        if ((de0 & NameOffHeadFlag) != 0 || de0 < DirentSize || de0 % DirentSize != 0 || de0 > block.Length)
-        {
-            return result;
-        }
-
-        var ndirents = de0 / DirentSize;
-
-
-        var anyHead = false;
-        for (var i = 0; i < ndirents; i++)
-        {
-            if ((BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(i * DirentSize + 8, 2)) & NameOffHeadFlag) != 0)
-            {
-                anyHead = true;
-                break;
-            }
-        }
-
-        if (!anyHead)
-        {
-            return ParseBlock(block);
-        }
-
-
-        var nameAreaEnd = blockSize - DenseHeadSlots * DirentSize;
-        var namesEnd = Math.Min(nameAreaEnd, block.Length);
-        if (namesEnd < de0)
-        {
-            return result;
-        }
-
-
-        static int ContributionStart(ReadOnlySpan<byte> block, int index)
-        {
-            var r = BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(index * DirentSize + 8, 2));
-            return (r & NameOffHeadFlag) == 0 ? r : (r & 0x7FFF) >> 2;
-        }
-
-        int pos = de0;
-        for (var i = 0; i < ndirents; i++)
-        {
-            var entryOffset = i * DirentSize;
-            var raw = BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(entryOffset + 8, 2));
-
-
-            var isHead = (raw & NameOffHeadFlag) != 0;
-            int contributionStart;
-            if (isHead)
-            {
-                var slot = raw & 0x3;
-                if (slot >= DenseHeadSlots)
-                {
-                    break;
-                }
-
-                contributionStart = (raw & 0x7FFF) >> 2;
-            }
-            else
-            {
-                contributionStart = raw;
-            }
-
-            if (contributionStart < pos || contributionStart >= namesEnd)
-            {
-                break;
-            }
-
-
-            int end = i + 1 < ndirents ? ContributionStart(block, i + 1) : namesEnd;
-            if (end < contributionStart || end > namesEnd)
-            {
-                break;
-            }
-
-            if (i + 1 == ndirents)
-            {
-                var scan = contributionStart;
-                while (scan < end && block[scan] != 0)
-                {
-                    scan++;
-                }
-
-                end = scan;
-            }
-
-            if (isHead)
-            {
-
-
-                var slot = raw & 0x3;
-                var headOffset = blockSize - (slot + 1) * DirentSize;
-                if (headOffset < 0 || headOffset + DirentSize > block.Length)
-                {
-                    break;
-                }
-
-
-                var tailLength = end - contributionStart;
-                var nameBytes = new byte[DirentSize + tailLength];
-                block.Slice(headOffset, DirentSize).CopyTo(nameBytes);
-                block.Slice(contributionStart, tailLength).CopyTo(nameBytes.AsSpan(DirentSize));
-
-                result.Add(new ErofsDirectoryEntry
-                {
-                    Nid = BinaryPrimitives.ReadUInt64LittleEndian(block.Slice(entryOffset)),
-                    NameOff = raw,
-                    FileType = block[entryOffset + 10],
-                    Reserved = block[entryOffset + 11],
-                    Name = UotanStudio.Firmware.FileSystem.Extraction.PortableExtractionPaths.NameEncoding.GetString(nameBytes),
-                });
-            }
-            else
-            {
-
-
-                result.Add(new ErofsDirectoryEntry
-                {
-                    Nid = BinaryPrimitives.ReadUInt64LittleEndian(block.Slice(entryOffset)),
-                    NameOff = raw,
-                    FileType = block[entryOffset + 10],
-                    Reserved = block[entryOffset + 11],
-                    Name = UotanStudio.Firmware.FileSystem.Extraction.PortableExtractionPaths.NameEncoding.GetString(block.Slice(contributionStart, end - contributionStart)),
-                });
-            }
-
-            pos = end;
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Parses a whole directory data area block by block (i_size may span several directory blocks), each block parsed with compact semantics. blockSize should be the directory block size: by default the block size blksz, or 1 &lt;&lt; DirBlkBits when the superblock's DirBlkBits is non-zero.
-    /// <para>按块大小迭代解析整个目录数据区（i_size 可能跨多个目录块），每块按 compact 语义解析。</para>
+    /// Parses a whole directory data area block by block with compact semantics.
+    /// <para>按块迭代解析整个目录数据区，每块按 compact 语义解析。</para>
     /// </summary>
     /// <param name="data">Directory data area of the inode; a span shorter than <see cref="DirentSize"/>
     /// bytes yields an empty list.
@@ -315,48 +148,4 @@ internal sealed class ErofsDirectoryEntry
 
         return result;
     }
-
-    /// <summary>
-    /// Parses a whole directory data area block by block; when dense is true each block is parsed with dense semantics (ParseDenseBlock(ReadOnlySpan{byte}, int)), otherwise with compact semantics (ParseBlock(ReadOnlySpan{byte})).
-    /// <para>按块大小迭代解析整个目录数据区；dense 为 true 时每块按 dense 语义解析 （ParseDenseBlock(ReadOnlySpan{byte}, int)），否则按 compact 语义解析 （ParseBlock(ReadOnlySpan{byte})）。</para>
-    /// </summary>
-    /// <param name="data">Directory data area of the inode; a span shorter than <see cref="DirentSize"/>
-    /// bytes yields an empty list.
-    /// <para>inode 的目录数据区；跨度小于 <see cref="DirentSize"/> 字节时结果为空列表。</para></param>
-    /// <param name="blockSize">Directory block size in bytes, used both as the step between blocks and
-    /// as the dense head-slot layout size; the final block is parsed with the remaining bytes.
-    /// <para>目录块大小（字节），既是块间的步进，也是 dense 语义下 head-slot 的布局基准；最后一块按剩余字节解析。</para></param>
-    /// <param name="dense">When <see langword="true"/>, blocks carrying the EROFS_FEATURE_INCOMPAT_DIRENT_DENSE
-    /// layout are decoded; otherwise the compact layout is used.
-    /// <para>为 <see langword="true"/> 时解析携带 EROFS_FEATURE_INCOMPAT_DIRENT_DENSE 布局的块；
-    /// 否则按 compact 布局解析。</para></param>
-    /// <returns>The entries of every block concatenated in block order.
-    /// <para>按块顺序拼接得到的全部条目。</para></returns>
-    public static List<ErofsDirectoryEntry> ParseDirectory(ReadOnlySpan<byte> data, int blockSize, bool dense)
-    {
-        var result = new List<ErofsDirectoryEntry>();
-        for (var offset = 0; offset + DirentSize <= data.Length; offset += blockSize)
-        {
-            var length = Math.Min(blockSize, data.Length - offset);
-            result.AddRange(dense
-                ? ParseDenseBlock(data.Slice(offset, length), blockSize)
-                : ParseBlock(data.Slice(offset, length)));
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Parses a whole directory data area block by block with dense semantics, delegating each block to ParseDenseBlock(ReadOnlySpan{byte}, int).
-    /// <para>按块大小迭代解析整个目录数据区（dense 语义），每块调用 ParseDenseBlock(ReadOnlySpan{byte}, int)。</para>
-    /// </summary>
-    /// <param name="data">Directory data area of the inode; a span shorter than <see cref="DirentSize"/> bytes
-    /// yields an empty list. <para>inode 的目录数据区；跨度小于 <see cref="DirentSize"/> 字节时结果为空列表。</para></param>
-    /// <param name="blockSize">Directory block size in bytes, used both as the step between blocks and as the
-    /// dense head-slot layout size; the final block is parsed with the remaining bytes.
-    /// <para>目录块大小（字节），既是块间的步进，也是 dense head-slot 的布局基准；最后一块按剩余字节解析。</para></param>
-    /// <returns>The entries of every block concatenated in block order.
-    /// <para>按块顺序拼接得到的全部条目。</para></returns>
-    public static List<ErofsDirectoryEntry> ParseDenseDirectory(ReadOnlySpan<byte> data, int blockSize)
-        => ParseDirectory(data, blockSize, dense: true);
 }

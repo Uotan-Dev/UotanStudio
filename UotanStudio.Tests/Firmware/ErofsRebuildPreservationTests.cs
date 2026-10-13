@@ -1,6 +1,7 @@
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -34,7 +35,7 @@ public class ErofsRebuildPreservationTests
             captured = parser.ReadRebuildOptions();
         }
         Assert.True(captured.SourceInodes is { Count: > 0 });
-        Assert.All(captured.SourceInodes!.Values, inode => Assert.False(string.IsNullOrEmpty(inode.Path)));
+        Assert.All(captured.SourceInodes!.Values, inode => Assert.False(string.IsNullOrEmpty(inode.SourcePath)));
 
         var document = new UotanStudio.Firmware.FileSystem.Metadata.ErofsRebuildParameters();
         SetInodes(document, captured);
@@ -43,14 +44,14 @@ public class ErofsRebuildPreservationTests
         Assert.NotNull(restored.SourceInodesByPath);
         foreach (var (nid, original) in captured.SourceInodes!)
         {
-            if (!restored.SourceInodesByPath!.TryGetValue(original.Path!, out var record))
+            if (!restored.SourceInodesByPath!.TryGetValue(original.SourcePath!, out var record))
             {
-                Assert.Fail($"The restored path table is missing inode {original.Path}.");
+                Assert.Fail($"The restored path table is missing inode {original.SourcePath}.");
             }
 
-            Assert.Equal(original.Compressed, record.Compressed);
-            Assert.Equal(original.InlineData, record.InlineData);
-            Assert.Equal(original.Algorithm, record.Algorithm);
+            Assert.Equal(original.SourceCompressed, record.SourceCompressed);
+            Assert.Equal(original.DataLayout == ErofsDataLayout.Inline, record.DataLayout == ErofsDataLayout.Inline);
+            Assert.Equal(original.SourceAlgorithm, record.SourceAlgorithm);
             Assert.Equal(original.LogicalClusterSize, record.LogicalClusterSize);
             Assert.Same(record, restored.SourceInodes![nid]);
         }
@@ -71,7 +72,7 @@ public class ErofsRebuildPreservationTests
 
         Assert.Null(restored.SourceInodesByPath);
         Assert.True(restored.SourceInodes!.ContainsKey(7));
-        Assert.True(restored.SourceInodes![7].Compressed);
+        Assert.True(restored.SourceInodes![7].SourceCompressed);
     }
 
     [Fact]
@@ -119,14 +120,14 @@ public class ErofsRebuildPreservationTests
             document.Inodes.Add(new UotanStudio.Firmware.FileSystem.Metadata.ErofsRebuildInode
             {
                 Nid = inode.Key,
-                Path = inode.Value.Path,
-                MTime = inode.Value.Mtime,
-                MTimeNanoseconds = inode.Value.MtimeNanoseconds,
-                Extended = inode.Value.Extended,
-                Compressed = inode.Value.Compressed,
-                Algorithm = inode.Value.Algorithm.ToString(),
-                CompactIndexes = inode.Value.CompactIndexes,
-                InlineData = inode.Value.InlineData,
+                Path = inode.Value.SourcePath,
+                MTime = inode.Value.CTime,
+                MTimeNanoseconds = inode.Value.CTimeNsec,
+                Extended = inode.Value.IsExtended,
+                Compressed = inode.Value.SourceCompressed,
+                Algorithm = inode.Value.SourceAlgorithm.ToString(),
+                CompactIndexes = inode.Value.DataLayout == ErofsDataLayout.CompactIndexes,
+                InlineData = inode.Value.DataLayout == ErofsDataLayout.Inline,
                 LogicalClusterSize = inode.Value.LogicalClusterSize,
             });
         }

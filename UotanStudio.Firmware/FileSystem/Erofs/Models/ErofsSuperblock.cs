@@ -79,6 +79,15 @@ internal sealed class ErofsSuperblock
 
     public byte SbExtSlots { get; init; }
 
+    /// <summary>
+    /// Raw 16-bit word at the shared root-nid / block-count-high-half offset. Without <c>48bit</c> it is the
+    /// root inode number, and with <c>48bit</c> it is the high half of the block count while the root moves to
+    /// <see cref="RootNid8b"/>; the raw value is kept for both so <see cref="RootNid64"/> can fall back to it
+    /// when the wide field is zero, which is what <c>lib/super.c</c> does.
+    /// <para>根 nid 与块计数高半部分共用偏移处的原始 16 位字。未声明 <c>48bit</c> 时它是根 inode 编号，声明后它是
+    /// 块计数的高半部分而根移到 <see cref="RootNid8b"/>；两种情况都保留原始值，使 <see cref="RootNid64"/> 能在宽字段
+    /// 为零时回落到它，这正是 <c>lib/super.c</c> 的做法。</para>
+    /// </summary>
     public ushort RootNid { get; init; }
 
     public ulong Inos { get; init; }
@@ -101,6 +110,10 @@ internal sealed class ErofsSuperblock
 
     public uint FeatureIncompat { get; init; }
 
+    /// <summary>
+    /// Algorithm bitmap when compression configuration records follow the superblock, otherwise the LZ4 maximum match distance. The preserved rebuild treats a non-zero value as evidence that the source was built with a compressor.
+    /// <para>超级块后跟随压缩配置记录时为算法位图，否则为 LZ4 最大匹配距离。保留式重建把非零值视为源构建使用了压缩器的证据。</para>
+    /// </summary>
     public ushort AvailableComprAlgs { get; init; }
 
     public ushort ExtraDevices { get; init; }
@@ -128,6 +141,15 @@ internal sealed class ErofsSuperblock
     public bool HasCompatChecksum => (FeatureCompat & CompatSbChecksum) != 0;
     public bool HasCompatMtime => (FeatureCompat & CompatMtime) != 0;
     public bool HasCompatXattrFilter => (FeatureCompat & CompatXattrFilter) != 0;
+
+    /// <summary>Whether the compat word declares inode-shared extended attributes, the condition under which
+    /// <c>s_ishare_xattr_prefix_id</c> names a long-prefix record.
+    /// <para>compat 字是否声明 inode 间共享的扩展属性，这也是 <c>s_ishare_xattr_prefix_id</c> 指名一条长前缀记录的
+    /// 条件。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when <c>ishare_xattrs</c> is set.
+    /// <para>置有 <c>ishare_xattrs</c> 时为 <see langword="true"/>。</para></value>
+    public bool HasCompatIshareXattrs => (FeatureCompat & CompatIshareXattrs) != 0;
     public bool Has48Bit => (FeatureIncompat & Incompat48Bit) != 0;
     public bool HasBigPcluster => (FeatureIncompat & IncompatBigPcluster) != 0;
     public bool HasChunkedFile => (FeatureIncompat & IncompatChunkedFile) != 0;
@@ -147,11 +169,48 @@ internal sealed class ErofsSuperblock
         ? ((ulong)BlocksHi << 32) | Blocks
         : Blocks;
 
-    public ulong RootNid64 => Has48Bit ? RootNid8b : RootNid;
+    /// <summary>
+    /// Resolved root inode number: a 48bit image prefers the wide field but falls back to the legacy 16-bit field when the wide field is zero; an image without 48bit always reads the 16-bit field.
+    /// <para>解析后的根 inode 编号：48bit 镜像优先取宽字段，该字段为零时回退到旧的 16 位字段；非 48bit 镜像始终读取 16 位字段。</para>
+    /// </summary>
+    /// <value>The wide field when a <c>48bit</c> image populates it, otherwise the 16-bit field.
+    /// <para><c>48bit</c> 镜像填充了宽字段时为其值，否则为 16 位字段。</para></value>
+    public ulong RootNid64 => Has48Bit && RootNid8b != 0 ? RootNid8b : RootNid;
 
     public ushort BlocksHi { get; init; }
 
     public ushort EffectiveComprAlgs => HasBigPcluster ? AvailableComprAlgs : (ushort)1;
+
+    /// <summary>
+    /// Reports whether compression configuration records follow the superblock.
+    /// <para>判断超级块之后是否紧跟压缩配置记录。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when the incompat bit shared by <c>compr_cfgs</c> and
+    /// <c>big_pcluster</c> is set.<para>由 <c>compr_cfgs</c> 与 <c>big_pcluster</c> 共用的 incompat 位置位时为
+    /// <see langword="true"/>。</para></value>
+    public bool HasCompressionConfigs => (FeatureIncompat & IncompatCompressCfgs) != 0;
+
+    /// <summary>
+    /// Major component of the oldest Linux release that can mount this image, estimated the way erofs-utils does:
+    /// the highest kernel among the incompat bits, raised per algorithm named in <see cref="AvailableComprAlgs"/>
+    /// once configuration records are present. Compat bits carry no kernel floor.
+    /// <para>可挂载该镜像的最老 Linux 主版本号，估算方式与 erofs-utils 一致：取 incompat 位中的最高内核下限，并在存在
+    /// 配置记录时按 <see cref="AvailableComprAlgs"/> 指名的算法逐项抬高。compat 位不含内核下限。</para>
+    /// </summary>
+    /// <value>The major version, or zero when no floor applies.
+    /// <para>主版本号；无下限适用时为零。</para></value>
+    internal int MinimumKernelMajor => ErofsFeatureTable.MinimumKernelMajor(FeatureCompat, FeatureIncompat,
+        AvailableComprAlgs, HasCompressionConfigs);
+
+    /// <summary>
+    /// Minor component of the oldest Linux release that can mount this image, paired with
+    /// <see cref="MinimumKernelMajor"/>.
+    /// <para>可挂载该镜像的最老 Linux 次版本号，与 <see cref="MinimumKernelMajor"/> 配对。</para>
+    /// </summary>
+    /// <value>The minor version, or zero when no floor applies.
+    /// <para>次版本号；无下限适用时为零。</para></value>
+    internal int MinimumKernelMinor => ErofsFeatureTable.MinimumKernelMinor(FeatureCompat, FeatureIncompat,
+        AvailableComprAlgs, HasCompressionConfigs);
 
     /// <summary>
     /// Computes the absolute byte offset of an inode from its nid: (meta_blkaddr &lt;&lt; s_blkszbits) + nid.
@@ -215,6 +274,13 @@ internal sealed class ErofsSuperblock
             throw new FormatException(
                 $"EROFS image uses unknown incompatible feature bits 0x{unknownIncompat:X8}.");
         }
+
+        if (HasCompatIshareXattrs && XattrPrefixCount != 0 && IshareXattrPrefixId >= XattrPrefixCount)
+        {
+            throw new FormatException(
+                $"EROFS ishare xattr prefix id {IshareXattrPrefixId} is outside the prefix table of length " +
+                $"{XattrPrefixCount}.");
+        }
     }
 
     /// <summary>
@@ -232,9 +298,35 @@ internal sealed class ErofsSuperblock
         => ErofsFeatureTable.Describe(0, bits);
 
     /// <summary>
+    /// Names the upstream features carried by an incompat word, resolving the bit shared by <c>device_table</c>
+    /// and <c>compr_head2</c> through the extra-device slot count instead of printing both names.
+    /// <para>命名 incompat 字所携带的上游特性，并用额外设备槽位数解析 <c>device_table</c> 与 <c>compr_head2</c>
+    /// 共用的位，而不是同时输出两名。</para>
+    /// </summary>
+    /// <param name="bits">The raw <c>s_feature_incompat</c> mask.
+    /// <para>原始 <c>s_feature_incompat</c> 掩码。</para></param>
+    /// <param name="extraDeviceCount">Extra-device slots carried by the layout, read from
+    /// <c>s_extra_devices</c>.<para>布局携带的额外设备槽位数，取自 <c>s_extra_devices</c>。</para></param>
+    /// <returns>Comma-joined upstream names, or <c>"none"</c> when the word is empty.
+    /// <para>以逗号连接的上游名；该字为空时返回 <c>"none"</c>。</para></returns>
+    internal static string DescribeIncompat(uint bits, int extraDeviceCount)
+        => ErofsFeatureTable.Describe(0, bits, extraDeviceCount);
+
+    /// <summary>
+    /// Names the incompat features of this superblock under its own extra-device context, the same wording
+    /// <see cref="DescribeIncompat(uint, int)"/> gives for the pair of raw words.
+    /// <para>在该超级块自身的额外设备上下文中命名其 incompat 特性，措辞与对原始两字调用
+    /// <see cref="DescribeIncompat(uint, int)"/> 的结果一致。</para>
+    /// </summary>
+    /// <returns>Comma-joined upstream names, or <c>"none"</c> when no incompat bit is set.
+    /// <para>以逗号连接的上游名；未置任何 incompat 位时返回 <c>"none"</c>。</para></returns>
+    internal string DescribeIncompatFeatures()
+        => ErofsFeatureTable.Describe(0, FeatureIncompat, ExtraDevices);
+
+    /// <summary>
     /// Names the upstream features carried by a compat word, with the same single source of truth as
-    /// <see cref="DescribeIncompat"/>.
-    /// <para>命名 compat 字所携带的上游特性，与 <see cref="DescribeIncompat"/> 共用同一唯一真值来源。</para>
+    /// <see cref="DescribeIncompat(uint)"/>.
+    /// <para>命名 compat 字所携带的上游特性，与 <see cref="DescribeIncompat(uint)"/> 共用同一唯一真值来源。</para>
     /// </summary>
     /// <param name="bits">The raw <c>s_feature_compat</c> mask.
     /// <para>原始 <c>s_feature_compat</c> 掩码。</para></param>
@@ -253,9 +345,32 @@ internal sealed class ErofsSuperblock
     /// </exception>
     internal static void ValidateBlockCountField(long blockCount)
     {
-        if (blockCount > uint.MaxValue)
+        ValidateBlockCountField(blockCount, false);
+    }
+
+    /// <summary>
+    /// Guards that a computed total block count fits the superblock's block-count fields: the 32-bit
+    /// <see cref="Blocks"/> alone unless the image declares <c>48bit</c>, which splits the value into
+    /// <see cref="Blocks"/> and the 16-bit <see cref="BlocksHi"/> occupying the <c>root_nid</c> slot.
+    /// <para>确保计算得到的总块数适合超级块的块数字段：未声明 <c>48bit</c> 时只有 32 位的
+    /// <see cref="Blocks"/>，声明后该值拆为 <see cref="Blocks"/> 与占用 <c>root_nid</c> 槽位的 16 位
+    /// <see cref="BlocksHi"/>。</para>
+    /// </summary>
+    /// <param name="blockCount">The computed total block count to store in the superblock. <para>要写入超级块的计算总块数。</para></param>
+    /// <param name="has48Bit">Whether the declared feature word carries <c>48bit</c>.
+    /// <para>已声明的特性字是否携带 <c>48bit</c>。</para></param>
+    /// <exception cref="InvalidOperationException">
+    /// <paramref name="blockCount"/> exceeds the fields the declaration provides.
+    /// <para><paramref name="blockCount"/> 超过该声明所提供的字段范围。</para>
+    /// </exception>
+    internal static void ValidateBlockCountField(long blockCount, bool has48Bit)
+    {
+        var limit = has48Bit ? (long)ushort.MaxValue << 32 | uint.MaxValue : uint.MaxValue;
+        if (blockCount > limit)
         {
-            throw new InvalidOperationException($"Image block count {blockCount} exceeds the 32-bit superblock field.");
+            throw new InvalidOperationException(
+                $"Image block count {blockCount} exceeds the superblock block-count field"
+                + (has48Bit ? " pair (48bit)." : "."));
         }
     }
 
@@ -269,9 +384,30 @@ internal sealed class ErofsSuperblock
     /// </exception>
     internal static void ValidateRootNidField(ulong rootNid)
     {
-        if (rootNid > ushort.MaxValue)
+        ValidateRootNidField(rootNid, false);
+    }
+
+    /// <summary>
+    /// Guards that a resolved root inode number fits the superblock root field: the 16-bit
+    /// <see cref="RootNid"/> unless the image declares <c>48bit</c>, which stores the root in the 64-bit
+    /// <see cref="RootNid8b"/> and keeps the 16-bit word for the block-count high half.
+    /// <para>确保解析出的根 inode 编号适合超级块根字段：未声明 <c>48bit</c> 时为 16 位的
+    /// <see cref="RootNid"/>，声明后根存放在 64 位的 <see cref="RootNid8b"/> 中，而 16 位字留给块计数的高半部分。</para>
+    /// </summary>
+    /// <param name="rootNid">The resolved root inode number to store in the superblock. <para>要写入超级块的已解析根 inode 编号。</para></param>
+    /// <param name="has48Bit">Whether the declared feature word carries <c>48bit</c>.
+    /// <para>已声明的特性字是否携带 <c>48bit</c>。</para></param>
+    /// <exception cref="InvalidOperationException">
+    /// <paramref name="rootNid"/> exceeds the field the declaration provides.
+    /// <para><paramref name="rootNid"/> 超过该声明所提供的字段范围。</para>
+    /// </exception>
+    internal static void ValidateRootNidField(ulong rootNid, bool has48Bit)
+    {
+        if (rootNid > (has48Bit ? ulong.MaxValue : ushort.MaxValue))
         {
-            throw new InvalidOperationException($"Root nid {rootNid} exceeds the 16-bit superblock field.");
+            throw new InvalidOperationException(has48Bit
+                ? $"Root nid {rootNid} exceeds the 64-bit superblock field."
+                : $"Root nid {rootNid} exceeds the 16-bit superblock field.");
         }
     }
 
@@ -311,9 +447,7 @@ internal sealed class ErofsSuperblock
             BlockSizeBits = data[OffsetBlockSizeBits],
             SbExtSlots = data[OffsetSbExtSlots],
 
-            RootNid = has48Bit
-                ? (ushort)0
-                : BinaryPrimitives.ReadUInt16LittleEndian(data[OffsetRootNidOrBlocksHi..]),
+            RootNid = BinaryPrimitives.ReadUInt16LittleEndian(data[OffsetRootNidOrBlocksHi..]),
             BlocksHi = has48Bit
                 ? BinaryPrimitives.ReadUInt16LittleEndian(data[OffsetRootNidOrBlocksHi..])
                 : (ushort)0,

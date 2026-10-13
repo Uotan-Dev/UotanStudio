@@ -24,8 +24,9 @@ namespace UotanStudio.Services.Mirroring;
 /// </remarks>
 public static class ScrcpyControlMessageWriter
 {
-    /// <summary>Encodes a position struct: x(4) y(4) width(2) height(2), big-endian.</summary>
-    /// <summary>编码 position 结构：x(4) y(4) width(2) height(2)，大端。</summary>
+    /// <summary>Encodes a position struct: x(4) y(4) width(2) height(2), big-endian.
+    /// <para>编码 position 结构：x(4) y(4) width(2) height(2)，大端。</para>
+    /// </summary>
     private static void WritePosition(Span<byte> dest, int x, int y, int width, int height)
     {
         if (width <= 0 || height <= 0)
@@ -178,8 +179,9 @@ public static class ScrcpyControlMessageWriter
         return msg;
     }
 
-    /// <summary>Converts ticks to i16 fixed-point (1 tick = 0x7FFF per scrcpy Binary.i16FixedPointToFloat).</summary>
-    /// <summary>将刻度转换为 i16 定点数（按 scrcpy Binary.i16FixedPointToFloat，1 刻度 = 0x7FFF）。</summary>
+    /// <summary>Converts ticks to i16 fixed-point (1 tick = 0x7FFF per scrcpy Binary.i16FixedPointToFloat).
+    /// <para>将刻度转换为 i16 定点数（按 scrcpy Binary.i16FixedPointToFloat，1 刻度 = 0x7FFF）。</para>
+    /// </summary>
     private static short ToI16FixedPoint(float ticks)
     {
         var scaled = (int)MathF.Round(ticks * 32767f);

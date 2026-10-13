@@ -7,11 +7,8 @@ using UotanStudio.Firmware.Core.IO;
 namespace UotanStudio.Firmware.AndroidMeta.Apk;
 
 /// <summary>
-/// Rewrites an APK's ZIP layer by parsing the central directory directly (no reflection,
-/// AOT-safe): drops stale v1 signature entries and/or appends new STORED entries, preserving
-/// all other entries byte-for-byte including their local headers and alignment padding.
-/// <para>直接解析中央目录重写 APK 的 ZIP 层（无反射、AOT 安全）：剔除旧 v1 签名条目和/或追加
-/// 新的 STORED 条目，其余条目连同本地文件头与对齐填充逐字节保留。</para>
+/// Rewrites an APK's ZIP layer by parsing the central directory directly: drops stale v1 signature entries and appends new STORED entries, preserving all other entries byte-for-byte.
+/// <para>直接解析中央目录重写 APK 的 ZIP 层：剔除旧 v1 签名条目并追加新的 STORED 条目，其余条目逐字节保留。</para>
 /// </summary>
 public static class ApkEntryStripper
 {
@@ -28,16 +25,12 @@ public static class ApkEntryStripper
     /// </summary>
     public sealed class RewriteRequest
     {
-        /// <summary>Drops META-INF v1 signature entries (MANIFEST.MF/.SF/.RSA/.DSA/.EC).</summary>
-        /// <para>剔除 META-INF 的 v1 签名条目（MANIFEST.MF/.SF/.RSA/.DSA/.EC）。</para>
-        /// <value>When <see langword="true"/> entries matched by <see cref="IsV1SignatureEntry"/> and their central records are omitted from the output; false keeps them untouched.
-        /// <para>为 <see langword="true"/> 时，被 <see cref="IsV1SignatureEntry"/> 命中的条目及其中央目录记录不出现在输出中；false 原样保留。</para></value>
+        /// <summary>Drops META-INF v1 signature entries.<para>剔除 META-INF 的 v1 签名条目。</para></summary>
+        /// <value>When <see langword="true"/> matched entries and their central records are omitted from the output. <para>为 <see langword="true"/> 时命中条目及其中央记录不写入输出。</para></value>
         public bool StripV1SignatureEntries { get; init; }
 
-        /// <summary>Stored entries to append after the existing ones (name + full content).</summary>
-        /// <para>追加在既有条目之后的 STORED 条目（名称 + 完整内容）。</para>
-        /// <value>(Name, Content) pairs written in enumeration order as method-0 STORED entries with UTF-8 names; names are not de-duplicated against existing entries. Defaults to empty.
-        /// <para>按枚举顺序以 method 0 STORED、UTF-8 文件名写入的 (Name, Content) 对；名称不与既有条目去重。默认空列表。</para></value>
+        /// <summary>Stored entries to append after the existing ones.<para>追加在既有条目之后的 STORED 条目。</para></summary>
+        /// <value>Name and content pairs written in enumeration order as method-0 STORED entries with UTF-8 names. <para>按枚举顺序以 method 0 STORED、UTF-8 文件名写入的名称与内容对。</para></value>
         public IReadOnlyList<(string Name, byte[] Content)> EntriesToAppend { get; init; } = [];
     }
 
@@ -46,11 +39,11 @@ public static class ApkEntryStripper
     /// <para>按请求把输入 APK 重写到输出路径（原子替换）。</para>
     /// </summary>
     /// <param name="inputApk">Existing APK to read; opened for reading and closed before returning. <para>待读取的已存在 APK；以读方式打开并在返回前关闭。</para></param>
-    /// <param name="outputApk">Destination path; an existing file is replaced only after the rewrite succeeds, and the parent directory is created when missing. <para>目标路径；仅在重写成功后替换既有文件，缺失的父目录会被创建。</para></param>
+    /// <param name="outputApk">Destination path; an existing file is replaced only after the rewrite succeeds. <para>目标路径；仅在重写成功后替换既有文件。</para></param>
     /// <param name="request">Rewrite request describing stripping and appended entries; must not be <see langword="null"/>. <para>描述剔除与追加条目的重写请求；不得为 null。</para></param>
-    /// <param name="cancellationToken">Observed between copied entries and appended writes; cancellation deletes the temporary file and leaves the existing output untouched. <para>在条目复制与追加写入之间生效；取消时删除临时文件并保持既有输出不动。</para></param>
+    /// <param name="cancellationToken">Observed between entry copies and appended writes; cancellation leaves the existing output untouched. <para>在条目复制与追加写入之间生效；取消时保持既有输出不动。</para></param>
     /// <exception cref="FileNotFoundException"><paramref name="inputApk"/> does not exist. <para><paramref name="inputApk"/> 不存在。</para></exception>
-    /// <exception cref="InvalidDataException">The central directory is corrupt or exceeds 256 MiB, a local header signature is missing, or the rewritten archive exceeds the 32-bit ZIP limits. <para>中央目录损坏或超过 256 MiB、本地文件头签名缺失，或重写后的包超出 32 位 ZIP 上限。</para></exception>
+    /// <exception cref="InvalidDataException">The central directory is corrupt or exceeds 256 MiB, or a local header signature is missing. <para>中央目录损坏或超过 256 MiB，或本地文件头签名缺失。</para></exception>
     /// <exception cref="EndOfStreamException">An entry's declared range runs past the end of the input. <para>条目声明的范围超出输入末尾。</para></exception>
     /// <exception cref="OverflowException">The rewritten archive exceeds the 4 GiB offset addressable by 32-bit ZIP records. <para>重写后的包超出 32 位 ZIP 可寻址的 4 GiB 偏移。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para></exception>
@@ -317,8 +310,8 @@ public static class ApkEntryStripper
     /// <para>判断条目是否为旧 v1 签名工件。</para>
     /// </summary>
     /// <param name="entryName">Archive entry path as stored; the <c>META-INF/</c> prefix and extensions are compared case-insensitively. <para>按存储原样的条目路径；<c>META-INF/</c> 前缀与扩展名比较不区分大小写。</para></param>
-    /// <returns><see langword="true"/> for <c>META-INF/MANIFEST.MF</c> or any path under <c>META-INF/</c> whose name ends in <c>.SF</c>, <c>.RSA</c>, <c>.DSA</c> or <c>.EC</c>.
-    /// <para>对 <c>META-INF/MANIFEST.MF</c>，或 <c>META-INF/</c> 下以 <c>.SF</c>、<c>.RSA</c>、<c>.DSA</c>、<c>.EC</c> 结尾的路径返回 <see langword="true"/>。</para></returns>
+    /// <returns><see langword="true"/> for the manifest file and for signature blocks stored under <c>META-INF/</c>.
+    /// <para>对清单文件以及存放在 <c>META-INF/</c> 下的签名块为 <see langword="true"/>。</para></returns>
     public static bool IsV1SignatureEntry(string entryName)
     {
         if (!entryName.StartsWith("META-INF/", StringComparison.OrdinalIgnoreCase))

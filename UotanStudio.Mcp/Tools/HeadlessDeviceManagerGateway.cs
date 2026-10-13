@@ -2,14 +2,21 @@ using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Adb.Pairing;
+using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
+using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Mcp.Tools;
 
-/// <summary>Owns device access when MCP runs without the desktop host.</summary>
-internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
+/// <summary>Owns device access when MCP runs without the desktop host.
+/// <para>在 MCP 不依赖桌面宿主运行时持有设备访问权。</para>
+/// The gateway is built from the communication layer's default controller, so discovery, leasing and
+/// protocol sessions all stay inside <c>UotanStudio.Comm</c> and need no UI state.
+/// <para>网关由通信层的默认控制器构建，因此发现、租用与协议会话全部留在 <c>UotanStudio.Comm</c> 内，无需任何界面状态。</para>
+/// </summary>
+internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway, IBootProtocolGateway
 {
     private readonly DeviceController _controller;
     private readonly Func<bool> _hdcServerAvailable;
@@ -174,7 +181,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
         }
         else
         {
-            var candidates = endpoints.Where(endpoint => MatchesFastbootTarget(endpoint, target)).Take(2).ToArray();
+            var candidates = endpoints.Where(endpoint => MatchesUsbTarget(endpoint, target)).Take(2).ToArray();
             if (candidates.Length == 0)
             {
                 throw new IOException($"No Fastboot endpoint matches target '{target}'.");
@@ -206,6 +213,100 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
         }
     }
 
+    /// <summary>
+    /// <para>租用清单识别出的 EDL 端点，把单次只读事务交给回调，并在返回前释放租约。</para>
+    /// Leases the EDL endpoint the inventory identified, hands one read transaction to the callback, and
+    /// releases the lease before returning.</summary>
+    /// <typeparam name="TResult"><para>回调产出的值类型。</para>Value the callback produces.</typeparam>
+    /// <param name="target"><para>EDL serial 或 USB 设备键；为空时要求恰好存在一个候选端点。</para>
+    /// EDL serial or USB device key; a blank value requires exactly one candidate endpoint.</param>
+    /// <param name="operation"><para>借用会话执行的读取回调。</para>The read callback using the borrowed session.</param>
+    /// <param name="cancellationToken"><para>贯穿发现、租用与回调的令牌。</para>Token threaded through discovery,
+    /// leasing and the callback.</param>
+    /// <returns><para>回调返回的值。</para>The value returned by <paramref name="operation"/>.</returns>
+    public Task<TResult> RunEdlAsync<TResult>(string? target,
+        Func<EdlSession, CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken)
+        => RunProtocolSessionAsync("edl", DeviceSessionKind.Edl, target, operation, cancellationToken);
+
+    /// <summary>
+    /// <para>租用清单识别出的 MTK 端点，把单次只读事务交给回调，并在返回前释放租约；仅有日志接口的端点会被拒绝。</para>
+    /// Leases the MTK endpoint the inventory identified, hands one read transaction to the callback, and
+    /// releases the lease before returning; a logging-only endpoint is refused.</summary>
+    /// <typeparam name="TResult"><para>回调产出的值类型。</para>Value the callback produces.</typeparam>
+    /// <param name="target"><para>MTK serial 或 USB 设备键；为空时要求恰好存在一个候选端点。</para>
+    /// MTK serial or USB device key; a blank value requires exactly one candidate endpoint.</param>
+    /// <param name="operation"><para>借用会话执行的读取回调。</para>The read callback using the borrowed session.</param>
+    /// <param name="cancellationToken"><para>贯穿发现、租用与回调的令牌。</para>Token threaded through discovery,
+    /// leasing and the callback.</param>
+    /// <returns><para>回调返回的值。</para>The value returned by <paramref name="operation"/>.</returns>
+    public Task<TResult> RunMtkAsync<TResult>(string? target,
+        Func<MtkSession, CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken)
+        => RunProtocolSessionAsync("mtk", DeviceSessionKind.Mtk, target, operation, cancellationToken);
+
+    /// <summary>
+    /// <para>Leases the descriptor-identified EDL or MTK direct endpoint, hands one read transaction to
+    /// the callback, and releases the lease before returning; a refused or already leased endpoint is
+    /// never reopened, retried, or routed to another transport.</para>
+    /// <para>租用按描述符识别出的 EDL 或 MTK 直连端点，把单次读取事务交给回调，并在返回前释放租约；
+    /// 被拒绝或已被租用的端点绝不重开、绝不重试、绝不改走其他传输。</para>
+    /// </summary>
+    private async Task<TResult> RunProtocolSessionAsync<TSession, TResult>(string protocol,
+        DeviceSessionKind kind, string? target,
+        Func<TSession, CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken)
+        where TSession : class
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        var snapshot = Refresh(cancellationToken);
+        var endpoint = SelectRoutableEndpoint(snapshot, protocol, target);
+        await using var lease = await _controller.OpenAsync(snapshot, endpoint.Id, kind, cancellationToken)
+            .ConfigureAwait(false);
+        if (!lease.TryGetSession<TSession>(out var session))
+        {
+            throw new InvalidOperationException($"The leased endpoint carries no {protocol} session.");
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return await operation(session, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <para>Locates the single endpoint classified as the requested protocol that this host may drive
+    /// directly; without a target it requires exactly one candidate and never guesses by enumeration
+    /// order.</para>
+    /// <para>在本宿主可直接驱动、且按请求协议分类的端点中定位唯一目标；未给出目标时要求恰好存在一个
+    /// 候选端点，绝不按枚举顺序猜测。</para>
+    /// </summary>
+    private DeviceEndpoint SelectRoutableEndpoint(DeviceSnapshot snapshot, string protocol, string? target)
+    {
+        var candidates = snapshot.Endpoints.Where(endpoint =>
+            string.Equals(endpoint.Protocol, protocol, StringComparison.Ordinal) &&
+            IsRoutableUsb(snapshot, endpoint));
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            var only = candidates.Take(2).ToArray();
+            if (only.Length != 1)
+            {
+                throw new InvalidOperationException(
+                    $"Exactly one {protocol} device must be connected, or pass its serial or device key.");
+            }
+
+            return only[0];
+        }
+
+        var matches = candidates.Where(endpoint => MatchesUsbTarget(endpoint, target)).Take(2).ToArray();
+        if (matches.Length == 0)
+        {
+            throw new IOException($"No {protocol} endpoint matches target '{target}'.");
+        }
+
+        if (matches.Length > 1)
+        {
+            throw new IOException($"The {protocol} target '{target}' is ambiguous.");
+        }
+
+        return matches[0];
+    }
+
     public (string ServiceName, string Password, string Payload) CreateQrPairingSession()
     {
         var credentials = AdbQrPairing.GenerateCredentials();
@@ -232,15 +333,16 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
     private const int MaxPairingWaitSeconds = 1800;
 
     /// <summary>
-    /// <para>按 serial 或 USB 设备键判断某个 Fastboot 端点是否就是调用方选定的目标。</para>
-    /// Decides whether a Fastboot endpoint is the target the caller selected, matching either the
-    /// reported serial or the USB device key, which is also the endpoint address.
+    /// <para>Decides whether a directly routable USB endpoint is the target the caller selected, matching
+    /// either the reported serial or the stable USB device key, which is also the endpoint address.</para>
+    /// <para>按 serial 或稳定 USB 设备键判断某个可直接路由的 USB 端点是否就是调用方选定的目标；
+    /// 设备键同时也是端点地址。</para>
     /// </summary>
-    /// <param name="endpoint"><para>待匹配的 Fastboot 端点。</para>The Fastboot endpoint under test.</param>
-    /// <param name="target"><para>调用方给出的 serial 或设备键。</para>The caller-supplied serial or device key.</param>
-    /// <returns><para>该端点即为所选目标时为 <see langword="true"/>。</para>
-    /// <see langword="true"/> when this endpoint is the selected target.</returns>
-    private static bool MatchesFastbootTarget(DeviceEndpoint endpoint, string? target) =>
+    /// <param name="endpoint"><para>The endpoint under test.</para>待匹配的端点。</param>
+    /// <param name="target"><para>The caller-supplied serial or device key.</para>调用方给出的 serial 或设备键。</param>
+    /// <returns><para><see langword="true"/> when this endpoint is the selected target.</para>
+    /// 该端点即为所选目标时为 <see langword="true"/>。</returns>
+    private static bool MatchesUsbTarget(DeviceEndpoint endpoint, string? target) =>
         !string.IsNullOrWhiteSpace(target) &&
         (string.Equals(endpoint.Serial ?? endpoint.Address, target, StringComparison.Ordinal) ||
             string.Equals(endpoint.Address, target, StringComparison.Ordinal) ||

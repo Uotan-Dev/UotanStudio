@@ -70,8 +70,10 @@ public sealed partial class FirehoseProtocol
         var transferStarted = false;
         try
         {
-            var xml = FirehoseXmlBuilder.BuildRead(Configuration.SectorSize, numSectors, filename, physicalPartition, startSector, slot: EffectiveSlot);
-            var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
+            var xml = FirehoseXmlBuilder.BuildRead(Configuration.SectorSize, numSectors, filename, physicalPartition,
+                startSector, slot: EffectiveSlot, pagesPerBlock: NandPagesPerBlockHint);
+            var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken,
+                skipResponseAcknowledgement: Configuration.SkipResponseOnReadWrite ? SkipResponseAcknowledgement(true) : null);
             RequireRawMode(response, EdlErrorCode.ReadFailed);
             transferStarted = true;
             await ReadRawPayloadToStreamAsync(destination, totalBytes, cancellationToken, progress);

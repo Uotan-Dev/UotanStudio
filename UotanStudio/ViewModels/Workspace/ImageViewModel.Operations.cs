@@ -23,15 +23,24 @@ internal partial class ImageViewModel
     /// Gets whether a progress stats line is currently available to display.</summary>
     public bool HasProgressStats => ProgressStats.Length > 0;
 
-    /// <summary>Extracts the clicked entry or checked entries. 提取右键条目或勾选条目。</summary>
+    /// <summary>
+    /// Extracts the clicked entry or checked entries.
+    /// <para>提取右键条目或勾选条目。</para>
+    /// </summary>
     [RelayCommand]
     private Task ExtractSelectedAsync(ImageEntryViewModel? image = null) => RunImagesAsync("extract", image);
 
-    /// <summary>Builds images using directory metadata. 按目录元数据构建镜像。</summary>
+    /// <summary>
+    /// Builds images using directory metadata.
+    /// <para>按目录元数据构建镜像。</para>
+    /// </summary>
     [RelayCommand]
     private Task SynthesizeImgAsync(ImageEntryViewModel? image = null) => RunImagesAsync("img", image);
 
-    /// <summary>Builds Brotli-compressed DAT output. 构建 Brotli 压缩的 DAT 输出。</summary>
+    /// <summary>
+    /// Builds Brotli-compressed DAT output.
+    /// <para>构建 Brotli 压缩的 DAT 输出。</para>
+    /// </summary>
     [RelayCommand]
     private Task SynthesizeBrAsync(ImageEntryViewModel? image = null) => RunImagesAsync("br", image);
 
@@ -135,9 +144,6 @@ internal partial class ImageViewModel
                         LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);
                         if (operation == "img" && result.Success)
                         {
-                            // 四维度等价报告以一行英文写入统一日志：可见状态区与解包页保持同一形状，日志保持单行可检索。
-                            // The equivalence report goes to the unified log as one English line, keeping the
-                            // visible status area shaped like the unpack page and the log greppable.
                             LogService.Instance.Write(LogLevel.Info, "Images",
                                 FirmwareEquivalencePresenter.FormatLogLine(entry.DisplayName, result.Equivalence));
                         }
@@ -195,14 +201,14 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>解包单个镜像条目：校验范围、检测格式、按需确认覆盖并按格式分派解包；
-    /// 结果摘要写入统一日志。</para>
     /// Unpacks a single image entry: validates ranges, detects the format, confirms overwrite on
     /// demand and dispatches by format; the result summary goes to the unified log.
+    /// <para>解包单个镜像条目：校验范围、检测格式、按需确认覆盖并按格式分派解包；
+    /// 结果摘要写入统一日志。</para>
     /// </summary>
-    /// <param name="entry"><para>镜像条目（用于按格式分派）。</para>The image entry (used for format dispatch).</param>
-    /// <param name="paths"><para>操作路径（源文件与解包目录）。</para>Operation paths (source file and unpacked directory).</param>
-    /// <param name="itemProgress"><para>条目内进度（0-100，可选），由调用方换算为总进度。</para>Optional in-item progress (0-100); the caller scales it into overall progress.</param>
+    /// <param name="entry">The image entry (used for format dispatch). <para>镜像条目（用于按格式分派）。</para></param>
+    /// <param name="paths">Operation paths (source file and unpacked directory). <para>操作路径（源文件与解包目录）。</para></param>
+    /// <param name="itemProgress">Optional in-item progress (0-100); the caller scales it into overall progress. <para>条目内进度（0-100，可选），由调用方换算为总进度。</para></param>
     /// <returns>解包是否成功、是否被用户跳过，以及实际使用的解包目录（重名时已加后缀）。
     /// Whether extraction succeeded, whether the user skipped it, and the directory actually used
     /// (suffixed when a duplicate name was found).</returns>
@@ -213,9 +219,6 @@ internal partial class ImageViewModel
         using var metadataScope = UotanStudio.Firmware.Core.Repacking.RepackMetadata.UseContext(
             ProjectContextService.Instance.CaptureMetadataContext(targetDirectory));
         UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
-        // 条目的格式标签来自解决方案快照，先还原为格式标识再分派。
-        // Entry labels come from the solution snapshot, so they are parsed back into a format identity
-        // before dispatch.
         var format = ImageInputService.ParseFormatLabel(entry.Format);
         var handler = ImageInputService.IsBootFamilyFormat(format)
             ? new UotanStudio.Firmware.BootSecurity.BootImage.BootImageFormatHandler()
@@ -246,8 +249,6 @@ internal partial class ImageViewModel
             ImageFormatKind.Sparse => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, targetDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken), cancellationToken),
             ImageFormatKind.Ext4 or ImageFormatKind.Erofs or ImageFormatKind.F2fs or ImageFormatKind.Raw => await ExtractRawAsync(paths.Source, targetDirectory, paths.Name,
                 byteProgress: byteProgress, erofsExtraDevicePaths: erofsDevices, cancellationToken: cancellationToken),
-            // boot 家族其余变体（MTK/Samsung/DHTB/ChromeOS/Tegra/zImage/RSCE）由 BootImageFormatHandler 分派解包。
-            // Remaining boot-family variants (MTK/Samsung/DHTB/ChromeOS/Tegra/zImage/RSCE) dispatch through BootImageFormatHandler.
             _ => await Task.Run(async () =>
             {
                 var options = new UotanStudio.Firmware.Core.UnpackOptions { FileSystemProgress = byteProgress };
@@ -294,13 +295,13 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>返回本次解包实际使用的目标目录：当标准解包目录已被同名文件占用（文件与目录冲突，
-    /// 无法作为目录解包）时，自动在原名称后追加 <c>(1)</c>/<c>(2)</c> 形式的后缀以避开冲突；
-    /// 否则原样返回标准解包目录。</para>
     /// Returns the directory actually used for this extraction: when the standard unpacked directory
     /// is already occupied by a same-named file (a file/directory conflict that cannot be unpacked
     /// into), the original name is automatically given a <c>(1)</c>/<c>(2)</c> style suffix to avoid
     /// the collision; otherwise the standard unpacked directory is returned unchanged.
+    /// <para>返回本次解包实际使用的目标目录：当标准解包目录已被同名文件占用（文件与目录冲突，
+    /// 无法作为目录解包）时，自动在原名称后追加 <c>(1)</c>/<c>(2)</c> 形式的后缀以避开冲突；
+    /// 否则原样返回标准解包目录。</para>
     /// </summary>
     private static string ResolveUnpackTargetDirectory(ImageOperationPaths paths)
     {
@@ -324,16 +325,11 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>供新建项目流程调用的解包入口：把导入的镜像逐个解包到工程目录；开启完全解包时
-    /// 继续扫描解包产物中的嵌套镜像（如 ROM 包内的 payload.bin、payload 产出的分区镜像）并
-    /// 递归解包。进度与状态写入本视图模型，由镜像面板进度条显示。</para>
-    /// Unpack entry for the new-project flow: unpacks imported images into the project directory one
-    /// by one; with full unpack enabled, scans unpacked output for nested images (payload.bin inside a
-    /// ROM package, partition images produced by payload) and unpacks them recursively. Progress and
-    /// status are written to this view model for the image panel progress bar.
+    /// Unpacks the imported images into the project directory for the new-project flow.
+    /// <para>供新建项目流程使用，把导入的镜像解包到工程目录。</para>
     /// </summary>
-    /// <param name="entries"><para>要解包的镜像条目。</para>The image entries to unpack.</param>
-    /// <param name="unpackFully"><para>是否递归解包嵌套镜像。</para>Whether to unpack nested images recursively.</param>
+    /// <param name="entries">The image entries to unpack. <para>要解包的镜像条目。</para></param>
+    /// <param name="unpackFully">Whether to unpack nested images recursively. <para>是否递归解包嵌套镜像。</para></param>
     public async Task UnpackFromProjectCreationAsync(IReadOnlyList<ImageEntryViewModel> entries, bool unpackFully, CancellationToken cancellationToken = default)
     {
         if (IsOperating || entries.Count == 0) return;
@@ -406,13 +402,13 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>把解包目录根层的产物统计（目录与文件数量）写成一行统一日志，不逐条展开条目，
-    /// 避免递归解包大量嵌套镜像时刷屏。</para>
     /// Writes a single unified-log line with the root-level extraction tally (directory and file
     /// counts) instead of listing entries one by one, so recursive unpacking of nested images
     /// does not flood the log.
+    /// <para>把解包目录根层的产物统计（目录与文件数量）写成一行统一日志，不逐条展开条目，
+    /// 避免递归解包大量嵌套镜像时刷屏。</para>
     /// </summary>
-    /// <param name="directory"><para>解包目标目录。</para>Extraction target directory.</param>
+    /// <param name="directory">Extraction target directory. <para>解包目标目录。</para></param>
     private static void LogExtractionContents(string directory)
     {
         try
@@ -434,10 +430,10 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>扫描解包目录根层与一级子目录，收集可继续解包的嵌套镜像条目；
-    /// <c>unknown</c>/<c>raw</c> 格式与工程外的文件被跳过。</para>
     /// Scans the unpacked directory root and first-level subdirectories for nested images that can be
     /// unpacked further; <c>unknown</c>/<c>raw</c> formats and files outside the project are skipped.
+    /// <para>扫描解包目录根层与一级子目录，收集可继续解包的嵌套镜像条目；
+    /// <c>unknown</c>/<c>raw</c> 格式与工程外的文件被跳过。</para>
     /// </summary>
     private static List<ImageEntryViewModel> CollectNestedImages(string directory)
     {
@@ -462,8 +458,6 @@ internal partial class ImageViewModel
         var context = ProjectContextService.Instance;
         foreach (var file in candidates)
         {
-            // 探测只返回文件内的格式标识；目录条目的 "folder" 标签由打包模式单独写入。
-            // Probing only reports file formats; the "folder" label is written by pack mode separately.
             var format = ImageInputService.ProbeFormat(file);
             if (format is ImageFormatKind.Unknown or ImageFormatKind.Raw)
             {

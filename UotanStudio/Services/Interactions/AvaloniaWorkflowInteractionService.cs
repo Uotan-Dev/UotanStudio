@@ -7,7 +7,8 @@ using UotanStudio.Views.Interactions;
 
 namespace UotanStudio.Services.Interactions;
 
-/// <summary>Presents a form on the UI thread and closes it before completing cancellation.</summary>
+/// <summary>Presents a form and closes it before completing cancellation.
+/// <para>呈现表单，并在取消完成之前将其关闭。</para></summary>
 public sealed class AvaloniaWorkflowInteractionService : IWorkflowInteractionService, IWorkflowFeedbackService
 {
     private readonly Func<Window?> _owner;

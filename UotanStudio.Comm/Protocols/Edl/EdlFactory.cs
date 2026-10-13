@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -7,7 +8,11 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// <summary>
 /// Factory for creating <see cref="EdlSession"/> instances from USB device sessions.
 /// <para>从 USB 设备会话创建 <see cref="EdlSession"/> 实例的工厂。</para>
-/// Defaults to Qualcomm 05C6:9008. Other identities require an explicit device profile.
+/// With no explicit profile it accepts exactly the bootrom identities the USB classifier reports as
+/// <c>edl</c>, so the factory and the discovery table can never disagree about which ports are EDL;
+/// other identities require an explicit device profile.
+/// <para>未指定设备档案时，它接受的范围与 USB 分类器判定为 <c>edl</c> 的 bootrom 标识完全一致，
+/// 因此工厂与发现表绝不可能对哪些端口属于 EDL 产生分歧；其余标识需要显式设备档案。</para>
 /// </summary>
 internal sealed class EdlFactory : IProtocolFactory
 {
@@ -15,8 +20,9 @@ internal sealed class EdlFactory : IProtocolFactory
     private readonly ushort? _productId;
     private readonly byte? _interfaceSubclass;
 
-    /// <summary>Creates an EDL factory matching Qualcomm QDLoader 9008 without any interface-subclass restriction.
-    /// <para>创建匹配高通 QDLoader 9008 且不附加接口子类限制的 EDL 工厂。</para></summary>
+    /// <summary>Creates an EDL factory that accepts every identity the USB classifier reports as EDL, without
+    /// any interface-subclass restriction.
+    /// <para>创建接受 USB 分类器判定为 EDL 的全部标识、且不附加接口子类限制的 EDL 工厂。</para></summary>
     public EdlFactory() { }
 
     /// <summary>Creates a new EDL factory matching a specific VID/PID.
@@ -29,17 +35,20 @@ internal sealed class EdlFactory : IProtocolFactory
         _productId = productId;
     }
 
-    /// <summary>Further restricts the default QDLoader identity to an observed interface subclass.
-    /// <para>在默认 QDLoader 标识之上进一步限制观测到的接口子类。</para></summary>
-    /// <param name="interfaceSubclass">Subclass byte that at least one vendor-class <c>0xFF</c> interface must carry,
-    /// alongside the default <c>05C6:9008</c> identity. <para>至少一个厂商类 <c>0xFF</c> 接口必须携带的子类字节，与默认的
-    /// <c>05C6:9008</c> 标识一同匹配。</para></param>
+    /// <summary>Further restricts the accepted identities to an observed interface subclass.
+    /// <para>在可接受标识之上进一步限制观测到的接口子类。</para></summary>
+    /// <param name="interfaceSubclass">Subclass byte that at least one vendor-class <c>0xFF</c> interface must
+    /// carry, on top of the classifier's EDL identity table. <para>至少一个厂商类 <c>0xFF</c> 接口必须携带的
+    /// 子类字节，附加在分类器的 EDL 标识表之上。</para></param>
     public EdlFactory(byte interfaceSubclass)
     {
         _interfaceSubclass = interfaceSubclass;
     }
 
-    /// <summary>Gets the protocol name. 获取协议名称。</summary>
+    /// <summary>
+    /// Gets the protocol name.
+    /// <para>获取协议名称。</para>
+    /// </summary>
     public string ProtocolName => "edl";
 
     /// <summary>
@@ -76,7 +85,15 @@ internal sealed class EdlFactory : IProtocolFactory
 
     internal bool Matches(UsbDeviceInfo info)
     {
-        if (info.VendorId != (_vendorId ?? 0x05C6) || info.ProductId != (_productId ?? 0x9008))
+        if (_vendorId is null && _productId is null)
+        {
+            if (UsbProtocolClassifier.Classify(info.VendorId, info.ProductId, null, null, null) != "edl")
+            {
+                return false;
+            }
+        }
+        else if (info.VendorId != _vendorId.GetValueOrDefault(0x05C6)
+                 || info.ProductId != _productId.GetValueOrDefault(0x9008))
         {
             return false;
         }

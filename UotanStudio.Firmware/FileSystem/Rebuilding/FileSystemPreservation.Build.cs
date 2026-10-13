@@ -16,15 +16,18 @@ namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 public static partial class FileSystemPreservation
 {
     /// <summary>
-    /// Reports whether the caller overrode EROFS compression or edited the inherited feature declaration. The
-    /// rebuild optimizer replays the source algorithm's recorded size estimates, so it can only be reused while
-    /// neither the compression settings nor the declaration the estimates were sampled under has changed.
-    /// <para>判断调用方是否覆盖了 EROFS 压缩参数或编辑了继承来的特性声明。重建优化器复用源算法记录的体积估算，
-    /// 因此只有压缩设置与采样估算所依据的声明都未改变时才能继续使用。</para>
+    /// Reports whether the caller overrode EROFS compression, edited the inherited feature declaration, or changed
+    /// the packed layout. The rebuild optimizer replays the source algorithm's recorded size estimates, so it can
+    /// only be reused while the compression settings, the declaration the estimates were sampled under, and the
+    /// fragment and metabox layout the estimates were sampled under have all stayed.
+    /// <para>判断调用方是否覆盖了 EROFS 压缩参数、编辑了继承来的特性声明，或改变了打包布局。重建优化器复用
+    /// 源算法记录的体积估算，因此只有压缩设置、采样估算所依据的声明，以及其所依据的 fragment 与 metabox
+    /// 布局都保持不变时才能继续使用。</para>
     /// </summary>
     private static bool HasCompressionOverride(IReadOnlyDictionary<string, string> options)
         => options.ContainsKey("ErofsAlgorithm") || options.ContainsKey("ErofsCompressionLevel")
-            || options.ContainsKey("ErofsFeatures") || options.ContainsKey("ErofsDotOmitted");
+            || options.ContainsKey("ErofsFeatures") || options.ContainsKey("ErofsDotOmitted")
+            || options.ContainsKey("ErofsFragments") || options.ContainsKey("ErofsMetabox");
 
     /// <summary>
     /// Builds one edited container and returns the EROFS rebuild report when the bounded candidate search ran or

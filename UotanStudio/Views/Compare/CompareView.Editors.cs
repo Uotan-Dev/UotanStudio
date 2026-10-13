@@ -14,10 +14,8 @@ using UotanStudio.ViewModels.Compare;
 
 namespace UotanStudio.Views.Compare;
 
-// 本分部承载 CompareView 的一组同类成员；类与其余分部合并后等价于原实现。
 public partial class CompareView
 {
-    // ===== 文本对比编辑器（槽模型 ↔ 两侧编辑器） =====
 
     /// <summary>同步编辑器文档时置位，避免把程序写入当成用户编辑。</summary>
     private bool _syncingEditors;
@@ -32,10 +30,10 @@ public partial class CompareView
     private bool _syncingEditorScroll;
 
     /// <summary>
-    /// <para>两个对比编辑器的滚动镜像：两侧文档等长（行=对齐槽），所以直接按像素镜像偏移就能保持同行对应，
-    /// 不需要按行号换算。</para>
     /// Scroll mirroring between the two compare editors: both documents have the same length (one line per aligned slot), so
     /// mirroring the pixel offset keeps the rows aligned without any row-index conversion.
+    /// <para>两个对比编辑器的滚动镜像：两侧文档等长（行=对齐槽），所以直接按像素镜像偏移就能保持同行对应，
+    /// 不需要按行号换算。</para>
     /// </summary>
     private void OnCompareEditorScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
@@ -76,9 +74,9 @@ public partial class CompareView
         => editor.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
 
     /// <summary>
-    /// <para>把两个对比编辑器同步成槽模型的投影（行号=对齐序号，填充槽显示斜杠），并刷新差异行着色与选中范围。</para>
     /// Synchronises both compare editors with the slot model's projection (line numbers are alignment indices, fillers show a
     /// slash) and refreshes the diff-line colouring and the selected slot range.
+    /// <para>把两个对比编辑器同步成槽模型的投影（行号=对齐序号，填充槽显示斜杠），并刷新差异行着色与选中范围。</para>
     /// </summary>
     private void SyncCompareEditors(TextEditor? skip = null)
     {
@@ -87,8 +85,6 @@ public partial class CompareView
             return;
         }
 
-        // 同步过程本身也不能抛：任何编辑器异常都转成错误条 + 日志。
-        // The synchronisation itself must not throw either: any editor failure becomes an error banner entry plus a log line.
         try
         {
             SyncCompareEditorsCore(vm, skip);
@@ -107,9 +103,6 @@ public partial class CompareView
         {
             foreach (var (editor, leftSide) in EnumerateCompareEditors())
             {
-                // 编辑侧保持用户刚输入的内容与光标（模型已按同样的语义更新），只同步另一侧。
-                // The edited side keeps the user's text and caret (the model was updated with the same semantics); only the other
-                // side is synchronised.
                 if (!ReferenceEquals(editor, skip))
                 {
                     var text = vm.ProjectText(leftSide);
@@ -119,8 +112,6 @@ public partial class CompareView
                     }
                 }
 
-                // 差异行整行着色（不同=红、单侧=橙/蓝），与行列表期间的规则一致。
-                // Whole-line diff colouring (different=red, single-side=orange/blue), matching the row list's rule.
                 if (_editors.TryGetValue(editor, out var highlighter))
                 {
                     highlighter.SetLines(vm.HighlightedSlots(leftSide).Select(index => index + 1));
@@ -168,9 +159,9 @@ public partial class CompareView
     }
 
     /// <summary>
-    /// <para>接线每一列的编辑器：浏览文本文件用编辑器（内容随列属性双向同步），文本对比用两侧编辑器（改动翻译成槽操作）。</para>
     /// Wires each column's editors: a browsed text file uses the editor (content synchronised both ways with the column's
     /// property) and a text comparison uses both sides' editors (changes translated into slot operations).
+    /// <para>接线每一列的编辑器：浏览文本文件用编辑器（内容随列属性双向同步），文本对比用两侧编辑器（改动翻译成槽操作）。</para>
     /// </summary>
     private void AttachColumnEditors()
     {
@@ -219,9 +210,6 @@ public partial class CompareView
             {
                 if (!string.Equals(editor.Document.Text, visuals.Column.EditorText, StringComparison.Ordinal))
                 {
-                    // 写入延后到本次属性通知之后：在编辑器自身的变更通知里回写文档容易触发内部状态冲突。
-                    // The write is deferred past the current notification: writing the document back from inside the editor's own
-                    // change notification can trip internal state.
                     var text = visuals.Column.EditorText;
                     Dispatcher.UIThread.Post(
                         () =>
@@ -229,8 +217,6 @@ public partial class CompareView
                             _syncingEditors = true;
                             try
                             {
-                                // 写回整篇文档会把光标重置到文件开头，先记住光标位置再恢复。
-                                // Replacing the whole document resets the caret to the top of the file, so it is captured and restored.
                                 var caret = editor.CaretOffset;
                                 editor.Document.Text = text;
                                 editor.CaretOffset = Math.Clamp(caret, 0, editor.Document.TextLength);
@@ -257,8 +243,6 @@ public partial class CompareView
                 return;
             }
 
-            // 编辑失败也不能闪退：异常写进错误区与日志。
-            // An editing failure must not crash the app either: exceptions go to the error banner and the log.
             try
             {
                 visuals.Column.EditorText = editor.Document.Text;
@@ -277,8 +261,6 @@ public partial class CompareView
         };
         editor.Document.Text = visuals.Column.EditorText;
     }
-
-    // ===== 文本编辑器的右键菜单 =====
 
     /// <summary>记录右键命中的编辑器（菜单项在弹出层里，取不到编辑器本身）。</summary>
     /// Records the editor a context request hit (menu items live in a popup and cannot resolve the editor themselves).
@@ -328,10 +310,10 @@ public partial class CompareView
     }
 
     /// <summary>
-    /// <para>文本对比编辑器右键菜单「复制到另一侧」：整行选中时复制这些行到对侧相同槽位；只在单行内选中一段文字时，
-    /// 用选中文字替换对侧同一行的相同列范围。</para>
     /// The text-comparison editor's "copy to the other side": a whole-line selection copies those lines to the same slots on the other
     /// side, while a partial selection inside one line replaces the counterpart's same column range with the selected text.
+    /// <para>文本对比编辑器右键菜单「复制到另一侧」：整行选中时复制这些行到对侧相同槽位；只在单行内选中一段文字时，
+    /// 用选中文字替换对侧同一行的相同列范围。</para>
     /// </summary>
     private void OnCopyEditorSelectionToOtherSide(object? sender, RoutedEventArgs e)
     {
@@ -353,8 +335,6 @@ public partial class CompareView
             var endLine = Math.Max(selection.StartPosition.Line, selection.EndPosition.Line) - 1;
             var selectedText = selection.IsEmpty ? null : editor.SelectedText;
 
-            // 只有「单行内、且没有整行覆盖」时才按列范围替换，其余情况按整行复制。
-            // Only a single-line selection that does not cover whole lines is handled as a column range; everything else copies whole lines.
             var partial = selectedText is not null && startLine == endLine
                 && selection.StartPosition.Column > 1;
             vm.CopyEditorSelection(
@@ -374,11 +354,11 @@ public partial class CompareView
     }
 
     /// <summary>
-    /// <para>挂接对比编辑器：载入槽模型投影、拦截会改变行数的编辑（翻译成槽操作后重新投影两侧），
-    /// 把行内编辑写回槽模型，并把编辑器选区同步成行选择（供顶部复制按钮使用）。</para>
     /// Attaches a compare editor: loads the slot model's projection, intercepts line-count-changing edits (translated into slot
     /// operations with both sides re-projected afterwards), writes in-line edits back into the slot model and mirrors the
     /// editor's selection into the row selection used by the toolbar's copy buttons.
+    /// <para>挂接对比编辑器：载入槽模型投影、拦截会改变行数的编辑（翻译成槽操作后重新投影两侧），
+    /// 把行内编辑写回槽模型，并把编辑器选区同步成行选择（供顶部复制按钮使用）。</para>
     /// </summary>
     private void AttachCompareEditors()
     {
@@ -405,15 +385,8 @@ public partial class CompareView
             editor.TextArea.TextView.BackgroundRenderers.Add(highlighter);
             editor.Document.Changed += OnCompareEditorChanged;
             editor.TextArea.SelectionChanged += OnCompareEditorSelectionChanged;
-            // 右键菜单项在弹出层里取不到编辑器，与浏览编辑器一样在隧道阶段记录右键目标。
-            // Menu items live in a popup and cannot resolve the editor, so record the context target in the tunnel phase
-            // just like the browsing editor does.
             editor.AddHandler(ContextRequestedEvent, OnEditorContextRequested, RoutingStrategies.Tunnel);
-            // Ctrl+Z / Ctrl+Y 由两侧共享的撤销历史处理（隧道阶段先拦截）。
-            // Ctrl+Z / Ctrl+Y are handled by the history both panes share (intercepted in the tunnel phase).
             editor.AddHandler(KeyDownEvent, OnCompareEditorKeyDown, RoutingStrategies.Tunnel);
-            // 两侧文档等长、行高相同，因此编辑器滚动直接按像素镜像即可保持同行对应。
-            // Both documents have the same length and row height, so mirroring the pixel offsets keeps the rows aligned.
             if (ResolveEditorScrollViewer(editor) is { } scrollViewer)
             {
                 scrollViewer.ScrollChanged += OnCompareEditorScrollChanged;
@@ -432,11 +405,11 @@ public partial class CompareView
             : new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb(0x40, 0xC4, 0x2B, 0x1C));
 
     /// <summary>
-    /// <para>编辑器改动前置处理：行数会变化的编辑（Enter、删除换行、多行粘贴、剪切整行）在这里取消，
-    /// 改由槽模型执行并重新投影两侧，保证两侧文档始终等长；行数不变的行内编辑直接放行。</para>
     /// Pre-change handling: an edit that changes the line count (Enter, deleting a line break, multi-line paste, cutting a
     /// whole line) is cancelled and executed through the slot model with both sides re-projected so the documents stay the
     /// same length; an in-line edit that keeps the line count passes through.
+    /// <para>编辑器改动前置处理：行数会变化的编辑（Enter、删除换行、多行粘贴、剪切整行）在这里取消，
+    /// 改由槽模型执行并重新投影两侧，保证两侧文档始终等长；行数不变的行内编辑直接放行。</para>
     /// </summary>
     private void OnCompareEditorChanged(object? sender, DocumentChangeEventArgs e)
     {
@@ -446,9 +419,6 @@ public partial class CompareView
             return;
         }
 
-        // 任何异常都不能让应用闪退（UI 事件里的未捕获异常会直接终止进程）：出错写进错误区与日志，保持视图可用。
-        // No exception may crash the app (an uncaught exception in a UI event kills the process): failures go to the error banner and
-        // the log, and the view stays usable.
         try
         {
             var (editor, leftSide) = FindCompareEditorSide(document);
@@ -457,25 +427,12 @@ public partial class CompareView
                 return;
             }
 
-            // 编辑器的改动整体交给槽模型翻译（行内编辑只改本侧内容；行数变化则在对侧补/收填充槽），
-            // 然后只把另一侧同步成新的投影，编辑侧保留用户输入与光标。
-            // The editor change is translated by the slot model as a whole (an in-line edit only touches this side's content, a
-            // count change adds/removes fillers on the other side) and only the other side is synchronised afterwards, so the
-            // edited side keeps the user's text and caret.
             var (startLine, removedLines, lines, _) = DescribeChange(document, e);
-            // 先记撤销点（两侧共享），再落到槽模型：一次结构编辑会连同对侧的填充槽一起回退。
-            // Record the undo point (shared by both panes) before applying to the slot model, so a structural edit rolls back
-            // together with the counterpart's filler.
             vm.RecordTextUndoPoint(
                 structural: removedLines != lines.Count,
                 leftSlot: CaretSlot(FindEditor(leftSide: true)),
                 rightSlot: CaretSlot(FindEditor(leftSide: false)));
             vm.ApplyEditorLines(leftSide, startLine, removedLines, lines);
-            // 变更通知里只更新模型：另一侧文档的写入与撤销栈清理全部延后到通知结束之后。
-            // 在编辑器自身的变更通知里改文档（哪怕改的是另一侧）或清理撤销栈，都会触发编辑器内部状态冲突并导致闪退。
-            // Inside a change notification only the model is updated: writing the other side's document and clearing undo stacks are
-            // deferred until the notification has finished. Touching documents (even the other side) or undo stacks from inside a change
-            // notification trips internal state in the editor and crashes the app.
             Dispatcher.UIThread.Post(
                 () =>
                 {
@@ -502,9 +459,9 @@ public partial class CompareView
         => EnumerateCompareEditors().Where(pair => pair.LeftSide == leftSide).Select(pair => pair.Editor).FirstOrDefault();
 
     /// <summary>
-    /// <para>编辑器处理失败时把原因写进错误区与日志：宁可显示一条错误，也不能让未处理异常结束进程。</para>
     /// Records an editor failure in the error banner and the log: showing an error beats letting an unhandled exception kill the
     /// process.
+    /// <para>编辑器处理失败时把原因写进错误区与日志：宁可显示一条错误，也不能让未处理异常结束进程。</para>
     /// </summary>
     private void ReportEditorFailure(CompareViewModel vm, Exception ex)
     {
@@ -519,10 +476,10 @@ public partial class CompareView
     private static void ClearEditorUndo(TextEditor editor) => editor.Document.UndoStack.ClearAll();
 
     /// <summary>
-    /// <para>对比编辑器上的 Ctrl+Z / Ctrl+Y（含 Ctrl+Shift+Z）：回退两侧共享的编辑历史，结构编辑连同对侧填充槽一起回退，
-    /// 因此两侧永远保持同行对应。</para>
     /// Ctrl+Z / Ctrl+Y (and Ctrl+Shift+Z) inside a compare editor: rolls the shared history back and forth, so a structural edit is
     /// undone together with the counterpart's filler and the rows stay aligned.
+    /// <para>对比编辑器上的 Ctrl+Z / Ctrl+Y（含 Ctrl+Shift+Z）：回退两侧共享的编辑历史，结构编辑连同对侧填充槽一起回退，
+    /// 因此两侧永远保持同行对应。</para>
     /// </summary>
     private void OnCompareEditorKeyDown(object? sender, KeyEventArgs e)
     {
@@ -606,15 +563,15 @@ public partial class CompareView
     }
 
     /// <summary>
-    /// <para>把一次文档改动换算成「受影响的整行范围 + 该范围替换后的行 + 被替换掉的旧行数」。</para>
-    /// <para>注意：<c>Changed</c> 事件触发时文档**已经是改动后**的状态，所以新行直接从文档里读，
-    /// 不能拿改动前的区域再套一次插入（那样会把同一个字符应用两遍，表现为输入一个字符出现两个、删除多删）。
-    /// 旧行数由「新行数 − 本次插入的换行数 + 本次删除的换行数」还原。</para>
     /// Converts one document change into "the affected whole-line range, its replacement lines and how many old lines it replaced".
     /// Note that when <c>Changed</c> fires the document already holds the post-change state, so the new lines are read straight from the
     /// document — applying the insertion to a pre-change region again would insert the same character twice (typing one character shows
     /// two, deletions remove extra characters). The old line count is recovered as
     /// "new line count − inserted newlines + removed newlines".
+    /// <para>把一次文档改动换算成「受影响的整行范围 + 该范围替换后的行 + 被替换掉的旧行数」。</para>
+    /// <para>注意：<c>Changed</c> 事件触发时文档**已经是改动后**的状态，所以新行直接从文档里读，
+    /// 不能拿改动前的区域再套一次插入（那样会把同一个字符应用两遍，表现为输入一个字符出现两个、删除多删）。
+    /// 旧行数由「新行数 − 本次插入的换行数 + 本次删除的换行数」还原。</para>
     /// </summary>
     private static (int StartLine, int RemovedLines, List<string> Lines, int CaretColumn) DescribeChange(
         TextDocument document,
@@ -629,8 +586,6 @@ public partial class CompareView
         var region = document.GetText(firstLine.Offset, Math.Max(0, regionEnd - firstLine.Offset));
         var lines = region.Split('\n').ToList();
 
-        // 旧行数 = 新行数 − 插入的换行数 + 删除的换行数（换行只在受影响的整行范围内）。
-        // Old line count = new line count − inserted newlines + removed newlines (newlines only occur inside the affected range).
         var netNewLines = CountNewlines(e.InsertedText.Text) - CountNewlines(e.RemovedText.Text);
         var removedLines = Math.Max(1, lines.Count - netNewLines);
         var caretColumn = lines.Count == 0 ? 0 : lines[^1].Length;
@@ -678,9 +633,9 @@ public partial class CompareView
 
     /// <summary>结构变化后把光标放回目标行与列。 Restores the caret to the given line and column after a structural change.</summary>
     /// <summary>
-    /// <para>差异行整行背景着色器：按行号集合画半透明色块（与行列表期间的整行变色一致）。</para>
     /// Whole-line diff background renderer: paints translucent bands for the given line numbers, matching the row list's
     /// whole-row colouring.
+    /// <para>差异行整行背景着色器：按行号集合画半透明色块（与行列表期间的整行变色一致）。</para>
     /// </summary>
     private sealed class CompareLineHighlighter(Avalonia.Media.IBrush brush) : IBackgroundRenderer
     {
@@ -697,8 +652,6 @@ public partial class CompareView
                 return;
             }
 
-            // 渲染里的异常会直接崩掉应用：着色失败就放弃本次绘制。
-            // An exception during rendering crashes the app, so a failed paint is simply skipped.
             try
             {
                 using (drawingContext.PushClip(new Rect(textView.Bounds.Size)))
@@ -717,8 +670,6 @@ public partial class CompareView
             }
             catch (Exception)
             {
-                // 忽略本次着色。
-                // Skip this paint.
             }
         }
     }

@@ -3,14 +3,9 @@ using System.Globalization;
 namespace UotanStudio.Services;
 
 /// <summary>
-/// <para>共享进度计量器：按 (已处理, 总量) 样本计算滑动窗口速度与预计剩余时间，
-/// 并格式化为「已处理 / 总量 · 速度 · 剩余时间」统计文本。字节模式由
-/// <see cref="Report"/> 喂入，条目计数模式由 <see cref="ReportItems"/> 喂入；
-/// 格式化模板由调用方经本地化提供，本类型不依赖 <see cref="LanguageService"/>。</para>
 /// Shared progress meter: computes sliding-window speed and estimated time remaining from
-/// (processed, total) samples and formats a "processed / total · speed · eta" stats line. The byte
-/// mode is fed via <see cref="Report"/> and the item-count mode via <see cref="ReportItems"/>; the
-/// caller supplies the localized format template — this type does not depend on <see cref="LanguageService"/>.
+/// processed/total samples and formats a stats line.
+/// <para>共享进度计量器：按已处理量与总量样本计算滑动窗口速度与预计剩余时间，并生成统计文本。</para>
 /// </summary>
 public sealed class ProgressMeter
 {
@@ -20,7 +15,7 @@ public sealed class ProgressMeter
     private readonly record struct Sample(long Processed, long Timestamp);
 
     private readonly TimeProvider _clock;
-    /// <summary>Creates a meter using the system monotonic clock.</summary>
+    /// <summary>Creates a meter using the system monotonic clock.<para>使用系统单调时钟创建计量器。</para></summary>
     public ProgressMeter() : this(TimeProvider.System) { }
     internal ProgressMeter(TimeProvider clock) => _clock = clock;
 
@@ -28,15 +23,20 @@ public sealed class ProgressMeter
     private readonly Queue<Sample> _samples = new();
     private bool _itemMode;
 
-    /// <summary><para>最近一次上报的已处理量（字节或条目数）。</para>The latest processed amount (bytes or items).</summary>
+    /// <summary>The latest processed amount (bytes or items). <para>最近一次上报的已处理量（字节或条目数）。</para></summary>
+    /// <value>The amount accepted by the newest sample. <para>最新样本接受的已处理量。</para></value>
     public long Processed { get; private set; }
 
-    /// <summary><para>最近一次上报的总量（字节或条目数）。</para>The latest total amount (bytes or items).</summary>
+    /// <summary>The latest total amount (bytes or items). <para>最近一次上报的总量（字节或条目数）。</para></summary>
+    /// <value>The total amount accepted by the newest sample. <para>最新样本接受的总量。</para></value>
     public long Total { get; private set; }
 
     /// <summary>
-    /// <para>以字节样本上报进度（阶段开始或切换时先 <see cref="Reset"/>）。</para>
-    /// Reports byte-based progress (call <see cref="Reset"/> when a stage starts or switches).</summary>
+    /// Reports byte-based progress; sampling restarts through <see cref="Reset"/> at a stage transition.
+    /// <para>以字节样本上报进度；阶段切换时经 <see cref="Reset"/> 重新采样。</para>
+    /// </summary>
+    /// <param name="processed">Bytes processed so far. <para>截至当前的已处理字节数。</para></param>
+    /// <param name="total">Total bytes for the stage. <para>该阶段的总字节数。</para></param>
     public void Report(long processed, long total)
     {
         lock (_gate)
@@ -48,8 +48,11 @@ public sealed class ProgressMeter
     }
 
     /// <summary>
+    /// Reports item-count progress; the stats line is rendered as items.
     /// <para>以条目计数样本上报进度；统计文本按「项」呈现。</para>
-    /// Reports item-count progress; the stats line is rendered as items.</summary>
+    /// </summary>
+    /// <param name="processed">Items processed so far. <para>截至当前的已处理条目数。</para></param>
+    /// <param name="total">Total items for the stage. <para>该阶段的总条目数。</para></param>
     public void ReportItems(long processed, long total)
     {
         lock (_gate)
@@ -60,7 +63,7 @@ public sealed class ProgressMeter
         }
     }
 
-    /// <summary><para>清空样本与计数，用于阶段切换。</para>Clears samples and counters for stage transitions.</summary>
+    /// <summary>Clears samples and counters for stage transitions. <para>清空样本与计数，用于阶段切换。</para></summary>
     public void Reset()
     {
         lock (_gate)
@@ -74,8 +77,6 @@ public sealed class ProgressMeter
 
     private void Accept(long processed, long total)
     {
-        // 新阶段（processed 回退）视为重新开始，丢弃历史样本避免速度被拉低。
-        // A falling processed count means a new stage; drop history so the speed is not diluted.
         if (processed < Processed) _samples.Clear();
         Processed = Math.Max(0, processed);
         Total = Math.Max(0, total);
@@ -86,8 +87,10 @@ public sealed class ProgressMeter
     }
 
     /// <summary>
+    /// Byte speed within the sliding window; <c>null</c> when samples are insufficient or not positive.
     /// <para>滑动窗口内的字节速度；样本不足或速度非正时为 <c>null</c>。</para>
-    /// Byte speed within the sliding window; <c>null</c> when samples are insufficient or not positive.</summary>
+    /// </summary>
+    /// <value>The current byte throughput, or <c>null</c> when not computable. <para>当前的字节吞吐，无法计算时为 <c>null</c>。</para></value>
     public double? BytesPerSecond
     {
         get
@@ -96,7 +99,8 @@ public sealed class ProgressMeter
         }
     }
 
-    /// <summary><para>按当前速度估算的剩余时间；无法估算时为 <c>null</c>。</para>Estimated remaining time at the current speed; <c>null</c> when not estimable.</summary>
+    /// <summary>Estimated remaining time at the current speed; <c>null</c> when not estimable. <para>按当前速度估算的剩余时间；无法估算时为 <c>null</c>。</para></summary>
+    /// <value>The projected time left, or <c>null</c> when not estimable. <para>预计剩余时间，无法估算时为 <c>null</c>。</para></value>
     public TimeSpan? EstimatedRemaining
     {
         get
@@ -112,10 +116,12 @@ public sealed class ProgressMeter
     }
 
     /// <summary>
-    /// <para>用调用方提供的本地化模板生成统计文本；模板占位符：
-    /// {0}=已处理、{1}=总量、{2}=速度、{3}=剩余时间。</para>
-    /// Builds the stats text with a caller-supplied localized template; placeholders:
-    /// {0}=processed, {1}=total, {2}=speed, {3}=eta.</summary>
+    /// Builds the stats text from a localized format template.
+    /// <para>用本地化格式模板生成统计文本。</para>
+    /// </summary>
+    /// <param name="template">Format string with {0}=processed, {1}=total, {2}=speed and {3}=eta.
+    /// <para>格式串，占位符 {0}=已处理、{1}=总量、{2}=速度、{3}=剩余时间。</para></param>
+    /// <returns>The formatted stats line. <para>格式化后的统计文本。</para></returns>
     public string FormatStats(string template)
     {
         lock (_gate)
@@ -140,8 +146,6 @@ public sealed class ProgressMeter
 
     private double? ComputeSpeed()
     {
-        // 速度取窗口首尾样本差；首尾间隔过短时不估算，避免瞬时抖动。
-        // Speed is the delta across window edges; skip estimation when the span is too short.
         if (_samples.Count < 2) return null;
         var first = _samples.Peek();
         var last = _samples.Last();
@@ -151,12 +155,18 @@ public sealed class ProgressMeter
         return bytes > 0 ? bytes / seconds : null;
     }
 
-    /// <summary><para>把速度格式化为「x 单位/s」；无效值显示「—」。</para>Formats a speed as "x unit/s"; invalid values render as "—".</summary>
+    /// <summary>Formats a speed as "x unit/s"; invalid values render as "—". <para>把速度格式化为「x 单位/s」；无效值显示「—」。</para></summary>
+    /// <param name="bytesPerSecond">The byte throughput to render. <para>待呈现的字节吞吐。</para></param>
+    /// <returns>The rendered speed text. <para>渲染后的速度文本。</para></returns>
     public static string FormatSpeed(double bytesPerSecond) =>
         double.IsFinite(bytesPerSecond) && bytesPerSecond > 0 ? FormatSize(bytesPerSecond) + "/s" : "—";
 
-    /// <summary><para>把剩余时间格式化为 mm:ss（不足一小时）或 h:mm:ss；<c>null</c> 显示「—」。</para>
-    /// Formats eta as mm:ss (under an hour) or h:mm:ss; <c>null</c> renders as "—".</summary>
+    /// <summary>
+    /// Formats eta as mm:ss (under an hour) or h:mm:ss; <c>null</c> renders as "—".
+    /// <para>把剩余时间格式化为 mm:ss（不足一小时）或 h:mm:ss；<c>null</c> 显示「—」。</para>
+    /// </summary>
+    /// <param name="eta">The estimated remaining time to render. <para>待渲染的预计剩余时间。</para></param>
+    /// <returns>The rendered time text. <para>渲染后的时间文本。</para></returns>
     public static string FormatEta(TimeSpan? eta)
     {
         if (eta is not { } value || value <= TimeSpan.Zero) return "—";
@@ -165,8 +175,12 @@ public sealed class ProgressMeter
             : string.Create(CultureInfo.InvariantCulture, $"{value.Minutes:00}:{value.Seconds:00}");
     }
 
-    /// <summary><para>把字节数格式化为 1024 进制的 B/KB/MB/GB/TB，一位小数；负值或非有限值显示「—」。</para>
-    /// Formats bytes as base-1024 B/KB/MB/GB/TB with one decimal; negative or non-finite values render as "—".</summary>
+    /// <summary>
+    /// Formats bytes as base-1024 B/KB/MB/GB/TB with one decimal; negative or non-finite values render as "—".
+    /// <para>把字节数格式化为 1024 进制的 B/KB/MB/GB/TB，一位小数；负值或非有限值显示「—」。</para>
+    /// </summary>
+    /// <param name="bytes">The byte count to render. <para>待渲染的字节数。</para></param>
+    /// <returns>The rendered size text. <para>渲染后的大小文本。</para></returns>
     public static string FormatSize(double bytes)
     {
         if (!double.IsFinite(bytes) || bytes < 0) return "—";

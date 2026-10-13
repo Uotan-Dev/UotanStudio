@@ -8,14 +8,14 @@ namespace UotanStudio.Services.Delivery;
 internal static class DeliveryRecoveryUpdater
 {
     internal const string ScriptPath = "META-INF/com/google/android/updater-script";
-    /// <summary><para>传统 Recovery 包内原生更新器的标准成员路径。</para>Standard member path of the native updater inside a traditional Recovery package.</summary>
+    /// <summary>Standard member path of the native updater inside a traditional Recovery package. <para>传统 Recovery 包内原生更新器的标准成员路径。</para></summary>
     internal const string EntryPath = "META-INF/com/google/android/update-binary";
 
     /// <summary>
-    /// <para>解析 DAT 卡刷要使用的原生 Edify 更新器：优先显式指定的路径，其次沿 DAT 来源目录寻找原包
-    /// META-INF/com/google/android/update-binary；多个候选时回退内嵌的 arm64 更新器，找不到则报错。</para>
     /// Resolves the native Edify updater for DAT flashing: an explicit path first, then META-INF/com/google/android/update-binary
     /// discoverable alongside the DAT sources; multiple candidates fall back to the embedded arm64 updater, and none throws.
+    /// <para>解析 DAT 卡刷要使用的原生 Edify 更新器：优先显式指定的路径，其次沿 DAT 来源目录寻找原包
+    /// META-INF/com/google/android/update-binary；多个候选时回退内嵌的 arm64 更新器，找不到则报错。</para>
     /// </summary>
     internal static string Resolve(DeliveryPlan plan)
     {
@@ -55,8 +55,8 @@ internal static class DeliveryRecoveryUpdater
     }
 
     /// <summary>
-    /// <para>校验给定的更新器为本机 ELF 可执行文件，且导出卡刷所需的 Edify 函数（block_image_update 等）；通过则返回绝对路径。</para>
     /// Validates that the updater is a native ELF executable exposing the Edify functions needed for flashing; returns the absolute path on success.
+    /// <para>校验给定的更新器为本机 ELF 可执行文件，且导出卡刷所需的 Edify 函数（block_image_update 等）；通过则返回绝对路径。</para>
     /// </summary>
     internal static string Validate(string path)
     {

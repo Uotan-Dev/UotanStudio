@@ -7,12 +7,8 @@ using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 namespace UotanStudio.Firmware.OtaDelta.Payload;
 
 /// <summary>
-/// Source-image part of <c>PayloadParser</c>: resolves base images for source-dependent operations into
-/// temporary files that are cleaned up by the callers. A ZIP-embedded payload that is stored uncompressed
-/// is read in place through the archive's own byte range, and only a compressed entry is materialized
-/// to a temporary file first.
-/// <para><c>PayloadParser</c> 的源镜像分部：为源依赖操作把基座镜像解析到由调用方清理的临时文件。
-/// ZIP 内嵌载荷在未压缩存储时就地读取归档自身的字节区间，只有被压缩的条目才先物化到临时文件。</para>
+/// Resolves base images for source-dependent payload operations into temporary files that callers clean up. A ZIP-embedded payload stored uncompressed is read in place through the archive's byte range; only a compressed entry is materialized to a temporary file.
+/// <para>把源依赖型 payload 操作所需的基础镜像解析到临时文件，由调用方清理。ZIP 内未压缩存储的 payload 直接经归档字节区间就地读取；仅压缩条目会先物化为临时文件。</para>
 /// </summary>
 public static partial class PayloadParser
 {

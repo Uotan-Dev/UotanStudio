@@ -112,13 +112,8 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private bool ExportActive => _gpuExportEnabled && _exportRing is not null && _gpuExportFrameCallback is not null;
 
     /// <summary>
-    /// Creates a D3D11 device and Media Foundation device manager, activates the first asynchronous hardware or
-    /// synchronous system transform that advertises D3D11 awareness and NV12 output for the codec, and registers
-    /// the frame callback. Any previous native resources are released first. All calls must stay on the thread
-    /// that owns the decoder; the first call after construction claims the calling thread.
-    /// <para>创建 D3D11 设备与 Media Foundation 设备管理器，激活第一个声明支持 D3D11 且能按编码输出 NV12 的
-    /// 异步硬件变换或同步系统变换，并登记帧回调；既有原生资源会先行释放。全部调用必须留在解码器所属线程上；
-    /// 构造后的首次调用即绑定当前线程。</para>
+    /// Creates the D3D11 and Media Foundation hardware decode pipeline and registers the frame callback.
+    /// <para>创建 D3D11 与 Media Foundation 硬件解码管线并登记帧回调。</para>
     /// </summary>
     /// <param name="codec">Compressed codec of the incoming access units. <para>输入访问单元的压缩编码格式。</para></param>
     /// <param name="width">
@@ -185,11 +180,8 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         => Decode(accessUnit, checked(_sequence++ * 166667));
 
     /// <summary>
-    /// Feeds one access unit with an explicit timestamp. Synchronous transforms emit frames on the calling
-    /// thread immediately; asynchronous hardware transforms first wait until the decoder accepts input and then
-    /// pump its event queue, so output may arrive after this call returns and through <see cref="Poll"/>.
-    /// <para>输入一个访问单元并附带显式时间戳。同步变换立即在调用线程上输出帧；异步硬件变换会先等待解码器
-    /// 接受输入，再抽取其事件队列，因此输出可能在本调用返回之后以及 <see cref="Poll"/> 期间到达。</para>
+    /// Feeds one access unit with an explicit timestamp to the hardware decoder.
+    /// <para>向硬件解码器输入一个带显式时间戳的访问单元。</para>
     /// </summary>
     /// <param name="accessUnit">
     /// One complete compressed access unit, 1 byte to 32 MiB.
@@ -268,11 +260,8 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     }
 
     /// <summary>
-    /// Signals end of stream, issues the drain command, and emits all buffered frames: asynchronous transforms
-    /// wait up to five seconds for the drain-complete event, synchronous transforms are drained inline. Call
-    /// <see cref="Initialize"/> or <see cref="Reset"/> before feeding a new stream.
-    /// <para>发出码流结束通知并下发 drain 命令，输出全部缓存帧：异步变换最多等待五秒的 drain-complete 事件，
-    /// 同步变换则在调用内直接排空。输入新码流前须调用 <see cref="Initialize"/> 或 <see cref="Reset"/>。</para>
+    /// Signals end of stream, issues the drain command, and emits all buffered frames.
+    /// <para>发出码流结束通知并下发 drain 命令，输出全部缓存帧。</para>
     /// </summary>
     /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
     /// <exception cref="InvalidOperationException">
@@ -652,9 +641,6 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         if (hr == DxgiInterop.WaitTimeout) return false;
         if (hr == DxgiInterop.WaitAbandoned)
         {
-            // The previous owner died holding the mutex; ownership transferred to us, so normalize
-            // the key back to 0 and treat the slot as acquired.
-            // 上一个持有者在持有互锁时死亡；所有权已转移给本设备，把键归一化回 0 并视为已获取。
             _ = DxgiInterop.ReleaseSync(slot.KeyedMutex, 0);
             return true;
         }
@@ -862,9 +848,6 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         }
         catch
         {
-            // The blit failed while this thread owns the mutex; hand it back at key 0 so the slot
-            // stays rentable, then let the exception fail the session.
-            // blit 失败时互锁仍归本线程所有；以键 0 归还使槽位保持可租用，然后让异常终止会话。
             _ = DxgiInterop.ReleaseSync(slot.KeyedMutex, 0);
             throw;
         }
@@ -913,10 +896,6 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             int rowBytes = checked(_width * 4);
             int required = checked(rowBytes * _height);
             if (stride < rowBytes) throw new InvalidDataException("Staging readback is truncated.");
-            // The staging map stays valid until Unmap, and the callback completes before that, so
-            // the frame borrows the mapped memory instead of an extra full-frame copy.
-            // staging 映射在 Unmap 之前一直有效，而回调在 Unmap 前完成，因此帧直接借用映射内存，
-            // 省去一次整帧拷贝。
             using var frame = new PointerDecodedVideoFrame((byte*)mapped.pData, required, _width, _height, stride, timestampTicks)
             {
                 ReturnBufferToPool = false,
@@ -973,9 +952,6 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         _stagingWidth = _stagingHeight = 0;
         if (_exportRing is not null)
         {
-            // Slots may still be queued for composition; the compositor holds its own reference to the
-            // shared kernel resource, so destroying the textures here cannot pull the surfaces away.
-            // 槽位可能仍在合成队列中；合成器对共享内核资源持有自身引用，此处销毁纹理不会使表面失效。
             _exportRing.Dispose();
             _exportRing = null;
         }

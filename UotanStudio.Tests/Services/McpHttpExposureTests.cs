@@ -17,6 +17,7 @@ namespace UotanStudio.Tests.Services;
 /// <para>桌面 MCP HTTP 暴露的端到端覆盖：真实 Streamable HTTP MCP 客户端连接回环监听并通过它列举与调用工具、
 /// 列举与读取资源；由设置驱动的服务负责启动与释放端口。</para>
 /// </summary>
+[Collection("MCP tool generation")]
 public sealed class McpHttpExposureTests
 {
     [Fact]

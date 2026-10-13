@@ -43,8 +43,8 @@ internal static class Lzo1x
     private const long Max255Count = (long.MaxValue / 255) - 2;
 
     /// <summary>
-    /// Decompresses an LZO1X bitstream into output with full bounds checking (mirroring the kernel's safe variant).
-    /// <para>解压 LZO1X 位流到 output，带完整边界检查（对齐内核 safe 变体）。</para>
+    /// Decompresses an LZO1X bitstream into output with full bounds checking.
+    /// <para>解压 LZO1X 位流到 output，带完整边界检查。</para>
     /// </summary>
     /// <param name="input">LZO1X bitstream to decode, treated as untrusted; fewer than three available
     /// bytes are reported as <see cref="LzoStatus.InputOverrun"/> and an optional two-byte version header
@@ -79,13 +79,9 @@ internal static class Lzo1x
     }
 
     /// <summary>
-    /// Decompresses one LZO1X bitstream with full bounds checking. This is a faithful port of the
-    /// upstream minilzo safe-variant decoder; the cursor names (<c>ip</c>, <c>op</c>, <c>state</c>,
-    /// <c>t</c>, <c>mPos</c>) intentionally mirror that implementation so future updates can be diffed
-    /// against upstream, so do not rename them when editing the control flow.
-    /// <para>带完整边界检查地解压单个 LZO1X 位流。本方法忠实移植上游 minilzo 的 safe 变体解码器；
-    /// 游标名（<c>ip</c>、<c>op</c>、<c>state</c>、<c>t</c>、<c>mPos</c>）刻意与上游实现保持一致，
-    /// 便于后续升级时与上游逐行比对，修改控制流时不要改名。</para>
+    /// Decompresses one LZO1X bitstream with full bounds checking, using the fixed cursor names
+    /// (<c>ip</c>, <c>op</c>, <c>state</c>, <c>t</c>, <c>mPos</c>); do not rename them when editing the control flow.
+    /// <para>带完整边界检查地解压单个 LZO1X 位流；游标名（<c>ip</c>、<c>op</c>、<c>state</c>、<c>t</c>、<c>mPos</c>）固定，修改控制流时不要改名。</para>
     /// </summary>
     private static (LzoStatus, int) TryDecompressCore(byte[] input, byte[] output)
     {

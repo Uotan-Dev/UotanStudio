@@ -18,13 +18,13 @@ public class MirroringNodeViewModel : FlowNodeViewModel
     private readonly IScriptToolGateway _gateway;
 
     /// <summary>
-    /// <para>创建具有指定标题的投屏节点。</para>
     /// Creates a mirroring node with the specified title.
+    /// <para>创建具有指定标题的投屏节点。</para>
     /// </summary>
-    /// <param name="title"><para>节点的显示标题。</para>The display title of the node.</param>
+    /// <param name="title">The display title of the node. <para>节点的显示标题。</para></param>
     /// <param name="gateway">
-    /// <para>设备动作网关；为 <c>null</c> 时使用 <see cref="DeviceScriptToolGateway.Default"/>。</para>
     /// The device action gateway; uses <see cref="DeviceScriptToolGateway.Default"/> when <c>null</c>.
+    /// <para>设备动作网关；为 <c>null</c> 时使用 <see cref="DeviceScriptToolGateway.Default"/>。</para>
     /// </param>
     public MirroringNodeViewModel(string title, IScriptToolGateway? gateway = null) : base(title, NodeCategory.Flash)
     {
@@ -32,8 +32,8 @@ public class MirroringNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的开始投屏节点。</para>
     /// Creates a default start-mirroring node.
+    /// <para>创建默认的开始投屏节点。</para>
     /// </summary>
     public static MirroringNodeViewModel CreateStartNode()
     {
@@ -48,8 +48,8 @@ public class MirroringNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的停止投屏节点。</para>
     /// Creates a default stop-mirroring node.
+    /// <para>创建默认的停止投屏节点。</para>
     /// </summary>
     public static MirroringNodeViewModel CreateStopNode()
     {

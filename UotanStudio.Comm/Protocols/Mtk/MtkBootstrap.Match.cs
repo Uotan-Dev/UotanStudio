@@ -35,12 +35,6 @@ public sealed record MtkAutoStartup
     /// <para>完全一致或最低版本匹配；默认完全一致。</para></value>
     public MtkDaIdentityMatch IdentityMatch { get; init; } = MtkDaIdentityMatch.Exact;
 
-    /// <summary>Gets the optional Boot ROM SLA key provider consulted with the identity the device reports.
-    /// <para>获取可选的 Boot ROM SLA 密钥提供方，按设备上报的身份查询。</para></summary>
-    /// <value>The key store, or <see langword="null"/> to reject an SLA request instead of answering it.
-    /// <para>密钥库；为 <see langword="null"/> 时遇到 SLA 请求将拒绝而非应答。</para></value>
-    public IMtkSlaKeyProvider? SlaKeyProvider { get; init; }
-
     /// <summary>Gets the optional explicitly extracted EMI parameters for the XFlash Boot ROM path.
     /// <para>获取 XFlash Boot ROM 路径可选的、显式提取的 EMI 参数。</para></summary>
     /// <value>The EMI source, or <see langword="null"/> when no explicit DRAM resource is supplied.
@@ -294,8 +288,7 @@ public static partial class MtkBootstrap
             HandshakeTimeoutMs = startup.HandshakeTimeoutMs,
             SlaTimeoutMs = startup.SlaTimeoutMs,
             BootResourceProvider = startup.BootResourceProvider,
-            BootResourceOrder = startup.BootResourceOrder,
-            BootRomSlaResponder = startup.SlaKeyProvider?.ResolveSlaResponder(device)
+            BootResourceOrder = startup.BootResourceOrder
         };
     }
 }

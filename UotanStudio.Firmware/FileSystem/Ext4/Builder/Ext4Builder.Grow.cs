@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.FileSystem.Ext4.Models;
+using UotanStudio.Hash.Crc32c;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;
 

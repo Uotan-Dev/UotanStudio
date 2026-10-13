@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Numerics;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Models;
 
@@ -40,6 +41,10 @@ internal readonly struct ZErofsMapHeader
     public const int ExtentPlenFmtBit = 28;
 
     public const uint ExtentPlenMask = (1u << 21) - 1;
+
+    /// <summary>Fixed prefix a four-byte extent area stores its first physical address in.
+    /// <para>四字节 extent 区在其起点存放首条物理地址的固定前缀。</para></summary>
+    public const int ExtentPrefixBytes = 8;
 
     public const byte LclusterBitsMask = 0x0F;
 
@@ -86,6 +91,75 @@ internal readonly struct ZErofsMapHeader
     public int LclusterBitsOffset => ClusterBits & LclusterBitsMask;
 
     public bool IsFragmentInode => (ClusterBits & FragmentInodeMask) != 0;
+
+    /// <summary>Decodes the per-record size of an extent area from the <c>EXTRECSZ</c> field of its advise
+    /// word (<c>include/erofs_fs.h</c> <c>z_erofs_extent_recsize</c>).
+    /// <para>从 extent 区的 advise 字解出逐条记录字节数（<c>include/erofs_fs.h</c> 的
+    /// <c>z_erofs_extent_recsize</c>）。</para></summary>
+    /// <param name="advise">Raw <c>h_advise</c> word of the extent map header.
+    /// <para>extent 映射头的原始 <c>h_advise</c> 字。</para></param>
+    /// <returns>One of 4, 8, 16 or 32 bytes per record. <para>每条记录 4、8、16 或 32 字节之一。</para></returns>
+    public static int ExtentRecordSize(ushort advise)
+        => 4 << ((advise >> ExtRecSizeBit) & ExtRecSizeMask);
+
+    /// <summary>Encodes the <c>Z_EROFS_ADVISE_EXTENTS</c> flag together with the <c>EXTRECSZ</c> field that
+    /// names a record size (<c>lib/compress.c</c> <c>z_erofs_write_extents</c>).
+    /// <para>把 <c>Z_EROFS_ADVISE_EXTENTS</c> 标志与指名记录字节数的 <c>EXTRECSZ</c> 字段一起编码
+    /// （<c>lib/compress.c</c> 的 <c>z_erofs_write_extents</c>）。</para></summary>
+    /// <param name="recordSize">One of 4, 8, 16 or 32 bytes per record.
+    /// <para>每条记录 4、8、16 或 32 字节之一。</para></param>
+    /// <returns>The advise word carrying the extent flag and the record-size field.
+    /// <para>携带 extent 标志与记录尺寸字段的 advise 字。</para></returns>
+    public static ushort ExtentAdvise(int recordSize)
+        => (ushort)(AdviseExtents | ((BitOperations.Log2((uint)recordSize) - 2) << ExtRecSizeBit));
+
+    /// <summary>
+    /// Returns the start of an inode's extent area as the map header end rounded up to one record size.
+    /// <para>返回 inode 的 extent 区起点，即映射头末端向上取整到一个记录尺寸。</para>
+    /// </summary>
+    /// <param name="mapHeaderStart">Absolute byte offset of the eight-byte map header, i.e. upstream
+    /// <c>Z_EROFS_MAP_HEADER_START(iloc + inode_isize + xattr_isize)</c>.
+    /// <para>八字节映射头的绝对字节偏移，即上游的
+    /// <c>Z_EROFS_MAP_HEADER_START(iloc + inode_isize + xattr_isize)</c>。</para></param>
+    /// <param name="recordSize">One of 4, 8, 16 or 32 bytes per record.
+    /// <para>每条记录 4、8、16 或 32 字节之一。</para></param>
+    /// <returns>The absolute byte offset the extent area begins at.
+    /// <para>extent 区起始的绝对字节偏移。</para></returns>
+    public static long ExtentAreaBase(long mapHeaderStart, int recordSize)
+        => AlignUp(mapHeaderStart + Size, recordSize);
+
+    /// <summary>
+    /// Returns the distance from an inode's metadata base to its extent area base.
+    /// <para>返回自 inode 元数据基点到 extent 区起点的距离。</para>
+    /// </summary>
+    /// <param name="indexBase">Byte offset of the map header relative to the inode's metadata base, i.e.
+    /// <c>round_up(inode_isize + xattr_isize, 8)</c>. <para>映射头相对 inode 元数据基点的字节偏移，即
+    /// <c>round_up(inode_isize + xattr_isize, 8)</c>。</para></param>
+    /// <param name="recordSize">One of 4, 8, 16 or 32 bytes per record.
+    /// <para>每条记录 4、8、16 或 32 字节之一。</para></param>
+    /// <returns>The number of bytes between the metadata base and the extent area.
+    /// <para>元数据基点与 extent 区之间的字节数。</para></returns>
+    public static int ExtentAreaOffset(int indexBase, int recordSize)
+        => checked((int)(AlignUp(indexBase + Size, recordSize) - indexBase));
+
+    /// <summary>Total bytes an inode's extent metadata occupies after its map header, counting the area
+    /// offset, the eight-byte initial physical address of the four-byte form and every record
+    /// (<c>lib/compress.c</c> <c>z_erofs_write_extents</c>).
+    /// <para>inode 的 extent 元数据在映射头之后占用的总字节数，含区偏移、四字节形态的八字节初始物理地址与
+    /// 全部记录（<c>lib/compress.c</c> 的 <c>z_erofs_write_extents</c>）。</para></summary>
+    /// <param name="indexBase">Byte offset of the map header relative to the inode's metadata base.
+    /// <para>映射头相对 inode 元数据基点的字节偏移。</para></param>
+    /// <param name="recordSize">One of 4, 8, 16 or 32 bytes per record.
+    /// <para>每条记录 4、8、16 或 32 字节之一。</para></param>
+    /// <param name="extentCount">Number of extent records. <para>extent 记录数量。</para></param>
+    /// <returns>The metadata bytes from the inode's metadata base through the last record.
+    /// <para>自 inode 元数据基点到最后一条记录的元数据字节数。</para></returns>
+    public static long ExtentMetadataSize(int indexBase, int recordSize, int extentCount)
+        => AlignUp(indexBase + Size, recordSize)
+           + (recordSize <= 4 ? ExtentPrefixBytes : 0)
+           + (long)recordSize * extentCount;
+
+    private static long AlignUp(long value, long alignment) => (value + alignment - 1) / alignment * alignment;
 
     /// <summary>
     /// Creates a header using the fragment-offset form (h_fragmentoff occupies bytes 0-3).
@@ -176,11 +250,19 @@ internal readonly struct ZErofsLclusterIndex
 
     public const ushort LiPartialRef = 1 << 15;
 
-    public const ushort LiHole = 1 << 14;
-
     public const ushort LiTypeMask = 0x0003;
 
     public const ushort LiD0CblkCnt = 1 << 11;
+
+    /// <summary>
+    /// The only bits <c>di_advise</c> carries: the two low lcluster-type bits, bit 11
+    /// <c>Z_EROFS_LI_D0_CBLKCNT</c> and bit 15 <c>Z_EROFS_LI_PARTIAL_REF</c>
+    /// (<c>include/erofs_fs.h</c>). Bit 14 is not defined by the format.
+    /// <para><c>di_advise</c> 仅携带的位：低两位 lcluster 类型、第 11 位
+    /// <c>Z_EROFS_LI_D0_CBLKCNT</c> 与第 15 位 <c>Z_EROFS_LI_PARTIAL_REF</c>
+    /// （<c>include/erofs_fs.h</c>）。格式未定义第 14 位。</para>
+    /// </summary>
+    public const ushort KnownAdviseMask = LiTypeMask | LiD0CblkCnt | LiPartialRef;
 
     public const ushort LclusterTypePlain = 0;
 
@@ -214,16 +296,45 @@ internal readonly struct ZErofsLclusterIndex
 
     public bool IsPartial => (Advise & LiPartialRef) != 0;
 
-    public bool IsHole => (Advise & LiHole) != 0;
+    public bool HasD0CblkCntAdvise => (Advise & LiD0CblkCnt) != 0;
 
-    public bool HasD0CblkCnt => (Advise & LiD0CblkCnt) != 0;
+    /// <summary>
+    /// Rejects an <c>di_advise</c> word that raises a bit the format does not define, which keeps an
+    /// unassigned bit such as 14 from being silently decoded as a storage layout.
+    /// <para>拒绝置有格式未定义位的 <c>di_advise</c> 字，使第 14 位这类未分配位不会被静默解码成某种存储布局。</para>
+    /// </summary>
+    /// <exception cref="FileSystemCorruptedException"><see cref="Advise"/> raises a bit outside
+    /// <see cref="KnownAdviseMask"/>.<para><see cref="Advise"/> 置有 <see cref="KnownAdviseMask"/>
+    /// 之外的位。</para></exception>
+    public void ValidateAdvise()
+    {
+        var unknown = (ushort)(Advise & ~KnownAdviseMask);
+        if (unknown != 0)
+        {
+            throw new FileSystemCorruptedException($"Unknown EROFS logical cluster advise bits 0x{unknown:X4}.");
+        }
+    }
+
+    /// <summary>
+    /// Payload of a NONHEAD <c>delta[0]</c> word that stores the compressed block count behind the
+    /// <see cref="LiD0CblkCnt"/> marker (<c>lib/zmap.c</c>); zero when the marker is clear, where the word
+    /// is an ordinary delta.
+    /// <para>NONHEAD 的 <c>delta[0]</c> 字在置有 <see cref="LiD0CblkCnt"/> 标记时其后的压缩块数量
+    /// （<c>lib/zmap.c</c>）；标记未置位时为零，此时该字是普通增量。</para>
+    /// </summary>
+    /// <param name="delta0">Raw NONHEAD <c>delta[0]</c> word.<para>NONHEAD 的原始 <c>delta[0]</c> 字。</para></param>
+    /// <returns>The compressed block count when the marker is set, otherwise zero.
+    /// <para>标记置位时的压缩块数量，否则为零。</para></returns>
+    public static int CompressedBlockCount(ushort delta0)
+        => (delta0 & LiD0CblkCnt) == 0 ? 0 : delta0 & ~LiD0CblkCnt;
 
     /// <summary>
     /// Creates the entry in full-index form (blkaddr at bytes 4-7).
     /// <para>以 full 索引形式构造（blkaddr 占字节 4-7）。</para>
     /// </summary>
-    /// <param name="advise">li_advise at bytes 0-1, carrying the lcluster type, partial-reference and hole
-    /// bits. <para>字节 0-1 的 li_advise，携带 lcluster 类型、partial 引用与 hole 标志位。</para></param>
+    /// <param name="advise">li_advise at bytes 0-1, carrying the lcluster type, the partial-reference and
+    /// the compressed-block-count advise bits. <para>字节 0-1 的 li_advise，携带 lcluster 类型、partial
+    /// 引用与压缩块计数建议位。</para></param>
     /// <param name="clusterOfs">li_cluster_ofs at bytes 2-3. <para>字节 2-3 的 li_cluster_ofs。</para></param>
     /// <param name="blkaddr">li_daddr written to bytes 4-7 and exposed as <see cref="Blkaddr"/>.
     /// <para>写入字节 4-7 并由 <see cref="Blkaddr"/> 暴露的 li_daddr。</para></param>
@@ -238,8 +349,9 @@ internal readonly struct ZErofsLclusterIndex
     /// Creates the entry in NONHEAD delta form (delta[0] at bytes 4-5, delta[1] at bytes 6-7).
     /// <para>以 NONHEAD delta 形式构造（delta[0] 字节 4-5，delta[1] 字节 6-7）。</para>
     /// </summary>
-    /// <param name="advise">li_advise at bytes 0-1, carrying the lcluster type, partial-reference and hole
-    /// bits. <para>字节 0-1 的 li_advise，携带 lcluster 类型、partial 引用与 hole 标志位。</para></param>
+    /// <param name="advise">li_advise at bytes 0-1, carrying the lcluster type, the partial-reference and
+    /// the compressed-block-count advise bits. <para>字节 0-1 的 li_advise，携带 lcluster 类型、partial
+    /// 引用与压缩块计数建议位。</para></param>
     /// <param name="clusterOfs">li_cluster_ofs at bytes 2-3. <para>字节 2-3 的 li_cluster_ofs。</para></param>
     /// <param name="delta0">li_delta[0] written to bytes 4-5; with <see cref="LiD0CblkCnt"/> set it holds the
     /// compressed block count instead of a delta.

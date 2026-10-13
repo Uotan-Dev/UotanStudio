@@ -4,6 +4,7 @@ using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.VendorFirmware.Pac;
+using UotanStudio.Hash.Crc16;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

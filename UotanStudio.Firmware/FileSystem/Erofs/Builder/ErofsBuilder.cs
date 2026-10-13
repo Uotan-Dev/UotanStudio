@@ -4,7 +4,9 @@ using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 using UotanStudio.Firmware.FileSystem.Metadata;
+using ErofsInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
 
@@ -13,6 +15,15 @@ public sealed partial class ErofsBuilder
     private const long InodeTableStart = ErofsSuperblock.SuperblockOffset + ErofsSuperblock.SuperblockSize;
 
     private const ulong NidMetaboxFlag = 1UL << 63;
+
+    /// <summary>
+    /// Upper bound on the chunk index entries one chunk-based inode may carry. The table lives in the
+    /// metadata area beside the inode record, so an image that would need more entries than this cannot
+    /// be laid out within one metadata block and is refused instead of written.
+    /// <para>单个 chunk-based inode 可携带的 chunk 索引表项数量上限。该表位于 inode 记录旁的元数据区，
+    /// 因此需要多于该值的表项无法布局在一个元数据块内，此时拒绝写出而不是硬写。</para>
+    /// </summary>
+    private const int MaxChunkIndexEntries = 1 << 16;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct LinuxStat
@@ -206,7 +217,7 @@ public sealed partial class ErofsBuilder
 
     private static ErofsOptions ValidateAndCollect(
         string directoryPath,
-        out BuildNode root,
+        out ErofsInode root,
         ErofsOptions? options,
         params string[] excludedPaths)
     {
@@ -219,12 +230,14 @@ public sealed partial class ErofsBuilder
 
         var effective = options ?? new ErofsOptions();
         effective.Validate();
-        var exclusions = excludedPaths.Length == 0
+        var excludedHostPaths = excludedPaths.Length == 0
             ? null
             : new HashSet<string>(
                 excludedPaths.Select(Path.GetFullPath),
                 OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        root = CollectNodes(directoryPath, exclusions, effective.CancellationToken);
+        var imageExclusions = new ErofsExclusions(effective.ExcludePaths, effective.ExcludeRegexes);
+        imageExclusions.Validate();
+        root = CollectNodes(directoryPath, excludedHostPaths, imageExclusions, effective.CancellationToken);
         ApplyMetadataOverrides(root, effective);
         return effective;
     }
@@ -235,13 +248,13 @@ public sealed partial class ErofsBuilder
     /// <para>将 Android 风格元数据文件中的 fs_config（uid/gid/mode）与 file_contexts
     /// （security.selinux inline xattr）覆盖应用到收集完成的目录树。</para>
     /// </summary>
-    private static void ApplyMetadataOverrides(BuildNode root, ErofsOptions options)
+    private static void ApplyMetadataOverrides(ErofsInode root, ErofsOptions options)
     {
         if (options.FsConfig is null && options.FileContexts is null
             && options.FsConfigPath is null && options.FileContextsPath is null) return;
         var fsConfig = options.FsConfig ??= FileSystemMetadataOverrides.LoadFsConfig(options.FsConfigPath);
         var contexts = options.FileContexts ??= FileSystemMetadataOverrides.LoadFileContexts(options.FileContextsPath);
-        var ordered = new List<BuildNode>();
+        var ordered = new List<ErofsInode>();
         CollectPreOrder(root, ordered);
         foreach (var node in ordered)
         {
@@ -257,7 +270,7 @@ public sealed partial class ErofsBuilder
             if (contexts.Count > 0 && node.XattrIbody.Length == 0 &&
                 FileSystemMetadataOverrides.TryGetLabel(contexts, relative, out var label))
             {
-                node.XattrIbody = ErofsXattr.EncodeInline(
+                List<ErofsXattrEntry> labelEntries =
                 [
                     new ErofsXattrEntry
                     {
@@ -265,66 +278,123 @@ public sealed partial class ErofsBuilder
                         Value = FileSystemMetadataOverrides.ToSelinuxXattrValue(label),
                         NameIndex = ErofsXattr.NameIndexSecurity,
                     }
-                ]);
+                ];
+                BindXattrEncoding(node,
+                    ErofsXattr.Encode(labelEntries, PrefixSeed(options), NameFilterRequested(options)),
+                    labelEntries);
             }
         }
     }
 
-    private static BuildNode CollectNodes(string directoryPath, HashSet<string>? excludedPaths, CancellationToken token)
+    private static ErofsInode CollectNodes(string directoryPath, HashSet<string>? excludedPaths,
+        ErofsExclusions exclusions, CancellationToken token)
     {
         var rootFull = Path.GetFullPath(directoryPath);
-        return CollectNode(rootFull, isRoot: true, excludedPaths, token);
+        return CollectNode(rootFull, string.Empty, isRoot: true, excludedPaths, exclusions, token);
     }
 
     /// <summary>
-    /// Reads Unix metadata (uid/gid/mtime/permissions/dev): Linux uses lstat for all fields; other platforms fall back to defaults (permissions = 0, uid/gid = 0, mtime = 0).
-    /// <para>读取 Unix 元数据（uid/gid/mtime/permissions/dev）：Linux 通过 lstat 获取全部字段； 其他平台使用回退默认值（permissions = 0，uid/gid = 0，mtime = 0）。</para>
+    /// Reads Unix metadata (uid/gid/mtime with nanoseconds/permissions/rdev): Linux uses lstat for all fields; other platforms fall back to defaults (uid/gid = 0, mtime = 0, no mode).
+    /// <para>读取 Unix 元数据（uid/gid/mtime 含纳秒/权限/设备号）：Linux 通过 lstat 获取全部字段；其他平台使用回退默认值（uid/gid = 0，mtime = 0，不带权限）。</para>
     /// </summary>
-    private static void ReadUnixMetadata(
+    /// <returns><see langword="true"/> when <c>lstat</c> supplied a real mode for this entry, so a zero
+    /// permission word means "no metadata" rather than mode 0000.
+    /// <para>当 <c>lstat</c> 为该条目提供了真实权限位时返回 <see langword="true"/>，从而让全零权限表示"无元数据"而不是 0000 模式。</para></returns>
+    private static bool ReadUnixMetadata(
         string fullPath,
         out uint uid,
         out uint gid,
         out long mtime,
+        out uint mtimeNanoseconds,
         out ushort permissions,
-        out bool isDevice,
+        out bool isSpecialFile,
         out uint deviceRdev,
         out ushort deviceMode)
     {
         uid = 0;
         gid = 0;
         mtime = 0;
+        mtimeNanoseconds = 0;
         permissions = 0;
-        isDevice = false;
+        isSpecialFile = false;
         deviceRdev = 0;
         deviceMode = 0;
 
-        if (!OperatingSystem.IsLinux()) return;
+        if (!OperatingSystem.IsLinux()) return false;
 
         try
         {
             var buf = new LinuxStat();
-            if (LStat(fullPath, out buf) != 0) return;
+            if (LStat(fullPath, out buf) != 0) return false;
 
             uid = (uint)buf.st_uid;
             gid = (uint)buf.st_gid;
             mtime = buf.st_mtime;
+            mtimeNanoseconds = (uint)buf.st_mtime_nsec;
             permissions = (ushort)(buf.st_mode & 0xFFF);
 
             var fileType = buf.st_mode & 0xF000;
-            if (fileType == 0x2000 || fileType == 0x6000)
+            if (fileType is 0x2000 or 0x6000 or 0x1000 or 0xC000)
             {
-                isDevice = true;
-                deviceRdev = (uint)buf.st_rdev;
+                isSpecialFile = true;
+                deviceRdev = EncodeUnixDeviceId(buf.st_rdev);
                 deviceMode = (ushort)buf.st_mode;
             }
         }
         catch
         {
-
+            return false;
         }
+
+        return true;
     }
 
-    private static BuildNode CollectNode(string fullPath, bool isRoot, HashSet<string>? excludedPaths, CancellationToken token)
+    /// <summary>
+    /// Converts a glibc <c>st_rdev</c> into the device identifier EROFS stores in <c>i_rdev</c>: the major
+    /// number sits at bit 8 and the high minor bits at bit 24. The host value is a 64-bit pair of fields, so it
+    /// has to be taken apart with the glibc <c>gnu_dev_major</c>/<c>gnu_dev_minor</c> layout before it is folded
+    /// back into 32 bits; ordinary Android device nodes (major below 4096, minor below 256) land on the same
+    /// number either way, while a huge major number is only preserved by going through the fields.
+    /// <para>把 glibc 的 <c>st_rdev</c> 转成 EROFS 写入 <c>i_rdev</c> 的设备号：磁盘形式把主号放在第 8 位、
+    /// 次号高位放在第 24 位。宿主值是 64 位的双字段编码，必须先用 glibc 的
+    /// <c>gnu_dev_major</c>/<c>gnu_dev_minor</c> 布局拆开，再折回 32 位。常见的 Android 设备节点
+    /// （主号小于 4096、次号小于 256）两种写法结果相同，只有超大主号必须经过字段拆分才能保留。</para>
+    /// </summary>
+    /// <param name="stRdev">Raw <c>st_rdev</c> as reported by <c>lstat</c>. <para><c>lstat</c> 报告的原始 <c>st_rdev</c>。</para></param>
+    /// <returns>The 32-bit on-disk device identifier. <para>写入磁盘的 32 位设备号。</para></returns>
+    internal static uint EncodeUnixDeviceId(ulong stRdev)
+    {
+        var major = (uint)(((stRdev >> 8) & 0xfff) | ((stRdev >> 32) & 0xffff0000));
+        var minor = (uint)((stRdev & 0xff) | ((stRdev >> 12) & 0xfff00));
+        return (minor & 0xff) | (major << 8) | ((minor & ~0xffu) << 12);
+    }
+
+    /// <summary>
+    /// Collects one host path into the node tree. Generated repack metadata is never payload: a
+    /// <c>metadata.json</c> the extraction wrote into the tree root, or one whose shape
+    /// <see cref="UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile"/> validates, is skipped
+    /// under an active edit plan too, where the plan membership test alone would have collected it. The
+    /// plan test is still applied, so a file the plan does not project stays out as well.
+    /// <para>把一个宿主路径收集为节点树。生成的打包元数据绝不是负载：解包写进目录树根部的
+    /// <c>metadata.json</c>，或经
+    /// <see cref="UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile"/> 校验过的同形态文件，
+    /// 在编辑计划生效时同样跳过，否则仅凭计划成员判定会把它收集进来。计划判定仍然生效，因此计划未投影的
+    /// 文件同样不会进入。</para>
+    /// </summary>
+    /// <param name="fullPath">Absolute host path to collect. <para>待收集的宿主绝对路径。</para></param>
+    /// <param name="imagePath">Image-relative <c>/</c>-separated path of this entry, empty for the build
+    /// root, which is the spelling the exclusion rules compare against.
+    /// <para>该条目的镜像内相对路径，以 <c>/</c> 分隔，构建根为空；排除规则正是与该写法比较。</para></param>
+    /// <param name="isRoot">Whether the path is the build root, whose node carries an empty name.
+    /// <para>该路径是否为构建根，其节点名称相应为空。</para></param>
+    /// <param name="excludedPaths">Absolute host paths to leave out, or <see langword="null"/> for none.
+    /// <para>要排除的宿主绝对路径；无则为 <see langword="null"/>。</para></param>
+    /// <param name="exclusions">Image-relative exclusion rules applied to every child before it is read.
+    /// <para>在读取每个子项之前应用的镜像内相对路径排除规则。</para></param>
+    /// <param name="token">Cancels collection. <para>取消收集。</para></param>
+    /// <returns>The collected node. <para>收集到的节点。</para></returns>
+    private static ErofsInode CollectNode(string fullPath, string imagePath, bool isRoot,
+        HashSet<string>? excludedPaths, ErofsExclusions exclusions, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         var attributes = File.GetAttributes(fullPath);
@@ -334,30 +404,31 @@ public sealed partial class ErofsBuilder
         {
             string target = string.Empty;
             try { target = new FileInfo(fullPath).LinkTarget ?? string.Empty; } catch { }
-            return new BuildNode
+            return new ErofsInode
             {
                 Name = name,
                 IsDirectory = false,
                 FullPath = fullPath,
                 IsSymlink = true,
                 SymlinkTarget = target,
-                Size = Encoding.UTF8.GetByteCount(target),
+                Size = (ulong)Encoding.UTF8.GetByteCount(target),
             };
         }
 
-        ReadUnixMetadata(
+        var hasUnixMode = ReadUnixMetadata(
             fullPath,
             out var uid,
             out var gid,
             out var mtime,
-            out var _permissions,
-            out var isDevice,
+            out var mtimeNanoseconds,
+            out var permissions,
+            out var isSpecialFile,
             out var deviceRdev,
             out var deviceMode);
 
-        if (isDevice)
+        if (isSpecialFile)
         {
-            return new BuildNode
+            return new ErofsInode
             {
                 Name = name,
                 IsDirectory = false,
@@ -367,50 +438,78 @@ public sealed partial class ErofsBuilder
                 DeviceMode = deviceMode,
                 Uid = uid,
                 Gid = gid,
-                Mtime = mtime,
+                CTime = (ulong)mtime,
+                CTimeNsec = mtimeNanoseconds,
+                ModeOverride = permissions,
+                HasModeOverride = hasUnixMode,
             };
         }
 
         if ((attributes & FileAttributes.Directory) != 0)
         {
-            var node = new BuildNode
+            var node = new ErofsInode
             {
                 Name = name,
                 IsDirectory = true,
                 FullPath = fullPath,
                 Uid = uid,
                 Gid = gid,
-                Mtime = mtime,
+                CTime = (ulong)mtime,
+                CTimeNsec = mtimeNanoseconds,
+                ModeOverride = permissions,
+                HasModeOverride = hasUnixMode,
             };
             foreach (var childPath in Directory.EnumerateFileSystemEntries(fullPath))
             {
-                if (UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Current is { } plan ? !plan.Includes(childPath) : UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile(childPath)) continue;
+                if (UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile(childPath)
+                    || (UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Current is { } plan
+                        && !plan.Includes(childPath)))
+                {
+                    continue;
+                }
+
+                var childName = Path.GetFileName(childPath);
+                var childImagePath = imagePath.Length == 0 ? childName : $"{imagePath}/{childName}";
+                if (exclusions.IsExcluded(childImagePath))
+                {
+                    continue;
+                }
+
                 var childFullPath = Path.GetFullPath(childPath);
                 if (excludedPaths?.Contains(childFullPath) == true)
                 {
                     continue;
                 }
 
-                node.Children.Add(CollectNode(childFullPath, isRoot: false, excludedPaths, token));
+                node.Children.Add(CollectNode(childFullPath, childImagePath, isRoot: false, excludedPaths,
+                    exclusions, token));
             }
 
             return node;
         }
 
         var info = new FileInfo(fullPath);
-        return new BuildNode
+        return new ErofsInode
         {
             Name = name,
             IsDirectory = false,
             FullPath = fullPath,
-            Size = info.Length,
+            Size = ToInodeSize(info.Length),
             Uid = uid,
             Gid = gid,
-            Mtime = mtime,
+            CTime = (ulong)mtime,
+            CTimeNsec = mtimeNanoseconds,
+            ModeOverride = permissions,
+            HasModeOverride = hasUnixMode,
         };
     }
 
-    private static void CollectPreOrder(BuildNode node, List<BuildNode> ordered)
+    private static ulong ToInodeSize(long length)
+        => length >= 0
+            ? (ulong)length
+            : throw new ArgumentOutOfRangeException(nameof(length), length, "EROFS inode size cannot be negative.");
+
+    private static void CollectPreOrder(ErofsInode node, List<ErofsInode> ordered)
     {
         ordered.Add(node);
         foreach (var child in node.Children)
@@ -424,7 +523,7 @@ public sealed partial class ErofsBuilder
     /// Encodes the per-path xattrs from ErofsOptions.FileXattrs into inline ibodies and attaches them to the matching nodes.
     /// <para>把 ErofsOptions.FileXattrs 中按相对路径列出的 xattr 编码为 inline ibody 挂到对应节点。</para>
     /// </summary>
-    private static void BindXattrs(List<BuildNode> ordered, ErofsOptions options)
+    private static void BindXattrs(List<ErofsInode> ordered, ErofsOptions options)
     {
         if (options.FileXattrs is not { Count: > 0 })
         {
@@ -439,7 +538,83 @@ public sealed partial class ErofsBuilder
                 continue;
             }
 
-            node.XattrIbody = ErofsXattr.EncodeInline(entries);
+            BindXattrEncoding(node, ErofsXattr.Encode(entries, PrefixSeed(options), NameFilterRequested(options)), entries);
+        }
+    }
+
+    /// <summary>
+    /// The records an encode starts from, for the collection phase that runs before the image context
+    /// exists: the inherited source records, the configured name prefixes and the fingerprint prefix, all
+    /// registered verbatim so a name that carries a configured prefix is already compressible on the first
+    /// pass rather than only after the prefix table is planned.
+    /// <para>编码的起始记录集合，供镜像上下文建立之前的收集阶段使用：继承的源记录、配置的名称前缀与指纹
+    /// 前缀，全部逐字注册，使携带配置前缀的名称在首轮编码时即可被压缩，而不必等到前缀表规划之后。</para>
+    /// </summary>
+    /// <param name="options">Validated build options.<para>经校验的构建选项。</para></param>
+    /// <returns>The seed records in table order.<para>按表序的起始记录。</para></returns>
+    private static List<(byte BaseIndex, string Infix)> PrefixSeed(ErofsOptions options)
+    {
+        var seed = new List<(byte BaseIndex, string Infix)>(options.SourceXattrPrefixes ?? []);
+        if (options.XattrNamePrefixes is { Count: > 0 } configured)
+        {
+            foreach (var prefixText in configured)
+            {
+                AddPrefixRecord(seed, prefixText);
+            }
+        }
+
+        if (options.IshareXattrPrefix is { Length: > 0 } prefix)
+        {
+            AddPrefixRecord(seed, prefix);
+        }
+
+        return seed;
+    }
+
+    /// <summary>
+    /// Appends a configured prefix to a seed table unless an earlier record already reconstructs the same
+    /// text, keeping every index in the table unique and stable between the collection and layout phases.
+    /// <para>把一个配置的前缀追加到起始表；若已有记录能还原出相同文本则跳过，使收集阶段与布局阶段共享同一
+    /// 组唯一且稳定的表内索引。</para>
+    /// </summary>
+    /// <param name="seed">Seed table to append to.<para>待追加的起始表。</para></param>
+    /// <param name="prefix">Whole prefix text to register verbatim.<para>逐字注册的完整前缀文本。</para></param>
+    private static void AddPrefixRecord(List<(byte BaseIndex, string Infix)> seed, string prefix)
+    {
+        if (!seed.Any(record => ErofsXattr.PrefixText(record) == prefix))
+        {
+            seed.Add(ErofsXattr.SplitPrefix(prefix));
+        }
+    }
+
+    /// <summary>
+    /// Whether this build writes per-inode xattr name filters, for the collection phase that runs before
+    /// the image context exists.
+    /// <para>本次构建是否写出逐 inode 的 xattr 名称过滤器，供镜像上下文建立之前的收集阶段使用。</para>
+    /// </summary>
+    /// <param name="options">Validated build options.<para>经校验的构建选项。</para></param>
+    /// <returns><see langword="true"/> when the filter words are written.
+    /// <para>写出过滤字时为 <see langword="true"/>。</para></returns>
+    private static bool NameFilterRequested(ErofsOptions options)
+        => options.XattrNameFilter
+            || options.SourceXattrFilterFeature
+            || (options.FeaturesAuthoritative && options.Features.Contains(ErofsFeature.XattrFilter));
+
+    /// <summary>
+    /// Stores one node's encoded inline ibody together with the long-prefix records its names registered.
+    /// The ibody is final, but the prefix records are a per-node contribution the image flushes as one
+    /// shared table, so identical records from several nodes collapse into one table row.
+    /// <para>保存单个节点编码后的 inline ibody 及其名称登记的长前缀记录。ibody 已是最终形态，而前缀
+    /// 记录是逐节点贡献，镜像将其合并为一张共享表，因此多个节点的相同记录会合并为一行。</para>
+    /// </summary>
+    private static void BindXattrEncoding(ErofsInode node, ErofsXattrEncoding encoding,
+        IReadOnlyList<ErofsXattrEntry> entries)
+    {
+        node.XattrIbody = encoding.Ibody;
+        node.XattrEntries = [.. entries];
+        if (encoding.PrefixTable is { Count: > 0 } prefixes)
+        {
+            node.XattrPrefixes = [.. prefixes];
         }
     }
 
@@ -447,7 +622,7 @@ public sealed partial class ErofsBuilder
     /// Image-relative path of a node ('/'-separated; root is "").
     /// <para>节点的镜像内相对路径（'/' 分隔；根为 ""）。</para>
     /// </summary>
-    private static string BuildImagePath(BuildNode node)
+    private static string BuildImagePath(ErofsInode node)
     {
         var parts = new List<string>();
         for (var current = node; current.Parent is not null; current = current.Parent)
@@ -459,92 +634,29 @@ public sealed partial class ErofsBuilder
         return string.Join('/', parts);
     }
 
-    private sealed class BuildNode
-    {
-        public string Name = string.Empty;
-        public bool IsDirectory;
-        public string FullPath = string.Empty;
-        public long Size;
-        public List<BuildNode> Children = [];
-        public BuildNode? Parent;
-        public ulong OriginalInode;
-        public ulong LinkCount = 1;
-        public ulong Nid;
-        public long MetaOffset;
-        public byte[] InlineData = [];
-        public long DirBlocks;
-        public long DirPayloadSize;
-        public bool DirectoryInline;
-        public long DirBlockAddr = -1;
-        public long FlatBlockAddr = -1;
-        public long FlatBlocks;
-        public PclusterPlan[]? Pclusters;
-        public uint CompressedBlocks;
-        public uint ClusterCount;
-        public int LogicalClusterSize;
-        public bool CompactedIndexes;
-        public bool BigPcluster;
-        public bool InlineCompressedTail;
-        public ErofsOptions? CompressionOptions;
-        public ErofsSourceInode? SourceInode;
-
-        public byte[] XattrIbody = [];
-
-        public bool IsSymlink;
-        public string SymlinkTarget = string.Empty;
-        public bool IsDevice;
-        public uint DeviceRdev;
-        public ushort DeviceMode;
-        public uint Uid;
-        public uint Gid;
-        public ushort ModeOverride;
-        public bool HasModeOverride;
-        public long Mtime;
-        public bool RequiresExtendedTime;
-
-        public bool IsFragment;
-        public long FragmentOffset = -1;
-        public byte[]? ContentHash;
-        public BuildNode? DedupSource;
-        public bool IsPacked;
-        public List<PackedFragment>? PackedFragments;
-
-        public bool IsMetaboxResident;
-
-        public bool IsMetaboxContainer;
-        public long MetaboxSlot = -1;
-
-    }
-
-    private sealed class PackedFragment
-    {
-        public required BuildNode Owner;
-        public long Offset;
-        public long Length;
-    }
-
-    private sealed class PclusterPlan
-    {
-        public long SourceOffset;
-        public int SourceLength;
-        public int CompressedLength;
-        public uint BlockAddress;
-        public bool Plain;
-
-        /// <summary>Staging-file offset of this pcluster's accepted encoding; -1 for a plain cluster, where the
-        /// write pass copies the source bytes as they stand instead of reading the staging file.
-        /// <para>该 pcluster 已接受编码在暂存文件中的偏移；原样簇为 -1，写出阶段直接复制源字节而不读暂存文件。</para></summary>
-        public long StagedOffset = -1;
-    }
+    /// <summary>
+    /// Decides whether an inode needs the 64-byte extended record: a compact record stores <c>i_mtime</c>
+    /// only as an unsigned 32-bit delta from the superblock epoch and has no per-inode nanosecond field
+    /// (all compact inodes share <c>s_fixed_nsec</c>), so an unrepresentable timestamp requires the extended form.
+    /// <para>判断 inode 是否需要 64 字节的 extended 记录：compact 记录的 <c>i_mtime</c> 只是相对超级块
+    /// epoch 的无符号 32 位增量且没有逐 inode 纳秒字段（所有 compact inode 共用 <c>s_fixed_nsec</c>），
+    /// 因此无法表示的时间戳必须改用 extended 形式。</para>
+    /// </summary>
+    /// <param name="timestamp">Effective inode seconds. <para>生效的 inode 秒数。</para></param>
+    /// <param name="epoch">Superblock epoch seconds. <para>超级块 epoch 秒数。</para></param>
+    /// <param name="nanoseconds">Per-inode sub-second part. <para>逐 inode 的亚秒部分。</para></param>
+    /// <returns><see langword="true"/> when the extended record is required.
+    /// <para>必须使用 extended 记录时为 <see langword="true"/>。</para></returns>
+    internal static bool NeedsExtendedInodeTime(ulong timestamp, ulong epoch, uint nanoseconds)
+        => timestamp < epoch || timestamp - epoch > uint.MaxValue || nanoseconds != 0;
 
     /// <summary>
     /// Reports whether the feature declaration permits per-node big pclusters. An authoritative
     /// declaration is the authority, so a rebuilt image cannot advertise a layout its source lacked; a
-    /// derived declaration falls back to <see cref="ErofsOptions.LegacyCompatibility"/>, which is exactly
-    /// what keeps a fresh build's layout unchanged.
+    /// derived declaration asks the options whether the planned pcluster limit actually exceeds one block,
+    /// which is what keeps the default single-block layout free of the bit.
     /// <para>判断特性声明是否允许逐节点 big pcluster。权威声明即为依据，因此重建镜像不会声明源镜像缺失的
-    /// 布局；推导式声明回退到 <see cref="ErofsOptions.LegacyCompatibility"/>，这正是新建构建布局保持不变的
-    /// 原因。</para>
+    /// 布局；推导式声明改问选项规划的 pcluster 上限是否真超过一块，这正是默认单块布局不带该位的原因。</para>
     /// </summary>
     /// <param name="options">Validated build options carrying the declaration.
     /// <para>携带声明的经校验构建选项。</para></param>
@@ -553,16 +665,17 @@ public sealed partial class ErofsBuilder
     private static bool DeclaredBigPcluster(ErofsOptions options)
         => options.FeaturesAuthoritative
             ? options.Features.Contains(ErofsFeature.BigPcluster)
-            : !options.LegacyCompatibility;
+            : options.ModernCompressionLayoutRequested;
 
     /// <summary>
     /// Reports whether the declaration advertises the compression configuration records that follow the
     /// superblock. The records share incompat bit 0x00000002 with big pclusters, so an image without them
     /// also carries no algorithm bitmap and keeps the legacy max-distance encoding in
-    /// <c>s_available_compr_algs</c>.
-    /// <para>判断声明是否 advertise 紧随超级块的压缩配置记录。该记录与 big pcluster 共用 incompat 位
-    /// 0x00000002，因此无该记录的镜像也不携带算法位图，<c>s_available_compr_algs</c> 沿用 legacy 的最大
-    /// 距离编码。</para>
+    /// <c>s_available_compr_algs</c>. A derived declaration resolves to the same single predicate as
+    /// <see cref="DeclaredBigPcluster"/>, because one bit licenses both layouts.
+    /// <para>判断声明是否写出紧随超级块的压缩配置记录。该记录与 big pcluster 共用 incompat 位 0x00000002，
+    /// 因此无该记录的镜像也不携带算法位图，<c>s_available_compr_algs</c> 沿用 legacy 的最大距离编码。
+    /// 推导式声明落到与 <see cref="DeclaredBigPcluster"/> 相同的单一判据，因为一位许可两种布局。</para>
     /// </summary>
     /// <param name="options">Validated build options carrying the declaration.
     /// <para>携带声明的经校验构建选项。</para></param>
@@ -571,7 +684,7 @@ public sealed partial class ErofsBuilder
     private static bool DeclaredCompressionConfigs(ErofsOptions options)
         => options.FeaturesAuthoritative
             ? options.Features.Contains(ErofsFeature.CompressionConfigs)
-            : !options.LegacyCompatibility;
+            : options.ModernCompressionLayoutRequested;
 
     /// <summary>
     /// Reports whether the declaration advertises ztailpacking, the incompat bit licensing a final
@@ -587,6 +700,26 @@ public sealed partial class ErofsBuilder
         => options.FeaturesAuthoritative
             ? options.Features.Contains(ErofsFeature.Ztailpacking)
             : !options.LegacyCompatibility;
+
+    /// <summary>
+    /// Resolves the <c>48bit</c> incompat bit, which splits the superblock block count into
+    /// <c>s_blocks</c> plus <c>s_blocks_hi</c> and moves the root inode number into the 64-bit
+    /// <c>s_rootnid_8b</c> field. A derived declaration answers from the image's own size, because a
+    /// superblock whose high half does not fit cannot publish the count any other way.
+    /// <para>解析 <c>48bit</c> incompat 位，它把超级块块数拆为 <c>s_blocks</c> 与 <c>s_blocks_hi</c>，
+    /// 并把根 inode 编号移入 64 位的 <c>s_rootnid_8b</c> 字段。推导式声明依据镜像自身大小作答，因为高半部分
+    /// 装不下的超级块无法以其他方式发布该计数。</para>
+    /// </summary>
+    /// <param name="options">Validated build options carrying the declaration.
+    /// <para>携带声明的经校验构建选项。</para></param>
+    /// <param name="totalBlocks">Total image block count the superblock has to publish.
+    /// <para>超级块必须发布的镜像总块数。</para></param>
+    /// <returns><see langword="true"/> when the wide superblock fields are written.
+    /// <para>写出宽超级块字段时为 <see langword="true"/>。</para></returns>
+    internal static bool DeclaredFortyEightBit(ErofsOptions options, long totalBlocks)
+        => options.FeaturesAuthoritative
+            ? options.Features.Contains(ErofsFeature.FortyEightBit)
+            : totalBlocks > uint.MaxValue;
 
     /// <summary>
     /// Resolves the inode advise bit shared by <c>EROFS_I_NLINK_1</c> and dot-omitted directories from
@@ -608,6 +741,20 @@ public sealed partial class ErofsBuilder
             ErofsTriStateFeature.Disabled => false,
             _ => !options.LegacyCompatibility,
         };
+
+    /// <summary>
+    /// Reports whether the nlink-one / dot-omitted advise bit may be written. The bit lies outside the
+    /// advise mask many targets accept, so an image carrying it could mount but enumerate nothing; the bit
+    /// is therefore written only when the caller declares a target that genuinely defines it.
+    /// <para>判断是否可以写出 nlink-one / 省略点项 advise 位。该位超出许多目标可接受的 advise 掩码，
+    /// 携带它的镜像可能能挂载却枚举不出内容，因此只有调用方声明的目标确实定义该位时才写出。</para>
+    /// </summary>
+    /// <param name="options">Validated build options whose feature declaration is already resolved.
+    /// <para>特性声明已完成解析的经校验构建选项。</para></param>
+    /// <returns><see langword="true"/> only when the declaration targets a kernel defining the bit.
+    /// <para>仅当声明针对定义了该位的内核时为 <see langword="true"/>。</para></returns>
+    private static bool KernelDefinesNlinkOneAdvice(ErofsOptions options)
+        => options.NlinkOneAdviseSupported;
 
     /// <summary>
     /// Reports whether the declaration still allows the superblock checksum. A derived declaration keeps the
@@ -657,9 +804,9 @@ public sealed partial class ErofsBuilder
         {
             foreach (var inode in inodes.Values)
             {
-                if (inode.Compressed)
+                if (inode.SourceCompressed)
                 {
-                    mask |= 1 << (int)inode.Algorithm;
+                    mask |= 1 << (int)inode.SourceAlgorithm;
                 }
             }
         }
@@ -667,7 +814,7 @@ public sealed partial class ErofsBuilder
         return (ushort)mask;
     }
 
-    private static void BuildImage(BuildNode root, ErofsOptions options, Stream destination, long baseOffset,
+    private static void BuildImage(ErofsInode root, ErofsOptions options, Stream destination, long baseOffset,
         bool freshDestination, IProgress<(long Processed, long Total)>? progress = null)
     {
         using var output = new OffsetStream(destination, baseOffset);
@@ -679,11 +826,18 @@ public sealed partial class ErofsBuilder
             var payloadBytes = progress is null ? null
                 : new ExtractionByteCounter(context.PayloadByteTotal(), progress, options.CancellationToken);
             context.PlanNodePayloads(payloadBytes);
+
+            context.PlanInodeFingerprints(options);
+            context.PlanXattrPrefixTable();
+            context.PlanSharedXattrs();
             context.PlanNodeLayouts();
             context.CreatePackedNode();
             context.PlanMetabox();
             var metaOff = context.AssignInodeOffsets();
             var totalBlocks = context.AssignDataAddresses(metaOff);
+            context.TotalBlocks = totalBlocks;
+
+            context.VerifyPreservedStorageStrategies();
 
             var finalSize = checked(totalBlocks * context.BlockSize);
             var oldLength = output.Length;
