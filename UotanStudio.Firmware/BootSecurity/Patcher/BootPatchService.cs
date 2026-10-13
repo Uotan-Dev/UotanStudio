@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Compress;
 using UotanStudio.Firmware.Archive.Editing;
 using UotanStudio.Firmware.Archive.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage;
@@ -9,7 +10,6 @@ using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.BootSecurity.Patcher.Kernel;
 using UotanStudio.Firmware.BootSecurity.Workflow;
-using UotanStudio.Firmware.Compression;
 using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.BootSecurity.Patcher;

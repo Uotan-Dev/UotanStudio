@@ -1,5 +1,5 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.Compression.Internal;
+using UotanStudio.Compress.Internal;
 using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.OtaDelta.Diff;

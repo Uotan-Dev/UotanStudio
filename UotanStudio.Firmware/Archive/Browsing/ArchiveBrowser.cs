@@ -1,9 +1,9 @@
 using SharpCompress.Archives;
 using SharpCompress.Readers;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Detection;
 using UotanStudio.Firmware.Archive.Extraction;
 using UotanStudio.Firmware.Archive.Models;
-using UotanStudio.Firmware.Compression;
-using UotanStudio.Firmware.Compression.Detection;
 using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.Archive.Browsing;

@@ -2,9 +2,9 @@ using System.IO.Compression;
 using K4os.Compression.LZ4.Streams;
 using SharpCompress.Compressors.BZip2;
 using SharpCompress.Compressors.Xz;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
-using UotanStudio.Firmware.Compression;
-using UotanStudio.Firmware.Compression.Compressors;
 
 namespace UotanStudio.Firmware.BootSecurity.BootImage.Components;
 

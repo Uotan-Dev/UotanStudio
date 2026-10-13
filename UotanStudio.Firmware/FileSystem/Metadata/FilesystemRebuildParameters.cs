@@ -220,6 +220,17 @@ internal sealed class ErofsRebuildParameters
     /// <see langword="null"/>，此时该维度由写入方自行解析。</para></value>
     public string? DotOmitted { get; set; }
     /// <summary>
+    /// Gets whether the source image targeted a kernel that defines the nlink-one / dot-omitted advise bit.
+    /// The bit only exists on newer kernels, so the source being observed is the only durable evidence that the
+    /// target defines it; without this dimension a rebuild would silently drop the bit from every inode.
+    /// <para>获取源镜像是否面向定义了 nlink-one / dot-omitted advise 位的内核。该位只存在于较新内核上，
+    /// 因此"观测到源镜像"是目标定义该位的唯一持久证据；缺少该维度时，重建会在每个 inode 上静默丢弃该位。</para>
+    /// </summary>
+    /// <value>The recorded statement about the target, or <see langword="null"/> when the snapshot predates
+    /// this field; a null value is restored as unsupported.
+    /// <para>记录的目标陈述；快照早于该字段时为 <see langword="null"/>，此时还原为不支持。</para></value>
+    public bool? NlinkOneAdviseSupported { get; set; }
+    /// <summary>
     /// Gets the incompat bits the extraction removed from the source declaration: either the layout policy
     /// demanded a bit the source never declared, or the writer cannot re-emit the structures behind the
     /// declared bit.
@@ -339,6 +350,46 @@ internal sealed class ErofsRebuildInode
     /// <value>The chunk-size log2, or <c>0</c> for a file that was not chunk-based.
     /// <para>chunk 大小的 log2，或非 chunk-based 文件的 <c>0</c>。</para></value>
     public int ChunkBits { get; set; }
+    /// <summary>
+    /// Gets the attribute sets the source image recorded for this inode, as name/value pairs. They are carried
+    /// as resolved entries rather than as the raw inline body because a body may reference a slot in the source
+    /// image's shared xattr area, which a rebuild does not reproduce; the resolved list is what lets the
+    /// rebuild re-encode the same set, and re-share it when sharing is requested.
+    /// <para>获取源镜像为该 inode 记录的属性集，以名称/值对表示。它们以已解析条目而非原始内联体的形式携带，
+    /// 因为内联体可能引用源镜像共享 xattr 区中的槽位，而重建不会复现该区域；正是已解析列表让重建能重新编码
+    /// 同一集合，并在请求共享时再次共享它。</para>
+    /// </summary>
+    /// <value>The recorded attributes in on-disk order, or <see langword="null"/> when the source inode carried
+    /// none or the snapshot predates this field.
+    /// <para>按磁盘顺序记录的属性；源 inode 未携带或快照早于该字段时为 <see langword="null"/>。</para></value>
+    public List<ErofsRebuildXattr>? Xattrs { get; set; }
+}
+
+/// <summary>
+/// One extended attribute of a source inode: the on-disk name index that selects its prefix and the resolved
+/// name and value bytes. The index is stored so a name that carries a long prefix re-encodes against the same
+/// prefix record instead of being re-qualified.
+/// <para>源 inode 的一条扩展属性：选择其前缀的磁盘名称索引，以及已解析的名称与值字节。保存该索引使携带长前缀
+/// 的名称按同一前缀记录重新编码，而不是被重新限定。</para>
+/// </summary>
+internal sealed class ErofsRebuildXattr
+{
+    /// <summary>Gets the on-disk <c>e_name_index</c> byte, defaulting to the <c>user.</c> prefix.
+    /// <para>获取磁盘 <c>e_name_index</c> 字节，默认为 <c>user.</c> 前缀。</para></summary>
+    /// <value>A default prefix index (1..6), or a long-prefix index with the <c>0x80</c> flag set.
+    /// <para>默认前缀索引（1..6），或置有 <c>0x80</c> 标志的长前缀索引。</para></value>
+    public byte NameIndex { get; set; } = 1;
+
+    /// <summary>Gets the resolved attribute name. <para>获取已解析的属性名称。</para></summary>
+    /// <value>Never null; the full name including its prefix, e.g. <c>user.caps</c>.
+    /// <para>永不为 null；含前缀的完整名称，例如 <c>user.caps</c>。</para></value>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets the attribute value bytes as a base64 string, because JSON carries no raw bytes.
+    /// <para>获取属性值的 base64 字符串，因为 JSON 不携带原始字节。</para></summary>
+    /// <value>Standard base64 of the value; an empty string for a zero-length value.
+    /// <para>值的标准 base64；零长度值为空字符串。</para></value>
+    public string Value { get; set; } = string.Empty;
 }
 
 /// <summary>

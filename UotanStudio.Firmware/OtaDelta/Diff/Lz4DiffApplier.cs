@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Google.Protobuf;
 using K4os.Compression.LZ4;
-using UotanStudio.Firmware.Compression.Codecs.Lz4;
+using UotanStudio.Compress.Codecs.Lz4;
 
 namespace UotanStudio.Firmware.OtaDelta.Diff;
 

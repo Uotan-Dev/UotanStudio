@@ -1,6 +1,6 @@
 using System.Buffers;
 using K4os.Compression.LZ4;
-using UotanStudio.Firmware.Compression.Codecs.Lzo;
+using UotanStudio.Compress.Codecs.Lzo;
 
 namespace UotanStudio.Firmware.FileSystem.F2fs;
 

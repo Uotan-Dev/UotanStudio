@@ -9,14 +9,14 @@ public sealed partial class PayloadBuilder
     {
         var format = compressionType switch
         {
-            CompressionType.None => UotanStudio.Firmware.Compression.CompressionFormat.None,
-            CompressionType.BZip2 => UotanStudio.Firmware.Compression.CompressionFormat.Bzip2,
-            CompressionType.Xz => UotanStudio.Firmware.Compression.CompressionFormat.Xz,
+            CompressionType.None => UotanStudio.Compress.CompressionFormat.None,
+            CompressionType.BZip2 => UotanStudio.Compress.CompressionFormat.Bzip2,
+            CompressionType.Xz => UotanStudio.Compress.CompressionFormat.Xz,
             CompressionType.Zstd => throw new ArgumentException("Zstd REPLACE compression requires the dictionary-aware overload.", nameof(compressionType)),
             _ => throw new PayloadGenerationException("Unsupported payload REPLACE compression.")
         };
-        UotanStudio.Firmware.Compression.CompressionService.Compress(inputStream, outputStream, format,
-            new UotanStudio.Firmware.Compression.CompressionOptions
+        UotanStudio.Compress.CompressionService.Compress(inputStream, outputStream, format,
+            new UotanStudio.Compress.CompressionOptions
             {
                 MaxDegreeOfParallelism = 1,
                 DictionarySize = 1u << 20

@@ -1,7 +1,7 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using Google.Protobuf;
-using UotanStudio.Firmware.Compression.Compressors;
+using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using ZstdSharp;

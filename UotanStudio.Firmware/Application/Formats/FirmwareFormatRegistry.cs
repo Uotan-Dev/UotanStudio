@@ -26,7 +26,7 @@ public static class FirmwareFormatRegistry
             }
 
             Register(new Archive.CpioFormatHandler());
-            Register(new Compression.CompressFormatHandler());
+            Register(new CompressFormatHandler());
 
             Register(new OtaDelta.Payload.PayloadFormatHandler());
             Register(new OtaDelta.Dat.DatFormatHandler());

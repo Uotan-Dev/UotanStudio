@@ -1,6 +1,6 @@
 using System.IO.Compression;
+using UotanStudio.Compress;
 using UotanStudio.Firmware.BlockImage.Lp;
-using UotanStudio.Firmware.Compression;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Firmware.OtaDelta.Payload;

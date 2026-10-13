@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Hashing;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.Compression;
+using UotanStudio.Compress;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.Core.Text;

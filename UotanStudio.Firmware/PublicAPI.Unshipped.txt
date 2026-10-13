@@ -346,8 +346,6 @@ UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection.Backup = 1 -> UotanStudio.F
 UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection.Both = 2 -> UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection
 UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection.Primary = 0 -> UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection
 static UotanStudio.Firmware.BlockImage.Gpt.GptDeviceImage.BuildExtents(UotanStudio.Firmware.BlockImage.Gpt.GptTable! table, UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection copies) -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent!>!
-UotanStudio.Firmware.Core.Checksums.RockchipCrc32
-static UotanStudio.Firmware.Core.Checksums.RockchipCrc32.Compute(System.ReadOnlySpan<byte> data, uint seed = 0) -> uint
 UotanStudio.Firmware.Core.IO.TempFileHelper
 static UotanStudio.Firmware.Core.IO.TempFileHelper.CleanupAll() -> void
 static UotanStudio.Firmware.Core.IO.TempFileHelper.CreateAdjacentPath(string! targetPath) -> string!
@@ -554,6 +552,8 @@ UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.DotOmitted.get -> UotanStudio
 UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.DotOmitted.set -> void
 UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.Features.get -> UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureSet
 UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.Features.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.NlinkOneAdviseSupported.get -> bool
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.NlinkOneAdviseSupported.set -> void
 UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeature
 UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeature.BigPcluster = 4 -> UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeature
 UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeature.ChunkedFile = 8 -> UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeature
@@ -574,9 +574,17 @@ UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeature.SuperblockChecksum = 4
 UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeature.XattrFilter = 16384 -> UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeature
 UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeature.XattrPrefixes = 512 -> UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeature
 UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeature.Ztailpacking = 64 -> UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeature
+UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattrEncoding
+UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattrEncoding.ErofsXattrEncoding() -> void
+UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattrEncoding.Ibody.get -> byte[]!
+UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattrEncoding.Ibody.init -> void
+UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattrEncoding.NameFilter.get -> uint
+UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattrEncoding.NameFilter.init -> void
+UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattrEncoding.PrefixTable.get -> System.Collections.Generic.IReadOnlyList<(byte BaseIndex, string! Infix)>!
+UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattrEncoding.PrefixTable.init -> void
 UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureCapability
 UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureCapability.Emittable = 0 -> UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureCapability
-UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureCapability.ReadOnlyForEmit = 1 -> UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureCapability
+UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureCapability.Contextual = 1 -> UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureCapability
 UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureSet
 UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureSet.CompatBits.get -> uint
 UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureSet.CompatBits.init -> void
@@ -604,3 +612,58 @@ static UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureSet.FromWords(ui
 static UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureSet.operator !=(UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureSet left, UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureSet right) -> bool
 static UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureSet.operator ==(UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureSet left, UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureSet right) -> bool
 ~override UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsFeatureSet.Equals(object obj) -> bool
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.AllFilesAsFragments.get -> bool
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.AllFilesAsFragments.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.IshareXattrPrefix.get -> string?
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.IshareXattrPrefix.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.IshareXattrs.get -> bool
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.IshareXattrs.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.XattrNameFilter.get -> bool
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.XattrNameFilter.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.XattrNamePrefixes.get -> System.Collections.Generic.IReadOnlyList<string!>?
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.XattrNamePrefixes.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.MetaboxRequired.get -> bool
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.MetaboxRequired.set -> void
+const UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.MaximumPclusterSize = 1048576 -> int
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.ExcludePaths.get -> System.Collections.Generic.IReadOnlyList<string!>?
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.ExcludePaths.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.ExcludeRegexes.get -> System.Collections.Generic.IReadOnlyList<string!>?
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.ExcludeRegexes.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.ForceUid.get -> uint?
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.ForceUid.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.ForceGid.get -> uint?
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.ForceGid.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.AllRoot.get -> bool
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.AllRoot.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.UidOffset.get -> long
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.UidOffset.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.GidOffset.get -> long
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.GidOffset.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.UseCompacted2BIndexes.get -> bool
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.UseCompacted2BIndexes.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsInodeFormat
+UotanStudio.Firmware.FileSystem.Erofs.ErofsInodeFormat.Auto = 0 -> UotanStudio.Firmware.FileSystem.Erofs.ErofsInodeFormat
+UotanStudio.Firmware.FileSystem.Erofs.ErofsInodeFormat.Compact = 1 -> UotanStudio.Firmware.FileSystem.Erofs.ErofsInodeFormat
+UotanStudio.Firmware.FileSystem.Erofs.ErofsInodeFormat.Extended = 2 -> UotanStudio.Firmware.FileSystem.Erofs.ErofsInodeFormat
+UotanStudio.Firmware.FileSystem.Erofs.ErofsChunkIndexKind
+UotanStudio.Firmware.FileSystem.Erofs.ErofsChunkIndexKind.Auto = 0 -> UotanStudio.Firmware.FileSystem.Erofs.ErofsChunkIndexKind
+UotanStudio.Firmware.FileSystem.Erofs.ErofsChunkIndexKind.BlockMap = 1 -> UotanStudio.Firmware.FileSystem.Erofs.ErofsChunkIndexKind
+UotanStudio.Firmware.FileSystem.Erofs.ErofsChunkIndexKind.Indexes = 2 -> UotanStudio.Firmware.FileSystem.Erofs.ErofsChunkIndexKind
+UotanStudio.Firmware.FileSystem.Erofs.ErofsDedupeMode
+UotanStudio.Firmware.FileSystem.Erofs.ErofsDedupeMode.WholeFile = 0 -> UotanStudio.Firmware.FileSystem.Erofs.ErofsDedupeMode
+UotanStudio.Firmware.FileSystem.Erofs.ErofsDedupeMode.Pcluster = 1 -> UotanStudio.Firmware.FileSystem.Erofs.ErofsDedupeMode
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.UseExtentIndexes.get -> UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsTriStateFeature
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.UseExtentIndexes.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.ChunkSize.get -> int
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.ChunkSize.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.BlobDeviceIds.get -> System.Collections.Generic.IReadOnlyList<int>?
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.BlobDeviceIds.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.InodeFormat.get -> UotanStudio.Firmware.FileSystem.Erofs.ErofsInodeFormat
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.InodeFormat.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.ChunkIndexKind.get -> UotanStudio.Firmware.FileSystem.Erofs.ErofsChunkIndexKind
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.ChunkIndexKind.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.CompressHints.get -> System.Collections.Generic.IReadOnlyList<string!>?
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.CompressHints.set -> void
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.DedupeMode.get -> UotanStudio.Firmware.FileSystem.Erofs.ErofsDedupeMode
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.DedupeMode.set -> void
+static UotanStudio.Firmware.BlockImage.Gpt.GptReader.ReadWithPartitionEntryOverridesAsync(UotanStudio.Firmware.BlockImage.Gpt.GptBlockReader! readBlocks, int blockSize, ulong blockCount, ulong? partitionEntryLba, uint? partitionEntryCount, uint? partitionEntrySize, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BlockImage.Gpt.GptTable!>!

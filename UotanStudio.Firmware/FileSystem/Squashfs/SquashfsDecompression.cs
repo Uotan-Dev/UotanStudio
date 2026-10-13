@@ -1,7 +1,7 @@
 using K4os.Compression.LZ4;
-using UotanStudio.Firmware.Compression;
-using UotanStudio.Firmware.Compression.Codecs.Lzo;
-using UotanStudio.Firmware.Compression.Compressors;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Codecs.Lzo;
+using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.FileSystem.Squashfs;

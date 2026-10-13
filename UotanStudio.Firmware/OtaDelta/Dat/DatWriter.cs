@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.Compression.Compressors;
+using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.OtaDelta.Diff;
 
 namespace UotanStudio.Firmware.OtaDelta.Dat;

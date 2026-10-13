@@ -1,7 +1,8 @@
-using UotanStudio.Firmware.Compression.Files;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Files;
 using UotanStudio.Firmware.Core;
 
-namespace UotanStudio.Firmware.Compression;
+namespace UotanStudio.Firmware.Application.Formats;
 
 /// <summary>
 /// Format handler that detects, inspects, unpacks and packs stand-alone compressed files.

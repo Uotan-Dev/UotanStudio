@@ -2347,47 +2347,6 @@ UotanStudio.Firmware.BootSecurity.Workflow.SelinuxSwitchPlan.OriginalCommandLine
 UotanStudio.Firmware.BootSecurity.Workflow.SelinuxSwitchPlan.SelinuxSwitchPlan(string! BootPath, UotanStudio.Firmware.BootSecurity.Workflow.SelinuxSwitchMode Mode, string! OriginalCommandLine, string! UpdatedCommandLine, System.Collections.Generic.IReadOnlyList<string!>! Limitations) -> void
 UotanStudio.Firmware.BootSecurity.Workflow.SelinuxSwitchPlan.UpdatedCommandLine.get -> string!
 UotanStudio.Firmware.BootSecurity.Workflow.SelinuxSwitchPlan.UpdatedCommandLine.init -> void
-UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.Brotli = 4 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.Bzip2 = 9 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.Deflate = 3 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.Gzip = 1 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.Lz4 = 5 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.Lz4Legacy = 6 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.Lzma = 7 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.Lzop = 11 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.None = 0 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.Xz = 8 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.Zlib = 2 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.Zopfli = 12 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormat.Zstd = 10 -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormatInfo
-UotanStudio.Firmware.Compression.CompressionFormatInfo.Aliases.get -> string![]!
-UotanStudio.Firmware.Compression.CompressionFormatInfo.CanCompress.get -> bool
-UotanStudio.Firmware.Compression.CompressionFormatInfo.CanDecompress.get -> bool
-UotanStudio.Firmware.Compression.CompressionFormatInfo.Extensions.get -> string![]!
-UotanStudio.Firmware.Compression.CompressionFormatInfo.Format.get -> UotanStudio.Firmware.Compression.CompressionFormat
-UotanStudio.Firmware.Compression.CompressionFormatInfo.HasMagic.get -> bool
-UotanStudio.Firmware.Compression.CompressionFormatInfo.IsStreaming.get -> bool
-UotanStudio.Firmware.Compression.CompressionFormatInfo.Magic.get -> byte[]?
-UotanStudio.Firmware.Compression.CompressionFormatInfo.Name.get -> string!
-UotanStudio.Firmware.Compression.CompressionFormats
-UotanStudio.Firmware.Compression.CompressionOptions
-UotanStudio.Firmware.Compression.CompressionOptions.CompressionOptions() -> void
-UotanStudio.Firmware.Compression.CompressionOptions.DictionarySize.get -> uint?
-UotanStudio.Firmware.Compression.CompressionOptions.DictionarySize.set -> void
-UotanStudio.Firmware.Compression.CompressionOptions.Level.get -> int?
-UotanStudio.Firmware.Compression.CompressionOptions.Level.set -> void
-UotanStudio.Firmware.Compression.CompressionOptions.MaxDegreeOfParallelism.get -> int?
-UotanStudio.Firmware.Compression.CompressionOptions.MaxDegreeOfParallelism.set -> void
-UotanStudio.Firmware.Compression.CompressionService
-UotanStudio.Firmware.Compression.Compressors.BrotliCompressor
-UotanStudio.Firmware.Compression.Compressors.DeflateCompressor
-UotanStudio.Firmware.Compression.Compressors.GzipCompressor
-UotanStudio.Firmware.Compression.Compressors.LzmaCompressor
-UotanStudio.Firmware.Compression.Compressors.ZlibCompressor
-UotanStudio.Firmware.Compression.Compressors.ZstdCompressor
-UotanStudio.Firmware.Compression.Files.CompressionFile
 UotanStudio.Firmware.DeviceTree.Dt.DeviceTree
 UotanStudio.Firmware.DeviceTree.Dt.DeviceTree.BootCpuId.get -> uint
 UotanStudio.Firmware.DeviceTree.Dt.DeviceTree.BootCpuId.set -> void
@@ -3976,7 +3935,6 @@ UotanStudio.Firmware.Core.Bridges.ISparseContainerBridge.OpenLogicalView(string!
 UotanStudio.Firmware.Core.Bridges.ISparseLogicalView
 UotanStudio.Firmware.Core.Bridges.ISparseLogicalView.BlockSize.get -> uint
 UotanStudio.Firmware.Core.Bridges.ISparseLogicalView.Logical.get -> System.IO.Stream!
-UotanStudio.Firmware.Core.Checksums.Adler32
 UotanStudio.Firmware.Core.DetectionConfidence
 UotanStudio.Firmware.Core.DetectionConfidence.ExtensionOnly = 1 -> UotanStudio.Firmware.Core.DetectionConfidence
 UotanStudio.Firmware.Core.DetectionConfidence.StrongMagic = 3 -> UotanStudio.Firmware.Core.DetectionConfidence
@@ -4286,10 +4244,10 @@ UotanStudio.Firmware.VendorFirmware.Dz.DzChunkHeader.TargetSize -> uint
 UotanStudio.Firmware.VendorFirmware.Dz.DzChunkHeader.TrimCount -> uint
 UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource
 UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource.<Clone>$() -> UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource!
-UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource.Compression.get -> UotanStudio.Firmware.Compression.CompressionFormat
+UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource.Compression.get -> UotanStudio.Compress.CompressionFormat
 UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource.Compression.init -> void
-UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource.Deconstruct(out byte[]! Header, out string! FilePath, out UotanStudio.Firmware.Compression.CompressionFormat Compression) -> void
-UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource.DzChunkSource(byte[]! Header, string! FilePath, UotanStudio.Firmware.Compression.CompressionFormat Compression = UotanStudio.Firmware.Compression.CompressionFormat.Zlib) -> void
+UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource.Deconstruct(out byte[]! Header, out string! FilePath, out UotanStudio.Compress.CompressionFormat Compression) -> void
+UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource.DzChunkSource(byte[]! Header, string! FilePath, UotanStudio.Compress.CompressionFormat Compression = UotanStudio.Compress.CompressionFormat.Zlib) -> void
 UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource.Equals(UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource? other) -> bool
 UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource.FilePath.get -> string!
 UotanStudio.Firmware.VendorFirmware.Dz.DzChunkSource.FilePath.init -> void
@@ -6175,55 +6133,6 @@ static UotanStudio.Firmware.BootSecurity.Workflow.RecoveryRamdiskMergeResult.ope
 static UotanStudio.Firmware.BootSecurity.Workflow.RecoveryRamdiskMergeResult.operator ==(UotanStudio.Firmware.BootSecurity.Workflow.RecoveryRamdiskMergeResult? left, UotanStudio.Firmware.BootSecurity.Workflow.RecoveryRamdiskMergeResult? right) -> bool
 static UotanStudio.Firmware.BootSecurity.Workflow.SelinuxSwitchPlan.operator !=(UotanStudio.Firmware.BootSecurity.Workflow.SelinuxSwitchPlan? left, UotanStudio.Firmware.BootSecurity.Workflow.SelinuxSwitchPlan? right) -> bool
 static UotanStudio.Firmware.BootSecurity.Workflow.SelinuxSwitchPlan.operator ==(UotanStudio.Firmware.BootSecurity.Workflow.SelinuxSwitchPlan? left, UotanStudio.Firmware.BootSecurity.Workflow.SelinuxSwitchPlan? right) -> bool
-static UotanStudio.Firmware.Compression.CompressionFormats.All.get -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.Compression.CompressionFormatInfo!>!
-static UotanStudio.Firmware.Compression.CompressionFormats.FromExtension(string! filename) -> UotanStudio.Firmware.Compression.CompressionFormat
-static UotanStudio.Firmware.Compression.CompressionFormats.GetDisplayName(UotanStudio.Firmware.Compression.CompressionFormat format) -> string!
-static UotanStudio.Firmware.Compression.CompressionFormats.GetInfo(UotanStudio.Firmware.Compression.CompressionFormat format) -> UotanStudio.Firmware.Compression.CompressionFormatInfo?
-static UotanStudio.Firmware.Compression.CompressionFormats.IsSupported(UotanStudio.Firmware.Compression.CompressionFormat format) -> bool
-static UotanStudio.Firmware.Compression.CompressionFormats.Parse(string! name) -> UotanStudio.Firmware.Compression.CompressionFormat
-static UotanStudio.Firmware.Compression.CompressionFormats.ToExtension(UotanStudio.Firmware.Compression.CompressionFormat format) -> string!
-static UotanStudio.Firmware.Compression.CompressionFormats.TryParse(string? name, out UotanStudio.Firmware.Compression.CompressionFormat format) -> bool
-static UotanStudio.Firmware.Compression.CompressionService.Compress(System.IO.Stream! input, System.IO.Stream! output, UotanStudio.Firmware.Compression.CompressionFormat format, UotanStudio.Firmware.Compression.CompressionOptions? options = null) -> void
-static UotanStudio.Firmware.Compression.CompressionService.Compress(byte[]! data, UotanStudio.Firmware.Compression.CompressionFormat format, UotanStudio.Firmware.Compression.CompressionOptions? options = null) -> byte[]!
-static UotanStudio.Firmware.Compression.CompressionService.Decompress(System.IO.Stream! input, System.IO.Stream! output, UotanStudio.Firmware.Compression.CompressionFormat format) -> void
-static UotanStudio.Firmware.Compression.CompressionService.Decompress(System.IO.Stream! input, System.IO.Stream! output, UotanStudio.Firmware.Compression.CompressionFormat format, long maximumOutputBytes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
-static UotanStudio.Firmware.Compression.CompressionService.Decompress(byte[]! data, UotanStudio.Firmware.Compression.CompressionFormat format) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.BrotliCompressor.Compress(System.IO.Stream! input, System.IO.Stream! output, UotanStudio.Firmware.Compression.CompressionOptions? options = null) -> void
-static UotanStudio.Firmware.Compression.Compressors.BrotliCompressor.Compress(byte[]! data, UotanStudio.Firmware.Compression.CompressionOptions? options = null) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.BrotliCompressor.Decompress(System.IO.Stream! input, System.IO.Stream! output) -> void
-static UotanStudio.Firmware.Compression.Compressors.BrotliCompressor.Decompress(System.IO.Stream! source, System.IO.Stream! destination, long maxOutputBytes) -> void
-static UotanStudio.Firmware.Compression.Compressors.BrotliCompressor.Decompress(byte[]! data) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.DeflateCompressor.Compress(System.IO.Stream! input, System.IO.Stream! output, UotanStudio.Firmware.Compression.CompressionOptions? options = null) -> void
-static UotanStudio.Firmware.Compression.Compressors.DeflateCompressor.Compress(byte[]! data, UotanStudio.Firmware.Compression.CompressionOptions? options = null) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.DeflateCompressor.Decompress(System.IO.Stream! input, System.IO.Stream! output) -> void
-static UotanStudio.Firmware.Compression.Compressors.DeflateCompressor.Decompress(System.IO.Stream! source, System.IO.Stream! destination, long maxOutputBytes) -> void
-static UotanStudio.Firmware.Compression.Compressors.DeflateCompressor.Decompress(byte[]! data) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.GzipCompressor.Compress(System.IO.Stream! input, System.IO.Stream! output, UotanStudio.Firmware.Compression.CompressionOptions? options = null) -> void
-static UotanStudio.Firmware.Compression.Compressors.GzipCompressor.Compress(byte[]! data, UotanStudio.Firmware.Compression.CompressionOptions? options = null) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.GzipCompressor.Decompress(System.IO.Stream! input, System.IO.Stream! output) -> void
-static UotanStudio.Firmware.Compression.Compressors.GzipCompressor.Decompress(System.IO.Stream! source, System.IO.Stream! destination, long maxOutputBytes) -> void
-static UotanStudio.Firmware.Compression.Compressors.GzipCompressor.Decompress(byte[]! data) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.GzipCompressor.IsGzipFormat(byte[]! data) -> bool
-static UotanStudio.Firmware.Compression.Compressors.LzmaCompressor.Compress(System.IO.Stream! input, System.IO.Stream! output) -> void
-static UotanStudio.Firmware.Compression.Compressors.LzmaCompressor.Compress(byte[]! data) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.LzmaCompressor.Decompress(System.IO.Stream! input, System.IO.Stream! output) -> void
-static UotanStudio.Firmware.Compression.Compressors.LzmaCompressor.Decompress(byte[]! data) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.ZlibCompressor.Compress(System.IO.Stream! input, System.IO.Stream! output, UotanStudio.Firmware.Compression.CompressionOptions? options = null) -> void
-static UotanStudio.Firmware.Compression.Compressors.ZlibCompressor.Compress(byte[]! data, UotanStudio.Firmware.Compression.CompressionOptions? options = null) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.ZlibCompressor.Decompress(System.IO.Stream! input, System.IO.Stream! output) -> void
-static UotanStudio.Firmware.Compression.Compressors.ZlibCompressor.Decompress(byte[]! data) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.ZlibCompressor.IsZlibFormat(byte[]! data) -> bool
-static UotanStudio.Firmware.Compression.Compressors.ZstdCompressor.Compress(System.IO.Stream! input, System.IO.Stream! output, UotanStudio.Firmware.Compression.CompressionOptions? options = null) -> void
-static UotanStudio.Firmware.Compression.Compressors.ZstdCompressor.Compress(byte[]! data, UotanStudio.Firmware.Compression.CompressionOptions? options = null) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.ZstdCompressor.Decompress(System.IO.Stream! input, System.IO.Stream! output) -> void
-static UotanStudio.Firmware.Compression.Compressors.ZstdCompressor.Decompress(byte[]! data) -> byte[]!
-static UotanStudio.Firmware.Compression.Compressors.ZstdCompressor.IsZstdFormat(byte[]! data) -> bool
-static UotanStudio.Firmware.Compression.Files.CompressionFile.CompressFile(string! inputPath, string! outputPath, UotanStudio.Firmware.Compression.CompressionFormat format, UotanStudio.Firmware.Compression.CompressionOptions? options = null, System.IProgress<(long Processed, long Total)>? progress = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
-static UotanStudio.Firmware.Compression.Files.CompressionFile.DecompressFile(string! inputPath, string! outputPath, UotanStudio.Firmware.Compression.CompressionFormat format) -> void
-static UotanStudio.Firmware.Compression.Files.CompressionFile.DecompressFile(string! inputPath, string! outputPath, UotanStudio.Firmware.Compression.CompressionFormat format, long maximumOutputBytes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
-static UotanStudio.Firmware.Compression.Files.CompressionFile.DecompressFileAuto(string! inputPath, string! outputPath) -> void
-static UotanStudio.Firmware.Compression.Files.CompressionFile.DecompressFileAuto(string! inputPath, string! outputPath, long maximumOutputBytes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
-static UotanStudio.Firmware.Compression.Files.CompressionFile.DetectFile(string! inputPath) -> UotanStudio.Firmware.Compression.CompressionFormat
 static UotanStudio.Firmware.DeviceTree.Dt.DtbFormat.Read(System.ReadOnlySpan<byte> data) -> UotanStudio.Firmware.DeviceTree.Dt.DeviceTree!
 static UotanStudio.Firmware.DeviceTree.Dt.DtbFormat.Read(byte[]! data) -> UotanStudio.Firmware.DeviceTree.Dt.DeviceTree!
 static UotanStudio.Firmware.DeviceTree.Dt.DtbFormat.Write(UotanStudio.Firmware.DeviceTree.Dt.DeviceTree! tree) -> byte[]!
@@ -6445,8 +6354,6 @@ static UotanStudio.Firmware.Patching.TextPatchResult.operator ==(UotanStudio.Fir
 static UotanStudio.Firmware.Patching.XmlPatch.Apply(string! text, string! xpath, string! namespaces, UotanStudio.Firmware.Patching.XmlPatchOperation operation, string! value, string! attributeName, int expectedMatches, bool checkOldValue, string! expectedOldValue) -> UotanStudio.Firmware.Patching.TextPatchResult!
 static UotanStudio.Firmware.Patching.XmlPatch.Query(string! text, string! xpath, string! namespaces, int expectedMatches) -> System.Collections.Generic.IReadOnlyList<string!>!
 
-static UotanStudio.Firmware.Core.Checksums.Adler32.Compute(System.ReadOnlySpan<byte> data) -> uint
-static UotanStudio.Firmware.Core.Checksums.Adler32.Compute(byte[]! data, int offset, int length) -> uint
 static UotanStudio.Firmware.Core.FileSystemByteProgress.ForStage(System.IProgress<UotanStudio.Firmware.Core.FileSystemByteProgress>? progress, UotanStudio.Firmware.Core.FileSystemWorkStage stage) -> System.IProgress<(long Processed, long Total)>!
 static UotanStudio.Firmware.Core.FileSystemByteProgress.operator !=(UotanStudio.Firmware.Core.FileSystemByteProgress left, UotanStudio.Firmware.Core.FileSystemByteProgress right) -> bool
 static UotanStudio.Firmware.Core.FileSystemByteProgress.operator ==(UotanStudio.Firmware.Core.FileSystemByteProgress left, UotanStudio.Firmware.Core.FileSystemByteProgress right) -> bool

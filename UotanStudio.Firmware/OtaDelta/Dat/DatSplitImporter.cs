@@ -1,7 +1,7 @@
 using System.Formats.Tar;
 using System.Globalization;
 using System.IO.Compression;
-using UotanStudio.Firmware.Compression;
+using UotanStudio.Compress;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Diff;

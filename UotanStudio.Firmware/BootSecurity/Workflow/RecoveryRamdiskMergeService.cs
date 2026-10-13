@@ -1,9 +1,9 @@
+using UotanStudio.Compress;
 using UotanStudio.Firmware.Archive.Editing;
 using UotanStudio.Firmware.BootSecurity.BootImage;
 using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
-using UotanStudio.Firmware.Compression;
 using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.BootSecurity.Workflow;

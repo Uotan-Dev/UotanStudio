@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.Compression;
+using UotanStudio.Compress;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
 

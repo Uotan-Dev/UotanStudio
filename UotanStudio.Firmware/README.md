@@ -8,7 +8,7 @@
 | --- | --- |
 | `AndroidMeta` | APK、DEX、AXML、ARSC 等 Android 包与元数据 |
 | `Archive` | 归档成员、路径、元数据、浏览、提取与写入；CPIO 和 TAR 格式读写 |
-| `Compression` | 压缩格式识别、参数、流式压缩/解压、文件操作及底层编码器 |
+| `UotanStudio.Compress` | 通用压缩已外移为独立项目；本项目只保留各领域的块级压缩簇封装 |
 | `BootSecurity` | 启动镜像、AVB 签名与验证、启动补丁 |
 | `DeviceTree` | 设备树解析与构建 |
 | `FileSystem` | EXT4、EROFS、F2FS 的目录、inode、数据簇及重建 |
@@ -23,7 +23,7 @@
 | `Application/Containers` | 组合 ZIP、Payload、LP/Super 能力，分析容器结构并提取选定成员 |
 | `Infrastructure/Downloads` | HTTP 下载、GitHub 镜像选择与网络传输 |
 
-通用压缩是供其他上下文调用的支撑上下文。它拥有算法选择、压缩参数与压缩流语义，不能依赖归档、文件系统、OTA、启动镜像或宿主。归档上下文拥有成员列表和成员提取语义，可以调用压缩上下文处理外层压缩。文件系统簇、Payload 操作和启动镜像 ramdisk 的专有封装仍由各自上下文解析，通用编码器不负责解释这些领域结构。
+通用压缩是独立的支撑项目 `UotanStudio.Compress`，本项目通过项目引用调用其能力。本项目负责归档、文件系统、OTA、启动镜像与厂商容器中的领域封装，包括成员列表、块级压缩簇和专有容器头部；通用编码器不解释这些领域结构。
 
 `Application/Formats/FirmwareFormatRegistry` 是内置处理器的组装入口，集中注册上下文处理器。`Core/FormatDetector` 只面向已注册的 `IReadonlyFormatHandler`，不构造具体格式实现。
 
@@ -46,26 +46,11 @@
 
 `FileSystemByteProgress` 位于共享契约中，因为格式接口的打包重载和 `UnpackOptions` 对所有调用方公开该进度类型。它不负责选择文件系统实现。
 
-## 压缩能力入口
+## 压缩能力入口（已外移）
 
-`CompressionService` 提供 `Compress`、`Decompress` 的流及字节数组重载，负责选择和调用编码器。`Files/CompressionFile` 拥有 `CompressFile`、`DecompressFile`、`DecompressFileAuto`、`DetectFile` 及原子发布实现，负责文件生命周期、取消、大小上限、进度上报和输出发布。生产调用优先使用流/文件重载；`CompressionService` 的字节数组重载仅用于兼容。
+通用压缩由 `UotanStudio.Compress` 提供：`CompressionService` 负责算法选择与流/字节数组的压缩解压，`Files/CompressionFile` 负责文件生命周期、取消、大小上限、进度与原子发布，`CompressionFormats` 是格式名称、别名、扩展名与能力的统一来源，`Detection/CompressionDetector` 负责字节与流头部识别。不要在调用方复制格式列表或头部探测逻辑。
 
-`CompressionFormats` 是格式名称、扩展名和能力的统一来源；`Detection/CompressionDetector` 负责字节数组、字节跨度及流头部识别，不根据文件名猜测魔数。`CompressFormatHandler` 将这些能力接入固件格式处理流程。不要在调用方复制格式列表或头部探测逻辑。
-
-| 格式或策略 | 实现入口 | 说明 |
-| --- | --- | --- |
-| Brotli | `Compressors/BrotliCompressor.cs` | 压缩、解压；无可靠固定魔数，需要显式格式或外部上下文 |
-| LZ4 / LZ4HC | `Compressors/Lz4Compressor.cs` | 同一种 LZ4 格式；默认快速压缩，HC 通过 `CompressionOptions.Level` 选择，例如 9 或 12，无需独立解码器 |
-| LZ4 Legacy | `Compressors/Lz4Compressor.cs` | 独立的 legacy 帧封装 |
-| Zstandard | `Compressors/ZstdCompressor.cs` | 压缩、解压 |
-| DEFLATE | `Compressors/DeflateCompressor.cs` | 原始 DEFLATE 流；不能依赖固定魔数自动识别 |
-| gzip / zlib | `Compressors/GzipCompressor.cs`、`ZlibCompressor.cs` | 各自封装 DEFLATE，头部与校验语义不同 |
-| LZMA / XZ | `Compressors/LzmaCompressor.cs`、`XzCompressor.cs` | LZMA 编码与 XZ 容器 |
-| bzip2 | `Compressors/Bzip2Compressor.cs` | 压缩、解压 |
-| lzop / LZO | `Compressors/LzopCompressor.cs`、`Codecs/Lzo/Lzo1x.cs` | lzop 容器与 LZO 块编码分层 |
-| Zopfli | `CompressionFormats` / `CompressionService` | 现有兼容枚举仅支持解压路由；未实现 Zopfli 压缩 |
-
-`Codecs/Lz4/` 与 `Codecs/Lzo/` 分别存放 LZ4 目标长度编码与 LZO1X；`Internal/` 存放压缩上下文内部的等级映射、有界并行和 XZ 实现辅助代码。LZ4 编码器许可证随构建和发布输出复制。
+`CompressFormatHandler` 位于 `Application/Formats`，把这些能力接入固件格式处理流程，并走 `Core/Repacking/RepackMetadata`。它消费 `UotanStudio.Compress` 的公开入口，本项目的领域压缩簇继续由各自上下文解析。
 
 ## 归档能力入口
 
@@ -103,6 +88,6 @@ NTPi 的 `Compression/Lzma2Compressor` 实际还处理 `NTDECOMP` 头部、长�
 
 ## 命名空间与调用入口
 
-命名空间由目录决定：压缩模块为 `UotanStudio.Firmware.Compression`（LZO 块实现在其 `Codecs`），归档模块为 `UotanStudio.Firmware.Archive`，Sparse 与 LP 位于 `BlockImage`，容器组合与内置处理器注册位于 `Application.Containers` 与 `Application.Formats`，HTTP 下载与 GitHub 镜像选择位于 `Infrastructure.Downloads`，重打包元数据位于 `Core.Repacking`。
+命名空间由目录决定：归档模块为 `UotanStudio.Firmware.Archive`，Sparse 与 LP 位于 `BlockImage`，容器组合与内置处理器注册位于 `Application.Containers` 与 `Application.Formats`，HTTP 下载与 GitHub 镜像选择位于 `Infrastructure.Downloads`，重打包元数据位于 `Core.Repacking`。压缩模块位于 `UotanStudio.Compress`。
 
-文件操作入口是 `CompressionFile.CompressFile`、`DecompressFile`、`DecompressFileAuto`、`DetectFile`；头部识别入口是 `CompressionDetector.Detect`；字节数组与流重载入口是 `CompressionService.Compress`、`Decompress`。程序集不携带其它命名空间的类型转发，外部调用方只能按当前命名空间引用公开类型。
+文件操作入口是 `UotanStudio.Compress.Files.CompressionFile` 的 `CompressFile`、`DecompressFile`、`DecompressFileAuto`、`DetectFile`；头部识别入口是 `CompressionDetector.Detect`；字节数组与流重载入口是 `CompressionService.Compress`、`Decompress`。程序集不携带其它命名空间的类型转发，外部调用方只能按当前命名空间引用公开类型。
