@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
-using UotanStudio.Firmware.Compression;
-using UotanStudio.Firmware.Compression.Files;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Files;
 
 namespace UotanStudio.Mcp.Tools;
 

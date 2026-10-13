@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using ModelContextProtocol.Server;
+using UotanStudio.Compress;
 using UotanStudio.Firmware.Application.Formats;
-using UotanStudio.Firmware.Compression;
 using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Mcp.Tools;
