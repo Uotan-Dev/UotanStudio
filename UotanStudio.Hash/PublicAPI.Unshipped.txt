@@ -1,0 +1,6 @@
+#nullable enable
+UotanStudio.Hash.Adler32.Adler32
+static UotanStudio.Hash.Adler32.Adler32.Compute(System.ReadOnlySpan<byte> data) -> uint
+static UotanStudio.Hash.Adler32.Adler32.Compute(byte[]! data, int offset, int length) -> uint
+UotanStudio.Hash.RockchipCrc32.RockchipCrc32
+static UotanStudio.Hash.RockchipCrc32.RockchipCrc32.Compute(System.ReadOnlySpan<byte> data, uint seed = 0) -> uint
