@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.Compression.Codecs.Lzo;
+using UotanStudio.Compress.Codecs.Lzo;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using Xunit;
 

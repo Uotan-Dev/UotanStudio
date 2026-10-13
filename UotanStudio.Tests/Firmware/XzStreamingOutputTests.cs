@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.Compression;
-using UotanStudio.Firmware.Compression.Compressors;
-using UotanStudio.Firmware.Compression.Internal;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Compressors;
+using UotanStudio.Compress.Internal;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

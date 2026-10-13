@@ -15,7 +15,6 @@ public class FirmwareContextDependencyScannerTests
         "Archive",
         "BlockImage",
         "BootSecurity",
-        "Compression",
         "DeviceTree",
         "FileSystem",
         "OtaDelta",
@@ -161,7 +160,7 @@ public class FirmwareContextDependencyScannerTests
 
             public sealed class DtoParser
             {
-                /// <remarks>Layout mirrors UotanStudio.Firmware.Compression codecs.</remarks>
+                /// <remarks>Layout mirrors UotanStudio.Compress codecs.</remarks>
                 public int Parse() => 0;
             }
             """;
@@ -196,7 +195,7 @@ public class FirmwareContextDependencyScannerTests
         const string content = """
             public static class StreamCopy
             {
-                public static void Run() => UotanStudio.Firmware.Compression.Codecs.Lz4.Lz4Codec.Decode();
+                public static void Run() => UotanStudio.Firmware.FileSystem.Squashfs.SquashfsParser.Parse();
             }
             """;
 
@@ -204,7 +203,7 @@ public class FirmwareContextDependencyScannerTests
 
         var edge = Assert.Single(edges);
         Assert.Equal("Core", edge.Source);
-        Assert.Equal("Compression", edge.Target);
+        Assert.Equal("FileSystem", edge.Target);
         Assert.True(FirmwareContextDependencyScanner.IsRegionLayerName(edge.Source));
     }
 
@@ -267,9 +266,9 @@ public class FirmwareContextDependencyScannerTests
         const string content = """
             public sealed class PayloadBuilder
             {
-                public void First() => UotanStudio.Firmware.Compression.Codecs.Zstd.Decoder.Run();
-                public void Second() => UotanStudio.Firmware.Compression.Codecs.Zstd.Decoder.Run();
-                public void Third() => UotanStudio.Firmware.FileSystem.Guard.Run();
+                public void First() => UotanStudio.Firmware.FileSystem.Squashfs.SquashfsParser.Parse();
+                public void Second() => UotanStudio.Firmware.FileSystem.Squashfs.SquashfsParser.Parse();
+                public void Third() => UotanStudio.Firmware.BlockImage.Sparse.SparseReader.Read();
             }
             """;
 
@@ -279,13 +278,13 @@ public class FirmwareContextDependencyScannerTests
             edges,
             edge =>
             {
-                Assert.Equal(("OtaDelta", "Compression"), (edge.Source, edge.Target));
-                Assert.Equal(2, edge.LineCount);
+                Assert.Equal(("OtaDelta", "BlockImage"), (edge.Source, edge.Target));
+                Assert.Equal(1, edge.LineCount);
             },
             edge =>
             {
                 Assert.Equal(("OtaDelta", "FileSystem"), (edge.Source, edge.Target));
-                Assert.Equal(1, edge.LineCount);
+                Assert.Equal(2, edge.LineCount);
             });
     }
 

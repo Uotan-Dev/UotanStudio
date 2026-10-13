@@ -1,9 +1,9 @@
 using System.Buffers.Binary;
 using System.IO.Hashing;
-using UotanStudio.Firmware.Compression;
-using UotanStudio.Firmware.Compression.Compressors;
-using UotanStudio.Firmware.Compression.Detection;
-using UotanStudio.Firmware.Compression.Files;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Compressors;
+using UotanStudio.Compress.Detection;
+using UotanStudio.Compress.Files;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;

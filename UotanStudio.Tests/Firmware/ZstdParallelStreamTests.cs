@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.Compression;
-using UotanStudio.Firmware.Compression.Compressors;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Compressors;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

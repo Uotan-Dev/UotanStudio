@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.Compression.Codecs.Lz4;
+using UotanStudio.Compress.Codecs.Lz4;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

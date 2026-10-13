@@ -14,20 +14,15 @@ public class FirmwareArchitectureGuardTests
     private static readonly HashSet<string> AllowedCrossContextEdges =
     [
         "AndroidMeta -> Executable",
-        "Archive -> Compression",
         "Archive -> FileSystem",
         "BlockImage -> FileSystem",
         "BootSecurity -> Archive",
         "BootSecurity -> BlockImage",
-        "BootSecurity -> Compression",
         "BootSecurity -> DeviceTree",
-        "FileSystem -> Compression",
         "OtaDelta -> BlockImage",
-        "OtaDelta -> Compression",
         "Patching -> FileSystem",
         "Radio -> CompoundFile",
         "VendorFirmware -> BlockImage",
-        "VendorFirmware -> Compression",
         "VendorFirmware -> FileSystem",
         "VendorFirmware -> OtaDelta",
         "VendorFirmware -> Patching",
@@ -212,7 +207,7 @@ public class FirmwareArchitectureGuardTests
         File.WriteAllText(
             Path.Combine(blockImageDirectory, "SparseImageWriter.cs"),
             """
-            /// <summary>Mentions UotanStudio.Firmware.Compression only in documentation.</summary>
+            /// <summary>Mentions UotanStudio.Compress only in documentation.</summary>
             public sealed class SparseImageWriter
             {
                 public void Flush() => UotanStudio.Firmware.FileSystem.Squashfs.SquashfsBuilder.Write();

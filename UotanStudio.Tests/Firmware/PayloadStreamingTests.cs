@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using Google.Protobuf;
-using UotanStudio.Firmware.Compression;
+using UotanStudio.Compress;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using Xunit;
