@@ -40,8 +40,20 @@ public sealed partial class ErofsParser
         };
     }
 
-    /// <summary>Reads the source compression contracts, inode timestamps, declared superblock feature words,
-    /// dot-omitted advise dimension and device table for an edited rebuild.</summary>
+    /// <summary>
+    /// Reads the source compression contracts, inode timestamps, declared superblock feature words,
+    /// dot-omitted advise dimension and device table for an edited rebuild. The legacy baseline follows
+    /// the upstream matrix (task 1.6a): mark legacy only when every observable modern signal is absent
+    /// AND none of the eight modern feature bits are set. Modern erofs-utils defaults advertise only the
+    /// lz4_0padding incompatibility and no layout-carrying feature bit, so treating "8 features all
+    /// missing" as sufficient would misclassify them as legacy and force-off Fragments, TailPacking,
+    /// Metabox, Dedup and DotOmitted downstream.
+    /// <para>读取编辑重建所需的源压缩契约、inode 时间戳、已声明的超级块特性字、目录省略 advise 维度和设备表。
+    /// legacy 判定按上游矩阵（任务 1.6a）：仅当所有可观察到的现代迹象均缺失且 8 个现代特性位全部未声明时
+    /// 才把源标记为 legacy。现代 erofs-utils 默认镜像通常只带 lz4_0padding incompatibility 而非承载布局的
+    /// 特性位，因此以「8 位全部未声明」作为充分条件会把它们误判为 legacy，进而在下游强制关闭
+    /// Fragments/TailPacking/Metabox/Dedup 与 DotOmitted。</para>
+    /// </summary>
     internal ErofsOptions ReadRebuildOptions()
     {
         var codecs = ReadCompressionOptions();
@@ -57,6 +69,8 @@ public sealed partial class ErofsParser
         var inodes = new Dictionary<ulong, UnifiedInode>(entries.Count);
         var compressed = false;
         var adviseObserved = false;
+        var extendedObserved = false;
+        var compactedIndexObserved = false;
         for (var i = 0; i < entries.Count; i++)
         {
             var record = records[i];
@@ -64,6 +78,14 @@ public sealed partial class ErofsParser
             {
                 compressed = true;
                 defaultAlgorithm = record.SourceAlgorithm;
+            }
+            if (!extendedObserved && (record.IFormat & UnifiedInode.FlagExtended) != 0)
+            {
+                extendedObserved = true;
+            }
+            if (!compactedIndexObserved && record.DataLayout == UnifiedDataLayout.CompactIndexes)
+            {
+                compactedIndexObserved = true;
             }
             if (!adviseObserved && (record.IFormat & UnifiedInode.AdviseBitNlinkOneOrDotOmitted) != 0)
             {
@@ -117,6 +139,11 @@ public sealed partial class ErofsParser
         selected.SourceCompressionOptions = codecs;
         selected.Features = ErofsFeatureSet.FromWords(_superblock.FeatureCompat, _superblock.FeatureIncompat);
         selected.FeaturesAuthoritative = true;
+        var hasModernSignal = adviseObserved
+            || extendedObserved
+            || _superblock.BuildTimeNsec != 0
+            || _superblock.HasCompressionConfigs
+            || compactedIndexObserved;
         selected.LegacyCompatibility = !selected.Features.Contains(ErofsFeature.BigPcluster)
                     && !selected.Features.Contains(ErofsFeature.Ztailpacking)
                     && !selected.Features.Contains(ErofsFeature.Metabox)
@@ -124,7 +151,8 @@ public sealed partial class ErofsParser
                     && !selected.Features.Contains(ErofsFeature.DeviceTable)
                     && !selected.Features.Contains(ErofsFeature.ChunkedFile)
                     && !selected.Features.Contains(ErofsFeature.XattrPrefixes)
-                    && !selected.Features.Contains(ErofsFeature.FortyEightBit);
+                    && !selected.Features.Contains(ErofsFeature.FortyEightBit)
+                    && !hasModernSignal;
         if (selected.LegacyCompatibility)
         {
             selected.Fragments = false;
@@ -156,6 +184,7 @@ public sealed partial class ErofsParser
         selected.DotOmitted = !selected.LegacyCompatibility && adviseObserved
             ? ErofsTriStateFeature.Enabled
             : ErofsTriStateFeature.Disabled;
+        selected.NlinkOneAdviseSupported = adviseObserved;
         if (TryReadExtraDeviceDescriptors(out var extraDevices))
         {
             selected.ExtraDeviceCount = extraDevices.Length;
@@ -322,10 +351,10 @@ public sealed partial class ErofsParser
         }
         var chunkBased = inode.DataLayout == UnifiedDataLayout.ChunkBased;
         var chunkBits = chunkBased ? inode.ChunkFormatBlkBits : 0;
-        if (chunkBits > UnifiedInode.ChunkFormatBlkBitsMask)
+        if (chunkBased && (inode.ChunkFormat & ~UnifiedInode.ChunkFormatAll) != 0)
         {
             throw new FileSystemCorruptedException(
-                $"EROFS chunk size blkbits {chunkBits} for '{entry.Path}' exceed the on-disk mask.");
+                $"EROFS chunk format 0x{inode.ChunkFormat:X4} for '{entry.Path}' raises undefined bits.");
         }
 
         if (chunkBased)
@@ -345,12 +374,69 @@ public sealed partial class ErofsParser
         inode.SourceAlgorithm = algorithm;
         inode.SourceFragmentShape = fragmentShape;
         inode.SecondaryAlgorithm = secondaryAlgorithm;
+        AttachSourceXattrIbody(entry.Nid, inode, entry.Xattrs);
         if (inode.Idata is UnifiedCompressedIdata logicalIdata)
         {
             logicalIdata.LogicalClusterSize = logicalClusterSize;
         }
 
         return inode;
+    }
+
+    /// <summary>
+    /// Copies the source inode's raw inline xattr body onto the inode a rebuild plans from, so a rebuild that
+    /// inherits source inodes can re-emit the attribute set the source image recorded. The body is carried
+    /// verbatim because it is index-relative to the source long-prefix table and may encode a shared-attribute
+    /// id rather than entries; re-encoding it would corrupt it, and the prefix table and ishare prefix are
+    /// themselves replayed. <c>XattrICount</c> is carried alongside rather than recomputed, because the
+    /// length-derived count is wrong for the shared form.
+    /// <para>把源 inode 的原始内联 xattr 体复制到重建所规划的那个 inode 上，使继承源 inode 的重建能够重新输出
+    /// 源镜像记录的属性集。该体按原样携带，因为它相对于源长前缀表索引，且可能编码共享属性 id 而非条目；重新编码会
+    /// 破坏它，而前缀表与 ishare 前缀本身已被重放。<c>XattrICount</c> 一并携带而非重算，因为由长度推导的计数
+    /// 对共享形态并不正确。</para>
+    /// </summary>
+    /// <param name="nid">On-disk inode number the body belongs to.
+    /// <para>该体所属的磁盘 inode 编号。</para></param>
+    /// <param name="inode">Decoded source inode to extend.
+    /// <para>待扩充的解码源 inode。</para></param>
+    /// <param name="resolvedEntries">Attribute set the caller already resolved for this inode, including any
+    /// entries a shared reference pointed at. A shared body names a slot in the source image's shared area,
+    /// which the rebuild does not carry over, so its attributes can only be replayed as the resolved list.
+    /// <para>调用方已为该 inode 解析出的属性集，含共享引用所指的条目。共享体指名源镜像共享区中的槽位，而重建不会
+    /// 沿用该区域，因此其属性只能以已解析列表的形式重放。</para></param>
+    private void AttachSourceXattrIbody(ulong nid, UnifiedInode inode,
+        IReadOnlyList<ErofsXattrEntry>? resolvedEntries)
+    {
+        if (inode.XattrICount == 0 || inode.XattrISize <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var metaboxResident = _hasMetabox && (nid & NidMetaboxFlag) != 0;
+            var ibodyOffset = checked((metaboxResident ? MetaboxOffset(nid) : _superblock.GetInodeOffset(nid))
+                + inode.OnDiskSize);
+            inode.XattrIbody = metaboxResident
+                ? ReadMetaboxBytes(ibodyOffset, inode.XattrISize, "source xattr ibody")
+                : ReadBytes(ibodyOffset, inode.XattrISize, "source xattr ibody");
+            var sharedIds = ErofsXattr.ParseSharedXattrIds(inode.XattrIbody, inode.XattrICount);
+            inode.SharedXattrId = sharedIds.Length > 0 ? (int)sharedIds[0] : -1;
+            if (resolvedEntries is { Count: > 0 })
+            {
+                inode.XattrEntries = [.. resolvedEntries];
+            }
+        }
+        catch (FileSystemCorruptedException)
+        {
+            // A source whose inline attributes cannot be re-read still yields an inode; the attribute set is
+            // simply not inherited, and the caller reports the image as read with fewer preserved dimensions.
+        }
+        catch (FormatException)
+        {
+            inode.XattrIbody = [];
+            inode.SharedXattrId = -1;
+        }
     }
 
     /// <summary>

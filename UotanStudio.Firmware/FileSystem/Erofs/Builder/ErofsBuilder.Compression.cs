@@ -532,34 +532,47 @@ public sealed partial class ErofsBuilder
             cursor += initial.Length;
         }
 
+        var entries = new byte[Math.Max(1, recordSize) * 256];
+        var pending = 0;
         foreach (var plan in pclusters)
         {
             var physicalLength = ExtentPhysicalLength(plan, blockSize);
             var encoded = plan.Plain
                 ? (uint)physicalLength
                 : (uint)physicalLength | (((uint)options.Algorithm + 1) << ZErofsMapHeader.ExtentPlenFmtBit);
-            var record = new byte[recordSize];
-            BinaryPrimitives.WriteUInt32LittleEndian(record, encoded);
+            var recordOffset = pending * recordSize;
+            BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(recordOffset), encoded);
             if (recordSize >= 8)
             {
-                BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(4), (uint)physical);
+                BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(recordOffset + 4), (uint)physical);
             }
 
             if (recordSize >= 16)
             {
-                BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(8), (uint)(physical >> 32));
-                BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(12), (uint)logical);
+                BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(recordOffset + 8), (uint)(physical >> 32));
+                BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(recordOffset + 12), (uint)logical);
             }
 
             if (recordSize >= 32)
             {
-                BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(16), (uint)(logical >> 32));
+                BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(recordOffset + 16), (uint)(logical >> 32));
             }
 
-            WriteAt(output, cursor, record, record.Length);
-            cursor += record.Length;
+            pending++;
             logical += plan.SourceLength;
             physical += encoded & ZErofsMapHeader.ExtentPlenMask;
+
+            if (pending * recordSize == entries.Length)
+            {
+                WriteAt(output, cursor, entries, entries.Length);
+                cursor += entries.Length;
+                pending = 0;
+            }
+        }
+
+        if (pending > 0)
+        {
+            WriteAt(output, cursor, entries, pending * recordSize);
         }
     }
 
@@ -616,15 +629,18 @@ public sealed partial class ErofsBuilder
         var clusters = node.ClusterCount;
         var pclusters = node.Pclusters!;
         var pclusterIndex = 0;
+        var entries = new byte[ZErofsLclusterIndex.Size * 512];
+        var pending = 0;
         for (var c = 0L; c < clusters; c++)
         {
             var plan = pclusters[pclusterIndex];
             var headCluster = plan.SourceOffset / node.LogicalClusterSize;
             var coveredClusters = PlanEndCluster(node, pclusterIndex) - headCluster;
-            var entry = new byte[ZErofsLclusterIndex.Size];
+            var entryStart = pending * ZErofsLclusterIndex.Size;
             if (c >= PlanEndCluster(node, pclusterIndex))
             {
-                BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(2), (ushort)((long)node.Size % node.LogicalClusterSize));
+                entries.AsSpan(entryStart, ZErofsLclusterIndex.Size).Clear();
+                BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart + 2), (ushort)((long)node.Size % node.LogicalClusterSize));
             }
             else if (c == headCluster)
             {
@@ -632,17 +648,17 @@ public sealed partial class ErofsBuilder
                 var headType = secondary is null
                     ? plan.Plain ? ZErofsLclusterIndex.LclusterTypePlain : ZErofsLclusterIndex.LclusterTypeHead1
                     : ZErofsLclusterIndex.LclusterTypeHead2;
-                BinaryPrimitives.WriteUInt16LittleEndian(entry, headType);
-                BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(2), (ushort)(plan.SourceOffset % node.LogicalClusterSize));
-                BinaryPrimitives.WriteUInt32LittleEndian(entry.AsSpan(4), plan.BlockAddress);
+                BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart), headType);
+                BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart + 2), (ushort)(plan.SourceOffset % node.LogicalClusterSize));
+                BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(entryStart + 4), plan.BlockAddress);
             }
             else
             {
                 var d0 = c - headCluster;
 
                 var d1 = (ushort)Math.Min(headCluster + coveredClusters - c, (long)(ZErofsLclusterIndex.LiD0CblkCnt - 1));
-                BinaryPrimitives.WriteUInt16LittleEndian(entry, ZErofsLclusterIndex.LclusterTypeNonHead);
-                BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(2), 0);
+                BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart), ZErofsLclusterIndex.LclusterTypeNonHead);
+                BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart + 2), 0);
                 if (bigPcluster && d0 == 1 && !plan.Fragment)
                 {
 
@@ -654,19 +670,24 @@ public sealed partial class ErofsBuilder
                     }
 
                     BinaryPrimitives.WriteUInt16LittleEndian(
-                        entry.AsSpan(4), (ushort)((uint)compressedBlocks | ZErofsLclusterIndex.LiD0CblkCnt));
+                        entries.AsSpan(entryStart + 4), (ushort)((uint)compressedBlocks | ZErofsLclusterIndex.LiD0CblkCnt));
                 }
                 else
                 {
                     BinaryPrimitives.WriteUInt16LittleEndian(
-                        entry.AsSpan(4), (ushort)Math.Min(d0, (long)(ZErofsLclusterIndex.LiD0CblkCnt - 1)));
+                        entries.AsSpan(entryStart + 4), (ushort)Math.Min(d0, (long)(ZErofsLclusterIndex.LiD0CblkCnt - 1)));
                 }
 
-                BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(6), d1);
+                BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart + 6), d1);
             }
 
-            WriteAt(output, entryOffset, entry, entry.Length);
-            entryOffset += entry.Length;
+            pending++;
+            if (pending * ZErofsLclusterIndex.Size == entries.Length || c == clusters - 1)
+            {
+                WriteAt(output, entryOffset, entries, pending * ZErofsLclusterIndex.Size);
+                entryOffset += pending * ZErofsLclusterIndex.Size;
+                pending = 0;
+            }
 
             if (c == headCluster + coveredClusters - 1 && pclusterIndex + 1 < pclusters.Length)
             {

@@ -112,8 +112,7 @@ public sealed partial class ErofsBuilder
                     position += bestLength;
                 }
             }
-            return plans.Sum(p => CeilDiv(p.CompressedLength, blockSize)) < CeilDiv((long)node.Size, blockSize)
-                ? [.. plans] : null;
+            return [.. plans];
         }
         finally
         {

@@ -429,7 +429,7 @@ public sealed partial class ErofsParser : IDisposable
                 {
                     var slotOffset = devTableOffset + (long)i * ErofsDeviceSlot.Size;
                     var slotData = ReadBytes(slotOffset, ErofsDeviceSlot.Size, $"Device slot {i + 1}");
-                    _deviceSlots[i + 1] = ErofsDeviceSlot.FromBytes(slotData);
+                    _deviceSlots[i + 1] = ErofsDeviceSlot.FromBytes(slotData, _superblock.Has48Bit);
                     if (deviceStreams is not null)
                         _deviceStreams[i + 1] = deviceStreams[i + 1];
                 }

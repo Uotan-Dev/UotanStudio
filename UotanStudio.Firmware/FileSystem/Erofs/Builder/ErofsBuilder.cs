@@ -743,11 +743,11 @@ public sealed partial class ErofsBuilder
         };
 
     /// <summary>
-    /// Reports whether the nlink-one / dot-omitted advise bit may be written. The bit lies outside the
-    /// advise mask many targets accept, so an image carrying it could mount but enumerate nothing; the bit
-    /// is therefore written only when the caller declares a target that genuinely defines it.
-    /// <para>判断是否可以写出 nlink-one / 省略点项 advise 位。该位超出许多目标可接受的 advise 掩码，
-    /// 携带它的镜像可能能挂载却枚举不出内容，因此只有调用方声明的目标确实定义该位时才写出。</para>
+    /// Reports whether the nlink-one / dot-omitted advise bit may be written. Only newer kernels define the
+    /// bit, and a kernel that does not define it rejects the inode, so the bit is written only when the caller
+    /// declares a target that genuinely defines it.
+    /// <para>判断是否可以写出 nlink-one / 省略点项 advise 位。只有较新内核定义该位，未定义它的内核会拒绝该
+    /// inode，因此只有调用方声明的目标确实定义该位时才写出。</para>
     /// </summary>
     /// <param name="options">Validated build options whose feature declaration is already resolved.
     /// <para>特性声明已完成解析的经校验构建选项。</para></param>

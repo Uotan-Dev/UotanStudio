@@ -84,6 +84,8 @@ internal static class ErofsRebuildMetadata
             parameters.DotOmitted = options.DotOmitted.ToString();
         }
 
+        parameters.NlinkOneAdviseSupported = options.NlinkOneAdviseSupported;
+
         if (options.SourceXattrPrefixes is { Count: > 0 } prefixes)
         {
             parameters.XattrPrefixes = [.. prefixes.Select(prefix => new ErofsRebuildXattrPrefix
@@ -146,6 +148,14 @@ internal static class ErofsRebuildMetadata
                     FragmentShape = source.SourceFragmentShape.ToString(),
                     SecondaryAlgorithm = source.SecondaryAlgorithm?.ToString(),
                     ChunkBits = source.ChunkFormatBlkBits,
+                    Xattrs = source.XattrEntries is { Count: > 0 } attributes
+                        ? [.. attributes.Select(attribute => new ErofsRebuildXattr
+                        {
+                            NameIndex = attribute.NameIndex,
+                            Name = attribute.Name,
+                            Value = Convert.ToBase64String(attribute.Value),
+                        })]
+                        : null,
                 });
             }
         }
@@ -281,6 +291,8 @@ internal static class ErofsRebuildMetadata
             options.DotOmitted = ParseDotOmitted(parameters.DotOmitted);
         }
 
+        options.NlinkOneAdviseSupported = parameters.NlinkOneAdviseSupported ?? false;
+
         if (parameters.XattrPrefixes is { Count: > 0 } prefixes)
         {
             options.SourceXattrPrefixes = [.. prefixes.Select(prefix => (prefix.BaseIndex, prefix.Infix))];
@@ -379,6 +391,14 @@ internal static class ErofsRebuildMetadata
                     SourceAlgorithm = algorithm,
                     SourceFragmentShape = ParseFragmentShape(inode.FragmentShape),
                     SecondaryAlgorithm = ParseSecondaryAlgorithm(inode.SecondaryAlgorithm),
+                    XattrEntries = inode.Xattrs is { Count: > 0 } stored
+                        ? [.. stored.Select(attribute => new ErofsXattrEntry
+                        {
+                            NameIndex = attribute.NameIndex,
+                            Name = attribute.Name,
+                            Value = Convert.FromBase64String(attribute.Value),
+                        })]
+                        : null,
                 };
                 inodes[inode.Nid] = node;
                 if (inode.Path is { Length: > 0 } path)

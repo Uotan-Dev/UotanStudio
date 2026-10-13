@@ -38,7 +38,23 @@ internal sealed class ErofsDeviceSlot
     /// <para>该设备的统一起始块号（uniaddr_lo/uniaddr_hi 组成的 48 位）。</para>
     public ulong UniAddr { get; init; }
 
-    public static ErofsDeviceSlot FromBytes(ReadOnlySpan<byte> data)
+    /// <summary>Reads one device slot, honouring the image's 48-bit feature state. erofs-utils only folds
+    /// <c>blocks_hi</c>/<c>uniaddr_hi</c> in while <c>INCOMPAT_48BIT</c> is declared, and those two words
+    /// otherwise sit in space the format reserves, so an image without the feature may carry arbitrary bytes
+    /// there that must be ignored rather than treated as an address extension.
+    /// <para>按镜像的 48 位特性状态读取一个设备槽位。erofs-utils 仅在声明 <c>INCOMPAT_48BIT</c> 时才并入
+    /// <c>blocks_hi</c>/<c>uniaddr_hi</c>；未声明时这两个字位于格式保留的空间内，因此未携带该特性的镜像可以在
+    /// 其中存放任意字节，必须忽略它们而不是当作地址扩展。</para>
+    /// </summary>
+    /// <param name="data">Slot bytes, at least <see cref="Size"/> long.
+    /// <para>槽位字节，至少 <see cref="Size"/> 长。</para></param>
+    /// <param name="has48Bit">Whether the containing image declares <c>INCOMPAT_48BIT</c>.
+    /// <para>所属镜像是否声明 <c>INCOMPAT_48BIT</c>。</para></param>
+    /// <returns>The decoded slot; the high halves are zero when <paramref name="has48Bit"/> is clear.
+    /// <para>解码得到的槽位；<paramref name="has48Bit"/> 未置位时高半部为零。</para></returns>
+    /// <exception cref="FormatException">The region is shorter than <see cref="Size"/>.
+    /// <para>区域短于 <see cref="Size"/>。</para></exception>
+    public static ErofsDeviceSlot FromBytes(ReadOnlySpan<byte> data, bool has48Bit)
     {
         if (data.Length < Size)
         {
@@ -48,10 +64,15 @@ internal sealed class ErofsDeviceSlot
         return new ErofsDeviceSlot
         {
             Tag = data[..TagLength].ToArray(),
-            Blocks = ReadLe48(data, OffsetBlocksLo, OffsetBlocksHi),
-            UniAddr = ReadLe48(data, OffsetUniAddrLo, OffsetUniAddrHi),
+            Blocks = ReadAddress(data, OffsetBlocksLo, OffsetBlocksHi, has48Bit),
+            UniAddr = ReadAddress(data, OffsetUniAddrLo, OffsetUniAddrHi, has48Bit),
         };
     }
+
+    private static ulong ReadAddress(ReadOnlySpan<byte> data, int lowOffset, int highOffset, bool has48Bit)
+        => has48Bit
+            ? ReadLe48(data, lowOffset, highOffset)
+            : BinaryPrimitives.ReadUInt32LittleEndian(data[lowOffset..]);
 
     public void WriteTo(Span<byte> destination)
     {

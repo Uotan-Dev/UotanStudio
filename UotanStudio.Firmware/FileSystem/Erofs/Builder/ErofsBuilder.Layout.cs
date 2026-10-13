@@ -41,6 +41,16 @@ public sealed partial class ErofsBuilder
         /// <para>选项声明的额外设备数量。</para></summary>
         public int ExtraDevices { get; init; }
 
+        /// <summary>Block count the extra devices contribute, so <c>s_blocks</c> spans the whole logical
+        /// filesystem rather than the primary image alone. erofs-utils seeds its running total with the primary
+        /// block count and adds each device's blocks, and the kernel and the size-basis report read the result.
+        /// <para>额外设备贡献的块数，使 <c>s_blocks</c> 覆盖整个逻辑文件系统而不只是主镜像。erofs-utils 以主镜像
+        /// 块数作为累计初值并逐设备相加，内核与容量基线报告都会读取该结果。</para>
+        /// </summary>
+        public long ExtraDeviceBlocks => ExtraDevices == 0 || Options.ExtraDeviceImages is not { } images
+            ? 0
+            : images.Take(ExtraDevices).Sum(image => (long)(image.SizeBytes / BlockSize));
+
         /// <summary>Image offset where the inode metadata table starts.
         /// <para>inode 元数据表在镜像中的起始偏移。</para></summary>
         public long InodeTableOffset { get; init; }
@@ -322,12 +332,42 @@ public sealed partial class ErofsBuilder
                         ErofsXattr.Encode(planEntries, PrefixSeed(), NameFilterRequested),
                         planEntries);
                 }
+                else if (node.SourceInode is { XattrIbody.Length: > 0 } sourceInode)
+                {
+                    InheritSourceXattrIbody(node, sourceInode);
+                }
                 else
                 {
                     node.XattrIbody = [];
                     node.XattrEntries = null;
                 }
             }
+        }
+
+        /// <summary>
+        /// Gives a planned node the attribute set the source image recorded for it. The body is carried
+        /// verbatim because it is index-relative to the source long-prefix table and may reference a shared
+        /// attribute id rather than list entries; the prefix table and ishare prefix are themselves replayed,
+        /// so re-encoding would corrupt a body that is already valid. The entries are decoded from the body so
+        /// the shared-attribute pass still sees the set, and a shared body keeps its id instead of being
+        /// re-shared.
+        /// <para>把源镜像为该节点记录的属性集交给规划后的节点。该体按原样携带，因为它相对于源长前缀表索引，且可能
+        /// 引用共享属性 id 而非列出条目；前缀表与 ishare 前缀本身已被重放，因此重新编码会破坏本已有效的体。条目由该体
+        /// 解码得出，使共享属性遍历仍能看到该集合；共享体则保留其 id 而不再被重新共享。</para>
+        /// </summary>
+        /// <param name="node">Planned node to extend. <para>待扩充的规划节点。</para></param>
+        /// <param name="sourceInode">Source inode carrying the recorded body.
+        /// <para>携带已记录体的源 inode。</para></param>
+        private void InheritSourceXattrIbody(ErofsInode node, ErofsInode sourceInode)
+        {
+            node.XattrIbody = [.. sourceInode.XattrIbody];
+            node.XattrICount = sourceInode.XattrICount;
+            node.SharedXattrId = sourceInode.SharedXattrId;
+            node.XattrEntries = sourceInode.XattrEntries is { Count: > 0 } resolved
+                ? [.. resolved]
+                : sourceInode.SharedXattrId >= 0
+                    ? null
+                    : [.. ErofsXattr.ParseInline(node.XattrIbody, node.XattrICount, Options.SourceXattrPrefixes)];
         }
 
         /// <summary>
@@ -393,6 +433,7 @@ public sealed partial class ErofsBuilder
                 {
                     node.SourceInode = record;
                     node.SecondaryAlgorithm = record.SecondaryAlgorithm;
+                    InheritSourceXattrIbody(node, record);
                 }
             }
         }
@@ -1567,6 +1608,14 @@ public sealed partial class ErofsBuilder
                         + "source image did not describe.");
                 }
 
+                if ((source.ZAdvise & ZErofsMapHeader.AdviseInterlacedPcluster) != 0)
+                {
+                    throw new FileSystemUnsupportedFeatureException(
+                        $"EROFS preserved inode '{path}' records the interlaced pcluster layout, but this writer "
+                        + "emits only block-aligned plain clusters, so the rebuild would silently re-lay out its "
+                        + "uncompressed runs; the interlaced physical layout is read but not emitted.");
+                }
+
                 if (Options.InodeFormat != ErofsInodeFormat.Auto)
                 {
                     var sourceExtended = source.IsExtended;
@@ -2202,20 +2251,21 @@ public sealed partial class ErofsBuilder
             }
 
             var has48Bit = (featureIncompat & ErofsSuperblock.Incompat48Bit) != 0;
+            var superblockBlocks = totalBlocks + ExtraDeviceBlocks;
             return new ErofsSuperblock
             {
                 MagicValue = ErofsSuperblock.Magic,
                 BlockSizeBits = (byte)BitOperations.Log2((uint)BlockSize),
                 RootNid = (ushort)Root.Nid,
-                BlocksHi = has48Bit ? checked((ushort)(totalBlocks >> 32)) : (ushort)0,
+                BlocksHi = has48Bit ? checked((ushort)(superblockBlocks >> 32)) : (ushort)0,
                 RootNid8b = Root.Nid,
                 Inos = (ulong)Ordered.Count,
                 BuildTime = Now,
                 BuildTimeNsec = Options.BuildTimeNanoseconds,
                 BuildTime32 = Options.BuildTimeOffset,
                 Blocks = has48Bit
-                    ? (uint)(totalBlocks & uint.MaxValue)
-                    : (uint)totalBlocks,
+                    ? (uint)(superblockBlocks & uint.MaxValue)
+                    : (uint)superblockBlocks,
                 MetaBlkAddr = (uint)(MetaZoneByteOffset / BlockSize),
                 AvailableComprAlgs = CompressedAlgorithmsField(Options),
                 FeatureCompat = featureCompat,

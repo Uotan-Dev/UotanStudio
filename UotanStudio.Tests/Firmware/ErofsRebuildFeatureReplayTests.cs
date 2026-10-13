@@ -65,6 +65,38 @@ public sealed class ErofsRebuildFeatureReplayTests
     }
 
     [Fact]
+    public void Pack_PreservedModernDefaultErofsOnlyLz4ZeroPadding_RebuildKeepsDotOmittedAndModernLayouts()
+    {
+        using var source = new TempDirectory();
+        var payload = Enumerable.Repeat((byte)0x74, 20 * 1024).ToArray();
+        source.WriteBytes("data.bin", payload);
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            MaxPclusterSize = BlockSize,
+            Features = Declare(ErofsFeature.Lz4ZeroPadding),
+        });
+        var sourceSuperblock = ErofsSuperblock.FromImage(image);
+        Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, sourceSuperblock.FeatureIncompat);
+        Assert.False(sourceSuperblock.HasBigPcluster);
+        Assert.False(sourceSuperblock.HasCompressionConfigs);
+
+        var replay = Replay(image, source.Path);
+
+        Assert.False(replay.Restored.LegacyCompatibility);
+        Assert.Equal(ErofsTriStateFeature.Disabled, replay.Restored.DotOmitted);
+        Assert.Equal(
+            ErofsSuperblock.IncompatLz4_0Padding, replay.Profile.FeatureIncompat);
+
+        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuiltSuperblock = ErofsSuperblock.FromImage(rebuilt);
+        Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, rebuiltSuperblock.FeatureIncompat);
+        Assert.False(rebuiltSuperblock.HasBigPcluster);
+        using var parser = new ErofsParser(rebuilt);
+        Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
+    }
+
+    [Fact]
     public void Capture_Restore_LegacySourceProfileForGki510_ReplaysLz4ZeroPaddingWithoutBigPcluster()
     {
         using var source = new TempDirectory();
@@ -273,7 +305,8 @@ public sealed class ErofsRebuildFeatureReplayTests
         Assert.Equal(sourceSuperblock.FeatureIncompat, rebuiltSuperblock.FeatureIncompat);
         Assert.Equal((ushort)1, rebuiltSuperblock.ExtraDevices);
         var slot = ErofsDeviceSlot.FromBytes(rebuilt.AsSpan(
-            (int)(rebuiltSuperblock.DevtSlotoff * ErofsDeviceSlot.Size), ErofsDeviceSlot.Size));
+            (int)(rebuiltSuperblock.DevtSlotoff * ErofsDeviceSlot.Size), ErofsDeviceSlot.Size),
+            rebuiltSuperblock.Has48Bit);
         Assert.Equal("other.img", Encoding.UTF8.GetString(slot.Tag).TrimEnd('\0'));
         Assert.Equal((ulong)(ExtraDeviceBytes / BlockSize), slot.Blocks);
         using var parser = new ErofsParser(rebuilt);

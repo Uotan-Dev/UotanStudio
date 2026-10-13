@@ -118,7 +118,7 @@ public sealed partial class ErofsParser
 
         var chunkBlkBits = inode.ChunkFormatBlkBits;
         var chunkSize = (long)_blockSize << chunkBlkBits;
-        if ((inode.ChunkFormat & ~0x7F) != 0 || (inode.Chunk48Bit && !inode.UsesChunkIndexes))
+        if ((inode.ChunkFormat & ~UnifiedInode.ChunkFormatAll) != 0 || (inode.Chunk48Bit && !inode.UsesChunkIndexes))
         {
             throw new FileSystemCorruptedException($"Invalid chunk size (blkbits {chunkBlkBits}) for nid {nid}.");
         }

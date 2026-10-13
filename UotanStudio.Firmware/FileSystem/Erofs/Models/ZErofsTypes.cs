@@ -28,6 +28,14 @@ internal readonly struct ZErofsMapHeader
 
     public const ushort AdviseInlinePcluster = 0x0008;
 
+    /// <summary>Flag selecting the interlaced physical layout for an uncompressed pcluster, which rotates its
+    /// bytes about the logical cluster boundary inside one block. erofs-utils raises it for a fragment build
+    /// whose data is not unaligned. This reader honours the flag, but the managed planner emits only
+    /// block-aligned plain clusters and therefore never raises it, so an image carrying it is read correctly
+    /// while a rebuild emits the non-interlaced equivalent.
+    /// <para>为未压缩 pcluster 选择交错物理布局的标志，该布局把其字节绕逻辑簇边界在单个块内旋转。erofs-utils 对
+    /// 数据未非对齐的 fragment 构建置起它。本读取方遵循该标志，但受管规划器只输出块对齐的 plain 簇，因此从不置起
+    /// 它；于是携带该标志的镜像可被正确读取，而重建会输出等价的非交错形态。</para></summary>
     public const ushort AdviseInterlacedPcluster = 0x0010;
 
     public const ushort AdviseFragmentPcluster = 0x0020;

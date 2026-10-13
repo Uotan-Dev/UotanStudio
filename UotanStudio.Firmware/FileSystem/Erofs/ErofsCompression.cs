@@ -3,7 +3,7 @@ using System.IO.Compression;
 using K4os.Compression.LZ4;
 using SevenZip;
 using SevenZip.Compression.LZMA;
-using UotanStudio.Firmware.Compression.Codecs.Lz4;
+using UotanStudio.Compress.Codecs.Lz4;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using ZstdSharp;
 using ZstdSharp.Unsafe;
