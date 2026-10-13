@@ -1,4 +1,4 @@
-namespace UotanStudio.Comm.Protocols.Edl.Reenum;
+namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
 /// The Sahara-to-Firehose link stage an EDL session is currently believed to occupy.

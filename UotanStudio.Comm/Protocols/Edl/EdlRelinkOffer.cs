@@ -2,7 +2,7 @@ using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
 
-namespace UotanStudio.Comm.Protocols.Edl.Reenum;
+namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
 /// The evidence an EDL session publishes so a caller can wait for the post-programmer USB
@@ -12,11 +12,10 @@ namespace UotanStudio.Comm.Protocols.Edl.Reenum;
 /// Correlation uses the attached physical identity (container id first, usable physical port second)
 /// and the released previous endpoint; it never falls back to VID/PID, enumeration order or list
 /// position. A session that never received a device endpoint can still publish identity-bearing offers
-/// for a caller to complete with <c>with</c> expressions before handing them to
-/// <see cref="EdlRelinkCoordinator"/>.
+/// for a caller to complete with <c>with</c> expressions before opening the replacement endpoint.
 /// <para>关联使用附加的物理身份（优先容器 ID，其次可用物理端口）与已释放的旧端点；
 /// 绝不回退到 VID/PID、枚举顺序或列表位置。从未收到设备端点的会话仍可发布含身份的提议，
-/// 由调用方在用 <c>with</c> 表达式补全后交给 <see cref="EdlRelinkCoordinator"/>。</para>
+/// 由调用方用 <c>with</c> 表达式补全后打开替代端点。</para>
 /// </summary>
 public sealed record EdlRelinkOffer
 {
