@@ -1,3 +1,4 @@
+using UotanStudio.Compress;
 using UotanStudio.Firmware.Archive;
 using UotanStudio.Firmware.Archive.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage;
@@ -5,7 +6,6 @@ using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.BootSecurity.Workflow;
-using UotanStudio.Firmware.Compression;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

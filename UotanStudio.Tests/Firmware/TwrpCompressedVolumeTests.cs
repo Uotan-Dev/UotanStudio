@@ -1,5 +1,5 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.Compression;
+using UotanStudio.Compress;
 using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;

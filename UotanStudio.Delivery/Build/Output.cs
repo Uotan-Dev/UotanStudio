@@ -3,10 +3,10 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.Application.Equivalence;
 using UotanStudio.Firmware.BlockImage.Lp;
-using UotanStudio.Firmware.Compression;
-using UotanStudio.Firmware.Compression.Compressors;
 using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Services.Delivery;

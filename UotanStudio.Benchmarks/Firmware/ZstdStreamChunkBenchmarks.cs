@@ -1,6 +1,6 @@
 using BenchmarkDotNet.Attributes;
-using UotanStudio.Firmware.Compression;
-using UotanStudio.Firmware.Compression.Compressors;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Compressors;
 
 namespace UotanStudio.Benchmarks.Firmware;
 

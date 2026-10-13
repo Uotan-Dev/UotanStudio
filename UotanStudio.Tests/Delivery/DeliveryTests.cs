@@ -498,7 +498,7 @@ public sealed class DeliveryTests : IDisposable
         }, token: TestContext.Current.CancellationToken);
         using var compressed = File.OpenRead(Path.Combine(output, "super.zst"));
         using var decoded = new MemoryStream();
-        UotanStudio.Firmware.Compression.Compressors.ZstdCompressor.Decompress(compressed, decoded);
+        UotanStudio.Compress.Compressors.ZstdCompressor.Decompress(compressed, decoded);
         Assert.Equal(SHA256.HashData(File.ReadAllBytes(raw)), SHA256.HashData(decoded.ToArray()));
     }
 

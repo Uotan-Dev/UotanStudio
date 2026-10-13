@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.Compression.Compressors;
+using UotanStudio.Compress.Compressors;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
