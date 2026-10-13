@@ -5,6 +5,8 @@
   <Project Path="UotanStudio.Projects/UotanStudio.Projects.csproj" />
   <Project Path="UotanStudio.Comm/UotanStudio.Comm.csproj" />
   <Project Path="UotanStudio.Desktop/UotanStudio.Desktop.csproj" />
+  <Project Path="UotanStudio.Hash/UotanStudio.Hash.csproj" />
+  <Project Path="UotanStudio.Compress/UotanStudio.Compress.csproj" />
   <Project Path="UotanStudio.Firmware/UotanStudio.Firmware.csproj" />
   <Project Path="UotanStudio.Firmware.MagicGen/UotanStudio.Firmware.MagicGen.csproj" />
   <Project Path="UotanStudio.Delivery/UotanStudio.Delivery.csproj" />

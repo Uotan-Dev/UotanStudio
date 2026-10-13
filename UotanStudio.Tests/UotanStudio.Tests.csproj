@@ -16,6 +16,10 @@
     <ProjectReference Include="..\UotanStudio.Projects\UotanStudio.Projects.csproj" />
     <!-- Firmware library under test (AVB, boot image, CPIO, Sparse, compression, Payload) -->
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
+    <!-- Hash / checksum algorithms referenced directly by tests (internal types exposed through InternalsVisibleTo). -->
+    <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
+    <!-- Compression library under test (internal codecs exposed through InternalsVisibleTo). -->
+    <ProjectReference Include="..\UotanStudio.Compress\UotanStudio.Compress.csproj" />
     <ProjectReference Include="..\UotanStudio.Delivery\UotanStudio.Delivery.csproj" />
     <!-- Comm library under test (AVB verification wiring / protocol tests) -->
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
