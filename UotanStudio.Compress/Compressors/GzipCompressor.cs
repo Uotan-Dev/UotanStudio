@@ -1,8 +1,8 @@
 using System.Buffers;
 using System.IO.Compression;
-using UotanStudio.Firmware.Compression.Internal;
+using UotanStudio.Compress.Internal;
 
-namespace UotanStudio.Firmware.Compression.Compressors;
+namespace UotanStudio.Compress.Compressors;
 
 /// <summary>
 /// GZIP codec built on the BCL stream, emitting the 10-byte header, deflate body and CRC-32/ISIZE trailer.

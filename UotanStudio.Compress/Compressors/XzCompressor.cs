@@ -1,9 +1,8 @@
 using SharpCompress.Compressors.Xz;
-using UotanStudio.Firmware.Compression.Internal;
-using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Compress.Internal;
 using UotanStudio.Hash.XzCrc64;
 
-namespace UotanStudio.Firmware.Compression.Compressors;
+namespace UotanStudio.Compress.Compressors;
 
 /// <summary>
 /// XZ container codec: LZMA2 payload wrapped in the standard stream header, block, padding, index and footer layout with a CRC-32 or CRC-64 check over the uncompressed data.
@@ -97,7 +96,7 @@ internal static class XzCompressor
 
         try
         {
-            using var lzma2 = new FileStream(TempFileHelper.CreateScratchPath("uotan-xz"),
+            using var lzma2 = new FileStream(ScratchFile.CreateScratchPath("uotan-xz"),
                 FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536,
                 FileOptions.DeleteOnClose | FileOptions.SequentialScan);
 

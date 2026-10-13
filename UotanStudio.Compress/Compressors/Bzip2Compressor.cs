@@ -1,8 +1,8 @@
 using SharpCompress.Compressors;
 using SharpCompress.Compressors.BZip2;
-using UotanStudio.Firmware.Compression.Internal;
+using UotanStudio.Compress.Internal;
 
-namespace UotanStudio.Firmware.Compression.Compressors;
+namespace UotanStudio.Compress.Compressors;
 
 /// <summary>
 /// BZip2 codec writing the standard <c>BZh9</c> stream layout at the largest 900 kB block setting; concatenation of independent streams is supported on read.

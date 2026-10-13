@@ -1,4 +1,4 @@
-namespace UotanStudio.Firmware.Compression.Internal;
+namespace UotanStudio.Compress.Internal;
 
 internal sealed class NonDisposingStream(Stream inner) : Stream
 {

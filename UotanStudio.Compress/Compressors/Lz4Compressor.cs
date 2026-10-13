@@ -1,9 +1,9 @@
 using System.Buffers;
 using K4os.Compression.LZ4;
 using K4os.Compression.LZ4.Streams;
-using UotanStudio.Firmware.Compression.Internal;
+using UotanStudio.Compress.Internal;
 
-namespace UotanStudio.Firmware.Compression.Compressors;
+namespace UotanStudio.Compress.Compressors;
 
 /// <summary>
 /// LZ4 codec covering both on-disk layouts: the standard frame produced by the K4os stream implementation and the legacy block frame made of a magic followed by little-endian 4-byte length prefixed blocks with no frame descriptor, checksum or end marker.

@@ -1,8 +1,8 @@
 using SharpCompress.Compressors;
 using SharpCompress.Compressors.Deflate;
-using UotanStudio.Firmware.Compression.Internal;
+using UotanStudio.Compress.Internal;
 
-namespace UotanStudio.Firmware.Compression.Compressors;
+namespace UotanStudio.Compress.Compressors;
 
 /// <summary>
 /// ZLIB compression and decompression over byte arrays or streams, tolerant of concatenated zlib members.

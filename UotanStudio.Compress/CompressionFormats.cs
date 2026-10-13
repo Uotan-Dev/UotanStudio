@@ -1,6 +1,6 @@
 using System.Collections.Frozen;
 
-namespace UotanStudio.Firmware.Compression;
+namespace UotanStudio.Compress;
 
 /// <summary>
 /// Registry of the compression formats supported by this assembly, with name, alias and extension lookup.

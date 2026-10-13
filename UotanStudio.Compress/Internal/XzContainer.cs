@@ -1,7 +1,7 @@
-using UotanStudio.Firmware.Core;
+using System.Buffers.Binary;
 using UotanStudio.Hash.XzCrc64;
 
-namespace UotanStudio.Firmware.Compression.Internal;
+namespace UotanStudio.Compress.Internal;
 
 internal static class XzContainer
 {
@@ -79,7 +79,7 @@ internal static class XzContainer
         var blockPadding = (4 - ((blockHeader.Length + compressedSize % 4) % 4)) % 4;
 
         output.Write(blockHeader, 0, blockHeader.Length);
-        Core.Streams.StreamCopy.CopyExactly(lzma2Data, output, compressedSize);
+        ExactCopy.Exactly(lzma2Data, output, compressedSize);
         for (var i = 0; i < blockPadding; i++)
         {
             output.WriteByte(0);
@@ -245,7 +245,12 @@ internal static class XzContainer
     /// Returns a 4-byte little-endian value.
     /// <para>返回小端序 4 字节值。</para>
     /// </summary>
-    private static byte[] WriteUInt32LE(uint value) => ByteWriter.ToUInt32LE(value);
+    private static byte[] WriteUInt32LE(uint value)
+    {
+        var buf = new byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(buf, value);
+        return buf;
+    }
 
     /// <summary>
     /// Writes an XZ variable-length integer (1-9 bytes, 7 bits per group, high bit = continuation).

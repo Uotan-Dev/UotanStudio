@@ -1,9 +1,8 @@
 using System.Diagnostics;
-using UotanStudio.Firmware.Compression.Detection;
-using UotanStudio.Firmware.Core.IO;
-using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Compress.Detection;
+using UotanStudio.Compress.Internal;
 
-namespace UotanStudio.Firmware.Compression.Files;
+namespace UotanStudio.Compress.Files;
 
 /// <summary>Compresses and decompresses files with progress, cancellation and atomic publication.
 /// <para>压缩与解压文件，支持进度、取消以及原子发布输出。</para></summary>
@@ -47,7 +46,7 @@ public static class CompressionFile
             progress.Report((0, totalBytes));
             long processed = 0;
             var lastReport = Stopwatch.GetTimestamp();
-            using var counting = new CountingReadStream(input, leaveOpen: true, cancellationToken: cancellationToken,
+            using var counting = new ByteCountingReadStream(input, leaveOpen: true, cancellationToken: cancellationToken,
                 bytesRead: bytes =>
                 {
                     processed += bytes;
@@ -190,7 +189,7 @@ public static class CompressionFile
         try
         {
             write(tempPath);
-            AtomicPublish.Publish(tempPath, fullPath);
+            AtomicFilePublish.Publish(tempPath, fullPath);
         }
         finally
         {

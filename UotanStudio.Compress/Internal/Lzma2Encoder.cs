@@ -1,7 +1,7 @@
 using SevenZip;
 using SevenZip.Compression.LZMA;
 
-namespace UotanStudio.Firmware.Compression.Internal;
+namespace UotanStudio.Compress.Internal;
 
 internal static class Lzma2Encoder
 {

@@ -1,4 +1,4 @@
-namespace UotanStudio.Firmware.Compression.Detection;
+namespace UotanStudio.Compress.Detection;
 
 /// <summary>Detects compression framing from bytes or a stream header without selecting a codec by extension.
 /// <para>从字节或流头部检测压缩封装，不按扩展名选择编解码器。</para></summary>

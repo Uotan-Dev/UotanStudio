@@ -1,4 +1,4 @@
-namespace UotanStudio.Firmware.Compression;
+namespace UotanStudio.Compress;
 
 /// <summary>
 /// Immutable metadata describing one registered compression format.

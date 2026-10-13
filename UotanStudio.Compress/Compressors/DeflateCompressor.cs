@@ -1,10 +1,10 @@
 using System.Buffers;
 using System.IO.Compression;
-using UotanStudio.Firmware.Compression.Internal;
+using UotanStudio.Compress.Internal;
 using SCCompressionMode = SharpCompress.Compressors.CompressionMode;
 using SCDeflateStream = SharpCompress.Compressors.Deflate.DeflateStream;
 
-namespace UotanStudio.Firmware.Compression.Compressors;
+namespace UotanStudio.Compress.Compressors;
 
 /// <summary>
 /// Raw DEFLATE codec (RFC 1951 bit stream with no zlib or gzip wrapper) that reads concatenated members back-to-back.

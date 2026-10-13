@@ -1,7 +1,7 @@
 using SevenZip;
 using SevenZip.Compression.LZMA;
 
-namespace UotanStudio.Firmware.Compression.Compressors;
+namespace UotanStudio.Compress.Compressors;
 
 /// <summary>
 /// LZMA-alone codec built on the LZMA-SDK: a five-byte coder-properties header, an eight-byte little-endian uncompressed size, then the encoded stream.

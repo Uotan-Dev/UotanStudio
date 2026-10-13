@@ -1,7 +1,7 @@
 using System.Buffers;
 using System.IO.Compression;
 
-namespace UotanStudio.Firmware.Compression.Compressors;
+namespace UotanStudio.Compress.Compressors;
 
 /// <summary>
 /// Compresses and decompresses raw Brotli streams (no container header or footer) through the in-box <see cref="BrotliStream"/>.

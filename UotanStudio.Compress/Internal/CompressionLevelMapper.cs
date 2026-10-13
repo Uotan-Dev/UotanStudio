@@ -1,6 +1,6 @@
 using System.IO.Compression;
 
-namespace UotanStudio.Firmware.Compression.Internal;
+namespace UotanStudio.Compress.Internal;
 
 internal static class CompressionLevelMapper
 {

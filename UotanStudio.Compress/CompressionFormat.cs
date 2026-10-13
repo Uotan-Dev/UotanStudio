@@ -1,4 +1,4 @@
-namespace UotanStudio.Firmware.Compression;
+namespace UotanStudio.Compress;
 
 /// <summary>
 /// Identifies a compression container format handled by the compression services.

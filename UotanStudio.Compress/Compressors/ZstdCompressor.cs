@@ -1,8 +1,8 @@
 using System.Buffers;
-using UotanStudio.Firmware.Compression.Internal;
+using UotanStudio.Compress.Internal;
 using ZstdSharp;
 
-namespace UotanStudio.Firmware.Compression.Compressors;
+namespace UotanStudio.Compress.Compressors;
 
 /// <summary>
 /// Zstd compression and decompression over byte arrays or streams, backed by ZstdSharp.

@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using size_t = System.UInt32;
 
-namespace UotanStudio.Firmware.Compression.Codecs.Lz4;
+namespace UotanStudio.Compress.Codecs.Lz4;
 
 internal static unsafe partial class Lz4DestinationCodec
 {

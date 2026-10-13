@@ -1,4 +1,4 @@
-namespace UotanStudio.Firmware.Compression;
+namespace UotanStudio.Compress;
 
 /// <summary>
 /// Signals a failure raised by the compression or decompression pipelines.

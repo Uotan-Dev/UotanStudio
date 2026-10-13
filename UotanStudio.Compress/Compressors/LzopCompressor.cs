@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.IO.Hashing;
-using UotanStudio.Firmware.Compression.Codecs.Lzo;
+using UotanStudio.Compress.Codecs.Lzo;
 
-namespace UotanStudio.Firmware.Compression.Compressors;
+namespace UotanStudio.Compress.Compressors;
 
 /// <summary>
 /// LZOP container codec: a nine-byte signature and big-endian header, then 256 KiB LZO1X-1 blocks, each capped at 64 MiB and closed by a zero-size block.

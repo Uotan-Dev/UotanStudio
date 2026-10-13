@@ -1,4 +1,4 @@
-namespace UotanStudio.Firmware.Compression;
+namespace UotanStudio.Compress;
 
 /// <summary>
 /// Optional codec tuning knobs accepted by <see cref="CompressionService"/>; every member is nullable so an unset value keeps the codec default.

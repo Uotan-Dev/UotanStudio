@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace UotanStudio.Firmware.Compression.Codecs.Lzo;
+namespace UotanStudio.Compress.Codecs.Lzo;
 
 /// <summary>
 /// Outcome codes returned by the LZO1X codec.

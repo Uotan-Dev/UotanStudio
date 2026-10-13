@@ -1,8 +1,7 @@
-using UotanStudio.Firmware.Compression.Compressors;
-using UotanStudio.Firmware.Compression.Internal;
-using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Compress.Compressors;
+using UotanStudio.Compress.Internal;
 
-namespace UotanStudio.Firmware.Compression;
+namespace UotanStudio.Compress;
 
 /// <summary>
 /// Entry point that routes a <see cref="CompressionFormat"/> to the matching codec, offering whole-buffer and streaming conversions over the same format registry.
@@ -233,7 +232,7 @@ public static class CompressionService
         cancellationToken.ThrowIfCancellationRequested();
         ValidateForDecompression(format);
 
-        using var limitedOutput = new CountingWriteStream(output, maximumOutputBytes, leaveOpen: true, cancellationToken: cancellationToken);
+        using var limitedOutput = new BoundedWriteStream(output, maximumOutputBytes, leaveOpen: true, cancellationToken: cancellationToken);
         output = limitedOutput;
 
         if (format == CompressionFormat.None)
