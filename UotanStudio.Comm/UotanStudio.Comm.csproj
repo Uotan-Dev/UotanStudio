@@ -19,6 +19,7 @@
   <ItemGroup>
     <None Remove="Native\LibUsb\**\*" />
     <Content Include="Native\LibUsb\$(LibUsbRuntimeIdentifier)\*"
+             Condition="Exists('Native\LibUsb\$(LibUsbRuntimeIdentifier)\')"
              Link="%(Filename)%(Extension)"
              TargetPath="%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
@@ -33,6 +34,9 @@
   <Target Name="ValidateLibUsbRuntime" BeforeTargets="PrepareForBuild">
     <Warning Condition="!Exists('$(MSBuildProjectDirectory)/Native/LibUsb/$(LibUsbRuntimeIdentifier)')"
              Text="No bundled libusb runtime for '$(LibUsbRuntimeIdentifier)'. Supply a compatible system library or configure CommKit.SetLibusbLibraryPath." />
+    <Message Condition="!Exists('$(MSBuildProjectDirectory)/Native/LibUsb/$(LibUsbRuntimeIdentifier)')"
+             Importance="High"
+             Text="libusb binaries are no longer vendored; the runtime downloads the required file on first use via NativeBinProvisioner. Call UsbCommunicationLayer.SetLibusbLibraryPath (or CommKit.SetLibusbLibraryPath) to point at a system-installed libusb instead." />
   </Target>
 
   <ItemGroup>
@@ -50,6 +54,7 @@
     <!-- Shared AVB signature verification lives in UotanStudio.Firmware (no circular dependency:
          Firmware does not reference Comm). -->
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
+    <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
   </ItemGroup>
 
   <ItemGroup>

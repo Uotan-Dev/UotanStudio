@@ -33,7 +33,9 @@ The edges below match the `ProjectReference` entries in each project file.
 
 ```mermaid
 flowchart TD
- Firmware["UotanStudio.Firmware<br/>Firmware formats · file systems · compression · signing"]
+ Hash["UotanStudio.Hash<br/>Checksums · hash algorithms"]
+ Compress["UotanStudio.Compress<br/>General-purpose compression · container codecs"]
+ Firmware["UotanStudio.Firmware<br/>Firmware formats · file systems · signing"]
  MagicGen["UotanStudio.Firmware.MagicGen<br/>Magic number table generation"]
  Projects["UotanStudio.Projects<br/>Project files · solution snapshots"]
  Media["UotanStudio.Media<br/>Audio/video decoding and presentation"]
@@ -46,6 +48,8 @@ flowchart TD
  Tests["UotanStudio.Tests<br/>Single executable test host"]
 
  MagicGen --> Firmware
+ Compress --> Hash
+ Firmware --> Compress
  Comm --> Firmware
  Delivery --> Firmware
  Mirroring --> Comm
@@ -65,7 +69,7 @@ flowchart TD
  Tests -.-> Host
 ```
 
-- `UotanStudio.Firmware`, `UotanStudio.Media` and `UotanStudio.Projects` are lower-level libraries with no dependency on the other business projects.
+- `UotanStudio.Hash` is the lowest leaf library; `UotanStudio.Compress` depends only on it and provides general-purpose compression and container codecs, and `UotanStudio.Firmware` depends on `UotanStudio.Compress` in turn. `UotanStudio.Media` and `UotanStudio.Projects` likewise depend on no other business project.
 - The test host really references every project except `UotanStudio.Desktop`; the diagram draws one representative dashed edge for it.
 - `UotanStudio.Comm` owns every device access path (USB handles, sockets, serial ports, adb/HDC server protocols); the host only consumes `DeviceController`/`DeviceLease` and the protocol clients.
 - `UotanStudio.Delivery` may use the firmware layer but never references host UI, project services or the key library; signing reaches it through `IDeliverySigningKeyProvider`.
@@ -78,7 +82,7 @@ Detection follows the handler list published by `FirmwareFormatRegistry.Register
 
 | Area | Formats |
 | --- | --- |
-| Archives and compression | ZIP, CPIO; Brotli, Bzip2, Deflate, Gzip, LZ4, LZO, LZMA, XZ, Zlib, Zstd |
+| Archives and compression | ZIP, CPIO; Brotli, Bzip2, Deflate, Gzip, LZ4, LZO, LZMA, XZ, Zlib, Zstd (the compression algorithms and container codecs are provided by `UotanStudio.Compress`) |
 | File systems | ext4, EROFS, F2FS, SquashFS, ROMFS, FAT12/16/32, exFAT (ext4, EROFS and F2FS support building from scratch and rebuilding) |
 | Partitions and block devices | GPT, Android LP (`super`), sparse images, partition editor with per-partition read and write |
 | OTA and deltas | `payload.bin`, `.transfer.list` + `.new.dat`/`.new.dat.br` + `.patch.dat`, care_map |

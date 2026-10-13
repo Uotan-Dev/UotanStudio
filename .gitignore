@@ -465,3 +465,7 @@ $RECYCLE.BIN/
 /.qoder-scratch
 /docs
 /reference
+
+# 本地临时产物（一次性可视化输出、工作树移除前备份）
+/viz
+/.w0-verify-backup-*

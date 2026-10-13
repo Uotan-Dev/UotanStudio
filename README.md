@@ -33,7 +33,9 @@
 
 ```mermaid
 flowchart TD
- Firmware["UotanStudio.Firmware<br/>固件格式 · 文件系统 · 压缩 · 签名"]
+ Hash["UotanStudio.Hash<br/>校验和 · 哈希算法"]
+ Compress["UotanStudio.Compress<br/>通用压缩 · 容器编解码"]
+ Firmware["UotanStudio.Firmware<br/>固件格式 · 文件系统 · 签名"]
  MagicGen["UotanStudio.Firmware.MagicGen<br/>魔术号表生成"]
  Projects["UotanStudio.Projects<br/>项目文件 · 解决方案快照"]
  Media["UotanStudio.Media<br/>音视频解码与呈现"]
@@ -46,6 +48,8 @@ flowchart TD
  Tests["UotanStudio.Tests<br/>唯一可执行测试宿主"]
 
  MagicGen --> Firmware
+ Compress --> Hash
+ Firmware --> Compress
  Comm --> Firmware
  Delivery --> Firmware
  Mirroring --> Comm
@@ -65,7 +69,7 @@ flowchart TD
  Tests -.-> Host
 ```
 
-- `UotanStudio.Firmware`、`UotanStudio.Media`、`UotanStudio.Projects` 是不依赖其他业务项目的底层库。
+- `UotanStudio.Hash` 是最底层的叶子库，`UotanStudio.Compress` 只依赖它并提供通用压缩与容器编解码，`UotanStudio.Firmware` 再依赖 `UotanStudio.Compress`；`UotanStudio.Media`、`UotanStudio.Projects` 同样不依赖其他业务项目。
 - 测试宿主实际引用除 `UotanStudio.Desktop` 之外的全部项目，图中只画出一条代表性依赖。
 - 全部设备读写（USB 句柄、套接字、串口、adb/HDC server 协议）由 `UotanStudio.Comm` 持有，宿主只消费 `DeviceController`/`DeviceLease` 与协议客户端。
 - `UotanStudio.Delivery` 可引用固件层，但不得反向引用宿主 UI、项目服务或密钥库；签名能力通过 `IDeliverySigningKeyProvider` 注入。
@@ -78,7 +82,7 @@ flowchart TD
 
 | 类别 | 格式 |
 | --- | --- |
-| 归档与压缩 | ZIP、CPIO；Brotli、Bzip2、Deflate、Gzip、LZ4、LZO、LZMA、XZ、Zlib、Zstd |
+| 归档与压缩 | ZIP、CPIO；Brotli、Bzip2、Deflate、Gzip、LZ4、LZO、LZMA、XZ、Zlib、Zstd（压缩算法与容器编解码由 `UotanStudio.Compress` 提供） |
 | 文件系统 | ext4、EROFS、F2FS、SquashFS、ROMFS、FAT12/16/32、exFAT（ext4、EROFS、F2FS 支持从零构建与重建） |
 | 分区与块设备 | GPT、Android LP（`super`）、sparse 镜像、按分区名读写的分区编辑器 |
 | OTA 与增量 | `payload.bin`、`.transfer.list` + `.new.dat`/`.new.dat.br` + `.patch.dat`、care_map |
