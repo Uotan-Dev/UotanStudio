@@ -196,213 +196,6 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Writes consecutive sixteen-bit register words through the preloader write command.
-    /// <para>通过 preloader 写入命令写入连续的十六位寄存器字。</para></summary>
-    /// <remarks>
-    /// The framing mirrors <c>write</c> with <c>length == 16</c>
-    /// (<c>mtkclient/Library/mtk_preloader.py:416-442</c>): command, big-endian address and big-endian
-    /// count are echoed, an opening status must arrive at or below <c>0x0003</c> before any value is
-    /// sent, each big-endian value is echoed separately, and a closing status completes the exchange.
-    /// The reference returns <see langword="false"/> on every refusal; this path faults instead.
-    /// 帧结构对应 <c>length == 16</c> 的 <c>write</c>（<c>mtkclient/Library/mtk_preloader.py:416-442</c>）：
-    /// 回显命令、大端地址与大端计数后，首个状态必须不超过 <c>0x0003</c> 才会发送任何值，每个大端值单独
-    /// 回显，最后由收尾状态完成交换。参考在每次拒绝时返回 <see langword="false"/>，而本路径进入 fault。
-    /// </remarks>
-    /// <param name="address">The first register address; words walk upward by two bytes.
-    /// <para>起始寄存器地址；字按两字节向上递增。</para></param>
-    /// <param name="values">The words to write, bounded by
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopWriteBytes"/> bytes.
-    /// <para>要写入的字，以 <see cref="MtkDaMemoryAccess.MaximumWordLoopWriteBytes"/> 字节为界。</para></param>
-    /// <param name="confirmWrite">The explicit caller opt-in that authorizes the write.
-    /// <para>授权本次写入的显式调用方选择。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>A task that completes after the device acknowledged the final word.
-    /// <para>在设备确认最后一个字后完成的任务。</para></returns>
-    /// <exception cref="UnauthorizedAccessException"><paramref name="confirmWrite"/> is
-    /// <see langword="false"/>; no byte was sent and the session keeps its stage.
-    /// <para><paramref name="confirmWrite"/> 为 <see langword="false"/>；未发送任何字节，会话保持原阶段。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="values"/> is empty.
-    /// <para><paramref name="values"/> 为空。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The payload is oversized or the window leaves the
-    /// 32-bit address space. <para>载荷超限，或窗口越出 32 位地址空间。</para></exception>
-    /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
-    /// <para>会话不处于 preloader 命令阶段。</para></exception>
-    /// <exception cref="MtkProtocolException">An echo or status was refused; the session faults.
-    /// <para>某次回显或状态被拒绝；会话进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public async Task WritePreloader16Async(uint address, ReadOnlyMemory<ushort> values, bool confirmWrite,
-        CancellationToken cancellationToken = default)
-    {
-        RequirePreloaderCommandStage();
-        RequirePreloaderWritePayload(values.Length, sizeof(ushort), MtkDaMemoryAccess.MaximumWordLoopWriteBytes);
-        RequireDaMemoryWindow(address, checked(values.Length * sizeof(ushort)));
-        RequireDaMemoryWriteConfirmation(confirmWrite, "preloader");
-        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            try
-            {
-                await WritePreloader16OwnedAsync(address, values, cancellationToken).ConfigureAwait(false);
-                RecordSecurityEvidence("preloader-command", CommandOutcomeKind.Completed,
-                    $"preloader WRITE16 0x{address:X8}: {values.Length} word(s).");
-            }
-            catch
-            {
-                FaultPreloaderCommands();
-                throw;
-            }
-        }
-        finally
-        {
-            _operation.Release();
-        }
-    }
-
-    /// <summary>Writes consecutive thirty-two-bit register words through the preloader write command.
-    /// <para>通过 preloader 写入命令写入连续的三十二位寄存器字。</para></summary>
-    /// <remarks>
-    /// The framing mirrors <c>write</c> with <c>length == 32</c>
-    /// (<c>mtkclient/Library/mtk_preloader.py:416-442</c>), including the rule that the opening status
-    /// must arrive at or below <c>0x0003</c> before any value byte is sent. The reference returns
-    /// <see langword="false"/> on every refusal; this path faults instead.
-    /// 帧结构对应 <c>length == 32</c> 的 <c>write</c>
-    /// （<c>mtkclient/Library/mtk_preloader.py:416-442</c>），包括“首个状态不超过 <c>0x0003</c> 才发送任何
-    /// 值字节”的规则。参考在每次拒绝时返回 <see langword="false"/>，而本路径进入 fault。
-    /// </remarks>
-    /// <param name="address">The first doubleword address; words walk upward by four bytes.
-    /// <para>起始双字地址；字按四字节向上递增。</para></param>
-    /// <param name="values">The doublewords to write, bounded by
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopWriteBytes"/> bytes.
-    /// <para>要写入的双字，以 <see cref="MtkDaMemoryAccess.MaximumWordLoopWriteBytes"/> 字节为界。</para></param>
-    /// <param name="confirmWrite">The explicit caller opt-in that authorizes the write.
-    /// <para>授权本次写入的显式调用方选择。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>A task that completes after the device acknowledged the final doubleword.
-    /// <para>在设备确认最后一个双字后完成的任务。</para></returns>
-    /// <exception cref="UnauthorizedAccessException"><paramref name="confirmWrite"/> is
-    /// <see langword="false"/>; no byte was sent and the session keeps its stage.
-    /// <para><paramref name="confirmWrite"/> 为 <see langword="false"/>；未发送任何字节，会话保持原阶段。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="values"/> is empty.
-    /// <para><paramref name="values"/> 为空。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The payload is oversized or the window leaves the
-    /// 32-bit address space. <para>载荷超限，或窗口越出 32 位地址空间。</para></exception>
-    /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
-    /// <para>会话不处于 preloader 命令阶段。</para></exception>
-    /// <exception cref="MtkProtocolException">An echo or status was refused; the session faults.
-    /// <para>某次回显或状态被拒绝；会话进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public async Task WritePreloader32Async(uint address, ReadOnlyMemory<uint> values, bool confirmWrite,
-        CancellationToken cancellationToken = default)
-    {
-        RequirePreloaderCommandStage();
-        RequirePreloaderWritePayload(values.Length, MtkDaMemoryAccess.RegisterCellBytes,
-            MtkDaMemoryAccess.MaximumWordLoopWriteBytes);
-        RequireDaMemoryWindow(address, checked(values.Length * MtkDaMemoryAccess.RegisterCellBytes));
-        RequireDaMemoryWriteConfirmation(confirmWrite, "preloader");
-        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            try
-            {
-                await WritePreloader32OwnedAsync(address, values, cancellationToken).ConfigureAwait(false);
-                RecordSecurityEvidence("preloader-command", CommandOutcomeKind.Completed,
-                    $"preloader WRITE32 0x{address:X8}: {values.Length} word(s).");
-            }
-            catch
-            {
-                FaultPreloaderCommands();
-                throw;
-            }
-        }
-        finally
-        {
-            _operation.Release();
-        }
-    }
-
-    /// <summary>Writes a byte block through repeated thirty-two-bit preloader write commands.
-    /// <para>通过重复的三十二位 preloader 写入命令写入一个字节块。</para></summary>
-    /// <remarks>
-    /// <c>writemem</c> (<c>mtkclient/Library/mtk_preloader.py:450-455</c>) slices the payload into
-    /// little-endian doublewords and issues one WRITE32 command per word, zero-padding the final short
-    /// word before sending it whole; this path keeps that behaviour, so a length that is not a
-    /// multiple of four touches up to three bytes past the payload, exactly like the Legacy poke
-    /// documented in <c>PokeLegacyMemoryAsync</c>.
-    /// <c>writemem</c>（<c>mtkclient/Library/mtk_preloader.py:450-455</c>）把载荷切成小端双字，每个字发出
-    /// 一条 WRITE32 命令，并在发送前把最后一个不完整的双字补零后整体写入；本路径保留该行为，因此非四字节
-    /// 倍数的长度会波及载荷之后最多三个字节，与 <c>PokeLegacyMemoryAsync</c> 中记载的 Legacy poke 相同。
-    /// </remarks>
-    /// <param name="address">The first byte address; words walk upward by four bytes.
-    /// <para>起始字节地址；字按四字节向上递增。</para></param>
-    /// <param name="data">The payload, bounded by
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopWriteBytes"/> bytes.
-    /// <para>载荷，以 <see cref="MtkDaMemoryAccess.MaximumWordLoopWriteBytes"/> 字节为界。</para></param>
-    /// <param name="confirmWrite">The explicit caller opt-in that authorizes the write.
-    /// <para>授权本次写入的显式调用方选择。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>The number of payload bytes submitted. 已提交的载荷字节数。</returns>
-    /// <exception cref="UnauthorizedAccessException"><paramref name="confirmWrite"/> is
-    /// <see langword="false"/>; no byte was sent and the session keeps its stage.
-    /// <para><paramref name="confirmWrite"/> 为 <see langword="false"/>；未发送任何字节，会话保持原阶段。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The payload is empty, oversized, or the padded
-    /// window leaves the 32-bit address space. <para>载荷为空、超限，或补零后的窗口越出 32 位地址空间。</para></exception>
-    /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
-    /// <para>会话不处于 preloader 命令阶段。</para></exception>
-    /// <exception cref="MtkProtocolException">An echo or status was refused; the session faults.
-    /// <para>某次回显或状态被拒绝；会话进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public async Task<int> WritePreloaderMemoryAsync(uint address, ReadOnlyMemory<byte> data, bool confirmWrite,
-        CancellationToken cancellationToken = default)
-    {
-        RequirePreloaderCommandStage();
-        MtkDaMemoryAccess.ValidateWordLoopWriteLength(data.Length);
-        RequireDaMemoryWindow(address, checked(data.Length + MtkDaMemoryAccess.RegisterCellBytes));
-        RequireDaMemoryWriteConfirmation(confirmWrite, "preloader");
-        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            try
-            {
-                var payload = data.ToArray();
-                var cell = new byte[MtkDaMemoryAccess.RegisterCellBytes];
-                for (var offset = 0; offset < payload.Length; offset += MtkDaMemoryAccess.RegisterCellBytes)
-                {
-                    Array.Clear(cell);
-                    payload.AsSpan(offset,
-                        Math.Min(MtkDaMemoryAccess.RegisterCellBytes, payload.Length - offset)).CopyTo(cell);
-                    await WritePreloader32OwnedAsync(checked(address + (uint)offset),
-                        new uint[] { BinaryPrimitives.ReadUInt32LittleEndian(cell) }, cancellationToken)
-                        .ConfigureAwait(false);
-                }
-
-                RecordSecurityEvidence("preloader-command", CommandOutcomeKind.Completed,
-                    $"preloader writemem 0x{address:X8}: {payload.Length} bytes submitted.");
-                return payload.Length;
-            }
-            catch
-            {
-                FaultPreloaderCommands();
-                throw;
-            }
-        }
-        finally
-        {
-            _operation.Release();
-        }
-    }
-
     /// <summary>Runs one extended preloader command through the 0xC8 cache-control exchange.
     /// <para>通过 0xC8 缓存控制交换执行一条扩展 preloader 命令。</para></summary>
     /// <remarks>
@@ -1121,32 +914,32 @@ public sealed partial class MtkSession
     /// <para>在被拒绝的命令阶段交换之后把会话移入 fault 阶段。</para></summary>
     private void FaultPreloaderCommands() => _state = MtkSessionState.Faulted;
 
-    /// <summary>Returns the identity queried by the boot handshake.
-    /// <para>返回 boot 握手查询到的身份信息。</para></summary>
-    /// <returns>The non-null device identity.</returns>
-    /// <exception cref="InvalidOperationException">The identity has not been queried.
-    /// <para>尚未查询身份信息。</para></exception>
     private MtkDeviceInfo RequireQueriedIdentity() => DeviceInfo ?? throw new InvalidOperationException(
         "Query the boot identity before addressing chip-specific preloader registers.");
 
-    /// <summary>Rejects an empty or oversized register payload before any byte leaves the host.
-    /// <para>在任何字节离开主机之前拒绝空或超限的寄存器载荷。</para></summary>
-    /// <param name="words">The word count to send. 要发送的字数。</param>
-    /// <param name="wordBytes">The width of one word. 单字宽度。</param>
-    /// <param name="maximumBytes">The byte ceiling for the whole exchange. 整个交换的字节上限。</param>
-    /// <exception cref="ArgumentException"><paramref name="words"/> is zero.
-    /// <para><paramref name="words"/> 为零。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The payload exceeds <paramref name="maximumBytes"/>.
-    /// <para>载荷超过 <paramref name="maximumBytes"/>。</para></exception>
-    private static void RequirePreloaderWritePayload(int words, int wordBytes, int maximumBytes)
+    private static void RequireDaMemoryWriteConfirmation(bool confirmWrite, string family)
     {
-        if (words == 0)
+        if (!confirmWrite)
         {
-            throw new ArgumentException("A preloader write needs at least one word.", nameof(words));
+            throw new UnauthorizedAccessException(
+                $"The {family} download agent write changes device memory and requires an explicit confirmation.");
+        }
+    }
+
+    private static void RequireDaMemoryWindow(uint address, int lengthBytes)
+    {
+        if ((ulong)address + (ulong)(uint)lengthBytes > 0x1_0000_0000UL)
+        {
+            throw new ArgumentOutOfRangeException(nameof(address), address,
+                "The requested range leaves the 32-bit download-agent address space.");
         }
 
-        var lengthBytes = checked(words * wordBytes);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(lengthBytes, maximumBytes);
+        if (MtkDaMemoryAccess.IntersectsEfuseWindow(address, (long)address + lengthBytes))
+        {
+            throw new ArgumentOutOfRangeException(nameof(address), address,
+                "Ordinary download-agent memory access does not reach the eFuse window; capture it as an " +
+                "explicit eFuse region instead.");
+        }
     }
 
     /// <summary>Runs one documented READ exchange and returns the raw big-endian payload.

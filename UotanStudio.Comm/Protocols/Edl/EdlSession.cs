@@ -4,9 +4,8 @@ using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Common.Evidence;
-using UotanStudio.Comm.Protocols.Edl.Auth;
-using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Comm.Protocols.Edl;
+using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Comm.Protocols.Edl.Streaming;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
@@ -21,7 +20,6 @@ public sealed partial class EdlSession : IProtocolSession
 {
     private static readonly TimeSpan MaxRelinkTimeout = TimeSpan.FromHours(24);
     private readonly List<ProtocolEvidence> _initializationEvidence = [];
-    private readonly List<ProtocolEvidence> _authenticationEvidence = [];
     private volatile bool _disposed;
     private readonly EdlProbeTransport _probeTransport;
     private EdlProtocolState _protocolState;
@@ -95,22 +93,6 @@ public sealed partial class EdlSession : IProtocolSession
     /// <value>Append-only across initialization attempts; never contains key material.
     /// <para>跨初始化尝试只增不减；从不包含密钥材料。</para></value>
     public IReadOnlyList<ProtocolEvidence> InitializationEvidence => _initializationEvidence;
-
-    /// <summary>
-    /// Gets the ordered evidence for each attempted vendor authentication stage.
-    /// <para>获取每个已尝试厂商认证阶段的按序证据。</para>
-    /// </summary>
-    /// <value>Stage names and observed outcomes only; challenge, token and signature bytes are never copied.
-    /// <para>仅含阶段名与观测结果；质询、令牌与签名字节从不复制。</para></value>
-    public IReadOnlyList<ProtocolEvidence> AuthenticationEvidence => _authenticationEvidence;
-
-    /// <summary>
-    /// Gets the finalized vendor authentication state after an authentication-selected initialization attempt.
-    /// <para>获取选定认证的初始化尝试后定格的厂商认证状态。</para>
-    /// </summary>
-    /// <value>The result once a run with authentication stages finished or failed; <see langword="null"/>
-    /// before that. <para>含认证阶段的运行完成或失败后可用；在此之前为 <see langword="null"/>。</para></value>
-    public EdlAuthenticationResult? AuthenticationResult { get; private set; }
 
     /// <summary>
     /// Gets the Sahara-to-Firehose link stage this session is believed to occupy.
@@ -350,7 +332,6 @@ public sealed partial class EdlSession : IProtocolSession
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
-        ValidateInitializationOptions(options);
         ThrowIfDisposed();
         using var operation = await Firehose!.EnterOperationAsync(cancellationToken).ConfigureAwait(false);
         await InitializeOwnedAsync(programmerImage, cancellationToken, options).ConfigureAwait(false);
@@ -394,7 +375,6 @@ public sealed partial class EdlSession : IProtocolSession
         ArgumentNullException.ThrowIfNull(programmerImage);
         if (options is not null)
         {
-            ValidateInitializationOptions(options);
         }
 
         ThrowIfDisposed();
@@ -447,25 +427,6 @@ public sealed partial class EdlSession : IProtocolSession
         }
     }
 
-    /// <summary>Validates option well-formedness and vendor authentication mutual exclusion before any device I/O.
-    /// <para>在任何设备 I/O 之前校验参数合法性与厂商认证互斥关系。</para></summary>
-    /// <param name="options">The startup requirements to validate. <para>待校验的启动要求。</para></param>
-    private static void ValidateInitializationOptions(EdlInitializationOptions options)
-    {
-        FirehoseProtocol.ValidateAuthenticationTimeout(options.AuthenticationTimeoutMs);
-        options.ProjectAuthentication?.Validate();
-        options.Vip?.Validate();
-        if (options.ProjectAuthentication is not null && options.XiaomiAuthenticationProvider is not null)
-        {
-            throw new ArgumentException("Select one vendor authentication family.", nameof(options));
-        }
-        if (options.SendOnePlusNetType && (options.XiaomiAuthenticationProvider is not null
-            || options.ProjectAuthentication?.Kind is EdlProjectAuthenticationKind.NothingProject or EdlProjectAuthenticationKind.OnePlusProject))
-        {
-            throw new ArgumentException("The selected SetNetType startup path cannot be combined with this authentication variant.", nameof(options));
-        }
-    }
-
     /// <summary>Initializes while the caller holds this session's Firehose operation lease.</summary>
     internal async Task InitializeOwnedAsync(Stream? programmerImage, CancellationToken cancellationToken,
         EdlInitializationOptions? options = null)
@@ -474,11 +435,6 @@ public sealed partial class EdlSession : IProtocolSession
         cancellationToken.ThrowIfCancellationRequested();
         if (IsConfigured)
         {
-            if (options?.XiaomiAuthenticationProvider is not null || options?.ProjectAuthentication is not null
-                || options?.Vip is not null || options?.SendOnePlusNetType == true)
-            {
-                throw new InvalidOperationException("Vendor startup requirements must be selected before session initialization.");
-            }
             if (options?.QueryIdentityBeforeUpload == true && Sahara?.DeviceIdentity is null)
             {
                 throw new InvalidOperationException("The configured session has no verified Sahara identity report.");
@@ -486,26 +442,11 @@ public sealed partial class EdlSession : IProtocolSession
             return;
         }
 
-        var authenticationRequested = options?.Vip is not null || options?.XiaomiAuthenticationProvider is not null
-            || options?.ProjectAuthentication is not null || options?.SendOnePlusNetType == true;
         var skipResponse = options?.SkipResponseOnReadWrite ?? false;
         Firehose!.Configuration.SkipResponseOnErase = skipResponse;
         Firehose.Configuration.SkipResponseOnReadWrite = skipResponse;
-        var lastAuthStage = EdlAuthStage.NotRequired;
         try
         {
-            if (options?.Vip is { } vip)
-            {
-                if (_protocolState == EdlProtocolState.Firehose)
-                {
-                    throw new InvalidOperationException("VIP must be selected before Firehose probing changes the packet sequence.");
-                }
-                lastAuthStage = EdlAuthStage.VipEnabled;
-                var started = Stopwatch.GetTimestamp();
-                Firehose!.ConfigureVipOwned(vip);
-                RecordAuthenticationEvidence(EdlAuthStage.VipEnabled, CommandOutcomeKind.Completed,
-                    "The VIP packet profile was installed before probing.", started);
-            }
             var streamDloadSelected = false;
             if (_protocolState != EdlProtocolState.Firehose)
             {
@@ -541,76 +482,15 @@ public sealed partial class EdlSession : IProtocolSession
 
             if (!streamDloadSelected)
             {
-                if (options?.XiaomiAuthenticationProvider is { } provider)
-                {
-                    lastAuthStage = EdlAuthStage.XiaomiRsaAuth;
-                    await RunAuthStageAsync(EdlAuthStage.XiaomiRsaAuth,
-                        token => Firehose!.AuthenticateXiaomiOwnedAsync(provider, Sahara?.DeviceIdentity,
-                            options.AuthenticationTimeoutMs, token), cancellationToken).ConfigureAwait(false);
-                }
-                var project = options?.ProjectAuthentication;
-                if (project is not null && Sahara?.DeviceIdentity is { } identity && identity.SerialNumber != project.SerialNumber)
-                {
-                    lastAuthStage = EdlAuthStage.ProjectAuth;
-                    RecordAuthenticationEvidence(EdlAuthStage.ProjectAuth, CommandOutcomeKind.Rejected,
-                        "The selected project serial does not match the Sahara report.", Stopwatch.GetTimestamp());
-                    throw new FirehoseException("The selected project authentication serial does not match Sahara.");
-                }
-                var netType = options?.SendOnePlusNetType == true;
-                var demacia = project?.Kind == EdlProjectAuthenticationKind.OnePlusDemacia;
-                await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: project is not null || netType).ConfigureAwait(false);
-                if (demacia)
-                {
-                    lastAuthStage = EdlAuthStage.ProjectAuth;
-                    await RunAuthStageAsync(EdlAuthStage.ProjectAuth,
-                        token => Firehose.AuthenticateProjectOwnedAsync(project!, options!.AuthenticationTimeoutMs, token),
-                        cancellationToken).ConfigureAwait(false);
-                }
-                if (netType)
-                {
-                    lastAuthStage = EdlAuthStage.OnePlusNetType;
-                    await RunAuthStageAsync(EdlAuthStage.OnePlusNetType,
-                        token => Firehose.SetOnePlusNetTypeOwnedAsync(options!.AuthenticationTimeoutMs, token),
-                        cancellationToken).ConfigureAwait(false);
-                }
-                if (project is not null && !demacia)
-                {
-                    lastAuthStage = EdlAuthStage.ProjectAuth;
-                    await RunAuthStageAsync(EdlAuthStage.ProjectAuth,
-                        token => Firehose.AuthenticateProjectOwnedAsync(project, options!.AuthenticationTimeoutMs, token),
-                        cancellationToken).ConfigureAwait(false);
-                }
-                if (project is not null || netType)
-                {
-                    await Firehose.CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
-                }
+                await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: false).ConfigureAwait(false);
+                await Firehose.CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
                 IsConfigured = true;
                 LinkStage = EdlLinkStage.FirehoseReady;
                 Backend = EdlDownloadBackend.Firehose;
-                if (authenticationRequested || _authenticationEvidence.Count > 0)
-                {
-                    AuthenticationResult = new EdlAuthenticationResult
-                    {
-                        Evidence = [.. _authenticationEvidence],
-                        ReachedStage = EdlAuthStage.Completed,
-                        AuthenticationRequested = authenticationRequested,
-                        Disposition = EdlAuthSessionDisposition.CanContinue
-                    };
-                }
             }
         }
         catch
         {
-            if (authenticationRequested || _authenticationEvidence.Count > 0)
-            {
-                AuthenticationResult = new EdlAuthenticationResult
-                {
-                    Evidence = [.. _authenticationEvidence],
-                    ReachedStage = lastAuthStage == EdlAuthStage.NotRequired ? EdlAuthStage.Failed : lastAuthStage,
-                    AuthenticationRequested = authenticationRequested,
-                    Disposition = EdlAuthSessionDisposition.RequiresReconnect
-                };
-            }
             Streaming?.Dispose();
             Streaming = null;
             Backend = EdlDownloadBackend.None;
@@ -635,25 +515,6 @@ public sealed partial class EdlSession : IProtocolSession
         var streaming = new StreamingProtocol(Transport);
         await streaming.HelloAsync(cancellationToken).ConfigureAwait(false);
         Streaming = streaming;
-    }
-
-    /// <summary>Runs one vendor authentication stage and records its observed outcome as evidence.
-    /// <para>执行单个厂商认证阶段，并把观测结果记录为证据。</para></summary>
-    private async Task RunAuthStageAsync(EdlAuthStage stage, Func<CancellationToken, Task> action,
-        CancellationToken cancellationToken)
-    {
-        var started = Stopwatch.GetTimestamp();
-        try
-        {
-            await action(cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception error)
-        {
-            RecordAuthenticationEvidence(stage, ClassifyFailure(error), null, started);
-            throw;
-        }
-
-        RecordAuthenticationEvidence(stage, CommandOutcomeKind.Completed, null, started);
     }
 
     /// <summary>Classifies a failed exchange into the shared evidence outcome vocabulary.
@@ -682,29 +543,6 @@ public sealed partial class EdlSession : IProtocolSession
             ElapsedMs = elapsedMs
         });
     }
-
-    private void RecordAuthenticationEvidence(EdlAuthStage stage, CommandOutcomeKind outcome, string? detail,
-        long startedTimestamp)
-    {
-        _authenticationEvidence.Add(new ProtocolEvidence
-        {
-            Protocol = "edl",
-            Phase = AuthenticationPhase(stage),
-            Outcome = outcome,
-            Detail = detail ?? $"stage={stage}",
-            ElapsedMs = (long)Stopwatch.GetElapsedTime(startedTimestamp).TotalMilliseconds
-        });
-    }
-
-    private static string AuthenticationPhase(EdlAuthStage stage) => stage switch
-    {
-        EdlAuthStage.VipEnabled => "auth-vip-enabled",
-        EdlAuthStage.XiaomiRsaAuth => "auth-xiaomi-rsa",
-        EdlAuthStage.ConfigureBeforeAuth => "auth-configure-before-auth",
-        EdlAuthStage.ProjectAuth => "auth-project",
-        EdlAuthStage.OnePlusNetType => "auth-oneplus-nettype",
-        _ => "auth-stage"
-    };
 
     /// <summary>Publishes a relink offer when endpoint evidence was attached before the failure.
     /// <para>当失败前附加了端点证据时发布重链提议。</para></summary>
@@ -758,11 +596,11 @@ public sealed partial class EdlSession : IProtocolSession
     }
 
     /// <summary>
-    /// Ensures the session is initialized with explicit startup requirements, including vendor authentication.
-    /// <para>确保会话按显式启动要求初始化，其中可包含厂商鉴权。</para>
+    /// Ensures the session is initialized with explicit startup requirements.
+    /// <para>确保会话按显式启动要求初始化。</para>
     /// </summary>
     /// <remarks>Startup requirements are validated even when the session is already configured, so a late request
-    /// for vendor authentication fails loudly instead of being skipped.</remarks>
+    /// for configuration options fails loudly instead of being skipped.</remarks>
     /// <param name="programmerImage">Optional programmer image stream. <para>可选的编程器镜像流。</para></param>
     /// <param name="options">Immutable startup requirements, or <see langword="null"/> for the defaults.
     /// <para>不可变的启动要求；为 <see langword="null"/> 时使用默认值。</para></param>

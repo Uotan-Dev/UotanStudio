@@ -128,17 +128,6 @@ public sealed record MtkLegacyOptions
     /// </value>
     public bool ForceCharging { get; init; }
 
-    /// <summary>Gets whether the reference Legacy download-agent patches are applied before upload.
-    /// <para>获取上传前是否应用参考实现的 Legacy 下载代理补丁。</para></summary>
-    /// <value>
-    /// False by default. When enabled, the stage-two image is patched and stage one is re-attested before
-    /// either is uploaded; a loader entry whose images hold no attested patch site is rejected instead of
-    /// being uploaded unpatched. Patched agents only load on targets whose signature checks are already open.
-    /// <para>默认为 false。启用时，会在上传前修补第二阶段镜像并重新担保第一阶段；若加载器条目的镜像没有可担保的
-    /// 补丁站点，则直接拒绝而不是上传未修补的镜像。打过补丁的代理只在签名校验已放开的目标上可加载。</para>
-    /// </value>
-    public bool PatchStageTwoSecurityChecks { get; init; }
-
     internal void Validate()
     {
         if (StageOneResponseHex is { } expected

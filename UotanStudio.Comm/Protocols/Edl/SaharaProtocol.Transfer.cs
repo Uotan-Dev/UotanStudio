@@ -42,7 +42,15 @@ public sealed partial class SaharaProtocol
                     total += read;
                 }
 
-                var written = await _transport.WriteAsync(buffer, 0, count, _timeoutMs, cancellationToken).ConfigureAwait(false);
+                long written;
+                try
+                {
+                    written = await _transport.WriteAsync(buffer, 0, count, _timeoutMs, cancellationToken).ConfigureAwait(false);
+                }
+                catch (TimeoutException ex)
+                {
+                    throw new EdlException(EdlErrorCode.WritePortTimeout, ex.Message, ex);
+                }
                 if (written != count)
                 {
                     throw new EdlException(EdlErrorCode.WritePortTimeout);

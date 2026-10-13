@@ -111,9 +111,8 @@ public sealed partial class FirehoseProtocol
         var responseReceived = false;
         try
         {
-            var credential = await GetOnePlusCommandTokenOwnedAsync("program", cancellationToken).ConfigureAwait(false);
             var xml = FirehoseXmlBuilder.BuildProgram(Configuration.SectorSize, numSectors, filename, physicalPartition, startSector,
-                slot: EffectiveSlot, publicKey: credential.PublicKey, token: credential.Token,
+                slot: EffectiveSlot,
                 pagesPerBlock: NandPagesPerBlockHint);
             var ready = await SendCommandAndWaitResponseAsync(xml, cancellationToken,
                 skipResponseAcknowledgement: Configuration.SkipResponseOnReadWrite ? SkipResponseAcknowledgement(true) : null);
@@ -422,9 +421,8 @@ public sealed partial class FirehoseProtocol
         ThrowIfDisposed();
         await RequireDestructiveCapabilityAsync(EdlFirehoseCommand.Patch, cancellationToken).ConfigureAwait(false);
         var address = ValidatePatch(Configuration.SectorSize, filename, physicalPartition, startSector, byteOffset, value, sizeInBytes);
-        var credential = await GetOnePlusCommandTokenOwnedAsync("patch", cancellationToken).ConfigureAwait(false);
         var xml = FirehoseXmlBuilder.BuildPatch(Configuration.SectorSize, filename, physicalPartition, address, byteOffset,
-            value, sizeInBytes, EffectiveSlot, credential.PublicKey, credential.Token);
+            value, sizeInBytes, EffectiveSlot);
 
         return await SendCommandAndWaitResponseAsync(xml, cancellationToken);
     }
@@ -525,7 +523,14 @@ public sealed partial class FirehoseProtocol
 
                 ThrowIfDisposed();
                 cancellationToken.ThrowIfCancellationRequested();
-                await WritePacketAsync(buffer, toRead, zlpTimeout, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await _transport.WriteAsync(buffer, 0, toRead, zlpTimeout, cancellationToken).ConfigureAwait(false);
+                }
+                catch (TimeoutException ex)
+                {
+                    throw new EdlException(EdlErrorCode.WritePortTimeout, ex.Message, ex);
+                }
 
                 bytesWritten += toRead;
             }

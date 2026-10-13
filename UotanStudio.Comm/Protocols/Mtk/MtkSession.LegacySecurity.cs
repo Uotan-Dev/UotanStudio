@@ -196,89 +196,6 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Writes a caller-supplied secure-boot configuration image through the Legacy agent.
-    /// <para>通过 Legacy 代理写入调用方提供的安全启动配置镜像。</para></summary>
-    /// <remarks>
-    /// This is the off-device path for layouts whose body cannot be rewritten here, such as version 3
-    /// images protected by the target SEJ engine. The header and alignment are validated and the
-    /// partition comes from the live GPT, but the body is written exactly as supplied with no patching,
-    /// re-hashing, comparison against the previous content or read-back
-    /// (Library/DA/legacy/extension/legacy.py:196-200 performs the same unconditional write).
-    /// 这是主体无法在此重写的布局所使用的设备外路径，例如其主体由目标 SEJ 引擎保护的版本 3 镜像。头部与
-    /// 对齐会被校验，分区来自实时 GPT，但主体按所提供的样子写入：不打补丁、不重新计算摘要、不与旧内容比较，
-    /// 也不回读（Library/DA/legacy/extension/legacy.py:196-200 同样执行无条件写入）。
-    /// </remarks>
-    /// <param name="image">A readable stream positioned at the first image byte.
-    /// <para>定位在首个镜像字节处的可读流。</para></param>
-    /// <param name="length">The positive image byte count, a multiple of 0x200 and no larger than the
-    /// four MiB ceiling the reader applies to a secure-boot configuration partition.
-    /// <para>正数镜像字节数，必须为 0x200 的整数倍，且不超过读取器对安全启动配置分区施用的 4 MiB 上限。</para></param>
-    /// <param name="partitionId">The discovered Legacy physical region holding the configuration GPT.
-    /// <para>承载配置 GPT 的已发现 Legacy 物理区域。</para></param>
-    /// <param name="confirmWrite">The explicit caller opt-in that authorizes the partition write.
-    /// <para>授权分区写入的显式调用方选择。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>The write receipt when authorized; a refusal throws instead of returning a partial
-    /// result. <para>已授权时返回写入回执；拒绝会抛出异常，而不是返回部分结果。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="image"/> is null.
-    /// <para><paramref name="image"/> 为 null。</para></exception>
-    /// <exception cref="ArgumentException">The source is unreadable or shorter than
-    /// <paramref name="length"/>, or its header is not a documented layout.
-    /// <para>源不可读或短于 <paramref name="length"/>，或其头部不属于已记载的布局。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="length"/> is not positive or
-    /// exceeds the ceiling; no buffer is sized before that check.
-    /// <para><paramref name="length"/> 不是正数或超过上限；校验之前不会分配任何缓冲区。</para></exception>
-    /// <exception cref="UnauthorizedAccessException"><paramref name="confirmWrite"/> is
-    /// <see langword="false"/>; no bytes were written and the session keeps its stage.
-    /// <para><paramref name="confirmWrite"/> 为 <see langword="false"/>；未写入任何字节，会话保持原阶段。</para></exception>
-    /// <exception cref="MtkProtocolException">Any exchange failed; the Legacy family faults.
-    /// <para>任一交互失败；Legacy 家族进入 fault 状态。</para></exception>
-    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
-    /// <para>调用方在任一协作点取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session is disposed.
-    /// <para>会话已被释放。</para></exception>
-    public async Task<MtkSecCfgWriteResult> WriteLegacySecCfgAsync(Stream image, int length, byte partitionId,
-        bool confirmWrite, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(image);
-        MtkXFlashChannel.ValidateSource(image, length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, MaximumSecCfgBytes);
-        var buffer = new byte[length];
-        await image.ReadExactlyAsync(buffer, cancellationToken).ConfigureAwait(false);
-        var format = MtkSecCfg.ValidateWriteCandidate(buffer);
-        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            try
-            {
-                var view = (await ReadLegacySecCfgOwnedAsync(partitionId, cancellationToken).ConfigureAwait(false)).View;
-                if (view.Format != format)
-                {
-                    throw new ArgumentException(
-                        $"The supplied image is a {format} layout but the partition holds {view.Format}.", nameof(image));
-                }
-
-                return await WriteLegacySecCfgOwnedAsync(view, buffer, confirmWrite, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            catch (Exception exception) when (IsSecurityPolicyRefusal(exception))
-            {
-                RecordSecurityEvidence("legacy-seccfg-write", CommandOutcomeKind.Rejected,
-                    $"The supplied {format} image was refused before any byte was written.");
-                throw;
-            }
-            catch
-            {
-                FaultLegacy();
-                throw;
-            }
-        }
-        finally
-        {
-            _operation.Release();
-        }
-    }
 
     private async Task<(MtkSecCfgView View, byte[] Image)> ReadLegacySecCfgOwnedAsync(byte partitionId,
         CancellationToken cancellationToken)
@@ -301,23 +218,4 @@ public sealed partial class MtkSession
         return (view, image);
     }
 
-    private async Task<MtkSecCfgWriteResult> WriteLegacySecCfgOwnedAsync(MtkSecCfgView view, byte[] image,
-        bool confirmWrite, CancellationToken cancellationToken)
-    {
-        if (!confirmWrite)
-        {
-            throw new UnauthorizedAccessException(
-                "Writing a secure-boot configuration changes device state and requires an explicit confirmation.");
-        }
-
-        using var source = new MemoryStream(image, writable: false);
-        await TransferLegacyStorageOwnedAsync(true, (byte)view.PartitionId, view.ByteOffset, image.LongLength, source,
-            SecCfgTransferTimeoutMs, null, cancellationToken, nor: false).ConfigureAwait(false);
-        var result = new MtkSecCfgWriteResult(view.PartitionName, view.PartitionIndex, view.ByteOffset,
-            image.LongLength, view.Format, Convert.ToHexString(SHA256.HashData(image)));
-        RecordSecurityEvidence("legacy-seccfg-write", CommandOutcomeKind.Completed,
-            $"Wrote 0x{image.LongLength:X} bytes to {view.PartitionName} at 0x{view.ByteOffset:X}.",
-            result.ImageSha256Hex);
-        return result;
-    }
 }

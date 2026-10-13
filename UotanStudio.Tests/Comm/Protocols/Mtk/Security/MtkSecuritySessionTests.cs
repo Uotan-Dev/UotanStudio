@@ -198,61 +198,6 @@ public sealed partial class MtkSessionTests
     }
 
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    [InlineData(4 * 1024 * 1024 + 512)]
-    public async Task WriteXFlashSecCfgAsync_LengthOutsideCeiling_RejectsBeforeAnyAllocationOrIo(int length)
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreateGptSessionAsync(transport);
-        using var source = new MemoryStream(new byte[8 * 1024 * 1024]);
-        var before = transport.Writes.Count;
-
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => session.WriteXFlashSecCfgAsync(
-            source, length, 8, confirmWrite: true, TestContext.Current.CancellationToken));
-
-        Assert.Equal(before, transport.Writes.Count);
-        Assert.Equal(MtkSessionState.XFlashStorageReady, session.State);
-    }
-
-    [Fact]
-    public async Task WriteXFlashSecCfgAsync_TruncatedSourceAndUndocumentedHeader_RejectBeforeIo()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreateGptSessionAsync(transport);
-        var before = transport.Writes.Count;
-        using var truncated = new MemoryStream(new byte[1024]);
-
-        await Assert.ThrowsAsync<ArgumentException>(() => session.WriteXFlashSecCfgAsync(
-            truncated, SecCfgPartitionLength, 8, confirmWrite: true, TestContext.Current.CancellationToken));
-        using var unknown = new MemoryStream(new byte[SecCfgPartitionLength]);
-
-        await Assert.ThrowsAsync<ArgumentException>(() => session.WriteXFlashSecCfgAsync(
-            unknown, SecCfgPartitionLength, 8, confirmWrite: true, TestContext.Current.CancellationToken));
-
-        Assert.Equal(before, transport.Writes.Count);
-        Assert.Equal(MtkSessionState.XFlashStorageReady, session.State);
-    }
-
-    [Fact]
-    public async Task WriteXFlashSecCfgAsync_LayoutMismatchingPartition_RefusesWithoutWriteAndKeepsStage()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreateGptSessionAsync(transport);
-        var before = transport.Writes.Count;
-        EnqueueGpt(transport, SecCfgDisk());
-        EnqueueStorageRead(transport, SecCfgImage(SecCfgClosedHeaderHex, SecCfgClosedHashHex));
-        using var supplied = new MemoryStream(SecCfgVersion3Image());
-
-        await Assert.ThrowsAsync<ArgumentException>(() => session.WriteXFlashSecCfgAsync(
-            supplied, SecCfgPartitionLength, 8, confirmWrite: true, TestContext.Current.CancellationToken));
-
-        Assert.DoesNotContain("00010004", SecurityWordText(transport, before), StringComparison.Ordinal);
-        Assert.Equal(MtkSessionState.XFlashStorageReady, session.State);
-    }
-
-
     [Fact]
     public async Task ReadLegacyEfuseCellsAsync_BigEndianRegisterValue_ReEmitsLittleEndianBytes()
     {

@@ -175,4 +175,26 @@ public sealed partial class MtkSessionTests
     private static XElement XmlSlaDocument() => new("sla", new XAttribute("version", "1.0"),
         new XElement("rnd", "00112233445566778899AABBCCDDEEFF"),
         new XElement("hrid", "01020304"), new XElement("socid", "11223344"));
+
+    private static XElement XmlSecurityRequest(int length, int packetLength) => new("host",
+        new XElement("version", "1.0"), new XElement("command", "CMD:DOWNLOAD-FILE"),
+        new XElement("arg", new XElement("checksum", "CHK_NO"), new XElement("info", "MEM"),
+            new XElement("source_file", $"MEM://0x0:0x{length:x}"),
+            new XElement("packet_length", $"0x{packetLength:x}")));
+
+    private static void EnqueueXmlSecurityResource(ScriptedCommTransport transport, int length, int packetLength)
+    {
+        EnqueueXmlCompletion(transport);
+        EnqueueXmlText(transport, "OK");
+        EnqueueXmlText(transport, XmlSecurityRequest(length, packetLength)
+            .ToString(SaveOptions.DisableFormatting));
+        EnqueueXmlText(transport, "OK");
+        for (var offset = 0; offset < length; offset += packetLength)
+        {
+            EnqueueXmlText(transport, "OK");
+            EnqueueXmlText(transport, "OK");
+        }
+        EnqueueXmlText(transport, XmlControl("END", "OK"));
+        EnqueueXmlText(transport, XmlControl("START"));
+    }
 }

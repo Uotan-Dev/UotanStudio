@@ -1,4 +1,4 @@
-﻿using UotanStudio.Comm.Diagnostics;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Transports.Abstractions;
 
@@ -409,7 +409,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         for (var attempt = 0; attempt < maxRetries; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ValidateVipPayloadSize();
             if (attempt > 0)
             {
                 Log($"Configure attempt {attempt + 1}/{maxRetries}...");
@@ -443,11 +442,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
             if (!response.IsAck)
             {
-                if (_vip is not null)
-                {
-                    _faulted = true;
-                    throw new FirehoseException("VIP configure was rejected; negotiation retries would change the signed packet sequence.");
-                }
                 var maxPayloadStr = response["MaxPayloadSizeToTargetInBytes"];
                 if (maxPayloadStr != null && long.TryParse(maxPayloadStr, out var maxPayload) && maxPayload > 0 && maxPayload != Configuration.MaxPayloadSizeToTarget)
                 {
@@ -485,11 +479,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             var ackMax = response.GetInt64("MaxPayloadSizeToTargetInBytes");
             if (ackMax.HasValue)
             {
-                if (_vip is { } vip && ackMax.Value != vip.ProgramPayloadSize)
-                {
-                    _faulted = true;
-                    throw new FirehoseException("The negotiated VIP packet size differs from the signed profile.");
-                }
                 Configuration.MaxPayloadSizeToTarget = ackMax.Value;
             }
 
@@ -555,11 +544,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <param name="attemptedStorageTypes">Storage types already sent in this configure call. <para>本次 configure 已发送过的存储类型。</para></param>
     private void AdoptStorageTypeFromNak(FirehoseResponse response, HashSet<FirehoseStorageType> attemptedStorageTypes)
     {
-        if (_vip is not null)
-        {
-            return;
-        }
-
         var candidates = new[] { response["MemoryName"], response.RawValue, response.RawXml };
         foreach (var candidate in candidates)
         {
@@ -653,12 +637,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
     internal async Task CompleteStorageConfigurationOwnedAsync(CancellationToken cancellationToken)
     {
-        if (_vip is not null)
-        {
-            ValidateVipPayloadSize();
-            CaptureCapabilities();
-            return;
-        }
         if (Configuration.AutoDetectSectorSize && Configuration.SectorSize == 0)
         {
             await AutoDetectSectorSizeCoreAsync(cancellationToken).ConfigureAwait(false);
@@ -704,8 +682,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     private async Task RequireDestructiveCapabilityAsync(EdlFirehoseCommand command, CancellationToken cancellationToken)
     {
         if (_capabilitySnapshot?.For(command) is not FeatureSupport.Unknown
-            || _capabilityDiscoveryAttempted
-            || _vip is not null)
+            || _capabilityDiscoveryAttempted)
         {
             RequireCapability(command);
             return;
@@ -981,9 +958,25 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <param name="timeoutMs">The write timeout in milliseconds. 写入超时（毫秒）。</param>
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
     /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
+    /// <exception cref="EdlException">Thrown when the transport accepted only part of the payload, because a partial write cannot be replayed.
+    /// <para>传输只接受了部分载荷时抛出，因为部分写入无法重放。</para></exception>
     private async Task WriteDataAsync(byte[] data, int timeoutMs, CancellationToken cancellationToken)
     {
-        await WritePacketAsync(data, data.Length, timeoutMs, cancellationToken).ConfigureAwait(false);
+        long written;
+        try
+        {
+            written = await _transport.WriteAsync(data, 0, data.Length, timeoutMs, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (TimeoutException ex)
+        {
+            throw new EdlException(EdlErrorCode.WritePortTimeout, ex.Message, ex);
+        }
+        if (written != data.Length)
+        {
+            throw new EdlException(EdlErrorCode.InvalidParameter,
+                $"The transport accepted {written} of {data.Length} bytes; a partial write cannot be replayed.");
+        }
     }
 
     /// <summary>
@@ -1001,11 +994,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <param name="value">The target log value. 目标日志值。</param>
     private void OnTargetLog(string value)
     {
-        if (_vip is null && value.Contains("VIP is enabled, receiving the signed table", StringComparison.OrdinalIgnoreCase))
-        {
-            _faulted = true;
-            throw new FirehoseException("The programmer requires VIP tables, but no signed sequence was selected.");
-        }
         Log($"TARGET: {value}");
         TargetLogReceived?.Invoke(this, new FirehoseLogEventArgs(value));
     }
@@ -1104,7 +1092,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
     private int GetProgramPayloadSize()
     {
-        ValidateVipPayloadSize();
         if (Configuration.MaxPayloadSizeToTarget < Configuration.SectorSize)
         {
             throw new EdlException(EdlErrorCode.InvalidParameter, "The negotiated payload cannot hold one sector.");

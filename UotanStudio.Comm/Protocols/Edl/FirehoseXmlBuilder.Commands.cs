@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -70,7 +70,7 @@ public static partial class FirehoseXmlBuilder
 
     internal static string BuildPatch(long sectorSizeInBytes, string filename,
         int physicalPartitionNumber, FirehoseSectorAddress startSector,
-        long byteOffset, string value, long sizeInBytes, int? slot = null, string? publicKey = null, string? token = null)
+        long byteOffset, string value, long sizeInBytes, int? slot = null)
     {
         var sb = new StringBuilder();
         sb.Append(EdlConstants.XmlHeader);
@@ -85,11 +85,6 @@ public static partial class FirehoseXmlBuilder
         if (slot.HasValue && slot.Value != 0)
         {
             sb.Append($" slot=\"{slot.Value}\"");
-        }
-
-        if (publicKey is not null && token is not null)
-        {
-            sb.Append($" pk=\"{EscapeXml(publicKey)}\" token=\"{EscapeXml(token)}\"");
         }
 
         sb.Append(" />\n");

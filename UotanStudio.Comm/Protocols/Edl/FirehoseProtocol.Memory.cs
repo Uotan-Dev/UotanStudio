@@ -305,7 +305,16 @@ public sealed partial class FirehoseProtocol
             else
             {
                 var toRead = (int)Math.Min(chunkBytes, totalBytes - bytesRead);
-                var n = await _transport.ReadAsync(rawBuffer, 0, toRead, _cmdTimeoutMs, cancellationToken).ConfigureAwait(false);
+                int n;
+                try
+                {
+                    n = await _transport.ReadAsync(rawBuffer, 0, toRead, _cmdTimeoutMs, cancellationToken).ConfigureAwait(false);
+                }
+                catch (TimeoutException ex)
+                {
+                    throw new EdlException(EdlErrorCode.ReadPortTimeout,
+                        $"Raw payload read timed out after {bytesRead}/{totalBytes} bytes.", ex);
+                }
                 if (n <= 0 || n > toRead)
                 {
                     throw new EdlException(EdlErrorCode.ReadPortTimeout,

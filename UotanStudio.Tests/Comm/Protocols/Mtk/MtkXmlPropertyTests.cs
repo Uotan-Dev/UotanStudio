@@ -156,32 +156,6 @@ public partial class MtkSessionTests
         Assert.Equal(inFlight ? MtkSessionState.Faulted : MtkSessionState.XmlStageTwoHardwareInitialized, session.State);
     }
 
-    [Fact]
-    public async Task QueryXmlSystemPropertyAsync_QueuedSecurityUpload_WaitsForFinalHandoff()
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreateXmlStageTwoHardwareSessionAsync(transport);
-        using var resource = new MemoryStream(new byte[512]);
-        EnqueueXmlStorage(transport, XmlPropertyDocument("DA.SLA", "ENABLED"));
-        EnqueueXmlSecurityResource(transport, 512, 512);
-        Task? queued = null;
-        transport.OnWrite = _ =>
-        {
-            queued ??= session.UploadXmlSecurityResourceAsync(MtkXmlSecurityResourceKind.FlashPolicy,
-                resource, 512, cancellationToken: TestContext.Current.CancellationToken);
-            Assert.False(queued.IsCompleted);
-            return [];
-        };
-
-        var report = await session.QueryXmlSlaStatusAsync("test_properties",
-            cancellationToken: TestContext.Current.CancellationToken);
-        Assert.NotNull(queued);
-        await queued;
-
-        Assert.Equal(MtkXmlSlaIndication.EnabledReported, report.Indication);
-        Assert.Equal(512, resource.Position);
-        Assert.Equal(MtkSessionState.XmlStageTwoHardwareInitialized, session.State);
-    }
 
     [Fact]
     public async Task QueryXmlSystemPropertyAsync_Da1_RejectsBeforeIo()

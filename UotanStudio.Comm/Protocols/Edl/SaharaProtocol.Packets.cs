@@ -16,7 +16,15 @@ public sealed partial class SaharaProtocol
     private async Task<byte[]> ReadChunkAsync(int length, int timeoutMs, CancellationToken cancellationToken)
     {
         var buffer = new byte[length];
-        var n = await _transport.ReadAsync(buffer, 0, length, timeoutMs, cancellationToken).ConfigureAwait(false);
+        int n;
+        try
+        {
+            n = await _transport.ReadAsync(buffer, 0, length, timeoutMs, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException ex)
+        {
+            throw new EdlException(EdlErrorCode.ReadPortTimeout, ex.Message, ex);
+        }
         if (n < 0 || n > length)
         {
             throw new SaharaException("The transport returned an invalid receive length.");
@@ -60,7 +68,15 @@ public sealed partial class SaharaProtocol
                 {
                     throw new SaharaException("The Sahara packet receive deadline expired.");
                 }
-                var n = await _transport.ReadAsync(buf, total, length - total, (int)remainingMs, cancellationToken);
+                int n;
+                try
+                {
+                    n = await _transport.ReadAsync(buf, total, length - total, (int)remainingMs, cancellationToken);
+                }
+                catch (TimeoutException ex)
+                {
+                    throw new EdlException(EdlErrorCode.ReadPortTimeout, ex.Message, ex);
+                }
                 if (n == 0)
                 {
                     if (total != 0)
@@ -96,7 +112,15 @@ public sealed partial class SaharaProtocol
         try
         {
             data.CopyTo(buf);
-            var w = await _transport.WriteAsync(buf, 0, data.Length, _timeoutMs, cancellationToken);
+            long w;
+            try
+            {
+                w = await _transport.WriteAsync(buf, 0, data.Length, _timeoutMs, cancellationToken);
+            }
+            catch (TimeoutException ex)
+            {
+                throw new EdlException(EdlErrorCode.WritePortTimeout, ex.Message, ex);
+            }
             if (w != data.Length)
             {
                 throw new EdlException(EdlErrorCode.WritePortTimeout);

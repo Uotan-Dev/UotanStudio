@@ -123,15 +123,6 @@ public static partial class MtkBootstrap
             if (protocol == MtkDaProtocol.Legacy)
             {
                 _ = options.Legacy!.BuildRuntime(entry.HardwareCode, new(0, 0));
-                if (options.Legacy.PatchStageTwoSecurityChecks)
-                {
-                    var patch = MtkLegacyDaPatcher.TryPatch(ReadAll(stageOne), ReadAll(stageTwo),
-                        (int)first.SignatureLength, (int)second.SignatureLength, loader.Metadata.HeaderIndicatesV6)
-                        ?? throw new MtkProtocolException(
-                            "The selected loader entry has no attested Legacy download-agent patch site.");
-                    stageOne = new MemoryStream(patch.StageOne, writable: false);
-                    stageTwo = new MemoryStream(patch.StageTwo, writable: false);
-                }
             }
 
             MtkDeviceInfo device;

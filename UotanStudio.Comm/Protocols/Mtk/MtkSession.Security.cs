@@ -147,29 +147,6 @@ public sealed partial class MtkSession
         return payload;
     }
 
-    /// <summary>Writes one 32-bit register through the stage-two custom register code.
-    /// <para>通过二阶段自定义寄存器码写入一个 32 位寄存器。</para></summary>
-    /// <remarks>
-    /// The framing is the documented register write: selector, control code, address frame, value
-    /// frame and a single completion status
-    /// (Library/DA/xflash/extension/xflash.py:344-351 with :302-313).
-    /// 帧结构即已记载的寄存器写入：选择器、控制码、地址帧、值帧与一次完成状态
-    /// （Library/DA/xflash/extension/xflash.py:344-351，配合 :302-313）。
-    /// </remarks>
-    /// <param name="channel">The live XFlash channel. 当前存活的 XFlash 通道。</param>
-    /// <param name="address">The register address. 寄存器地址。</param>
-    /// <param name="value">The value to store. 要写入的取值。</param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    private async Task WriteXFlashSecurityRegisterAsync(MtkXFlashChannel channel, uint address, uint value,
-        CancellationToken cancellationToken)
-    {
-        await SendXFlashSecurityControlCodeAsync(channel, XFlashSecurityCustomWriteRegister, cancellationToken).ConfigureAwait(false);
-        await SendXFlashWordAsync(channel, address, cancellationToken).ConfigureAwait(false);
-        await SendXFlashWordAsync(channel, value, cancellationToken).ConfigureAwait(false);
-        await ReadXFlashStatusAsync(channel, "register write", cancellationToken).ConfigureAwait(false);
-    }
-
     /// <summary>Reads a 32-bit device register through the Legacy register command.
     /// <para>通过 Legacy 寄存器命令读取 32 位设备寄存器。</para></summary>
     /// <remarks>
@@ -196,33 +173,6 @@ public sealed partial class MtkSession
         var value = await ReadAsync(4, _timeoutMs, cancellationToken).ConfigureAwait(false);
         await RequireLegacySecurityAcknowledgeAsync("register read", cancellationToken).ConfigureAwait(false);
         return BinaryPrimitives.ReadUInt32BigEndian(value);
-    }
-
-    /// <summary>Writes a 32-bit device register through the Legacy register command.
-    /// <para>通过 Legacy 寄存器命令写入 32 位设备寄存器。</para></summary>
-    /// <remarks>
-    /// The documented exchange writes the register-write command byte, a big-endian address, a
-    /// big-endian value and then reads one acknowledge byte
-    /// (Library/DA/legacy/dalegacy_lib.py:101-108 with Library/DA/legacy/dalegacy_param.py:32).
-    /// 已记载的交互写入寄存器写命令字节、大端地址与大端值，随后读取 1 个确认字节
-    /// （Library/DA/legacy/dalegacy_lib.py:101-108，命令取值见
-    /// Library/DA/legacy/dalegacy_param.py:32）。
-    /// </remarks>
-    /// <param name="address">The register address. 寄存器地址。</param>
-    /// <param name="value">The value to store. 要写入的取值。</param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <exception cref="MtkProtocolException">The acknowledgement byte is missing or negative.
-    /// <para>确认字节缺失或为否定确认。</para></exception>
-    private async Task WriteLegacySecurityRegisterAsync(uint address, uint value, CancellationToken cancellationToken)
-    {
-        ThrowIfDisposed();
-        var request = new byte[9];
-        request[0] = LegacySecurityWriteRegisterCommand;
-        BinaryPrimitives.WriteUInt32BigEndian(request.AsSpan(1), address);
-        BinaryPrimitives.WriteUInt32BigEndian(request.AsSpan(5), value);
-        await WriteAsync(request, _timeoutMs, cancellationToken).ConfigureAwait(false);
-        await RequireLegacySecurityAcknowledgeAsync("register write", cancellationToken).ConfigureAwait(false);
     }
 
     private async Task RequireLegacySecurityAcknowledgeAsync(string operation, CancellationToken cancellationToken)

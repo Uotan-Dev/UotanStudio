@@ -33,8 +33,16 @@ public sealed partial class FirehoseProtocol
             if (_rxBufferBytes == 0)
             {
                 var remainingMs = (int)Math.Max(1, budget - (Environment.TickCount64 - start));
-                var received = await _transport.ReadAsync(_rxBuffer, 0, _rxBuffer.Length,
-                    Math.Min(Math.Max(1, _cmdTimeoutMs), remainingMs), cancellationToken).ConfigureAwait(false);
+                int received;
+                try
+                {
+                    received = await _transport.ReadAsync(_rxBuffer, 0, _rxBuffer.Length,
+                        Math.Min(Math.Max(1, _cmdTimeoutMs), remainingMs), cancellationToken).ConfigureAwait(false);
+                }
+                catch (TimeoutException ex)
+                {
+                    throw new EdlException(EdlErrorCode.ReadPortTimeout, ex.Message, ex);
+                }
                 if (received < 0 || received > _rxBuffer.Length)
                 {
                     throw new FirehoseException("The transport returned an invalid receive length.");

@@ -232,7 +232,7 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
         var count = Math.Min(length, _length - _position);
         if (count > 0)
         {
-            _buffer!.AsSpan(_position, count).CopyTo(buffer.AsSpan(offset, length));
+            _buffer!.AsSpan(_position, count).CopyTo(buffer.AsSpan(offset, count));
             _position += count;
         }
         return count;

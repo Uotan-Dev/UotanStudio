@@ -201,6 +201,11 @@ implemented and covered by tests, but the host deliberately exposes no control f
   fault the session on a refused exchange. The non-fatal `QueryBootIdentityOwnedAsync` path already collects the
   same two bytes during initialization, so no separate control surfaces them.
 
+Vendor exploit implementations (VIP table operations, OnePlus/Xiaomi/Nothing auth bypass, EDL memory debug,
+DA patching, DA crash, DA memory write, preloader public write, SECCFG write, XML security resource upload,
+download-agent memory peek/poke and target-memory poke/memcpy) have been removed from the codebase entirely;
+they are not retained as unsurfaced methods.
+
 Re-exposing any of these requires device evidence for the specific operation plus a dedicated dangerous-operation
 confirmation, not just a button.
 
