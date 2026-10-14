@@ -109,13 +109,48 @@ public static class HttpDownload
     }
 
     /// <summary>Rewrites a GitHub URL onto a mirror; non-GitHub URLs are returned unchanged.
-    /// <para>把 GitHub 地址改写到某个镜像；非 GitHub 地址原样返回。</para></summary>
+    /// <para>把 GitHub 地址改写到某个镜像；非 GitHub 地址原样返回。</para>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every <see cref="GitHubMirrorSite.BaseUrl"/> entry in the list already carries the part of the
+    /// origin it substitutes for, either <c>…&#47;https://github.com</c> or a short alias such as
+    /// <c>…&#47;gh</c> or <c>…&#47;github.com</c>. A <c>github.com</c> URL therefore contributes only its
+    /// path and query, and appending the whole URL on top of that prefix would repeat the origin
+    /// (<c>…&#47;https://github.com&#47;https://github.com&#47;…</c>), which no such proxy serves.
+    /// </para>
+    /// <para>
+    /// 列表中每个 <see cref="GitHubMirrorSite.BaseUrl"/> 已经自带它要替换的源站片段，形式为
+    /// <c>…&#47;https://github.com</c>，或 <c>…&#47;gh</c>、<c>…&#47;github.com</c> 这类短别名。因此
+    /// <c>github.com</c> 的地址只贡献路径与查询串；若把完整地址再拼到该前缀之后就会出现两次源站
+    /// （<c>…&#47;https://github.com&#47;https://github.com&#47;…</c>），没有这类代理会响应该形式。
+    /// </para>
+    /// <para>
+    /// Other GitHub hosts keep the full URL, because their path is not valid under the rewritten
+    /// <c>github.com</c> namespace; a prefix ending in the <c>https://github.com</c> marker has that
+    /// marker replaced rather than extended.
+    /// </para>
+    /// <para>
+    /// 其他 GitHub 主机保留完整地址，因为其路径在被改写的 <c>github.com</c> 命名空间下并不成立；
+    /// 以 <c>https://github.com</c> 结尾的前缀会把这个标记整段替换，而不是在其后追加。
+    /// </para>
+    /// </remarks>
     internal static Uri MirrorUrl(GitHubMirrorSite site, Uri url)
     {
-        var target = string.Equals(url.Host, "github.com", StringComparison.OrdinalIgnoreCase)
-            ? url.ToString()
-            : "https://github.com" + url.PathAndQuery;
-        return new Uri(site.BaseUrl.TrimEnd('/') + "/" + target);
+        if (!IsGitHubUrl(url)) return url;
+        var prefix = site.BaseUrl.TrimEnd('/');
+        if (string.Equals(url.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return new Uri(prefix + url.PathAndQuery);
+        }
+
+        const string marker = "https://github.com";
+        if (prefix.EndsWith(marker, StringComparison.OrdinalIgnoreCase))
+        {
+            return new Uri(prefix[..^marker.Length].TrimEnd('/') + "/" + url);
+        }
+
+        return new Uri(prefix + "/" + url);
     }
 
     /// <summary>Speed-probes mirrors and the origin by fetching 256 KiB each and returns sources fastest-first;
