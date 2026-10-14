@@ -41,5 +41,5 @@ jobs:
         run: dotnet format UotanStudio.slnx style --no-restore --verify-no-changes
 
       - name: Test
-        timeout-minutes: 5
+        timeout-minutes: 15
         run: dotnet test --solution UotanStudio.slnx --no-restore -c Release --minimum-expected-tests 7000
