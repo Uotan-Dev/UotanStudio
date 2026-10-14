@@ -12,6 +12,7 @@ namespace UotanStudio.Tests.Services;
 public sealed class ProjectOperationsBoundaryTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-project-boundary-" + Guid.NewGuid().ToString("N"));
+    private readonly List<string> _destinations = [];
     private readonly TestWorkspace _workspace = new();
     private readonly ProjectOperationsService _projects;
 
@@ -89,6 +90,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     {
         var dir = Path.Combine(Path.GetTempPath(), Path.GetFileName(_root) + "-dest-" + Guid.NewGuid().ToString("N"));
         if (existing) Directory.CreateDirectory(dir);
+        _destinations.Add(dir);
         return dir;
     }
 
@@ -393,23 +395,25 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     {
         ProjectContextService.Instance.CloseProject();
         ImageViewModel.EnsureInstance().Images.Clear();
-        DeleteProjectRoot();
+        RemoveDirectoryIfUnlocked(_root);
+        foreach (var destination in _destinations)
+            RemoveDirectoryIfUnlocked(destination);
     }
 
-    private void DeleteProjectRoot()
+    private static void RemoveDirectoryIfUnlocked(string path)
     {
-        for (var attempt = 0; ; attempt++)
+        for (var attempt = 0; attempt < 40; attempt++)
         {
             try
             {
-                Directory.Delete(_root, recursive: true);
+                if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
                 return;
             }
-            catch (IOException) when (attempt < 20)
+            catch (IOException)
             {
                 Thread.Sleep(50);
             }
-            catch (UnauthorizedAccessException) when (attempt < 20)
+            catch (UnauthorizedAccessException)
             {
                 Thread.Sleep(50);
             }
