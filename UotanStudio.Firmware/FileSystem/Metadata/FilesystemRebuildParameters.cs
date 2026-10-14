@@ -152,6 +152,37 @@ internal sealed class ErofsRebuildParameters
     /// <summary>Records whether the source metabox container was compressed; output geometry may differ. <para>记录源 metabox 容器是否被压缩；输出几何信息可能不同。</para></summary>
     public bool SourceMetaboxCompressed { get; set; }
     /// <summary>
+    /// Gets the resolved <c>ErofsCompressionAlgorithm</c> member name of the algorithm the source image
+    /// encoded its metabox container with. The container is an ordinary compressed inode, so the value is
+    /// recovered from the container's own map header rather than from the primary compression declaration; a
+    /// rebuild that re-encodes the container has to select the same codec for the recorded payload to stay
+    /// reproducible. The name is stored as text so the document stays locale-free.
+    /// <para>获取源镜像编码其 metabox 容器所用算法解析后的 <c>ErofsCompressionAlgorithm</c> 成员名。容器本质是
+    /// 普通压缩 inode，因此该值取自容器自身的映射头而非主压缩声明；重新编码容器的重建必须选用同一编解码器，
+    /// 记录的负载才保持可复现。名称以文本保存，使文档不依赖语言环境。</para>
+    /// </summary>
+    /// <value><c>Lz4</c>, <c>Lzma</c>, <c>Deflate</c> or <c>Zstd</c>, or <see langword="null"/> when the source
+    /// metabox container carried no compression or when the snapshot predates this field; a null value leaves
+    /// the codec to the writer's own resolution.
+    /// <para>取值为 <c>Lz4</c>、<c>Lzma</c>、<c>Deflate</c> 或 <c>Zstd</c>；源 metabox 容器未压缩或快照早于该
+    /// 字段时为 <see langword="null"/>，此时编解码器由写入方自行解析。</para></value>
+    public string? SourceMetaboxAlgorithm { get; set; }
+    /// <summary>
+    /// Gets the resolved <c>ErofsDataLayout</c> member name of the storage layout the source image recorded
+    /// for its metabox container inode, so a rebuild can tell an inline or flat container from a compressed one
+    /// instead of inferring the shape from the compression flag alone.
+    /// <para>获取源镜像为 metabox 容器 inode 记录的存储布局解析后的 <c>ErofsDataLayout</c> 成员名，使重建能区分
+    /// 内联、平坦与压缩容器，而不是只凭压缩标志推断其形态。</para>
+    /// </summary>
+    /// <value><c>Flat</c>, <c>Compressed</c>, <c>Inline</c>, <c>CompactIndexes</c> or <c>ChunkBased</c>, or
+    /// <see langword="null"/> when the source declares no metabox container or when the snapshot predates this
+    /// field. The value is recorded so the container shape survives the document; no writer-side option
+    /// consumes it yet, and the compression flag beside it stays the dimension a rebuild replays.
+    /// <para>取值为 <c>Flat</c>、<c>Compressed</c>、<c>Inline</c>、<c>CompactIndexes</c> 或 <c>ChunkBased</c>；
+    /// 源未声明 metabox 容器或快照早于该字段时为 <see langword="null"/>。记录该值是为了让容器形态随文档留存；
+    /// 目前尚无写入侧选项消费它，重建重放的仍是与之并列的压缩标志。</para></value>
+    public string? SourceMetaboxDataLayout { get; set; }
+    /// <summary>
     /// Gets the start block of the source image's metadata area (<c>s_meta_blkaddr</c>), so a rebuild places
     /// its inode table in the same separate zone the source used instead of silently returning the metadata
     /// to the head of the image.

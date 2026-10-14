@@ -1,6 +1,4 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.FileSystem;
-using UotanStudio.Firmware.FileSystem.Erofs.Models;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 
@@ -774,6 +772,24 @@ internal sealed class ErofsInode
             {
                 compressed.CompactedIndexes = false;
                 DataLayout = ErofsDataLayout.Compressed;
+            }
+        }
+    }
+
+    /// <summary>Whether any plain index row is stored with the interlaced byte rotation.
+    /// <para>是否有任一原样索引行按交错字节旋转存放。</para></summary>
+    internal bool InterlacedPlainPclusters
+    {
+        get => CompressedState?.InterlacedPlainPclusters ?? false;
+        set
+        {
+            if (value)
+            {
+                EnsureCompressedState().InterlacedPlainPclusters = true;
+            }
+            else if (CompressedState is { } compressed)
+            {
+                compressed.InterlacedPlainPclusters = false;
             }
         }
     }

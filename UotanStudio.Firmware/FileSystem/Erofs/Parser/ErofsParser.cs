@@ -118,6 +118,25 @@ public sealed record ErofsFileEntry(
     public IReadOnlyList<ErofsXattrEntry>? Xattrs { get; init; }
 }
 
+/// <summary>
+/// How the source image stored its metabox container inode. Upstream builds the container through the
+/// ordinary compressed-file path, so the container is an ordinary inode and carries its own layout and codec
+/// instead of a metabox-specific encoding; a rebuild replays those two dimensions so re-encoded resident
+/// inodes reproduce the source bytes.
+/// <para>源镜像存储其 metabox 容器 inode 的方式。上游通过普通压缩文件路径构建容器，因此容器就是普通 inode，
+/// 自带布局与编解码器而不是 metabox 专属编码；重建会重放这两个维度，使重新编码的常驻 inode 复现源字节。</para>
+/// </summary>
+/// <param name="Compressed">Whether the container inode is stored compressed.
+/// <para>容器 inode 是否以压缩方式存储。</para></param>
+/// <param name="DataLayout">Storage layout recorded by the container inode.
+/// <para>容器 inode 记录的存储布局。</para></param>
+/// <param name="Algorithm">Codec named by the container's own map header, or <see langword="null"/> when the
+/// container is not compressed. <para>容器自身映射头指名的编解码器；容器未压缩时为 <see langword="null"/>。</para></param>
+internal readonly record struct ErofsMetaboxContainer(
+    bool Compressed,
+    UnifiedDataLayout DataLayout,
+    ErofsCompressionAlgorithm? Algorithm);
+
 public sealed partial class ErofsParser : IDisposable
 {
     private const int CopyBufferSize = 1 << 20;
@@ -141,6 +160,7 @@ public sealed partial class ErofsParser : IDisposable
     private readonly int _blockSize;
     private readonly bool _hasMetabox;
     private readonly byte[]? _metaboxData;
+    private ErofsMetaboxContainer? _metaboxContainer;
     private readonly Stream?[]? _deviceStreams;
     private readonly ErofsDeviceSlot[]? _deviceSlots;
     private bool _flatDevice;
@@ -761,6 +781,13 @@ public sealed partial class ErofsParser : IDisposable
     /// Reads length bytes from the source; validates the range first (offset &lt;= len and size &lt;= len - offset), then reads exactly via ReadExactly.
     /// <para>从数据源读取 length 字节；先做范围校验（offset &lt;= len 且 size &lt;= len - offset）， 再按 ReadExactly 精确读取。</para>
     /// </summary>
+    /// <remarks>
+    /// The container inode is an ordinary inode, so its compression state, codec and data layout are recorded
+    /// as a side effect of this read for a later rebuild; the returned bytes stay exactly the decompressed
+    /// payload the rest of the parser consumes.
+    /// <para>容器 inode 是普通 inode，因此本次读取会顺带记录其压缩状态、编解码器与数据布局，供后续重建使用；
+    /// 返回的字节仍与解析器其余部分消费的解压负载完全一致。</para>
+    /// </remarks>
     private byte[] ReadMetaboxData(ulong metaboxNid)
     {
         var metaboxOffset = _superblock.GetInodeOffset(metaboxNid);
@@ -775,6 +802,7 @@ public sealed partial class ErofsParser : IDisposable
 
         var inode = UnifiedInode.FromBytes(
             ReadBytes(metaboxOffset, inodeSize, "METABOX inode"), metaboxNid, _superblock.BlockSizeBits, inMetabox: true);
+        _metaboxContainer = ReadMetaboxContainer(inode, metaboxOffset);
         var dataSize = (long)inode.Size;
         if (dataSize <= 0) return [];
         if (dataSize > MaxMetadataComponentSize)
@@ -811,6 +839,34 @@ public sealed partial class ErofsParser : IDisposable
         }
 
         return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// Records how the metabox container inode itself is stored: whether it is compressed, the storage layout
+    /// it declares, and, for a compressed form, the codec its own map header names. Upstream builds the
+    /// container through the ordinary compressed-file path, so the low nibble of <c>h_algorithmtype</c> is the
+    /// container's algorithm and nothing about the codec has to be assumed from the primary declaration.
+    /// <para>记录 metabox 容器 inode 自身的存储方式：是否压缩、声明的存储布局，以及压缩形态下其自身映射头指名的
+    /// 编解码器。上游通过普通压缩文件路径构建容器，因此 <c>h_algorithmtype</c> 低四位就是容器的算法，无需从主
+    /// 声明推断编解码器。</para>
+    /// </summary>
+    /// <param name="inode">Container inode decoded from the source metabox slot.
+    /// <para>从源 metabox 槽位解码出的容器 inode。</para></param>
+    /// <param name="inodeOffset">Image-relative offset of that inode record.
+    /// <para>该 inode 记录在镜像中的相对偏移。</para></param>
+    /// <returns>The recorded container shape; the algorithm is null whenever the container is not compressed.
+    /// <para>记录的容器形态；容器未压缩时算法为 null。</para></returns>
+    private ErofsMetaboxContainer ReadMetaboxContainer(UnifiedInode inode, long inodeOffset)
+    {
+        if (!inode.IsCompressed)
+        {
+            return new ErofsMetaboxContainer(false, inode.DataLayout, null);
+        }
+
+        var headerOffset = AlignUp(inodeOffset + inode.InlineDataOffset, 8);
+        CheckRange(headerOffset, ZErofsMapHeader.Size, "METABOX container map header");
+        var header = ZErofsMapHeader.FromBytes(ReadBytes(headerOffset, ZErofsMapHeader.Size, "METABOX container map header"));
+        return new ErofsMetaboxContainer(true, inode.DataLayout, (ErofsCompressionAlgorithm)header.Algorithm);
     }
 
     private void CopyFromDevice(Stream output, int deviceId, long offset, long length, string what)
@@ -1107,6 +1163,19 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>读取 inode 的 xattr 列表：解析 inline xattr ibody（含共享 xattr id 引用解析）。</para>
     /// </summary>
     internal bool RequireCompleteMetadata { get; init; }
+
+    /// <summary>
+    /// Gets how the source image stored its metabox container inode, as recorded while the container payload
+    /// was read. A rebuild consumes this instead of re-deriving the container's compression state, codec and
+    /// layout from the superblock, because the container is an ordinary inode whose own map header is the only
+    /// authority for its codec.
+    /// <para>获取源镜像存储其 metabox 容器 inode 的方式，在读取容器负载时记录。重建消费该信息，而不是从超级块
+    /// 重新推导容器的压缩状态、编解码器与布局，因为容器就是普通 inode，其自身映射头才是编解码器的唯一权威。</para>
+    /// </summary>
+    /// <value>The recorded container shape, or <see langword="null"/> when the source declares no metabox
+    /// container or its payload was never read. <para>记录的容器形态；源未声明 metabox 容器或从未读取其负载时
+    /// 为 <see langword="null"/>。</para></value>
+    internal ErofsMetaboxContainer? MetaboxContainer => _metaboxContainer;
 
     private List<ErofsXattrEntry> ReadXattrs(ulong nid, UnifiedInode inode)
     {

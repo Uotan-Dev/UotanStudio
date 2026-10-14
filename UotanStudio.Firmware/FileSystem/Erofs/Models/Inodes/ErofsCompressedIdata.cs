@@ -63,6 +63,15 @@ internal sealed class ErofsCompressedIdata : IErofsIdata
     /// <para>由映射头 advise 字置起。</para></value>
     internal bool InlineCompressedTail { get; set; }
 
+    /// <summary>Whether any plain index row is stored with the interlaced byte rotation
+    /// (<c>Z_EROFS_ADVISE_INTERLACED_PCLUSTER</c>).
+    /// <para>是否有任一原样索引行按交错字节旋转存放
+    /// （<c>Z_EROFS_ADVISE_INTERLACED_PCLUSTER</c>）。</para></summary>
+    /// <value>Raised from the map header advise word; a rebuild only honours it while
+    /// <see cref="ErofsOptions.InterlacedPlainPclusters"/> holds.
+    /// <para>由映射头 advise 字置起；重建仅在 <see cref="ErofsOptions.InterlacedPlainPclusters"/> 成立时才兑现它。</para></value>
+    internal bool InterlacedPlainPclusters { get; set; }
+
     /// <summary>Whether the source inode stored its index as the extent form
     /// (<c>Z_EROFS_ADVISE_EXTENTS</c> under the compressed-full datalayout).
     /// <para>源 inode 是否以 extent 形态存储索引（compressed-full 布局下的

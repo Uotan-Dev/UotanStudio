@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.Numerics;
-using System.Security.Cryptography;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
+using UotanStudio.Hash.Digests;
 using ErofsInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
@@ -258,6 +258,12 @@ public sealed partial class ErofsBuilder
                 fs.Position = p.SourceOffset;
                 fs.ReadExactly(raw, 0, p.SourceLength);
                 var offset = checked((long)p.BlockAddress * blockSize);
+                if (p.InterlacedOffset > 0)
+                {
+                    WriteInterlacedFrame(output, raw, p, offset, blockSize);
+                    continue;
+                }
+
                 WriteAt(output, offset, raw, p.SourceLength);
                 WriteZeroes(output, offset + p.SourceLength, blockSize - p.SourceLength);
                 continue;
@@ -611,6 +617,11 @@ public sealed partial class ErofsBuilder
             BinaryPrimitives.WriteUInt32LittleEndian(header, checked((uint)(ulong)node.FragmentOffset));
         }
 
+        if (node.Pclusters!.Any(p => p.InterlacedOffset > 0))
+        {
+            advise |= ZErofsMapHeader.AdviseInterlacedPcluster;
+        }
+
         BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(4), advise);
 
         var secondary = node.SecondaryAlgorithm;
@@ -908,6 +919,48 @@ public sealed partial class ErofsBuilder
         return (initial, twoByte, clusterCount - initial - twoByte);
     }
 
+    /// <summary>
+    /// Writes one plain frame with the interlaced byte rotation the pcluster plan selected, mirroring
+    /// <c>lib/compress.c</c> in erofs-utils: the stored block starts at the in-block offset the frame's
+    /// logical window lands on and wraps at the block end, and the remaining bytes of the block stay zero.
+    /// <para>按 pcluster 规划选定的字节旋转写出单个原样帧，与 erofs-utils 的 <c>lib/compress.c</c> 一致：
+    /// 存储块从该帧逻辑窗口落入的块内偏移开始，在块尾回绕，块内其余字节保持为零。</para>
+    /// </summary>
+    /// <param name="output">Destination stream in image coordinates.
+    /// <para>镜像坐标下的目标流。</para></param>
+    /// <param name="raw">Buffer holding the frame's plain source bytes, read from the node's payload.
+    /// <para>存放该帧原样源字节的缓冲区，已从节点负载读出。</para></param>
+    /// <param name="p">Planned pcluster carrying the rotation in
+    /// <see cref="ErofsPclusterPlan.InterlacedOffset"/>.
+    /// <para>携带 <see cref="ErofsPclusterPlan.InterlacedOffset"/> 旋转量的已规划 pcluster。</para></param>
+    /// <param name="offset">First byte of the frame's physical block region.
+    /// <para>该帧物理块区间的首字节。</para></param>
+    /// <param name="blockSize">Filesystem block size in bytes.
+    /// <para>以字节计的文件系统块大小。</para></param>
+    /// <exception cref="FileSystemCorruptedException">The rotation and frame length together exceed one
+    /// block. <para>旋转量与帧长度之和超过一个块。</para></exception>
+    private static void WriteInterlacedFrame(Stream output, byte[] raw, ErofsPclusterPlan p, long offset,
+        int blockSize)
+    {
+        var rotation = p.InterlacedOffset;
+        var rightpart = Math.Min(blockSize - rotation, p.SourceLength);
+        if (rightpart < 0 || p.SourceLength > blockSize)
+        {
+            throw new FileSystemCorruptedException(
+                $"Interlaced plain pcluster at {p.SourceOffset} does not fit its block: rotation {rotation} "
+                + $"with length {p.SourceLength} exceeds {blockSize} bytes.");
+        }
+
+        var block = new byte[blockSize];
+        Array.Copy(raw, 0, block, rotation, rightpart);
+        if (p.SourceLength > rightpart)
+        {
+            Array.Copy(raw, rightpart, block, 0, p.SourceLength - rightpart);
+        }
+
+        WriteAt(output, offset, block, block.Length);
+    }
+
     private static void WriteZeroes(Stream output, long offset, long count)
     {
         output.Position = offset;
@@ -950,28 +1003,98 @@ public sealed partial class ErofsBuilder
            && GetInodeRecordSize(node, blockSize) <= blockSize;
 
     /// <summary>
-    /// Writes each variable-sized METABOX inode record with its inline xattrs and tail data.
-    /// <para>按分配的变长槽位写入 inode、扩展属性与内联尾部数据。</para>
+    /// Assembles the metabox container body: every resident's inode record placed at its slot, followed by
+    /// that record's inline xattrs and inline tail data, plus the shared xattr area at its planned offset.
+    /// The body is produced as one buffer rather than written straight into the image because the container
+    /// may be encoded, and an encoder needs the whole payload addressable before it plans a single pcluster.
+    /// <para>装配 metabox 容器本体：把每个常驻 inode 的记录放到其槽位，紧随其内联 xattr 与内联尾部数据，并在
+    /// 规划的偏移处写入共享 xattr 区。本体以单个缓冲产出而不是直接写进镜像，因为容器可能被编码，而编码器需要
+    /// 在规划任何 pcluster 之前就能寻址整个负载。</para>
     /// </summary>
-    private static void WriteMetaboxContainer(Stream output, ErofsInode metaboxNode, int blockSize, ulong now, List<ErofsInode> residents, ErofsOptions options)
+    /// <param name="blockSize">Filesystem block size in bytes.
+    /// <para>以字节计的文件系统块大小。</para></param>
+    /// <param name="now">Superblock epoch seconds every resident's record is stamped against.
+    /// <para>各常驻记录所依据的超级块纪元秒。</para></param>
+    /// <param name="residents">Nodes stored in the container, each with its slot already assigned.
+    /// <para>存放在容器中的节点，其槽位均已分配。</para></param>
+    /// <param name="bodyLength">Logical body length the layout measured.
+    /// <para>布局度量出的本体逻辑长度。</para></param>
+    /// <param name="sharedXattrOffset">Offset of the shared xattr area inside the body, or <c>-1</c> when the
+    /// area lives in a data block instead. <para>共享 xattr 区在本体内的偏移；该区位于数据块中时为
+    /// <c>-1</c>。</para></param>
+    /// <param name="sharedXattrs">Encoded shared xattr records in slot order.
+    /// <para>按槽位顺序排列的已编码共享 xattr 记录。</para></param>
+    /// <param name="options">Validated build options the residents' records are built against.
+    /// <para>构建常驻记录所依据的经校验选项。</para></param>
+    /// <returns>The zero-filled body buffer with every resident and shared xattr record in place. Gaps stay
+    /// zero, which is what the image preallocation used to guarantee for the slot-wise writer.
+    /// <para>已填入全部常驻记录与共享 xattr 记录、其余为零的本体缓冲。空隙保持为零，这正是逐槽位写入方原先
+    /// 依赖镜像预分配保证的结果。</para></returns>
+    private static byte[] BuildMetaboxContainerBody(int blockSize, ulong now, List<ErofsInode> residents,
+        long bodyLength, long sharedXattrOffset, List<byte[]> sharedXattrs, ErofsOptions options)
     {
-        var baseOffset = checked(metaboxNode.FlatBlockAddr * blockSize);
+        var body = new byte[checked((int)bodyLength)];
         foreach (var resident in residents)
         {
             BuildInode(resident, blockSize, now, options);
             var buffer = new byte[resident.OnDiskSize];
             resident.WriteTo(buffer);
-            var slotOffset = checked(baseOffset + resident.MetaboxSlot * ErofsSuperblock.CompactInodeSize);
-            WriteAt(output, slotOffset, buffer, buffer.Length);
+            var slotOffset = checked((int)(resident.MetaboxSlot * ErofsSuperblock.CompactInodeSize));
+            buffer.CopyTo(body, slotOffset);
             if (resident.XattrIbody.Length > 0)
             {
-                WriteAt(output, slotOffset + resident.OnDiskSize, resident.XattrIbody, resident.XattrIbody.Length);
+                resident.XattrIbody.CopyTo(body, slotOffset + resident.OnDiskSize);
             }
+
             if (resident.InlineData.Length > 0)
             {
-                WriteAt(output, slotOffset + resident.InlineDataOffset, resident.InlineData, resident.InlineData.Length);
+                resident.InlineData.CopyTo(body, slotOffset + checked((int)resident.InlineDataOffset));
             }
         }
+
+        if (sharedXattrOffset >= 0 && sharedXattrs.Count > 0)
+        {
+            var cursor = checked((int)sharedXattrOffset);
+            foreach (var entry in sharedXattrs)
+            {
+                entry.CopyTo(body, cursor);
+                cursor += checked((int)AlignUp(entry.Length, ErofsXattr.EntryAlignment));
+            }
+        }
+
+        return body;
+    }
+
+    /// <summary>
+    /// Writes each variable-sized METABOX inode record with its inline xattrs and tail data.
+    /// <para>按分配的变长槽位写入 inode、扩展属性与内联尾部数据。</para>
+    /// </summary>
+    /// <param name="output">Destination stream in image coordinates.
+    /// <para>镜像坐标下的目标流。</para></param>
+    /// <param name="metaboxNode">Synthetic container node whose flat block address anchors the area.
+    /// <para>其平坦块地址锚定该区域的合成容器节点。</para></param>
+    /// <param name="blockSize">Filesystem block size in bytes.
+    /// <para>以字节计的文件系统块大小。</para></param>
+    /// <param name="now">Superblock epoch seconds every resident's record is stamped against.
+    /// <para>各常驻记录所依据的超级块纪元秒。</para></param>
+    /// <param name="residents">Nodes stored in the container, each with its slot already assigned.
+    /// <para>存放在容器中的节点，其槽位均已分配。</para></param>
+    /// <param name="bodyLength">Logical body length the layout measured.
+    /// <para>布局度量出的本体逻辑长度。</para></param>
+    /// <param name="sharedXattrOffset">Offset of the shared xattr area inside the body, or <c>-1</c> when the
+    /// area is written separately. <para>共享 xattr 区在本体内的偏移；该区另行写出时为 <c>-1</c>。</para></param>
+    /// <param name="sharedXattrs">Encoded shared xattr records in slot order.
+    /// <para>按槽位顺序排列的已编码共享 xattr 记录。</para></param>
+    /// <param name="options">Validated build options the residents' records are built against.
+    /// <para>构建常驻记录所依据的经校验选项。</para></param>
+    private static void WriteMetaboxContainer(Stream output, ErofsInode metaboxNode, int blockSize, ulong now,
+        List<ErofsInode> residents, long bodyLength, long sharedXattrOffset, List<byte[]> sharedXattrs,
+        ErofsOptions options)
+    {
+        var baseOffset = checked(metaboxNode.FlatBlockAddr * blockSize);
+        var body = BuildMetaboxContainerBody(blockSize, now, residents, bodyLength, sharedXattrOffset,
+            sharedXattrs, options);
+        WriteAt(output, baseOffset, body, body.Length);
     }
 
     /// <summary>
@@ -1050,13 +1173,13 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Streams a whole file through SHA-256 via IncrementalHash in chunks without loading the file wholly into memory.
-    /// <para>流式计算整文件 SHA-256（IncrementalHash，分块读取，不整读大文件）。</para>
+    /// Streams a whole file through SHA-256 via a digest accumulator in chunks without loading the file wholly into memory.
+    /// <para>流式计算整文件 SHA-256（经摘要累加器分块读取，不整读大文件）。</para>
     /// </summary>
     private static byte[] HashFile(ErofsInode node, CancellationToken token)
     {
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = Sha256.CreateAccumulator();
         var buffer = new byte[1 << 20];
         var remaining = (long)node.Size;
         while (remaining > 0)
@@ -1064,7 +1187,7 @@ public sealed partial class ErofsBuilder
             token.ThrowIfCancellationRequested();
             var count = (int)Math.Min(buffer.Length, remaining);
             fs.ReadExactly(buffer, 0, count);
-            hash.AppendData(buffer, 0, count);
+            hash.Append(buffer.AsSpan(0, count));
             remaining -= count;
         }
 

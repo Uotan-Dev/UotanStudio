@@ -130,6 +130,53 @@ public sealed class ErofsOptions
     internal bool SourceSharedEaInMetabox { get; set; }
     internal bool SourceMetaboxCompressed { get; set; }
     /// <summary>
+    /// Compression algorithm the source image's metabox container was encoded with, recovered from the
+    /// algorithm nibble of the container inode's own map header. The container is an ordinary compressed
+    /// inode, so its codec is recorded beside its index the same way a regular file's is; nothing else in
+    /// the image repeats it, which is why a preserved rebuild has to read it from the container itself.
+    /// <para>源镜像 metabox 容器所用的压缩算法，取自容器 inode 自身映射头的算法半字节。容器就是普通压缩
+    /// inode，其编解码器与常规文件一样记录在索引旁；镜像中再无第二处重复该信息，因此保留式重建必须从容器
+    /// 自身读取它。</para>
+    /// </summary>
+    /// <value>The recovered algorithm, or <see langword="null"/> when the source carried no metabox container
+    /// or stored it verbatim. <para>还原出的算法；源没有 metabox 容器或以明文存放容器时为
+    /// <see langword="null"/>。</para></value>
+    internal ErofsCompressionAlgorithm? SourceMetaboxAlgorithm { get; set; }
+    /// <summary>
+    /// Whether this build encodes the metabox container's body instead of storing it verbatim.
+    /// <para>本次构建是否对 metabox 容器本体编码，而不是按明文存放。</para>
+    /// </summary>
+    /// <value><see langword="true"/> only when the build is on the preserved-rebuild path
+    /// (<see cref="SourceInodes"/> carries records), <see cref="Metabox"/> is on, <see cref="Compress"/> is on,
+    /// the source recorded a container algorithm, and that algorithm is one this build can re-encode — that is,
+    /// it has a configuration record behind it (the same criterion
+    /// <c>ErofsRebuildMetadata.CanReencodeWithRecords</c> applies to preserved inodes), or, when the profile
+    /// restored no records at all, it is exactly <see cref="Algorithm"/>. The preserved-path requirement is
+    /// what keeps this property and the metabox guard in <c>VerifyPreservedStorageStrategies</c> covering the
+    /// same builds: the container codec is a source-replay input, so a fresh directory build has nothing to
+    /// replay and always stores the container verbatim. The codec half of the test is what keeps the promise
+    /// honest: the superblock bitmap is built from the encodable algorithms and a reader consumes the records
+    /// in ascending bit order, so a container encoded with a codec that carries no record would name an
+    /// algorithm the image cannot declare. With those conditions unmet the caller must keep refusing the
+    /// rebuild rather than emit a container whose declared form it cannot back.
+    /// <para>仅当构建处于保留式重建路径（<see cref="SourceInodes"/> 携带记录）、<see cref="Metabox"/> 与
+    /// <see cref="Compress"/> 均开启、源记录了容器算法、且该算法是本次构建能重新编码的算法时为
+    /// <see langword="true"/>——即它背后存在配置记录（与 <c>ErofsRebuildMetadata.CanReencodeWithRecords</c>
+    /// 对保留 inode 使用的判据相同），或在档案完全未还原记录时恰好等于 <see cref="Algorithm"/>。要求处于保留
+    /// 路径正是让本属性与 <c>VerifyPreservedStorageStrategies</c> 中的 metabox 守卫覆盖同一批构建的条件：容器
+    /// 编解码器是源重放输入，因此全新目录构建没有可重放的内容，始终按明文存放容器。判据中关于编解码器的部分正是
+    /// 承诺成立的前提：超级块位图由可编码算法集合构成，读取方按位升序消费记录，因此用没有配置记录的编解码器编码
+    /// 容器会让镜像指名一个它无法声明的算法。上述条件不满足时调用方必须继续拒绝重建，而不是写出声明无法支撑其
+    /// 形态的容器。</para></value>
+    internal bool MetaboxContainerCompressed
+        => SourceInodes is { Count: > 0 }
+            && Metabox
+            && Compress
+            && SourceMetaboxAlgorithm is { } algorithm
+            && (SourceCompressionOptions is { } records
+                ? records.ContainsKey(algorithm)
+                : algorithm == Algorithm);
+    /// <summary>
     /// Start block of the source image's metadata area as recorded in <c>s_meta_blkaddr</c>. A nonzero value
     /// means the source kept its inode records in a metadata zone of their own instead of at the head of the
     /// image; a preserved rebuild has to place the same zone
@@ -943,6 +990,55 @@ public sealed class ErofsOptions
     /// <para>必须发布 0x00000002 位时为 <see langword="true"/>。</para></returns>
     internal bool ModernCompressionLayoutRequested
         => Compress && !LegacyCompatibility;
+
+    /// <summary>
+    /// Reports whether this build may lay an uncompressed pcluster out with the interlaced byte rotation
+    /// named by <c>Z_EROFS_ADVISE_INTERLACED_PCLUSTER</c>. The condition mirrors
+    /// <c>lib/compress.c</c> in erofs-utils, which raises the advise when fragments are enabled, the dedupe
+    /// dimension is not forced to whole-file comparison, and the build does not lay compressed data out
+    /// unaligned.
+    /// <para>判断本次构建是否可以按 <c>Z_EROFS_ADVISE_INTERLACED_PCLUSTER</c> 所指的字节旋转来存放未压缩
+    /// pcluster。该条件与 erofs-utils 的 <c>lib/compress.c</c> 一致：启用 fragments、去重维度未强制为整文件
+    /// 比较、且本次构建不以非对齐方式存放压缩数据时置起该 advise。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> when every clause holds. A build without compression never rotates: the advise
+    /// describes the layout of a compressed inode's plain pcluster, so it is only meaningful while the
+    /// compression layout is in use.
+    /// <para>每个子句都成立时为 <see langword="true"/>。未启用压缩的构建绝不旋转：该 advise 描述的是压缩 inode 的
+    /// 原样 pcluster 布局，因此只在压缩布局生效时才有意义。</para></value>
+    /// <remarks>
+    /// The dedupe clause cannot distinguish the upstream <c>EROFS_DEDUPE_FORCE_ON</c> value from the two
+    /// dimensions this repository models, because <see cref="ErofsDedupeMode"/> carries only whole-file and
+    /// encoded-pcluster comparison and an explicitly requested whole-file dedupe is what
+    /// <c>EROFS_DEDUPE_FORCE_ON</c> names. The unaligned clause is the one that matters in practice: a build
+    /// that declares 48-bit block counts, or that pins the compressed extent size away from the block size,
+    /// rotates nothing, exactly as <c>lib/compress.c</c> declines to set the advise for that layout.
+    /// <para>去重子句无法把上游的 <c>EROFS_DEDUPE_FORCE_ON</c> 与本仓库建模的两个维度区分开，因为
+    /// <see cref="ErofsDedupeMode"/> 只携带整文件比较与编码后 pcluster 比较，而显式请求的整文件去重正是
+    /// <c>EROFS_DEDUPE_FORCE_ON</c> 所指之物。真正起作用的是非对齐子句：声明 48 位块数、或把压缩 extent 大小
+    /// 钉到块大小之外的构建不会旋转任何内容，正如 <c>lib/compress.c</c> 拒绝为该布局置起该 advise。</para>
+    /// </remarks>
+    internal bool InterlacedPlainPclusters
+        => Compress
+           && Fragments
+           && !(Dedup && DedupeMode == ErofsDedupeMode.WholeFile)
+           && !CompressedDataLaysOutUnaligned;
+
+    /// <summary>
+    /// Reports whether this build would lay compressed data out without block alignment, which is the
+    /// condition that makes the interlaced layout unavailable: it is raised by a declared 48-bit layout and
+    /// by a compressed extent size that is not a whole number of blocks.
+    /// <para>判断本次构建是否会以非块对齐的方式存放压缩数据，而这一条件正是交错布局不可用的原因：声明 48 位布局、
+    /// 以及压缩 extent 大小不是整数个块，都会置起它。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when either the 48-bit feature is declared or
+    /// <see cref="MaxPclusterSize"/> is set to a value that is not a multiple of <see cref="BlockSize"/>.
+    /// <para>声明了 48 位特性，或 <see cref="MaxPclusterSize"/> 被设为 <see cref="BlockSize"/> 的非整数倍时
+    /// 为 <see langword="true"/>。</para></value>
+    internal bool CompressedDataLaysOutUnaligned
+        => Features.Contains(ErofsFeature.FortyEightBit)
+           || (MaxPclusterSize > 0 && MaxPclusterSize % BlockSize != 0);
 
     /// <summary>
     /// Rejects a declaration that keeps the bit shared by <c>big_pcluster</c> and <c>compr_cfgs</c> while

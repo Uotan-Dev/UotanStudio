@@ -126,6 +126,11 @@ public sealed partial class ErofsParser
         }
         selected.SourceMetaboxCompressed = _superblock.HasMetabox && _superblock.MetaBoxNid != 0
             && ReadInode(_superblock.MetaBoxNid).IsCompressed;
+        if (MetaboxContainer is { } container)
+        {
+            selected.SourceMetaboxAlgorithm = container.Algorithm;
+        }
+
         selected.SourceMetaBlkAddr = _superblock.MetaBlkAddr;
         selected.SourceDeviceTable = _deviceSlots?.Skip(1)
             .Select(slot => new ErofsSourceDevice([.. slot.Tag], slot.Blocks, slot.UniAddr))

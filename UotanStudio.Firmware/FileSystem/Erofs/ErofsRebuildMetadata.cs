@@ -61,6 +61,7 @@ internal static class ErofsRebuildMetadata
             IshareXattrs = options.IshareXattrs,
             SourceSharedEaInMetabox = options.SourceSharedEaInMetabox,
             SourceMetaboxCompressed = options.SourceMetaboxCompressed,
+            SourceMetaboxAlgorithm = options.SourceMetaboxAlgorithm?.ToString(),
             MetaBlkAddr = options.SourceMetaBlkAddr == 0 ? null : options.SourceMetaBlkAddr,
             BuildTime = options.BuildTime,
             BuildTimeNanoseconds = options.BuildTimeNanoseconds,
@@ -272,6 +273,9 @@ internal static class ErofsRebuildMetadata
             IshareXattrs = parameters.IshareXattrs ?? false,
             SourceSharedEaInMetabox = parameters.SourceSharedEaInMetabox,
             SourceMetaboxCompressed = parameters.SourceMetaboxCompressed,
+            SourceMetaboxAlgorithm = parameters.SourceMetaboxAlgorithm is { } metaboxAlgorithm
+                ? ParseAlgorithm(metaboxAlgorithm)
+                : null,
             SourceMetaBlkAddr = parameters.MetaBlkAddr ?? 0,
             BuildTime = parameters.BuildTime,
             BuildTimeNanoseconds = parameters.BuildTimeNanoseconds,

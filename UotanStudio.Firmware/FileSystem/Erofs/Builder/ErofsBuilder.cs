@@ -4,7 +4,6 @@ using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
-using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 using UotanStudio.Firmware.FileSystem.Metadata;
 using ErofsInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
 
@@ -860,6 +859,7 @@ public sealed partial class ErofsBuilder
         finally
         {
             context.StagedCompression?.Dispose();
+            context.DeleteMetaboxBodyFile();
         }
     }
 

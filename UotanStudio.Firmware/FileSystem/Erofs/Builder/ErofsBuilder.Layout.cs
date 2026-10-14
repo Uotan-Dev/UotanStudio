@@ -1,9 +1,9 @@
 using System.Buffers.Binary;
 using System.Numerics;
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
+using UotanStudio.Hash.Digests;
 using ErofsInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
@@ -181,6 +181,55 @@ public sealed partial class ErofsBuilder
         /// <summary>Synthetic node backing the metabox container; null when metabox is unused.
         /// <para>承载 metabox 容器的合成节点；未启用 metabox 时为 null。</para></summary>
         public ErofsInode? MetaboxNode { get; private set; }
+
+        /// <summary>Logical byte length of the assembled metabox container body, or zero before
+        /// <see cref="PlanMetabox"/> measured it.
+        /// <para>装配完成的 metabox 容器本体的逻辑字节长度；<see cref="PlanMetabox"/> 度量之前为零。</para></summary>
+        public long MetaboxBodyLength { get; private set; }
+
+        /// <summary>Scratch file holding the assembled metabox container body once a build encodes it.
+        /// The container is a synthetic node with no source file of its own, while the compression planners
+        /// read a node's payload from <see cref="ErofsInode.FullPath"/>, so the body is materialized here and
+        /// the container temporarily names this path. Null while the container stays verbatim.
+        /// <para>本次构建对 metabox 容器本体编码后承载其装配结果的暂存文件。容器是没有自身源文件的合成节点，
+        /// 而压缩规划器按 <see cref="ErofsInode.FullPath"/> 读取节点负载，因此把本体落到这里并让容器临时指向该
+        /// 路径。容器按明文存放时为 null。</para>
+        /// </summary>
+        public string? MetaboxBodyPath { get; private set; }
+
+        /// <summary>Records the scratch file an encoded metabox container body was materialized into.
+        /// <para>记录编码后的 metabox 容器本体所落入的暂存文件。</para>
+        /// </summary>
+        /// <param name="path">Path the body was written to.
+        /// <para>本体写入的路径。</para></param>
+        public void SetMetaboxBodyPath(string path) => MetaboxBodyPath = path;
+
+        /// <summary>
+        /// Deletes the metabox container body scratch file, if one was created. It is a build-time handoff
+        /// between the address pass and the write pass and carries no durable state, so it is removed on every
+        /// exit path including a failed build.
+        /// <para>删除 metabox 容器本体的暂存文件（若已创建）。它只是地址分配与写出阶段之间的构建期交接物，
+        /// 不承载持久状态，因此在包括构建失败在内的所有退出路径上都会被删除。</para>
+        /// </summary>
+        public void DeleteMetaboxBodyFile()
+        {
+            if (MetaboxBodyPath is not { } path)
+            {
+                return;
+            }
+
+            MetaboxBodyPath = null;
+            try
+            {
+                File.Delete(path);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
 
         /// <summary>
         /// Creates the build context: captures the superblock checksum window and computes the layout
@@ -1125,6 +1174,86 @@ public sealed partial class ErofsBuilder
         }
 
         /// <summary>
+        /// Materializes the metabox container body into a scratch file and plans its pclusters, so the
+        /// container travels the same compression pipeline as a regular file. Upstream arrives at the same
+        /// shape from the other direction: <c>lib/metabox.c</c> assembles the container into a temporary file
+        /// and hands that descriptor to <c>erofs_mkfs_build_special_from_fd</c>, which runs the ordinary
+        /// <c>erofs_write_compressed_file</c> path over it. Nothing about a metabox container therefore needs
+        /// slot addressing once its bytes exist as a stream — the slots are only the verbatim layout of the
+        /// same payload.
+        /// <para>把 metabox 容器本体落到暂存文件并规划其 pcluster，使容器与常规文件走同一条压缩管线。上游从
+        /// 另一方向得到同一形态：<c>lib/metabox.c</c> 把容器装配进临时文件并把这个描述符交给
+        /// <c>erofs_mkfs_build_special_from_fd</c>，由它套用普通的 <c>erofs_write_compressed_file</c>
+        /// 路径。因此容器字节一旦以流的形式存在，就完全不需要槽位寻址——槽位只是同一负载在明文形态下的摆放
+        /// 方式。</para>
+        /// <para>The body is assembled here rather than during the payload pass because a resident's serialized
+        /// record embeds the data block assigned to it, so the container's payload is only defined once the
+        /// address walk has passed every resident. That is exactly the invariant this call relies on, and the
+        /// container is always last in the ordered list because <see cref="PlanMetabox"/> appends it after every
+        /// real node.</para>
+        /// <para>本体在此处而非负载阶段装配，因为常驻节点的序列化记录内嵌分配给它自身的数据块，容器负载只有
+        /// 在地址遍历走过所有常驻节点之后才有定义。这正是本次调用所依赖的不变式，而容器因
+        /// <see cref="PlanMetabox"/> 在全部真实节点之后追加而始终位于有序列表末尾。</para>
+        /// </summary>
+        /// <param name="node">Synthetic metabox container node to plan.
+        /// <para>待规划的合成 metabox 容器节点。</para></param>
+        /// <param name="staging">Staging file receiving every accepted frame, so the write pass copies frames
+        /// instead of compressing them a second time.
+        /// <para>接收所有被接受帧的暂存文件，使写出阶段复制帧而不再压缩第二次。</para></param>
+        /// <returns>The scratch file path holding the assembled body, which the caller records on the context so
+        /// the write pass can address it. <para>承载装配结果的暂存文件路径，调用方将其记录到上下文上供写出阶段
+        /// 寻址。</para></returns>
+        /// <exception cref="FileSystemCorruptedException">The container body does not compress at all on this
+        /// image, so the encoded form would occupy at least as many blocks as the verbatim one.
+        /// <para>容器本体在本镜像上完全无法压缩，即编码形态占用的块数不少于明文形态。</para></exception>
+        private string PlanMetaboxContainerCompression(ErofsInode node, Core.CompressionPayloadStaging staging)
+        {
+            var containerOptions = Options.SourceMetaboxAlgorithm is { } algorithm
+                && Options.SourceCompressionOptions?.GetValueOrDefault(algorithm) is { } recovered
+                    ? recovered
+                    : Options;
+            var body = BuildMetaboxContainerBody(BlockSize, Now, MetaboxResident!, MetaboxBodyLength,
+                SharedXattrMetaboxOffset, SharedXattrs, containerOptions);
+            var path = Path.Combine(Path.GetTempPath(), $"uotan-metabox-{Guid.NewGuid():N}.tmp");
+            try
+            {
+                using (var scratch = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    scratch.Write(body, 0, body.Length);
+                }
+
+                node.FullPath = path;
+                node.CompressionOptions = containerOptions;
+                node.LogicalClusterSize = BlockSize;
+                node.Pclusters = TryPlanCompressed(node, BlockSize, containerOptions, staging);
+            }
+            catch
+            {
+                File.Delete(path);
+                throw;
+            }
+
+            if (node.Pclusters is null)
+            {
+                File.Delete(path);
+                node.FullPath = string.Empty;
+                throw new FileSystemCorruptedException(
+                    $"The metabox container body of {MetaboxBodyLength} bytes does not compress on this image, "
+                    + "so the rebuild cannot reproduce the source's compressed container faithfully; rebuild "
+                    + "with the container left verbatim, or with a codec and pcluster size that let it shrink.");
+            }
+
+            node.CompressedBlocks = (uint)node.Pclusters.Sum(p => CeilDiv(p.CompressedLength, BlockSize));
+            node.ClusterCount = (uint)CeilDiv(MetaboxBodyLength, node.LogicalClusterSize);
+            node.CompactedIndexes = Options.UseCompactedIndexes;
+            node.BigPcluster = DeclaredBigPcluster(containerOptions)
+                && (containerOptions.Algorithm != ErofsCompressionAlgorithm.Lz4
+                    || node.Pclusters.Any(p => p.CompressedLength > BlockSize));
+            KeepTerminalPclusterResolvable(node, BlockSize);
+            return path;
+        }
+
+        /// <summary>
         /// Rewrites the payload's terminal pcluster as an uncompressed cluster when it would otherwise put a
         /// compressed head row on the file's last logical cluster while the inode declares big pclusters.
         /// A reader derives a head row's physical length from the index row that follows the head, and that
@@ -1216,6 +1345,23 @@ public sealed partial class ErofsBuilder
         /// Selects metabox-resident inodes, assigns their slots, and appends the metabox container node.
         /// <para>挑选 metabox 常驻 inode、分配其槽位并追加 metabox 容器节点。</para>
         /// </summary>
+        /// <remarks>
+        /// The container node is appended last so every resident precedes it in the ordered list. The
+        /// address pass relies on that order: a resident's serialized record embeds the data block assigned
+        /// to it, so the container body can only be assembled once the residents' addresses are known, which
+        /// is exactly when the walk reaches the container.
+        /// <para>容器节点追加在最后，因此每个常驻节点在有序列表中都位于它之前。地址分配阶段依赖该顺序：常驻
+        /// 节点的序列化记录内嵌分配给它自身的数据块，所以容器本体只有在常驻节点地址已知之后才能装配，而那正是
+        /// 遍历走到容器节点的时刻。</para>
+        /// <para>The container keeps <c>i_size</c> equal to its logical length whether or not its body is
+        /// encoded: a reader derives the compressed cluster count from that length, so publishing the encoded
+        /// length there would make the container decode truncated. What an encoded container gives up instead
+        /// is <see cref="ErofsInode.FlatBlocks"/>, because its reserved blocks then come from the pcluster plan
+        /// the address pass assigns.</para>
+        /// <para>无论本体是否编码，容器都把 <c>i_size</c> 保持为其逻辑长度：读取方由该长度推导压缩簇数量，
+        /// 因此在那里发布编码后长度会让容器解码被截断。编码后的容器放弃的是
+        /// <see cref="ErofsInode.FlatBlocks"/>，因为此时它预留的块来自地址分配阶段所分配的 pcluster 规划。</para>
+        /// </remarks>
         internal void PlanMetabox()
         {
             if (!Options.Metabox)
@@ -1247,11 +1393,12 @@ public sealed partial class ErofsBuilder
 
             if (MetaboxResident.Count > 0 || Options.MetaboxRequired || SharedXattrs.Count > 0)
             {
+                MetaboxBodyLength = metaboxLength;
                 MetaboxNode = new ErofsInode
                 {
                     IsMetaboxContainer = true,
                     Size = (ulong)metaboxLength,
-                    FlatBlocks = CeilDiv(metaboxLength, BlockSize),
+                    FlatBlocks = Options.MetaboxContainerCompressed ? 0 : CeilDiv(metaboxLength, BlockSize),
                 };
                 Ordered.Add(MetaboxNode);
             }
@@ -1535,11 +1682,24 @@ public sealed partial class ErofsBuilder
         /// <para>拒绝发布存储策略与源镜像所记录策略不同的保留式重建。把压缩 inode 静默重排为明文块、或丢掉紧凑
         /// 索引与尾部内联决策的重建镜像仍可读取，但已不是源所描述的那张镜像，因此这种偏离属于错误而非静默降级。
         /// 仅当选项携带源 inode 记录（即保留式重建路径）时检查；全新目录构建没有可比对的源策略，不受影响。</para>
+        /// <para>The metabox container is checked separately and before the per-inode loop, because it is a
+        /// synthetic node that carries no source record of its own: what can be replayed is not read from
+        /// <c>SourceInodes</c> but from <see cref="ErofsOptions.SourceMetaboxAlgorithm"/> plus this build's own
+        /// codec set, which is exactly what <see cref="ErofsOptions.MetaboxContainerCompressed"/> resolves. A
+        /// source whose container was encoded is therefore accepted only when this build encodes it too, and
+        /// otherwise keeps failing loudly rather than publishing a verbatim container under the recorded
+        /// feature.</para>
+        /// <para>metabox 容器单独检查，且先于逐 inode 循环，因为它是不携带自身源记录的合成节点：可重放与否不由
+        /// <c>SourceInodes</c> 读出，而由 <see cref="ErofsOptions.SourceMetaboxAlgorithm"/> 与本次构建的编解码器
+        /// 集合共同决定，这正是 <see cref="ErofsOptions.MetaboxContainerCompressed"/> 所解析的内容。因此源容器被
+        /// 编码过的镜像只在本次构建同样编码它时才被接受，否则继续保持显式失败，而不是在已记录特性下发布明文
+        /// 容器。</para>
         /// </summary>
         /// <exception cref="FileSystemUnsupportedFeatureException">A preserved inode's planned storage
-        /// strategy differs from its recorded source strategy, or the source recorded a structure the planned
-        /// layout cannot express. <para>某条保留 inode 的已规划存储策略与其记录的源策略不同，或源记录的某个结构
-        /// 已规划布局无法表达。</para></exception>
+        /// strategy differs from its recorded source strategy, the source recorded a structure the planned
+        /// layout cannot express, or the source metabox container was encoded with a codec this build cannot
+        /// re-encode. <para>某条保留 inode 的已规划存储策略与其记录的源策略不同，源记录的某个结构已规划布局无法
+        /// 表达，或源 metabox 容器所用的编解码器本次构建无法重新编码。</para></exception>
         internal void VerifyPreservedStorageStrategies()
         {
             if (Options.SourceInodes is not { Count: > 0 })
@@ -1547,13 +1707,13 @@ public sealed partial class ErofsBuilder
                 return;
             }
 
-            if (Options.Metabox && Options.SourceMetaboxCompressed)
+            if (Options.Metabox && Options.SourceMetaboxCompressed && !Options.MetaboxContainerCompressed)
             {
                 throw new FileSystemUnsupportedFeatureException(
                     "EROFS preserved rebuild: the source metabox container is compressed (mkfs.erofs "
-                    + "-m<size>:<algorithm>) but this writer stores the container verbatim, so the rebuild "
-                    + "would silently change the metabox payload form; the compressed container layout is "
-                    + "not modelled.");
+                    + "-m<size>:<algorithm>) but this build cannot re-encode it, so the rebuild would "
+                    + "silently change the metabox payload form; the compressed container layout is "
+                    + "not modelled for this codec.");
             }
 
             foreach (var node in Ordered)
@@ -1610,10 +1770,18 @@ public sealed partial class ErofsBuilder
 
                 if ((source.ZAdvise & ZErofsMapHeader.AdviseInterlacedPcluster) != 0)
                 {
-                    throw new FileSystemUnsupportedFeatureException(
-                        $"EROFS preserved inode '{path}' records the interlaced pcluster layout, but this writer "
-                        + "emits only block-aligned plain clusters, so the rebuild would silently re-lay out its "
-                        + "uncompressed runs; the interlaced physical layout is read but not emitted.");
+                    if (Options.InterlacedPlainPclusters)
+                    {
+                        node.InterlacedPlainPclusters = true;
+                    }
+                    else
+                    {
+                        throw new FileSystemUnsupportedFeatureException(
+                            $"EROFS preserved inode '{path}' records the interlaced pcluster layout, but this "
+                            + "build cannot reproduce it: the layout is only available while fragments are "
+                            + "enabled, the dedupe dimension is not forced to whole-file comparison, and the "
+                            + "compressed data is not laid out unaligned.");
+                    }
                 }
 
                 if (Options.InodeFormat != ErofsInodeFormat.Auto)
@@ -1725,6 +1893,15 @@ public sealed partial class ErofsBuilder
                         dataBlock += node.DirBlocks;
                     }
                 }
+                else if (node.IsMetaboxContainer && Options.MetaboxContainerCompressed)
+                {
+                    SetMetaboxBodyPath(PlanMetaboxContainerCompression(node, EnsureStagedCompression()));
+                    foreach (var p in node.Pclusters!)
+                    {
+                        p.BlockAddress = (uint)dataBlock;
+                        dataBlock += CeilDiv(p.CompressedLength, BlockSize);
+                    }
+                }
                 else if (node.Pclusters is not null)
                 {
                     foreach (var p in node.Pclusters)
@@ -1755,6 +1932,13 @@ public sealed partial class ErofsBuilder
                         {
                             p.BlockAddress = (uint)dataBlock;
                         }
+
+                        p.InterlacedOffset = InterlacedRotation(p);
+                        if (p.InterlacedOffset != 0)
+                        {
+                            node.InterlacedPlainPclusters = true;
+                        }
+
 
                         if (!node.InlineCompressedTail || !ReferenceEquals(p, node.Pclusters[^1]))
                             dataBlock += CeilDiv(p.CompressedLength, BlockSize);
@@ -1846,6 +2030,36 @@ public sealed partial class ErofsBuilder
         /// 参与：原样 pcluster 自其源文件逐字存放、没有可比对的暂存编码，而 fragment 条目的字节位于 packed
         /// inode，那里已经由整文件 fragment 复用覆盖。</para>
         /// </summary>
+        /// <summary>
+        /// Reports the byte rotation one planned plain frame is stored with, or zero when it is stored
+        /// verbatim. A rotation is only available for a plain frame whose physical address and physical
+        /// length are both whole blocks, which is the layout erofs-utils interlaces; a rotated frame also has
+        /// to fit inside the single block that holds it, so a frame longer than one block is never rotated.
+        /// <para>给出单个已规划原样帧所按的字节旋转量，帧原样存放时为 0。只有物理地址与物理长度都是整数个块的
+        /// 原样帧才可旋转，这正是 erofs-utils 为之交错的布局；旋转后的帧还必须能容纳进承载它的单个块内，
+        /// 因此超过一块的帧绝不旋转。</para>
+        /// </summary>
+        /// <param name="pcluster">Planned pcluster whose address has just been assigned.
+        /// <para>刚分配好地址的已规划 pcluster。</para></param>
+        /// <returns>The rotation in bytes, or <c>0</c> when the frame is stored verbatim.
+        /// <para>以字节计的旋转量；帧原样存放时为 <c>0</c>。</para></returns>
+        private int InterlacedRotation(ErofsPclusterPlan pcluster)
+        {
+            if (!Options.InterlacedPlainPclusters || !pcluster.Plain || pcluster.Fragment)
+            {
+                return 0;
+            }
+
+            if (pcluster.SourceLength > BlockSize
+                || pcluster.CompressedLength % BlockSize != 0
+                || pcluster.BlockAddress % (BlockSize / ErofsSuperblock.CompactInodeSize) != 0)
+            {
+                return 0;
+            }
+
+            return checked((int)(pcluster.SourceOffset % BlockSize));
+        }
+
         /// <param name="pcluster">Planned pcluster of one compressed node.
         /// <para>某个压缩节点的已规划 pcluster。</para></param>
         /// <returns>A hexadecimal digest of the staged frame, or <see langword="null"/> when the entry has no
@@ -1867,7 +2081,7 @@ public sealed partial class ErofsBuilder
 
             var frame = new byte[pcluster.CompressedLength];
             staging.Read(pcluster.StagedOffset, frame);
-            return Convert.ToHexString(SHA256.HashData(frame));
+            return Convert.ToHexString(Sha256.ComputeHash(frame));
         }
 
         /// <summary>
@@ -2321,11 +2535,9 @@ public sealed partial class ErofsBuilder
                 WriteAt(output, XattrPrefixByteOffset, prefixTable, prefixTable.Length);
             }
 
-            if (SharedXattrs.Count > 0)
+            if (SharedXattrs.Count > 0 && SharedXattrMetaboxOffset < 0)
             {
-                var cursor = SharedXattrMetaboxOffset >= 0
-                    ? MetaboxNode!.FlatBlockAddr * BlockSize + SharedXattrMetaboxOffset
-                    : SharedXattrBlockAddr * BlockSize;
+                var cursor = SharedXattrBlockAddr * BlockSize;
                 foreach (var entry in SharedXattrs)
                 {
                     WriteAt(output, cursor, entry, entry.Length);
@@ -2386,7 +2598,8 @@ public sealed partial class ErofsBuilder
                 }
                 else if (node.IsMetaboxContainer)
                 {
-                    WriteMetaboxContainer(output, node, BlockSize, Now, MetaboxResident!, Options);
+                    WriteMetaboxContainer(output, node, BlockSize, Now, MetaboxResident!, MetaboxBodyLength,
+                        SharedXattrMetaboxOffset, SharedXattrs, Options);
                 }
                 else if (node.FlatBlockAddr >= 0 && node.FlatBlocks > 0 && node.DedupSource is null)
                 {

@@ -54,4 +54,27 @@ internal sealed class ErofsPclusterPlan
     /// <value><see langword="true"/> only for the single synthetic entry a tail-fragment node ends with.
     /// <para>仅当尾部 fragment 节点末尾的那条合成条目为 <see langword="true"/>。</para></value>
     internal bool Fragment { get; set; }
+
+    /// <summary>
+    /// Byte rotation this plain frame is stored with inside its single physical block, mirroring
+    /// <c>Z_EROFS_ADVISE_INTERLACED_PCLUSTER</c>: the stored block starts at the in-block offset that
+    /// <see cref="SourceOffset"/> lands on and wraps at the block end.
+    /// <para>该原样帧在其单个物理块内按此字节旋转量存放，对应 <c>Z_EROFS_ADVISE_INTERLACED_PCLUSTER</c>：
+    /// 存储块从 <see cref="SourceOffset"/> 落入的块内偏移开始，并在块尾回绕。</para>
+    /// </summary>
+    /// <value>The rotation in bytes, from <c>0</c> to <c>blockSize - 1</c>; <c>0</c> means the frame is stored
+    /// verbatim from the block start, which is what every non-interlaced frame uses.
+    /// <para>以字节计的旋转量，取值 <c>0</c> 到 <c>blockSize - 1</c>；<c>0</c> 表示帧自块首原样存放，
+    /// 即所有非交错帧的存放方式。</para></value>
+    /// <remarks>
+    /// Only PLAIN frames carry a rotation, because the advise selects the layout of an uncompressed pcluster
+    /// alone: an encoded frame is right-aligned inside its block-rounded region with leading zero padding and
+    /// a reader removes that padding without consulting the bit. A rotation also requires a
+    /// block-aligned physical address and length, which the address pass is the only place that can judge,
+    /// so the planner records the candidate window here and leaves the final decision to that pass.
+    /// <para>只有 PLAIN 帧携带旋转量，因为该 advise 选中的是未压缩 pcluster 的存放形态：编码帧在其块对齐区间内
+    /// 右对齐并带前导零填充，读取方扣除填充时不看这一位。旋转还要求物理地址与物理长度都块对齐，而这是只有
+    /// 地址分配阶段才能判定的条件，因此规划阶段只记录候选窗口，最终决定交给该阶段。</para>
+    /// </remarks>
+    internal int InterlacedOffset { get; set; }
 }
