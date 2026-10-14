@@ -8,7 +8,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 - `UotanStudio` 是 Avalonia 宿主，包含界面、ViewModel、项目会话、设置、密钥库适配和应用服务。
 - `UotanStudio.Delivery` 是独立交付子项目，命名空间为 `UotanStudio.Services.Delivery`。它负责交付计划校验、Super/Payload/Recovery 构建、DAT/BR 兼容、脚本、ZIP 输出、工具准备和输出校验。
 - `UotanStudio.Compress` 是独立的通用压缩库，命名空间为 `UotanStudio.Compress`，只依赖 `UotanStudio.Hash`。它提供通用压缩/解压实现与容器编解码，供固件层复用；**不得反向引用 `UotanStudio.Firmware`**（会形成程序集环，该边界由 `UotanStudio.Tests/Firmware/Architecture/CompressProjectBoundaryTests.cs` 守护）。
-- `UotanStudio.Hash` 提供校验和与哈希算法，是不依赖任何其他业务项目的最底层叶子库。
+- `UotanStudio.Hash` 提供校验和与摘要算法，是不依赖任何其他业务项目的最底层叶子库。全仓库的校验和与摘要计算都必须经由它的公共契约：格式规定的非标准初值、寄存器语义、无最终异或、厂商私有变体与加性校验和由本库实现；语义与 BCL 一致的标准 CRC-32 与 MD5/SHA 摘要族由本库转发（本库是仓库内唯一可以声明 `System.IO.Hashing` 包的项目）。签名与验签、作为签名参数的 `HashAlgorithmName`、HMAC、随机数生成、AES 等厂商加解密与定时比较不在转发范围。本库类型一律 public 并登记 `PublicAPI`，`InternalsVisibleTo` 只给 `UotanStudio.Tests` 与 `UotanStudio.Benchmarks`；边界由 `UotanStudio.Tests/Firmware/Architecture/HashBoundaryGuardTests.cs` 全仓扫描把关，该门只在检出解决方案时有效，找不到 `UotanStudio.slnx` 即失败而非跳过。
 - `UotanStudio.Firmware` 负责固件格式、文件系统、Payload、设备树、启动镜像和签名等底层能力；通用压缩实现由 `UotanStudio.Compress` 提供，Firmware 只保留 SquashFS/EROFS/F2FS 块级压缩簇、启动镜像组件封装、Payload 压缩操作、`.cpio.gz`/`.tar.xz` 组合等格式领域封装。
 - `UotanStudio.Comm` 负责 ADB、HDC、Fastboot、USB/TCP/UDP 与 EDL/MTK/RKDL 设备通信。整个项目的设备读写（USB、TCP、UDP、串口、adb/HDC server 协议）必须由 Comm 持有；宿主不得自行打开套接字、串口或 USB 句柄，只能消费 `DeviceController`/`DeviceLease`、`Contracts` 门面与 Comm 公开的协议客户端类。
 - `UotanStudio.Mirroring`（命名空间 `UotanStudio.Services.Mirroring`）是独立投屏服务层，承载 scrcpy 等投屏协议与会话管理，仅引用 `UotanStudio.Comm`；`UotanStudio.Media` 保持零 Comm 依赖，经解码工厂消费帧数据。scrcpy 不属于 Comm 协议层。
