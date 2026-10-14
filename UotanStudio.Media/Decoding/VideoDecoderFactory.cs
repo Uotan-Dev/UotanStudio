@@ -158,6 +158,29 @@ public static class VideoDecoderFactory
         decoder is FallbackVideoDecoder selection ? selection.ActiveDecoder : decoder;
 
     /// <summary>
+    /// Gets the pixel layout the initialized backend delivers on its decode callback.
+    /// <para>获取已初始化后端在解码回调上交付的像素布局。</para>
+    /// </summary>
+    /// <param name="decoder">
+    /// Decoder to inspect; fallback wrappers resolve to their active inner decoder.
+    /// <para>要检查的解码器；回退包装器会解析到其当前激活的内部解码器。</para>
+    /// </param>
+    /// <returns>
+    /// <see cref="VideoPixelFormat.Bgra32"/> only for a backend whose GPU export is currently active;
+    /// <see cref="VideoPixelFormat.Nv12"/> for every readback or download path and before initialization.
+    /// Consumers use this instead of matching the display name from <see cref="GetBackendName"/>.
+    /// <para>仅当某后端的 GPU 导出当前开启时返回 <see cref="VideoPixelFormat.Bgra32"/>；所有回读或下载路径
+    /// 以及未初始化状态返回 <see cref="VideoPixelFormat.Nv12"/>。消费方使用本值，而不是去匹配
+    /// <see cref="GetBackendName"/> 的显示名称。</para>
+    /// </returns>
+    public static VideoPixelFormat GetFramePixelFormat(IVideoDecoder decoder) => GetActiveDecoder(decoder) switch
+    {
+        MediaFoundation.MediaFoundationGpuVideoDecoder gpu when OperatingSystem.IsWindows() => gpu.FramePixelFormat,
+        VideoToolbox.VideoToolboxVideoDecoder toolbox when OperatingSystem.IsMacOS() => toolbox.FramePixelFormat,
+        _ => VideoPixelFormat.Nv12,
+    };
+
+    /// <summary>
     /// Gets the initialized backend name, including the actual choice after fallback.
     /// <para>获取已初始化后端的名称，包含回退后实际选中的实现。</para>
     /// </summary>
@@ -178,7 +201,7 @@ public static class VideoDecoderFactory
             MediaFoundation.MediaFoundationGpuVideoDecoder => "Media Foundation (GPU)",
             MediaFoundation.MediaFoundationVideoDecoder => "Media Foundation (CPU)",
             VideoToolbox.VideoToolboxVideoDecoder => "VideoToolbox (hardware)",
-            GStreamer.GStreamerVideoDecoder gst => $"GStreamer ({(gst.UsesHardware ? gst.UsesCpuConverter ? "hardware, CPU planes" : "GPU" : "CPU")}: {gst.DecoderElement})",
+            GStreamer.GStreamerVideoDecoder gst => $"GStreamer ({gst.PlaneDescription}: {gst.DecoderElement})",
             VaApiVideoDecoder => "VA-API (libavcodec, hardware)",
             _ => "Unknown",
         };

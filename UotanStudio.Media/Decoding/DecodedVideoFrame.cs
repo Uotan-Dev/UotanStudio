@@ -26,6 +26,13 @@ namespace UotanStudio.Media.Decoding;
 /// 公共构造函数接管池化缓冲区。解码回调可借用会话存储；解码器在回调返回后
 /// 释放帧，消费方须在回调内复制或转换像素。Dispose 可重复调用。
 /// </para>
+/// <para>
+/// Derived frames may carry a packed layout instead; <see cref="PixelFormat"/> is the value to
+/// branch on, because the runtime type does not describe the bytes.
+/// </para>
+/// <para>
+/// 派生帧可携带打包布局；分支依据是 <see cref="PixelFormat"/>，运行时类型并不描述字节含义。
+/// </para>
 /// </remarks>
 public class DecodedVideoFrame : IDisposable
 {
@@ -69,12 +76,14 @@ public class DecodedVideoFrame : IDisposable
     /// <para>行距（字节），为对齐可能大于宽度。</para>
     /// </param>
     /// <param name="timestampTicks">Presentation timestamp in ticks. <para>显示时间戳（tick）。</para></param>
-    /// <param name="skipNv12Validation">
-    /// true = accept a length that does not cover complete NV12 planes, used by derived
-    /// layouts such as BGRA.
-    /// <para>为 true 时允许长度不覆盖完整 NV12 平面，供 BGRA 等派生布局使用。</para>
+    /// <param name="pixelFormat">
+    /// The layout the buffer actually holds; only <see cref="VideoPixelFormat.Nv12"/> is checked
+    /// against the plane total, so packed layouts such as <see cref="VideoPixelFormat.Bgra32"/>
+    /// validate their own size.
+    /// <para>缓冲区实际持有的布局；仅 <see cref="VideoPixelFormat.Nv12"/> 会按平面总长校验，
+    /// 因此 <see cref="VideoPixelFormat.Bgra32"/> 等打包布局自行确认大小。</para>
     /// </param>
-    protected DecodedVideoFrame(byte[] buffer, int length, int width, int height, int stride, long timestampTicks, bool skipNv12Validation)
+    protected DecodedVideoFrame(byte[] buffer, int length, int width, int height, int stride, long timestampTicks, VideoPixelFormat pixelFormat)
     {
         if (buffer is null)
         {
@@ -86,7 +95,7 @@ public class DecodedVideoFrame : IDisposable
             throw new ArgumentOutOfRangeException(nameof(length));
         }
 
-        if (!skipNv12Validation && buffer.Length > 0)
+        if (pixelFormat == VideoPixelFormat.Nv12 && buffer.Length > 0)
         {
             int required = VideoFrameLimits.Nv12Length(width, height, stride);
             if (length < required)
@@ -96,6 +105,7 @@ public class DecodedVideoFrame : IDisposable
         }
 
         _buffer = buffer;
+        PixelFormat = pixelFormat;
         Length = length;
         Width = width;
         Height = height;
@@ -138,12 +148,26 @@ public class DecodedVideoFrame : IDisposable
         }
 
         _buffer = buffer;
+        PixelFormat = VideoPixelFormat.Nv12;
         Length = length;
         Width = width;
         Height = height;
         Stride = stride;
         TimestampTicks = timestampTicks;
     }
+
+    /// <summary>
+    /// Gets the pixel layout this frame actually carries.
+    /// <para>获取该帧实际承载的像素布局。</para>
+    /// </summary>
+    /// <value>
+    /// <see cref="VideoPixelFormat.Nv12"/> for the plane layout described by this type, or
+    /// <see cref="VideoPixelFormat.Bgra32"/> for packed rows produced by a hardware color
+    /// conversion. Consumers branch on this instead of on the runtime frame type.
+    /// <para>本类型所述平面布局为 <see cref="VideoPixelFormat.Nv12"/>，硬件色彩转换产出的
+    /// 打包行为 <see cref="VideoPixelFormat.Bgra32"/>。消费方据此分支，而不再判断帧的运行时类型。</para>
+    /// </value>
+    public VideoPixelFormat PixelFormat { get; }
 
     /// <summary>
     /// Gets the number of valid bytes in <see cref="Buffer"/>.
@@ -258,7 +282,7 @@ public sealed unsafe class PointerDecodedVideoFrame : DecodedVideoFrame
     /// <param name="stride">Bytes per BGRA row. 每行 BGRA 字节数。</param>
     /// <param name="timestampTicks">Presentation timestamp in ticks. 显示时间戳（tick）。</param>
     public PointerDecodedVideoFrame(byte* pointer, int length, int width, int height, int stride, long timestampTicks)
-        : base([], length, width, height, stride, timestampTicks, skipNv12Validation: true)
+        : base([], length, width, height, stride, timestampTicks, VideoPixelFormat.Bgra32)
     {
         if (length < checked(width * height * 4))
         {

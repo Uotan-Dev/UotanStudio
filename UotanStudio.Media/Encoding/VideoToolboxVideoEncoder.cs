@@ -4,7 +4,6 @@ using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using UotanStudio.Media.Decoding;
-using UotanStudio.Media.Decoding.MediaFoundation;
 using UotanStudio.Media.Decoding.VideoToolbox;
 
 namespace UotanStudio.Media.Encoding;
@@ -135,7 +134,7 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
     /// </exception>
     public void Encode(DecodedVideoFrame frame)
     {
-        if (frame is GpuDecodedVideoFrame) throw new ArgumentException("Encoder requires NV12 input, not BGRA.", nameof(frame));
+        if (frame.PixelFormat != VideoPixelFormat.Nv12) throw new ArgumentException("Encoder requires NV12 input, not a packed pixel layout.", nameof(frame));
         CheckReady();
         ArgumentNullException.ThrowIfNull(frame);
         if (frame.Width != _width || frame.Height != _height) throw new ArgumentException("Frame dimensions do not match the encoder.", nameof(frame));

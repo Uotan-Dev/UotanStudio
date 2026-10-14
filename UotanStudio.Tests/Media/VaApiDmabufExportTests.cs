@@ -60,22 +60,117 @@ public sealed class VaApiDmabufExportTests
     }
 
     [Fact]
-    public void HeldSurface_ReceiveRetry_SkipsWithoutLosingFrames()
+    public void UnsupportedChromaFourcc_DisablesExportAndDownloadsTheSameFrame()
+    {
+        var session = new FakeSession { ChromaFourcc = 0x30323149 };
+        session.ReceiveStatuses.Enqueue(1);
+        var dmabuf = new List<VaDmaBufVideoFrame>();
+        var nv12 = new List<DecodedVideoFrame>();
+        using var decoder = new VaApiVideoDecoder(new VideoDecoderOptions { VaApiPreferGpuExport = true }, (_, _) => session);
+        decoder.Initialize(VideoCodecId.H264, 4, 4, nv12.Add);
+        decoder.DmabufFrameCallback = dmabuf.Add;
+        decoder.Decode(Picture, 444);
+        Assert.Empty(dmabuf);
+        Assert.Single(nv12);
+        Assert.Equal(1, session.ExportCalls);
+        Assert.Equal(1, session.CopyCalls);
+        nv12[0].Dispose();
+    }
+
+    [Fact]
+    public void ComposedSingleLayerDescriptor_DisablesExportAndDownloadsTheSameFrame()
+    {
+        var session = new FakeSession { LayerCount = 1 };
+        session.ReceiveStatuses.Enqueue(1);
+        var dmabuf = new List<VaDmaBufVideoFrame>();
+        var nv12 = new List<DecodedVideoFrame>();
+        using var decoder = new VaApiVideoDecoder(new VideoDecoderOptions { VaApiPreferGpuExport = true }, (_, _) => session);
+        decoder.Initialize(VideoCodecId.H264, 4, 4, nv12.Add);
+        decoder.DmabufFrameCallback = dmabuf.Add;
+        decoder.Decode(Picture, 555);
+        Assert.Empty(dmabuf);
+        Assert.Single(nv12);
+        Assert.Equal(1, session.CopyCalls);
+        nv12[0].Dispose();
+    }
+
+    [Fact]
+    public void Gr88ChromaLayer_IsAcceptedAndReportedAsCrCbOrder()
     {
         var session = new FakeSession();
         session.ReceiveStatuses.Enqueue(1);
-        session.ReceiveStatuses.Enqueue(2);
-        session.ReceiveStatuses.Enqueue(2);
         using var decoder = CreateDecoder(session);
+        var frames = new List<VaDmaBufVideoFrame>();
+        decoder.DmabufFrameCallback = frames.Add;
+        decoder.Decode(Picture, 666);
+        VaDmaBufVideoFrame frame = Assert.Single(frames);
+        Assert.Equal(DmabufChromaOrder.CrCb, frame.Surface.ChromaOrder);
+        frame.Dispose();
+    }
+
+    [Fact]
+    public void Rg88ChromaLayer_IsAcceptedAndReportedAsCbCrOrder()
+    {
+        var session = new FakeSession { ChromaFourcc = 0x38384752 };
+        session.ReceiveStatuses.Enqueue(1);
+        using var decoder = CreateDecoder(session);
+        var frames = new List<VaDmaBufVideoFrame>();
+        decoder.DmabufFrameCallback = frames.Add;
+        decoder.Decode(Picture, 777);
+        VaDmaBufVideoFrame frame = Assert.Single(frames);
+        Assert.Equal(DmabufChromaOrder.CbCr, frame.Surface.ChromaOrder);
+        frame.Dispose();
+    }
+
+    [Fact]
+    public void UnreleasedExport_ReclaimedAfterWaitAndSessionKeepsRunning()
+    {
+        var session = new FakeSession();
+        session.ReceiveStatuses.Enqueue(1);
+        using var decoder = CreateDecoder(session);
+        decoder.ExportReleaseWaitMilliseconds = 15;
         var frames = new List<VaDmaBufVideoFrame>();
         decoder.DmabufFrameCallback = frames.Add;
         decoder.Decode(Picture, 1);
         Assert.Single(frames);
+        Assert.True(session.HoldsFrame);
+        Assert.Equal(0, decoder.ExportAbandonedFrames);
         decoder.Decode(Picture, 2);
-        Assert.Single(frames);
-        Assert.Equal(0, session.ReleaseFrames);
+        Assert.Equal(1, decoder.ExportAbandonedFrames);
+        Assert.Equal(1, session.ReleaseFrames);
+        Assert.False(session.HoldsFrame);
         frames[0].Dispose();
         Assert.Equal(1, session.ReleaseFrames);
+    }
+
+    [Fact]
+    public void PresenterReleasesBeforeWaitExpires_NothingIsReclaimed()
+    {
+        var session = new FakeSession();
+        session.ReceiveStatuses.Enqueue(1);
+        using var decoder = CreateDecoder(session);
+        decoder.ExportReleaseWaitMilliseconds = 60_000;
+        var frames = new List<VaDmaBufVideoFrame>();
+        decoder.DmabufFrameCallback = frames.Add;
+        decoder.Decode(Picture, 1);
+        frames[0].Dispose();
+        decoder.Decode(Picture, 2);
+        Assert.Equal(0, decoder.ExportAbandonedFrames);
+        Assert.Equal(1, session.ReleaseFrames);
+    }
+
+    [Fact]
+    public void SurfacePinnedByTheDriver_ReclaimsOnceThenFailsInsteadOfLoopingForever()
+    {
+        var session = new FakeSession { HoldForever = true };
+        session.ReceiveStatuses.Enqueue(1);
+        using var decoder = CreateDecoder(session);
+        decoder.ExportReleaseWaitMilliseconds = 5;
+        var frames = new List<VaDmaBufVideoFrame>();
+        decoder.DmabufFrameCallback = frames.Add;
+        decoder.Decode(Picture, 1);
+        Assert.Throws<InvalidDataException>(() => decoder.Decode(Picture, 2));
+        Assert.Equal(1, decoder.ExportAbandonedFrames);
     }
 
     [Fact]
@@ -117,12 +212,16 @@ public sealed class VaApiDmabufExportTests
     {
         public Queue<int> ReceiveStatuses { get; } = new();
         public int ExportStatus { get; set; }
+        public uint ChromaFourcc { get; set; } = 0x38385247;
+        public uint LayerCount { get; set; } = 2;
+        public bool HoldForever { get; set; }
+        public bool HoldsFrame { get; private set; }
         public int ExportCalls { get; private set; }
         public int ReleaseFrames { get; private set; }
         public int CopyCalls { get; private set; }
         public bool Disposed { get; private set; }
 
-        public int Send(ReadOnlySpan<byte> packet, long timestamp) => 0;
+        public int Send(ReadOnlySpan<byte> packet, long timestamp) => HoldsFrame ? 2 : 0;
 
         public int Receive(out VaFrameInfo info)
         {
@@ -146,18 +245,23 @@ public sealed class VaApiDmabufExportTests
                 Width = 4,
                 Height = 4,
                 ObjectCount = 1,
-                LayerCount = 2,
+                LayerCount = LayerCount,
                 Matrix = 2,
                 Range = 1,
                 Pts = 111,
             };
             frame.Objects[0] = new DmaBufObject { Fd = -1, Size = 64, Modifier = 0 };
             frame.Layers[0] = new DmaBufLayer { Format = 0x20203852, Planes = 1 };
-            frame.Layers[1] = new DmaBufLayer { Format = 0x38385247, Planes = 1 };
+            frame.Layers[1] = new DmaBufLayer { Format = ChromaFourcc, Planes = 1 };
+            if (ExportStatus == 0) HoldsFrame = true;
             return ExportStatus;
         }
 
-        public void ReleaseFrame() => ReleaseFrames++;
+        public void ReleaseFrame()
+        {
+            ReleaseFrames++;
+            if (!HoldForever) HoldsFrame = false;
+        }
         public void Reset() { }
         public void Dispose() => Disposed = true;
 

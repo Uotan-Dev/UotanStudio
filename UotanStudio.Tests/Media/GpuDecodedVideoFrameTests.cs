@@ -44,4 +44,29 @@ public class GpuDecodedVideoFrameTests
         Assert.Throws<ArgumentException>(() =>
             new DecodedVideoFrame(new byte[100], 100, 16, 16, 16, 0));
     }
+
+    [Fact]
+    public void GpuFrame_ReportsBgra32PixelFormat()
+    {
+        byte[] buffer = new byte[64];
+        using var frame = new GpuDecodedVideoFrame(buffer, buffer.Length, 4, 2, 16, 0);
+        Assert.Equal(VideoPixelFormat.Bgra32, frame.PixelFormat);
+    }
+
+    [Fact]
+    public void Nv12Frame_ReportsNv12PixelFormat()
+    {
+        byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(24);
+        using var frame = new DecodedVideoFrame(buffer, 24, 4, 2, 4, 0);
+        Assert.Equal(VideoPixelFormat.Nv12, frame.PixelFormat);
+    }
+
+    [Fact]
+    public void GpuFrame_LengthBelowNv12Total_StillConstructsBecauseLayoutIsDeclared()
+    {
+        byte[] buffer = new byte[64];
+        using var frame = new GpuDecodedVideoFrame(buffer, buffer.Length, 4, 4, 16, 0);
+        Assert.Equal(VideoPixelFormat.Bgra32, frame.PixelFormat);
+        Assert.Equal(64, frame.Length);
+    }
 }

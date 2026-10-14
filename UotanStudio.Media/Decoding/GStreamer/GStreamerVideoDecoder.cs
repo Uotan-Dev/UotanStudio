@@ -68,17 +68,33 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     /// </value>
     public bool UsesHardware => _hardware;
     /// <summary>
-    /// Whether the built pipeline converts planes on the CPU.
-    /// <para>获取一个值，该值指示已构建的管线是否在 CPU 上转换平面。</para>
+    /// Gets the plane path of the pipeline that <see cref="Initialize"/> built; the converter path is
+    /// the default until a candidate is accepted.
+    /// <para>获取 <see cref="Initialize"/> 实际构建管线的平面路径；在某个候选被接受前默认使用转换路径。</para>
     /// </summary>
     /// <value>
-    /// <see langword="true"/> when the pipeline contains a conversion stage, so decoded planes land in
-    /// system memory even if the decoder element itself is hardware; hardware elements that output
-    /// D3D11/GL memory need this stage before the NV12 caps can be negotiated.
-    /// <para>管线含转换阶段时为 <see langword="true"/>：此时即使解码元素本身是硬件，解码平面仍落到系统内存，
-    /// 因为输出 D3D11/GL 内存的硬件元素必须先经该阶段才能协商到 NV12 caps。</para>
+    /// <see cref="GStreamerPlanePath.DirectNv12"/> when the decoder was asked for NV12 on its own source
+    /// pad, otherwise <see cref="GStreamerPlanePath.CpuConverter"/>.
+    /// <para>解码器源 pad 上直接协商 NV12 时为 <see cref="GStreamerPlanePath.DirectNv12"/>，
+    /// 否则为 <see cref="GStreamerPlanePath.CpuConverter"/>。</para>
     /// </value>
-    public bool UsesCpuConverter { get; private set; }
+    internal GStreamerPlanePath PlanePath { get; private set; } = GStreamerPlanePath.CpuConverter;
+    /// <summary>
+    /// Gets the one-phrase backend description used in the properties panel: whether the decoder element
+    /// is a hardware plugin, and whether planes come from a conversion stage or from the decoder itself.
+    /// <para>获取属性面板使用的一句式后端描述：解码元件是否为硬件插件，以及平面来自转换阶段还是解码器本身。</para>
+    /// </summary>
+    /// <value>
+    /// Never claims GPU-resident planes, because both paths hand system-memory NV12 to the presenter.
+    /// <para>不会声称平面驻留在 GPU 上：两条路径交给呈现器的都是系统内存 NV12。</para>
+    /// </value>
+    internal string PlaneDescription => (UsesHardware, PlanePath) switch
+    {
+        (true, GStreamerPlanePath.CpuConverter) => "hardware, CPU planes",
+        (true, GStreamerPlanePath.DirectNv12) => "hardware, direct NV12",
+        (false, GStreamerPlanePath.DirectNv12) => "software, direct NV12",
+        _ => "software",
+    };
     /// <summary>
     /// Gets a value indicating whether a GStreamer pipeline is currently built.
     /// <para>获取一个值，该值指示当前是否已构建 GStreamer 管线。</para>
@@ -101,9 +117,10 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     /// Builds the numeric GStreamer colorimetry string ("range:matrix:transfer:primaries") for the
     /// session overrides. A zero component keeps the stream value untouched, matching
     /// <c>gst_video_colorimetry_from_string</c>; matrix values follow
-    /// <see cref="VideoColorMatrix"/>/GstVideoColorMatrix (BT.709 = 3, BT.601 = 4).
+    /// <see cref="VideoColorMatrix"/>/GstVideoColorMatrix (BT.709 = 3, BT.601 = 4, BT.2020 = 6).
     /// <para>按会话覆盖构建数值形式的 GStreamer colorimetry 串（"range:matrix:transfer:primaries"）。零分量保持码流值不变，
-    /// 与 <c>gst_video_colorimetry_from_string</c> 语义一致；矩阵取值遵循 <see cref="VideoColorMatrix"/>/GstVideoColorMatrix（BT.709 = 3，BT.601 = 4）。</para>
+    /// 与 <c>gst_video_colorimetry_from_string</c> 语义一致；矩阵取值遵循 <see cref="VideoColorMatrix"/>/GstVideoColorMatrix（BT.709 = 3，BT.601 = 4，BT.2020 = 6），
+    /// BT.2020 与 transfer 13、primaries 7 成对使用。</para>
     /// </summary>
     /// <param name="matrix">Session matrix override. <para>会话矩阵覆盖。</para></param>
     /// <param name="range">Session range override. <para>会话范围覆盖。</para></param>
@@ -114,9 +131,9 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     internal static string? ColorimetryFor(VideoColorMatrix matrix, VideoColorRange range)
     {
         int r = range switch { VideoColorRange.Full => 1, VideoColorRange.Limited => 2, _ => 0 };
-        int m = matrix switch { VideoColorMatrix.Bt709 => 3, VideoColorMatrix.Bt601 => 4, _ => 0 };
+        int m = matrix switch { VideoColorMatrix.Bt709 => 3, VideoColorMatrix.Bt601 => 4, VideoColorMatrix.Bt2020 => 6, _ => 0 };
         if (r == 0 && m == 0) return null;
-        (int t, int p) = m switch { 3 => (5, 1), 4 => (4, 4), _ => (0, 0) };
+        (int t, int p) = m switch { 3 => (5, 1), 4 => (4, 4), 6 => (13, 7), _ => (0, 0) };
         return $"{r}:{m}:{t}:{p}";
     }
     /// <summary>
@@ -168,28 +185,88 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
         ArgumentNullException.ThrowIfNull(frameCallback);
         VideoFrameLimits.ValidateDimensions(width, height);
         _pipeline?.Dispose(); _pipeline = null;
-        UsesCpuConverter = false;
+        PlanePath = GStreamerPlanePath.CpuConverter;
         GstNative.Initialize();
         _codec = codec; _width = width; _height = height; _callback = frameCallback; _sequence = 0;
         string name = codec switch { VideoCodecId.H264 => "h264", VideoCodecId.H265 => "h265", VideoCodecId.Av1 => "av1", _ => throw new ArgumentOutOfRangeException(nameof(codec)) };
         string format = codec == VideoCodecId.Av1 ? "obu-stream,alignment=tu" : "byte-stream,alignment=au";
         var errors = new List<string>();
         string? colorimetry = ColorimetryFor(_options.ColorMatrix, _options.ColorRange);
+        string inputCaps = $"video/x-{name},stream-format={format},width={width},height={height}";
         string outputCaps = $"video/x-raw,format=NV12{(colorimetry is null ? "" : $",colorimetry={colorimetry}")}";
         foreach (string candidate in Candidates(codec, _hardware))
         {
             if (!GstNative.HasElement(candidate)) continue;
+            GStreamerPlanePath path = GstNative.CanOutputNv12(candidate) ? GStreamerPlanePath.DirectNv12 : GStreamerPlanePath.CpuConverter;
             try
             {
-                string description = $"appsrc name=input is-live=true format=time block=false max-bytes={GstPipeline.MaximumQueuedBytes} caps=video/x-{name},stream-format={format},width={width},height={height} ! {name}parse ! {candidate} ! video/x-raw ! videoconvert ! {outputCaps} ! appsink name=output sync=false max-buffers=8 drop=false enable-last-sample=false";
-                _pipeline = new GstPipeline(description);
+                _pipeline = new GstPipeline(BuildPipeline($"{name}parse", candidate, inputCaps, outputCaps, path));
                 DecoderElement = candidate;
-                UsesCpuConverter = description.Contains("videoconvert", StringComparison.Ordinal);
+                PlanePath = path;
                 return;
             }
             catch (Exception error) when (error is NotSupportedException or InvalidOperationException) { errors.Add($"{candidate}: {error.Message}"); }
         }
         throw new NotSupportedException($"No GStreamer {(_hardware ? "hardware" : "software")} decoder accepts {codec}. {string.Join("; ", errors)}");
+    }
+
+    /// <summary>
+    /// Assembles the pipeline description for one decoder element and plane path.
+    /// <para>按单个解码元件与平面路径组装管线描述。</para>
+    /// </summary>
+    /// <param name="parser">
+    /// The bitstream parser element, such as <c>h264parse</c>.
+    /// <para>比特流解析元件，例如 <c>h264parse</c>。</para>
+    /// </param>
+    /// <param name="element">
+    /// The decoder element chosen from <see cref="Candidates"/>.
+    /// <para>由 <see cref="Candidates"/> 选出的解码元件。</para>
+    /// </param>
+    /// <param name="inputCaps">
+    /// The appsrc input caps without the <c>caps=</c> prefix.
+    /// <para>不含 <c>caps=</c> 前缀的 appsrc 输入 caps。</para>
+    /// </param>
+    /// <param name="outputCaps">
+    /// The negotiated raw output caps, NV12 included.
+    /// <para>需要协商的原始输出 caps，含 NV12。</para>
+    /// </param>
+    /// <param name="path">
+    /// Whether the decoder itself may be asked for NV12, or a conversion stage is inserted.
+    /// <para>由解码器直接产出 NV12，还是插入转换阶段。</para>
+    /// </param>
+    /// <returns>
+    /// The full <c>gst_parse_launch</c> description. <see cref="GStreamerPlanePath.DirectNv12"/> places
+    /// the caps filter on the decoder's source pad with no conversion stage;
+    /// <see cref="GStreamerPlanePath.CpuConverter"/> keeps the historical bare <c>video/x-raw</c> plus
+    /// <c>videoconvert</c> chain.
+    /// <para>完整的 <c>gst_parse_launch</c> 描述。<see cref="GStreamerPlanePath.DirectNv12"/> 把 caps 过滤直接压在
+    /// 解码器源 pad 上且不含转换阶段；<see cref="GStreamerPlanePath.CpuConverter"/> 保留历史形态的裸
+    /// <c>video/x-raw</c> 加 <c>videoconvert</c> 链。</para>
+    /// </returns>
+    internal static string BuildPipeline(string parser, string element, string inputCaps, string outputCaps, GStreamerPlanePath path)
+    {
+        string stages = path == GStreamerPlanePath.DirectNv12
+            ? $"{element} ! {outputCaps}"
+            : $"{element} ! video/x-raw ! videoconvert ! {outputCaps}";
+        return $"appsrc name=input is-live=true format=time block=false max-bytes={GstPipeline.MaximumQueuedBytes} caps={inputCaps} ! {parser} ! {stages} ! appsink name=output sync=false max-buffers=8 drop=false enable-last-sample=false";
+    }
+
+    /// <summary>
+    /// Validates the format field reported by the pipeline's output caps.
+    /// <para>校验管线输出 caps 报告的 format 字段。</para>
+    /// </summary>
+    /// <param name="format">
+    /// The negotiated format string, or <see langword="null"/> when the caps omit it.
+    /// <para>协商得到的格式字符串；caps 未提供时为 <see langword="null"/>。</para>
+    /// </param>
+    /// <exception cref="InvalidDataException">
+    /// The format is absent or not NV12, which the plane copy below cannot interpret.
+    /// <para>格式缺失或不是 NV12 时抛出，下方平面复制无法解释该布局。</para>
+    /// </exception>
+    internal static void RequireNv12(string? format)
+    {
+        if (format == "NV12") return;
+        throw new InvalidDataException($"GStreamer delivered {format ?? "(no format field)"}; only NV12 planes are supported.");
     }
     /// <summary>
     /// Feeds one compressed access unit into the pipeline with a synthesized 60 fps presentation timestamp.
@@ -257,6 +334,7 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
         nint caps = GstNative.gst_sample_get_caps(sample);
         if (caps == 0) throw new InvalidDataException("Missing video output caps.");
         nint structure = GstNative.gst_caps_get_structure(caps, 0);
+        RequireNv12(GstNative.ReadStructureString(structure, "format"));
         if (GstNative.gst_structure_get_int(structure, "width", out int width) == 0 || GstNative.gst_structure_get_int(structure, "height", out int height) == 0)
             throw new InvalidDataException("Missing video dimensions.");
         VideoFrameLimits.ValidateDimensions(width, height);
@@ -291,7 +369,7 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
         if (colorText != 0) GstNative.gst_video_colorimetry_from_string(out color, colorText);
         using var frame = new DecodedVideoFrame(pixels, size, width, height, stride, GstNative.GetTimestamp(source))
         {
-            ColorMatrix = color.Matrix switch { 3 => VideoColorMatrix.Bt709, 4 => VideoColorMatrix.Bt601, _ => VideoColorMatrix.Auto },
+            ColorMatrix = color.Matrix switch { 3 => VideoColorMatrix.Bt709, 4 => VideoColorMatrix.Bt601, 6 => VideoColorMatrix.Bt2020, _ => VideoColorMatrix.Auto },
             ColorRange = color.Range switch { 1 => VideoColorRange.Full, 2 => VideoColorRange.Limited, _ => VideoColorRange.Auto },
         };
         _inCallback = true;
@@ -365,4 +443,24 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     /// <exception cref="InvalidOperationException">The call comes from a decoder callback.
     /// <para>调用来自解码器回调。</para></exception>
     public void Dispose() { if (_inCallback) throw new InvalidOperationException("Decoder callbacks cannot dispose the decoder."); if (_disposed) return; _pipeline?.Dispose(); _pipeline = null; _callback = null; _disposed = true; }
+}
+
+/// <summary>
+/// How the GStreamer pipeline obtains the NV12 planes it hands to the presenter.
+/// <para>GStreamer 管线取得交给呈现器的 NV12 平面的方式。</para>
+/// </summary>
+internal enum GStreamerPlanePath
+{
+    /// <summary>
+    /// A bare raw caps plus a <c>videoconvert</c> stage follows the decoder, so planes are written to
+    /// system memory by that stage.
+    /// <para>解码器后接裸 raw caps 与 <c>videoconvert</c> 阶段，平面由该阶段写入系统内存。</para>
+    /// </summary>
+    CpuConverter,
+    /// <summary>
+    /// The NV12 caps are placed on the decoder's own source pad, so the decoder writes system-memory
+    /// planes without a conversion stage.
+    /// <para>NV12 caps 直接压在解码器源 pad 上，由解码器本身写出系统内存平面，无转换阶段。</para>
+    /// </summary>
+    DirectNv12,
 }

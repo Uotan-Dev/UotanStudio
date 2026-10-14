@@ -143,15 +143,23 @@ public static unsafe class Nv12ToBgraConverter
     /// <para>目标缓冲区的行距（字节）；传 <c>0</c> 表示默认宽度 × 4。</para>
     /// </param>
     /// <exception cref="ArgumentException">
-    /// The frame span or the destination is too small for the computed layout.
-    /// <para>帧跨度或目标缓冲区小于按布局计算所需的大小。</para>
+    /// The frame span or the destination is too small for the computed layout, or the frame does
+    /// not carry <see cref="VideoPixelFormat.Nv12"/> planes.
+    /// <para>帧跨度或目标缓冲区小于按布局计算所需的大小，或该帧并非 <see cref="VideoPixelFormat.Nv12"/> 平面布局。</para>
     /// </exception>
     /// <exception cref="ArgumentOutOfRangeException">
     /// The frame dimensions or strides violate the converter bounds.
     /// <para>帧尺寸或行距超出转换器的边界约束。</para>
     /// </exception>
     public static void Convert(in DecodedVideoFrame frame, Span<byte> destination, int destinationStride = 0)
-        => Convert(frame.Span, frame.Width, frame.Height, frame.Stride, destination, destinationStride);
+    {
+        if (frame.PixelFormat != VideoPixelFormat.Nv12)
+        {
+            throw new ArgumentException($"The converter reads NV12 planes; the frame carries {frame.PixelFormat}.", nameof(frame));
+        }
+
+        Convert(frame.Span, frame.Width, frame.Height, frame.Stride, destination, destinationStride);
+    }
 
     private static void Validate(int width, int height, int nv12Stride, int destinationLength, int destinationStride)
     {
@@ -182,13 +190,12 @@ public static unsafe class Nv12ToBgraConverter
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void ConvertCore(byte* src, byte* dst, int width, int height, int nv12Stride, int dstStride, VideoColorMatrix matrix, VideoColorRange range)
     {
-        bool full = range == VideoColorRange.Full;
-        bool hd = matrix == VideoColorMatrix.Bt709;
-        int yOffset = full ? 0 : 16, yScale = full ? 256 : 298;
-        int red = hd ? (full ? 403 : 459) : (full ? 359 : 409);
-        int greenU = hd ? (full ? 48 : 55) : (full ? 88 : 100);
-        int greenV = hd ? (full ? 120 : 136) : (full ? 183 : 208);
-        int blue = hd ? (full ? 475 : 541) : (full ? 454 : 516);
+        var coefficients = Nv12ConversionTable.For(matrix, range);
+        int yOffset = coefficients.LumaOffset, yScale = coefficients.LumaScale;
+        int red = coefficients.RedFromChromaRed;
+        int greenU = -coefficients.GreenFromChromaBlue;
+        int greenV = -coefficients.GreenFromChromaRed;
+        int blue = coefficients.BlueFromChromaBlue;
         var yPlane = src;
         var uvPlane = src + (long)nv12Stride * height;
         var uvStride = nv12Stride;

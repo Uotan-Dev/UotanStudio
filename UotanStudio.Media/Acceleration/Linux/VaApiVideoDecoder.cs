@@ -36,6 +36,34 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
     private byte[]? _configuration;
     private long _sequence;
     private int _generation;
+    private DmaBufSurface? _outstandingSurface;
+    private long _exportAbandoned;
+
+    /// <summary>
+    /// Gets how many exported frames the decoder reclaimed because the presenter did not release them in
+    /// time; each reclaimed frame frees the pinned VA surface instead of ending the session.
+    /// <para>获取解码器因呈现方未及时释放而自行回收的导出帧数；每次回收都会解除被钉住的 VA 表面，而不是终止会话。</para>
+    /// </summary>
+    /// <value>
+    /// Counted per reclaim and reset by <see cref="Initialize"/>. <para>每次回收计一次，<see cref="Initialize"/> 归零。</para>
+    /// </value>
+    public long ExportAbandonedFrames => Interlocked.Read(ref _exportAbandoned);
+
+    /// <summary>
+    /// How long the decoder waits for the presenter to release a pinned export before reclaiming it.
+    /// <para>解码器在自行回收之前，等待呈现方释放被钉住的导出帧的时长。</para>
+    /// </summary>
+    /// <value>
+    /// Milliseconds; the default matches the encoder pipeline latency budget and is lowered only by tests.
+    /// <para>毫秒；默认值对应编码管线的延迟预算，仅测试会调低它。</para>
+    /// </value>
+    internal int ExportReleaseWaitMilliseconds { get; set; } = 5000;
+
+    /// <summary>
+    /// Maximum reclaims in a single send stall before the decoder reports a hard failure.
+    /// <para>单次发送阻塞中允许的最大回收次数，超过后解码器报告硬失败。</para>
+    /// </summary>
+    internal const int MaximumExportReclaimsPerSend = 3;
 
     /// <summary>
     /// Creates an uninitialized hardware-only VA-API decoder.
@@ -163,6 +191,8 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
         _faulted = _ended = _exportFailed = false;
         _exportEnabled = _options.VaApiPreferGpuExport;
         _generation++;
+        _outstandingSurface = null;
+        Interlocked.Exchange(ref _exportAbandoned, 0);
         _session = _open(codec, _options.VaApiRenderNode);
         _callback = frameCallback;
     }
@@ -239,11 +269,16 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
                 status = _session.Send(accessUnit, timestampTicks);
                 if (status == 2 && ExportActive)
                 {
-                    long deadline = Environment.TickCount64 + 5000;
+                    long deadline = Environment.TickCount64 + ExportReleaseWaitMilliseconds;
+                    int reclaims = 0;
                     while (status == 2)
                     {
                         if (Environment.TickCount64 >= deadline)
-                            throw new InvalidDataException("VA-API decoder stalled behind an unreleased export frame for five seconds.");
+                        {
+                            if (!AbandonOutstandingExport() || ++reclaims > MaximumExportReclaimsPerSend)
+                                throw new InvalidDataException("VA-API decoder stalled behind an unreleased export frame.");
+                            deadline = Environment.TickCount64 + ExportReleaseWaitMilliseconds;
+                        }
                         Thread.Sleep(1);
                         ReadFrames(out frames);
                         status = _session.Send(accessUnit, timestampTicks);
@@ -337,16 +372,26 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
             _exportFailed = true;
             return false;
         }
-        var surface = new DmaBufSurface(new DmaBufDescriptor
+        DmaBufSurface surface;
+        try
         {
-            Format = raw.Format,
-            Width = raw.Width,
-            Height = raw.Height,
-            ObjectCount = raw.ObjectCount,
-            Objects = raw.Objects,
-            LayerCount = raw.LayerCount,
-            Layers = raw.Layers,
-        });
+            surface = new DmaBufSurface(new DmaBufDescriptor
+            {
+                Format = raw.Format,
+                Width = raw.Width,
+                Height = raw.Height,
+                ObjectCount = raw.ObjectCount,
+                Objects = raw.Objects,
+                LayerCount = raw.LayerCount,
+                Layers = raw.Layers,
+            });
+        }
+        catch (InvalidDataException)
+        {
+            _exportFailed = true;
+            return false;
+        }
+        _outstandingSurface = surface;
         var frame = new VaDmaBufVideoFrame(surface, info.Width, info.Height,
             _options.ColorMatrix != VideoColorMatrix.Auto ? _options.ColorMatrix : (VideoColorMatrix)raw.Matrix,
             _options.ColorRange != VideoColorRange.Auto ? _options.ColorRange : (VideoColorRange)raw.Range,
@@ -358,7 +403,31 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
 
     private void ReleaseGeneration(int generation)
     {
-        if (generation == Volatile.Read(ref _generation)) _session?.ReleaseFrame();
+        if (generation != Volatile.Read(ref _generation)) return;
+        ReclaimOutstandingExport(releasedByPresenter: true);
+    }
+
+    /// <summary>
+    /// Reclaims an exported frame the presenter never released, so the pinned VA surface comes back and the
+    /// session continues with a dropped frame instead of a fault.
+    /// <para>回收呈现方从未释放的导出帧，使被钉住的 VA 表面重新可用；会话因此以丢一帧继续，而不是报错终止。</para>
+    /// </summary>
+    /// <returns>
+    /// <see langword="true"/> when there was an outstanding export to reclaim; <see langword="false"/> means
+    /// the stall has nothing the decoder may reclaim, so the caller must fail.
+    /// <para>确有未回收导出时返回 <see langword="true"/>；返回 <see langword="false"/> 表示这次阻塞没有可回收的
+    /// 导出帧，调用方必须失败。</para>
+    /// </returns>
+    private bool AbandonOutstandingExport() => ReclaimOutstandingExport(releasedByPresenter: false);
+
+    private bool ReclaimOutstandingExport(bool releasedByPresenter)
+    {
+        DmaBufSurface? surface = Interlocked.Exchange(ref _outstandingSurface, null);
+        if (surface is null) return releasedByPresenter;
+        if (!releasedByPresenter) Interlocked.Increment(ref _exportAbandoned);
+        surface.Dispose();
+        _session?.ReleaseFrame();
+        return true;
     }
 
     private int ReadFrames(out int count)

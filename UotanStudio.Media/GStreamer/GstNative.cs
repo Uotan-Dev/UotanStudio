@@ -40,6 +40,50 @@ internal static unsafe partial class GstNative
         gst_object_unref(factory);
         return true;
     }
+
+    /// <summary>
+    /// Asks an element factory whether its source pad can negotiate system-memory NV12, using the
+    /// pad's own caps query rather than a hard-coded element list.
+    /// <para>通过源 pad 自身的 caps 查询判断该元件能否协商系统内存 NV12，而不依赖硬编码的元件清单。</para>
+    /// </summary>
+    /// <param name="name">
+    /// The element factory name to instantiate and query.
+    /// <para>要实例化并查询的元件工厂名称。</para>
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when the intersection with <c>video/x-raw,format=NV12</c> is non-empty, so a
+    /// caps filter can be placed directly on the decoder and no conversion stage is needed;
+    /// <see langword="false"/> for missing factories, absent source pads, failed factories, or an empty
+    /// intersection (hardware elements advertising GPU memory only).
+    /// <para>与 <c>video/x-raw,format=NV12</c> 的交集非空时返回 <see langword="true"/>，表示可把 caps 过滤直接压在解码器上、
+    /// 无需转换阶段；工厂缺失、无源 pad、实例化失败，或交集为空（例如仅声明 GPU 内存的硬件元件）时返回
+    /// <see langword="false"/>。</para>
+    /// </returns>
+    internal static bool CanOutputNv12(string name)
+    {
+        nint element = gst_element_factory_make(name, null);
+        if (element == 0) return false;
+        try
+        {
+            nint pad = gst_element_get_static_pad(element, "src");
+            if (pad == 0) return false;
+            try
+            {
+                nint filter = gst_caps_from_string("video/x-raw,format=NV12");
+                if (filter == 0) return false;
+                try
+                {
+                    nint queried = gst_pad_query_caps(pad, filter);
+                    if (queried == 0) return false;
+                    try { return gst_caps_is_empty(queried) == 0; }
+                    finally { gst_caps_unref(queried); }
+                }
+                finally { gst_caps_unref(filter); }
+            }
+            finally { gst_object_unref(pad); }
+        }
+        finally { gst_object_unref(element); }
+    }
     internal static int BufferPtsOffset => IntPtr.Size == 8 ? 72 : 40;
     internal static void SetTimestamp(nint buffer, long ticks)
     {
@@ -68,10 +112,38 @@ internal static unsafe partial class GstNative
     [LibraryImport(Video)] internal static partial int gst_video_meta_unmap(nint meta, uint plane, ref MapInfo info);
     [LibraryImport(Video)] internal static partial int gst_video_colorimetry_from_string(out Colorimetry color, nint value);
     [LibraryImport(Gst, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint gst_structure_get_string(nint structure, string field);
+
+    /// <summary>
+    /// Reads a string field from a caps structure.
+    /// <para>从 caps 结构读取字符串字段。</para>
+    /// </summary>
+    /// <param name="structure">
+    /// The structure returned by <c>gst_caps_get_structure</c>.
+    /// <para>由 <c>gst_caps_get_structure</c> 返回的结构。</para>
+    /// </param>
+    /// <param name="field">
+    /// The field name, such as <c>format</c>.
+    /// <para>字段名称，例如 <c>format</c>。</para>
+    /// </param>
+    /// <returns>
+    /// The field value, or <see langword="null"/> when the structure omits it.
+    /// <para>字段值；结构中不存在该字段时返回 <see langword="null"/>。</para>
+    /// </returns>
+    internal static string? ReadStructureString(nint structure, string field)
+    {
+        nint value = gst_structure_get_string(structure, field);
+        return value == 0 ? null : Marshal.PtrToStringUTF8(value);
+    }
     [LibraryImport(Gst)] internal static partial int gst_init_check(nint argc, nint argv, out nint error);
     [LibraryImport(Gst)] internal static partial void gst_version(out uint major, out uint minor, out uint micro, out uint nano);
     [LibraryImport(Gst, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint gst_parse_launch(string pipeline, out nint error);
     [LibraryImport(Gst, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint gst_element_factory_find(string name);
+    [LibraryImport(Gst, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint gst_element_factory_make(string factoryName, string? instanceName);
+    [LibraryImport(Gst, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint gst_element_get_static_pad(nint element, string padName);
+    [LibraryImport(Gst, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint gst_caps_from_string(string caps);
+    [LibraryImport(Gst)] internal static partial nint gst_pad_query_caps(nint pad, nint filter);
+    [LibraryImport(Gst)] internal static partial int gst_caps_is_empty(nint caps);
+    [LibraryImport(Gst)] internal static partial void gst_caps_unref(nint caps);
     [LibraryImport(Gst, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint gst_bin_get_by_name(nint bin, string name);
     [LibraryImport(Gst)] internal static partial int gst_element_set_state(nint element, int state);
     [LibraryImport(Gst)] internal static partial int gst_element_get_state(nint element, out int state, out int pending, ulong timeout);

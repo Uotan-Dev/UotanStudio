@@ -54,7 +54,26 @@ public sealed class DmaBufSurface : IDisposable
             Dispose();
             throw new InvalidDataException("Invalid DRM PRIME descriptor.");
         }
+        DmaBufLayer luma = descriptor.Layers[0];
+        DmaBufLayer chroma = descriptor.LayerCount > 1 ? descriptor.Layers[1] : default;
+        if (!Nv12PlaneLayout.TryClassify(descriptor.LayerCount, luma.Format, luma.Planes, chroma.Format, chroma.Planes, out DmabufChromaOrder order))
+        {
+            Dispose();
+            throw new InvalidDataException($"Unsupported NV12 DRM layout: layers={descriptor.LayerCount}, first=0x{luma.Format:X8}, second=0x{chroma.Format:X8}.");
+        }
+        ChromaOrder = order;
     }
+    /// <summary>
+    /// Gets the chroma channel order of the accepted two-layer NV12 layout.
+    /// <para>获取被接受的 NV12 两层布局的色度通道次序。</para>
+    /// </summary>
+    /// <value>
+    /// <see cref="DmabufChromaOrder.CrCb"/> when the driver exported the chroma layer as <c>GR88</c>, so the
+    /// sampling shader must swap the two channels; construction rejects every other layout.
+    /// <para>驱动以 <c>GR88</c> 导出色度层时为 <see cref="DmabufChromaOrder.CrCb"/>，此时采样着色器必须交换两个通道；
+    /// 其他布局在构造阶段即被拒绝。</para>
+    /// </value>
+    public DmabufChromaOrder ChromaOrder { get; }
     /// <summary>Gets the exported width in pixels. <para>导出图像的宽度（像素）。</para></summary>
     /// <value>The width recorded in the DRM PRIME descriptor. <para>DRM PRIME 描述符中记录的宽度。</para></value>
     public uint Width => Descriptor.Width;

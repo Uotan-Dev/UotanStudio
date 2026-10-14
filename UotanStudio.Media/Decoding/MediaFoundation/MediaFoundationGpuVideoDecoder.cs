@@ -112,6 +112,19 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private bool ExportActive => _gpuExportEnabled && _exportRing is not null && _gpuExportFrameCallback is not null;
 
     /// <summary>
+    /// Gets the pixel layout this decoder will deliver on the next frame.
+    /// <para>获取本解码器下一帧将要交付的像素布局。</para>
+    /// </summary>
+    /// <value>
+    /// <see cref="VideoPixelFormat.Bgra32"/> while shared-texture export is active, and
+    /// <see cref="VideoPixelFormat.Nv12"/> when frames are read back from a staging texture. The value
+    /// follows <see cref="GpuExportEnabled"/> at any moment, so a mid-session export failure changes it too.
+    /// <para>共享纹理导出开启时为 <see cref="VideoPixelFormat.Bgra32"/>，由 staging 纹理回读时为
+    /// <see cref="VideoPixelFormat.Nv12"/>。该值随时跟随 <see cref="GpuExportEnabled"/>，因此会话中途导出失败也会改变它。</para>
+    /// </value>
+    public VideoPixelFormat FramePixelFormat => ExportActive ? VideoPixelFormat.Bgra32 : VideoPixelFormat.Nv12;
+
+    /// <summary>
     /// Creates the D3D11 and Media Foundation hardware decode pipeline and registers the frame callback.
     /// <para>创建 D3D11 与 Media Foundation 硬件解码管线并登记帧回调。</para>
     /// </summary>
@@ -1047,7 +1060,7 @@ public sealed class GpuDecodedVideoFrame : DecodedVideoFrame
     /// <param name="timestampTicks">Presentation time in 100-nanosecond ticks.
     /// <para>呈现时间，以 100 纳刻（tick）为单位。</para></param>
     public GpuDecodedVideoFrame(byte[] buffer, int length, int width, int height, int stride, long timestampTicks)
-        : base(buffer, length, width, height, stride, timestampTicks, skipNv12Validation: true)
+        : base(buffer, length, width, height, stride, timestampTicks, VideoPixelFormat.Bgra32)
     {
     }
 }

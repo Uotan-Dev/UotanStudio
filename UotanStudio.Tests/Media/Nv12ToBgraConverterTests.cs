@@ -1,4 +1,5 @@
 using UotanStudio.Media.Decoding;
+using UotanStudio.Media.Decoding.MediaFoundation;
 using Xunit;
 
 namespace UotanStudio.Tests.Media;
@@ -271,5 +272,14 @@ public class Nv12ToBgraConverterTests
         using var frame = new DecodedVideoFrame(pooled, nv12.Length, width, height, stride, timestampTicks: 42);
         Nv12ToBgraConverter.Convert(in frame, frameResult);
         Assert.Equal(spanResult, frameResult);
+    }
+
+    [Fact]
+    public void Convert_FrameOverload_PackedFrame_ThrowsAndNamesObservedLayout()
+    {
+        using DecodedVideoFrame frame = new GpuDecodedVideoFrame(new byte[64], 64, 4, 4, 16, 0);
+        var destination = new byte[Nv12ToBgraConverter.GetBgraBufferSize(4, 4)];
+        var error = Assert.Throws<ArgumentException>(() => Nv12ToBgraConverter.Convert(in frame, destination));
+        Assert.Contains(nameof(VideoPixelFormat.Bgra32), error.Message, StringComparison.Ordinal);
     }
 }

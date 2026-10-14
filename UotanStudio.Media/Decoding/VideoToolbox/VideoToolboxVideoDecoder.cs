@@ -93,6 +93,18 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     private bool ExportActive => _gpuExportEnabled && _iosurfaceFrameCallback is not null;
 
     /// <summary>
+    /// Gets the pixel layout this decoder will deliver on the next frame.
+    /// <para>获取本解码器下一帧将要交付的像素布局。</para>
+    /// </summary>
+    /// <value>
+    /// <see cref="VideoPixelFormat.Bgra32"/> while IOSurface export is active, and
+    /// <see cref="VideoPixelFormat.Nv12"/> when planes are copied out of the pixel buffer.
+    /// <para>IOSurface 导出开启时为 <see cref="VideoPixelFormat.Bgra32"/>，从像素缓冲区复制平面时为
+    /// <see cref="VideoPixelFormat.Nv12"/>。</para>
+    /// </value>
+    public VideoPixelFormat FramePixelFormat => ExportActive ? VideoPixelFormat.Bgra32 : VideoPixelFormat.Nv12;
+
+    /// <summary>
     /// Registers the frame callback and verifies that VideoToolbox hardware decoding is available for the codec;
     /// no decompression session exists yet. The calling thread becomes the owning thread for all later calls.
     /// <para>登记帧回调并校验 VideoToolbox 对该编码的硬件解码可用性；此时尚不解压会话。调用线程成为后续

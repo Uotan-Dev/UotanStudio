@@ -64,6 +64,13 @@ public enum VideoColorMatrix
     /// <para>BT.709 高清矩阵。</para>
     /// </summary>
     Bt709,
+    /// <summary>
+    /// BT.2020 narrow-primaries matrix, as reported by GStreamer colorimetry; the Media Foundation and
+    /// VA-API backends never report it, so it arrives only from a stream that declares it.
+    /// <para>BT.2020 窄色域矩阵，由 GStreamer colorimetry 报告；Media Foundation 与 VA-API 后端不会报告该值，
+    /// 因此只有自行声明该矩阵的码流才会带来它。</para>
+    /// </summary>
+    Bt2020,
 }
 
 /// <summary>
@@ -87,6 +94,27 @@ public enum VideoColorRange
     /// <para>全范围。</para>
     /// </summary>
     Full,
+}
+
+/// <summary>
+/// Pixel layout of a decoded frame delivered through the shared decode callback.
+/// <para>经由共享解码回调交付的解码帧像素布局。</para>
+/// </summary>
+public enum VideoPixelFormat
+{
+    /// <summary>
+    /// Semi-planar luma plus interleaved chroma planes sharing one stride, as described by
+    /// <see cref="DecodedVideoFrame"/>.
+    /// <para>半平面亮度加交错色度布局，两个平面共用同一行距，即 <see cref="DecodedVideoFrame"/> 所述布局。</para>
+    /// </summary>
+    Nv12,
+    /// <summary>
+    /// Packed 32-bit blue/green/red/alpha rows produced by a hardware color conversion; no plane
+    /// geometry applies and <see cref="DecodedVideoFrame.Stride"/> is at least width × 4.
+    /// <para>由硬件色彩转换产出的 32 位蓝/绿/红/ alpha 打包行；不适用平面几何，
+    /// <see cref="DecodedVideoFrame.Stride"/> 不小于宽度 × 4。</para>
+    /// </summary>
+    Bgra32,
 }
 
 /// <summary>
