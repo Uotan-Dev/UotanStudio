@@ -1,9 +1,9 @@
 using System.Buffers;
 using System.Buffers.Binary;
-using System.IO.Hashing;
 using UotanStudio.Firmware.BlockImage.Sparse.DataProviders;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Hash.Crc32Ieee;
 
 namespace UotanStudio.Firmware.BlockImage.Sparse.IO;
 
@@ -135,7 +135,7 @@ public static class SparseReader
             throw new InvalidDataException("Sparse chunk headers exceed the remaining image length.");
         }
 
-        Crc32? crc = validateCrc ? new Crc32() : null;
+        Crc32IeeeAccumulator? crc = validateCrc ? new Crc32IeeeAccumulator() : null;
         try
         {
             uint currentBlock = 0;
@@ -239,7 +239,7 @@ public static class SparseReader
                         var fileCrc = BinaryPrimitives.ReadUInt32LittleEndian(buffer4);
                         if (crc is not null)
                         {
-                            var computed = crc.GetCurrentHashAsUInt32();
+                            var computed = crc.GetCurrentHash();
                             if (fileCrc != computed)
                             {
                                 throw new InvalidDataException($"CRC32 checksum mismatch: file has 0x{fileCrc:X8}, computed 0x{computed:X8}");
@@ -262,7 +262,7 @@ public static class SparseReader
                 throw new InvalidDataException("Sparse chunks do not cover the declared total block count.");
             }
             if (crc is not null && sparseFile.Header.ImageChecksum != 0 &&
-                crc.GetCurrentHashAsUInt32() != sparseFile.Header.ImageChecksum)
+                crc.GetCurrentHash() != sparseFile.Header.ImageChecksum)
             {
                 throw new InvalidDataException("Sparse header image checksum does not match the expanded data.");
             }
@@ -443,7 +443,7 @@ public static class SparseReader
         return sparseFile;
     }
 
-    private static void AppendRepeated(Crc32? crc, uint fillValue, long totalBytes, CancellationToken cancellationToken)
+    private static void AppendRepeated(Crc32IeeeAccumulator? crc, uint fillValue, long totalBytes, CancellationToken cancellationToken)
     {
         if (crc is null)
         {
@@ -470,7 +470,7 @@ public static class SparseReader
     }
 
     [System.Runtime.CompilerServices.SkipLocalsInit]
-    private static void AppendZeros(Crc32? crc, long totalBytes, CancellationToken cancellationToken)
+    private static void AppendZeros(Crc32IeeeAccumulator? crc, long totalBytes, CancellationToken cancellationToken)
     {
         if (crc is null)
         {
@@ -493,7 +493,7 @@ public static class SparseReader
     /// Incrementally appends count bytes read from stream to the CRC using a pooled buffer.
     /// <para>使用池化缓冲从流中读取指定字节数并增量追加到 CRC。</para>
     /// </summary>
-    private static void CopyRawExactly(Stream source, Stream destination, Crc32? crc, long count, CancellationToken cancellationToken)
+    private static void CopyRawExactly(Stream source, Stream destination, Crc32IeeeAccumulator? crc, long count, CancellationToken cancellationToken)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
         try
@@ -518,7 +518,7 @@ public static class SparseReader
         }
     }
 
-    private static void AppendStream(Crc32 crc, Stream stream, long count, CancellationToken cancellationToken)
+    private static void AppendStream(Crc32IeeeAccumulator crc, Stream stream, long count, CancellationToken cancellationToken)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
         try

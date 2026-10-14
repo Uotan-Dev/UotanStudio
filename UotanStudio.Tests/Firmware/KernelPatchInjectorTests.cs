@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO.Compression;
 using UotanStudio.Firmware.BootSecurity.Patcher.Kernel;
 using Xunit;
 
@@ -43,6 +44,44 @@ public sealed class KernelPatchInjectorTests
         var kernel = BuildKernel(imageSize: 0x4000);
         kernel[0x38] = 0x00;
         Assert.Throws<NotSupportedException>(() => KernelPatchInjector.Patch(kernel, BuildKpimg(), "password1"));
+    }
+
+    [Fact]
+    public void HasKallsyms_GzipFramedIkcfgPayload_ReturnsTrue()
+    {
+        var kernel = BuildKernelWithGzipIkcfgPayload("CONFIG_KALLSYMS=y\nCONFIG_LOCALVERSION=\"\"\nCONFIG_SYSVIPC=y\nCONFIG_DEVTMPFS=y\n"u8.ToArray(), corrupt: false);
+        Assert.True(KernelPatchInjector.HasKallsyms(kernel));
+    }
+
+    [Fact]
+    public void HasKallsyms_CorruptedGzipIkcfgPayload_ReturnsFalse()
+    {
+        var kernel = BuildKernelWithGzipIkcfgPayload("CONFIG_KALLSYMS=y\nCONFIG_LOCALVERSION=\"\"\nCONFIG_SYSVIPC=y\nCONFIG_DEVTMPFS=y\n"u8.ToArray(), corrupt: true);
+        Assert.False(KernelPatchInjector.HasKallsyms(kernel));
+    }
+
+    private static byte[] BuildKernelWithGzipIkcfgPayload(byte[] config, bool corrupt)
+    {
+        var kernel = BuildKernel(imageSize: 0x4000);
+        kernel.AsSpan(0x100, "CONFIG_KALLSYMS=y"u8.Length).Clear();
+        using var compressed = new MemoryStream();
+        using (var gzip = new GZipStream(compressed, CompressionMode.Compress))
+        {
+            gzip.Write(config);
+        }
+
+        var payload = compressed.ToArray();
+        if (corrupt)
+        {
+            payload[payload.Length / 2] ^= 0xff;
+        }
+
+        var result = new byte[kernel.Length + "IKCFG_ST"u8.Length + payload.Length + "IKCFG_ED"u8.Length];
+        kernel.CopyTo(result, 0);
+        "IKCFG_ST"u8.CopyTo(result.AsSpan(kernel.Length));
+        payload.CopyTo(result.AsSpan(kernel.Length + "IKCFG_ST"u8.Length));
+        "IKCFG_ED"u8.CopyTo(result.AsSpan(kernel.Length + "IKCFG_ST"u8.Length + payload.Length));
+        return result;
     }
 
     private static byte[] BuildKernel(ulong imageSize)

@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.OtaDelta.Diff;
@@ -498,7 +497,7 @@ public static class DatWriter
         return buffer;
     }
 
-    private static string Sha1(byte[] data) => Convert.ToHexString(SHA1.HashData(data));
+    private static string Sha1(byte[] data) => Convert.ToHexString(UotanStudio.Hash.Digests.Sha1.ComputeHash(data));
 
     /// <summary>
     /// Writes the new command lines, splitting the merged ranges into multiple commands when maxBlocksPerCommand is greater than zero.

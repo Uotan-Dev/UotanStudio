@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb;
 
@@ -341,7 +342,7 @@ internal static class AvbHashtreeBuilder
             var srcSize = RoundUp((long)digestIndex * Sha256Size, hashBlockSize);
             var blockBuffer = new byte[hashBlockSize];
             var digestBuffer = new byte[Sha256Size];
-            using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            using var hasher = Sha256.CreateAccumulator();
             for (var level = 1; level < levelOffsets.Length; level++)
             {
                 var numDigests = checked((int)(srcSize / hashBlockSize));
@@ -419,7 +420,7 @@ internal static class AvbHashtreeBuilder
         var block = new byte[dataBlockSize];
         var digest = new byte[Sha256Size];
         var blockFill = 0;
-        using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hasher = Sha256.CreateAccumulator();
         int read;
         while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
         {
@@ -478,16 +479,16 @@ internal static class AvbHashtreeBuilder
     /// </summary>
     private static byte[] HashBlock(byte[] salt, ReadOnlySpan<byte> data)
     {
-        using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hasher = Sha256.CreateAccumulator();
         var digest = new byte[Sha256Size];
         HashBlockTo(hasher, salt, data, digest);
         return digest;
     }
 
-    private static void HashBlockTo(IncrementalHash hasher, byte[] salt, ReadOnlySpan<byte> data, Span<byte> destination)
+    private static void HashBlockTo(DigestAccumulator hasher, byte[] salt, ReadOnlySpan<byte> data, Span<byte> destination)
     {
-        hasher.AppendData(salt);
-        hasher.AppendData(data);
+        hasher.Append(salt);
+        hasher.Append(data);
         if (hasher.TryGetHashAndReset(destination, out _)) return;
         throw new CryptographicException("Failed to write the SHA256 digest. 写入 SHA256 摘要失败。");
     }

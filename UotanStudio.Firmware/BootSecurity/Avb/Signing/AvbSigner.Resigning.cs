@@ -3,6 +3,7 @@ using UotanStudio.Firmware.BootSecurity.Avb.Verification;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 
@@ -92,13 +93,13 @@ public static partial class AvbSigner
             }
             else
             {
-                using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                hasher.AppendData(salt);
+                using var hasher = Sha256.CreateAccumulator();
+                hasher.Append(salt);
                 var buffer = new byte[65536];
                 int read;
                 while ((read = await content.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) != 0)
                 {
-                    hasher.AppendData(buffer.AsSpan(0, read));
+                    hasher.Append(buffer.AsSpan(0, read));
                 }
                 descriptor = new AvbHashDescriptor
                 {

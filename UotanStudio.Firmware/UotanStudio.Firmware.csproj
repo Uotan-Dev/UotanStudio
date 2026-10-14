@@ -12,7 +12,6 @@
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="LTRData.DiscUtils.ExFat" />
     <PackageReference Include="LTRData.DiscUtils.Fat" />
-    <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <PackageReference Include="YamlDotNet" />
   </ItemGroup>

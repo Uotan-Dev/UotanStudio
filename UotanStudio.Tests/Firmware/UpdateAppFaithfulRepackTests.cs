@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.VendorFirmware.UpdateApp;
+using UotanStudio.Hash.Crc16CcittReversed;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -155,6 +156,12 @@ public sealed class UpdateAppFaithfulRepackTests : IDisposable
             TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public void Crc16CcittReversed_UpdateAppCheckVector_ProducesPublishedDigest()
+    {
+        Assert.Equal((ushort)0x906E, Crc16CcittReversed.Compute("123456789"u8));
+    }
+
     private string Write(string name, byte[] bytes)
     {
         var path = Path.Combine(_root, name);
@@ -201,24 +208,11 @@ public sealed class UpdateAppFaithfulRepackTests : IDisposable
             var start = block * blockSize;
             var length = Math.Min(blockSize, payload.Length - start);
             BinaryPrimitives.WriteUInt16LittleEndian(
-                header.AsSpan(98 + block * 2), ComputeCrc16(payload.AsSpan(start, length)));
+                header.AsSpan(98 + block * 2), Crc16CcittReversed.Compute(payload.AsSpan(start, length)));
         }
 
-        var crc = ComputeCrc16(header);
+        var crc = Crc16CcittReversed.Compute(header);
         BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(92), crc);
         return [.. header, .. payload];
-    }
-
-    private static ushort ComputeCrc16(ReadOnlySpan<byte> bytes)
-    {
-        var crc = (ushort)0xFFFF;
-        foreach (var value in bytes)
-        {
-            crc ^= value;
-            for (var bit = 0; bit < 8; bit++)
-                crc = (ushort)((crc & 1) != 0 ? (crc >> 1) ^ 0x8408 : crc >> 1);
-        }
-
-        return (ushort)(crc ^ 0xFFFF);
     }
 }

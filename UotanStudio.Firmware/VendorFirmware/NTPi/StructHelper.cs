@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
-using System.Security.Cryptography;
 using UotanStudio.Firmware.VendorFirmware.NTPi.Models;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.VendorFirmware.NTPi;
 
@@ -314,5 +314,5 @@ internal static class StructHelper
     /// The 64-character lowercase hexadecimal digest, without separators.
     /// <para>64 个字符的小写十六进制摘要，不含分隔符。</para>
     /// </returns>
-    public static string ComputeSha256Hex(ReadOnlySpan<byte> data) => Convert.ToHexStringLower(SHA256.HashData(data));
+    public static string ComputeSha256Hex(ReadOnlySpan<byte> data) => Sha256.ComputeHexLower(data);
 }

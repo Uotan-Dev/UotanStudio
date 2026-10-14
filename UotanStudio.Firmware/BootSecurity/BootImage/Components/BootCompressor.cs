@@ -1,7 +1,3 @@
-using System.IO.Compression;
-using K4os.Compression.LZ4.Streams;
-using SharpCompress.Compressors.BZip2;
-using SharpCompress.Compressors.Xz;
 using UotanStudio.Compress;
 using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
@@ -93,6 +89,14 @@ public static class BootCompressor
     /// The decompressed bytes, or <see langword="null"/> when the format is unsupported or any decoding error occurs; all exceptions raised by the underlying codecs are swallowed.
     /// <para>解压后的字节；当格式不受支持或出现任何解码错误时返回 <see langword="null"/>，底层编解码器抛出的异常全部被吞没。</para>
     /// </returns>
+    /// <remarks>
+    /// Every container is decoded through the compression library, and its bzip2 reader is built with
+    /// decompressConcatenated enabled, so a payload that concatenates several back-to-back bzip2 streams now decodes
+    /// into the members joined in order instead of being rejected after the first stream the way the previous
+    /// single-stream reader left it.
+    /// <para>所有容器统一经由压缩库解码，其中 bzip2 读取器以启用串接解压的方式构造，因此把多个首尾相连的 bzip2
+    /// 流拼接在一起的载荷现在会按成员顺序解码并合并输出，而不再像此前只支持单流的读取器那样在第一段之后被拒绝。</para>
+    /// </remarks>
     public static byte[]? TryDecompress(byte[] data, CompressionType type)
     {
         if (data is null || data.Length == 0)
@@ -102,49 +106,23 @@ public static class BootCompressor
 
         try
         {
-            using var input = new MemoryStream(data);
             using var output = new MemoryStream();
 
             switch (type)
             {
                 case CompressionType.Gzip:
                 case CompressionType.Zopfli:
-                    using (var gz = new GZipStream(input, CompressionMode.Decompress))
-                    {
-                        gz.CopyTo(output);
-                    }
-
-                    break;
+                    return CompressionService.Decompress(data, CompressionFormat.Gzip);
                 case CompressionType.Bzip2:
-                    using (var bz = BZip2Stream.Create(input, SharpCompress.Compressors.CompressionMode.Decompress, false))
-                    {
-                        bz.CopyTo(output);
-                    }
-
-                    break;
+                    return CompressionService.Decompress(data, CompressionFormat.Bzip2);
                 case CompressionType.Xz:
-                    using (var xz = new XZStream(input))
-                    {
-                        xz.CopyTo(output);
-                    }
-
-                    break;
+                    return CompressionService.Decompress(data, CompressionFormat.Xz);
                 case CompressionType.Zstd:
                     return ZstdCompressor.Decompress(data);
                 case CompressionType.Brotli:
-                    using (var br = new BrotliStream(input, CompressionMode.Decompress))
-                    {
-                        br.CopyTo(output);
-                    }
-
-                    break;
+                    return CompressionService.Decompress(data, CompressionFormat.Brotli);
                 case CompressionType.Lz4:
-                    using (var lz4 = LZ4Stream.Decode(input, leaveOpen: false))
-                    {
-                        lz4.CopyTo(output);
-                    }
-
-                    break;
+                    return CompressionService.Decompress(data, CompressionFormat.Lz4);
                 case CompressionType.None:
                     break;
                 case CompressionType.Lz4Legacy:

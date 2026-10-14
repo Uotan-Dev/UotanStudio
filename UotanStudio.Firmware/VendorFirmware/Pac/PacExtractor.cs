@@ -1,5 +1,5 @@
 using UotanStudio.Firmware.Core.IO;
-using UotanStudio.Hash.Crc16;
+using UotanStudio.Hash.Crc16Arc;
 
 namespace UotanStudio.Firmware.VendorFirmware.Pac;
 
@@ -244,7 +244,7 @@ internal static class PacExtractor
         var headBytes = head.ToBytes();
         var headForCrc = new byte[headBytes.Length - 4];
         Array.Copy(headBytes, 0, headForCrc, 0, headForCrc.Length);
-        var calculatedHeadCrc = Crc16.Calculate(0, headForCrc);
+        var calculatedHeadCrc = Crc16Arc.Compute(headForCrc, 0);
         var headOk = head.HeadCrc == calculatedHeadCrc;
 
         long totalSize = head.PacSize;
@@ -267,7 +267,7 @@ internal static class PacExtractor
             {
                 throw new EndOfStreamException("PAC data ended before the declared package size.");
             }
-            calculatedDataCrc = Crc16.Calculate(calculatedDataCrc, read == buffer.Length ? buffer : buffer.AsSpan(0, read).ToArray());
+            calculatedDataCrc = Crc16Arc.Compute(read == buffer.Length ? buffer : buffer.AsSpan(0, read).ToArray(), calculatedDataCrc);
             totalRead += read;
         }
 

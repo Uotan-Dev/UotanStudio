@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Text;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb;
 
@@ -124,7 +124,7 @@ internal static class AvbMetadataReader
             fields[name] = Convert.ToHexString(bytes);
             if (name == "PublicKey" && bytes.Length > 0)
             {
-                fields["PublicKeySha256"] = Convert.ToHexString(SHA256.HashData(bytes));
+                fields["PublicKeySha256"] = Convert.ToHexString(Sha256.ComputeHash(bytes));
                 if (bytes.Length >= 8)
                 {
                     fields["PublicKeyBits"] = MetadataDisplay.Number(U32(bytes, 0));
@@ -204,7 +204,7 @@ internal static class AvbMetadataReader
                 fields[prefix + ".PartitionName"] = Encoding.UTF8.GetString(Slice(body, 76, partitionLength));
                 var publicKey = Slice(body, 76UL + partitionLength, U32(body, 8));
                 fields[prefix + ".PublicKey"] = Convert.ToHexString(publicKey);
-                fields[prefix + ".PublicKeySha256"] = Convert.ToHexString(SHA256.HashData(publicKey));
+                fields[prefix + ".PublicKeySha256"] = Convert.ToHexString(Sha256.ComputeHash(publicKey));
                 fields[prefix + ".Flags"] = MetadataDisplay.Flags(U32(body, 12), (1, "DO_NOT_USE_AB"));
                 break;
             default:

@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.Core.Streams;
 
@@ -12,7 +12,7 @@ public sealed class HashingWriteStream : Stream
 {
     private readonly Stream _inner;
     private readonly bool _leaveOpen;
-    private readonly IncrementalHash _hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+    private readonly DigestAccumulator _hash = Sha256.CreateAccumulator();
     private long _bytesWritten;
     private bool _disposed;
 
@@ -119,7 +119,7 @@ public sealed class HashingWriteStream : Stream
         ThrowIfDisposed();
         if (buffer.Length > 0)
         {
-            _hash.AppendData(buffer);
+            _hash.Append(buffer);
             _inner.Write(buffer);
             _bytesWritten = checked(_bytesWritten + buffer.Length);
         }
@@ -140,7 +140,7 @@ public sealed class HashingWriteStream : Stream
         ThrowIfDisposed();
         if (buffer.Length > 0)
         {
-            _hash.AppendData(buffer.Span);
+            _hash.Append(buffer.Span);
             await _inner.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
             _bytesWritten = checked(_bytesWritten + buffer.Length);
         }

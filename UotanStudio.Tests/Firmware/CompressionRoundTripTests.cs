@@ -185,6 +185,121 @@ public class CompressionRoundTripTests
         Assert.Throws<CompressionException>(() => Lz4Compressor.DecompressLegacy(truncated));
     }
 
+    public static TheoryData<CompressionFormat> IncrementalDecompressionFormats => new()
+    {
+        CompressionFormat.None,
+        CompressionFormat.Gzip,
+        CompressionFormat.Zlib,
+        CompressionFormat.Deflate,
+        CompressionFormat.Brotli,
+        CompressionFormat.Lz4,
+        CompressionFormat.Bzip2,
+        CompressionFormat.Xz,
+        CompressionFormat.Zstd,
+    };
+
+    public static TheoryData<CompressionFormat> IncrementalCompressionFormats => new()
+    {
+        CompressionFormat.None,
+        CompressionFormat.Gzip,
+        CompressionFormat.Zlib,
+        CompressionFormat.Deflate,
+        CompressionFormat.Brotli,
+        CompressionFormat.Lz4,
+        CompressionFormat.Bzip2,
+        CompressionFormat.Zstd,
+    };
+
+    [Theory]
+    [MemberData(nameof(IncrementalDecompressionFormats))]
+    public void CreateDecompressionStream_IncrementalReads_MatchWholeBufferDecompression(CompressionFormat format)
+    {
+        var compressed = CompressionService.Compress(BuildPayload(128 * 1024), format);
+        using var input = new MemoryStream(compressed);
+        using var decoded = new MemoryStream();
+        using (var reader = CompressionService.CreateDecompressionStream(input, format))
+        {
+            reader.CopyTo(decoded, 8192);
+        }
+
+        Assert.Equal(CompressionService.Decompress(compressed, format), decoded.ToArray());
+        Assert.True(input.CanRead);
+    }
+
+    [Theory]
+    [MemberData(nameof(IncrementalCompressionFormats))]
+    public void CreateCompressionStream_DisposedBeforeReadingOutput_RoundTripsThroughWholeBufferEntry(CompressionFormat format)
+    {
+        var payload = BuildPayload(128 * 1024);
+        using var output = new MemoryStream();
+        using (var writer = CompressionService.CreateCompressionStream(output, format))
+        {
+            writer.Write(payload);
+        }
+
+        Assert.True(output.CanWrite);
+        Assert.Equal(payload, CompressionService.Decompress(output.ToArray(), format));
+    }
+
+    [Fact]
+    public void CreateDecompressionStream_PartialRead_KeepsInputOpenAndUnconsumed()
+    {
+        var payload = BuildPayload(256 * 1024);
+        var compressed = CompressionService.Compress(payload, CompressionFormat.Gzip);
+        using var input = new MemoryStream(compressed);
+        var reader = CompressionService.CreateDecompressionStream(input, CompressionFormat.Gzip);
+
+        var head = new byte[4096];
+        var filled = 0;
+        while (filled < head.Length)
+        {
+            var read = reader.Read(head, filled, head.Length - filled);
+            Assert.True(read > 0);
+            filled += read;
+        }
+
+        Assert.Equal(payload.AsSpan(0, head.Length).ToArray(), head);
+        Assert.True(input.Position < compressed.Length);
+
+        reader.Dispose();
+        Assert.True(input.CanRead);
+    }
+
+    [Theory]
+    [InlineData(CompressionFormat.Lzma)]
+    [InlineData(CompressionFormat.Lz4Legacy)]
+    [InlineData(CompressionFormat.Lzop)]
+    public void CreateDecompressionStream_BlockLoopFormat_ThrowsNotSupportedException(CompressionFormat format)
+    {
+        using var input = new MemoryStream([0x00, 0x01, 0x02, 0x03]);
+        Assert.Throws<NotSupportedException>(() => CompressionService.CreateDecompressionStream(input, format));
+    }
+
+    [Theory]
+    [InlineData(CompressionFormat.Xz)]
+    [InlineData(CompressionFormat.Lzma)]
+    [InlineData(CompressionFormat.Lz4Legacy)]
+    [InlineData(CompressionFormat.Lzop)]
+    public void CreateCompressionStream_FormatWithoutIncrementalWriter_ThrowsNotSupportedException(CompressionFormat format)
+    {
+        using var output = new MemoryStream();
+        Assert.Throws<NotSupportedException>(() => CompressionService.CreateCompressionStream(output, format));
+    }
+
+    [Fact]
+    public void CreateCompressionStream_DecompressOnlyFormat_ThrowsArgumentException()
+    {
+        using var output = new MemoryStream();
+        Assert.Throws<ArgumentException>(() => CompressionService.CreateCompressionStream(output, CompressionFormat.Zopfli));
+    }
+
+    [Fact]
+    public void CreateStreams_NullStream_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => CompressionService.CreateDecompressionStream(null!, CompressionFormat.Gzip));
+        Assert.Throws<ArgumentNullException>(() => CompressionService.CreateCompressionStream(null!, CompressionFormat.Gzip));
+    }
+
     private static byte[] BuildPayload(int length)
     {
         var rng = new Random(0x5EED);

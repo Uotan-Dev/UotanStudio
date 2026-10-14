@@ -1,8 +1,9 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
-using System.IO.Hashing;
 using System.Text;
+using UotanStudio.Compress;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Hash.Crc32Ieee;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk;
 
@@ -303,7 +304,7 @@ internal static class ApkRepacker
             throw new InvalidDataException($"Entry '{filePath}' exceeds the 32-bit ZIP entry size limit. 条目 '{filePath}' 超出 32 位 ZIP 条目大小上限。");
         }
 
-        var crc = new Crc32();
+        var crc = new Crc32IeeeAccumulator();
         var buffer = new byte[81920];
         int read;
         while ((read = input.Read(buffer)) > 0)
@@ -313,7 +314,7 @@ internal static class ApkRepacker
             output.Write(buffer.AsSpan(0, read));
         }
 
-        return (crc.GetCurrentHashAsUInt32(), (uint)input.Length, (uint)input.Length);
+        return (crc.GetCurrentHash(), (uint)input.Length, (uint)input.Length);
     }
 
     private static (uint Crc, uint CompressedSize, uint UncompressedSize) CopyDeflated(
@@ -325,10 +326,10 @@ internal static class ApkRepacker
             throw new InvalidDataException($"Entry '{filePath}' exceeds the 32-bit ZIP entry size limit. 条目 '{filePath}' 超出 32 位 ZIP 条目大小上限。");
         }
 
-        var crc = new Crc32();
+        var crc = new Crc32IeeeAccumulator();
         long uncompressed = input.Length;
         var start = output.Position;
-        using (var deflate = new DeflateStream(output, level, leaveOpen: true))
+        using (var deflate = CompressionService.CreateCompressionStream(output, CompressionFormat.Deflate, new CompressionOptions { Level = ToUnifiedLevel(level) }))
         {
             var buffer = new byte[81920];
             int read;
@@ -346,7 +347,27 @@ internal static class ApkRepacker
             throw new InvalidDataException($"Entry '{filePath}' compressed size exceeds the 32-bit ZIP limit. 条目 '{filePath}' 压缩后大小超出 32 位 ZIP 上限。");
         }
 
-        return (crc.GetCurrentHashAsUInt32(), (uint)compressedSize, (uint)uncompressed);
+        return (crc.GetCurrentHash(), (uint)compressedSize, (uint)uncompressed);
+    }
+
+    /// <summary>
+    /// Converts a BCL <see cref="System.IO.Compression.CompressionLevel"/> into the unified 0-9 level read by <see cref="CompressionOptions.Level"/>.
+    /// <para>把 BCL 的 <see cref="System.IO.Compression.CompressionLevel"/> 转换为 <see cref="CompressionOptions.Level"/> 读取的统一 0-9 等级。</para>
+    /// </summary>
+    /// <param name="level">Level requested through <see cref="ApkRepackOptions.CompressionLevel"/>; all four members are mapped.
+    /// <para>通过 <see cref="ApkRepackOptions.CompressionLevel"/> 请求的等级；四个成员均有对应结果。</para></param>
+    /// <returns>A level that <c>UotanStudio.Compress.Internal.CompressionLevelMapper</c> maps back to the same BCL band: 0 for <see cref="System.IO.Compression.CompressionLevel.NoCompression"/>, 1 for <see cref="System.IO.Compression.CompressionLevel.Fastest"/>, 6 for <see cref="System.IO.Compression.CompressionLevel.Optimal"/> and 9 for <see cref="System.IO.Compression.CompressionLevel.SmallestSize"/>.
+    /// <para>可被 <c>UotanStudio.Compress.Internal.CompressionLevelMapper</c> 映回同一 BCL 等级的等级值：<see cref="System.IO.Compression.CompressionLevel.NoCompression"/> 为 0，<see cref="System.IO.Compression.CompressionLevel.Fastest"/> 为 1，<see cref="System.IO.Compression.CompressionLevel.Optimal"/> 为 6，<see cref="System.IO.Compression.CompressionLevel.SmallestSize"/> 为 9。</para></returns>
+    private static int ToUnifiedLevel(CompressionLevel level)
+    {
+        return level switch
+        {
+            CompressionLevel.NoCompression => 0,
+            CompressionLevel.Fastest => 1,
+            CompressionLevel.Optimal => 6,
+            CompressionLevel.SmallestSize => 9,
+            _ => 6
+        };
     }
 
     private static byte[] BuildAlignmentExtra(long headerEndOffset, int alignment)

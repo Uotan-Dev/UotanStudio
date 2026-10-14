@@ -1,7 +1,7 @@
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Hash.Crc32;
 using UotanStudio.Hash.Crc32c;
+using UotanStudio.Hash.Crc32Register;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -104,7 +104,7 @@ public class Crc32Tests
     [Fact]
     public void Compute_KnownVector_MatchesCrc32RegisterSemantics()
     {
-        Assert.Equal(0x340BC6D9u, Crc32.Compute("123456789"u8, 0xFFFF_FFFFu));
+        Assert.Equal(0x340BC6D9u, Crc32Register.Compute("123456789"u8, 0xFFFF_FFFFu));
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class Crc32Tests
     {
         var seed = 0xF2F52010u;
 
-        var tabled = Crc32.Compute("0123456789abcdef"u8, seed);
+        var tabled = Crc32Register.Compute("0123456789abcdef"u8, seed);
 
         var bitwise = seed;
         foreach (var b in "0123456789abcdef"u8)
@@ -140,7 +140,7 @@ public class Crc32Tests
 
             foreach (var seed in seeds)
             {
-                Assert.Equal(Crc32Bitwise(data, seed), Crc32.Compute(data, seed));
+                Assert.Equal(Crc32Bitwise(data, seed), Crc32Register.Compute(data, seed));
             }
         }
     }
@@ -156,8 +156,8 @@ public class Crc32Tests
         {
             foreach (var split in new[] { 0, 1, 3, 7, 8, 9, 255, 256, 257, 516, 517 })
             {
-                var single = Crc32.Compute(data, seed);
-                var continued = Crc32.Compute(data.AsSpan(split), Crc32.Compute(data.AsSpan(0, split), seed));
+                var single = Crc32Register.Compute(data, seed);
+                var continued = Crc32Register.Compute(data.AsSpan(split), Crc32Register.Compute(data.AsSpan(0, split), seed));
 
                 Assert.Equal(single, continued);
             }
@@ -173,14 +173,14 @@ public class Crc32Tests
         {
             byte[] data = [(byte)b];
 
-            Assert.Equal(Crc32Bitwise(data, seed), Crc32.Compute(data, seed));
+            Assert.Equal(Crc32Bitwise(data, seed), Crc32Register.Compute(data, seed));
         }
     }
 
     [Fact]
     public void Compute_EmptySpan_ReturnsSeedUnchanged()
     {
-        Assert.Equal(0xF2F52010u, Crc32.Compute(ReadOnlySpan<byte>.Empty, 0xF2F52010u));
+        Assert.Equal(0xF2F52010u, Crc32Register.Compute(ReadOnlySpan<byte>.Empty, 0xF2F52010u));
     }
 
     private static uint Crc32Bitwise(ReadOnlySpan<byte> data, uint seed)

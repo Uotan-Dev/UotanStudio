@@ -9,6 +9,7 @@ using UotanStudio.Firmware.OtaDelta.Diff;
 using UotanStudio.Firmware.OtaDelta.Diff.Zucchini;
 using UotanStudio.Firmware.OtaDelta.Payload.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload;
 
@@ -830,7 +831,7 @@ internal class PayloadExtractor
         {
             if (info.Hash.Length != 32) throw new PartitionExtractionException("Invalid partition SHA-256 length.", name);
             image.Position = 0;
-            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            using var hash = Sha256.CreateAccumulator();
             var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
             try
             {
@@ -838,7 +839,7 @@ internal class PayloadExtractor
                 while ((read = image.Read(buffer, 0, buffer.Length)) > 0)
                 {
                     ct.ThrowIfCancellationRequested();
-                    hash.AppendData(buffer, 0, read);
+                    hash.Append(buffer.AsSpan(0, read));
                 }
             }
             finally

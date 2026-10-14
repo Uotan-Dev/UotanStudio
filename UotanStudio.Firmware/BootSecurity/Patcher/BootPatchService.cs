@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Compress;
 using UotanStudio.Firmware.Archive.Editing;
@@ -11,6 +10,7 @@ using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.BootSecurity.Patcher.Kernel;
 using UotanStudio.Firmware.BootSecurity.Workflow;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.Patcher;
 
@@ -100,7 +100,7 @@ public sealed class BootPatchService
         {
             await using var sourceBoot = new FileStream(bootPath, FileMode.Open, FileAccess.Read, FileShare.Read,
                 65536, FileOptions.SequentialScan);
-            stockBootSha1 = Convert.ToHexStringLower(await SHA1.HashDataAsync(sourceBoot, cancellationToken).ConfigureAwait(false));
+            stockBootSha1 = Convert.ToHexStringLower(await Sha1.ComputeHashAsync(sourceBoot, cancellationToken).ConfigureAwait(false));
         }
         options.Progress?.Report(.2d);
         string? bootKmi = null;

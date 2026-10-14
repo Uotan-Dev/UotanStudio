@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
-using System.IO.Hashing;
-using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Hash.Crc32Ieee;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BlockImage.Gpt;
 
@@ -95,14 +95,14 @@ public static partial class GptReader
     {
         private readonly List<GptPartition> _entries = [];
         private readonly HashSet<Guid> _ids = [];
-        private readonly Crc32 _crc = new();
-        private readonly IncrementalHash _hash = CreateHash(primary, backup);
+        private readonly Crc32IeeeAccumulator _crc = new();
+        private readonly DigestAccumulator _hash = CreateHash(primary, backup);
 
-        private static IncrementalHash CreateHash(Header primary, Header backup)
+        private static DigestAccumulator CreateHash(Header primary, Header backup)
         {
-            var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            hash.AppendData(primary.Sha256);
-            hash.AppendData(backup.Sha256);
+            var hash = Sha256.CreateAccumulator();
+            hash.Append(primary.Sha256);
+            hash.Append(backup.Sha256);
             return hash;
         }
 
@@ -115,7 +115,7 @@ public static partial class GptReader
                 throw new InvalidDataException("The primary and backup GPT entry arrays differ.");
             }
             _crc.Append(left);
-            _hash.AppendData(left);
+            _hash.Append(left);
             var type = new Guid(left[..16]);
             if (type == Guid.Empty)
             {
@@ -154,7 +154,7 @@ public static partial class GptReader
 
         internal GptTable Finish()
         {
-            if (_crc.GetCurrentHashAsUInt32() != primary.ArrayCrc)
+            if (_crc.GetCurrentHash() != primary.ArrayCrc)
             {
                 throw new InvalidDataException("The GPT partition array CRC is invalid.");
             }
@@ -195,7 +195,7 @@ public static partial class GptReader
         }
         var crc = BinaryPrimitives.ReadUInt32LittleEndian(span[16..]);
         span[16..20].Clear();
-        if (Crc32.HashToUInt32(span[..(int)size]) != crc)
+        if (Crc32Ieee.Compute(span[..(int)size]) != crc)
         {
             throw new InvalidDataException("The GPT header CRC is invalid.");
         }
@@ -247,7 +247,7 @@ public static partial class GptReader
             {
                 throw new InvalidDataException("The GPT entry array overlaps usable storage or a header.");
             }
-            return new Header(first, last, diskId, arrayLba, count, entrySize, arrayCrc, size, SHA256.HashData(span));
+            return new Header(first, last, diskId, arrayLba, count, entrySize, arrayCrc, size, Sha256.ComputeHash(span));
         }
         var requested = partitionEntryLba.Value;
         if (requested < 2 || requested > blockCount - 1 || arrayBlocks > blockCount - requested)
@@ -255,7 +255,7 @@ public static partial class GptReader
             throw new ArgumentOutOfRangeException(nameof(partitionEntryLba), requested,
                 "The requested partition-entry array LBA does not leave the entry array inside the reported capacity.");
         }
-        return new Header(first, last, diskId, requested, count, entrySize, arrayCrc, size, SHA256.HashData(span));
+        return new Header(first, last, diskId, requested, count, entrySize, arrayCrc, size, Sha256.ComputeHash(span));
     }
 
     private static void ValidateEntryDimensionOverride(uint? partitionEntryCount, uint? partitionEntrySize)

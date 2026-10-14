@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
-using System.Security.Cryptography;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.BootImage.Components;
 
@@ -36,7 +36,7 @@ internal sealed class BootComponentFiles(string directory, string outputPath, Ca
         StreamCopy.CopyExactly(input, output, input.Length, cancellationToken);
     }
 
-    internal void AppendHash(string key, IncrementalHash hash)
+    internal void AppendHash(string key, DigestAccumulator hash)
     {
         if (_inputs[key] is { } input)
         {
@@ -48,13 +48,13 @@ internal sealed class BootComponentFiles(string directory, string outputPath, Ca
                 cancellationToken.ThrowIfCancellationRequested();
                 var count = (int)Math.Min(remaining, buffer.Length);
                 input.ReadExactly(buffer.AsSpan(0, count));
-                hash.AppendData(buffer, 0, count);
+                hash.Append(buffer.AsSpan(0, count));
                 remaining -= count;
             }
         }
         Span<byte> size = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(size, checked((uint)Length(key)));
-        hash.AppendData(size);
+        hash.Append(size);
     }
 
     public void Dispose()

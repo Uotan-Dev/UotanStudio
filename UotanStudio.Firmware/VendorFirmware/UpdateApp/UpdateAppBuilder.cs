@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Hash.Crc16CcittReversed;
 
 namespace UotanStudio.Firmware.VendorFirmware.UpdateApp;
 
@@ -105,7 +106,7 @@ public static class UpdateAppBuilder
                 cancellationToken.ThrowIfCancellationRequested();
                 var count = ReadBlock(input, buffer, (long)block * options.BlockSize,
                     Math.Min(buffer.Length, checked((int)Math.Min(options.BlockSize, info.Length - (long)block * options.BlockSize))));
-                checksums[block] = ComputeCrc16(buffer.AsSpan(0, count));
+                checksums[block] = Crc16CcittReversed.Compute(buffer.AsSpan(0, count));
             }
 
             entries[index] = new EntryPlan(files[index].Path, files[index].Name,
@@ -140,7 +141,7 @@ public static class UpdateAppBuilder
 
         BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(HeaderChecksumOffset), 0);
         BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(HeaderChecksumOffset),
-            ComputeCrc16(header));
+            Crc16CcittReversed.Compute(header));
         output.Write(header);
 
         using var input = new FileStream(entry.Path, FileMode.Open, FileAccess.Read, FileShare.Read,
@@ -199,18 +200,6 @@ public static class UpdateAppBuilder
         }
 
         return name;
-    }
-
-    private static ushort ComputeCrc16(ReadOnlySpan<byte> bytes)
-    {
-        var crc = (ushort)0xFFFF;
-        foreach (var value in bytes)
-        {
-            crc ^= value;
-            for (var bit = 0; bit < 8; bit++)
-                crc = (ushort)((crc & 1) != 0 ? (crc >> 1) ^ 0x8408 : crc >> 1);
-        }
-        return (ushort)(crc ^ 0xFFFF);
     }
 
     private readonly record struct SourceFile(string Path, string Name);

@@ -1,9 +1,10 @@
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Hash.Crc16CcittReversed;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.VendorFirmware.UpdateApp;
 
@@ -267,7 +268,7 @@ public static class UpdateAppFaithfulRepacker
         {
             if (artifactProbe.Length != layoutBytes)
                 throw new InvalidDataException("UPDATE.APP layout artifact size drifted from the capture.");
-            if (!SHA256.HashData(artifactProbe).AsSpan().SequenceEqual(expectedDigest))
+            if (!Sha256.ComputeHash(artifactProbe).AsSpan().SequenceEqual(expectedDigest))
                 throw new InvalidDataException("UPDATE.APP layout artifact failed its SHA-256 check.");
         }
 
@@ -397,7 +398,7 @@ public static class UpdateAppFaithfulRepacker
             }
 
             output.Position = 0;
-            digest = SHA256.HashData(output);
+            digest = Sha256.ComputeHash(output);
         }, cancellationToken: cancellationToken);
         return digest;
     }
@@ -436,7 +437,7 @@ public static class UpdateAppFaithfulRepacker
         var expectedHeaderCrc = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(HeaderChecksumOffset));
         var scratch = (byte[])header.Clone();
         BinaryPrimitives.WriteUInt16LittleEndian(scratch.AsSpan(HeaderChecksumOffset), 0);
-        if (ComputeCrc16(scratch) != expectedHeaderCrc)
+        if (Crc16CcittReversed.Compute(scratch) != expectedHeaderCrc)
             throw new InvalidDataException("UPDATE.APP header CRC mismatch in captured metadata.");
 
         using var stream = payloadPath is not null
@@ -460,7 +461,7 @@ public static class UpdateAppFaithfulRepacker
             }
 
             var expected = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(CanonicalHeaderSize + block * 2));
-            if (ComputeCrc16(buffer.AsSpan(0, count)) != expected)
+            if (Crc16CcittReversed.Compute(buffer.AsSpan(0, count)) != expected)
                 throw new InvalidDataException($"UPDATE.APP payload CRC mismatch for block {block}; " +
                     "the stored bytes no longer match the captured checksum table.");
         }
@@ -481,19 +482,6 @@ public static class UpdateAppFaithfulRepacker
             output.Write(buffer, 0, read);
             remaining -= read;
         }
-    }
-
-    private static ushort ComputeCrc16(ReadOnlySpan<byte> bytes)
-    {
-        var crc = (ushort)0xFFFF;
-        foreach (var value in bytes)
-        {
-            crc ^= value;
-            for (var bit = 0; bit < 8; bit++)
-                crc = (ushort)((crc & 1) != 0 ? (crc >> 1) ^ 0x8408 : crc >> 1);
-        }
-
-        return (ushort)(crc ^ 0xFFFF);
     }
 
     private readonly record struct Plan(byte[] Header, string? PayloadPath, byte[]? Inline, long GapAfter);

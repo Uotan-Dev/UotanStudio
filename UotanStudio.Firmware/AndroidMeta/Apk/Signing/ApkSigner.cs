@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
-using System.Security.Cryptography;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk.Signing;
 
@@ -193,7 +193,7 @@ public static class ApkSigner
 
     private static byte[] HashEntry(Stream input, long expectedLength, CancellationToken cancellationToken)
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = Sha256.CreateAccumulator();
         var buffer = new byte[81920];
         long remaining = expectedLength;
         while (remaining > 0)
@@ -201,7 +201,7 @@ public static class ApkSigner
             cancellationToken.ThrowIfCancellationRequested();
             var read = input.Read(buffer.AsSpan(0, (int)Math.Min(buffer.Length, remaining)));
             if (read == 0) throw new EndOfStreamException("Truncated APK entry. APK 条目被截断。");
-            hash.AppendData(buffer.AsSpan(0, read));
+            hash.Append(buffer.AsSpan(0, read));
             remaining -= read;
         }
         if (input.ReadByte() != -1) throw new InvalidDataException("APK entry exceeds its declared size. APK 条目超过声明长度。");

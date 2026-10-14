@@ -1,4 +1,4 @@
-using System.IO.Hashing;
+using UotanStudio.Hash.Crc32Ieee;
 
 namespace UotanStudio.Firmware.BlockImage.Gpt;
 
@@ -84,7 +84,7 @@ public static class GptDeviceImage
         }
 
         var entryArray = GptTableWriter.BuildEntryArray(table);
-        var arrayCrc = Crc32.HashToUInt32(entryArray);
+        var arrayCrc = Crc32Ieee.Compute(entryArray);
         var primaryBlocks = checked(table.PrimaryEntryArrayLba + arrayBlocks);
         var primaryBytes = new byte[checked((int)primaryBlocks * table.BlockSize)];
         GptTableWriter.BuildProtectiveMbr(table.BlockCount).CopyTo(primaryBytes, 0);

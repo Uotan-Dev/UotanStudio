@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -7,6 +6,7 @@ using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Metadata;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 
@@ -206,19 +206,19 @@ public static partial class FileSystemPreservation
     {
         var json = JsonSerializer.SerializeToNode(metadata, RepackJsonContext.Default.RepackMetadata)!.AsObject();
         if (json["fileSystemPreservation"] is JsonObject payload) payload.Remove("configurationHash");
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json.ToJsonString())));
+        return Convert.ToHexString(Sha256.ComputeHash(Encoding.UTF8.GetBytes(json.ToJsonString())));
     }
 
     private static string HashFile(string path, CancellationToken token, Action<int>? processed = null)
     {
         using var input = File.OpenRead(path);
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = Sha256.CreateAccumulator();
         var buffer = new byte[65536];
         int count;
         while ((count = input.Read(buffer)) != 0)
         {
             token.ThrowIfCancellationRequested();
-            hash.AppendData(buffer.AsSpan(0, count));
+            hash.Append(buffer.AsSpan(0, count));
             processed?.Invoke(count);
         }
         return Convert.ToHexString(hash.GetHashAndReset());

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk;
 
@@ -67,7 +68,7 @@ internal static class JksKeyStoreReader
             }
         }
 
-        digest.AppendData(data, bodyStart, offset - bodyStart);
+        digest.Append(data.AsSpan(bodyStart, offset - bodyStart));
         var computed = digest.GetHashAndReset();
         if (offset + computed.Length != data.Length) throw new InvalidDataException("JKS trailer length mismatch; the keystore is corrupted.");
         for (var i = 0; i < computed.Length; i++)
@@ -101,20 +102,20 @@ internal static class JksKeyStoreReader
         {
             var numRounds = (keyLength + digestLength - 1) / digestLength;
             var xorKey = new byte[keyLength];
-            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+            using var sha = Sha1.CreateAccumulator();
             var digest = protectedKey.AsSpan(0, saltLength).ToArray();
             for (var round = 0; round < numRounds; round++)
             {
-                sha.AppendData(passwordBytes);
-                sha.AppendData(digest);
+                sha.Append(passwordBytes);
+                sha.Append(digest);
                 digest = sha.GetHashAndReset();
                 Array.Copy(digest, 0, xorKey, round * digestLength, Math.Min(digestLength, xorKey.Length - (round * digestLength)));
             }
 
             var plainKey = new byte[keyLength];
             for (var i = 0; i < keyLength; i++) plainKey[i] = (byte)(protectedKey[saltLength + i] ^ xorKey[i]);
-            sha.AppendData(passwordBytes);
-            sha.AppendData(plainKey);
+            sha.Append(passwordBytes);
+            sha.Append(plainKey);
             var computed = sha.GetHashAndReset();
             if (!computed.AsSpan().SequenceEqual(protectedKey.AsSpan(saltLength + keyLength, digestLength)))
             {
@@ -128,13 +129,13 @@ internal static class JksKeyStoreReader
 
     /// <summary>The keystore integrity digest: SHA1(passwordBytes || "Mighty Aphrodite").</summary>
     /// <para>密钥库完整性摘要：SHA1(passwordBytes || "Mighty Aphrodite")。</para>
-    internal static IncrementalHash IntegrityDigest(string password)
+    internal static DigestAccumulator IntegrityDigest(string password)
     {
-        var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+        var hash = Sha1.CreateAccumulator();
         var passwordBytes = EncodePassword(password);
-        hash.AppendData(passwordBytes);
+        hash.Append(passwordBytes);
         CryptographicOperations.ZeroMemory(passwordBytes);
-        hash.AppendData("Mighty Aphrodite"u8);
+        hash.Append("Mighty Aphrodite"u8);
         return hash;
     }
 
@@ -277,25 +278,25 @@ public static class JksKeyStoreWriter
                 void WriteHashedInt32(int value)
                 {
                     writer.WriteBEInt32(value);
-                    digest.AppendData(WriteBEBytes(new byte[4], value));
+                    digest.Append(WriteBEBytes(new byte[4], value));
                 }
                 void WriteHashedInt16(int value)
                 {
                     writer.WriteBEInt16(value);
                     Span<byte> bytes = [(byte)(value >> 8), (byte)value];
-                    digest.AppendData(bytes);
+                    digest.Append(bytes);
                 }
                 void WriteHashedInt64(long value)
                 {
                     writer.WriteBEInt64(value);
                     Span<byte> bytes = stackalloc byte[8];
                     for (var i = 0; i < 8; i++) bytes[i] = (byte)(value >> ((7 - i) * 8));
-                    digest.AppendData(bytes);
+                    digest.Append(bytes);
                 }
                 void WriteHashed(ReadOnlySpan<byte> bytes)
                 {
                     writer.Write(bytes);
-                    digest.AppendData(bytes);
+                    digest.Append(bytes);
                 }
 
                 WriteHashedInt32(PrivateKeyTag);
@@ -337,12 +338,12 @@ public static class JksKeyStoreWriter
             var numRounds = (plainKey.Length + DigestLength - 1) / DigestLength;
             var salt = RandomNumberGenerator.GetBytes(SaltLength);
             var xorKey = new byte[plainKey.Length];
-            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+            using var sha = Sha1.CreateAccumulator();
             var digest = salt;
             for (var round = 0; round < numRounds; round++)
             {
-                sha.AppendData(passwordBytes);
-                sha.AppendData(digest);
+                sha.Append(passwordBytes);
+                sha.Append(digest);
                 digest = sha.GetHashAndReset();
                 var copyLength = Math.Min(DigestLength, xorKey.Length - (round * DigestLength));
                 Array.Copy(digest, 0, xorKey, round * DigestLength, copyLength);
@@ -351,8 +352,8 @@ public static class JksKeyStoreWriter
             var protectedKey = new byte[SaltLength + plainKey.Length + DigestLength];
             Array.Copy(salt, protectedKey, SaltLength);
             for (var i = 0; i < plainKey.Length; i++) protectedKey[SaltLength + i] = (byte)(plainKey[i] ^ xorKey[i]);
-            sha.AppendData(passwordBytes);
-            sha.AppendData(plainKey);
+            sha.Append(passwordBytes);
+            sha.Append(plainKey);
             var check = sha.GetHashAndReset();
             Array.Copy(check, 0, protectedKey, SaltLength + plainKey.Length, DigestLength);
             return protectedKey;

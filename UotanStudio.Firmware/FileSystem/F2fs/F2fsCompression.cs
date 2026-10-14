@@ -1,6 +1,8 @@
 using System.Buffers;
 using K4os.Compression.LZ4;
+using UotanStudio.Compress.Codecs.Lz4;
 using UotanStudio.Compress.Codecs.Lzo;
+using UotanStudio.Compress.Codecs.Zstd;
 
 namespace UotanStudio.Firmware.FileSystem.F2fs;
 
@@ -160,11 +162,11 @@ internal static class F2fsCompression
             _ => LZ4Level.L00_FAST,
         };
 
-        var maxOutput = LZ4Codec.MaximumOutputSize(data.Length);
+        var maxOutput = Lz4BlockCodec.MaximumOutputSize(data.Length);
         var target = ArrayPool<byte>.Shared.Rent(maxOutput);
         try
         {
-            var written = LZ4Codec.Encode(data, target.AsSpan(0, maxOutput), lz4Level);
+            var written = Lz4BlockCodec.Encode(data, target.AsSpan(0, maxOutput), (int)lz4Level);
             if (written <= 0)
                 throw new InvalidOperationException("LZ4 compression produced no output.");
             return target.AsSpan(0, written).ToArray();
@@ -175,7 +177,7 @@ internal static class F2fsCompression
     private static byte[] DecompressLz4(ReadOnlySpan<byte> compressed, int expectedSize)
     {
         var result = new byte[expectedSize];
-        var decoded = LZ4Codec.Decode(compressed, result);
+        var decoded = Lz4BlockCodec.Decode(compressed, result);
         if (decoded < 0)
         {
             throw new FileSystemCorruptedException("LZ4 decompression failed.  LZ4 解压失败。");
@@ -186,9 +188,14 @@ internal static class F2fsCompression
 
     private static byte[] CompressZstd(ReadOnlySpan<byte> data, int level)
     {
-        using var compressor = new ZstdSharp.Compressor(level > 0 ? level : 3);
-        var result = compressor.Wrap(data);
-        return result.ToArray();
+        var maxOutput = ZstdBlockCodec.MaximumCompressedSize(data.Length);
+        var target = ArrayPool<byte>.Shared.Rent(maxOutput);
+        try
+        {
+            var written = ZstdBlockCodec.Compress(data, target.AsSpan(0, maxOutput), level > 0 ? level : 3);
+            return target.AsSpan(0, written).ToArray();
+        }
+        finally { ArrayPool<byte>.Shared.Return(target); }
     }
 
     private static byte[] DecompressZstd(ReadOnlySpan<byte> compressed, int expectedSize)

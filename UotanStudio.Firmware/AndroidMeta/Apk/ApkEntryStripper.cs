@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
-using System.IO.Hashing;
 using System.Text;
 using UotanStudio.Firmware.AndroidMeta.Apk.Signing;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Hash.Crc32Ieee;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk;
 
@@ -291,11 +291,7 @@ public static class ApkEntryStripper
 
     private static uint Crc32Of(byte[] content)
     {
-        var crc = new Crc32();
-        crc.Append(content);
-        Span<byte> hash = stackalloc byte[4];
-        crc.GetCurrentHash(hash);
-        return BinaryPrimitives.ReadUInt32LittleEndian(hash);
+        return Crc32Ieee.Compute(content);
     }
 
     private static void WriteDosTimestamp(Span<byte> target)

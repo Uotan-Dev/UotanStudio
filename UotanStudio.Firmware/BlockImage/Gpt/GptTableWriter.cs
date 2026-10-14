@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
-using System.IO.Hashing;
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Hash.Crc32Ieee;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BlockImage.Gpt;
 
@@ -204,7 +204,7 @@ internal static class GptTableWriter
         var arrayBytes = checked((ulong)table.PartitionEntryCount * table.PartitionEntrySize);
         var arrayBlocks = (arrayBytes + (uint)table.BlockSize - 1) / (uint)table.BlockSize;
         var entryArray = BuildEntryArray(table);
-        var arrayCrc = Crc32.HashToUInt32(entryArray);
+        var arrayCrc = Crc32Ieee.Compute(entryArray);
         var primaryHeader = BuildHeaderBlock(table, 1, table.BlockCount - 1, table.PrimaryEntryArrayLba, arrayCrc);
         var backupHeader = BuildHeaderBlock(table, table.BlockCount - 1, 1, table.BackupEntryArrayLba, arrayCrc);
 
@@ -387,12 +387,12 @@ internal static class GptTableWriter
     private static string ComputeFingerprint(GptTable table)
     {
         var array = BuildEntryArray(table);
-        var arrayCrc = Crc32.HashToUInt32(array);
+        var arrayCrc = Crc32Ieee.Compute(array);
         var primary = BuildHeaderBlock(table, 1, table.BlockCount - 1, table.PrimaryEntryArrayLba, arrayCrc);
         var backup = BuildHeaderBlock(table, table.BlockCount - 1, 1, table.BackupEntryArrayLba, arrayCrc);
-        return Convert.ToHexString(SHA256.HashData([
-            .. SHA256.HashData(primary),
-            .. SHA256.HashData(backup),
+        return Convert.ToHexString(Sha256.ComputeHash([
+            .. Sha256.ComputeHash(primary),
+            .. Sha256.ComputeHash(backup),
             .. array
         ]));
     }
@@ -506,7 +506,7 @@ internal static class GptTableWriter
         BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(84), table.PartitionEntrySize);
         BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(88), arrayCrc);
         BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(16),
-            Crc32.HashToUInt32(block.AsSpan(0, (int)table.HeaderSize)));
+            Crc32Ieee.Compute(block.AsSpan(0, (int)table.HeaderSize)));
         return block;
     }
 

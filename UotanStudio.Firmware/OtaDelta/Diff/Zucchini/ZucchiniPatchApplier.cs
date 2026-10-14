@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using System.IO.Hashing;
+using UotanStudio.Hash.Crc32Ieee;
 
 namespace UotanStudio.Firmware.OtaDelta.Diff.Zucchini;
 
@@ -98,9 +98,9 @@ internal static class ZucchiniPatchApplier
         WriteUInt32(ZucchiniConstants.Magic, patch);
         WriteUInt32(ZucchiniConstants.Version, patch);
         WriteUInt32(checked((uint)oldData.Length), patch);
-        WriteUInt32(Crc32.HashToUInt32(oldData), patch);
+        WriteUInt32(Crc32Ieee.Compute(oldData), patch);
         WriteUInt32(checked((uint)newData.Length), patch);
-        WriteUInt32(Crc32.HashToUInt32(newData), patch);
+        WriteUInt32(Crc32Ieee.Compute(newData), patch);
         WriteUInt32(1, patch);
         WriteUInt32(0, patch);
         WriteUInt32(checked((uint)oldData.Length), patch);
@@ -280,7 +280,7 @@ internal static class ZucchiniPatchApplier
 
     private static void VerifyCrc(ReadOnlySpan<byte> data, uint expected, bool oldImage)
     {
-        var actual = Crc32.HashToUInt32(data);
+        var actual = Crc32Ieee.Compute(data);
         if (actual != expected) throw new ZucchiniChecksumException($"Zucchini {(oldImage ? "old" : "new")} image CRC mismatch: expected {expected:X8}, found {actual:X8}.");
     }
 

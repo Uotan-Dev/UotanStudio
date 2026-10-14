@@ -5,6 +5,7 @@ using UotanStudio.Firmware.BootSecurity.Avb.Verification;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Text;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 
@@ -568,7 +569,7 @@ public static partial class AvbSigner
         var signingInput = new byte[checked(HeaderSize + (int)auxSize)];
         header.CopyTo(signingInput, 0);
         aux.CopyTo(signingInput, HeaderSize);
-        var storedHash = SHA256.HashData(signingInput);
+        var storedHash = Sha256.ComputeHash(signingInput);
         var signature = SignData(signingInput, key);
 
         var vbmeta = new byte[checked(HeaderSize + (int)authSize + (int)auxSize)];

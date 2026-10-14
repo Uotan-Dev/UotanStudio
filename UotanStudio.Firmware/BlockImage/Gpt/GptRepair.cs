@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
-using System.IO.Hashing;
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Hash.Crc32Ieee;
 
 namespace UotanStudio.Firmware.BlockImage.Gpt;
 
@@ -232,7 +232,7 @@ internal static class GptRepair
 
         var blockCount = analysis.BlockCount;
         var primaryBlock = BuildPrimaryBlock(backupHeader, blockCount, blockSize,
-            Crc32.HashToUInt32(backupArray));
+            Crc32Ieee.Compute(backupArray));
         FileExtraction.WriteAtomic(destination, output =>
         {
             using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
@@ -391,7 +391,7 @@ internal static class GptRepair
         }
         var storedCrc = BinaryPrimitives.ReadUInt32LittleEndian(span[16..]);
         span[16..20].Clear();
-        if (Crc32.HashToUInt32(span[..(int)headerSize]) != storedCrc)
+        if (Crc32Ieee.Compute(span[..(int)headerSize]) != storedCrc)
         {
             issues.Add(new GptValidationIssue(crcCode, $"The header CRC at LBA {lba} does not match."));
             return null;
@@ -479,7 +479,7 @@ internal static class GptRepair
                 $"The primary entry array at LBA {header.ArrayLba} is not fully readable."));
             return false;
         }
-        if (Crc32.HashToUInt32(array) != header.ArrayCrc)
+        if (Crc32Ieee.Compute(array) != header.ArrayCrc)
         {
             issues.Add(new GptValidationIssue(GptValidationIssueCode.PrimaryEntryArrayCrcMismatch,
                 "The primary entry array CRC does not match the stored value."));
@@ -499,7 +499,7 @@ internal static class GptRepair
                 $"The backup entry array at LBA {header.ArrayLba} is not fully readable."));
             return false;
         }
-        if (Crc32.HashToUInt32(array) != header.ArrayCrc)
+        if (Crc32Ieee.Compute(array) != header.ArrayCrc)
         {
             issues.Add(new GptValidationIssue(GptValidationIssueCode.BackupEntryArrayCrcMismatch,
                 "The backup entry array CRC does not match the stored value."));
@@ -621,7 +621,7 @@ internal static class GptRepair
         BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(84), backup.EntrySize);
         BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(88), arrayCrc);
         BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(16),
-            Crc32.HashToUInt32(block.AsSpan(0, (int)backup.HeaderSize)));
+            Crc32Ieee.Compute(block.AsSpan(0, (int)backup.HeaderSize)));
         return block;
     }
 

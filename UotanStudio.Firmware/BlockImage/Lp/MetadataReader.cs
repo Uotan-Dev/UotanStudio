@@ -1,5 +1,5 @@
-using System.Security.Cryptography;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BlockImage.Lp;
 
@@ -181,7 +181,7 @@ public static class MetadataReader
         var structSize = (int)geometry.StructSize;
         var structData = buffer.AsSpan(0, structSize).ToArray();
         structData.AsSpan(8, 32).Clear();
-        var hash = SHA256.HashData(structData);
+        var hash = Sha256.ComputeHash(structData);
         if (!hash.AsSpan().SequenceEqual(geometry.Checksum))
         {
             throw new InvalidDataException("LP geometry checksum mismatch.");
@@ -286,7 +286,7 @@ public static class MetadataReader
 
         var headerHashData = headerBuffer.AsSpan(0, (int)Math.Min(header.HeaderSize, headerBuffer.Length)).ToArray();
         headerHashData.AsSpan(12, 32).Clear();
-        var headerHash = SHA256.HashData(headerHashData);
+        var headerHash = Sha256.ComputeHash(headerHashData);
         if (!headerHash.AsSpan().SequenceEqual(header.HeaderChecksum))
         {
             throw new InvalidDataException("LP metadata header checksum mismatch.");
@@ -294,7 +294,7 @@ public static class MetadataReader
 
         var tablesBuffer = new byte[header.TablesSize];
         stream.ReadExactly(tablesBuffer);
-        var tablesHash = SHA256.HashData(tablesBuffer);
+        var tablesHash = Sha256.ComputeHash(tablesBuffer);
         if (!tablesHash.AsSpan().SequenceEqual(header.TablesChecksum))
         {
             throw new InvalidDataException("LP metadata tables checksum mismatch.");

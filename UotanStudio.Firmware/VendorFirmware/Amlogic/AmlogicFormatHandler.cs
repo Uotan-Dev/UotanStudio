@@ -3,7 +3,8 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
-using UotanStudio.Hash.Crc32;
+using UotanStudio.Hash.Crc32Register;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.VendorFirmware.Amlogic;
 
@@ -500,7 +501,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
             await input.ReadExactlyAsync(verifyData, cancellationToken).ConfigureAwait(false);
             var expected = ParseVerifyDigest(verifyData, verifyItem.SubType);
             input.Position = matches[0].Offset;
-            using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+            using var sha1 = Sha1.CreateAccumulator();
             await CopyExactlyAsync(input, Stream.Null, matches[0].Size, sha1, cancellationToken).ConfigureAwait(false);
             var actual = sha1.GetHashAndReset();
             if (!CryptographicOperations.FixedTimeEquals(expected, actual))
@@ -581,7 +582,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
                 await using var input = new FileStream(item.Source.Path, FileMode.Open, FileAccess.Read, FileShare.Read,
                     128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
                 input.Position = item.Source.SourceOffset;
-                using var sha1 = item.Source.Verify ? IncrementalHash.CreateHash(HashAlgorithmName.SHA1) : null;
+                using var sha1 = item.Source.Verify ? Sha1.CreateAccumulator() : null;
                 await CopyExactlyAsync(input, output, item.Size, sha1, cancellationToken).ConfigureAwait(false);
                 if (sha1 is not null)
                 {
@@ -692,7 +693,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
         int read;
         while ((read = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
         {
-            crc = Crc32.Compute(buffer.AsSpan(0, read), crc);
+            crc = Crc32Register.Compute(buffer.AsSpan(0, read), crc);
         }
         return crc;
     }
@@ -701,7 +702,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
         Stream input,
         Stream output,
         long length,
-        IncrementalHash? hash,
+        DigestAccumulator? hash,
         CancellationToken cancellationToken)
     {
         var buffer = new byte[128 * 1024];
@@ -713,7 +714,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
             {
                 throw new EndOfStreamException("AMLogic item data is truncated.");
             }
-            hash?.AppendData(buffer, 0, read);
+            hash?.Append(buffer.AsSpan(0, read));
             await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             length -= read;
         }

@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.FileSystem.F2fs.Models;
-using UotanStudio.Hash.Crc32;
+using UotanStudio.Hash.Crc32Register;
 
 namespace UotanStudio.Firmware.FileSystem.F2fs;
 
@@ -321,7 +321,7 @@ public sealed class F2fsParser : IDisposable
         }
     }
 
-    private static uint ComputeCrc32(uint crc, ReadOnlySpan<byte> data) => Crc32.Compute(data, crc);
+    private static uint ComputeCrc32(uint crc, ReadOnlySpan<byte> data) => Crc32Register.Compute(data, crc);
 
     /// <summary>
     /// Walks the directory tree from the root inode and returns all entries (files, directories and symlinks) with their relative paths.

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Hash.Digests;
 using UotanStudio.Hash.RockchipCrc32;
 
 namespace UotanStudio.Firmware.VendorFirmware.Rockchip;
@@ -270,7 +271,7 @@ internal static class RockchipExtractor
             if (value is not (>= (byte)'0' and <= (byte)'9') and not (>= (byte)'a' and <= (byte)'f'))
                 throw new InvalidDataException("RKFW MD5 trailer is not lowercase hexadecimal ASCII.");
         }
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
+        using var hash = Md5.CreateAccumulator();
         stream.Position = 0;
         var remaining = stream.Length - stored.Length;
         var buffer = new byte[128 * 1024];
@@ -278,7 +279,7 @@ internal static class RockchipExtractor
         {
             var read = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
             if (read == 0) throw new EndOfStreamException();
-            hash.AppendData(buffer, 0, read);
+            hash.Append(buffer.AsSpan(0, read));
             remaining -= read;
         }
         var actual = Encoding.ASCII.GetBytes(Convert.ToHexStringLower(hash.GetHashAndReset()));

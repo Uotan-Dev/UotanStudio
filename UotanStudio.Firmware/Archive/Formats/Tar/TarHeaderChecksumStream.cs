@@ -1,3 +1,5 @@
+using UotanStudio.Hash.Sums;
+
 namespace UotanStudio.Firmware.Archive.Formats.Tar;
 
 /// <summary>
@@ -211,11 +213,10 @@ internal sealed class TarHeaderChecksumStream(Stream inner) : Stream
     private static void ValidateHeader(byte[] header, long headerStart)
     {
         var recorded = ReadOctal(header.AsSpan(ChecksumOffset, 8));
-        uint computed = 0;
-        for (var i = 0; i < BlockSize; i++)
-        {
-            computed += i is >= ChecksumOffset and < ChecksumOffset + 8 ? (byte)' ' : header[i];
-        }
+        Span<byte> block = stackalloc byte[BlockSize];
+        header.AsSpan(0, BlockSize).CopyTo(block);
+        block[ChecksumOffset..(ChecksumOffset + 8)].Fill((byte)' ');
+        var computed = ByteSum32.Compute(block);
 
         if (computed != recorded)
         {

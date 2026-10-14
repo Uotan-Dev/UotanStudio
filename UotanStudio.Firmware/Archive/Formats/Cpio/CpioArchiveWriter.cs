@@ -5,6 +5,7 @@ using UotanStudio.Firmware.Archive.Models;
 using UotanStudio.Firmware.Archive.Writing;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Hash.Sums;
 
 namespace UotanStudio.Firmware.Archive.Formats.Cpio;
 
@@ -384,12 +385,7 @@ public sealed class CpioArchiveWriter
     {
         if (options.CpioSymlinkAsDataPayload && entry.Metadata.FileType == CpioFileType.SymbolicLink)
         {
-            uint total = 0;
-            foreach (var b in Encoding.UTF8.GetBytes(entry.LinkName ?? string.Empty))
-            {
-                total += b;
-            }
-            return total;
+            return ByteSum32.Compute(Encoding.UTF8.GetBytes(entry.LinkName ?? string.Empty));
         }
 
         if (entry.DataStream is { } stream)
@@ -411,12 +407,7 @@ public sealed class CpioArchiveWriter
             return SumExactly(source, payloadLength, entry.Name);
         }
 
-        uint sum = 0;
-        for (long i = 0; i < payloadLength; i++)
-        {
-            sum += entry.Data[checked((int)i)];
-        }
-        return sum;
+        return ByteSum32.Compute(entry.Data.AsSpan(0, checked((int)payloadLength)));
     }
 
     private static uint SumExactly(Stream source, long length, string entryName)
@@ -433,10 +424,7 @@ public sealed class CpioArchiveWriter
                 {
                     throw new EndOfStreamException($"Entry '{entryName}' ended before its declared length.");
                 }
-                for (var i = 0; i < read; i++)
-                {
-                    total += buffer[i];
-                }
+                total += ByteSum32.Compute(buffer.AsSpan(0, read));
                 remaining -= read;
             }
             return total;

@@ -1,7 +1,7 @@
-using System.Security.Cryptography;
 using UotanStudio.Compress;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.VendorFirmware.Dz;
 
@@ -133,13 +133,13 @@ internal static class DzExtractor
 
         var chunks = new List<DzChunk>();
         var chunkBuffer = new byte[DzChunkHeader.Size];
-        using var digest = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
+        using var digest = Md5.CreateAccumulator();
         for (uint index = 0; index < header.ChunkCount; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             FileExtraction.ValidateRange(fs.Position, DzChunkHeader.Size, fs.Length, "DZ chunk header");
             fs.ReadExactly(chunkBuffer);
-            digest.AppendData(chunkBuffer);
+            digest.Append(chunkBuffer);
             var chunk = DzChunkHeader.FromBytes(chunkBuffer);
             if (!chunk.Header.AsSpan().SequenceEqual(DzConstants.DzChunkHeader))
                 throw new InvalidDataException($"The DZ chunk {index} has invalid magic.");

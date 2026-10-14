@@ -1,5 +1,5 @@
-using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 
@@ -16,7 +16,7 @@ internal static class CryptoHelper
             throw new ArgumentNullException(nameof(data));
         }
 
-        var hex = Convert.ToHexStringLower(MD5.HashData(data));
+        var hex = Md5.ComputeHexLower(data);
         return Encoding.UTF8.GetBytes(hex[..16]);
     }
 

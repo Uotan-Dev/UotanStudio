@@ -1,8 +1,8 @@
-using System.Security.Cryptography;
 using Google.Protobuf;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Diff;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
 
@@ -176,7 +176,7 @@ public sealed partial class PayloadBuilder
                         DataOffset = (ulong)dataOffset,
                         DataLength = (ulong)patch.Length,
                         DataSha256Hash = ByteString.CopyFrom(hashing.GetHashAndReset()),
-                        SrcSha256Hash = ByteString.CopyFrom(SHA256.HashData(oldBuffer.AsSpan(0, count))),
+                        SrcSha256Hash = ByteString.CopyFrom(Sha256.ComputeHash(oldBuffer.AsSpan(0, count))),
                         SrcLength = (ulong)count,
                         DstLength = (ulong)count,
                         SourcePartitionName = partition.SourcePartitionName ?? partition.PartitionName

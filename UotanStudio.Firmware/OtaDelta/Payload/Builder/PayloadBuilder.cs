@@ -3,6 +3,7 @@ using Google.Protobuf;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
 
@@ -672,7 +673,7 @@ public sealed partial class PayloadBuilder : IDisposable
                 manifest.Partitions.Add(update);
                 continue;
             }
-            using var partitionHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            using var partitionHash = Sha256.CreateAccumulator();
             if (partition.OperationType == InstallOperation.Types.Type.Zero)
             {
                 if (partition.SizeBytes % BlockSize != 0) throw new PayloadGenerationException("Partition size must be block-aligned.");
@@ -690,7 +691,7 @@ public sealed partial class PayloadBuilder : IDisposable
                         : WriteReplaceOperation(data, buffer, count, InstallOperation.Types.Type.ReplaceBz, CompressionType.BZip2, cancellationToken);
                     operation.DstExtents.Add(new Extent { StartBlock = (partition.SizeBytes - remaining) / BlockSize, NumBlocks = (ulong)count / BlockSize });
                     update.Operations.Add(operation); operationCount++;
-                    partitionHash.AppendData(buffer, 0, count); remaining -= (ulong)count;
+                    partitionHash.Append(buffer.AsSpan(0, count)); remaining -= (ulong)count;
                 }
                 update.NewPartitionInfo = new PartitionInfo { Size = partition.SizeBytes, Hash = ByteString.CopyFrom(partitionHash.GetHashAndReset()) };
             }

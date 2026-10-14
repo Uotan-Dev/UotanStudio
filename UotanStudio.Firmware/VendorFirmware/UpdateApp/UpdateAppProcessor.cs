@@ -3,6 +3,7 @@ using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.Core.Text;
+using UotanStudio.Hash.Crc16CcittReversed;
 
 namespace UotanStudio.Firmware.VendorFirmware.UpdateApp;
 
@@ -197,7 +198,7 @@ internal static class UpdateAppProcessor
 
                 var expectedHeaderCrc = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(HeaderChecksumOffset));
                 BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(HeaderChecksumOffset), 0);
-                var actualHeaderCrc = ComputeCrc16(header);
+                var actualHeaderCrc = Crc16CcittReversed.Compute(header);
                 if (actualHeaderCrc != expectedHeaderCrc)
                     throw new InvalidDataException($"UPDATE.APP header CRC mismatch at 0x{headerStart:X}.");
             }
@@ -345,7 +346,7 @@ internal static class UpdateAppProcessor
                             offset += read;
                             remaining -= read;
                         }
-                        var actual = ComputeCrc16(buffer.AsSpan(0, count));
+                        var actual = Crc16CcittReversed.Compute(buffer.AsSpan(0, count));
                         if (actual != entry.ChecksumTable[block])
                             throw new InvalidDataException($"UPDATE.APP payload CRC mismatch for '{entry.Name}' block {block}.");
                         hashingStream.Write(buffer, 0, count);
@@ -370,16 +371,4 @@ internal static class UpdateAppProcessor
     }
 
     private static string CleanFileName(string name) => new([.. name.Where(c => c is >= ((char)32) and <= ((char)126))]);
-
-    private static ushort ComputeCrc16(ReadOnlySpan<byte> bytes)
-    {
-        var crc = (ushort)0xFFFF;
-        foreach (var value in bytes)
-        {
-            crc ^= value;
-            for (var bit = 0; bit < 8; bit++)
-                crc = (ushort)((crc & 1) != 0 ? (crc >> 1) ^ 0x8408 : crc >> 1);
-        }
-        return (ushort)(crc ^ 0xFFFF);
-    }
 }

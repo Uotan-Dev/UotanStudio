@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
-using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Compress;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.Patcher.Kernel;
 
@@ -89,7 +89,7 @@ internal static class KernelPatchInjector
         }
         else
         {
-            SHA256.HashData(keyBytes).CopyTo(preset[SetupRootSuperKey..]);
+            Sha256.ComputeHash(keyBytes).CopyTo(preset[SetupRootSuperKey..]);
             preset[SetupSuperKey..(SetupSuperKey + 0x40)].Clear();
         }
 
@@ -114,7 +114,17 @@ internal static class KernelPatchInjector
 
     private static long Align64(ulong value, int alignment) => checked(((long)((value + (ulong)alignment - 1) / (ulong)alignment)) * alignment);
 
-    private static bool HasKallsyms(ReadOnlySpan<byte> kernel)
+    /// <summary>
+    /// Reports whether the kernel advertises CONFIG_KALLSYMS, either as plaintext bytes or inside the gzip payload framed by the IKCFG_ST and IKCFG_ED markers.
+    /// <para>判断内核是否声明 CONFIG_KALLSYMS，既接受明文匹配，也解压 IKCFG_ST 与 IKCFG_ED 标记包裹的 gzip 配置块后判断。</para>
+    /// </summary>
+    /// <param name="kernel">待检测的内核镜像字节。</param>
+    /// <returns>内核明文或解压后的 IKCFG 配置块中存在 CONFIG_KALLSYMS=y 时为 true。</returns>
+    /// <remarks>
+    /// <para>The payload is decoded through CompressionService.CreateDecompressionStream, the repository's authoritative compression entry. A malformed gzip stream surfaces either as an InvalidDataException from the reader or as a CompressionException when the codec fails, and both simply mean the kernel carries no usable IKCFG config, so they are reported as false instead of propagating.</para>
+    /// <para>该数据块经由仓库权威压缩入口 CompressionService.CreateDecompressionStream 解码。损坏的 gzip 流会以读取器抛出的 InvalidDataException 或编解码失败时抛出的 CompressionException 呈现，两者都说明内核没有可用的 IKCFG 配置，因此返回 false 而不是继续向上抛出。</para>
+    /// </remarks>
+    internal static bool HasKallsyms(ReadOnlySpan<byte> kernel)
     {
         if (kernel.IndexOf("CONFIG_KALLSYMS=y"u8) >= 0) return true;
         var start = kernel.IndexOf("IKCFG_ST"u8);
@@ -125,11 +135,12 @@ internal static class KernelPatchInjector
         try
         {
             using var input = new MemoryStream(kernel.Slice(start, endRelative).ToArray(), writable: false);
-            using var gzip = new GZipStream(input, CompressionMode.Decompress);
+            using var gzip = CompressionService.CreateDecompressionStream(input, CompressionFormat.Gzip);
             using var config = new MemoryStream();
             gzip.CopyTo(config);
             return config.GetBuffer().AsSpan(0, checked((int)config.Length)).IndexOf("CONFIG_KALLSYMS=y"u8) >= 0;
         }
         catch (InvalidDataException) { return false; }
+        catch (CompressionException) { return false; }
     }
 }

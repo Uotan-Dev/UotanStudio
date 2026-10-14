@@ -6,6 +6,7 @@ using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Diff;
 using UotanStudio.Firmware.OtaDelta.Payload.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.OtaDelta.Dat;
 
@@ -200,7 +201,7 @@ internal static class DatReader
     {
         stream.Position = 0;
         if (expected is not null && (expected.Length != 40 || !expected.All(Uri.IsHexDigit) ||
-            !CryptographicOperations.FixedTimeEquals(SHA1.HashData(stream), Convert.FromHexString(expected))))
+            !CryptographicOperations.FixedTimeEquals(Sha1.ComputeHash(stream), Convert.FromHexString(expected))))
             throw new InvalidDataException("Transfer command SHA-1 mismatch.");
         stream.Position = 0;
     }

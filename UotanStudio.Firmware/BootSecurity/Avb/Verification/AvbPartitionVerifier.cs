@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Verification;
 
@@ -88,14 +89,14 @@ internal static class AvbPartitionVerifier
                     return Result("The hash descriptor contains unsupported flags.");
                 }
                 image.Position = 0;
-                hasher.AppendData(salt);
+                hasher.Append(salt);
                 var buffer = new byte[64 * 1024];
                 var remaining = (long)descriptor.ImageSize;
                 while (remaining > 0)
                 {
                     var count = (int)Math.Min(buffer.Length, remaining);
                     await image.ReadExactlyAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
-                    hasher.AppendData(buffer.AsSpan(0, count));
+                    hasher.Append(buffer.AsSpan(0, count));
                     remaining -= count;
                 }
                 cancellationToken.ThrowIfCancellationRequested();
@@ -205,10 +206,10 @@ internal static class AvbPartitionVerifier
         };
     }
 
-    private static void HashBlock(IncrementalHash hasher, byte[] salt, ReadOnlySpan<byte> block, byte[] digest)
+    private static void HashBlock(DigestAccumulator hasher, byte[] salt, ReadOnlySpan<byte> block, byte[] digest)
     {
-        hasher.AppendData(salt);
-        hasher.AppendData(block);
+        hasher.Append(salt);
+        hasher.Append(block);
         hasher.GetHashAndReset(digest);
     }
 
@@ -217,11 +218,11 @@ internal static class AvbPartitionVerifier
     /// the accepted set (only <c>sha1</c>, <c>sha256</c> and <c>sha512</c> are supported).
     /// <para>创建 AVB 描述符所指定的摘要；名称不在受支持集合（仅 <c>sha1</c>、<c>sha256</c>、<c>sha512</c>）内时返回 <see langword="null"/>。</para>
     /// </summary>
-    private static IncrementalHash? CreateDescriptorDigest(string? algorithm) => algorithm switch
+    private static DigestAccumulator? CreateDescriptorDigest(string? algorithm) => algorithm switch
     {
-        "sha1" => IncrementalHash.CreateHash(HashAlgorithmName.SHA1),
-        "sha256" => IncrementalHash.CreateHash(HashAlgorithmName.SHA256),
-        "sha512" => IncrementalHash.CreateHash(HashAlgorithmName.SHA512),
+        "sha1" => Sha1.CreateAccumulator(),
+        "sha256" => Sha256.CreateAccumulator(),
+        "sha512" => Sha512.CreateAccumulator(),
         _ => null
     };
 

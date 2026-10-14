@@ -169,6 +169,7 @@ public sealed class DexSmaliCallSiteTests
         }
         Assert.NotEqual(0, handles);
         BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(handles), 5);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), UotanStudio.Hash.Adler32.Adler32.Compute(bytes.AsSpan(12)));
         Assert.Throws<DexException>(() => DexFile.Load(bytes));
     }
 }

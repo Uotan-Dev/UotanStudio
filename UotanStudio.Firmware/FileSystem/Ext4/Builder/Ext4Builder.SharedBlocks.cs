@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
-using System.Security.Cryptography;
 using Microsoft.Win32.SafeHandles;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;
 
@@ -351,15 +351,15 @@ public sealed partial class Ext4Builder
         [System.Runtime.CompilerServices.SkipLocalsInit]
         public long Resolve(ReadOnlyMemory<byte> content)
         {
-            Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];
+            Span<byte> hash = stackalloc byte[Sha256.HashSizeInBytes];
             if (_hashProvider is null)
             {
-                SHA256.HashData(content.Span, hash);
+                Sha256.ComputeHash(content.Span, hash);
             }
             else
             {
                 var supplied = _hashProvider(content);
-                if (supplied.Length != SHA256.HashSizeInBytes)
+                if (supplied.Length != Sha256.HashSizeInBytes)
                 {
                     throw new InvalidOperationException("EXT4 block hash provider must return exactly 32 bytes.");
                 }
@@ -379,14 +379,14 @@ public sealed partial class Ext4Builder
                     var identity = UniqueBlockCount++;
                     RandomAccess.Write(_stagingHandle, content.Span, checked(identity * _blockSize));
                     _record[0] = 1;
-                    hash.CopyTo(_record.AsSpan(HashOffset, SHA256.HashSizeInBytes));
+                    hash.CopyTo(_record.AsSpan(HashOffset, Sha256.HashSizeInBytes));
                     BinaryPrimitives.WriteInt32LittleEndian(_record.AsSpan(LengthOffset, 4), content.Length);
                     BinaryPrimitives.WriteInt64LittleEndian(_record.AsSpan(IdentityOffset, 8), identity);
                     RandomAccess.Write(_handle, _record, position);
                     return identity;
                 }
 
-                if (_record.AsSpan(HashOffset, SHA256.HashSizeInBytes).SequenceEqual(hash)
+                if (_record.AsSpan(HashOffset, Sha256.HashSizeInBytes).SequenceEqual(hash)
                     && BinaryPrimitives.ReadInt32LittleEndian(_record.AsSpan(LengthOffset, 4)) == content.Length)
                 {
                     var identity = BinaryPrimitives.ReadInt64LittleEndian(_record.AsSpan(IdentityOffset, 8));

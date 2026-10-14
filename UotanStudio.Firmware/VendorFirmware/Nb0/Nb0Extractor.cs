@@ -1,8 +1,8 @@
 using System.Buffers;
-using System.Security.Cryptography;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.VendorFirmware.Nb0.Models;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.VendorFirmware.Nb0;
 
@@ -460,7 +460,7 @@ public sealed class Nb0Extractor(int bufferSize = Nb0Extractor.DefaultBufferSize
         var start = ValidateEntryRange(stream, entry);
 
         stream.Position = start;
-        using var md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
+        using var md5 = Md5.CreateAccumulator();
         var buffer = ArrayPool<byte>.Shared.Rent(_bufferSize);
         try
         {
@@ -475,7 +475,7 @@ public sealed class Nb0Extractor(int bufferSize = Nb0Extractor.DefaultBufferSize
                 }
 
                 output.Write(buffer, 0, read);
-                md5.AppendData(buffer, 0, read);
+                md5.Append(buffer.AsSpan(0, read));
                 remaining -= read;
             }
         }
@@ -554,7 +554,7 @@ public sealed class Nb0Extractor(int bufferSize = Nb0Extractor.DefaultBufferSize
         var start = ValidateEntryRange(stream, entry);
 
         stream.Position = start;
-        using var md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
+        using var md5 = Md5.CreateAccumulator();
         var buffer = ArrayPool<byte>.Shared.Rent(_bufferSize);
         try
         {
@@ -570,7 +570,7 @@ public sealed class Nb0Extractor(int bufferSize = Nb0Extractor.DefaultBufferSize
                 }
 
                 await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                md5.AppendData(buffer, 0, read);
+                md5.Append(buffer.AsSpan(0, read));
                 remaining -= read;
             }
         }

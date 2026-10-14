@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.Executable.Elf;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.Executable.Qualcomm;
 
@@ -552,7 +553,7 @@ public static class QualcommImageAnalyzer
                     byte[] actual;
                     if (segmentType == 7 && !pageMode)
                     {
-                        using var hash = IncrementalHash.CreateHash(HashName(algorithm));
+                        using var hash = CreateMbnDigest(algorithm);
                         AppendRange(hash, stream, 0, elf.Header.HeaderSize, token);
                         AppendRange(hash, stream, (long)elf.Header.ProgramHeaderOffset,
                             checked((long)elf.Header.ProgramHeaderEntrySize * elf.Header.ProgramHeaderCount), token);
@@ -560,7 +561,7 @@ public static class QualcommImageAnalyzer
                     }
                     else
                     {
-                        using var hash = IncrementalHash.CreateHash(HashName(algorithm));
+                        using var hash = CreateMbnDigest(algorithm);
                         AppendRange(hash, stream, checked((long)(segment.Offset + skipped + page * 4096)),
                             pageMode ? 4096 : checked((long)segment.FileSize), token);
                         actual = hash.GetHashAndReset();
@@ -589,14 +590,17 @@ public static class QualcommImageAnalyzer
             trailingV6 ? "MBN v6 carries a trailing 20-byte digest outside the segment table; it was not independently verified." : null);
     }
 
-    internal static HashAlgorithmName HashName(string name) => name switch
+    internal static DigestAccumulator CreateMbnDigest(string name) => name switch
     {
-        "SHA-1" => HashAlgorithmName.SHA1,
-        "SHA-384" => HashAlgorithmName.SHA384,
-        _ => HashAlgorithmName.SHA256
+        "SHA-1" => Sha1.CreateAccumulator(),
+        "SHA-384" => Sha384.CreateAccumulator(),
+        _ => Sha256.CreateAccumulator()
     };
 
-    internal static void AppendRange(IncrementalHash hash, Stream stream, long offset, long length, CancellationToken token)
+    internal static void AppendRange(DigestAccumulator hash, Stream stream, long offset, long length, CancellationToken token) =>
+        AppendBytes(hash.Append, stream, offset, length, token);
+
+    private static void AppendBytes(Action<ReadOnlySpan<byte>> append, Stream stream, long offset, long length, CancellationToken token)
     {
         if (offset < 0 || length < 0 || offset > stream.Length || length > stream.Length - offset)
         {
@@ -616,7 +620,7 @@ public static class QualcommImageAnalyzer
                     throw new EndOfStreamException();
                 }
 
-                hash.AppendData(buffer.AsSpan(0, read));
+                append(buffer.AsSpan(0, read));
                 length -= read;
             }
         }

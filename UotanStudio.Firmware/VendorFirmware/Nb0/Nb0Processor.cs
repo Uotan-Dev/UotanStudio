@@ -1,5 +1,5 @@
-using System.Security.Cryptography;
 using UotanStudio.Firmware.VendorFirmware.Nb0.Models;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.VendorFirmware.Nb0;
 
@@ -35,7 +35,7 @@ internal static class Nb0Md5Helper
     /// Computes the MD5 digest of the data.
     /// <para>计算数据的 MD5 摘要。</para>
     /// </summary>
-    internal static byte[] ComputeMd5(byte[] data) => MD5.HashData(data);
+    internal static byte[] ComputeMd5(byte[] data) => Md5.ComputeHash(data);
 
     /// <summary>
     /// Compares whether two MD5 digests are equal.

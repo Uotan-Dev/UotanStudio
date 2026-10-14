@@ -1,8 +1,8 @@
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 
@@ -684,7 +684,7 @@ public class BootImageParser : IDisposable
     /// <para>20 字节 SHA-1 摘要，呈现为 40 个小写十六进制字符。</para></returns>
     public static string CalculateSha1(byte[] data)
     {
-        var hash = SHA1.HashData(data);
+        var hash = Sha1.ComputeHash(data);
         return Convert.ToHexStringLower(hash);
     }
 

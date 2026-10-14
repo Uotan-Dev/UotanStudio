@@ -120,6 +120,18 @@ public sealed class ArtOatTests : IDisposable
             OatFile.Inspect(Write("test.odex", oat), Write("test.vdex", vdex), cancellation.Token));
     }
 
+    [Fact]
+    public void WriteDexHashes_AssembledDex_StoredChecksumMatchesOneShotAdler32()
+    {
+        var (_, dex) = ArtVdexFixture.Fixture(1);
+        var bytes = (byte[])dex.Clone();
+        using var stream = new MemoryStream(bytes);
+        var data = new ArtData(stream, 0, bytes.Length, Token);
+        data.WriteDexHashes();
+        Assert.Equal(UotanStudio.Hash.Adler32.Adler32.Compute(bytes.AsSpan(12)), BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(8)));
+        data.VerifyDexHashes();
+    }
+
     private static (byte[] Oat, byte[] Vdex) Fixture(int version = 124)
     {
         var vdex = ArtVdexFixture.Fixture(1, version == 124 ? 6 : 10).Vdex;

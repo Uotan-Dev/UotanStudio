@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.Executable.Qualcomm;
 
@@ -96,7 +97,7 @@ internal static class QualcommAuthentication
             {
                 var certificate = certs[index];
                 summaries.Add(new(authority, certificate.Subject, certificate.Issuer,
-                    Convert.ToHexString(SHA256.HashData(certificate.RawData)))
+                    Convert.ToHexString(Sha256.ComputeHash(certificate.RawData)))
                 {
                     Index = index,
                     SerialNumber = certificate.SerialNumber,
@@ -104,7 +105,7 @@ internal static class QualcommAuthentication
                     NotAfter = certificate.NotAfter.ToUniversalTime(),
                     SignatureAlgorithmOid = certificate.SignatureAlgorithm.Value ?? "",
                     PublicKeyAlgorithmOid = certificate.PublicKey.Oid.Value ?? "",
-                    Sha384 = Convert.ToHexString(SHA384.HashData(certificate.RawData)),
+                    Sha384 = Convert.ToHexString(Sha384.ComputeHash(certificate.RawData)),
                     Attributes = QualcommMetadataReader.ReadAttributes(certificate.SubjectName.RawData)
                 });
             }
@@ -127,7 +128,7 @@ internal static class QualcommAuthentication
                 }
             }
 
-            var rootSha384 = chain.Valid ? Convert.ToHexString(SHA384.HashData(chain.RootRaw!)) : null;
+            var rootSha384 = chain.Valid ? Convert.ToHexString(Sha384.ComputeHash(chain.RootRaw!)) : null;
             var trust = options.TrustedRootCertificateSha256.Count == 0
                 && options.TrustedRootCertificateSha384.Count == 0
                 ? QualcommVerificationStatus.NotChecked
@@ -272,7 +273,7 @@ internal static class QualcommAuthentication
         if (validRoots.Count == 1)
         {
             var raw = validRoots[0].RawData;
-            return (true, Convert.ToHexString(SHA256.HashData(raw)), raw, false, "");
+            return (true, Convert.ToHexString(Sha256.ComputeHash(raw)), raw, false, "");
         }
 
         return (false, null, null, validRoots.Count > 1, validRoots.Count > 1
@@ -286,10 +287,10 @@ internal static class QualcommAuthentication
     {
         byte[] digest = algorithm switch
         {
-            1 => SHA1.HashData(root),
-            2 => SHA256.HashData(root),
-            3 => SHA384.HashData(root),
-            4 => SHA512.HashData(root),
+            1 => Sha1.ComputeHash(root),
+            2 => Sha256.ComputeHash(root),
+            3 => Sha384.ComputeHash(root),
+            4 => Sha512.ComputeHash(root),
             _ => []
         };
         if (digest.Length == 0)
@@ -349,6 +350,15 @@ internal static class QualcommAuthentication
         return [.. candidates];
     }
 
+    private static DigestAccumulator CreateCandidateDigest(HashAlgorithmName algorithm) => algorithm.Name switch
+    {
+        "SHA1" => Sha1.CreateAccumulator(),
+        "SHA256" => Sha256.CreateAccumulator(),
+        "SHA384" => Sha384.CreateAccumulator(),
+        "SHA512" => Sha512.CreateAccumulator(),
+        _ => Sha256.CreateAccumulator()
+    };
+
     private static (bool Valid, QualcommVerificationStatus Status, string? Algorithm, string Error)
         VerifySignature(Stream stream, long baseOffset, long signedEnd, byte[] signature,
             X509Certificate2 leaf, QualcommMbnLayout? layout, string authority,
@@ -399,7 +409,7 @@ internal static class QualcommAuthentication
         {
             token.ThrowIfCancellationRequested();
             byte[] digest;
-            using (var hash = IncrementalHash.CreateHash(hashName))
+            using (var hash = CreateCandidateDigest(hashName))
             {
                 if (layout is null || layout.Value.Version == 3)
                 {
@@ -426,7 +436,7 @@ internal static class QualcommAuthentication
                         for (var remaining = length; remaining > 0;)
                         {
                             var chunk = Math.Min(remaining, zeros.Length);
-                            hash.AppendData(zeros[..chunk]);
+                            hash.Append(zeros[..chunk]);
                             remaining -= chunk;
                         }
 
@@ -493,17 +503,17 @@ internal static class QualcommAuthentication
     private static (bool Valid, bool Applicable) VerifyLegacySignature(Stream stream, long baseOffset, long signedEnd, byte[] signature, X509Certificate2 certificate, QualcommMbnLayout layout, string authority, CancellationToken token)
     {
         if (!TryReadLegacyIdentifiers(certificate, out var softwareId, out var hardwareId)) return (false, false);
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = Sha256.CreateAccumulator();
         AppendSignedData(hash, stream, baseOffset, signedEnd, layout, authority, token);
         var first = hash.GetHashAndReset();
         Span<byte> identifier = stackalloc byte[8];
         Span<byte> input = stackalloc byte[40];
         BinaryPrimitives.WriteUInt64BigEndian(identifier, softwareId ^ 0x3636363636363636UL);
         identifier.CopyTo(input); first.CopyTo(input[8..]);
-        var second = SHA256.HashData(input);
+        var second = Sha256.ComputeHash(input);
         BinaryPrimitives.WriteUInt64BigEndian(identifier, hardwareId ^ 0x5C5C5C5C5C5C5C5CUL);
         identifier.CopyTo(input); second.CopyTo(input[8..]);
-        var third = SHA256.HashData(input);
+        var third = Sha256.ComputeHash(input);
         using var rsa = certificate.GetRSAPublicKey();
         if (rsa is null || !TryNormalizeRsaSignature(signature, rsa.KeySize, out var normalized)) return (false, true);
         return (VerifyRawPkcs1Digest(rsa, normalized, third), true);
@@ -521,7 +531,7 @@ internal static class QualcommAuthentication
         return hasSoftwareId && hasHardwareId;
     }
 
-    private static void AppendSignedData(IncrementalHash hash, Stream stream, long baseOffset, long signedEnd, QualcommMbnLayout layout, string authority, CancellationToken token)
+    private static void AppendSignedData(DigestAccumulator hash, Stream stream, long baseOffset, long signedEnd, QualcommMbnLayout layout, string authority, CancellationToken token)
     {
         Span<byte> zeros = stackalloc byte[4096]; zeros.Clear();
         var masks = authority == "QTI"
@@ -533,7 +543,7 @@ internal static class QualcommAuthentication
             var start = baseOffset + offset;
             if (start < cursor || start + length > signedEnd) throw new ExecutableCorruptedException("Signed-data mask is out of range.");
             QualcommImageAnalyzer.AppendRange(hash, stream, cursor, start - cursor, token);
-            for (var remaining = length; remaining > 0;) { var chunk = Math.Min(remaining, zeros.Length); hash.AppendData(zeros[..chunk]); remaining -= chunk; }
+            for (var remaining = length; remaining > 0;) { var chunk = Math.Min(remaining, zeros.Length); hash.Append(zeros[..chunk]); remaining -= chunk; }
             cursor = start + length;
         }
         QualcommImageAnalyzer.AppendRange(hash, stream, cursor, signedEnd - cursor, token);

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk.Signing;
 
@@ -71,7 +72,7 @@ internal static class ApkContentDigest
         var chunkCountEocd = CountChunks(patchedEocd.Length);
         var totalChunks = checked((int)(chunkCountZip + chunkCountCd + chunkCountEocd));
 
-        using var topLevel = IncrementalHash.CreateHash(new HashAlgorithmName(hashName));
+        using var topLevel = CreateAccumulator(hashName);
         var digestSize = topLevel.HashLengthInBytes;
         var perChunkDigests = new byte[checked(totalChunks * digestSize)];
         var filled = 0;
@@ -84,10 +85,30 @@ internal static class ApkContentDigest
             throw new InvalidOperationException("Chunk digest buffer was not filled exactly. 分块摘要缓冲区未被精确填满。");
         }
 
-        topLevel.AppendData(TopPrefix(totalChunks));
-        topLevel.AppendData(perChunkDigests);
+        topLevel.Append(TopPrefix(totalChunks));
+        topLevel.Append(perChunkDigests);
         return topLevel.GetHashAndReset();
     }
+
+    /// <summary>
+    /// Creates the accumulator whose algorithm matches the APK signer's hash name, keeping the
+    /// unsupported-name failure identical to the algorithm lookup it replaces.
+    /// <para>创建与 APK 签名器哈希名称同算法的累加器，名称不受支持时的失败与被替换的算法查找完全一致。</para>
+    /// </summary>
+    /// <param name="hashName">Hash algorithm name ("SHA256"/"SHA512").
+    /// <para>哈希算法名称（"SHA256"/"SHA512"）。</para></param>
+    /// <returns>An accumulator fixed to that algorithm. <para>固定为该算法的累加器。</para></returns>
+    /// <exception cref="CryptographicException">The name is outside the known hash algorithm set.
+    /// <para>该名称不在已知哈希算法集合内。</para></exception>
+    private static DigestAccumulator CreateAccumulator(string hashName) => hashName switch
+    {
+        "MD5" => Md5.CreateAccumulator(),
+        "SHA1" => Sha1.CreateAccumulator(),
+        "SHA256" => Sha256.CreateAccumulator(),
+        "SHA384" => Sha384.CreateAccumulator(),
+        "SHA512" => Sha512.CreateAccumulator(),
+        _ => throw new CryptographicException($"'{hashName}' is not a known hash algorithm."),
+    };
 
     private static long CountChunks(long length) =>
         (length + ApkSignatureConstants.ContentDigestChunkSize - 1) / ApkSignatureConstants.ContentDigestChunkSize;
@@ -157,14 +178,14 @@ internal static class ApkContentDigest
     private static int AppendChunkDigest(
         Stream stream, long offset, int chunkLength, string hashName, byte[] digests, int filled, byte[]? buffer = null)
     {
-        using var hash = IncrementalHash.CreateHash(new HashAlgorithmName(hashName));
-        hash.AppendData(ChunkPrefix(chunkLength));
+        using var hash = CreateAccumulator(hashName);
+        hash.Append(ChunkPrefix(chunkLength));
         if (chunkLength > 0)
         {
             var scratch = buffer ?? new byte[chunkLength];
             stream.Seek(offset, SeekOrigin.Begin);
             stream.ReadExactly(scratch.AsSpan(0, chunkLength));
-            hash.AppendData(scratch.AsSpan(0, chunkLength));
+            hash.Append(scratch.AsSpan(0, chunkLength));
         }
 
         var written = hash.GetHashAndReset();
@@ -175,11 +196,11 @@ internal static class ApkContentDigest
     private static int AppendChunkDigest(
         byte[] data, long offset, int chunkLength, string hashName, byte[] digests, int filled)
     {
-        using var hash = IncrementalHash.CreateHash(new HashAlgorithmName(hashName));
-        hash.AppendData(ChunkPrefix(chunkLength));
+        using var hash = CreateAccumulator(hashName);
+        hash.Append(ChunkPrefix(chunkLength));
         if (chunkLength > 0)
         {
-            hash.AppendData(data.AsSpan(checked((int)offset), chunkLength));
+            hash.Append(data.AsSpan(checked((int)offset), chunkLength));
         }
 
         var written = hash.GetHashAndReset();

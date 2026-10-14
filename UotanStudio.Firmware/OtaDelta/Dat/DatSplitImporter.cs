@@ -1,6 +1,5 @@
 using System.Formats.Tar;
 using System.Globalization;
-using System.IO.Compression;
 using UotanStudio.Compress;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
@@ -526,7 +525,7 @@ public static class DatSplitImporter
         file.ReadExactly(header);
         file.Position = 0;
         return header[0] == 0x1F && header[1] == 0x8B
-            ? new GZipStream(file, CompressionMode.Decompress, leaveOpen: true)
+            ? CompressionService.CreateDecompressionStream(file, CompressionFormat.Gzip)
             : file;
     }
 

@@ -1,9 +1,7 @@
 using System.Buffers.Binary;
-using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using SevenZip;
 using SevenZip.Compression.LZMA;
-using SharpCompress.Compressors.BZip2;
 using UotanStudio.Compress;
 using UotanStudio.Compress.Compressors;
 using UotanStudio.Compress.Detection;
@@ -16,7 +14,7 @@ using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Metadata;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
-using SharpCompressCompressionMode = SharpCompress.Compressors.CompressionMode;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.Archive;
 
@@ -284,6 +282,15 @@ public sealed partial class CpioFormatHandler
     /// 900 kB 块布局，因此记录为更小块等级的源会以等级 9 重新编码：结果仍是合法的 bzip2 流，仅压缩率
     /// 被重新计算。</para>
     /// </summary>
+    /// <remarks>
+    /// Encoding is delegated to <see cref="Bzip2Compressor.Compress(Stream, Stream)"/>, which appends the encoded stream at the
+    /// current position of <paramref name="destination"/>, leaves that stream open for the caller's follow-up writes and never
+    /// disposes <paramref name="source"/>. A read, encode or write failure surfaces as <see cref="CompressionException"/> instead
+    /// of the compressor's own exception type.
+    /// <para>编码委托给 <see cref="Bzip2Compressor.Compress(Stream, Stream)"/>：它在 <paramref name="destination"/> 的当前位置追加写出编码流，
+    /// 保持该流打开以供调用方继续写入，并且不会释放 <paramref name="source"/>。读取、编码或写入失败会以 <see cref="CompressionException"/>
+    /// 抛出，而不再是压缩库自身的异常类型。</para>
+    /// </remarks>
     /// <param name="source">Uncompressed CPIO body positioned at its first byte.
     /// <para>定位在起始处的未压缩 CPIO 主体。</para></param>
     /// <param name="destination">Writable destination for the encoded stream, left open.
@@ -299,9 +306,7 @@ public sealed partial class CpioFormatHandler
             throw new ArchiveCorruptedException("Invalid stored bzip2 block level.");
         }
 
-        using var encoder = BZip2Stream.Create(destination, SharpCompressCompressionMode.Compress,
-            decompressConcatenated: false, leaveOpen: true);
-        source.CopyTo(encoder);
+        Bzip2Compressor.Compress(source, destination);
     }
 
     private static ArchiveFormat ResolveArchiveFormat(RepackMetadata? metadata)
@@ -465,13 +470,13 @@ public sealed partial class CpioFormatHandler
                 {
                     continue;
                 }
-                using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                using var hasher = Sha256.CreateAccumulator();
                 var buffer = new byte[81920];
                 int read;
                 while ((read = stream.Read(buffer)) > 0)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    hasher.AppendData(buffer.AsSpan(0, read));
+                    hasher.Append(buffer.AsSpan(0, read));
                 }
                 var current = Convert.ToHexString(hasher.GetHashAndReset());
                 if (digest is not null && digest != current)
@@ -623,13 +628,13 @@ public sealed partial class CpioFormatHandler
 
     private static byte[] HashStream(Stream stream, CancellationToken cancellationToken)
     {
-        using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hasher = Sha256.CreateAccumulator();
         var buffer = new byte[81920];
         int read;
         while ((read = stream.Read(buffer)) > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            hasher.AppendData(buffer.AsSpan(0, read));
+            hasher.Append(buffer.AsSpan(0, read));
         }
         return hasher.GetHashAndReset();
     }

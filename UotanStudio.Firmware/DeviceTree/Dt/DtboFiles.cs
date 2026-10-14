@@ -1,12 +1,14 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Text.Json;
+using UotanStudio.Compress;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Hash.Adler32;
+using UotanStudio.Hash.Crc32Ieee;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.DeviceTree.Dt;
 
@@ -22,6 +24,7 @@ public static partial class DtboFormat
 
     private const string OriginalFileName = "original.dtbo.img";
     private const int MaximumEntries = 65536;
+    private const int SmallestSizeLevel = 9;
 
     internal static System.Text.Json.Nodes.JsonObject CreateConfiguration(Stream input)
     {
@@ -402,13 +405,48 @@ public static partial class DtboFormat
         return compression;
     }
 
+    /// <summary>
+    /// Creates the incremental encoder for a DTBO compression flag, appending its member at the current position of
+    /// <paramref name="output"/> and leaving that stream open.
+    /// <para>为 DTBO 压缩标志创建增量编码器，成员从 <paramref name="output"/> 的当前位置开始追加，且不关闭该流。</para>
+    /// </summary>
+    /// <param name="output">Blob destination positioned at the start of the member.
+    /// <para>定位在成员起点的数据块目标流。</para></param>
+    /// <param name="compression">Flag decoded by <see cref="CompressionOf"/>; <see cref="CompressionNone"/> yields
+    /// <see langword="null"/> so the caller writes the plaintext itself.
+    /// <para>由 <see cref="CompressionOf"/> 解析出的压缩标志；<see cref="CompressionNone"/> 返回
+    /// <see langword="null"/>，由调用方自行写明文。</para></param>
+    /// <returns>The encoder that must be disposed before the blob length is recorded, or <see langword="null"/> for an
+    /// uncompressed blob. <para>必须在记录数据块长度之前释放的编码器；未压缩的数据块返回 <see langword="null"/>。</para></returns>
+    /// <remarks>
+    /// The gzip branch goes through <see cref="CompressionService.CreateCompressionStream"/> with
+    /// <see cref="CompressionOptions.Level"/> set to <see cref="SmallestSizeLevel"/>, because the codec mapper maps
+    /// every level of nine and above onto <see cref="CompressionLevel.SmallestSize"/>; a mapper change outside that
+    /// band would rewrite every packed byte. The zlib branch stays on the built-in <see cref="ZLibStream"/> because the
+    /// library's zlib codec is a different deflate implementation whose level enum has no smallest-size member.
+    /// <para>gzip 分支经由 <see cref="CompressionService.CreateCompressionStream"/> 创建，并把
+    /// <see cref="CompressionOptions.Level"/> 设为 <see cref="SmallestSizeLevel"/>：映射器把九级及以上统一转换为
+    /// <see cref="CompressionLevel.SmallestSize"/>，映射器一旦跳出该档位，所有打包字节都会随之改变。zlib 分支仍使用
+    /// 内置 <see cref="ZLibStream"/>，因为库中的 zlib 编解码器是另一套 deflate 实现，其等级枚举没有最小体积成员。</para>
+    /// </remarks>
     private static Stream? CreateEncoder(Stream output, uint compression) => compression switch
     {
         CompressionZlib => new ZLibStream(output, CompressionLevel.SmallestSize, leaveOpen: true),
-        CompressionGzip => new GZipStream(output, CompressionLevel.SmallestSize, leaveOpen: true),
+        CompressionGzip => CompressionService.CreateCompressionStream(output, CompressionFormat.Gzip,
+            new CompressionOptions { Level = SmallestSizeLevel }),
         _ => null
     };
 
+    /// <remarks>
+    /// A zlib blob is authenticated by folding every decoded block into a running Adler-32 value with
+    /// <see cref="Adler32.Compute(ReadOnlySpan{byte}, uint)"/>, which the hash library seeds with the previous packed
+    /// value so the streamed result equals the one-shot checksum over the concatenated bytes; the running value starts
+    /// at <c>1</c>. The gzip branch accumulates with <see cref="Crc32IeeeAccumulator"/>, the hash library's standard
+    /// CRC-32 form.
+    /// <para>zlib 数据块的认证方式是把每个解码块用 <see cref="Adler32.Compute(ReadOnlySpan{byte}, uint)"/> 并入累进的
+    /// Adler-32 值，哈希库以上一次的打包值作为种子，因此流式结果与对拼接字节一次性计算的结果一致；累进值从 <c>1</c>
+    /// 开始。gzip 分支改用 <see cref="Crc32IeeeAccumulator"/> 累加，即哈希库提供的标准 CRC-32 形式。</para>
+    /// </remarks>
     private static byte[] CopyBlob(Stream input, uint version, DtboEntry entry, Stream output,
         long limit, CancellationToken cancellationToken)
     {
@@ -417,10 +455,10 @@ public static partial class DtboFormat
         using Stream? decoder = compression switch
         {
             CompressionZlib => new ZLibStream(range, CompressionMode.Decompress, leaveOpen: true),
-            CompressionGzip => new GZipStream(range, CompressionMode.Decompress, leaveOpen: true),
+            CompressionGzip => CompressionService.CreateDecompressionStream(range, CompressionFormat.Gzip),
             _ => null
         };
-        var crc = compression == CompressionGzip ? new System.IO.Hashing.Crc32() : null;
+        var crc = compression == CompressionGzip ? new Crc32IeeeAccumulator() : null;
         var adler = 1u;
         long length = 0;
         var hash = CopyAndHash(decoder ?? range, output, limit, cancellationToken,
@@ -429,7 +467,7 @@ public static partial class DtboFormat
                 crc?.Append(buffer.AsSpan(0, count));
                 if (compression == CompressionZlib)
                 {
-                    adler = AppendAdler32(adler, buffer.AsSpan(0, count));
+                    adler = Adler32.Compute(buffer.AsSpan(0, count), adler);
                 }
                 length += count;
             });
@@ -442,7 +480,7 @@ public static partial class DtboFormat
             input.Position = (long)entry.DtOffset + entry.DtSize - trailerSize;
             input.ReadExactly(trailer[..trailerSize]);
             if (compression == CompressionGzip
-                ? BinaryPrimitives.ReadUInt32LittleEndian(trailer) != crc!.GetCurrentHashAsUInt32()
+                ? BinaryPrimitives.ReadUInt32LittleEndian(trailer) != crc!.GetCurrentHash()
                     || BinaryPrimitives.ReadUInt32LittleEndian(trailer[4..]) != unchecked((uint)length)
                 : BinaryPrimitives.ReadUInt32BigEndian(trailer) != adler)
                 throw new InvalidDataException("DTBO compression trailer checksum or size mismatch.");
@@ -450,33 +488,10 @@ public static partial class DtboFormat
         return hash;
     }
 
-    /// <summary>
-    /// Folds one decoded block into a running Adler-32 value, delegating each block to <see cref="Adler32.Compute(ReadOnlySpan{byte})"/>
-    /// so the streaming check uses the same reduction as the one-shot helper.
-    /// <para>把一块解码数据并入累进的 Adler-32 值，逐块委托给 <see cref="Adler32.Compute(ReadOnlySpan{byte})"/>，使流式校验与
-    /// 一次性辅助方法使用同一套归约。</para>
-    /// </summary>
-    /// <param name="running">
-    /// Checksum covering every earlier block, <c>1</c> before the first block.
-    /// <para>覆盖此前所有数据块的校验和，首个数据块之前为 <c>1</c>。</para></param>
-    /// <param name="block">Next decoded block. <para>下一个解码数据块。</para></param>
-    /// <returns>
-    /// The checksum covering the bytes behind <paramref name="running"/> followed by <paramref name="block"/>.
-    /// <para>覆盖 <paramref name="running"/> 已有字节与其后 <paramref name="block"/> 的校验和。</para></returns>
-    private static uint AppendAdler32(uint running, ReadOnlySpan<byte> block)
-    {
-        const long modulus = 65521;
-        var added = Adler32.Compute(block);
-        var carry = (long)(running & 0xFFFF) - 1;
-        var low = ((added & 0xFFFF) + carry) % modulus;
-        var high = ((added >> 16) + (running >> 16) + (long)block.Length * carry) % modulus;
-        return (uint)((high << 16) | low);
-    }
-
     private static byte[] CopyAndHash(Stream input, Stream output, long limit, CancellationToken cancellationToken,
         long? exactLength = null, Action<byte[], int>? observe = null)
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = Sha256.CreateAccumulator();
         var buffer = new byte[81920];
         long total = 0;
         while (true)
@@ -488,7 +503,7 @@ public static partial class DtboFormat
                 throw new InvalidDataException("DTBO overlay exceeds the output limit.");
             total += read;
             output.Write(buffer, 0, read);
-            hash.AppendData(buffer, 0, read);
+            hash.Append(buffer.AsSpan(0, read));
             observe?.Invoke(buffer, read);
         }
         if (exactLength is not null && total != exactLength)

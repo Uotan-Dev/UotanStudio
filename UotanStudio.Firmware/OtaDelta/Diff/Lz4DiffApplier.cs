@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Google.Protobuf;
 using K4os.Compression.LZ4;
 using UotanStudio.Compress.Codecs.Lz4;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.OtaDelta.Diff;
 
@@ -79,7 +80,7 @@ internal static class Lz4DiffApplier
                 { stored[..encoded].CopyTo(stored[(stored.Length - encoded)..]); stored[..(stored.Length - encoded)].Clear(); }
                 else stored[encoded..].Clear();
             }
-            if (block.Hash.Length > 0 && (block.Hash.Length != 32 || !CryptographicOperations.FixedTimeEquals(SHA256.HashData(stored), block.Hash)))
+            if (block.Hash.Length > 0 && (block.Hash.Length != 32 || !CryptographicOperations.FixedTimeEquals(Sha256.ComputeHash(stored), block.Hash)))
                 throw new InvalidDataException("LZ4DIFF recompression SHA-256 mismatch; the compressor version differs from the patch generator.");
             if (block.Patch.Length > 0)
             {

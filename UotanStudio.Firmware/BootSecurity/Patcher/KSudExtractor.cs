@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
-using System.IO.Compression;
 using System.Text.RegularExpressions;
+using UotanStudio.Compress;
+using ZlibException = SharpCompress.Compressors.Deflate.ZlibException;
 
 namespace UotanStudio.Firmware.BootSecurity.Patcher;
 
@@ -414,10 +415,10 @@ public static partial class Extractor
         try
         {
             using var ms = new MemoryStream(data, off, len);
-            using var ds = new DeflateStream(ms, CompressionMode.Decompress);
+            using var ds = CompressionService.CreateDecompressionStream(ms, CompressionFormat.Deflate);
             return ReadCapped(ds, capOut).Length;
         }
-        catch (InvalidDataException)
+        catch (Exception ex) when (ex is InvalidDataException or ZlibException)
         {
             return -1;
         }
@@ -442,8 +443,9 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// Attempts to decompress data at <paramref name="off" /> as a deflate stream and returns the consumed bytes and output.
-    /// <para>尝试把 <paramref name="off" /> 处的数据当作 deflate 流解压，并返回消耗字节数与输出。</para>
+    /// Attempts to decompress data at <paramref name="off" /> as a raw RFC 1951 DEFLATE stream through the compression facade
+    /// and returns the consumed bytes and output.
+    /// <para>经由压缩门面把 <paramref name="off" /> 处的数据当作原始 RFC 1951 DEFLATE 流解压，并返回消耗字节数与输出。</para>
     /// </summary>
     /// <param name="data">Buffer containing a candidate deflate stream.
     /// <para>包含候选 deflate 流的缓冲区。</para></param>
@@ -453,8 +455,13 @@ public static partial class Extractor
     /// <para>解压输出的最大字节数；超过上限的流会被拒绝。</para></param>
     /// <returns>The input bytes consumed and the decompressed output, or <see langword="null"/> when the
     /// region is empty, the stream is malformed, the output is empty or exceeds <paramref name="cap"/>,
-    /// or no input bytes are consumed. <para>消耗的输入字节数与解压输出；当区域为空、流格式错误、输出为空或超过
-    /// <paramref name="cap"/>、或未消耗任何输入字节时返回 <see langword="null"/>。</para></returns>
+    /// or no input bytes are consumed. A malformed region is reported as <see langword="null"/> rather than
+    /// propagating: the codec raised by the facade surfaces either as <see cref="InvalidDataException"/> or as
+    /// <see cref="ZlibException"/>, and both mean the region carries no usable deflate stream.
+    /// <para>消耗的输入字节数与解压输出；当区域为空、流格式错误、输出为空或超过
+    /// <paramref name="cap"/>、或未消耗任何输入字节时返回 <see langword="null"/>。格式错误的区域以
+    /// <see langword="null"/> 上报而不向上抛出：门面编解码器抛出的异常会呈现为 <see cref="InvalidDataException"/>
+    /// 或 <see cref="ZlibException"/>，两者都说明该区域没有可用的 deflate 流。</para></returns>
     public static (int Consumed, byte[] Output)? TryDeflate(byte[] data, int off, int cap = 32 * 1024 * 1024)
     {
         int chunkLen = Math.Min(cap, data.Length - off);
@@ -464,12 +471,12 @@ public static partial class Extractor
         try
         {
             using var ms = new MemoryStream(data, off, chunkLen);
-            using var ds = new DeflateStream(ms, CompressionMode.Decompress);
+            using var ds = CompressionService.CreateDecompressionStream(ms, CompressionFormat.Deflate);
             output = ReadCapped(ds, cap + 1);
             if (output.Length > cap)
                 return null;
         }
-        catch (InvalidDataException)
+        catch (Exception ex) when (ex is InvalidDataException or ZlibException)
         {
             return null;
         }
@@ -523,7 +530,7 @@ public static partial class Extractor
     private static partial System.Text.RegularExpressions.Regex InvalidCharsRegex();
 
     private static string Sha256Hex(byte[] data) =>
-        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(data));
+        UotanStudio.Hash.Digests.Sha256.ComputeHexLower(data);
 
     private static IEnumerable<byte[]> EnumerateX86InlineHashes(ElfFile elf, ulong fnVa, int window)
     {

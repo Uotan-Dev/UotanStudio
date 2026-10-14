@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.AndroidMeta.Art;
 
@@ -130,12 +130,24 @@ internal sealed class ArtData(Stream stream, long origin, long length, Cancellat
         Check(U32(108), U32(104));
     }
 
+    /// <summary>
+    /// Verifies the DEX signature and header checksum. SHA-1 covers every byte from offset 32 on and Adler-32 is
+    /// folded chunk by chunk through <c>UotanStudio.Hash.Adler32.Adler32.Compute</c>, starting at the seed <c>1</c>,
+    /// over every byte from offset 12 on; that fold is provably equal to a single
+    /// <c>UotanStudio.Hash.Adler32.Adler32.Compute(data.AsSpan(12))</c> call over the whole range.
+    /// <para>校验 DEX 的签名与头部校验和。SHA-1 覆盖偏移 32 起的每个字节；Adler-32 以种子 <c>1</c> 起步，经
+    /// <c>UotanStudio.Hash.Adler32.Adler32.Compute</c> 分块折叠偏移 12 起的每个字节，该折叠结果与对完整区间调用一次
+    /// <c>UotanStudio.Hash.Adler32.Adler32.Compute(data.AsSpan(12))</c> 可证相等。</para>
+    /// </summary>
+    /// <exception cref="InvalidDataException">
+    /// The restored DEX does not reproduce its stored SHA-1 signature and Adler-32 checksum.
+    /// <para>还原后的 DEX 未能复现其存储的 SHA-1 签名与 Adler-32 校验和。</para>
+    /// </exception>
     internal void VerifyDexHashes()
     {
-        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+        using var sha = Sha1.CreateAccumulator();
         var buffer = new byte[65536];
-        uint a = 1;
-        uint b = 0;
+        var adler = 1u;
         for (long offset = 12; offset < length;)
         {
             var count = (int)Math.Min(buffer.Length, length - offset);
@@ -143,49 +155,51 @@ internal sealed class ArtData(Stream stream, long origin, long length, Cancellat
             var skip = (int)Math.Max(0, 32 - offset);
             if (count > skip)
             {
-                sha.AppendData(buffer, skip, count - skip);
+                sha.Append(buffer.AsSpan(skip, count - skip));
             }
-            for (var i = 0; i < count; i++)
-            {
-                a = (a + buffer[i]) % 65521;
-                b = (b + a) % 65521;
-            }
+            adler = UotanStudio.Hash.Adler32.Adler32.Compute(buffer.AsSpan(0, count), adler);
             offset += count;
         }
         Span<byte> signature = stackalloc byte[20];
         Read(12, signature);
-        if (U32(8) != ((b << 16) | a) || !signature.SequenceEqual(sha.GetHashAndReset()))
+        if (U32(8) != adler || !signature.SequenceEqual(sha.GetHashAndReset()))
         {
             throw new InvalidDataException("Restored DEX does not match its original SHA-1 and Adler32.");
         }
     }
 
+    /// <summary>
+    /// Recomputes and stores the DEX signature and header checksum. The Adler-32 fold starts at the seed <c>1</c> and
+    /// covers every byte from offset 12 on, chunk by chunk through <c>UotanStudio.Hash.Adler32.Adler32.Compute</c>;
+    /// folding chunk-wise from <c>1u</c> equals a single
+    /// <c>UotanStudio.Hash.Adler32.Adler32.Compute(data.AsSpan(12))</c> call over the whole range, so the packed value
+    /// written at offset 8 keeps the on-disk ODEX/DEX header checksum byte-identical.
+    /// <para>重新计算并写入 DEX 的签名与头部校验和。Adler-32 以种子 <c>1</c> 起步，经
+    /// <c>UotanStudio.Hash.Adler32.Adler32.Compute</c> 分块折叠偏移 12 起的每个字节；从 <c>1u</c> 开始的逐块折叠与对
+    /// <c>data.AsSpan(12)</c> 完整区间调用一次 <c>UotanStudio.Hash.Adler32.Adler32.Compute</c> 相等，因此写入偏移 8
+    /// 的打包值使落盘的 ODEX/DEX 头部校验和保持逐字节一致。</para>
+    /// </summary>
     internal void WriteDexHashes()
     {
-        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+        using var sha = Sha1.CreateAccumulator();
         var buffer = new byte[65536];
         for (long offset = 32; offset < length;)
         {
             var count = (int)Math.Min(buffer.Length, length - offset);
             Read(offset, buffer.AsSpan(0, count));
-            sha.AppendData(buffer, 0, count);
+            sha.Append(buffer.AsSpan(0, count));
             offset += count;
         }
         stream.Position = origin + 12;
         stream.Write(sha.GetHashAndReset());
-        uint a = 1;
-        uint b = 0;
+        var adler = 1u;
         for (long offset = 12; offset < length;)
         {
             var count = (int)Math.Min(buffer.Length, length - offset);
             Read(offset, buffer.AsSpan(0, count));
-            for (var i = 0; i < count; i++)
-            {
-                a = (a + buffer[i]) % 65521;
-                b = (b + a) % 65521;
-            }
+            adler = UotanStudio.Hash.Adler32.Adler32.Compute(buffer.AsSpan(0, count), adler);
             offset += count;
         }
-        Write32(8, (b << 16) | a);
+        Write32(8, adler);
     }
 }

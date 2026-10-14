@@ -1,5 +1,5 @@
-using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BlockImage.Lp;
 
@@ -137,5 +137,5 @@ public sealed class LpMetadata
     /// Computes the SHA256 of a byte buffer.
     /// <para>计算字节缓冲区的 SHA256。</para>
     /// </summary>
-    internal static byte[] ComputeSha256(ReadOnlySpan<byte> data) => SHA256.HashData(data);
+    internal static byte[] ComputeSha256(ReadOnlySpan<byte> data) => Sha256.ComputeHash(data);
 }

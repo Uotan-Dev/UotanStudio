@@ -1,11 +1,11 @@
 using System.Buffers.Binary;
-using System.IO.Hashing;
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Compress;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.Core.Text;
+using UotanStudio.Hash.Crc32Ieee;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.VendorFirmware.Dz;
 
@@ -130,7 +130,7 @@ public static class DzBuilder
         FileExtraction.WriteAtomic(outputPath, output =>
         {
             output.Write(header);
-            using var headerDigest = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
+            using var headerDigest = Md5.CreateAccumulator();
             var expected = new List<byte[]>(chunks.Length);
             foreach (var source in chunks)
             {
@@ -165,7 +165,7 @@ public static class DzBuilder
                 output.Position = recordOffset;
                 output.Write(chunkHeader);
                 output.Position = end;
-                headerDigest.AppendData(chunkHeader);
+                headerDigest.Append(chunkHeader);
                 expected.Add(checksums.Sha256);
             }
             BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(192), (uint)chunks.Length);
@@ -196,9 +196,9 @@ public static class DzBuilder
 
     internal static (byte[] Sha256, byte[] Md5, uint Crc32) HashContent(Stream input, CancellationToken token)
     {
-        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        using var md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
-        var crc = new Crc32();
+        using var sha = Sha256.CreateAccumulator();
+        using var md5 = Md5.CreateAccumulator();
+        var crc = new Crc32IeeeAccumulator();
         var buffer = new byte[64 * 1024];
         while (true)
         {
@@ -208,11 +208,11 @@ public static class DzBuilder
             {
                 break;
             }
-            sha.AppendData(buffer, 0, count);
-            md5.AppendData(buffer, 0, count);
+            sha.Append(buffer.AsSpan(0, count));
+            md5.Append(buffer.AsSpan(0, count));
             crc.Append(buffer.AsSpan(0, count));
         }
         token.ThrowIfCancellationRequested();
-        return (sha.GetHashAndReset(), md5.GetHashAndReset(), crc.GetCurrentHashAsUInt32());
+        return (sha.GetHashAndReset(), md5.GetHashAndReset(), crc.GetCurrentHash());
     }
 }

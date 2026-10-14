@@ -1,5 +1,5 @@
-using K4os.Compression.LZ4;
 using UotanStudio.Compress;
+using UotanStudio.Compress.Codecs.Lz4;
 using UotanStudio.Compress.Codecs.Lzo;
 using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.Core.Streams;
@@ -132,7 +132,7 @@ internal static class SquashfsDecompression
     private static byte[] DecompressLz4(byte[] payload, int expectedSize, bool exactOutput)
     {
         var buffer = new byte[expectedSize];
-        var written = LZ4Codec.Decode(payload, 0, payload.Length, buffer, 0, buffer.Length);
+        var written = Lz4BlockCodec.Decode(payload, buffer);
         if (written < 0)
         {
             throw new FileSystemCorruptedException(

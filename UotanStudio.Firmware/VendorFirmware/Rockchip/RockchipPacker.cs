@@ -1,8 +1,8 @@
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Hash.Digests;
 using UotanStudio.Hash.RockchipCrc32;
 
 namespace UotanStudio.Firmware.VendorFirmware.Rockchip;
@@ -164,7 +164,7 @@ public static class RockchipPacker
             BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(33), checked((uint)imageOffset));
             BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(37), unchecked((uint)imageLength));
 
-            using var md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
+            using var md5 = Md5.CreateAccumulator();
             await WriteAndHashAsync(output, header, md5, cancellationToken).ConfigureAwait(false);
             await CopyFileAsync(loaderPath, output, loaderLength, md5, crcState: null, cancellationToken).ConfigureAwait(false);
             await CopyFileAsync(imagePath, output, imageLength, md5, crcState: null, cancellationToken).ConfigureAwait(false);
@@ -519,7 +519,7 @@ public static class RockchipPacker
         string path,
         FileStream output,
         long expectedLength,
-        IncrementalHash? hash,
+        DigestAccumulator? hash,
         RkCrc32State? crcState,
         CancellationToken cancellationToken,
         RkCrc32State? secondaryCrc = null)
@@ -537,7 +537,7 @@ public static class RockchipPacker
                 throw new EndOfStreamException($"Rockchip source file changed size while packing: {path}");
             }
             var memory = buffer.AsMemory(0, read);
-            hash?.AppendData(memory.Span);
+            hash?.Append(memory.Span);
             crcState?.Append(memory.Span);
             secondaryCrc?.Append(memory.Span);
             await output.WriteAsync(memory, cancellationToken).ConfigureAwait(false);
@@ -552,10 +552,10 @@ public static class RockchipPacker
     private static async Task WriteAndHashAsync(
         FileStream output,
         byte[] data,
-        IncrementalHash hash,
+        DigestAccumulator hash,
         CancellationToken cancellationToken)
     {
-        hash.AppendData(data);
+        hash.Append(data);
         await output.WriteAsync(data, cancellationToken).ConfigureAwait(false);
     }
 

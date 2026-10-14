@@ -1,11 +1,11 @@
 using System.Buffers.Binary;
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.BootImage;
 
@@ -721,7 +721,7 @@ internal class BootImagePacker
 
     private byte[] ComputeImageId()
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+        using var hash = Sha1.CreateAccumulator();
         Append(nameof(Kernel), Kernel);
         Append(nameof(Ramdisk), Ramdisk);
         Append(nameof(Second), Second);
@@ -738,10 +738,10 @@ internal class BootImagePacker
                 files.AppendHash(name, hash);
                 return;
             }
-            hash.AppendData(component);
+            hash.Append(component);
             Span<byte> size = stackalloc byte[4];
             BinaryPrimitives.WriteUInt32LittleEndian(size, checked((uint)component.Length));
-            hash.AppendData(size);
+            hash.Append(size);
         }
     }
 

@@ -1,8 +1,8 @@
-using System.Security.Cryptography;
 using Google.Protobuf;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Diff;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
 
@@ -184,8 +184,8 @@ public sealed partial class PayloadBuilder
         var blockBytes = checked((int)BlockSize);
         var targetBuffer = new byte[chunkSize];
         var sourceBuffer = new byte[chunkSize];
-        using var newHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        using var oldHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var newHash = Sha256.CreateAccumulator();
+        using var oldHash = Sha256.CreateAccumulator();
         using var sourceIndex = new IncrementalSourceIndex(source, blockBytes);
         long indexedBlock = 0;
         var sourceRemaining = sourceLength;
@@ -193,7 +193,7 @@ public sealed partial class PayloadBuilder
         {
             var count = (int)Math.Min(chunkSize, sourceRemaining);
             ReadIncrementalChunk(source, sourceBuffer.AsSpan(0, count), cancellationToken);
-            oldHash.AppendData(sourceBuffer, 0, count);
+            oldHash.Append(sourceBuffer.AsSpan(0, count));
             for (var offset = 0; offset < count; offset += blockBytes)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -209,7 +209,7 @@ public sealed partial class PayloadBuilder
             cancellationToken.ThrowIfCancellationRequested();
             var count = (int)Math.Min((long)chunkSize, remaining);
             ReadIncrementalChunk(target, targetBuffer.AsSpan(0, count), cancellationToken);
-            newHash.AppendData(targetBuffer, 0, count);
+            newHash.Append(targetBuffer.AsSpan(0, count));
 
             var blocks = count / blockBytes;
             for (var i = 0; i < blocks; i++)
@@ -320,7 +320,7 @@ public sealed partial class PayloadBuilder
             DataOffset = replacement.DataOffset,
             DataLength = (ulong)patch.Length,
             DataSha256Hash = ByteString.CopyFrom(new byte[32]),
-            SrcSha256Hash = ByteString.CopyFrom(SHA256.HashData(oldBuffer.AsSpan(0, count))),
+            SrcSha256Hash = ByteString.CopyFrom(Sha256.ComputeHash(oldBuffer.AsSpan(0, count))),
             SrcLength = (ulong)count,
             DstLength = (ulong)count
         };
@@ -346,7 +346,7 @@ public sealed partial class PayloadBuilder
             Type = InstallOperation.Types.Type.SourceCopy,
             SrcLength = (ulong)runBytes,
             DstLength = (ulong)runBytes,
-            SrcSha256Hash = ByteString.CopyFrom(SHA256.HashData(sourceBuffer.AsSpan(offset, runBytes)))
+            SrcSha256Hash = ByteString.CopyFrom(Sha256.ComputeHash(sourceBuffer.AsSpan(offset, runBytes)))
         };
         var extent = new Extent { StartBlock = sourceBlock, NumBlocks = (ulong)runBlocks };
         operation.SrcExtents.Add(extent);

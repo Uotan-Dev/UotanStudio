@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
@@ -7,6 +6,7 @@ using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Extraction;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.Patching;
 
@@ -199,8 +199,8 @@ public static class ImageConfigurationEditor
                 }
                 await using var expected = File.OpenRead(mapping.Resolve(edit.Path.TrimStart('/')));
                 await using var actual = File.OpenRead(extracted);
-                var expectedHash = await SHA256.HashDataAsync(expected, token).ConfigureAwait(false);
-                var actualHash = await SHA256.HashDataAsync(actual, token).ConfigureAwait(false);
+                var expectedHash = await Sha256.ComputeHashAsync(expected, token).ConfigureAwait(false);
+                var actualHash = await Sha256.ComputeHashAsync(actual, token).ConfigureAwait(false);
                 if (expected.Length != actual.Length || !expectedHash.AsSpan().SequenceEqual(actualHash))
                 {
                     throw new InvalidDataException("Rebuilt image configuration verification failed.");

@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Hash.Crc16;
+using UotanStudio.Hash.Crc16Arc;
 
 namespace UotanStudio.Firmware.VendorFirmware.Pac;
 
@@ -135,7 +135,7 @@ public static class PacBuilder
                 cancellationToken.ThrowIfCancellationRequested();
                 var bytes = entry.ToBytes();
                 output.Write(bytes);
-                dataCrc = Crc16.Calculate(dataCrc, bytes);
+                dataCrc = Crc16Arc.Compute(bytes, dataCrc);
             }
 
             var buffer = new byte[CopyBufferSize];
@@ -149,13 +149,13 @@ public static class PacBuilder
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     output.Write(buffer, 0, read);
-                    dataCrc = Crc16.Calculate(dataCrc, buffer[..read]);
+                    dataCrc = Crc16Arc.Compute(buffer[..read], dataCrc);
                 }
             }
 
             head.DataCrc = dataCrc;
             var header = head.ToBytes();
-            head.HeadCrc = Crc16.Calculate(0, header[..(SprdHead.Size - 4)]);
+            head.HeadCrc = Crc16Arc.Compute(header[..(SprdHead.Size - 4)], 0);
             header = head.ToBytes();
             output.Position = 0;
             output.Write(header);

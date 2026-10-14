@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
-using System.IO.Compression;
 using System.Text;
+using UotanStudio.Compress;
 using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.VendorFirmware.Oppo;
@@ -202,7 +202,8 @@ internal static class OppoSplashFormat
     /// <exception cref="ArgumentNullException">Any argument is null. <para>任一参数为 null。</para></exception>
     /// <exception cref="InvalidDataException">The gzip stream is malformed, exceeds the ceiling, or
     /// disagrees with the declared raw size.
-    /// <para>gzip 流格式错误、超出上限，或与声明的原始大小不一致。</para></exception>
+    /// <para>gzip 流格式错误、超出上限，或与声明的原始大小不一致。压缩门面报告的失败也会以此类型呈现，
+    /// 原始原因保留在 <see cref="Exception.InnerException"/> 中。</para></exception>
     public static void DecompressEntry(Stream input, OppoSplashEntry entry, Stream output,
         long maximumOutputBytes, CancellationToken cancellationToken = default)
     {
@@ -216,25 +217,33 @@ internal static class OppoSplashFormat
 
         using var range = new BoundedReadStream(input, checked(DataOffset + entry.Offset),
             entry.CompressedSize, leaveOpen: true);
-        using var gzip = new GZipStream(range, CompressionMode.Decompress, leaveOpen: true);
         var buffer = new byte[81920];
         long total = 0;
-        while (true)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var read = gzip.Read(buffer, 0, buffer.Length);
-            if (read == 0)
+            using var gzip = CompressionService.CreateDecompressionStream(range, CompressionFormat.Gzip);
+            while (true)
             {
-                break;
-            }
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = gzip.Read(buffer, 0, buffer.Length);
+                if (read == 0)
+                {
+                    break;
+                }
 
-            total = checked(total + read);
-            if (total > maximumOutputBytes || (entry.RealSize > 0 && total > entry.RealSize))
-            {
-                throw new InvalidDataException("The splash payload exceeds its declared size or the configured budget.");
-            }
+                total = checked(total + read);
+                if (total > maximumOutputBytes || (entry.RealSize > 0 && total > entry.RealSize))
+                {
+                    throw new InvalidDataException("The splash payload exceeds its declared size or the configured budget.");
+                }
 
-            output.Write(buffer, 0, read);
+                output.Write(buffer, 0, read);
+            }
+        }
+        catch (CompressionException exception)
+        {
+            throw new InvalidDataException(
+                $"Splash entry {entry.Name} failed to decompress.", exception);
         }
 
         if (entry.RealSize > 0 && total != entry.RealSize)

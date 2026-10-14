@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Text;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.VendorFirmware.Dz;
 
@@ -194,7 +195,7 @@ internal static class KdzBuilder
                     FileShare.Read, buffer.Length, FileOptions.SequentialScan);
                 offsets[index] = output.Position;
                 lengths[index] = member.Length;
-                using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                using var hash = Sha256.CreateAccumulator();
                 Copy(member, output, member.Length, buffer, token, hash);
                 if (member.ReadByte() != -1 || member.Length != lengths[index])
                 {
@@ -260,7 +261,7 @@ internal static class KdzBuilder
 
     internal static byte[] HashRange(Stream input, long length, CancellationToken token)
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = Sha256.CreateAccumulator();
         Copy(input, Stream.Null, length, new byte[64 * 1024], token, hash);
         return hash.GetHashAndReset();
     }
@@ -306,7 +307,7 @@ internal static class KdzBuilder
     }
 
     internal static void Copy(Stream input, Stream output, long length, byte[] buffer, CancellationToken token,
-        IncrementalHash? hash = null)
+        DigestAccumulator? hash = null)
     {
         while (length > 0)
         {
@@ -316,7 +317,7 @@ internal static class KdzBuilder
             {
                 throw new EndOfStreamException("A KDZ input ended before its declared length.");
             }
-            hash?.AppendData(buffer, 0, read);
+            hash?.Append(buffer.AsSpan(0, read));
             output.Write(buffer, 0, read);
             length -= read;
         }

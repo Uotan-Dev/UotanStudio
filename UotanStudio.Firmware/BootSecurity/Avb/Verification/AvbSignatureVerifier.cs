@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Firmware.Core.Text;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Verification;
 
@@ -796,7 +797,7 @@ public static partial class AvbSignatureVerifier
         var signedData = Combine(
             vbmetaData.AsSpan(0, HeaderSize).ToArray(),
             vbmetaData.AsSpan(HeaderSize + (int)authSize, (int)auxSize).ToArray());
-        var computed = hashName == "SHA512" ? SHA512.HashData(signedData) : SHA256.HashData(signedData);
+        var computed = hashName == "SHA512" ? Sha512.ComputeHash(signedData) : Sha256.ComputeHash(signedData);
         return computed.AsSpan().SequenceEqual(storedHash)
             ? (true, storedHash, computed)
             : (false, storedHash, computed);

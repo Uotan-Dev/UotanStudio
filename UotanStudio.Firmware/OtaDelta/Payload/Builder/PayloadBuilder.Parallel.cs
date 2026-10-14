@@ -1,9 +1,8 @@
-using System.IO.Compression;
-using System.Security.Cryptography;
 using Google.Protobuf;
 using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
+using UotanStudio.Hash.Digests;
 using ZstdSharp;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
@@ -38,7 +37,7 @@ public sealed partial class PayloadBuilder
     }
 
     private ulong WritePartitionOperations(Stream input, long? declaredLength, FileStream data,
-        PartitionBuildInfo partition, PartitionUpdate update, IncrementalHash partitionHash,
+        PartitionBuildInfo partition, PartitionUpdate update, DigestAccumulator partitionHash,
         int chunkSize, ref int operationCount, int compressionWorkers, CancellationToken cancellationToken)
     {
         const int maximumOperations = 65536;
@@ -77,7 +76,7 @@ public sealed partial class PayloadBuilder
                         throw new PayloadGenerationException("Partition size must be block-aligned.");
                     if (++operationCount > maximumOperations)
                         throw new PayloadGenerationException("Payload exceeds the supported 65536 operations.");
-                    partitionHash.AppendData(slot.Input, 0, slot.InputLength);
+                    partitionHash.Append(slot.Input.AsSpan(0, slot.InputLength));
                     slot.StartBlock = position / BlockSize;
                     position = checked(position + (ulong)slot.InputLength);
                 }
@@ -134,7 +133,7 @@ public sealed partial class PayloadBuilder
         internal int OutputLength;
         internal ulong StartBlock;
         internal byte[] Hash = [];
-        private readonly IncrementalHash _frameHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        private readonly DigestAccumulator _frameHash = Sha256.CreateAccumulator();
         private Compressor? _zstd;
         private byte[]? _zstdDictionary;
 
@@ -213,7 +212,7 @@ public sealed partial class PayloadBuilder
             }
 
             OutputLength = written;
-            _frameHash.AppendData(Output, 0, written);
+            _frameHash.Append(Output.AsSpan(0, written));
             Hash = _frameHash.GetHashAndReset();
         }
 

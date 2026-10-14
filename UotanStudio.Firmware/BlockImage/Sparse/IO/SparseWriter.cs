@@ -1,7 +1,7 @@
 using System.Buffers;
 using System.Buffers.Binary;
-using System.IO.Hashing;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
+using UotanStudio.Hash.Crc32Ieee;
 
 namespace UotanStudio.Firmware.BlockImage.Sparse.IO;
 
@@ -129,7 +129,7 @@ internal static class SparseWriter
             stream.Write(pad);
         }
 
-        Crc32? crc = includeCrc ? new Crc32() : null;
+        Crc32IeeeAccumulator? crc = includeCrc ? new Crc32IeeeAccumulator() : null;
         var buffer = new byte[BufferSize];
         var headerBuf = new byte[outHeader.ChunkHeaderSize];
         var fillValData = new byte[4];
@@ -226,7 +226,7 @@ internal static class SparseWriter
             crcHeader.WriteTo(headerBuf);
             stream.Write(headerBuf, 0, outHeader.ChunkHeaderSize);
             var crcBuf = new byte[4];
-            BinaryPrimitives.WriteUInt32LittleEndian(crcBuf, crc.GetCurrentHashAsUInt32());
+            BinaryPrimitives.WriteUInt32LittleEndian(crcBuf, crc.GetCurrentHash());
             stream.Write(crcBuf);
         }
     }
@@ -276,7 +276,7 @@ internal static class SparseWriter
     /// <param name="totalBytes">Expanded length, <c>ChunkSize * BlockSize</c>. Whole table widths plus one final remainder are appended; because the table width is a multiple of the pattern, a length that is not a multiple of 4 — possible when the header's block size is not a multiple of 4 — still receives exactly the leading <c>totalBytes % 4</c> pattern bytes, matching a byte-for-byte expansion.
     /// <para>展开后的长度，即 <c>ChunkSize * BlockSize</c>。按整表宽度加上最后一次余量追加；由于表宽度是模式的整数倍，
     /// 即使长度不是 4 的倍数（在头部块大小不是 4 的倍数时可能出现）也只追加模式前 <c>totalBytes % 4</c> 字节，与逐字节展开结果一致。</para></param>
-    private static void AppendRepeated(Crc32? crc, uint fillValue, long totalBytes)
+    private static void AppendRepeated(Crc32IeeeAccumulator? crc, uint fillValue, long totalBytes)
     {
         if (crc is null || totalBytes <= 0)
         {
@@ -302,7 +302,7 @@ internal static class SparseWriter
         }
     }
 
-    private static void AppendZeros(Crc32? crc, long totalBytes)
+    private static void AppendZeros(Crc32IeeeAccumulator? crc, long totalBytes)
     {
         if (crc is null)
         {

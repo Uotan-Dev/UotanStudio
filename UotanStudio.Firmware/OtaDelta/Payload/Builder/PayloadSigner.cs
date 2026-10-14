@@ -3,6 +3,7 @@ using Google.Protobuf;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
 
@@ -180,10 +181,10 @@ internal static class PayloadSigner
         }
 
         var newHeader = PayloadHeaderBuilder.BuildHeader((ulong)newManifestBytes.Length, checked((uint)signatureSize));
-        using (var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+        using (var hash = Sha256.CreateAccumulator())
         {
-            hash.AppendData(newHeader);
-            hash.AppendData(newManifestBytes);
+            hash.Append(newHeader);
+            hash.Append(newManifestBytes);
             var metadataSignature = SerializeSignature(signingKey.SignHash(hash.GetCurrentHash(), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
             cancellationToken.ThrowIfCancellationRequested();
             output.Write(newHeader);
@@ -202,7 +203,7 @@ internal static class PayloadSigner
                     throw new EndOfStreamException("Payload ended before its declared data region.");
                 }
 
-                hash.AppendData(buffer, 0, count);
+                hash.Append(buffer.AsSpan(0, count));
                 output.Write(buffer, 0, count);
                 remaining -= count;
             }

@@ -1,8 +1,8 @@
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.FileSystem.Extraction;
 
@@ -43,7 +43,7 @@ internal sealed class PortableExtractionPaths
                     || name.Equals(RepackMetadata.FileName, StringComparison.OrdinalIgnoreCase)
                     || name.EndsWith("_info", StringComparison.Ordinal) || name.EndsWith("_fs_config", StringComparison.Ordinal) || name.EndsWith("_file_contexts", StringComparison.Ordinal)
                     || reserved.Contains(stem, StringComparer.OrdinalIgnoreCase);
-                var host = encode ? Prefix + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(name))) : name;
+                var host = encode ? Prefix + Convert.ToHexString(Sha256.ComputeHash(Encoding.UTF8.GetBytes(name))) : name;
                 var imagePath = parent.Length == 0 ? name : parent + "/" + name;
                 _paths.Add(imagePath, parent.Length == 0 ? host : _paths[parent] + "/" + host);
                 if (_paths.Count > 100000) throw new FileSystemCorruptedException("Too many image entries.");

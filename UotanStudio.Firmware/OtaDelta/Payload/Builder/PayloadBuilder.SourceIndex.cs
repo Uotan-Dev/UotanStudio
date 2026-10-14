@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
-using System.Security.Cryptography;
 using UotanStudio.Firmware.OtaDelta.Diff;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
 
@@ -30,7 +30,7 @@ public sealed partial class PayloadBuilder
         public void Add(ReadOnlySpan<byte> bytes, long block)
         {
             Span<byte> digest = stackalloc byte[32];
-            SHA256.HashData(bytes, digest);
+            Sha256.ComputeHash(bytes, digest);
             var bucket = BinaryPrimitives.ReadUInt16LittleEndian(digest);
             BinaryPrimitives.WriteInt64LittleEndian(_record, _heads[bucket]);
             BinaryPrimitives.WriteInt64LittleEndian(_record.AsSpan(8), block);
@@ -56,7 +56,7 @@ public sealed partial class PayloadBuilder
                 }
             }
             Span<byte> digest = stackalloc byte[32];
-            SHA256.HashData(bytes, digest);
+            Sha256.ComputeHash(bytes, digest);
             var position = _heads[BinaryPrimitives.ReadUInt16LittleEndian(digest)];
             while (position >= 0)
             {

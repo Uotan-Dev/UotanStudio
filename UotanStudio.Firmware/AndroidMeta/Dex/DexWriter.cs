@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.AndroidMeta.Dex.Models;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.AndroidMeta.Dex;
 
@@ -490,7 +490,7 @@ internal static partial class DexWriter
 
         var bytes = ms.ToArray();
 
-        var signature = SHA1.HashData(bytes.AsSpan(32));
+        var signature = Sha1.ComputeHash(bytes.AsSpan(32));
         signature.CopyTo(bytes, 12);
 
         var checksum = Adler32(bytes.AsSpan(12));

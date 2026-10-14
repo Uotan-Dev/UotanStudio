@@ -4,7 +4,7 @@ using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.VendorFirmware.Pac;
-using UotanStudio.Hash.Crc16;
+using UotanStudio.Hash.Crc16Arc;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -49,7 +49,7 @@ public class PacFormatHandlerTests
         WriteUtf16(head.FwVersion, "V1.0");
 
         var headBytes = SerializeHead(head, headCrc: 0, dataCrc: 0);
-        headBytes = PatchU16(headBytes, SprdHead.Size - 4, Crc16.Calculate(0, headBytes[..(SprdHead.Size - 4)]));
+        headBytes = PatchU16(headBytes, SprdHead.Size - 4, Crc16Arc.Compute(headBytes[..(SprdHead.Size - 4)], 0));
 
         using var bodyMs = new MemoryStream();
         for (var i = 0; i < entries.Length; i++)
@@ -69,7 +69,7 @@ public class PacFormatHandlerTests
             bodyMs.Write(entries[i].Data);
         }
 
-        headBytes = PatchU16(headBytes, SprdHead.Size - 2, Crc16.Calculate(0, bodyMs.ToArray()));
+        headBytes = PatchU16(headBytes, SprdHead.Size - 2, Crc16Arc.Compute(bodyMs.ToArray(), 0));
 
         using var ms = new MemoryStream();
         ms.Write(headBytes);

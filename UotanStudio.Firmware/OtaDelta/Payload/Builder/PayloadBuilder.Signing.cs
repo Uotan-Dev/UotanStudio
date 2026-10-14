@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using Google.Protobuf;
 using UotanStudio.Firmware.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
 
@@ -23,9 +24,9 @@ public sealed partial class PayloadBuilder
             manifestBytes = encoded.ToArray();
         }
         var header = PayloadHeaderBuilder.BuildHeader((ulong)manifestBytes.Length, checked((uint)signatureSize));
-        using var hash = IncrementalHash.CreateHash(hashAlgorithm);
-        hash.AppendData(header);
-        hash.AppendData(manifestBytes);
+        using var hash = Sha256.CreateAccumulator();
+        hash.Append(header);
+        hash.Append(manifestBytes);
         var metadataSignature = SerializeSignature(key.SignHash(hash.GetCurrentHash(), hashAlgorithm, RSASignaturePadding.Pkcs1));
         token.ThrowIfCancellationRequested();
         output.Write(header);
@@ -39,7 +40,7 @@ public sealed partial class PayloadBuilder
             token.ThrowIfCancellationRequested();
             var count = data.Read(buffer, 0, (int)Math.Min(remaining, buffer.Length));
             if (count == 0) throw new EndOfStreamException();
-            hash.AppendData(buffer, 0, count);
+            hash.Append(buffer.AsSpan(0, count));
             output.Write(buffer, 0, count);
             remaining -= count;
         }
