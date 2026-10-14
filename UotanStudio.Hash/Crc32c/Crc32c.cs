@@ -14,7 +14,7 @@ namespace UotanStudio.Hash.Crc32c;
 /// <para>热循环借助 8 张 256 项表每轮消费 8 字节（slice-by-8），尾部余数字节回退到逐字节查表，
 /// 因此任意长度下的寄存器语义完全一致。</para>
 /// </remarks>
-internal static class Crc32c
+public static class Crc32c
 {
     private const uint Polynomial = 0x82F63B78;
     private const int SliceSize = 8;
@@ -25,7 +25,7 @@ internal static class Crc32c
     /// Register initial value (<c>~0</c>) used to start a fresh CRC32c checksum under the crc32c_le convention.
     /// <para>crc32c_le 约定下开始一次全新 CRC32c 计算所用的寄存器初值（<c>~0</c>）。</para>
     /// </summary>
-    internal const uint InitialSeed = 0xFFFF_FFFF;
+    public const uint InitialSeed = 0xFFFF_FFFF;
 
     private static readonly uint[] Table = InitTable();
     private static readonly uint[] SliceTable = InitSliceTable();

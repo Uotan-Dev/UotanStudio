@@ -8,7 +8,7 @@ namespace UotanStudio.Hash.HalfMd4Hash;
 /// <para>计算 ext4 half-MD4 目录哈希（返回最低位清零的状态字 1），与 e2fsprogs ext2fs_dirhash 的 EXT2_HASH_HALF_MD4
 /// 分支一致：全零种子改用默认 MD4 初始向量。</para>
 /// </summary>
-internal static class HalfMd4Hash
+public static class HalfMd4Hash
 {
     private static readonly uint[] DefaultHashInit = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476];
 
@@ -25,7 +25,9 @@ internal static class HalfMd4Hash
     /// <para>超级块哈希种子中至少四个种子词；全零向量改用默认 MD4 初始状态。</para></param>
     /// <returns>The directory hash, which is state word 1 with its least significant bit cleared.
     /// <para>目录哈希值，即清除最低有效位后的状态字 1。</para></returns>
-    internal static uint Compute(string name, uint[] seed)
+    /// <exception cref="ArgumentNullException"><paramref name="seed"/> is null. <para><paramref name="seed"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="seed"/> holds fewer than four words. <para><paramref name="seed"/> 不足四个种子词。</para></exception>
+    public static uint Compute(string name, uint[] seed)
     {
         ArgumentNullException.ThrowIfNull(seed);
         if (seed.Length < 4)

@@ -7,7 +7,7 @@ namespace UotanStudio.Hash.F2fsDentryHash;
 /// returning 0 for the <c>.</c> and <c>..</c> names as the kernel does.
 /// <para>计算 F2FS 目录项哈希：从 MD4 风格初始向量出发对 16 字节分块做 TEA 变换，并为 <c>.</c> 与 <c>..</c> 返回 0，与内核行为一致。</para>
 /// </summary>
-internal static class F2fsDentryHash
+public static class F2fsDentryHash
 {
     /// <summary>
     /// Computes the hash of one directory entry name; empty, <c>.</c> and <c>..</c> map to 0.
@@ -16,7 +16,7 @@ internal static class F2fsDentryHash
     /// <param name="name">Directory entry name, UTF-8 encoded internally.
     /// <para>目录项名称，内部按 UTF-8 编码。</para></param>
     /// <returns>The 32-bit dentry hash.<para>32 位目录项哈希。</para></returns>
-    internal static uint Compute(string name)
+    public static uint Compute(string name)
     {
         var nameBytes = Encoding.UTF8.GetBytes(name);
         if (nameBytes.Length <= 2 && nameBytes.Length > 0 && nameBytes[0] == (byte)'.'

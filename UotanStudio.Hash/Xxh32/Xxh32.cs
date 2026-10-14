@@ -7,12 +7,16 @@ namespace UotanStudio.Hash.Xxh32;
 /// format pins for the EROFS xattr name filter.
 /// <para>erofs-utils 与 Linux 内核共同使用的 XXH32（<c>lib/xxhash.c</c>），即 EROFS xattr 名称过滤器所固定的磁盘格式变体。</para>
 /// </summary>
-internal static class Xxh32
+public static class Xxh32
 {
+    /// <summary>
+    /// Computes the 32-bit xxHash of the input with the given seed.
+    /// <para>以给定种子计算输入的 32 位 xxHash。</para>
+    /// </summary>
     /// <param name="input">Bytes to hash.<para>待哈希的字节。</para></param>
     /// <param name="seed">Seed mixed into the accumulator.<para>混入累加器的种子。</para></param>
     /// <returns>The 32-bit digest.<para>32 位摘要。</para></returns>
-    internal static uint Compute(ReadOnlySpan<byte> input, uint seed)
+    public static uint Compute(ReadOnlySpan<byte> input, uint seed)
     {
         const uint prime1 = 2654435761u, prime2 = 2246822519u, prime3 = 3266489917u;
         const uint prime4 = 668265263u, prime5 = 374761393u;

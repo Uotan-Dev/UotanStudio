@@ -7,6 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Hardware-accelerated standard CRC-32; the only project allowed to reference it, per the boundary gate. -->
+    <PackageReference Include="System.IO.Hashing" />
     <!-- Public API surface baseline gate; build-time analyzer only, never a runtime dependency. -->
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
     <AdditionalFiles Include="PublicAPI.Shipped.txt" />

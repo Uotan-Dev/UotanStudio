@@ -4,3 +4,89 @@ static UotanStudio.Hash.Adler32.Adler32.Compute(System.ReadOnlySpan<byte> data) 
 static UotanStudio.Hash.Adler32.Adler32.Compute(byte[]! data, int offset, int length) -> uint
 UotanStudio.Hash.RockchipCrc32.RockchipCrc32
 static UotanStudio.Hash.RockchipCrc32.RockchipCrc32.Compute(System.ReadOnlySpan<byte> data, uint seed = 0) -> uint
+static UotanStudio.Hash.Adler32.Adler32.Compute(System.ReadOnlySpan<byte> data, uint previousResult) -> uint
+UotanStudio.Hash.Crc16CcittReversed.Crc16CcittReversed
+static UotanStudio.Hash.Crc16CcittReversed.Crc16CcittReversed.Compute(System.ReadOnlySpan<byte> data) -> ushort
+UotanStudio.Hash.Crc16CcittFalse.Crc16CcittFalse
+static UotanStudio.Hash.Crc16CcittFalse.Crc16CcittFalse.Compute(System.ReadOnlySpan<byte> data) -> ushort
+UotanStudio.Hash.Crc16Arc.Crc16Arc
+UotanStudio.Hash.Crc32Ieee.Crc32Ieee
+UotanStudio.Hash.Crc32Ieee.Crc32IeeeAccumulator
+UotanStudio.Hash.Crc32Ieee.Crc32IeeeAccumulator.Append(System.ReadOnlySpan<byte> data) -> void
+UotanStudio.Hash.Crc32Ieee.Crc32IeeeAccumulator.Crc32IeeeAccumulator() -> void
+UotanStudio.Hash.Crc32Ieee.Crc32IeeeAccumulator.GetCurrentHash() -> uint
+UotanStudio.Hash.Crc32Ieee.Crc32IeeeAccumulator.Reset() -> void
+UotanStudio.Hash.Crc32Register.Crc32Register
+UotanStudio.Hash.Crc32c.Crc32c
+UotanStudio.Hash.Digests.DigestAccumulator
+UotanStudio.Hash.Digests.DigestAccumulator.Append(System.ReadOnlySpan<byte> data) -> void
+UotanStudio.Hash.Digests.DigestAccumulator.Dispose() -> void
+UotanStudio.Hash.Digests.DigestAccumulator.GetHashAndReset() -> byte[]!
+UotanStudio.Hash.Digests.DigestAccumulator.TryGetHashAndReset(System.Span<byte> destination, out int bytesWritten) -> bool
+UotanStudio.Hash.Digests.Md5
+UotanStudio.Hash.Digests.Sha1
+UotanStudio.Hash.Digests.Sha256
+UotanStudio.Hash.Digests.Sha384
+UotanStudio.Hash.Digests.Sha512
+UotanStudio.Hash.F2fsDentryHash.F2fsDentryHash
+UotanStudio.Hash.HalfMd4Hash.HalfMd4Hash
+UotanStudio.Hash.Sums.ByteSum16
+UotanStudio.Hash.Sums.ByteSum32
+UotanStudio.Hash.Sums.ByteSum8
+UotanStudio.Hash.Sums.WordSum32LittleEndian
+UotanStudio.Hash.Xxh32.Xxh32
+UotanStudio.Hash.XzCrc64.XzCrc64
+UotanStudio.Hash.XzCrc64.XzCrc64.Append(System.ReadOnlySpan<byte> data) -> void
+UotanStudio.Hash.XzCrc64.XzCrc64.GetCurrentHashAsUInt64() -> ulong
+UotanStudio.Hash.XzCrc64.XzCrc64.XzCrc64() -> void
+const UotanStudio.Hash.Crc32c.Crc32c.InitialSeed = 4294967295 -> uint
+const UotanStudio.Hash.Digests.Md5.HashSizeInBytes = 16 -> int
+const UotanStudio.Hash.Digests.Sha1.HashSizeInBytes = 20 -> int
+const UotanStudio.Hash.Digests.Sha256.HashSizeInBytes = 32 -> int
+const UotanStudio.Hash.Digests.Sha384.HashSizeInBytes = 48 -> int
+const UotanStudio.Hash.Digests.Sha512.HashSizeInBytes = 64 -> int
+static UotanStudio.Hash.Crc16Arc.Crc16Arc.Compute(System.ReadOnlySpan<byte> data, ushort seed) -> ushort
+static UotanStudio.Hash.Crc32Ieee.Crc32Ieee.Compute(System.ReadOnlySpan<byte> data) -> uint
+static UotanStudio.Hash.Crc32Register.Crc32Register.Compute(System.ReadOnlySpan<byte> data, uint seed) -> uint
+static UotanStudio.Hash.Crc32c.Crc32c.Compute(System.ReadOnlySpan<byte> data, uint seed = 4294967295) -> uint
+static UotanStudio.Hash.Digests.Md5.ComputeHash(System.ReadOnlySpan<byte> data) -> byte[]!
+static UotanStudio.Hash.Digests.Md5.ComputeHash(System.ReadOnlySpan<byte> data, System.Span<byte> destination) -> int
+static UotanStudio.Hash.Digests.Md5.ComputeHashAsync(System.IO.Stream! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<byte[]!>
+static UotanStudio.Hash.Digests.Md5.ComputeHexLower(System.ReadOnlySpan<byte> data) -> string!
+static UotanStudio.Hash.Digests.Md5.CreateAccumulator() -> UotanStudio.Hash.Digests.DigestAccumulator!
+static UotanStudio.Hash.Digests.Sha1.ComputeHash(System.ReadOnlySpan<byte> data) -> byte[]!
+static UotanStudio.Hash.Digests.Sha1.ComputeHash(System.ReadOnlySpan<byte> data, System.Span<byte> destination) -> int
+static UotanStudio.Hash.Digests.Sha1.ComputeHashAsync(System.IO.Stream! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<byte[]!>
+static UotanStudio.Hash.Digests.Sha1.ComputeHexLower(System.ReadOnlySpan<byte> data) -> string!
+static UotanStudio.Hash.Digests.Sha1.CreateAccumulator() -> UotanStudio.Hash.Digests.DigestAccumulator!
+static UotanStudio.Hash.Digests.Sha256.ComputeHash(System.ReadOnlySpan<byte> data) -> byte[]!
+static UotanStudio.Hash.Digests.Sha256.ComputeHash(System.ReadOnlySpan<byte> data, System.Span<byte> destination) -> int
+static UotanStudio.Hash.Digests.Sha256.ComputeHashAsync(System.IO.Stream! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<byte[]!>
+static UotanStudio.Hash.Digests.Sha256.ComputeHexLower(System.ReadOnlySpan<byte> data) -> string!
+static UotanStudio.Hash.Digests.Sha256.CreateAccumulator() -> UotanStudio.Hash.Digests.DigestAccumulator!
+static UotanStudio.Hash.Digests.Sha384.ComputeHash(System.ReadOnlySpan<byte> data) -> byte[]!
+static UotanStudio.Hash.Digests.Sha384.ComputeHash(System.ReadOnlySpan<byte> data, System.Span<byte> destination) -> int
+static UotanStudio.Hash.Digests.Sha384.ComputeHashAsync(System.IO.Stream! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<byte[]!>
+static UotanStudio.Hash.Digests.Sha384.ComputeHexLower(System.ReadOnlySpan<byte> data) -> string!
+static UotanStudio.Hash.Digests.Sha384.CreateAccumulator() -> UotanStudio.Hash.Digests.DigestAccumulator!
+static UotanStudio.Hash.Digests.Sha512.ComputeHash(System.ReadOnlySpan<byte> data) -> byte[]!
+static UotanStudio.Hash.Digests.Sha512.ComputeHash(System.ReadOnlySpan<byte> data, System.Span<byte> destination) -> int
+static UotanStudio.Hash.Digests.Sha512.ComputeHashAsync(System.IO.Stream! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<byte[]!>
+static UotanStudio.Hash.Digests.Sha512.ComputeHexLower(System.ReadOnlySpan<byte> data) -> string!
+static UotanStudio.Hash.Digests.Sha512.CreateAccumulator() -> UotanStudio.Hash.Digests.DigestAccumulator!
+static UotanStudio.Hash.F2fsDentryHash.F2fsDentryHash.Compute(string! name) -> uint
+static UotanStudio.Hash.HalfMd4Hash.HalfMd4Hash.Compute(string! name, uint[]! seed) -> uint
+static UotanStudio.Hash.Sums.ByteSum16.Compute(System.ReadOnlySpan<byte> data) -> ushort
+static UotanStudio.Hash.Sums.ByteSum32.Compute(System.ReadOnlySpan<byte> data) -> uint
+static UotanStudio.Hash.Sums.ByteSum8.Compute(System.ReadOnlySpan<byte> data) -> byte
+static UotanStudio.Hash.Sums.WordSum32LittleEndian.Compute(System.ReadOnlySpan<byte> data) -> uint
+static UotanStudio.Hash.Xxh32.Xxh32.Compute(System.ReadOnlySpan<byte> input, uint seed) -> uint
+static UotanStudio.Hash.XzCrc64.XzCrc64.HashToUInt64(System.ReadOnlySpan<byte> data) -> ulong
+UotanStudio.Hash.Digests.DigestAccumulator.GetHashAndReset(System.Span<byte> destination) -> int
+UotanStudio.Hash.Digests.DigestAccumulator.HashLengthInBytes.get -> int
+static UotanStudio.Hash.Digests.Md5.ComputeHash(System.IO.Stream! source) -> byte[]!
+static UotanStudio.Hash.Digests.Sha1.ComputeHash(System.IO.Stream! source) -> byte[]!
+static UotanStudio.Hash.Digests.Sha256.ComputeHash(System.IO.Stream! source) -> byte[]!
+static UotanStudio.Hash.Digests.Sha384.ComputeHash(System.IO.Stream! source) -> byte[]!
+static UotanStudio.Hash.Digests.Sha512.ComputeHash(System.IO.Stream! source) -> byte[]!
+UotanStudio.Hash.Digests.DigestAccumulator.GetCurrentHash() -> byte[]!

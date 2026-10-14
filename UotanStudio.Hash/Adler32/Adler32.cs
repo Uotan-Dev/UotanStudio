@@ -59,4 +59,39 @@ public static class Adler32
     /// </exception>
     public static uint Compute(byte[] data, int offset, int length)
         => Compute(data.AsSpan(offset, length));
+
+    /// <summary>
+    /// Computes the Adler-32 checksum of the data continuing from <paramref name="previousResult"/>. To checksum a
+    /// stream in chunks, pass the previous return value as the next <paramref name="previousResult"/>.
+    /// <para>在 <paramref name="previousResult"/> 的基础上继续计算数据的 Adler-32 校验和。分块计算流数据时，把上一次的
+    /// 返回值作为下一次的 <paramref name="previousResult"/> 传入即可续算。</para>
+    /// </summary>
+    /// <param name="data">
+    /// Bytes to hash; an empty span returns <paramref name="previousResult"/> unchanged.
+    /// <para>参与计算的字节；空区间原样返回 <paramref name="previousResult"/>。</para>
+    /// </param>
+    /// <param name="previousResult">
+    /// Packed Adler-32 value of every earlier byte, holding <c>a</c> in the low half and <c>b</c> in the high half;
+    /// the value <c>1</c> starts a new checksum.
+    /// <para>此前所有字节的打包 Adler-32 值，低半部为 <c>a</c>，高半部为 <c>b</c>；取值 <c>1</c> 表示重新开始计算。</para>
+    /// </param>
+    /// <returns>
+    /// The Adler-32 value of the bytes already covered by <paramref name="previousResult"/> followed by
+    /// <paramref name="data"/>, identical to <see cref="Compute(ReadOnlySpan{byte})"/> over the concatenated bytes.
+    /// <para>返回 <paramref name="previousResult"/> 已覆盖字节后接 <paramref name="data"/> 的 Adler-32 值，与对拼接后的
+    /// 完整字节调用 <see cref="Compute(ReadOnlySpan{byte})"/> 的结果一致。</para>
+    /// </returns>
+    public static uint Compute(ReadOnlySpan<byte> data, uint previousResult)
+    {
+        if (data.IsEmpty)
+        {
+            return previousResult;
+        }
+
+        var added = Compute(data);
+        var carry = (long)(previousResult & 0xFFFF) - 1;
+        var low = ((added & 0xFFFF) + carry) % Mod;
+        var high = ((added >> 16) + (previousResult >> 16) + (long)data.Length * carry) % Mod;
+        return (uint)((high << 16) | low);
+    }
 }
