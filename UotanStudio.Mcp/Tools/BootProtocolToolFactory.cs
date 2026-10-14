@@ -1,6 +1,6 @@
 using System.ComponentModel;
-using System.Security.Cryptography;
 using ModelContextProtocol.Server;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Mcp.Tools;
 
@@ -185,7 +185,7 @@ internal static class BootProtocolToolHandlers
             return new ToolResult(true,
                 $"Peeked {lengthBytes} byte(s) at 0x{address:X8} over the boot command stage.",
                 ToolJson.Data(new MtkPeekPayload(target, address, lengthBytes,
-                    Convert.ToHexStringLower(data), Convert.ToHexStringLower(SHA256.HashData(data)))));
+                    Convert.ToHexStringLower(data), Sha256.ComputeHexLower(data))));
         }, cancellationToken).ConfigureAwait(false);
     }
 

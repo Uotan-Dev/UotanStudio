@@ -23,6 +23,7 @@ using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.VendorFirmware.Oppo;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Models;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Firmware;
 
@@ -926,7 +927,7 @@ public sealed class FirmwareService
         try
         {
             await using var fs = File.OpenRead(filePath);
-            var hash = await System.Security.Cryptography.SHA256.HashDataAsync(fs, cancellationToken);
+            var hash = await Sha256.ComputeHashAsync(fs, cancellationToken);
             var hex = Convert.ToHexStringLower(hash);
             var ok = string.IsNullOrEmpty(expectedHash) || string.Equals(hex, expectedHash, StringComparison.OrdinalIgnoreCase);
             return new FirmwareOpResult

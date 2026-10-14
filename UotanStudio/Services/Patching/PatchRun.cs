@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Patching;
 
@@ -427,7 +427,7 @@ public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
         {
             await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 131_072, true);
             var length = stream.Length;
-            var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, token).ConfigureAwait(false));
+            var hash = Convert.ToHexString(await Sha256.ComputeHashAsync(stream, token).ConfigureAwait(false));
             if (stream.Position != length || stream.Length != length) { throw new PatchConflictException(path); }
             return new FileIdentity(true, length, hash, File.GetLastWriteTimeUtc(path));
         }

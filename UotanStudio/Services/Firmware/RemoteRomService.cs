@@ -1,9 +1,9 @@
 using System.Buffers.Binary;
 using System.Collections.Frozen;
-using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using UotanStudio.Compress;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.Infrastructure.Downloads;
 using UotanStudio.Firmware.OtaDelta.Payload;
@@ -255,11 +255,58 @@ public sealed class RemoteRomService(HttpClient client)
             var dataOffset = checked(entry.LocalHeaderOffset + 30L + nameLength + extraLength);
             var compressed = await ReadRangeAsync(uri, dataOffset, checked((int)entry.CompressedSize), cancellationToken).ConfigureAwait(false);
             await using var source = new MemoryStream(compressed, writable: false);
-            await using Stream content = entry.Method == 8 ? new DeflateStream(source, CompressionMode.Decompress) : source;
+            await using Stream content = entry.Method == 8
+                ? CompressionService.CreateDecompressionStream(source, CompressionFormat.Deflate)
+                : source;
             var destination = Path.Combine(outputDirectory, Path.GetFileName(name.Replace('/', Path.DirectorySeparatorChar)));
             await using var output = File.Create(destination);
-            await content.CopyToAsync(output, cancellationToken).ConfigureAwait(false);
+            await CopyBoundedAsync(content, output, entry.UncompressedSize, cancellationToken).ConfigureAwait(false);
             progress?.Report((entry.UncompressedSize, entry.UncompressedSize));
+        }
+    }
+
+    /// <summary>Copies a decoded remote ZIP entry into a file while enforcing its declared size.<para>在强制声明的长度前提下，把已解码的远端 ZIP 条目复制到文件。</para></summary>
+    /// <param name="content">Decoded entry content; a codec failure is reported as <see cref="InvalidDataException"/>.<para>已解码的条目内容；编解码失败以 <see cref="InvalidDataException"/> 上报。</para></param>
+    /// <param name="output">Destination file stream.<para>目标文件流。</para></param>
+    /// <param name="expectedBytes">Size declared by the ZIP central directory; a mismatch in either direction rejects the entry.<para>ZIP 中央目录声明的长度；无论偏大还是偏小都会被拒绝。</para></param>
+    /// <param name="cancellationToken">Cancellation token observed before every read.<para>每次读取前检查的取消令牌。</para></param>
+    /// <exception cref="InvalidDataException">The decoded entry exceeds or falls short of <paramref name="expectedBytes"/>, or the codec rejected the payload.<para>解码后的条目超出或不足 <paramref name="expectedBytes"/>，或编解码器拒绝了该数据。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.<para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    private static async Task CopyBoundedAsync(Stream content, Stream output, long expectedBytes,
+        CancellationToken cancellationToken)
+    {
+        var buffer = new byte[81920];
+        long total = 0;
+        try
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = await content.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                total = checked(total + read);
+                if (total > expectedBytes)
+                {
+                    throw new InvalidDataException(
+                        $"Remote ZIP entry decoded beyond its declared size of {expectedBytes} bytes.");
+                }
+
+                await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException and not InvalidDataException)
+        {
+            throw new InvalidDataException("Remote ZIP entry failed to decompress.", exception);
+        }
+
+        if (total != expectedBytes)
+        {
+            throw new InvalidDataException(
+                $"Remote ZIP entry decoded to {total} bytes, declared {expectedBytes}.");
         }
     }
 

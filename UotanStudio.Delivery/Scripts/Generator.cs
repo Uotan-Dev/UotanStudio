@@ -1,6 +1,6 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -16,9 +16,9 @@ internal static partial class DeliveryScriptGenerator
     /// </summary>
     internal static string Fingerprint(DeliveryPlan plan)
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        hash.AppendData("UotanStudio delivery scripts v3\n"u8);
-        hash.AppendData(JsonSerializer.SerializeToUtf8Bytes(plan with { Scripts = [], GeneratedScripts = [], OpenScripts = [], ScriptCarets = [], ScriptFingerprint = "", OutputDirectory = "" },
+        using var hash = Sha256.CreateAccumulator();
+        hash.Append("UotanStudio delivery scripts v3\n"u8);
+        hash.Append(JsonSerializer.SerializeToUtf8Bytes(plan with { Scripts = [], GeneratedScripts = [], OpenScripts = [], ScriptCarets = [], ScriptFingerprint = "", OutputDirectory = "" },
             DeliveryJsonContext.Default.DeliveryPlan));
         return Convert.ToHexString(hash.GetHashAndReset());
     }

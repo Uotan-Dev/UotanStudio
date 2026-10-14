@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Hashing;
 
@@ -19,11 +19,11 @@ internal static class HashFormatter
     /// <returns>The lowercase hex digest, or null when unsupported.<para>小写十六进制摘要，不受支持时为 null。</para></returns>
     internal static string? ComputeHex(ReadOnlySpan<byte> data, string algorithm) => algorithm switch
     {
-        "md5" => Convert.ToHexStringLower(MD5.HashData(data)),
-        "sha1" => Convert.ToHexStringLower(SHA1.HashData(data)),
-        "sha256" => Convert.ToHexStringLower(SHA256.HashData(data)),
-        "sha384" => Convert.ToHexStringLower(SHA384.HashData(data)),
-        "sha512" => Convert.ToHexStringLower(SHA512.HashData(data)),
+        "md5" => Md5.ComputeHexLower(data),
+        "sha1" => Sha1.ComputeHexLower(data),
+        "sha256" => Sha256.ComputeHexLower(data),
+        "sha384" => Sha384.ComputeHexLower(data),
+        "sha512" => Sha512.ComputeHexLower(data),
         _ => null,
     };
 }

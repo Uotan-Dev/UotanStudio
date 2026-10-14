@@ -8,6 +8,7 @@ using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Firmware.AndroidMeta.Apk;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Keys;
 
@@ -325,7 +326,7 @@ public sealed class KeyLibraryService
             using var imported = AvbRsaPublicKeyCodec.Import(ReadBounded(path));
             if (!string.Equals(
                 key.Fingerprint,
-                "SHA256:" + Convert.ToHexString(SHA256.HashData(imported.ExportSubjectPublicKeyInfo())),
+                "SHA256:" + Convert.ToHexString(Sha256.ComputeHash(imported.ExportSubjectPublicKeyInfo())),
                 StringComparison.Ordinal))
             {
                 throw new InvalidDataException("AVB public-key blob does not match the library entry.");
@@ -487,7 +488,7 @@ public sealed class KeyLibraryService
         try
         {
             using var rsa = LoadPrivateKey(path);
-            return "SHA256:" + Convert.ToHexString(SHA256.HashData(rsa.ExportSubjectPublicKeyInfo()));
+            return "SHA256:" + Convert.ToHexString(Sha256.ComputeHash(rsa.ExportSubjectPublicKeyInfo()));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
                 or System.Security.Cryptography.CryptographicException or InvalidDataException)
@@ -507,7 +508,7 @@ public sealed class KeyLibraryService
     public ManagedKey ImportIdentity(string name, ManagedKeyKind kind, string sourcePrivateKeyPath)
     {
         using var rsa = LoadPrivateKey(sourcePrivateKeyPath);
-        var fingerprint = "SHA256:" + Convert.ToHexString(SHA256.HashData(rsa.ExportSubjectPublicKeyInfo()));
+        var fingerprint = "SHA256:" + Convert.ToHexString(Sha256.ComputeHash(rsa.ExportSubjectPublicKeyInfo()));
         if (FindByFingerprint(kind, fingerprint) is { } existing) return existing;
         return Publish(name, kind, rsa);
     }
@@ -571,7 +572,7 @@ public sealed class KeyLibraryService
     {
         Directory.CreateDirectory(Root);
         var key2 = new ManagedKey(Guid.NewGuid().ToString("N"), name.Trim(), kind, key.KeySize,
-            "SHA256:" + Convert.ToHexString(SHA256.HashData(key.ExportSubjectPublicKeyInfo())), DateTimeOffset.UtcNow);
+            "SHA256:" + Convert.ToHexString(Sha256.ComputeHash(key.ExportSubjectPublicKeyInfo())), DateTimeOffset.UtcNow);
         var staging = Path.Combine(Root, ".create-" + key2.Id);
         Directory.CreateDirectory(staging);
         try

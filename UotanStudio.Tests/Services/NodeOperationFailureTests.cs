@@ -497,6 +497,42 @@ public sealed class NodeOperationFailureTests
         Assert.Null(node.Output.Single().Data);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_CompressThenDecompressWithGzip_RestoresInput()
+    {
+        var compress = NodeFactoryRegistrar.Descriptors.Single(descriptor => descriptor.TypeKey == "Data.Compression.Compress").Factory();
+        var decompress = NodeFactoryRegistrar.Descriptors.Single(descriptor => descriptor.TypeKey == "Data.Compression.Decompress").Factory();
+        var plain = Enumerable.Repeat((byte)0x41, 2048).ToArray();
+        compress.Input.Single(port => port.Title == "Data").InitialValue = plain;
+
+        var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([compress, decompress],
+            [new NodeConnection { SourceInstanceId = compress.InstanceId, SourceConnector = "Compressed",
+                TargetInstanceId = decompress.InstanceId, TargetConnector = "Data" }],
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(plain, Assert.IsType<byte[]>(decompress.Output.Single().Data));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CompressThenDecompressWithDeflate_RestoresInput()
+    {
+        var compress = NodeFactoryRegistrar.Descriptors.Single(descriptor => descriptor.TypeKey == "Data.Compression.Compress").Factory();
+        var decompress = NodeFactoryRegistrar.Descriptors.Single(descriptor => descriptor.TypeKey == "Data.Compression.Decompress").Factory();
+        var plain = Enumerable.Repeat((byte)0x41, 2048).ToArray();
+        compress.Input.Single(port => port.Title == "Data").InitialValue = plain;
+        compress.Input.Single(port => port.Title == "Algorithm").InitialValue = "deflate";
+        decompress.Input.Single(port => port.Title == "Algorithm").InitialValue = "deflate";
+
+        var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([compress, decompress],
+            [new NodeConnection { SourceInstanceId = compress.InstanceId, SourceConnector = "Compressed",
+                TargetInstanceId = decompress.InstanceId, TargetConnector = "Data" }],
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(plain, Assert.IsType<byte[]>(decompress.Output.Single().Data));
+    }
+
     [Theory]
     [InlineData("Data.Cipher.Encrypt", "unknown-cipher")]
     [InlineData("Data.Cipher.Decrypt", "unknown-cipher")]

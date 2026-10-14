@@ -1,5 +1,5 @@
-using System.Security.Cryptography;
 using UotanStudio.Firmware.Patching;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Patching;
 
@@ -78,7 +78,7 @@ public sealed partial class PatchRun
             async Task VerifyAsync(Stream stream)
             {
                 stream.Position = 0;
-                var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, token).ConfigureAwait(false));
+                var hash = Convert.ToHexString(await Sha256.ComputeHashAsync(stream, token).ConfigureAwait(false));
                 if (stream.Length != identity.Length || hash != identity.Sha256)
                 {
                     throw new PatchConflictException(path);
@@ -125,7 +125,7 @@ public sealed partial class PatchRun
             async Task VerifyAsync()
             {
                 stream.Position = 0;
-                var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, token).ConfigureAwait(false));
+                var hash = Convert.ToHexString(await Sha256.ComputeHashAsync(stream, token).ConfigureAwait(false));
                 if (stream.Length != identity.Length || hash != identity.Sha256)
                 {
                     throw new PatchConflictException(path);

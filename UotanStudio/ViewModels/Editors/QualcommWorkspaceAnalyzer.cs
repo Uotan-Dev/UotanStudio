@@ -1,7 +1,7 @@
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using UotanStudio.Firmware.Executable.Qualcomm;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -27,7 +27,7 @@ internal sealed partial class QualcommWorkspaceAnalyzer : IQualcommWorkspaceAnal
             using var certificate = LoadRootCertificate(bytes);
             options = options with
             {
-                TrustedRootCertificateSha256 = [Convert.ToHexString(SHA256.HashData(certificate.RawData))]
+                TrustedRootCertificateSha256 = [Convert.ToHexString(Sha256.ComputeHash(certificate.RawData))]
             };
         }
 

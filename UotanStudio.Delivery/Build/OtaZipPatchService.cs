@@ -1,10 +1,10 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -720,7 +720,7 @@ public static class OtaZipPatchService
             throw new EndOfStreamException("Unexpected end of Payload while hashing metadata.");
         }
         input.Position = 0;
-        var fileHash = await SHA256.HashDataAsync(input, cancellationToken).ConfigureAwait(false);
+        var fileHash = await Sha256.ComputeHashAsync(input, cancellationToken).ConfigureAwait(false);
         var text =
             $"FILE_HASH={Convert.ToBase64String(fileHash)}\n" +
             $"FILE_SIZE={input.Length}\n" +

@@ -1,5 +1,5 @@
-using System.Security.Cryptography;
 using UotanStudio.Comm.Protocols.Mtk;
+using UotanStudio.Hash.Digests;
 using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
@@ -378,7 +378,7 @@ internal static class MtkRpmbService
         }
 
         return new MtkRpmbCaptureResult(family, mode, destination, capture.Bytes.LongLength,
-            Convert.ToHexString(SHA256.HashData(capture.Bytes)), capture.DeliveredFrames,
+            Convert.ToHexString(Sha256.ComputeHash(capture.Bytes)), capture.DeliveredFrames,
             capture.RequestedFrames, capture.Target, capture.ReportedCapacityBytes, capture.IsComplete);
     }
 

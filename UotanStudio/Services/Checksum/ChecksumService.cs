@@ -1,6 +1,5 @@
-using System.Buffers.Binary;
-using System.IO.Hashing;
-using System.Security.Cryptography;
+using UotanStudio.Hash.Crc32Ieee;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Checksum;
 
@@ -52,19 +51,19 @@ internal static class ChecksumService
         var file = new FileInfo(filePath);
         await using var input = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
             BufferLength, FileOptions.Asynchronous | FileOptions.SequentialScan);
-        using var md5 = algorithms.Md5 ? IncrementalHash.CreateHash(HashAlgorithmName.MD5) : null;
-        using var sha1 = algorithms.Sha1 ? IncrementalHash.CreateHash(HashAlgorithmName.SHA1) : null;
-        using var sha256 = algorithms.Sha256 ? IncrementalHash.CreateHash(HashAlgorithmName.SHA256) : null;
-        var crc32 = algorithms.Crc32 ? new Crc32() : (Crc32?)null;
+        using var md5 = algorithms.Md5 ? Md5.CreateAccumulator() : null;
+        using var sha1 = algorithms.Sha1 ? Sha1.CreateAccumulator() : null;
+        using var sha256 = algorithms.Sha256 ? Sha256.CreateAccumulator() : null;
+        var crc32 = algorithms.Crc32 ? new Crc32IeeeAccumulator() : (Crc32IeeeAccumulator?)null;
 
         var buffer = new byte[BufferLength];
         int read;
         while ((read = await input.ReadAsync(buffer.AsMemory(), token).ConfigureAwait(false)) != 0)
         {
             var chunk = buffer.AsSpan(0, read);
-            md5?.AppendData(chunk);
-            sha1?.AppendData(chunk);
-            sha256?.AppendData(chunk);
+            md5?.Append(chunk);
+            sha1?.Append(chunk);
+            sha256?.Append(chunk);
             crc32?.Append(chunk);
         }
 
@@ -77,12 +76,12 @@ internal static class ChecksumService
             Md5: HashToHex(md5),
             Sha1: HashToHex(sha1),
             Sha256: HashToHex(sha256),
-            Crc32: crc32 is null ? "" : BinaryPrimitives.ReadUInt32LittleEndian(crc32.GetCurrentHash()).ToString("x8"));
+            Crc32: crc32 is null ? "" : crc32.GetCurrentHash().ToString("x8"));
     }
 
     /// <summary>Empty when the hash was not requested; otherwise lowercase hexadecimal.<para>未请求该算法时返回空串，否则返回小写十六进制文本。</para></summary>
-    /// <param name="hash">The incremental hash, or null when the algorithm was skipped. <para>增量哈希；算法未参与时为 null。</para></param>
+    /// <param name="hash">The digest accumulator, or null when the algorithm was skipped. <para>摘要累加器；算法未参与时为 null。</para></param>
     /// <returns>The hex text, empty when the hash is null.<para>十六进制文本；哈希为 null 时为空串。</para></returns>
-    private static string HashToHex(IncrementalHash? hash)
+    private static string HashToHex(DigestAccumulator? hash)
         => hash is null ? "" : Convert.ToHexStringLower(hash.GetHashAndReset());
 }

@@ -1,7 +1,7 @@
 using System.IO.Enumeration;
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Patching;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Patching;
 
@@ -141,7 +141,7 @@ public static class PatchFileService
         {
             throw new InvalidDataException("Input is not a supported bounded text configuration.");
         }
-        return new PatchTextDocument(text, encoding, Convert.ToHexString(SHA256.HashData(bytes)));
+        return new PatchTextDocument(text, encoding, Convert.ToHexString(Sha256.ComputeHash(bytes)));
     }
 
     /// <summary>Publishes to a new output file using a sibling temporary file; existing files are preserved.<para>使用同级临时文件发布到新输出路径，已有文件保持不变。</para></summary>

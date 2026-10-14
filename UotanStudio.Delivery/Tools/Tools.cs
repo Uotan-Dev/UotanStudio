@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.IO.Compression;
-using System.Security.Cryptography;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Infrastructure.Downloads;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -314,7 +314,7 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
         if (!File.Exists(path)) return false;
         await using var input = File.OpenRead(path);
         if (input.Length > 256 * 1024 * 1024) return false;
-        return Convert.ToHexString(await SHA256.HashDataAsync(input, token).ConfigureAwait(false)).Equals(hash, StringComparison.OrdinalIgnoreCase);
+        return Convert.ToHexString(await Sha256.ComputeHashAsync(input, token).ConfigureAwait(false)).Equals(hash, StringComparison.OrdinalIgnoreCase);
     }
 
     internal static async Task ExtractAsync(string archive, string prefix, string target, CancellationToken token, string? member = null)

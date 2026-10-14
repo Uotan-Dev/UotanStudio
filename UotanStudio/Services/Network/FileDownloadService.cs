@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using UotanStudio.Firmware.Infrastructure.Downloads;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Network;
 
@@ -96,7 +97,7 @@ public static class FileDownloadService
                 await using (var input = new FileStream(staging, FileMode.Open, FileAccess.Read, FileShare.Read,
                     128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
                 {
-                    var actualHash = await SHA256.HashDataAsync(input, timeout.Token).ConfigureAwait(false);
+                    var actualHash = await Sha256.ComputeHashAsync(input, timeout.Token).ConfigureAwait(false);
                     if (!CryptographicOperations.FixedTimeEquals(actualHash, Convert.FromHexString(expectedHash)))
                     {
                         throw new InvalidDataException("Downloaded SHA256 does not match the expected value.");

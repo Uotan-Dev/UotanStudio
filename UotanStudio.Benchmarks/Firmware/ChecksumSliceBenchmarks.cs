@@ -1,5 +1,5 @@
 using BenchmarkDotNet.Attributes;
-using UotanStudio.Hash.Crc32;
+using UotanStudio.Hash.Crc32Register;
 using UotanStudio.Hash.Crc32c;
 
 namespace UotanStudio.Benchmarks.Firmware;
@@ -43,16 +43,16 @@ public class ChecksumSliceBenchmarks
     public uint Crc32cByteWise() => Crc32cByteWiseReference(_data);
 
     /// <summary>
-    /// Measures the current <see cref="Crc32"/> implementation over the whole buffer.
-    /// <para>度量当前 <see cref="Crc32"/> 实现在整个缓冲上的表现。</para>
+    /// Measures the current <see cref="Crc32Register"/> implementation over the whole buffer.
+    /// <para>度量当前 <see cref="Crc32Register"/> 实现在整个缓冲上的表现。</para>
     /// </summary>
     /// <returns>The checksum register value. <para>校验和寄存器值。</para></returns>
     [Benchmark]
-    public uint Crc32Current() => Crc32.Compute(_data, 0xFFFF_FFFFu);
+    public uint Crc32Current() => Crc32Register.Compute(_data, 0xFFFF_FFFFu);
 
     /// <summary>
-    /// Measures the byte-at-a-time reference <see cref="Crc32"/> over the whole buffer.
-    /// <para>度量逐字节参考实现 <see cref="Crc32"/> 在整个缓冲上的表现。</para>
+    /// Measures the byte-at-a-time reference <see cref="Crc32Register"/> over the whole buffer.
+    /// <para>度量逐字节参考实现 <see cref="Crc32Register"/> 在整个缓冲上的表现。</para>
     /// </summary>
     /// <returns>The checksum register value. <para>校验和寄存器值。</para></returns>
     [Benchmark]
@@ -63,7 +63,11 @@ public class ChecksumSliceBenchmarks
         var crc = seed;
         foreach (var b in data)
         {
-            crc = Crc32cTable[(crc ^ b) & 0xFF] ^ (crc >> 8);
+            crc ^= b;
+            for (var j = 0; j < 8; j++)
+            {
+                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0x82F63B78u : crc >> 1;
+            }
         }
 
         return crc;
@@ -74,46 +78,13 @@ public class ChecksumSliceBenchmarks
         var crc = seed;
         foreach (var b in data)
         {
-            crc = Crc32Table[(crc ^ b) & 0xFF] ^ (crc >> 8);
-        }
-
-        return crc;
-    }
-
-    private static readonly uint[] Crc32cTable = BuildCrc32cTable();
-    private static readonly uint[] Crc32Table = BuildCrc32Table();
-
-    private static uint[] BuildCrc32cTable()
-    {
-        var table = new uint[256];
-        for (uint i = 0; i < 256; i++)
-        {
-            var crc = i;
-            for (var j = 0; j < 8; j++)
-            {
-                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0x82F63B78 : crc >> 1;
-            }
-
-            table[i] = crc;
-        }
-
-        return table;
-    }
-
-    private static uint[] BuildCrc32Table()
-    {
-        var table = new uint[256];
-        for (uint i = 0; i < 256; i++)
-        {
-            var crc = i;
+            crc ^= b;
             for (var j = 0; j < 8; j++)
             {
                 crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
             }
-
-            table[i] = crc;
         }
 
-        return table;
+        return crc;
     }
 }

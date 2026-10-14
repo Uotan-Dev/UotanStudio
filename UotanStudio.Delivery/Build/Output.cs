@@ -1,13 +1,13 @@
 using System.Collections.Frozen;
 using System.Globalization;
 using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Compress;
 using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.Application.Equivalence;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -340,11 +340,11 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                         await using var input = new FileStream(stagedFiles[i], FileMode.Open, FileAccess.Read, FileShare.Read,
                             1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
                         var fileLength = input.Length;
-                        var hashAlgorithm = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                        var hashAlgorithm = Sha256.CreateAccumulator();
                         int read;
                         while ((read = await input.ReadAsync(buffer.AsMemory(), ct).ConfigureAwait(false)) != 0)
                         {
-                            hashAlgorithm.AppendData(buffer, 0, read);
+                            hashAlgorithm.Append(buffer.AsSpan(0, read));
                             var done = Interlocked.Add(ref processedBytes, read);
                             progress?.Report(new(90 + done * 9.0 / Math.Max(1, totalBytes), "Verifying output",
                                 Stage: "Delivery_ProgressVerify", Bytes: (done, totalBytes), Detail: Path.GetFileName(stagedFiles[i])));
@@ -551,13 +551,13 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                 using var produced = new FileStream(stagedPath, FileMode.Open, FileAccess.Read, FileShare.Read,
                     1024 * 1024, FileOptions.SequentialScan);
                 if (produced.Length != sourceLength) return (FirmwareEquivalenceState.NotEquivalent, null);
-                using var hashing = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                using var hashing = Sha256.CreateAccumulator();
                 var buffer = new byte[1024 * 1024];
                 int read;
                 while ((read = produced.Read(buffer, 0, buffer.Length)) != 0)
                 {
                     token.ThrowIfCancellationRequested();
-                    hashing.AppendData(buffer, 0, read);
+                    hashing.Append(buffer.AsSpan(0, read));
                 }
                 var hash = Convert.ToHexStringLower(hashing.GetHashAndReset());
                 var state = string.Equals(hash, sourceHash, StringComparison.OrdinalIgnoreCase)
@@ -595,7 +595,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         await using var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
         var length = source.Length;
-        var hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(source, token).ConfigureAwait(false));
+        var hash = Convert.ToHexStringLower(await Sha256.ComputeHashAsync(source, token).ConfigureAwait(false));
         return (hash, length);
     }
 
@@ -693,14 +693,14 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
         await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, true);
         var length = input.Length;
-        using IncrementalHash? hashing = expandSparse ? null : IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using DigestAccumulator? hashing = expandSparse ? null : Sha256.CreateAccumulator();
         var buffer = new byte[1024 * 1024];
         long copied = 0, last = 0;
         while (copied < length)
         {
             var count = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, length - copied)), token).ConfigureAwait(false);
             if (count == 0) throw new EndOfStreamException("Source truncated while copying.");
-            hashing?.AppendData(buffer, 0, count);
+            hashing?.Append(buffer.AsSpan(0, count));
             await output.WriteAsync(buffer.AsMemory(0, count), token).ConfigureAwait(false);
             copied += count;
             if (Environment.TickCount64 - last >= 100) { progress?.Invoke(copied * 100.0 / Math.Max(1, length)); last = Environment.TickCount64; }

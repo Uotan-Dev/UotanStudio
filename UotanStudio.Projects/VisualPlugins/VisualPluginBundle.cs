@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace UotanStudio.Services.Projects;
@@ -221,7 +220,7 @@ public static class VisualPluginBundle
     private static async Task CopyVerifiedAsync(Stream source, Stream destination, VisualPluginAsset asset,
         CancellationToken cancellationToken)
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = UotanStudio.Hash.Digests.Sha256.CreateAccumulator();
         var buffer = new byte[131072];
         var remaining = asset.Length;
         while (remaining > 0)
@@ -232,7 +231,7 @@ public static class VisualPluginBundle
             {
                 throw new InvalidDataException("Patch resource is truncated.");
             }
-            hash.AppendData(buffer, 0, read);
+            hash.Append(buffer.AsSpan(0, read));
             await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             remaining -= read;
         }

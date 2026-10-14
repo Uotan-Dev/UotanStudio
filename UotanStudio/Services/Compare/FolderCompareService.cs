@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Compare;
 
@@ -454,7 +454,7 @@ public sealed class FolderCompareService
         await using var stream = new FileStream(
             path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
-        return await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
+        return await Sha256.ComputeHashAsync(stream, ct).ConfigureAwait(false);
     }
 
     private static string ResolveSafeRelativePath(string rootDirectory, string relativePath)

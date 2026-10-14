@@ -6,6 +6,7 @@ using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Payload.Builder;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -189,7 +190,7 @@ internal static class DeliveryPayloadBuilder
         try
         {
             if (key.KeySize is not (2048 or 4096)) throw new InvalidDataException("Payload 签名需要 RSA 2048 或 4096 / Payload requires RSA 2048 or 4096.");
-            var fingerprint = "SHA256:" + Convert.ToHexString(SHA256.HashData(key.ExportSubjectPublicKeyInfo()));
+            var fingerprint = "SHA256:" + Convert.ToHexString(Sha256.ComputeHash(key.ExportSubjectPublicKeyInfo()));
             if (options.SigningKeyFingerprint.Length > 0 && fingerprint != options.SigningKeyFingerprint)
                 throw new InvalidDataException("所选密钥已被替换，请重新选择 / The selected key has changed; select it again.");
             return key;
@@ -214,14 +215,14 @@ internal static class DeliveryPayloadBuilder
         var header = new byte[24]; await input.ReadExactlyAsync(header, token).ConfigureAwait(false);
         var size = checked(24L + (long)BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(12, 8)));
         input.Position = 0;
-        using var metadata = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var metadata = Sha256.CreateAccumulator();
         var buffer = new byte[1024 * 1024];
         long remaining = size;
         while (remaining > 0)
         {
             var count = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), token).ConfigureAwait(false);
             if (count == 0) throw new EndOfStreamException();
-            metadata.AppendData(buffer, 0, count);
+            metadata.Append(buffer.AsSpan(0, count));
             remaining -= count;
         }
 

@@ -1,6 +1,6 @@
-using System.IO.Compression;
 using System.Security.Cryptography;
 using Avalonia;
+using UotanStudio.Compress;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 
@@ -225,6 +225,14 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         context.Log.Write(LogLevel.Info, Title, $"Encrypted {data.Length} bytes with {algorithm}.  已加密。");
     }
 
+    /// <summary>
+    /// Compresses the input data through the library codec, resolving to <see cref="System.IO.Compression.CompressionLevel.Optimal"/> because no <see cref="CompressionOptions"/> is supplied.
+    /// <para>通过库编解码器压缩输入数据；由于未提供 <see cref="CompressionOptions"/>，压缩等级解析为 <see cref="System.IO.Compression.CompressionLevel.Optimal"/>。</para>
+    /// </summary>
+    /// <param name="context">
+    /// The execution context.
+    /// <para>执行上下文。</para>
+    /// </param>
     private void ExecuteCompress(INodeExecutionContext context)
     {
         var data = NodeDataUtil.ToBytes(ReadInput("Data"));
@@ -236,8 +244,8 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         var algorithm = (Convert.ToString(ReadInput("Algorithm"), System.Globalization.CultureInfo.InvariantCulture) ?? "gzip").Trim().ToLowerInvariant();
         byte[] compressed = algorithm switch
         {
-            "deflate" => CompressWith(data, mode => new DeflateStream(mode, CompressionLevel.Optimal)),
-            "gzip" => CompressWith(data, mode => new GZipStream(mode, CompressionLevel.Optimal)),
+            "deflate" => CompressWith(data, mode => CompressionService.CreateCompressionStream(mode, CompressionFormat.Deflate)),
+            "gzip" => CompressWith(data, mode => CompressionService.CreateCompressionStream(mode, CompressionFormat.Gzip)),
             _ => throw new InvalidDataException($"Unsupported compression algorithm '{algorithm}'.")
         };
         WriteOutput("Compressed", compressed);
@@ -269,7 +277,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
     private static byte[] AesEncrypt(byte[] data, byte[] keyMaterial)
     {
         using var aes = Aes.Create();
-        aes.Key = SHA256.HashData(keyMaterial);
+        aes.Key = UotanStudio.Hash.Digests.Sha256.ComputeHash(keyMaterial);
         aes.IV = RandomNumberGenerator.GetBytes(aes.BlockSize / 8);
         aes.Mode = CipherMode.CBC;
         aes.Padding = PaddingMode.PKCS7;
@@ -280,7 +288,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
 
     private static byte[] XorCipher(byte[] data, byte[] keyMaterial)
     {
-        var key = SHA256.HashData(keyMaterial);
+        var key = UotanStudio.Hash.Digests.Sha256.ComputeHash(keyMaterial);
         var result = new byte[data.Length];
         for (var i = 0; i < data.Length; i++)
         {

@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 
 namespace UotanStudio.Services.Projects;
@@ -108,7 +107,7 @@ public sealed class VisualPluginAsset
             throw new InvalidDataException("Patch resource exceeds the per-resource size limit.");
         }
         var length = stream.Length;
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = UotanStudio.Hash.Digests.Sha256.CreateAccumulator();
         var remaining = length;
         var buffer = new byte[131072];
         while (remaining > 0)
@@ -119,7 +118,7 @@ public sealed class VisualPluginAsset
             {
                 throw new InvalidDataException("Patch resource changed while capturing its identity.");
             }
-            hash.AppendData(buffer, 0, read);
+            hash.Append(buffer.AsSpan(0, read));
             remaining -= read;
         }
         if (await stream.ReadAsync(buffer.AsMemory(0, 1), cancellationToken).ConfigureAwait(false) != 0)

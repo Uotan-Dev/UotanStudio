@@ -1,7 +1,5 @@
-using System.IO.Hashing;
-using System.Security.Cryptography;
-using UotanStudio.Comm;
 using UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.NativeBin;
 
@@ -292,7 +290,7 @@ public sealed class NativeBinProvisioner
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
-        var hash = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
+        var hash = await Sha256.ComputeHashAsync(stream, ct).ConfigureAwait(false);
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 

@@ -5,6 +5,7 @@ using UotanStudio.Firmware.AndroidMeta.AXml;
 using UotanStudio.Firmware.AndroidMeta.Dex;
 using UotanStudio.Firmware.AndroidMeta.Dex.Decompile;
 using UotanStudio.Firmware.AndroidMeta.Dex.Smali;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Mcp.Tools;
 
@@ -320,7 +321,7 @@ internal static class MiscToolHandlers
 
                 await using var stream = new FileStream(temporary, FileMode.Open, FileAccess.Read, FileShare.Read,
                     131072, FileOptions.Asynchronous | FileOptions.SequentialScan);
-                var actualHash = await System.Security.Cryptography.SHA256.HashDataAsync(stream, timeout.Token)
+                var actualHash = await Sha256.ComputeHashAsync(stream, timeout.Token)
                     .ConfigureAwait(false);
                 actual = Convert.ToHexStringLower(actualHash);
                 if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(actualHash, expected))

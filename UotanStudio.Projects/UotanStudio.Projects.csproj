@@ -4,6 +4,10 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="UotanStudio" />
     <InternalsVisibleTo Include="UotanStudio.Tests" />
     <InternalsVisibleTo Include="UotanStudio.Benchmarks" />

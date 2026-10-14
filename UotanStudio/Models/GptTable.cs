@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
-using System.IO.Hashing;
 using System.Text;
+using UotanStudio.Hash.Crc32Ieee;
 
 namespace UotanStudio.Models;
 
@@ -249,10 +249,10 @@ public static class GptTable
             }
 
             var header = result.AsSpan((int)copy.HeaderOffset, copy.HeaderSize);
-            BinaryPrimitives.WriteUInt32LittleEndian(header[EntriesCrcOffset..], Crc32.HashToUInt32(array));
+            BinaryPrimitives.WriteUInt32LittleEndian(header[EntriesCrcOffset..], Crc32Ieee.Compute(array));
             BinaryPrimitives.WriteUInt32LittleEndian(header[80..], (uint)slotCount);
             BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], 0);
-            BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], Crc32.HashToUInt32(header));
+            BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], Crc32Ieee.Compute(header));
         }
 
         return result;
@@ -321,7 +321,7 @@ public static class GptTable
         Span<byte> scratch = stackalloc byte[SectorSize];
         header.CopyTo(scratch);
         BinaryPrimitives.WriteUInt32LittleEndian(scratch[HeaderCrcOffset..], 0);
-        return stored == Crc32.HashToUInt32(scratch[..headerSize]);
+        return stored == Crc32Ieee.Compute(scratch[..headerSize]);
     }
 
     /// <summary>
@@ -370,7 +370,7 @@ public static class GptTable
 
     private static bool ChecksumMatches(byte[] image, long offset, int arrayBytes, uint expectedCrc) =>
         offset >= 0 && offset + arrayBytes <= image.Length
-        && Crc32.HashToUInt32(image.AsSpan((int)offset, arrayBytes)) == expectedCrc;
+        && Crc32Ieee.Compute(image.AsSpan((int)offset, arrayBytes)) == expectedCrc;
 
     private static long FreeBytesAfter(byte[] image, IReadOnlyList<GptCopy> copies, GptCopy copy)
     {

@@ -1,6 +1,6 @@
 using System.Globalization;
-using System.IO.Compression;
 using Avalonia;
+using UotanStudio.Compress;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 
@@ -86,8 +86,8 @@ public class DecompressNodeViewModel : FlowNodeViewModel
 
         var decompressed = algorithm switch
         {
-            "deflate" => DecompressWith(data, mode => new DeflateStream(mode, CompressionMode.Decompress), context.CancellationToken),
-            "gzip" => DecompressWith(data, mode => new GZipStream(mode, CompressionMode.Decompress), context.CancellationToken),
+            "deflate" => DecompressWith(data, mode => CompressionService.CreateDecompressionStream(mode, CompressionFormat.Deflate), context.CancellationToken),
+            "gzip" => DecompressWith(data, mode => CompressionService.CreateDecompressionStream(mode, CompressionFormat.Gzip), context.CancellationToken),
             _ => throw new InvalidDataException($"Unsupported compression algorithm '{algorithm}'.")
         };
         WriteOutput("Data", decompressed);

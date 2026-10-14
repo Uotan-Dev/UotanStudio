@@ -392,7 +392,28 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     public void Dispose()
     {
         ProjectContextService.Instance.CloseProject();
-        Directory.Delete(_root, recursive: true);
+        ImageViewModel.EnsureInstance().Images.Clear();
+        DeleteProjectRoot();
+    }
+
+    private void DeleteProjectRoot()
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                Directory.Delete(_root, recursive: true);
+                return;
+            }
+            catch (IOException) when (attempt < 20)
+            {
+                Thread.Sleep(50);
+            }
+            catch (UnauthorizedAccessException) when (attempt < 20)
+            {
+                Thread.Sleep(50);
+            }
+        }
     }
 
     private sealed class TestWorkspace : IProjectWorkspace

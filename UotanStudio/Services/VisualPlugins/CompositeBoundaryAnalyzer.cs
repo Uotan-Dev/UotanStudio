@@ -1,4 +1,5 @@
 using System.Globalization;
+using UotanStudio.Hash.Digests;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.NodeViewModels;
 
@@ -129,7 +130,7 @@ public static class CompositeBoundaryAnalyzer
     private static VisualPluginPortDefinition Define(FlowNodeViewModel node, NodeConnectorViewModel port, bool input)
     {
         var identity = $"{node.InstanceId}:{port.StableId}:{input}";
-        var digest = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(identity));
+        var digest = Sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(identity));
         return new VisualPluginPortDefinition
         {
             Id = (input ? "in-" : "out-") + Convert.ToHexStringLower(digest.AsSpan(0, 12)),
