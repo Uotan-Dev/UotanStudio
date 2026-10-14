@@ -162,4 +162,14 @@ public class ScrcpyControlMessageTests
         Assert.Equal(ScrcpyConstants.ControlTypeGetClipboard, msg[0]);
         Assert.Equal(ScrcpyConstants.CopyKeyCut, msg[1]);
     }
+
+    [Fact]
+    public void ResetVideo_IsOneByteCarryingServerTypeId17()
+    {
+        var msg = ScrcpyControlMessageWriter.ResetVideo();
+
+        Assert.Single(msg);
+        Assert.Equal((byte)17, msg[0]);
+        Assert.Equal(ScrcpyConstants.ControlTypeResetVideo, msg[0]);
+    }
 }
