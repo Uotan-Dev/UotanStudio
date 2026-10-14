@@ -16,9 +16,11 @@ internal static class DexReader
     /// </summary>
     /// <param name="data">
     /// Complete little-endian DEX image of at least 0x70 bytes whose header file-size field equals
-    /// <c>data.Length</c>; versions 035, 037, 038, 039 and 040 are accepted and every table range is
+    /// <c>data.Length</c> and whose declared Adler-32 checksum matches the bytes from offset 12 to the
+    /// end; versions 035, 037, 038, 039 and 040 are accepted and every table range is
     /// bounds-checked because the input is treated as untrusted. <see langword="null"/> is rejected.
-    /// <para>至少 0x70 字节的完整小端 DEX 镜像，其头部文件大小字段必须等于 <c>data.Length</c>；接受
+    /// <para>至少 0x70 字节的完整小端 DEX 镜像，其头部文件大小字段必须等于 <c>data.Length</c>，且头部声明的
+    /// Adler-32 校验和必须与偏移 12 至结尾的字节一致；接受
     /// 035、037、038、039、040 版本，且因输入按不可信处理，各表范围均经过边界检查。<see langword="null"/> 会被拒绝。</para>
     /// </param>
     /// <returns>The model holding the validated header plus the decoded string, type, prototype, field,
@@ -48,14 +50,10 @@ internal static class DexReader
         var header = ReadHeader(data);
         if (header.HeaderSize != 0x70 || header.FileSize != data.Length)
             throw new DexException("DEX header size or file size does not match the input.");
-        uint checksumA = 1, checksumB = 0;
-        foreach (var value in data.AsSpan(12))
+        var checksum = UotanStudio.Hash.Adler32.Adler32.Compute(data.AsSpan(12));
+        if (checksum != header.Checksum)
         {
-            checksumA = (checksumA + value) % 65521;
-            checksumB = (checksumB + checksumA) % 65521;
-        }
-        if ((checksumB << 16 | checksumA) != header.Checksum)
-        {
+            throw new DexException($"DEX Adler-32 checksum 0x{checksum:X8} does not match the declared header checksum 0x{header.Checksum:X8}.");
         }
         ValidateTable(data, header.StringIdsOffset, header.StringIdsSize, 4, "string_ids");
         ValidateTable(data, header.TypeIdsOffset, header.TypeIdsSize, 4, "type_ids");

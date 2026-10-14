@@ -108,7 +108,7 @@ public sealed class DexFile
     /// <returns>The parsed model, with every table range-checked against the actual file length.
     /// <para>解析后的模型；各表范围均已对照实际文件长度校验。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="path"/> is null or white space. <para><paramref name="path"/> 为 null 或空白。</para></exception>
-    /// <exception cref="DexException">The file does not exist, or its magic, version, endian tag, header size, file size or table ranges are invalid. <para>文件不存在，或魔数、版本、字节序标记、头部长度、文件大小与表范围校验失败。</para></exception>
+    /// <exception cref="DexException">The file does not exist, or its magic, version, endian tag, header size, file size, Adler-32 checksum or table ranges are invalid. <para>文件不存在，或魔数、版本、字节序标记、头部长度、文件大小、Adler-32 校验和与表范围校验失败。</para></exception>
     /// <exception cref="InvalidDataException">The file exceeds the 256 MiB metadata limit. <para>文件超过 256 MiB 元数据上限。</para></exception>
     /// <example>
     /// <code>
@@ -129,17 +129,17 @@ public sealed class DexFile
     /// <para>从字节数组加载 DEX。</para>
     /// </summary>
     /// <param name="data">
-    /// Complete DEX image. The declared header file size must equal <c>data.Length</c>; the input is
+    /// Complete DEX image. The declared header file size must equal <c>data.Length</c>, and the declared
+    /// Adler-32 checksum must match the bytes from offset 12 to the end; the input is
     /// treated as untrusted and every offset, count and length is bounds-checked before use.
-    /// <para>完整 DEX 镜像。头部声明的文件大小必须等于 <c>data.Length</c>；输入按不可信处理，
+    /// <para>完整 DEX 镜像。头部声明的文件大小必须等于 <c>data.Length</c>，且头部声明的 Adler-32 校验和必须与
+    /// 偏移 12 至结尾的字节一致；输入按不可信处理，
     /// 所有偏移、数量与长度在使用前均经过边界检查。</para>
     /// </param>
     /// <returns>The parsed model. Only little-endian DEX (endian tag 0x12345678) versions 035, 037,
-    /// 038, 039 and 040 are accepted; a declared Adler-32 checksum mismatch does not fail the load.
-    /// <para>解析后的模型。仅接受小端 DEX（字节序标记 0x12345678）的 035、037、038、039、040 版本；
-    /// 声明的 Adler-32 校验和不匹配不会导致加载失败。</para></returns>
+    /// 038, 039 and 040 are accepted. <para>解析后的模型。仅接受小端 DEX（字节序标记 0x12345678）的 035、037、038、039、040 版本。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is null. <para><paramref name="data"/> 为 null。</para></exception>
-    /// <exception cref="DexException">The magic, version, endian tag, header size or any table range is invalid. <para>魔数、版本、字节序标记、头部长度或任一表范围非法。</para></exception>
+    /// <exception cref="DexException">The magic, version, endian tag, header size, file size, Adler-32 checksum or any table range is invalid. <para>魔数、版本、字节序标记、头部长度、文件大小、Adler-32 校验和或任一表范围非法。</para></exception>
     public static DexFile Load(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);

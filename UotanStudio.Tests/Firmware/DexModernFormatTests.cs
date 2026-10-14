@@ -55,6 +55,15 @@ public class DexModernFormatTests
         Assert.Throws<DexException>(() => DexFile.Load(data));
     }
 
+    [Fact]
+    public void StoredAdler32Mismatch_IsRejected()
+    {
+        var data = StandardDex038();
+        data[12] ^= 0x01;
+        var error = Assert.Throws<DexException>(() => DexFile.Load(data));
+        Assert.Contains("Adler-32 checksum", error.Message);
+    }
+
     private static IEnumerable<(ushort Type, uint Count, uint Offset)> ReadMap(byte[] data)
     {
         var map = checked((int)U32(data, 52));
