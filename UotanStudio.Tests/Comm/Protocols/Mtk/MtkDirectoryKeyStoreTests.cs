@@ -51,4 +51,4 @@ public sealed class MtkDirectoryKeyStoreTests : IDisposable
     {
         Directory.Delete(_directory, recursive: true);
     }
-}
+}

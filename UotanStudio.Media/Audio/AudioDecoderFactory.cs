@@ -93,10 +93,12 @@ internal sealed class PcmAudioDecoder : IAudioDecoder
     public void Dispose() { _callback = null; _disposed = true; }
 }
 
-    /// <summary>
-    /// (Re)builds the pipeline for the selected codec and registers the frame callback.
-    /// <para>为所选编码重建解码管线并登记帧回调。</para>
-    /// </summary>
+/// <summary>
+/// GStreamer packet audio decoding into bounded stereo PCM: compressed packets are pushed through a private
+/// appsrc/decoder pipeline and re-emitted as interleaved S16LE 48 kHz stereo frames via the frame callback.
+/// <para>基于 GStreamer 的分包音频解码，输出有界的立体声 PCM：压缩数据包经私有 appsrc/解码器管线推送，
+/// 并以交织存放的 S16LE、48 kHz 立体声帧经帧回调重新输出。</para>
+/// </summary>
 /// <param name="codec">Wire codec the pipeline decodes; this backend does not serve raw PCM.
 /// <para>管线所解码的音频编码；此后端不处理原始 PCM。</para></param>
 public sealed unsafe class GStreamerAudioDecoder(AudioCodecId codec) : IAudioDecoder
