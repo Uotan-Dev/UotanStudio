@@ -470,6 +470,8 @@
     <x:String x:Key="MirrorProperty_EncoderValue">Selected by Android; name not reported</x:String>
   <x:String x:Key="MirrorSetting_Apply">Apply and reconnect</x:String>
   <x:String x:Key="MirrorSetting_ApplyHint">Reconnect to apply changes. Backend availability depends on the system, drivers and installed plugins. The device must support the selected encoding format.</x:String>
+  <x:String x:Key="MirrorSetting_UpdateServer">Check for a newer scrcpy server</x:String>
+  <x:String x:Key="MirrorSetting_UpdateServerHint">Downloads the newest published server jar into the local cache. A running session keeps the jar it already deployed; the new one is used on the next connect.</x:String>
   <x:String x:Key="MirrorSetting_AudioBackend">Audio decoder</x:String>
   <x:String x:Key="MirrorSetting_AudioCodec">Audio codec</x:String>
   <x:String x:Key="MirrorSetting_Auto">Automatic</x:String>

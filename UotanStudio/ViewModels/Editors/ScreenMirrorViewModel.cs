@@ -130,11 +130,14 @@ public partial class ScreenMirrorViewModel : Document
                     .SingleOrDefault(candidate => candidate.Serial == serial &&
                         candidate.Protocol == Services.Devices.DeviceProtocolKind.Adb)
                     ?? throw new InvalidOperationException($"Device {serial} is not connected.");
-                var options = CreateOptionsFromSettings();
+                var artifact = Services.Scrcpy.ScrcpyServerService.Shared.Resolve();
+                Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
+                    $"scrcpy server {artifact.Version} ({artifact.Source}) at {artifact.Path}.");
+                var options = CreateOptionsFromSettings(artifact.Version);
                 _streamOptions = options;
                 StatusText = GetLocalizedString("ScreenMirror_Installing");
                 var mirror = App.DeviceMonitor.StartMirror(
-                    device, ScrcpyServerLocator.Resolve(), options);
+                    device, artifact.Path, options);
                 if (_disposed)
                 {
                     mirror.Dispose();
@@ -417,45 +420,95 @@ public partial class ScreenMirrorViewModel : Document
             };
             long probeDeadline = Environment.TickCount64 + 3000;
             while (!GpuPresenter.CompositionProbeCompleted && Environment.TickCount64 < probeDeadline) Thread.Sleep(25);
-            using var decoder = VideoDecoderFactory.Create(codec, ActiveDecoderOptions);
-            decoder.Initialize(codec, metadata.Width, metadata.Height, OnDecodedFrame);
-            var active = VideoDecoderFactory.GetActiveDecoder(decoder);
-            if (active is VaApiVideoDecoder vaApi && OperatingSystem.IsLinux()) EnableVaApiZeroCopy(vaApi);
-            else if (active is MediaFoundationGpuVideoDecoder mediaFoundation && OperatingSystem.IsWindows()) EnableSharedTextureExport(mediaFoundation);
-            else if (active is VideoToolboxVideoDecoder videoToolbox && OperatingSystem.IsMacOS()) EnableIosurfaceExport(videoToolbox);
-            _decoderBackend = VideoDecoderFactory.GetBackendName(decoder);
-            if (VideoDecoderFactory.GetFallbackReason(decoder) is { } reason)
-                UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Warn,
-                    "ScreenMirror", $"GPU initialization failed; using CPU: {reason}");
-            byte[]? configuration = null;
+            var options = ActiveDecoderOptions;
+            int rebuilds = 0;
             while (!token.IsCancellationRequested)
             {
-                ScrcpyVideoFrame? packet = client.ReadFrame(1000);
-                if (packet is null) { decoder.Poll(); continue; }
-                Interlocked.Add(ref _receivedBytes, packet.Data.Length);
-                if (packet.IsCodecConfig)
+                using var decoder = VideoDecoderFactory.Create(codec, options);
+                decoder.Initialize(codec, metadata.Width, metadata.Height, OnDecodedFrame);
+                var active = VideoDecoderFactory.GetActiveDecoder(decoder);
+                if (active is VaApiVideoDecoder vaApi && OperatingSystem.IsLinux()) EnableVaApiZeroCopy(vaApi);
+                else if (active is MediaFoundationGpuVideoDecoder mediaFoundation && OperatingSystem.IsWindows()) EnableSharedTextureExport(mediaFoundation);
+                else if (active is VideoToolboxVideoDecoder videoToolbox && OperatingSystem.IsMacOS()) EnableIosurfaceExport(videoToolbox);
+                _decoderBackend = VideoDecoderFactory.GetBackendName(decoder);
+                if (VideoDecoderFactory.GetFallbackReason(decoder) is { } reason)
+                    UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Warn,
+                        "ScreenMirror", $"GPU initialization failed; using CPU: {reason}");
+                byte[]? configuration = null;
+                int failures = 0;
+                int skipped = 0;
+                bool awaitBoundary = rebuilds > 0;
+                long boundaryDeadline = Environment.TickCount64 + MirrorDecoderRecovery.KeyFrameWaitMilliseconds;
+                try
                 {
-
-                    if (packet.Data.Length > 1024 * 1024) throw new InvalidDataException("Excessive scrcpy codec configuration.");
-                    configuration = packet.Data;
-                    continue;
-                }
-                long timestampTicks = checked(packet.PresentationTimestampMicroseconds * 10);
-                Interlocked.Increment(ref _receivedFrames);
-                if (configuration is null) decoder.Decode(packet.Data, timestampTicks);
-                else
-                {
-                    int length = checked(configuration.Length + packet.Data.Length);
-                    if (length > 32 * 1024 * 1024) throw new InvalidDataException("Excessive scrcpy access unit.");
-                    byte[] combined = ArrayPool<byte>.Shared.Rent(length);
-                    try
+                    while (!token.IsCancellationRequested)
                     {
-                        configuration.CopyTo(combined, 0);
-                        packet.Data.CopyTo(combined, configuration.Length);
-                        decoder.Decode(combined.AsSpan(0, length), timestampTicks);
-                        configuration = null;
+                        ScrcpyVideoFrame? packet = client.ReadFrame(1000);
+                        if (packet is null)
+                        {
+                            try { decoder.Poll(); failures = 0; }
+                            catch (Exception error) when (MirrorDecoderRecovery.IsRecoverable(error))
+                            {
+                                if (++failures < MirrorDecoderRecovery.ConsecutiveFailuresBeforeRebuild) continue;
+                                throw;
+                            }
+                            continue;
+                        }
+                        Interlocked.Add(ref _receivedBytes, packet.Data.Length);
+                        if (awaitBoundary && !packet.IsCodecConfig)
+                        {
+                            if (Environment.TickCount64 >= boundaryDeadline)
+                                throw new InvalidDataException("The server produced no key frame after the decoder rebuild.");
+                            skipped++;
+                            continue;
+                        }
+                        awaitBoundary = false;
+                        if (packet.IsCodecConfig)
+                        {
+
+                            if (packet.Data.Length > 1024 * 1024) throw new InvalidDataException("Excessive scrcpy codec configuration.");
+                            configuration = packet.Data;
+                            continue;
+                        }
+                        long timestampTicks = checked(packet.PresentationTimestampMicroseconds * 10);
+                        Interlocked.Increment(ref _receivedFrames);
+                        try
+                        {
+                            if (configuration is null) decoder.Decode(packet.Data, timestampTicks);
+                            else
+                            {
+                                int length = checked(configuration.Length + packet.Data.Length);
+                                if (length > 32 * 1024 * 1024) throw new InvalidDataException("Excessive scrcpy access unit.");
+                                byte[] combined = ArrayPool<byte>.Shared.Rent(length);
+                                try
+                                {
+                                    configuration.CopyTo(combined, 0);
+                                    packet.Data.CopyTo(combined, configuration.Length);
+                                    decoder.Decode(combined.AsSpan(0, length), timestampTicks);
+                                    configuration = null;
+                                }
+                                finally { ArrayPool<byte>.Shared.Return(combined); }
+                            }
+                            if (failures != 0) failures = 0;
+                        }
+                        catch (Exception error) when (MirrorDecoderRecovery.IsRecoverable(error))
+                        {
+                            if (++failures < MirrorDecoderRecovery.ConsecutiveFailuresBeforeRebuild) continue;
+                            throw;
+                        }
                     }
-                    finally { ArrayPool<byte>.Shared.Return(combined); }
+                    return;
+                }
+                catch (Exception error) when (!token.IsCancellationRequested
+                        && failures >= MirrorDecoderRecovery.ConsecutiveFailuresBeforeRebuild
+                        && rebuilds < MirrorDecoderRecovery.RebuildAttemptsPerSession
+                        && MirrorDecoderRecovery.Degrade(options, MirrorDecoderRecovery.BackendOf(active)) is { } degraded)
+                {
+                    options = degraded;
+                    rebuilds++;
+                    UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Warn, "ScreenMirror",
+                        $"Video decoding failed after {failures} frames ({error.Message}); rebuilding the decoder without hardware acceleration, {skipped} packets skipped while waiting for a key frame.");
+                    SendControl(ScrcpyControlMessageWriter.ResetVideo());
                 }
             }
         }
@@ -674,15 +727,16 @@ public partial class ScreenMirrorViewModel : Document
     private static string GetLocalizedString(string key)
         => UotanStudio.Services.LanguageService.Instance.GetString(key);
 
-    /// <summary>Builds server options from the persisted app settings.
-    /// <para>按持久化应用设置构建服务端选项。</para>
+    /// <summary>Builds server options from the persisted app settings and the resolved jar version.
+    /// <para>按持久化应用设置与已解析的 jar 版本构建服务端选项。</para>
     /// </summary>
-    private ScrcpyServerOptions CreateOptionsFromSettings()
+    private ScrcpyServerOptions CreateOptionsFromSettings(string serverVersion)
     {
         _activeSettings = PendingSettings.Copy();
         var settings = _activeSettings;
         return new ScrcpyServerOptions
         {
+            ServerVersion = serverVersion,
             VideoBitRate = settings.ScreenMirrorBitRate,
             MaxFps = settings.ScreenMirrorMaxFps,
             MaxSize = settings.ScreenMirrorMaxSize,

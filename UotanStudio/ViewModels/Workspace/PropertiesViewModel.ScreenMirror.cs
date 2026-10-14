@@ -107,7 +107,7 @@ internal partial class PropertiesViewModel
             options is null ? waiting : options.MaxFps > 0 ? $"{options.MaxFps} fps" : svc.GetString("MirrorProperty_Unlimited"),
             options is null ? waiting : $"{options.VideoBitRate / 1_000_000.0:F2} Mbps", bitrate,
             svc.GetString("MirrorProperty_EncoderValue"), audioValue, string.IsNullOrEmpty(mirror.AudioBackend) ? audioFormat : $"{audioFormat} ? {mirror.AudioBackend}", audioFps,
-            mirror.DeviceName, UotanStudio.Services.Mirroring.ScrcpyConstants.ServerVersion];
+            mirror.DeviceName, options?.ServerVersion ?? waiting];
         for (int i = 0; i < values.Length; i++)
         {
             Properties[i].RefreshLocalizedName();

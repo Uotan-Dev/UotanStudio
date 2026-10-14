@@ -6,23 +6,32 @@ namespace UotanStudio.Tests.Mirroring;
 public class ScrcpyVideoMetadataTests
 {
     [Fact]
-    public void StreamerConfigFlag_IsRecognizedWithoutLegacySentinel()
+    public void StreamerConfigFlag_IsBitSixtyTwo()
     {
-        var packet = new ScrcpyVideoFrame(long.MinValue, [0, 0, 0, 1, 0x67]);
+        var packet = new ScrcpyVideoFrame(unchecked((long)ScrcpyConstants.PacketFlagConfig), [0, 0, 0, 1, 0x67]);
         Assert.True(packet.IsCodecConfig);
         Assert.False(packet.IsKeyFrame);
         Assert.Throws<InvalidOperationException>(() => packet.PresentationTimestampMicroseconds);
     }
 
+    [Fact]
+    public void StreamerSessionFlag_IsBitSixtyThreeAndNotAFrameFlag()
+    {
+        Assert.Equal(1UL << 63, ScrcpyConstants.PacketFlagSession);
+        Assert.Equal(1UL << 62, ScrcpyConstants.PacketFlagConfig);
+        Assert.Equal(1UL << 61, ScrcpyConstants.PacketFlagKeyFrame);
+        Assert.Equal(ScrcpyConstants.PacketFlagKeyFrame - 1, ScrcpyConstants.PacketTimestampMask);
+    }
+
     [Theory]
     [InlineData(123456L, false)]
-    [InlineData(0x400000000001E240L, true)]
+    [InlineData(0x2000_0000_0001_E240L, true)]
     public void StreamerTimestamp_DoesNotIncludeKeyFrameBit(long raw, bool keyFrame)
     {
         var packet = new ScrcpyVideoFrame(raw, [1]);
         Assert.False(packet.IsCodecConfig);
         Assert.Equal(keyFrame, packet.IsKeyFrame);
-        Assert.Equal(123456L, packet.PresentationTimestampMicroseconds);
+        Assert.Equal(0x1E240L, packet.PresentationTimestampMicroseconds);
     }
 
     [Fact]

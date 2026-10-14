@@ -85,7 +85,7 @@ public class ScrcpyControlMessageTests
         Assert.Equal(1080, BinaryPrimitives.ReadUInt16BigEndian(msg.AsSpan(9)));
         Assert.Equal(2400, BinaryPrimitives.ReadUInt16BigEndian(msg.AsSpan(11)));
         Assert.Equal(0, BinaryPrimitives.ReadInt16BigEndian(msg.AsSpan(13)));
-        Assert.Equal(unchecked((short)-32767), BinaryPrimitives.ReadInt16BigEndian(msg.AsSpan(15)));
+        Assert.Equal(unchecked((short)-2048), BinaryPrimitives.ReadInt16BigEndian(msg.AsSpan(15)));
         Assert.Equal(0u, BinaryPrimitives.ReadUInt32BigEndian(msg.AsSpan(17)));
     }
 
@@ -119,15 +119,25 @@ public class ScrcpyControlMessageTests
     }
 
     [Theory]
-    [InlineData(true, ScrcpyConstants.ScreenPowerModeNormal)]
-    [InlineData(false, ScrcpyConstants.ScreenPowerModeOff)]
-    public void SetDisplayPower_CarriesPowerModeByte(bool on, byte expectedMode)
+    [InlineData(true, ScrcpyConstants.DisplayPowerOn)]
+    [InlineData(false, ScrcpyConstants.DisplayPowerOff)]
+    public void SetDisplayPower_CarriesBooleanFlagByte(bool on, byte expectedFlag)
     {
         var msg = ScrcpyControlMessageWriter.SetDisplayPower(on);
 
         Assert.Equal(2, msg.Length);
         Assert.Equal(ScrcpyConstants.ControlTypeSetDisplayPower, msg[0]);
-        Assert.Equal(expectedMode, msg[1]);
+        Assert.Equal(expectedFlag, msg[1]);
+    }
+
+    [Fact]
+    public void InjectScroll_OneTickIsScaledForTheFiveXReader()
+    {
+        var msg = ScrcpyControlMessageWriter.InjectScrollEvent(0, 0, 1080, 1920, 1f, -1f);
+
+        Assert.Equal(21, msg.Length);
+        Assert.Equal((short)0x0800, BinaryPrimitives.ReadInt16BigEndian(msg.AsSpan(13)));
+        Assert.Equal((short)(-0x0800), BinaryPrimitives.ReadInt16BigEndian(msg.AsSpan(15)));
     }
 
     [Fact]

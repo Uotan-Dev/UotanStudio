@@ -9,7 +9,7 @@ namespace UotanStudio.Services.Mirroring;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Message layout follows scrcpy 2.x <c>control_msg.h</c>: a single type byte
+/// Message layout follows the server's <c>ControlMessageReader</c>: a single type byte
 /// followed by fixed-width big-endian fields. Touch/scroll positions are
 /// expressed in <em>video pixel coordinates</em> of the decoded frame together
 /// with the frame size (the server maps them onto the physical display); the
@@ -17,7 +17,7 @@ namespace UotanStudio.Services.Mirroring;
 /// size (e.g. after a rotation).
 /// </para>
 /// <para>
-/// 消息布局遵循 scrcpy 2.x <c>control_msg.h</c>：单字节类型 + 定宽大端字段。
+/// 消息布局遵循服务端 <c>ControlMessageReader</c>：单字节类型 + 定宽大端字段。
 /// 触摸/滚轮位置使用解码帧的<em>视频像素坐标</em>并携带帧尺寸（服务端将其映射到
 /// 物理屏幕）；帧尺寸与服务端当前视频尺寸不一致（如旋转后）时服务端会拒绝该事件。
 /// </para>
@@ -159,13 +159,14 @@ public static class ScrcpyControlMessageWriter
     /// </exception>
     /// <remarks>
     /// <para>
-    /// 滚动量为 i16 定点数（1 刻度 = 0x7FFF，对应服务端 1.0f），布局为
-    /// type(1) + position(12) + hScroll(2) + vScroll(2) + buttons(4)。
+    /// 滚动量为 i16 定点数，布局为 type(1) + position(12) + hScroll(2) + vScroll(2) + buttons(4)。
+    /// 服务端会把解码出的 [-1, 1] 定点值再乘 16 才作为最终滚动量（其注释说明实际范围是 [-16, 16]），
+    /// 因此 1 刻度对应 0x0800。
     /// </para>
     /// <para>
-    /// Scroll amounts are i16 fixed-point (one tick = 0x7FFF, i.e. 1.0f on the
-    /// server); layout: type(1) + position(12) + hScroll(2) + vScroll(2) +
-    /// buttons(4).
+    /// Scroll amounts are i16 fixed-point; layout: type(1) + position(12) + hScroll(2) +
+    /// vScroll(2) + buttons(4). The server multiplies the decoded [-1, 1] fixed-point value by 16
+    /// before using it (its reader comment states the real range is [-16, 16]), so one tick is 0x0800.
     /// </para>
     /// </remarks>
     public static byte[] InjectScrollEvent(int x, int y, int width, int height, float hScroll, float vScroll, uint buttons = 0)
@@ -179,12 +180,13 @@ public static class ScrcpyControlMessageWriter
         return msg;
     }
 
-    /// <summary>Converts ticks to i16 fixed-point (1 tick = 0x7FFF per scrcpy Binary.i16FixedPointToFloat).
-    /// <para>将刻度转换为 i16 定点数（按 scrcpy Binary.i16FixedPointToFloat，1 刻度 = 0x7FFF）。</para>
+    /// <summary>Converts ticks to the i16 fixed-point scale the 5.x reader expects (1 tick = 0x0800,
+    /// because the server multiplies the decoded value by 16).
+    /// <para>按 5.x 读取端期望的 i16 定点比例换算刻度（1 刻度 = 0x0800，因为服务端会把解码值再乘 16）。</para>
     /// </summary>
     private static short ToI16FixedPoint(float ticks)
     {
-        var scaled = (int)MathF.Round(ticks * 32767f);
+        var scaled = (int)MathF.Round(ticks * (32767f / 16f));
         return (short)Math.Clamp(scaled, short.MinValue, short.MaxValue);
     }
 
@@ -218,21 +220,33 @@ public static class ScrcpyControlMessageWriter
             : throw new ArgumentException("Type is not a single-byte control message. 该类型不是单字节控制消息。", nameof(type));
 
     /// <summary>
-    /// Builds TYPE_SET_DISPLAY_POWER (type + power mode), 2 bytes.
-    /// <para>构建 TYPE_SET_DISPLAY_POWER（类型 + 电源模式），共 2 字节。</para>
+    /// Builds TYPE_RESET_VIDEO: a request for the server to reconfigure the encoder and emit a new
+    /// independent frame, which is the only safe entry point for a decoder rebuilt mid-stream.
+    /// <para>构建 TYPE_RESET_VIDEO：请求服务端重配置编码器并产出一个新的独立帧，这是流内重建解码器唯一安全的入口。</para>
     /// </summary>
-    /// <param name="on">Whether the display is powered on; the mode byte is
-    /// <see cref="ScrcpyConstants.ScreenPowerModeNormal"/> or <see cref="ScrcpyConstants.ScreenPowerModeOff"/>.
-    /// <para>屏幕是否点亮；模式字节为 <see cref="ScrcpyConstants.ScreenPowerModeNormal"/> 或
-    /// <see cref="ScrcpyConstants.ScreenPowerModeOff"/>。</para></param>
+    /// <returns>
+    /// The encoded one-byte message. <para>编码后的单字节消息。</para>
+    /// </returns>
+    public static byte[] ResetVideo() => [ScrcpyConstants.ControlTypeResetVideo];
+
+    /// <summary>
+    /// Builds TYPE_SET_DISPLAY_POWER (type + power flag), 2 bytes.
+    /// <para>构建 TYPE_SET_DISPLAY_POWER（类型 + 电源标志），共 2 字节。</para>
+    /// </summary>
+    /// <param name="on">Whether the display is powered on; the flag byte is
+    /// <see cref="ScrcpyConstants.DisplayPowerOn"/> or <see cref="ScrcpyConstants.DisplayPowerOff"/>.
+    /// <para>屏幕是否点亮；标志字节为 <see cref="ScrcpyConstants.DisplayPowerOn"/> 或
+    /// <see cref="ScrcpyConstants.DisplayPowerOff"/>。</para></param>
     /// <returns>The encoded message. <para>编码后的消息。</para></returns>
     /// <remarks>
-    /// <para>服务端按 SurfaceControl 的电源模式解释第二个字节，1 不是合法模式值，因此不能写成布尔的 0/1。</para>
-    /// <para>The server forwards the second byte to SurfaceControl as a power mode, and 1 is not a valid mode, so
-    /// the flag cannot be encoded as a boolean 0/1.</para>
+    /// <para>服务端用 <c>DataInputStream.readBoolean()</c> 读取第二字节并直接传给
+    /// <c>Device.setDisplayPower(displayId, on)</c>，所以该载荷是布尔标志，不是 SurfaceControl 的模式值。</para>
+    /// <para>The server reads the second byte with <c>DataInputStream.readBoolean()</c> and passes it
+    /// straight to <c>Device.setDisplayPower(displayId, on)</c>, so the payload is a boolean flag rather
+    /// than a SurfaceControl power mode.</para>
     /// </remarks>
     public static byte[] SetDisplayPower(bool on)
-        => [ScrcpyConstants.ControlTypeSetDisplayPower, on ? ScrcpyConstants.ScreenPowerModeNormal : ScrcpyConstants.ScreenPowerModeOff];
+        => [ScrcpyConstants.ControlTypeSetDisplayPower, on ? ScrcpyConstants.DisplayPowerOn : ScrcpyConstants.DisplayPowerOff];
 
     /// <summary>
     /// Builds TYPE_SET_CLIPBOARD (type + sequence id + paste flag + length + text).

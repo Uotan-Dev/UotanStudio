@@ -37,9 +37,9 @@ public sealed record ScrcpyVideoMetadata(uint CodecFourCc, int Width, int Height
 /// <para>视频 socket 上解出的一个视频帧（或编码器配置包）。</para>
 /// </summary>
 /// <param name="Pts">
-/// Presentation timestamp; <see cref="ScrcpyConstants.NoPts"/> marks the codec
-/// config packet.
-/// <para>显示时间戳；<see cref="ScrcpyConstants.NoPts"/> 表示编码器配置包。</para>
+/// Raw presentation-timestamp word of the packet header: the timestamp in microseconds with the
+/// session and codec-config flags in bits 63 and 62 and the key-frame flag in bit 61.
+/// <para>包头部的原始时间戳字：微秒时间戳，第 63 位为会话标志、第 62 位为编码配置标志、第 61 位为关键帧标志。</para>
 /// </param>
 /// <param name="Data">The compressed access-unit bytes. <para>压缩访问单元字节。</para></param>
 public sealed record ScrcpyVideoFrame(long Pts, byte[] Data)
@@ -169,11 +169,24 @@ public sealed record ScrcpyAudioFrame(long Pts, byte[] Data)
 /// <para>
 /// Sockets are opened in the server's expected order: video, (optional)
 /// audio, control. The first socket carries the dummy byte, the 64-byte
-/// device name and the codec metadata before the framed stream.
+/// device name, the 4-byte video codec id and the first 12-byte session
+/// packet before the framed stream.
 /// </para>
 /// <para>
-/// socket 按服务端预期的顺序打开：视频、（可选）音频、控制。首个 socket 在
-/// 分帧码流之前承载哑字节、64 字节设备名与编码器元数据。
+/// socket 按服务端预期的顺序打开：视频、（可选）音频、控制。首个 socket 在分帧码流之前
+/// 承载哑字节、64 字节设备名、4 字节视频编码标识与首个 12 字节会话包。
+/// </para>
+/// <para>
+/// Every subsequent session packet on the video socket is consumed by
+/// <see cref="ReadFrame"/> before the next media packet, so
+/// <see cref="VideoMetadata"/> always describes the size the encoder is
+/// actually producing; <see cref="SessionEpoch"/> counts those replacements
+/// for consumers that must reconfigure a decoder.
+/// </para>
+/// <para>
+/// 视频 socket 上后续到达的会话包都由 <see cref="ReadFrame"/> 在下一个媒体包之前消费掉，
+/// 因此 <see cref="VideoMetadata"/> 始终描述编码器实际产出的尺寸；<see cref="SessionEpoch"/>
+/// 记录这些替换的次数，供需要重建解码器的使用方判断。
 /// </para>
 /// <para>
 /// All lengths read from the device are bounded: frame payloads are capped
@@ -272,14 +285,40 @@ public sealed class ScrcpyClient : IDisposable
     public string DeviceName { get; private set; } = string.Empty;
 
     /// <summary>
-    /// Video stream metadata read from the first socket during <see cref="Connect"/>.
-    /// <para>在 <see cref="Connect"/> 期间从首个 socket 读取的视频流元数据。</para>
+    /// Video stream metadata read from the first socket: the codec id from the stream header and the
+    /// size from the most recent session packet.
+    /// <para>从首个 socket 读取的视频流元数据：流头部的编码标识，以及最近一个会话包给出的尺寸。</para>
     /// </summary>
     /// <value>
-    /// The parsed codec/width/height header, or <see langword="null"/> before <see cref="Connect"/> or when the server does not send codec metadata.
-    /// <para>已解析的编码/宽/高头部；在 <see cref="Connect"/> 之前或服务端未发送编码元数据时返回 <see langword="null"/>。</para>
+    /// The parsed codec and session size, or <see langword="null"/> before <see cref="Connect"/> or when the
+    /// server does not send stream metadata.
+    /// <para>已解析的编码与会话尺寸；在 <see cref="Connect"/> 之前或服务端未发送流元数据时返回 <see langword="null"/>。</para>
     /// </value>
     public ScrcpyVideoMetadata? VideoMetadata { get; private set; }
+
+    /// <summary>
+    /// Count of session packets consumed since this client connected.
+    /// <para>本次连接以来已消费的会话包数量。</para>
+    /// </summary>
+    /// <value>
+    /// Starts at 0 and increases once per session packet, including the one read during <see cref="Connect"/>;
+    /// a consumer that compares it before and after a read detects a size change without owning state.
+    /// <para>从 0 开始，每个会话包加一，包含 <see cref="Connect"/> 期间读到的那个；使用方只需在读取前后比较该值
+    /// 即可检测尺寸变化，无需自己保存状态。</para>
+    /// </value>
+    public int SessionEpoch { get; private set; }
+
+    /// <summary>
+    /// Whether the latest session packet reported a client-requested resize.
+    /// <para>最近一个会话包是否由客户端请求的调整尺寸所致。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> when the server echoed the <c>isClientResize</c> flag on the latest session
+    /// packet; the value is only meaningful once <see cref="SessionEpoch"/> is non-zero.
+    /// <para>服务端在最近一个会话包上回显了 <c>isClientResize</c> 标志时为 <see langword="true"/>；仅在
+    /// <see cref="SessionEpoch"/> 非零时有意义。</para>
+    /// </value>
+    public bool LastSessionChangeWasClientRequested { get; private set; }
 
     /// <summary>
     /// Audio codec metadata read from the audio socket during <see cref="Connect"/>.
@@ -328,6 +367,8 @@ public sealed class ScrcpyClient : IDisposable
         VideoMetadata = null;
         AudioMetadata = null;
         AudioDisabledByServer = false;
+        SessionEpoch = 0;
+        LastSessionChangeWasClientRequested = false;
         try { ConnectCore(timeoutMs); }
         catch { Dispose(); throw; }
     }
@@ -352,33 +393,107 @@ public sealed class ScrcpyClient : IDisposable
             DeviceName = Encoding.UTF8.GetString(name.AsSpan().TrimEnd((byte)0));
         }
 
-        if (_options.SendCodecMeta)
+        if (_options.SendStreamMeta)
         {
-            var meta = ReadExact(_videoStream, 12, timeoutMs);
-            var codec = BinaryPrimitives.ReadUInt32BigEndian(meta);
-            var width = BinaryPrimitives.ReadInt32BigEndian(meta.AsSpan(4));
-            var height = BinaryPrimitives.ReadInt32BigEndian(meta.AsSpan(8));
-            if (width <= 0 || height <= 0)
-            {
-                throw new InvalidDataException(
-                    $"Server announced invalid video size {width}x{height}. 服务端宣告了无效的视频尺寸 {width}x{height}。");
-            }
-
-            VideoMetadata = new ScrcpyVideoMetadata(codec, width, height);
+            uint codec = ReadStreamCodecId(_videoStream, timeoutMs, "video");
+            var session = ReadExact(_videoStream, ScrcpyConstants.HeaderLength, timeoutMs);
+            ApplySessionPacket(session, codec);
         }
 
-        if (_audioStream is not null && _options.SendCodecMeta)
+        if (_audioStream is not null && _options.SendStreamMeta)
         {
-            var audioCodec = ReadExact(_audioStream, 4, timeoutMs);
-            uint codecId = BinaryPrimitives.ReadUInt32BigEndian(audioCodec);
-            if (codecId <= 1)
+            uint codecId = ReadStreamCodecId(_audioStream, timeoutMs, "audio");
+            if (codecId == ScrcpyConstants.StreamDisabledByServer)
             {
+                // The server could not capture audio and expects video-only mirroring to continue.
                 AudioDisabledByServer = true;
                 _audioStream.Dispose();
                 _audioStream = null;
             }
             else AudioMetadata = new ScrcpyAudioMetadata(codecId);
         }
+    }
+
+    /// <summary>
+    /// Reads the 4-byte codec identifier that opens a stream and rejects the two disable sentinels.
+    /// <para>读取每条流开头的 4 字节编码标识，并拒绝两个禁用哨兵值。</para>
+    /// </summary>
+    /// <param name="stream">The socket carrying the stream header. <para>承载流头部的 socket。</para></param>
+    /// <param name="timeoutMs">Per-read timeout in milliseconds. <para>单次读取超时（毫秒）。</para></param>
+    /// <param name="streamName">Stream name used in the failure text. <para>失败文本中使用的流名称。</para></param>
+    /// <returns>The codec four-character code announced by the server.
+    /// <para>服务端宣告的编码四字符码。</para></returns>
+    /// <exception cref="InvalidDataException">
+    /// The server disabled this stream (identifier 0) or reported a device-side configuration error
+    /// (identifier 1), and the stream cannot be consumed.
+    /// <para>服务端禁用了该流（标识 0）或上报了设备侧配置错误（标识 1），该流无法消费。</para>
+    /// </exception>
+    private uint ReadStreamCodecId(Stream stream, int timeoutMs, string streamName)
+    {
+        var header = ReadExact(stream, ScrcpyConstants.StreamMetaLength, timeoutMs);
+        uint codecId = BinaryPrimitives.ReadUInt32BigEndian(header);
+        if (codecId == ScrcpyConstants.StreamDisabledByServer)
+        {
+            throw new InvalidDataException(
+                $"The device disabled the {streamName} stream. 设备已禁用 {streamName} 流。");
+        }
+
+        if (codecId == ScrcpyConstants.StreamDisabledByError)
+        {
+            throw new InvalidDataException(
+                $"The device reported a {streamName} stream configuration error. 设备上报了 {streamName} 流的配置错误。");
+        }
+
+        return codecId;
+    }
+
+    /// <summary>
+    /// Applies one 12-byte session packet header (flags, width, height) to <see cref="VideoMetadata"/>.
+    /// <para>把一个 12 字节会话包头（flags、宽、高）应用到 <see cref="VideoMetadata"/>。</para>
+    /// </summary>
+    /// <param name="header">The 12 header bytes just read from the video socket.
+    /// <para>刚从视频 socket 读到的 12 个头部字节。</para></param>
+    /// <param name="codec">Codec identifier to keep for the announced size.
+    /// <para>与新尺寸一并保留的编码标识符。</para></param>
+    /// <exception cref="InvalidDataException">
+    /// The header does not carry the session flag, or the announced size is out of the supported range.
+    /// <para>该头部未携带会话标志，或宣告的尺寸超出支持范围。</para>
+    /// </exception>
+    /// <remarks>
+    /// <para>The server sets only bit 31 of the flags integer (the session marker itself) and bit 0
+    /// (<c>isClientResize</c>). Any other bit in that integer means the stream is being read out of step,
+    /// so the packet is refused instead of silently re-annotating the video size.</para>
+    /// <para>服务端只会置上 flags 整数的第 31 位（会话标志本身）与第 0 位（<c>isClientResize</c>）。
+    /// 该整数出现其他位就说明码流已经读错位，因此宁可拒绝该包，也不悄悄改写视频尺寸。</para>
+    /// </remarks>
+    private void ApplySessionPacket(ReadOnlySpan<byte> header, uint codec)
+    {
+        ulong flagsAndWidth = BinaryPrimitives.ReadUInt64BigEndian(header);
+        if ((flagsAndWidth & ScrcpyConstants.PacketFlagSession) == 0)
+        {
+            throw new InvalidDataException(
+                "Expected a session metadata packet before the first video frame. " +
+                "首帧之前应收到会话元数据包。");
+        }
+
+        const ulong knownFlags = ScrcpyConstants.PacketFlagSession | ScrcpyConstants.SessionFlagClientResize;
+        if ((flagsAndWidth & 0xFFFF_FFFF_0000_0000UL & ~knownFlags) != 0)
+        {
+            throw new InvalidDataException(
+                "The session packet carries unexpected flag bits. 会话包携带了未预期的标志位。");
+        }
+
+        int width = unchecked((int)(flagsAndWidth & 0xFFFF_FFFF));
+        int height = BinaryPrimitives.ReadInt32BigEndian(header.Slice(8, 4));
+        if (width is < 1 or > 16384 || height is < 1 or > 16384)
+        {
+            throw new InvalidDataException(
+                $"Server announced invalid video size {width}x{height}. 服务端宣告了无效的视频尺寸 {width}x{height}。");
+        }
+
+        VideoMetadata = new ScrcpyVideoMetadata(codec, width, height);
+        SessionEpoch++;
+        LastSessionChangeWasClientRequested = (flagsAndWidth & ScrcpyConstants.SessionFlagClientResize) != 0;
     }
 
     /// <summary>
@@ -427,11 +542,13 @@ public sealed class ScrcpyClient : IDisposable
     }
 
     /// <summary>
-    /// Reads one framed video packet from the video socket.
-    /// <para>从视频 socket 读取一个分帧视频包。</para>
+    /// Reads one framed video packet from the video socket, consuming any session packet that arrives
+    /// first.
+    /// <para>从视频 socket 读取一个分帧视频包，并先消费其间到达的会话包。</para>
     /// </summary>
     /// <param name="timeoutMs">Per-read timeout in milliseconds. <para>单次读取超时（毫秒）。</para></param>
     /// <returns>The frame, or <see langword="null"/> when no header arrived before timeout.</returns>
+    /// <exception cref="InvalidOperationException">The client is not connected. <para>客户端尚未连接。</para></exception>
     /// <exception cref="EndOfStreamException">The server closed the video stream.</exception>
     public ScrcpyVideoFrame? ReadFrame(int timeoutMs)
     {
@@ -441,28 +558,38 @@ public sealed class ScrcpyClient : IDisposable
             throw new InvalidOperationException("Client is not connected. 客户端尚未连接。");
         }
 
-        if (!TryReadExactInto(stream, _videoFrameHeader, timeoutMs))
+        while (true)
         {
-            return null;
-        }
+            if (!TryReadExactInto(stream, _videoFrameHeader, timeoutMs))
+            {
+                return null;
+            }
 
-        var header = _videoFrameHeader;
-        var pts = BinaryPrimitives.ReadInt64BigEndian(header);
-        var length = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(8));
-        if (length is < 0 or > MaxFrameLength)
-        {
-            throw new InvalidDataException(
-                $"Frame length {length} exceeds the {MaxFrameLength}-byte bound. 帧长度 {length} 超出 {MaxFrameLength} 字节上限。");
-        }
+            var header = _videoFrameHeader;
+            var flagsAndValue = BinaryPrimitives.ReadUInt64BigEndian(header);
+            if ((flagsAndValue & ScrcpyConstants.PacketFlagSession) != 0)
+            {
+                ApplySessionPacket(header, VideoMetadata?.CodecFourCc ?? 0);
+                continue;
+            }
 
-        var payload = GC.AllocateUninitializedArray<byte>(length);
-        if (!TryReadExactInto(stream, payload, timeoutMs))
-        {
-            throw new InvalidDataException(
-                $"Stream ended after 0/{length} expected bytes. 流在读取 0/{length} 字节后提前结束。");
-        }
+            var pts = unchecked((long)flagsAndValue);
+            var length = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(8));
+            if (length is < 0 or > MaxFrameLength)
+            {
+                throw new InvalidDataException(
+                    $"Frame length {length} exceeds the {MaxFrameLength}-byte bound. 帧长度 {length} 超出 {MaxFrameLength} 字节上限。");
+            }
 
-        return new ScrcpyVideoFrame(pts, payload);
+            var payload = GC.AllocateUninitializedArray<byte>(length);
+            if (!TryReadExactInto(stream, payload, timeoutMs))
+            {
+                throw new InvalidDataException(
+                    $"Stream ended after 0/{length} expected bytes. 流在读取 0/{length} 字节后提前结束。");
+            }
+
+            return new ScrcpyVideoFrame(pts, payload);
+        }
     }
 
     /// <summary>
@@ -493,7 +620,14 @@ public sealed class ScrcpyClient : IDisposable
         }
 
         var header = _audioFrameHeader;
-        var pts = BinaryPrimitives.ReadInt64BigEndian(header);
+        var flagsAndValue = BinaryPrimitives.ReadUInt64BigEndian(header);
+        if ((flagsAndValue & ScrcpyConstants.PacketFlagSession) != 0)
+        {
+            throw new InvalidDataException(
+                "A session packet arrived on the audio socket. 音频 socket 上出现了会话包。");
+        }
+
+        var pts = unchecked((long)flagsAndValue);
         var length = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(8));
         if (length is < 0 or > MaxAudioFrameLength)
         {
@@ -538,6 +672,15 @@ public sealed class ScrcpyClient : IDisposable
     /// <exception cref="InvalidDataException">The announced clipboard length exceeds the bound, or the type byte
     /// is not a known device message type.
     /// <para>宣告的剪贴板长度超出上限，或类型字节不属于已知的设备消息类型。</para></exception>
+    /// <remarks>
+    /// <para>5.x adds <c>TYPE_UHID_OUTPUT</c> (<see cref="ScrcpyConstants.DeviceTypeUhidOutput"/>), which the
+    /// server only emits for a UHID device created by a prior <c>TYPE_UHID_CREATE</c>. This client never creates
+    /// one, so that type is intentionally left unhandled and arriving at it is reported rather than skipped
+    /// without knowing the payload length.</para>
+    /// <para>5.x 新增了 <c>TYPE_UHID_OUTPUT</c>（<see cref="ScrcpyConstants.DeviceTypeUhidOutput"/>），服务端只会
+    /// 为先前由 <c>TYPE_UHID_CREATE</c> 创建的 UHID 设备发出它。本客户端从不创建 UHID 设备，因此该类型被有意保留为
+    /// 不消费：真的收到时按异常上报，而不是在不知道负载长度的情况下跳过。</para>
+    /// </remarks>
     public ScrcpyDeviceMessage? TryReadDeviceMessage(int timeoutMs = 0)
     {
         var stream = _controlStream;

@@ -481,8 +481,9 @@ public sealed class DeviceScriptToolGateway : IScriptToolGateway
     /// </returns>
     public ManagedMirrorSession StartMirror(DetectedDevice device)
     {
-        var options = new ScrcpyServerOptions();
-        var session = App.DeviceMonitor.StartMirror(device, ScrcpyServerLocator.Resolve(), options);
+        var artifact = Scrcpy.ScrcpyServerService.Shared.Resolve();
+        var options = new ScrcpyServerOptions { ServerVersion = artifact.Version };
+        var session = App.DeviceMonitor.StartMirror(device, artifact.Path, options);
         try
         {
             session.Connect();

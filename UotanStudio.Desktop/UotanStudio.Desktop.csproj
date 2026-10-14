@@ -29,10 +29,9 @@
     <Content Include="Assets\*.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <!-- scrcpy 服务端（v2.7）：随输出目录复制，投屏时推送到设备。 -->
-    <!-- scrcpy server (v2.7): copied to the output directory and pushed to devices when mirroring. -->
-    <Content Include="Assets\scrcpy-server.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <!-- scrcpy 服务端 jar 由 UotanStudio/Services/Scrcpy/ScrcpyServerService.cs 在使用前按源站公布的长度与
+         摘要校验后取入本地存储，仓库不随包分发该二进制。
+         The scrcpy server jar is fetched into the local store by ScrcpyServerService, which checks the length
+         and digest the origin publishes before use; this repository does not ship the binary. -->
   </ItemGroup>
 </Project>

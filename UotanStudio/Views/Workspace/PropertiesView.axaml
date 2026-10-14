@@ -119,6 +119,9 @@
       <TextBlock Text="{DynamicResource MirrorSetting_ApplyHint}" FontSize="11" TextWrapping="Wrap" Opacity="0.7" />
       <Button Name="ApplyMirrorSettingsButton" Content="{DynamicResource MirrorSetting_Apply}" Command="{Binding ActiveMirror.ApplyMirrorSettingsCommand, FallbackValue={x:Null}}"
               HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+      <Button Name="UpdateMirrorServerButton" Content="{DynamicResource MirrorSetting_UpdateServer}" Command="{Binding ActiveMirror.UpdateMirrorServerCommand, FallbackValue={x:Null}}"
+              HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+      <TextBlock Text="{DynamicResource MirrorSetting_UpdateServerHint}" FontSize="11" TextWrapping="Wrap" Opacity="0.7" />
     </StackPanel>
   </Grid>
 </UserControl>

@@ -30,7 +30,7 @@ public class ScrcpyAudioFrameTests
     [Fact]
     public void ConfigPacket_IsRecognizedAndHasNoTimestamp()
     {
-        var frame = new ScrcpyAudioFrame(long.MinValue, [0xFF, 0xF1]);
+        var frame = new ScrcpyAudioFrame(unchecked((long)ScrcpyConstants.PacketFlagConfig), [0xFF, 0xF1]);
         Assert.True(frame.IsCodecConfig);
         Assert.Throws<InvalidOperationException>(() => frame.PresentationTimestampMicroseconds);
     }

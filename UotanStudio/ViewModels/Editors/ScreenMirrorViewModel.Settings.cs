@@ -39,9 +39,54 @@ public partial class ScreenMirrorViewModel
     [NotifyCanExecuteChangedFor(nameof(ApplyMirrorSettingsCommand))]
     private bool _isApplyingMirrorSettings;
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(UpdateMirrorServerCommand))]
+    private bool _isUpdatingMirrorServer;
+    [ObservableProperty]
     private bool _hasPendingMirrorSettings;
     internal void MarkMirrorSettingsChanged() => HasPendingMirrorSettings = true;
     private bool CanApplyMirrorSettings() => !IsApplyingMirrorSettings && !_disposed && _serial is not null;
+    private bool CanUpdateMirrorServer() => !IsUpdatingMirrorServer && !_disposed;
+
+    /// <summary>
+    /// Fetches the newest published scrcpy server and installs it for the next session.
+    /// <para>获取最新发布的 scrcpy 服务端，并安装供下一次会话使用。</para>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A running session keeps the jar it already deployed: the version is fixed when the arguments are
+    /// built, so the new artifact takes effect on the next connect.
+    /// </para>
+    /// <para>
+    /// 已开始的会话仍使用它已经部署的 jar：版本在构建参数时即已确定，因此新产物从下一次连接生效。
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanUpdateMirrorServer))]
+    private async Task UpdateMirrorServerAsync()
+    {
+        IsUpdatingMirrorServer = true;
+        var previous = _streamOptions?.ServerVersion ?? Services.Scrcpy.ScrcpyServerService.BundledVersion;
+        try
+        {
+            var artifact = await Services.Scrcpy.ScrcpyServerService.Shared
+                .EnsureLatestAsync(_cts?.Token ?? CancellationToken.None);
+            StatusText = string.Equals(artifact.Version, previous, StringComparison.Ordinal)
+                ? $"scrcpy server {artifact.Version} ({artifact.Source})"
+                : $"scrcpy server {previous} -> {artifact.Version} ({artifact.Source})";
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception error)
+        {
+            StatusText = error.Message;
+            Services.LogService.Instance.Write(Services.LogLevel.Warn, "ScreenMirror",
+                $"scrcpy server update failed: {error.Message}");
+        }
+        finally
+        {
+            IsUpdatingMirrorServer = false;
+        }
+    }
 
     [RelayCommand(CanExecute = nameof(CanApplyMirrorSettings))]
     private async Task ApplyMirrorSettingsAsync()

@@ -23,6 +23,7 @@
     <ProjectReference Include="..\UotanStudio.Delivery\UotanStudio.Delivery.csproj" />
     <ProjectReference Include="..\UotanStudio.Mcp\UotanStudio.Mcp.csproj" />
     <ProjectReference Include="..\UotanStudio.Media\UotanStudio.Media.csproj" />
+    <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -59,7 +60,6 @@
     <!-- QR code rendering for the wireless-debugging pairing popup. -->
     <PackageReference Include="QRCoder" />
     <PackageReference Include="DiffPlex" />
-    <PackageReference Include="System.IO.Hashing" />
   </ItemGroup>
 
 </Project>

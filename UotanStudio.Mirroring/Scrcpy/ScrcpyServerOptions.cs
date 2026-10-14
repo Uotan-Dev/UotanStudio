@@ -10,6 +10,32 @@ namespace UotanStudio.Services.Mirroring;
 /// </summary>
 public sealed class ScrcpyServerOptions
 {
+    /// <summary>Version string of the server jar actually being deployed.
+    /// <para>实际部署的服务端 jar 的版本串。</para></summary>
+    /// <value>
+    /// Sent as <c>args[0]</c>; the server aborts unless it equals its own build version, so the value must come
+    /// from the artifact being pushed rather than from a constant. Dotted decimal only, at most 16 characters.
+    /// <para>作为 <c>args[0]</c> 发送；服务端在自身构建版本与之不等时会直接中止，因此该值必须来自要推送的产物本身，
+    /// 不能来自常量。仅允许点分十进制，最长 16 个字符。</para>
+    /// </value>
+    /// <exception cref="ArgumentException">A value outside dotted decimal form is assigned.
+    /// <para>赋值了不属于点分十进制形式的值。</para></exception>
+    public string ServerVersion
+    {
+        get => _serverVersion;
+        init
+        {
+            if (value.Length is 0 or > 16 || !value.All(c => char.IsAsciiDigit(c) || c == '.') || !value.Contains('.', StringComparison.Ordinal))
+            {
+                throw new ArgumentException($"'{value}' is not a dotted decimal server version. '{value}' 不是点分十进制的服务端版本。", nameof(ServerVersion));
+            }
+
+            _serverVersion = value;
+        }
+    }
+
+    private string _serverVersion = "5.0.1";
+
     /// <summary>Random session identifier shared with the socket name.
     /// <para>与 socket 名称共享的随机会话 ID。</para></summary>
     /// <value>
@@ -124,11 +150,16 @@ public sealed class ScrcpyServerOptions
     /// <para>为 <see langword="true"/> 时客户端会在握手期间读取并裁剪设备名。</para></value>
     public bool SendDeviceMeta { get; init; } = true;
 
-    /// <summary>Whether the server sends codec metadata (codec id + size).
-    /// <para>服务端是否发送编码器元数据（编码器 ID + 尺寸）。</para></summary>
-    /// <value>When <see langword="true"/> the client reads the 12-byte video header and the 4-byte audio codec id.
-    /// <para>为 <see langword="true"/> 时客户端会读取 12 字节视频头部与 4 字节音频编码标识。</para></value>
-    public bool SendCodecMeta { get; init; } = true;
+    /// <summary>Whether the server announces each stream with a codec identifier.
+    /// <para>服务端是否用编码标识符宣告每条流。</para></summary>
+    /// <value>
+    /// Passed to the server as <c>send_stream_meta</c>. When <see langword="true"/> the client reads the
+    /// 4-byte video codec id, then the first 12-byte session packet carrying the size the encoder actually
+    /// produces, and the 4-byte audio codec id on the audio socket.
+    /// <para>以 <c>send_stream_meta</c> 传给服务端。为 <see langword="true"/> 时客户端先读取 4 字节视频编码标识，
+    /// 随后读取承载编码器实际产出尺寸的首个 12 字节会话包，并在音频 socket 上读取 4 字节音频编码标识。</para>
+    /// </value>
+    public bool SendStreamMeta { get; init; } = true;
 
     /// <summary>
     /// Validates the options and builds the ordered server argument list (args[0] is the version).
@@ -159,7 +190,7 @@ public sealed class ScrcpyServerOptions
         if (LogLevel is not ("verbose" or "debug" or "info" or "warn" or "error")) throw new ArgumentException("Invalid server log level.", nameof(LogLevel));
         var args = new List<string>
         {
-            ScrcpyConstants.ServerVersion,
+            ServerVersion,
             $"scid={Scid:x8}",
             $"log_level={LogLevel}",
             $"max_size={MaxSize.ToString(CultureInfo.InvariantCulture)}",
@@ -175,7 +206,7 @@ public sealed class ScrcpyServerOptions
             $"send_device_meta={Bool(SendDeviceMeta)}",
             "send_frame_meta=true",
             $"send_dummy_byte={Bool(SendDummyByte)}",
-            $"send_codec_meta={Bool(SendCodecMeta)}",
+            $"send_stream_meta={Bool(SendStreamMeta)}",
             "cleanup=true",
             "tunnel_forward=true",
         };

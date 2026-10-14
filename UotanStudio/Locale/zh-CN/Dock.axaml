@@ -470,6 +470,8 @@
     <x:String x:Key="MirrorProperty_EncoderValue">Android 自动选择；未报告名称</x:String>
   <x:String x:Key="MirrorSetting_Apply">应用并重新连接</x:String>
   <x:String x:Key="MirrorSetting_ApplyHint">修改后重新连接生效。可用后端取决于系统、驱动和已安装插件；设备端编码格式也需要设备支持。</x:String>
+  <x:String x:Key="MirrorSetting_UpdateServer">检查新的 scrcpy 服务端</x:String>
+  <x:String x:Key="MirrorSetting_UpdateServerHint">把最新发布的 server jar 下载到本地缓存。已开始的会话继续使用它已部署的 jar，新版本从下一次连接生效。</x:String>
   <x:String x:Key="MirrorSetting_AudioBackend">音频解码后端</x:String>
   <x:String x:Key="MirrorSetting_AudioCodec">音频编码</x:String>
   <x:String x:Key="MirrorSetting_Auto">自动</x:String>

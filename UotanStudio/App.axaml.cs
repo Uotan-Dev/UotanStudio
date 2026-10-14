@@ -71,6 +71,7 @@ public partial class App : Application
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
 
         _ = Task.Run(() => FileAssociationService.Register());
+        _ = Services.Scrcpy.ScrcpyServerService.Shared.RunBackgroundCheckAsync(TimeSpan.FromSeconds(8));
 
         UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
 
