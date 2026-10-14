@@ -618,11 +618,13 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                 uniform float yOffset;
                 uniform float yScale;
                 uniform float4 coefficients;
+                uniform float chromaSwap;
                 half4 main(float2 p) {
                     float y = max(luma.eval(p).r * 255.0 - yOffset, 0.0) * yScale;
                     float2 cell = floor(p * 0.5);
                     float parity = mod(floor(p.y), 2.0);
-                    float2 uv = chroma.eval(float2(cell.x + 0.75, cell.y + 0.5 + parity * 0.5)).rg * 255.0 - 128.0;
+                    float2 sampled = chroma.eval(float2(cell.x + 0.75, cell.y + 0.5 + parity * 0.5)).rg;
+                    float2 uv = mix(sampled, sampled.yx, chromaSwap) * 255.0 - 128.0;
                     float3 rgb = float3(y + coefficients.x * uv.y,
                         y + coefficients.y * uv.x + coefficients.z * uv.y,
                         y + coefficients.w * uv.x);
@@ -645,7 +647,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             _matrix = matrix == VideoColorMatrix.Auto ? frame.ColorMatrix : matrix;
             _range = range == VideoColorRange.Auto ? frame.ColorRange : range;
             _release = release;
-            if (frame is GpuDecodedVideoFrame)
+            if (frame.PixelFormat == VideoPixelFormat.Bgra32)
                 _first = SKImage.FromPixelCopy(new SKImageInfo(Width, Height, SKColorType.Bgra8888, SKAlphaType.Opaque), frame.Span, frame.Stride)
                     ?? throw new NotSupportedException("Skia BGRA image creation failed.");
             else
@@ -717,26 +719,58 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                 using var paint = new SKPaint { Color = SKColors.White.WithAlpha((byte)Math.Clamp(opacity * 255, 0, 255)) };
                 var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
                 if (chroma is null) { canvas.DrawImage(first, 0, 0, sampling, paint); return; }
-                using var y = first.ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, sampling);
-                using var uv = chroma.ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, sampling);
-                var effect = Effect.Value;
-                bool full = _range == VideoColorRange.Full, hd = _matrix == VideoColorMatrix.Bt709;
-
-                using var uniforms = new SKRuntimeEffectUniforms(effect)
-                {
-                    ["yOffset"] = full ? 0f : 16f,
-                    ["yScale"] = full ? 1f : 298f / 256,
-                    ["coefficients"] = full
-                        ? hd ? new float[] { 403f / 256, -48f / 256, -120f / 256, 475f / 256 } : [359f / 256, -88f / 256, -183f / 256, 454f / 256]
-                        : hd ? [459f / 256, -55f / 256, -136f / 256, 541f / 256] : [409f / 256, -100f / 256, -208f / 256, 516f / 256],
-                };
-                using var children = new SKRuntimeEffectChildren(effect) { ["luma"] = y, ["chroma"] = uv };
-                using var shader = effect.ToShader(uniforms, children);
-                paint.Shader = shader;
-                canvas.DrawRect(0, 0, Width, Height, paint);
+                PaintNv12(canvas, paint, first, chroma, sampling, _matrix, _range, chromaSwapped: false, Width, Height);
             }
             finally { canvas.Restore(); }
         }
+    }
+
+    /// <summary>
+    /// Paints one NV12 frame with the shared runtime effect, taking every conversion constant from
+    /// <see cref="Nv12ConversionTable"/> so the shader and the CPU converter cannot disagree.
+    /// <para>使用共用的运行时着色器绘制一帧 NV12，所有转换常量都取自 <see cref="Nv12ConversionTable"/>，
+    /// 从而保证着色器与 CPU 转换器不会不一致。</para>
+    /// </summary>
+    /// <param name="canvas">Canvas already translated and scaled to the frame rectangle.
+    /// <para>已按帧矩形完成平移与缩放的画布。</para></param>
+    /// <param name="paint">Paint carrying the target opacity; its shader is replaced here.
+    /// <para>携带目标不透明度的画笔；此处替换其着色器。</para></param>
+    /// <param name="luma">Luma plane image. <para>亮度平面图像。</para></param>
+    /// <param name="chroma">Interleaved chroma plane image. <para>交错色度平面图像。</para></param>
+    /// <param name="sampling">Sampling options for both planes. <para>两个平面的采样选项。</para></param>
+    /// <param name="matrix">Chroma matrix to apply. <para>要应用的色度矩阵。</para></param>
+    /// <param name="range">Nominal range to apply. <para>要应用的标称范围。</para></param>
+    /// <param name="chromaSwapped">
+    /// <see langword="true"/> when the chroma layer stores Cr before Cb, as a <c>GR88</c> DMA-BUF layer does;
+    /// the shader then samples the two channels in the opposite order.
+    /// <para>色度平面把 Cr 存在 Cb 之前（例如 <c>GR88</c> DMA-BUF 层）时为 <see langword="true"/>，
+    /// 此时着色器按相反的通道顺序取值。</para>
+    /// </param>
+    /// <param name="width">Frame width in pixels. <para>帧宽度（像素）。</para></param>
+    /// <param name="height">Frame height in pixels. <para>帧高度（像素）。</para></param>
+    internal static void PaintNv12(SKCanvas canvas, SKPaint paint, SKImage luma, SKImage chroma, SKSamplingOptions sampling, VideoColorMatrix matrix, VideoColorRange range, bool chromaSwapped, int width, int height)
+    {
+        using var y = luma.ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, sampling);
+        using var uv = chroma.ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, sampling);
+        var effect = VideoImage.Effect.Value;
+        var coefficients = Nv12ConversionTable.For(matrix, range);
+        using var uniforms = new SKRuntimeEffectUniforms(effect)
+        {
+            ["yOffset"] = (float)coefficients.LumaOffset,
+            ["yScale"] = coefficients.LumaScale / 256f,
+            ["chromaSwap"] = chromaSwapped ? 1f : 0f,
+            ["coefficients"] = new float[]
+            {
+                coefficients.RedFromChromaRed / 256f,
+                coefficients.GreenFromChromaBlue / 256f,
+                coefficients.GreenFromChromaRed / 256f,
+                coefficients.BlueFromChromaBlue / 256f,
+            },
+        };
+        using var children = new SKRuntimeEffectChildren(effect) { ["luma"] = y, ["chroma"] = uv };
+        using var shader = effect.ToShader(uniforms, children);
+        paint.Shader = shader;
+        canvas.DrawRect(0, 0, width, height, paint);
     }
 
     /// <summary>
@@ -754,6 +788,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         private readonly List<uint> _textures = [];
         private EglDmaBufImage? _lumaEgl, _chromaEgl;
         private SKImage? _luma, _chroma;
+        private bool _chromaSwapped;
         private int _destroyed;
 
         internal DmaBufVideoImage(ScreenMirrorGpuPresenter owner, VaDmaBufVideoFrame frame, long sequence)
@@ -771,29 +806,16 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             float scale = (float)Math.Min(bounds.Width / Width, bounds.Height / Height);
             if (scale <= 0) return;
             if (gpu is null) throw new NotSupportedException("Zero-copy presentation requires a Skia GPU context.");
-            EnsureImported(gpu);
+            try { EnsureImported(gpu); }
+            catch (ObjectDisposedException) { return; }
             canvas.Save();
             try
             {
                 canvas.Translate((float)(bounds.X + (bounds.Width - Width * scale) / 2), (float)(bounds.Y + (bounds.Height - Height * scale) / 2));
                 canvas.Scale(scale);
                 using var paint = new SKPaint { Color = SKColors.White.WithAlpha((byte)Math.Clamp(opacity * 255, 0, 255)) };
-                using var y = _luma!.ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, new SKSamplingOptions(SKFilterMode.Nearest));
-                using var uv = _chroma!.ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, new SKSamplingOptions(SKFilterMode.Nearest));
-                var effect = VideoImage.Effect.Value;
-                bool full = _frame.ColorRange == VideoColorRange.Full, hd = _frame.ColorMatrix == VideoColorMatrix.Bt709;
-                using var uniforms = new SKRuntimeEffectUniforms(effect)
-                {
-                    ["yOffset"] = full ? 0f : 16f,
-                    ["yScale"] = full ? 1f : 298f / 256,
-                    ["coefficients"] = full
-                        ? hd ? new float[] { 403f / 256, -48f / 256, -120f / 256, 475f / 256 } : [359f / 256, -88f / 256, -183f / 256, 454f / 256]
-                        : hd ? [459f / 256, -55f / 256, -136f / 256, 541f / 256] : [409f / 256, -100f / 256, -208f / 256, 516f / 256],
-                };
-                using var children = new SKRuntimeEffectChildren(effect) { ["luma"] = y, ["chroma"] = uv };
-                using var shader = effect.ToShader(uniforms, children);
-                paint.Shader = shader;
-                canvas.DrawRect(0, 0, Width, Height, paint);
+                PaintNv12(canvas, paint, _luma!, _chroma!, new SKSamplingOptions(SKFilterMode.Nearest),
+                    _frame.ColorMatrix, _frame.ColorRange, _chromaSwapped, Width, Height);
             }
             finally { canvas.Restore(); }
         }
@@ -803,8 +825,10 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             if (_luma is not null) return;
             try
             {
-                var lumaEgl = EglDmaBufImage.Import(_frame.Surface, 0);
-                var chromaEgl = EglDmaBufImage.Import(_frame.Surface, 1);
+                var surface = _frame.Surface;
+                _chromaSwapped = surface.ChromaOrder == DmabufChromaOrder.CrCb;
+                var lumaEgl = EglDmaBufImage.Import(surface, 0);
+                var chromaEgl = EglDmaBufImage.Import(surface, 1);
                 _lumaEgl = lumaEgl;
                 _chromaEgl = chromaEgl;
                 var (lumaTexture, lumaTarget) = lumaEgl.CreateBoundTexture(externalOes: false, GlR8);

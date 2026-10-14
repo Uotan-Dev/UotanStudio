@@ -14,6 +14,8 @@ public sealed class ScreenMirrorGpuPresenterTests
     [InlineData(VideoColorMatrix.Bt601, VideoColorRange.Full)]
     [InlineData(VideoColorMatrix.Bt709, VideoColorRange.Limited)]
     [InlineData(VideoColorMatrix.Bt709, VideoColorRange.Full)]
+    [InlineData(VideoColorMatrix.Bt2020, VideoColorRange.Limited)]
+    [InlineData(VideoColorMatrix.Bt2020, VideoColorRange.Full)]
     [InlineData(VideoColorMatrix.Auto, VideoColorRange.Auto)]
     public void Shader_PreservesOddDimensionsStrideAndColorAfterDecoderReusesBuffer(VideoColorMatrix matrix, VideoColorRange range)
     {
@@ -57,6 +59,71 @@ public sealed class ScreenMirrorGpuPresenterTests
         Assert.False(source.Publish(frame, VideoColorMatrix.Auto, VideoColorRange.Auto));
         second.Dispose(); second.Dispose();
         Assert.Equal(0, source.LiveFrames);
+    }
+
+    [Fact]
+    public void PaintNv12_SwappedChroma_MatchesCpuConverterOnExchangedChromaBytes()
+    {
+        const int width = 6, height = 4, stride = 8;
+        byte[] planes = new byte[stride * (height + height / 2)];
+        for (int row = 0; row < height; row++)
+            for (int col = 0; col < width; col++) planes[row * stride + col] = (byte)(30 + row * 47 + col * 9);
+        for (int i = stride * height; i < planes.Length; i += 2)
+        {
+            planes[i] = 70;
+            planes[i + 1] = 205;
+        }
+        byte[] exchanged = (byte[])planes.Clone();
+        for (int i = stride * height; i < exchanged.Length; i += 2)
+            (exchanged[i], exchanged[i + 1]) = (planes[i + 1], planes[i]);
+
+        var expected = new byte[Nv12ToBgraConverter.GetBgraBufferSize(width, height)];
+        Nv12ToBgraConverter.Convert(exchanged, width, height, stride, expected, matrix: VideoColorMatrix.Bt601, range: VideoColorRange.Limited);
+
+        using var luma = SKImage.FromPixelCopy(new SKImageInfo(width, height, SKColorType.R8Unorm, SKAlphaType.Opaque), planes, stride);
+        using var chroma = SKImage.FromPixelCopy(new SKImageInfo((width + 1) / 2, (height + 1) / 2, SKColorType.Rg88, SKAlphaType.Opaque), planes[(stride * height)..], stride);
+        Assert.NotNull(luma);
+        Assert.NotNull(chroma);
+        var info = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque);
+        using var surface = SKSurface.Create(info);
+        using var paint = new SKPaint { Color = SKColors.White };
+        ScreenMirrorGpuPresenter.PaintNv12(surface.Canvas, paint, luma, chroma,
+            new SKSamplingOptions(SKFilterMode.Nearest), VideoColorMatrix.Bt601, VideoColorRange.Limited, chromaSwapped: true, width, height);
+        using var actual = new SKBitmap(info);
+        Assert.True(surface.ReadPixels(info, actual.GetPixels(), actual.RowBytes, 0, 0));
+        var bytes = actual.Bytes;
+        for (int i = 0; i < expected.Length; i++) Assert.InRange(Math.Abs(expected[i] - bytes[i]), 0, 2);
+    }
+
+    [Fact]
+    public void PaintNv12_UnswappedChroma_DivergesFromExchangedChromaReference()
+    {
+        const int width = 6, height = 4, stride = 8;
+        byte[] planes = new byte[stride * (height + height / 2)];
+        planes.AsSpan(0, stride * height).Fill(140);
+        for (int i = stride * height; i < planes.Length; i += 2)
+        {
+            planes[i] = 40;
+            planes[i + 1] = 220;
+        }
+        var exchangedExpected = new byte[Nv12ToBgraConverter.GetBgraBufferSize(width, height)];
+        byte[] exchanged = (byte[])planes.Clone();
+        for (int i = stride * height; i < exchanged.Length; i += 2)
+            (exchanged[i], exchanged[i + 1]) = (planes[i + 1], planes[i]);
+        Nv12ToBgraConverter.Convert(exchanged, width, height, stride, exchangedExpected, matrix: VideoColorMatrix.Bt601, range: VideoColorRange.Limited);
+
+        using var luma = SKImage.FromPixelCopy(new SKImageInfo(width, height, SKColorType.R8Unorm, SKAlphaType.Opaque), planes, stride);
+        using var chroma = SKImage.FromPixelCopy(new SKImageInfo((width + 1) / 2, (height + 1) / 2, SKColorType.Rg88, SKAlphaType.Opaque), planes[(stride * height)..], stride);
+        Assert.NotNull(luma);
+        Assert.NotNull(chroma);
+        var info = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque);
+        using var surface = SKSurface.Create(info);
+        using var paint = new SKPaint { Color = SKColors.White };
+        ScreenMirrorGpuPresenter.PaintNv12(surface.Canvas, paint, luma, chroma,
+            new SKSamplingOptions(SKFilterMode.Nearest), VideoColorMatrix.Bt601, VideoColorRange.Limited, chromaSwapped: false, width, height);
+        using var actual = new SKBitmap(info);
+        Assert.True(surface.ReadPixels(info, actual.GetPixels(), actual.RowBytes, 0, 0));
+        Assert.NotEqual(exchangedExpected, actual.Bytes);
     }
 
     private static DecodedVideoFrame Frame()

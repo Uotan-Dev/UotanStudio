@@ -1,5 +1,4 @@
 using UotanStudio.Media.Decoding;
-using UotanStudio.Media.Decoding.MediaFoundation;
 
 namespace UotanStudio.Views.Editors;
 
@@ -17,7 +16,7 @@ internal sealed class ScreenMirrorPixelBuffer
     {
         int length = Nv12ToBgraConverter.GetBgraBufferSize(frame.Width, frame.Height);
         if (Pixels.Length != length) Pixels = GC.AllocateUninitializedArray<byte>(length);
-        if (frame is GpuDecodedVideoFrame)
+        if (frame.PixelFormat == VideoPixelFormat.Bgra32)
         {
             int rowBytes = checked(frame.Width * 4);
             for (int row = 0; row < frame.Height; row++)
