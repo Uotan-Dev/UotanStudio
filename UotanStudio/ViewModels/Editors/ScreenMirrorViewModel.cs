@@ -95,6 +95,32 @@ public partial class ScreenMirrorViewModel : Document
         => (Interlocked.Read(ref _receivedFrames), Interlocked.Read(ref _decodedFrames),
             Interlocked.Read(ref _uploadedFrames) + GpuPresenter.Draws, Interlocked.Read(ref _receivedBytes));
     internal string DecoderBackend => _decoderBackend;
+    private IVideoDecoder? _pixelFormatDecoder;
+
+    /// <summary>
+    /// Gets the pixel layout the active decoder delivers right now, taken from the decoder instead of
+    /// inferred from its display name; it flips when a GPU export fails mid-session.
+    /// <para>获取当前激活解码器正在交付的像素布局，取自解码器本身而非其显示名称；会话中途 GPU 导出失败时该值随之改变。</para>
+    /// </summary>
+    internal VideoPixelFormat MirrorFrameFormat => _pixelFormatDecoder is { } decoder
+        ? VideoDecoderFactory.GetFramePixelFormat(decoder)
+        : VideoPixelFormat.Nv12;
+
+    /// <summary>
+    /// Gets the conversion descriptor for the properties panel, or an empty string when the localized
+    /// software-conversion default applies.
+    /// <para>获取属性面板使用的转换描述；适用本地化的软件转换默认值时返回空字符串。</para>
+    /// </summary>
+    internal string MirrorConversion
+    {
+        get
+        {
+            if (_pixelFormatDecoder is not { } decoder || MirrorFrameFormat != VideoPixelFormat.Bgra32) return string.Empty;
+            return MirrorDecoderRecovery.BackendOf(VideoDecoderFactory.GetActiveDecoder(decoder)) == VideoDecoderBackend.MediaFoundationGpu
+                ? "D3D11 → BGRA"
+                : "VideoToolbox → BGRA";
+        }
+    }
     internal ScrcpyServerOptions? StreamOptions => _streamOptions;
     internal ScrcpyVideoMetadata? StreamMetadata => _client?.VideoMetadata;
     internal Services.Mirroring.ScrcpyAudioMetadata? StreamMetadataAudio => _client?.AudioMetadata;
@@ -431,6 +457,7 @@ public partial class ScreenMirrorViewModel : Document
                 else if (active is MediaFoundationGpuVideoDecoder mediaFoundation && OperatingSystem.IsWindows()) EnableSharedTextureExport(mediaFoundation);
                 else if (active is VideoToolboxVideoDecoder videoToolbox && OperatingSystem.IsMacOS()) EnableIosurfaceExport(videoToolbox);
                 _decoderBackend = VideoDecoderFactory.GetBackendName(decoder);
+                _pixelFormatDecoder = decoder;
                 if (VideoDecoderFactory.GetFallbackReason(decoder) is { } reason)
                     UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Warn,
                         "ScreenMirror", $"GPU initialization failed; using CPU: {reason}");
