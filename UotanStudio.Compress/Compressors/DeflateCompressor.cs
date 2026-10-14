@@ -168,6 +168,22 @@ public static class DeflateCompressor
     }
 
     /// <summary>
+    /// Creates the incremental raw deflate writer appending its stream to a caller-owned destination.
+    /// <para>在调用方持有的目标流上创建增量原始 deflate 写出器，编码流追加到该流。</para>
+    /// </summary>
+    /// <param name="output">
+    /// Writable destination; the encoded bytes start at its current position.
+    /// <para>可写目标流；编码字节从其当前位置开始。</para></param>
+    /// <param name="options">
+    /// Only <see cref="CompressionOptions.Level"/> is read; the other members have no effect because one incremental stream cannot be chunked.
+    /// <para>仅读取 <see cref="CompressionOptions.Level"/>；单个增量流无法分块，其他成员不生效。</para></param>
+    /// <returns>
+    /// A writable encoder stream whose dispose flushes the terminating deflate block into <paramref name="output"/> without closing it.
+    /// <para>可写编码器流；释放时把结束 deflate 块刷入 <paramref name="output"/> 但不关闭该流。</para></returns>
+    internal static Stream CreateCompressionStream(Stream output, CompressionOptions? options)
+        => new DeflateStream(new NonDisposingStream(output), CompressionLevelMapper.ToBclCompressionLevel(options?.Level), leaveOpen: true);
+
+    /// <summary>
     /// Streaming DEFLATE decompression.
     /// <para>流式 DEFLATE 解压。</para>
     /// </summary>
@@ -233,6 +249,19 @@ public static class DeflateCompressor
             throw new CompressionException("DEFLATE 解压失败", ex);
         }
     }
+
+    /// <summary>
+    /// Creates the incremental raw deflate reader over a caller-owned payload.
+    /// <para>在调用方持有的数据流上创建增量原始 deflate 读取器。</para>
+    /// </summary>
+    /// <param name="input">
+    /// Readable raw deflate stream positioned at its first byte, consumed only as far as the decoder reads.
+    /// <para>定位在首字节处的可读原始 deflate 流，解码器读到多少就消费多少。</para></param>
+    /// <returns>
+    /// A readable stream of decoded bytes stopping at the end of the first member, unlike the array overload that walks every concatenated member; disposing the stream leaves <paramref name="input"/> open.
+    /// <para>解码字节的可读流，在首个成员末尾停止（与遍历全部串联成员的数组重载不同）；释放该流不会关闭 <paramref name="input"/>。</para></returns>
+    internal static Stream CreateDecompressionStream(Stream input)
+        => new SCDeflateStream(new NonDisposingStream(input), SCCompressionMode.Decompress);
 
     /// <summary>
     /// Streaming DEFLATE decompression with output limit (decompression bomb protection).

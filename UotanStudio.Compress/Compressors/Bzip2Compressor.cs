@@ -144,6 +144,17 @@ internal static class Bzip2Compressor
     }
 
     /// <summary>
+    /// Creates the incremental bzip2 writer appending its stream to a caller-owned destination through a 64 KiB buffer.
+    /// <para>在调用方持有的目标流上创建增量 bzip2 写出器，经 64 KiB 缓冲追加。</para>
+    /// </summary>
+    /// <param name="output">Writable destination; the encoded stream starts at its current position.
+    /// <para>可写目标流；编码流从其当前位置开始。</para></param>
+    /// <returns>A writable encoder stream whose dispose writes the stream trailer, flushes the buffer and leaves <paramref name="output"/> open.
+    /// <para>可写编码器流；释放时写出流尾部、刷新缓冲且不关闭 <paramref name="output"/>。</para></returns>
+    internal static Stream CreateCompressionStream(Stream output)
+        => BZip2Stream.Create(new BufferedStream(new NonDisposingStream(output), 64 * 1024), CompressionMode.Compress, decompressConcatenated: false, leaveOpen: false);
+
+    /// <summary>
     /// Streaming BZIP2 decompression.
     /// <para>流式 BZIP2 解压。</para>
     /// </summary>
@@ -180,6 +191,21 @@ internal static class Bzip2Compressor
             throw new CompressionException("BZIP2 解压失败", ex);
         }
     }
+
+    /// <summary>
+    /// Creates the incremental bzip2 reader over a caller-owned payload through a 64 KiB buffer.
+    /// <para>在调用方持有的数据上创建增量 bzip2 读取器，经 64 KiB 缓冲读取。</para>
+    /// </summary>
+    /// <param name="input">Readable bzip2 payload positioned at its magic; the buffering layer reads ahead, so the caller's position can pass the offset decoding ended at.
+    /// <para>定位在魔数处的可读 bzip2 数据；缓冲层会预读，因此调用方流上的位置可能超过解码实际结束处。</para></param>
+    /// <returns>A readable stream of decoded bytes that follows concatenated streams, owns the buffering layer and leaves <paramref name="input"/> open when disposed.
+    /// <para>解码字节的可读流，会跟随串接的多个流并持有缓冲层，释放时不关闭 <paramref name="input"/>。</para></returns>
+    internal static Stream CreateDecompressionStream(Stream input)
+        => BZip2Stream.Create(
+            new BufferedStream(new NonDisposingStream(input), 64 * 1024),
+            CompressionMode.Decompress,
+            decompressConcatenated: true,
+            leaveOpen: false);
 
     /// <summary>
     /// Detects whether the data is in bzip2 format (magic 42 5A 68).

@@ -1,0 +1,3 @@
+#nullable enable
+static UotanStudio.Compress.CompressionService.CreateCompressionStream(System.IO.Stream! output, UotanStudio.Compress.CompressionFormat format, UotanStudio.Compress.CompressionOptions? options = null) -> System.IO.Stream!
+static UotanStudio.Compress.CompressionService.CreateDecompressionStream(System.IO.Stream! input, UotanStudio.Compress.CompressionFormat format) -> System.IO.Stream!

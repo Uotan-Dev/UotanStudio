@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.IO.Compression;
+using UotanStudio.Compress.Internal;
 
 namespace UotanStudio.Compress.Compressors;
 
@@ -124,6 +125,22 @@ public static class BrotliCompressor
     }
 
     /// <summary>
+    /// Creates the incremental Brotli writer appending its stream to a caller-owned destination.
+    /// <para>在调用方持有的目标流上创建增量 Brotli 写出器，编码流追加到该流。</para>
+    /// </summary>
+    /// <param name="output">
+    /// Writable destination; the encoded bytes start at its current position.
+    /// <para>可写目标流；编码字节从其当前位置开始。</para></param>
+    /// <param name="options">
+    /// Only <see cref="CompressionOptions.Level"/> is read, mapped to the Brotli quality; the other members have no effect.
+    /// <para>仅读取 <see cref="CompressionOptions.Level"/> 并映射为 Brotli 质量；其他成员不生效。</para></param>
+    /// <returns>
+    /// A writable encoder stream whose dispose flushes the final Brotli block into <paramref name="output"/> without closing it.
+    /// <para>可写编码器流；释放时把最后一个 Brotli 块刷入 <paramref name="output"/> 但不关闭该流。</para></returns>
+    internal static Stream CreateCompressionStream(Stream output, CompressionOptions? options)
+        => new BrotliStream(new NonDisposingStream(output), EncoderOptions(options), leaveOpen: true);
+
+    /// <summary>
     /// Streaming Brotli decompression.
     /// <para>流式 Brotli 解压。</para>
     /// </summary>
@@ -159,6 +176,19 @@ public static class BrotliCompressor
             throw new CompressionException("BROTLI 解压失败", ex);
         }
     }
+
+    /// <summary>
+    /// Creates the incremental Brotli reader over a caller-owned payload.
+    /// <para>在调用方持有的数据流上创建增量 Brotli 读取器。</para>
+    /// </summary>
+    /// <param name="input">
+    /// Readable Brotli stream positioned at its first byte, consumed only as far as the decoder reads.
+    /// <para>定位在首字节处的可读 Brotli 流，解码器读到多少就消费多少。</para></param>
+    /// <returns>
+    /// A readable stream of decoded bytes whose expansion is never buffered as a whole; disposing the stream leaves <paramref name="input"/> open.
+    /// <para>解码字节的可读流，解压结果不会整体驻留内存；释放该流不会关闭 <paramref name="input"/>。</para></returns>
+    internal static Stream CreateDecompressionStream(Stream input)
+        => new BrotliStream(new NonDisposingStream(input), CompressionMode.Decompress, leaveOpen: true);
 
     /// <summary>
     /// Streaming Brotli decompression with output limit (decompression bomb protection).

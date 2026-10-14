@@ -18,7 +18,6 @@
     <PackageReference Include="K4os.Compression.LZ4.Streams" />
     <PackageReference Include="LZMA-SDK" />
     <PackageReference Include="SharpCompress" />
-    <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="ZstdSharp.Port" />
   </ItemGroup>
 

@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.IO.Hashing;
 using UotanStudio.Compress.Codecs.Lzo;
 
 namespace UotanStudio.Compress.Compressors;
@@ -665,5 +664,5 @@ internal static class LzopCompressor
         => UotanStudio.Hash.Adler32.Adler32.Compute(data, offset, length);
 
     private static uint Crc32Hash(byte[] data, int offset, int length)
-        => Crc32.HashToUInt32(data.AsSpan(offset, length));
+        => UotanStudio.Hash.Crc32Ieee.Crc32Ieee.Compute(data.AsSpan(offset, length));
 }

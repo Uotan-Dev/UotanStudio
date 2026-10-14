@@ -147,6 +147,22 @@ public static class GzipCompressor
     }
 
     /// <summary>
+    /// Creates the incremental gzip writer appending its member to a caller-owned destination.
+    /// <para>在调用方持有的目标流上创建增量 gzip 写出器，成员追加到该流。</para>
+    /// </summary>
+    /// <param name="output">
+    /// Writable destination; the member starts at its current position and the header, deflate body and trailer are emitted as the caller writes and disposes the returned stream.
+    /// <para>可写目标流；成员从其当前位置开始，头部、deflate 主体与尾部随调用方写入以及释放返回流时写出。</para></param>
+    /// <param name="options">
+    /// Only <see cref="CompressionOptions.Level"/> is read; the other members have no effect because one incremental stream cannot be chunked.
+    /// <para>仅读取 <see cref="CompressionOptions.Level"/>；单个增量流无法分块，其他成员不生效。</para></param>
+    /// <returns>
+    /// A writable encoder stream whose dispose flushes the trailer into <paramref name="output"/> without closing it.
+    /// <para>可写编码器流；释放时把尾部结构刷入 <paramref name="output"/> 但不关闭该流。</para></returns>
+    internal static Stream CreateCompressionStream(Stream output, CompressionOptions? options)
+        => new GZipStream(new NonDisposingStream(output), CompressionLevelMapper.ToBclCompressionLevel(options?.Level), leaveOpen: true);
+
+    /// <summary>
     /// Streaming GZIP decompression.
     /// <para>流式 GZIP 解压。</para>
     /// </summary>
@@ -182,6 +198,19 @@ public static class GzipCompressor
             throw new CompressionException("GZIP 解压失败", ex);
         }
     }
+
+    /// <summary>
+    /// Creates the incremental gzip reader over a caller-owned payload.
+    /// <para>在调用方持有的数据流上创建增量 gzip 读取器。</para>
+    /// </summary>
+    /// <param name="input">
+    /// Readable gzip payload positioned at its first byte, consumed only as far as the decoder reads.
+    /// <para>定位在首字节处的可读 gzip 数据，解码器读到多少就消费多少。</para></param>
+    /// <returns>
+    /// A readable stream of decoded bytes; concatenated members are followed by the reader itself, and disposing the stream leaves <paramref name="input"/> open.
+    /// <para>解码字节的可读流；串接的成员由读取器自行跟随，释放该流不会关闭 <paramref name="input"/>。</para></returns>
+    internal static Stream CreateDecompressionStream(Stream input)
+        => new GZipStream(new NonDisposingStream(input), CompressionMode.Decompress, leaveOpen: true);
 
     /// <summary>
     /// Streaming GZIP decompression with output limit (decompression bomb protection).

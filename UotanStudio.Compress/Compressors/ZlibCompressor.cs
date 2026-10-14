@@ -153,6 +153,22 @@ public static class ZlibCompressor
     }
 
     /// <summary>
+    /// Creates the incremental zlib writer appending its member to a caller-owned destination.
+    /// <para>在调用方持有的目标流上创建增量 zlib 写出器，成员追加到该流。</para>
+    /// </summary>
+    /// <param name="output">
+    /// Writable destination; the member starts at its current position.
+    /// <para>可写目标流；成员从其当前位置开始。</para></param>
+    /// <param name="options">
+    /// Only <see cref="CompressionOptions.Level"/> is read; the other members have no effect because one incremental stream cannot be chunked.
+    /// <para>仅读取 <see cref="CompressionOptions.Level"/>；单个增量流无法分块，其他成员不生效。</para></param>
+    /// <returns>
+    /// A writable encoder stream whose dispose writes the zlib trailer and leaves <paramref name="output"/> open.
+    /// <para>可写编码器流；释放时写出 zlib 尾部且不关闭 <paramref name="output"/>。</para></returns>
+    internal static Stream CreateCompressionStream(Stream output, CompressionOptions? options)
+        => new ZlibStream(new NonDisposingStream(output), CompressionMode.Compress, CompressionLevelMapper.ToSharpCompressDeflate(options?.Level));
+
+    /// <summary>
     /// Streaming ZLIB decompression.
     /// <para>流式 ZLIB 解压。</para>
     /// </summary>
@@ -217,6 +233,19 @@ public static class ZlibCompressor
             throw new CompressionException("ZLIB 解压失败", ex);
         }
     }
+
+    /// <summary>
+    /// Creates the incremental zlib reader over a caller-owned payload.
+    /// <para>在调用方持有的数据流上创建增量 zlib 读取器。</para>
+    /// </summary>
+    /// <param name="input">
+    /// Readable zlib payload positioned at its first byte, consumed only as far as the decoder reads.
+    /// <para>定位在首字节处的可读 zlib 数据，解码器读到多少就消费多少。</para></param>
+    /// <returns>
+    /// A readable stream of decoded bytes stopping at the end of the first member, unlike the array overload that walks every concatenated member; disposing the stream leaves <paramref name="input"/> open.
+    /// <para>解码字节的可读流，在首个成员末尾停止（与遍历全部串联成员的数组重载不同）；释放该流不会关闭 <paramref name="input"/>。</para></returns>
+    internal static Stream CreateDecompressionStream(Stream input)
+        => new ZlibStream(new NonDisposingStream(input), CompressionMode.Decompress);
 
     /// <summary>
     /// Detects whether the data is in zlib format (heuristic: CM=8 and (CMF*256+FLG) % 31 == 0).

@@ -300,6 +300,138 @@ public static class CompressionService
         throw new CompressionException($"Streaming decompression is not supported for format: {format}");
     }
 
+    /// <summary>
+    /// Creates the incremental decoder for a compressed payload, putting no output cap of its own on the decoded bytes and leaving the read loop, its bound and its cancellation to the caller.
+    /// <para>为压缩数据创建增量解码流，本身不对解码字节施加任何输出上限，读取循环、限额与取消均由调用方掌握。</para>
+    /// </summary>
+    /// <param name="input">
+    /// Readable payload positioned at its first byte; ownership stays with the caller, and disposing the returned stream leaves it open.
+    /// <para>定位在首字节处的可读数据；所有权归调用方，释放返回的流不会关闭它。</para></param>
+    /// <param name="format">
+    /// Container the payload is decoded with. An incremental reader exists for <see cref="CompressionFormat.None"/>, <see cref="CompressionFormat.Gzip"/>, <see cref="CompressionFormat.Zlib"/>, <see cref="CompressionFormat.Deflate"/>, <see cref="CompressionFormat.Brotli"/>, <see cref="CompressionFormat.Lz4"/>, <see cref="CompressionFormat.Bzip2"/>, <see cref="CompressionFormat.Xz"/>, <see cref="CompressionFormat.Zstd"/> and <see cref="CompressionFormat.Zopfli"/>, where <see cref="CompressionFormat.None"/> reads <paramref name="input"/> unchanged.
+    /// <para>用于解码的容器格式。具备增量读取器的格式为 <see cref="CompressionFormat.None"/>、<see cref="CompressionFormat.Gzip"/>、<see cref="CompressionFormat.Zlib"/>、<see cref="CompressionFormat.Deflate"/>、<see cref="CompressionFormat.Brotli"/>、<see cref="CompressionFormat.Lz4"/>、<see cref="CompressionFormat.Bzip2"/>、<see cref="CompressionFormat.Xz"/>、<see cref="CompressionFormat.Zstd"/> 与 <see cref="CompressionFormat.Zopfli"/>，其中 <see cref="CompressionFormat.None"/> 原样读取 <paramref name="input"/>。</para></param>
+    /// <returns>
+    /// A readable stream of decoded bytes that enforces no size limit; the caller stops or bounds its own reads. Use <see cref="M:UotanStudio.Compress.CompressionService.Decompress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,System.Int64,System.Threading.CancellationToken)"/> when one bounded copy describes the work instead.
+    /// <para>解码字节的可读流，不强制任何大小上限，需要限额时由调用方自行停止或界定读取。若一次带上限的拷贝即可描述该工作，请改用 <see cref="M:UotanStudio.Compress.CompressionService.Decompress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,System.Int64,System.Threading.CancellationToken)"/>。</para></returns>
+    /// <remarks>
+    /// The returned stream is the codec reader itself, so a malformed payload surfaces from the reader on the next read rather than from this call. Where the codec reader stops at the end of the first member or frame, a concatenated payload needs the copy entry, which walks every member.
+    /// <para>返回的流就是编解码读取器本身，因此损坏的数据会在下一次读取时由读取器抛出，而不是在本调用抛出。读取器只覆盖首个成员或帧的格式，串联数据仍需会遍历全部成员的拷贝入口。</para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="format"/> is unknown or cannot decompress.
+    /// <para><paramref name="format"/> 未知或不支持解压。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="format"/> decodes through a push-style block loop rather than a lazy reader: LZMA, LZ4 legacy and LZOP. Their bytes are produced by <see cref="M:UotanStudio.Compress.CompressionService.Decompress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,System.Int64,System.Threading.CancellationToken)"/>, which already reads block by block under its own limit.
+    /// <para><paramref name="format"/> 通过推式块循环而非惰性读取器解码，即 LZMA、LZ4 传统格式与 LZOP。其字节请交由 <see cref="M:UotanStudio.Compress.CompressionService.Decompress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,System.Int64,System.Threading.CancellationToken)"/> 产出，该入口已按自带上限逐块读取。</para></exception>
+    /// <exception cref="CompressionException">The codec reader could not be constructed, for example because the container metadata read during construction is malformed; the original error is kept as <see cref="Exception.InnerException"/>.
+    /// <para>无法构造解码读取器，例如构造期间读取的容器元数据非法；原始异常保留在 <see cref="Exception.InnerException"/> 中。</para></exception>
+    /// <example>
+    /// <code language="csharp">
+    /// using var reader = CompressionService.CreateDecompressionStream(payload, CompressionFormat.Gzip);
+    /// var buffer = new byte[64 * 1024];
+    /// int read;
+    /// while ((read = reader.Read(buffer)) > 0)
+    /// {
+    ///     cancellationToken.ThrowIfCancellationRequested();
+    ///     output.Write(buffer, 0, Math.Min(read, budget));
+    /// }
+    /// </code>
+    /// </example>
+    public static Stream CreateDecompressionStream(Stream input, CompressionFormat format)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ValidateForDecompression(format);
+
+        try
+        {
+            return format switch
+            {
+                CompressionFormat.None => new NonDisposingStream(input),
+                CompressionFormat.Gzip => GzipCompressor.CreateDecompressionStream(input),
+                CompressionFormat.Zopfli => GzipCompressor.CreateDecompressionStream(input),
+                CompressionFormat.Zlib => ZlibCompressor.CreateDecompressionStream(input),
+                CompressionFormat.Deflate => DeflateCompressor.CreateDecompressionStream(input),
+                CompressionFormat.Brotli => BrotliCompressor.CreateDecompressionStream(input),
+                CompressionFormat.Lz4 => Lz4Compressor.CreateDecompressionStream(input),
+                CompressionFormat.Bzip2 => Bzip2Compressor.CreateDecompressionStream(input),
+                CompressionFormat.Xz => XzCompressor.CreateDecompressionStream(input),
+                CompressionFormat.Zstd => ZstdCompressor.CreateDecompressionStream(input),
+                _ => throw new NotSupportedException($"Streaming decompression is not supported for format: {format}")
+            };
+        }
+        catch (NotSupportedException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new CompressionException($"Failed to create the incremental decoder for format: {format}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Creates the incremental encoder that writes into a caller-owned destination, putting no size cap of its own on the encoded bytes.
+    /// <para>创建写入调用方目标流的增量编码器，本身不对编码字节施加大小上限。</para>
+    /// </summary>
+    /// <param name="output">
+    /// Writable destination for the encoded bytes starting at its current position; ownership stays with the caller, and disposing the returned stream leaves it open.
+    /// <para>从其当前位置开始接收编码字节的可写目标流；所有权归调用方，释放返回的流不会关闭它。</para></param>
+    /// <param name="format">
+    /// Target container. An incremental writer exists for <see cref="CompressionFormat.None"/>, <see cref="CompressionFormat.Gzip"/>, <see cref="CompressionFormat.Zlib"/>, <see cref="CompressionFormat.Deflate"/>, <see cref="CompressionFormat.Brotli"/>, <see cref="CompressionFormat.Lz4"/>, <see cref="CompressionFormat.Bzip2"/> and <see cref="CompressionFormat.Zstd"/>, where <see cref="CompressionFormat.None"/> writes the bytes it receives unchanged.
+    /// <para>目标容器格式。具备增量写出器的格式为 <see cref="CompressionFormat.None"/>、<see cref="CompressionFormat.Gzip"/>、<see cref="CompressionFormat.Zlib"/>、<see cref="CompressionFormat.Deflate"/>、<see cref="CompressionFormat.Brotli"/>、<see cref="CompressionFormat.Lz4"/>、<see cref="CompressionFormat.Bzip2"/> 与 <see cref="CompressionFormat.Zstd"/>，其中 <see cref="CompressionFormat.None"/> 原样写出收到的字节。</para></param>
+    /// <param name="options">
+    /// Optional level tuning; <see langword="null"/> keeps every codec default. Chunking has no effect because one incremental stream is produced, and bzip2 ignores the level entirely because its block size is fixed.
+    /// <para>可选的等级调优；为 <see langword="null"/> 时全部采用编解码器默认值。增量写出只生成单个流，因此并行分块不生效；bzip2 的块大小固定，其等级也被忽略。</para></param>
+    /// <returns>
+    /// A writable stream of the encoded container. Disposing it writes the codec trailer and flushes it into <paramref name="output"/>, so the caller must dispose the returned stream before consuming <paramref name="output"/>.
+    /// <para>编码容器字节的可写流。释放它会写出编解码器尾部结构并刷入 <paramref name="output"/>，因此调用方必须先释放返回的流，再消费 <paramref name="output"/>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="format"/> is unknown or cannot compress, for example <see cref="CompressionFormat.Zopfli"/>.
+    /// <para><paramref name="format"/> 未知或不支持压缩，例如 <see cref="CompressionFormat.Zopfli"/>。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="format"/> has no incremental writer because its container needs sizes known only after the whole payload: XZ, LZMA, LZ4 legacy and LZOP. Those bytes are produced by <see cref="M:UotanStudio.Compress.CompressionService.Compress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,UotanStudio.Compress.CompressionOptions)"/>, which spools or blocks internally.
+    /// <para><paramref name="format"/> 没有增量写出器，因为其容器需要在整段载荷完成后才能确定的尺寸，即 XZ、LZMA、LZ4 传统格式与 LZOP。其字节请交由 <see cref="M:UotanStudio.Compress.CompressionService.Compress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,UotanStudio.Compress.CompressionOptions)"/> 产出，该入口内部已做暂存或分块。</para></exception>
+    /// <exception cref="CompressionException">The codec writer could not be constructed for <paramref name="output"/>, for example because the stream rejects writes; the original error is kept as <see cref="Exception.InnerException"/>.
+    /// <para>无法基于 <paramref name="output"/> 构造编码写出器，例如该流拒绝写入；原始异常保留在 <see cref="Exception.InnerException"/> 中。</para></exception>
+    /// <example>
+    /// <code language="csharp">
+    /// using var encoded = new MemoryStream();
+    /// using (var writer = CompressionService.CreateCompressionStream(encoded, CompressionFormat.Gzip))
+    /// {
+    ///     writer.Write(payload);
+    /// }
+    /// </code>
+    /// </example>
+    public static Stream CreateCompressionStream(Stream output, CompressionFormat format, CompressionOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        ValidateForCompression(format);
+
+        try
+        {
+            return format switch
+            {
+                CompressionFormat.None => new NonDisposingStream(output),
+                CompressionFormat.Gzip => GzipCompressor.CreateCompressionStream(output, options),
+                CompressionFormat.Zlib => ZlibCompressor.CreateCompressionStream(output, options),
+                CompressionFormat.Deflate => DeflateCompressor.CreateCompressionStream(output, options),
+                CompressionFormat.Brotli => BrotliCompressor.CreateCompressionStream(output, options),
+                CompressionFormat.Lz4 => Lz4Compressor.CreateCompressionStream(output, options),
+                CompressionFormat.Bzip2 => Bzip2Compressor.CreateCompressionStream(output),
+                CompressionFormat.Zstd => ZstdCompressor.CreateCompressionStream(output, options),
+                _ => throw new NotSupportedException($"Streaming compression is not supported for format: {format}")
+            };
+        }
+        catch (NotSupportedException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new CompressionException($"Failed to create the incremental encoder for format: {format}", ex);
+        }
+    }
+
     private static void ValidateForCompression(CompressionFormat format)
     {
         if (format == CompressionFormat.None)

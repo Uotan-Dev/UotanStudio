@@ -21,6 +21,10 @@
 
 `CompressionService` 提供 `Compress`、`Decompress` 的字节数组与流重载，负责选择并调用编码器，包括有界并行与流式/非流式格式的分派。
 
+`CompressionService.CreateCompressionStream` 与 `CreateDecompressionStream` 返回增量的编码/解码流，供调用方自己控制读取节奏：它们不施加输出上限，释放返回流会写出容器尾部但不关闭调用方流。需要一次性解压并限制展开大小的场景仍用 `Decompress(Stream, Stream, CompressionFormat, long, CancellationToken)`。构造侧支持 Gzip、Zlib、Deflate、Brotli、Lz4、Bzip2、Xz、Zstd 与 `None`；解压侧不覆盖 Lzma、Lz4Legacy 与 Lzop，压缩侧不覆盖 Xz、Lzma、Lz4Legacy 与 Lzop，这些格式只有整块入口，调用它们会得到 `NotSupportedException`。
+
+`Codecs/Lz4/Lz4BlockCodec` 与 `Codecs/Zstd/ZstdBlockCodec` 是给文件系统簇用的裸块原语，对 `UotanStudio.Firmware` 经 `InternalsVisibleTo` 可见、不进公共契约：前者保持 K4os 的负值返回约定（目标容量不足与数据损坏是两个不同的谓词，调用方分别处理），后者只提供压缩侧，因为 F2FS 的簇读取依赖 `Unwrap(source, expectedSize)` 的尺寸提示语义。
+
 `Files/CompressionFile` 提供 `CompressFile`、`DecompressFile`、`DecompressFileAuto`、`DetectFile`，负责文件生命周期、取消、解压大小上限、进度上报和输出的原子发布。
 
 `CompressionFormats` 是格式名称、别名、扩展名与能力的统一来源；`Detection/CompressionDetector` 负责字节数组、字节跨度及流头部识别，流可定位时恢复原位置，不根据文件名猜测魔数。
@@ -63,6 +67,14 @@
 - NTPi 的 `Lzma2Compressor`，它还处理 `NTDECOMP` 头部约束。
 - `.dz` 厂商容器。
 - 格式处理器 `CompressFormatHandler`，位于 `UotanStudio.Firmware.Application.Formats`，实现 `IFormatHandler` 并走 `Core/Repacking/RepackMetadata`，属于固件的组合层。
+
+下列固件路径直接使用第三方编码器或自带实现，不是因为漏接本库，而是本库当前不提供它们需要的控制；改动前请先确认这些前提仍然成立：
+
+- `FileSystem/Erofs/ErofsCompression.cs`：MicroLZMA、带 `windowBits`/策略选择的裸 DEFLATE、无帧 LZ4 块、写入 `windowLog` 的 zstd 帧，以及按簇复用压缩上下文。本库只有容器/流级入口，没有裸块 span 编解码与这些参数。
+- `FileSystem/F2fs/F2fsCompression.cs` 的 zstd 解压分支：依赖 `Unwrap(source, expectedSize)` 的尺寸提示并原样返回数组，本库的 span 解压返回写入字节数，替换会静默改变数组长度。
+- `DeviceTree/Dt/DtboFiles.cs` 的 zlib 两个方向：本库 `ZlibCompressor` 由 SharpCompress 支撑，其等级映射到不了 `CompressionLevel.SmallestSize`，且截断载荷抛出的异常类型与 BCL 不同，重打包字节保真测试会失败。
+- `BootSecurity/BootImage/Components/BootCompressor.cs` 的 `Detect`：它的魔数表与 `Detection/CompressionDetector` 有意不等价（空输入返回 `None` 而非抛异常、4 字节短路、`5D 00 00` 的裸 LZMA 判据、9 字节 lzop 魔数、额外的 `0B 0A` brotli 规则），且 `DecompressOrReturn` 依赖“未识别即原样返回”。解压分支已全部走本库。
+- `OtaDelta/Diff/PuffDeflateCodec.cs`、`VendorFirmware/NTPi/Lzma2Compressor.cs`、`VendorFirmware/SonySin/SonySinFormatHandler.cs`、`OtaDelta/Diff/StrictBrotliReadStream.cs`、`OtaDelta/Payload/**` 的 zstd 字典与 `checksumFlag`/`windowLog` 设置：分别属于 puffin 局部解压、`NTDECOMP` 成帧、厂商私有 LZ、严格帧校验（拒绝尾字节与截断）与载荷字典语义，本库不提供也不应提供这些语义。
 
 ## 许可证
 

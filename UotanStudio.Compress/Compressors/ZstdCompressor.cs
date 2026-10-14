@@ -126,6 +126,19 @@ public static class ZstdCompressor
     }
 
     /// <summary>
+    /// Creates the incremental Zstandard writer appending its frame to a caller-owned destination.
+    /// <para>在调用方持有的目标流上创建增量 Zstandard 写出器，帧追加到该流。</para>
+    /// </summary>
+    /// <param name="output">Writable destination; the frame starts at its current position.
+    /// <para>可写目标流；帧从其当前位置开始。</para></param>
+    /// <param name="options">Only <see cref="CompressionOptions.Level"/> is read, <see langword="null"/> selecting level <c>3</c>; parallel chunking has no effect because one incremental frame is produced.
+    /// <para>仅读取 <see cref="CompressionOptions.Level"/>，为 <see langword="null"/> 时取级别 <c>3</c>；增量写出只生成单帧，并行分块不生效。</para></param>
+    /// <returns>A writable frame encoder stream whose dispose closes the frame without closing <paramref name="output"/>.
+    /// <para>可写帧编码器流；释放时收尾该帧但不关闭 <paramref name="output"/>。</para></returns>
+    internal static Stream CreateCompressionStream(Stream output, CompressionOptions? options)
+        => new CompressionStream(new NonDisposingStream(output), options?.Level ?? 3);
+
+    /// <summary>
     /// Compresses a seekable stream through parallel per-chunk frames when parallelism is requested and at least two
     /// chunks exist; otherwise returns <see langword="false"/> and the caller keeps its single-frame sequential path.
     /// <para>在请求并行且至少存在两个块时，把可寻址流按块并发压缩为独立帧；否则返回 <see langword="false"/>，
@@ -228,6 +241,17 @@ public static class ZstdCompressor
             throw new CompressionException("ZSTD 解压失败", ex);
         }
     }
+
+    /// <summary>
+    /// Creates the incremental Zstandard reader over a caller-owned frame.
+    /// <para>在调用方持有的帧数据上创建增量 Zstandard 读取器。</para>
+    /// </summary>
+    /// <param name="input">Readable zstd frame positioned at its magic; only the bytes the frame requires are consumed.
+    /// <para>定位在魔数处的可读 zstd 帧；仅消费帧所需的字节。</para></param>
+    /// <returns>A readable stream of decoded bytes that never buffers the expansion as a whole and leaves <paramref name="input"/> open when disposed.
+    /// <para>解码字节的可读流，解压结果不会整体驻留内存，释放时不关闭 <paramref name="input"/>。</para></returns>
+    internal static Stream CreateDecompressionStream(Stream input)
+        => new DecompressionStream(new NonDisposingStream(input));
 
     /// <summary>
     /// Detects whether the data is in zstd format (magic 28 B5 2F FD).

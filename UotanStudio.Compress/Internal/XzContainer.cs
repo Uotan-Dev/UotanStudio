@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Hash.Crc32Ieee;
 using UotanStudio.Hash.XzCrc64;
 
 namespace UotanStudio.Compress.Internal;
@@ -220,11 +221,7 @@ internal static class XzContainer
     /// <para>计算标准 CRC-32（初始值 0xFFFFFFFF，最终异或 0xFFFFFFFF）。</para>
     /// </summary>
     private static uint ComputeCrc32(ReadOnlySpan<byte> data)
-    {
-        var crc = new System.IO.Hashing.Crc32();
-        crc.Append(data);
-        return crc.GetCurrentHashAsUInt32();
-    }
+        => Crc32Ieee.Compute(data);
 
     /// <summary>
     /// Returns an 8-byte little-endian value.

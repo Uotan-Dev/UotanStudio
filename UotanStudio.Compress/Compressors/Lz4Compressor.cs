@@ -1,6 +1,7 @@
 using System.Buffers;
 using K4os.Compression.LZ4;
 using K4os.Compression.LZ4.Streams;
+using UotanStudio.Compress.Codecs.Lz4;
 using UotanStudio.Compress.Internal;
 
 namespace UotanStudio.Compress.Compressors;
@@ -131,6 +132,19 @@ internal static class Lz4Compressor
     }
 
     /// <summary>
+    /// Creates the incremental LZ4 frame writer appending its frame to a caller-owned destination.
+    /// <para>在调用方持有的目标流上创建增量 LZ4 帧写出器，帧追加到该流。</para>
+    /// </summary>
+    /// <param name="output">Writable destination; the frame starts at its current position.
+    /// <para>可写目标流；帧从其当前位置开始。</para></param>
+    /// <param name="options">Only <see cref="CompressionOptions.Level"/> is read and clamped into the LZ4 0-12 range.
+    /// <para>仅读取 <see cref="CompressionOptions.Level"/> 并夹取到 LZ4 的 0-12 范围。</para></param>
+    /// <returns>A writable frame encoder stream whose dispose writes the end marker without closing <paramref name="output"/>.
+    /// <para>可写帧编码器流；释放时写出结束标记且不关闭 <paramref name="output"/>。</para></returns>
+    internal static Stream CreateCompressionStream(Stream output, CompressionOptions? options)
+        => LZ4Stream.Encode(new NonDisposingStream(output), ToLz4Level(options?.Level), leaveOpen: true);
+
+    /// <summary>
     /// Streaming standard LZ4 frame decompression.
     /// <para>流式标准 LZ4 帧解压。</para>
     /// </summary>
@@ -166,6 +180,17 @@ internal static class Lz4Compressor
             throw new CompressionException("LZ4 解压失败", ex);
         }
     }
+
+    /// <summary>
+    /// Creates the incremental LZ4 frame reader over a caller-owned frame.
+    /// <para>在调用方持有的帧数据上创建增量 LZ4 帧读取器。</para>
+    /// </summary>
+    /// <param name="input">Readable LZ4 frame positioned at its magic; only the bytes the frame requires are consumed.
+    /// <para>定位在魔数处的可读 LZ4 帧；仅消费帧所需的字节。</para></param>
+    /// <returns>A readable stream of decoded bytes that stops at the end of the current frame and leaves <paramref name="input"/> open when disposed.
+    /// <para>解码字节的可读流，在当前帧末尾停止，释放时不关闭 <paramref name="input"/>。</para></returns>
+    internal static Stream CreateDecompressionStream(Stream input)
+        => LZ4Stream.Decode(new NonDisposingStream(input), leaveOpen: true);
 
     /// <summary>
     /// Streaming standard LZ4 frame decompression with output limit (decompression bomb protection).
@@ -423,7 +448,7 @@ internal static class Lz4Compressor
                         throw new CompressionException("LZ4_LEGACY 数据格式无效：块长度非法");
                     }
                     const int maxDecompressed = 8 * 1024 * 1024;
-                    var maximumBlockLength = LZ4Codec.MaximumOutputSize(maxDecompressed);
+                    var maximumBlockLength = Lz4BlockCodec.MaximumOutputSize(maxDecompressed);
                     if (blockLength > maximumBlockLength)
                     {
                         throw new CompressionException($"LZ4_LEGACY 数据格式无效：块长度超过安全上限 {maximumBlockLength}");
@@ -455,7 +480,7 @@ internal static class Lz4Compressor
 
                         pooled = ArrayPool<byte>.Shared.Rent(maxDecompressed);
                     }
-                    var decoded = LZ4Codec.Decode(block, 0, blockLength, pooled, 0, maxDecompressed);
+                    var decoded = Lz4BlockCodec.Decode(block.AsSpan(0, blockLength), pooled.AsSpan(0, maxDecompressed));
                     if (decoded <= 0)
                     {
                         throw new CompressionException("LZ4_LEGACY 数据格式无效：块解码失败");
@@ -574,8 +599,8 @@ internal static class Lz4Compressor
             {
                 Parallel.For(0, chunks.Count, new ParallelOptions { MaxDegreeOfParallelism = dop }, i =>
                 {
-                    var buf = new byte[LZ4Codec.MaximumOutputSize(chunks[i].Length)];
-                    sizes[i] = LZ4Codec.Encode(chunks[i], 0, chunks[i].Length, buf, 0, buf.Length, level);
+                    var buf = new byte[Lz4BlockCodec.MaximumOutputSize(chunks[i].Length)];
+                    sizes[i] = Lz4BlockCodec.Encode(chunks[i], buf, (int)level);
                     compressed[i] = buf;
                 });
             }
@@ -583,8 +608,8 @@ internal static class Lz4Compressor
             {
                 for (var i = 0; i < chunks.Count; i++)
                 {
-                    var buf = new byte[LZ4Codec.MaximumOutputSize(chunks[i].Length)];
-                    sizes[i] = LZ4Codec.Encode(chunks[i], 0, chunks[i].Length, buf, 0, buf.Length, level);
+                    var buf = new byte[Lz4BlockCodec.MaximumOutputSize(chunks[i].Length)];
+                    sizes[i] = Lz4BlockCodec.Encode(chunks[i], buf, (int)level);
                     compressed[i] = buf;
                 }
             }

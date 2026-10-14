@@ -1,5 +1,6 @@
 using SharpCompress.Compressors.Xz;
 using UotanStudio.Compress.Internal;
+using UotanStudio.Hash.Crc32Ieee;
 using UotanStudio.Hash.XzCrc64;
 
 namespace UotanStudio.Compress.Compressors;
@@ -101,7 +102,7 @@ internal static class XzCompressor
                 FileOptions.DeleteOnClose | FileOptions.SequentialScan);
 
             var crc64 = new XzCrc64();
-            var crc32 = new System.IO.Hashing.Crc32();
+            var crc32 = new Crc32IeeeAccumulator();
 
             var total = Lzma2Encoder.Encode(input, lzma2, dictionarySize, maxDegreeOfParallelism,
                 (win, offset, count) =>
@@ -128,7 +129,7 @@ internal static class XzCompressor
             }
             else
             {
-                var crc = crc32.GetCurrentHashAsUInt32();
+                var crc = crc32.GetCurrentHash();
                 check = new byte[4];
                 for (var i = 0; i < 4; i++)
                 {
@@ -211,6 +212,17 @@ internal static class XzCompressor
             throw new CompressionException("XZ 解压失败", ex);
         }
     }
+
+    /// <summary>
+    /// Creates the incremental XZ reader over a caller-owned container.
+    /// <para>在调用方持有的容器数据上创建增量 XZ 读取器。</para>
+    /// </summary>
+    /// <param name="input">Readable <c>.xz</c> payload positioned at its magic; the reader takes the stream header, the blocks and the index as it goes.
+    /// <para>定位在魔数处的可读 <c>.xz</c> 数据；读取器按需取得流头、数据块与索引。</para></param>
+    /// <returns>A readable stream of decoded bytes that verifies the stored CRC as the container ends and leaves <paramref name="input"/> open when disposed.
+    /// <para>解码字节的可读流，在容器末尾校验存储的 CRC，释放时不关闭 <paramref name="input"/>。</para></returns>
+    internal static Stream CreateDecompressionStream(Stream input)
+        => new XZStream(new NonDisposingStream(input));
 
     /// <summary>
     /// Detects whether the data is in XZ format (magic FD 37 7A 58 5A 00).
