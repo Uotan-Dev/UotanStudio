@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Comm.Text;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -135,8 +136,7 @@ public sealed class AdbAuthentication : IDisposable
             throw new ArgumentException("Token must not be empty.", nameof(token));
         }
 
-        using var sha1 = SHA1.Create();
-        var hash = sha1.ComputeHash(token);
+        var hash = Sha1.ComputeHash(token);
         return _rsa.SignHash(hash, HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
     }
 

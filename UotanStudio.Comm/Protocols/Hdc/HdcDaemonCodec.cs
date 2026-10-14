@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Hash.Sums;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -89,16 +90,7 @@ internal static class HdcDaemonCodec
         return new((HdcCommand)command, (uint)channel, 0, payload.ToArray());
     }
 
-    private static int Checksum8(ReadOnlySpan<byte> data)
-    {
-        var sum = 0;
-        foreach (var value in data)
-        {
-            sum += value;
-        }
-
-        return sum & 255;
-    }
+    private static int Checksum8(ReadOnlySpan<byte> data) => ByteSum8.Compute(data);
 
     /// <summary>Serializes a daemon authentication handshake. The auth state is not a signing algorithm. <para>序列化守护进程认证握手。认证状态不是签名算法。</para></summary>
     public static byte[] Handshake(byte authState, uint sessionId, string connectKey, ReadOnlySpan<byte> buffer, string version)

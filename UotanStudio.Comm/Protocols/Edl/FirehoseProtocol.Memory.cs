@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -157,7 +157,7 @@ public sealed partial class FirehoseProtocol
     /// </summary>
     private sealed class DigestWriteStream(Stream inner) : Stream
     {
-        private readonly IncrementalHash _hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        private readonly DigestAccumulator _hash = Sha256.CreateAccumulator();
 
         internal long WrittenBytes { get; private set; }
 
@@ -182,14 +182,14 @@ public sealed partial class FirehoseProtocol
         public override void Write(byte[] buffer, int offset, int count)
         {
             var span = buffer.AsSpan(offset, count);
-            _hash.AppendData(span);
+            _hash.Append(span);
             inner.Write(span);
             WrittenBytes += count;
         }
 
         public override void Write(ReadOnlySpan<byte> buffer)
         {
-            _hash.AppendData(buffer);
+            _hash.Append(buffer);
             inner.Write(buffer);
             WrittenBytes += buffer.Length;
         }
@@ -199,7 +199,7 @@ public sealed partial class FirehoseProtocol
 
         public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            _hash.AppendData(buffer.Span);
+            _hash.Append(buffer.Span);
             await inner.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
             WrittenBytes += buffer.Length;
         }

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Hash.Sums;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -302,13 +303,5 @@ public sealed partial class MtkSession
         return new MtkLegacyTransferSpeedResult(baudrate, usbSpeed);
     }
 
-    private static ushort LegacySum(ReadOnlySpan<byte> bytes)
-    {
-        uint sum = 0;
-        foreach (var value in bytes)
-        {
-            sum += value;
-        }
-        return (ushort)(sum & 0xFFFF);
-    }
+    private static ushort LegacySum(ReadOnlySpan<byte> bytes) => ByteSum16.Compute(bytes);
 }

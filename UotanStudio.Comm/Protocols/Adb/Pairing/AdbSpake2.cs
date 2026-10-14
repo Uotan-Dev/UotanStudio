@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Adb.Pairing;
 
@@ -101,7 +102,7 @@ internal sealed class AdbSpake2
         }
 
         _privateKey = Reduce(random64) << 3;
-        _passwordHash = SHA512.HashData(password);
+        _passwordHash = Sha512.ComputeHash(password);
         var scalar = Reduce(_passwordHash);
         if (scalar.TestBit(0))
         {
@@ -156,7 +157,7 @@ internal sealed class AdbSpake2
         var shared = ScalarMultiply(_privateKey, Sub(ToExtended(peerPoint), peerMask));
         var sharedEncoded = Encode(shared);
 
-        using var transcript = IncrementalHash.CreateHash(HashAlgorithmName.SHA512);
+        using var transcript = Sha512.CreateAccumulator();
         if (_role == RoleAlice)
         {
             Update(transcript, _myName);
@@ -184,12 +185,12 @@ internal sealed class AdbSpake2
         return encoding;
     }
 
-    private static void Update(IncrementalHash hash, byte[] data)
+    private static void Update(DigestAccumulator hash, byte[] data)
     {
         Span<byte> length = stackalloc byte[sizeof(long)];
         BinaryPrimitives.WriteInt64LittleEndian(length, data.Length);
-        hash.AppendData(length);
-        hash.AppendData(data);
+        hash.Append(length);
+        hash.Append(data);
     }
 
     /// <summary>

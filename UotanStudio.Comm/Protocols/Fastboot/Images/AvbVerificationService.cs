@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Comm.Text;
 using UotanStudio.Firmware.BootSecurity.Avb;
+using UotanStudio.Hash.Digests;
 using FirmwareAvbVerifier = UotanStudio.Firmware.BootSecurity.Avb.Verification.AvbSignatureVerifier;
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Images;
@@ -422,12 +423,12 @@ internal sealed class AvbVerificationService
         var salt = ExtractSalt(data, header) ?? [];
 
         if (salt.Length == 0)
-            return algorithmName == "SHA512" ? SHA512.HashData(hashInput) : SHA256.HashData(hashInput);
+            return algorithmName == "SHA512" ? Sha512.ComputeHash(hashInput) : Sha256.ComputeHash(hashInput);
 
         var combined = new byte[salt.Length + hashInput.Length];
         Buffer.BlockCopy(salt, 0, combined, 0, salt.Length);
         Buffer.BlockCopy(hashInput, 0, combined, salt.Length, hashInput.Length);
-        return algorithmName == "SHA512" ? SHA512.HashData(combined) : SHA256.HashData(combined);
+        return algorithmName == "SHA512" ? Sha512.ComputeHash(combined) : Sha256.ComputeHash(combined);
     }
 
     private static byte[] BuildHashInput(byte[] data, AvbVBMetaImageHeader header, int headerSize)

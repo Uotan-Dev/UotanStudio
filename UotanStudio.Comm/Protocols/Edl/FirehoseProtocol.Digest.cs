@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -75,13 +75,13 @@ public sealed partial class FirehoseProtocol
 
             dataStream.Seek(0, SeekOrigin.Begin);
             byte[] local;
-            using (var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+            using (var hasher = Sha256.CreateAccumulator())
             {
                 var buffer = new byte[65536];
                 int read;
                 while ((read = await dataStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
                 {
-                    hasher.AppendData(buffer, 0, read);
+                    hasher.Append(buffer.AsSpan(0, read));
                 }
 
                 local = hasher.GetHashAndReset();

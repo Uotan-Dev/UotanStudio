@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Images;
 
@@ -100,7 +101,7 @@ internal sealed class LpGeometry
             s[..StructSizeBytes].CopyTo(checksumInput);
             Array.Clear(checksumInput, 8, 32);
             checksumValid = CryptographicOperations.FixedTimeEquals(
-                SHA256.HashData(checksumInput), checksum);
+                Sha256.ComputeHash(checksumInput), checksum);
         }
 
         return new LpGeometry(

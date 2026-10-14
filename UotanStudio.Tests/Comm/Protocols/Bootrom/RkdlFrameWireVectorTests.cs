@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Protocols.Bootrom;
+using UotanStudio.Hash.Crc16CcittFalse;
 using UotanStudio.Hash.RockchipCrc32;
 using Xunit;
 
@@ -207,6 +208,17 @@ public class RkdlFrameWireVectorTests
         Assert.Equal((ushort)0x29B1, RkdlCrc.Crc16Ccitt("123456789"u8.ToArray()));
         Assert.Equal((ushort)0xFFFF, RkdlCrc.Crc16Ccitt(ReadOnlySpan<byte>.Empty));
         Assert.Equal((ushort)0x0FEF, RkdlCrc.Crc16Ccitt(payload));
+    }
+
+    [Fact]
+    public void Crc16CcittFalse_UpstreamGoldenVectors_MatchReferenceCheckValues()
+    {
+        byte[] payload =
+            [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10];
+
+        Assert.Equal((ushort)0x29B1, Crc16CcittFalse.Compute("123456789"u8));
+        Assert.Equal((ushort)0xFFFF, Crc16CcittFalse.Compute(ReadOnlySpan<byte>.Empty));
+        Assert.Equal((ushort)0x0FEF, Crc16CcittFalse.Compute(payload));
     }
 
     [Fact]

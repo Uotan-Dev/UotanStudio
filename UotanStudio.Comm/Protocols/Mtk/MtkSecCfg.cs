@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Mtk.Security;
 
@@ -126,7 +127,7 @@ public static class MtkSecCfg
 
         var storedHash = image.Slice((int)size - 0x20, 0x20);
         var header = image[..Version4HeaderLength].ToArray();
-        var computed = SHA256.HashData(header);
+        var computed = Sha256.ComputeHash(header);
         var hashKind = MtkSecCfgHashKind.Unresolved;
         var decrypted = SoftwareTransform(storedHash, encrypt: false);
         if (decrypted.SequenceEqual(computed))
@@ -209,7 +210,7 @@ public static class MtkSecCfg
             BinaryPrimitives.ReadUInt32LittleEndian(image[0x28..]),
             endFlag,
             dataLength,
-            Convert.ToHexString(SHA256.HashData(body)));
+            Convert.ToHexString(Sha256.ComputeHash(body)));
         return true;
     }
 
@@ -250,7 +251,7 @@ public static class MtkSecCfg
         }
 
         var header = BuildVersion4Header(report, intent);
-        var hash = SoftwareTransform(SHA256.HashData(header), encrypt: true);
+        var hash = SoftwareTransform(Sha256.ComputeHash(header), encrypt: true);
         return BuildVersion4Image(header, hash);
     }
 

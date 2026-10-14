@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using UotanStudio.Hash.Crc16CcittFalse;
+using UotanStudio.Hash.Crc32Ieee;
 
 namespace UotanStudio.Comm.Protocols.Bootrom;
 
@@ -276,44 +278,38 @@ internal sealed class RkdlCsw
 
 /// <summary>
 /// CRC helpers for the RKDL protocol: CRC-16/CCITT for the loader download and CRC-32
-/// for the GPT header checksums.
-/// <para>RKDL 协议的 CRC 辅助方法：loader 下载用 CRC-16/CCITT，GPT 头校验用 CRC-32。</para>
+/// for the GPT header checksums. Both parameter sets come from
+/// <c>UotanStudio.Hash</c>.
+/// <para>RKDL 协议的 CRC 辅助方法：loader 下载用 CRC-16/CCITT，GPT 头校验用 CRC-32。两组参数都取自
+/// <c>UotanStudio.Hash</c>。</para>
 /// </summary>
 internal static class RkdlCrc
 {
     /// <summary>
     /// Computes CRC-16/CCITT (poly 0x1021, init 0xFFFF, MSB-first, no final XOR) over the data.
-    /// <para>计算数据的 CRC-16/CCITT（多项式 0x1021，初值 0xFFFF，高位优先，无最终异或）。</para>
+    /// The polynomial, seed and absence of a final XOR come from
+    /// <c>Crc16CcittFalse.Compute</c> in <c>UotanStudio.Hash</c>.
+    /// <para>计算数据的 CRC-16/CCITT（多项式 0x1021，初值 0xFFFF，高位优先，无最终异或）。多项式、初值与
+    /// 不做最终异或的约定都取自 <c>UotanStudio.Hash</c> 的 <c>Crc16CcittFalse.Compute</c>。</para>
     /// </summary>
     /// <param name="data">The data to checksum. <para>待校验数据。</para></param>
     /// <returns>The CRC-16/CCITT value. <para>CRC-16/CCITT 值。</para></returns>
     public static ushort Crc16Ccitt(ReadOnlySpan<byte> data)
     {
-        ushort crc = 0xFFFF;
-        foreach (var b in data)
-        {
-            crc ^= (ushort)(b << 8);
-            for (var i = 0; i < 8; i++)
-            {
-                crc = (crc & 0x8000) != 0
-                    ? (ushort)((crc << 1) ^ 0x1021)
-                    : (ushort)(crc << 1);
-            }
-        }
-        return crc;
+        return Crc16CcittFalse.Compute(data);
     }
 
     /// <summary>
     /// Computes the standard CRC-32 (IEEE 802.3, poly 0xEDB88320, init 0xFFFFFFFF, final XOR).
-    /// <para>计算标准 CRC-32（IEEE 802.3，多项式 0xEDB88320，初值 0xFFFFFFFF，最终异或）。</para>
+    /// The polynomial, seed and final XOR come from <c>Crc32Ieee.Compute</c> in <c>UotanStudio.Hash</c>.
+    /// <para>计算标准 CRC-32（IEEE 802.3，多项式 0xEDB88320，初值 0xFFFFFFFF，最终异或）。多项式、初值与
+    /// 最终异或的约定都取自 <c>UotanStudio.Hash</c> 的 <c>Crc32Ieee.Compute</c>。</para>
     /// </summary>
     /// <param name="data">The data to checksum. <para>待校验数据。</para></param>
     /// <returns>The CRC-32 value. <para>CRC-32 值。</para></returns>
     public static uint Crc32(ReadOnlySpan<byte> data)
     {
-        var crc = new System.IO.Hashing.Crc32();
-        crc.Append(data);
-        return crc.GetCurrentHashAsUInt32();
+        return Crc32Ieee.Compute(data);
     }
 }
 

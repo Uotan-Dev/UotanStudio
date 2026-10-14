@@ -1,5 +1,5 @@
-using System.Security.Cryptography;
 using UotanStudio.Firmware.VendorFirmware.MediaTek;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Mtk.Profile;
 
@@ -91,7 +91,7 @@ public sealed class MtkLoaderProfile
         await using (var hashSource = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
                          4096, FileOptions.Asynchronous | FileOptions.SequentialScan))
         {
-            var digest = await SHA256.HashDataAsync(hashSource, cancellationToken).ConfigureAwait(false);
+            var digest = await Sha256.ComputeHashAsync(hashSource, cancellationToken).ConfigureAwait(false);
             var sha256Hex = Convert.ToHexString(digest);
             using var loader = MtkDaFile.Open(path, MtkDaDirectoryLayout.Auto, cancellationToken);
             var kind = loader.Metadata.HeaderIndicatesV6 ? MtkDaKind.V6 : MtkDaKind.V5;

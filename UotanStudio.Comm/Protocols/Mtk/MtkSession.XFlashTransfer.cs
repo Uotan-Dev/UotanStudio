@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Mtk.Storage;
+using UotanStudio.Hash.Sums;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -235,11 +236,7 @@ public sealed partial class MtkSession
             {
                 var count = (int)Math.Min(buffer.Length, length - transferred);
                 await source.ReadExactlyAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
-                uint checksum = 0;
-                for (var index = 0; index < count; index++)
-                {
-                    checksum += buffer[index];
-                }
+                uint checksum = ByteSum16.Compute(buffer.AsSpan(0, count));
                 await SendXFlashWordAsync(channel, 0, cancellationToken).ConfigureAwait(false);
                 await SendXFlashWordAsync(channel, checksum & 0xFFFF, cancellationToken).ConfigureAwait(false);
                 using var payload = new MemoryStream(buffer, 0, count, writable: false);

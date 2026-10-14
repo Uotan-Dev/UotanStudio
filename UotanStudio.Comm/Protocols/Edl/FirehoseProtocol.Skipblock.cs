@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -128,7 +128,7 @@ public sealed partial class FirehoseProtocol
         CancellationToken cancellationToken)
     {
         dataStream.Seek(offset, SeekOrigin.Begin);
-        using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hasher = Sha256.CreateAccumulator();
         var buffer = new byte[65536];
         long hashed = 0;
         while (hashed < length)
@@ -141,7 +141,7 @@ public sealed partial class FirehoseProtocol
                 break;
             }
 
-            hasher.AppendData(buffer, 0, read);
+            hasher.Append(buffer.AsSpan(0, read));
             hashed += read;
         }
 
@@ -151,7 +151,7 @@ public sealed partial class FirehoseProtocol
             while (hashed < length)
             {
                 var pad = (int)Math.Min(buffer.Length, length - hashed);
-                hasher.AppendData(buffer, 0, pad);
+                hasher.Append(buffer.AsSpan(0, pad));
                 hashed += pad;
             }
         }

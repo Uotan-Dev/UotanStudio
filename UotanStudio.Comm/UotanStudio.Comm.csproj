@@ -46,7 +46,6 @@
     <PackageReference Include="LibUsbDotNet" />
     <PackageReference Include="K4os.Compression.LZ4" />
     <PackageReference Include="Makaretu.Dns.Multicast" />
-    <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="System.IO.Ports" />
   </ItemGroup>
 

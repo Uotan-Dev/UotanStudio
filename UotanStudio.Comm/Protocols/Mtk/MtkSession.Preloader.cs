@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Mtk.Upload;
+using UotanStudio.Hash.Sums;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -606,29 +607,8 @@ public sealed partial class MtkSession
         }
 
         var checksumField = new byte[sizeof(uint)];
-        BinaryPrimitives.WriteUInt32BigEndian(checksumField, ComputeXflashChecksum(payload.AsSpan(0, data.Length)));
+        BinaryPrimitives.WriteUInt32BigEndian(checksumField, WordSum32LittleEndian.Compute(payload.AsSpan(0, data.Length)));
         await WriteAsync(checksumField, _timeoutMs, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>Composes the xflash checksum: the little-endian doubleword sum with any trailing
-    /// bytes added individually. <para>组合 xflash 校验和：小端双字之和，剩余字节逐个相加。</para></summary>
-    /// <param name="data">The payload to checksum. 要校验和的载荷。</param>
-    /// <returns>The 32-bit checksum word. 32 位校验和字。</returns>
-    private static uint ComputeXflashChecksum(ReadOnlySpan<byte> data)
-    {
-        uint checksum = 0;
-        var offset = 0;
-        for (; offset + sizeof(uint) <= data.Length; offset += sizeof(uint))
-        {
-            checksum += BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset, sizeof(uint)));
-        }
-
-        for (; offset < data.Length; offset++)
-        {
-            checksum += data[offset];
-        }
-
-        return checksum;
     }
 
     /// <summary>Disables the target watchdog with the chip-specific write sequence the reference defines.

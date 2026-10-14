@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Hash.Sums;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -67,13 +68,7 @@ internal static class AdbMessaging
             return 0;
         }
 
-        uint crc = 0;
-        foreach (var b in payload)
-        {
-            crc = (crc + b) & 0xFFFFFFFF;
-        }
-
-        return crc;
+        return ByteSum32.Compute(payload);
     }
 
     /// <summary>

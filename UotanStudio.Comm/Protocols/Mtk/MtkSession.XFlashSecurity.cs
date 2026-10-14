@@ -1,7 +1,7 @@
-using System.Security.Cryptography;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Mtk.Security;
 using UotanStudio.Firmware.BlockImage.Gpt;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -275,7 +275,7 @@ public sealed partial class MtkSession
 
     private static MtkSecCfgView DescribeSecCfgImage(byte[] image, GptPartition entry, uint partitionId)
     {
-        var digest = Convert.ToHexString(SHA256.HashData(image));
+        var digest = Convert.ToHexString(Sha256.ComputeHash(image));
         var format = MtkSecCfg.DetectFormat(image) ?? throw new MtkProtocolException(
             "The seccfg partition carries neither documented secure-boot configuration header.");
         if (format == MtkSecCfgFormat.Version4)

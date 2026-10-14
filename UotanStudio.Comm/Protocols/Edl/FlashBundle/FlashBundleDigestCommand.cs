@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 
@@ -154,7 +154,7 @@ internal sealed record FlashBundleDigestCommand(byte[] Digest, string DigestHex,
         }
 
         var chunk = new byte[(int)payloadChunkBytes];
-        using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hasher = Sha256.CreateAccumulator();
         var dataBytes = byteCount - tailPaddingBytes;
         long written = 0;
         var packets = 0;
@@ -176,7 +176,7 @@ internal sealed record FlashBundleDigestCommand(byte[] Digest, string DigestHex,
                     chunk.AsSpan(readable, toRead - readable).Clear();
                 }
 
-                hasher.AppendData(chunk, 0, toRead);
+                hasher.Append(chunk.AsSpan(0, toRead));
                 written += toRead;
                 packets++;
                 if (packets > EdlConstants.MaximumPacketDigestCount)

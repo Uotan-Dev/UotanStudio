@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Edl.Programmer;
 
@@ -47,12 +47,12 @@ public static class EdlProgrammerHash
         var origin = image.Position;
         try
         {
-            using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            using var hasher = Sha256.CreateAccumulator();
             var buffer = new byte[ChunkBytes];
             int read;
             while ((read = image.Read(buffer, 0, ChunkBytes)) > 0)
             {
-                hasher.AppendData(buffer.AsSpan(0, read));
+                hasher.Append(buffer.AsSpan(0, read));
                 cancellationToken.ThrowIfCancellationRequested();
             }
 

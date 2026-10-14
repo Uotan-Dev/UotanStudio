@@ -1,5 +1,5 @@
-using System.Security.Cryptography;
 using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Mtk.Sla;
 
@@ -70,7 +70,7 @@ public sealed record MtkSlaEvidence
     /// <para>64 字符的小写十六进制摘要；绝不是挑战原文。</para>
     /// </returns>
     public static string ComputeChallengeSha256Hex(ReadOnlySpan<byte> challenge) =>
-        Convert.ToHexStringLower(SHA256.HashData(challenge));
+        Sha256.ComputeHexLower(challenge);
 
     /// <summary>
     /// Projects this observation onto the common evidence model for session and result consumption.
