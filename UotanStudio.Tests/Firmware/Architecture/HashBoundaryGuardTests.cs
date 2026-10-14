@@ -12,31 +12,27 @@ namespace UotanStudio.Tests.Firmware.Architecture;
 /// <remarks>
 /// Scanning is line-oriented text, matching the other architecture gates. A rule never applies to a
 /// documentation line, because the XML docs legitimately name the entry points they replaced.
-/// <c>UotanStudio.Tests</c> and <c>UotanStudio.Benchmarks</c> are outside the scanned set on purpose: the
-/// equivalence pins must call <c>System.IO.Hashing</c> directly to prove that the façade returns the same
-/// bytes as the BCL, and a gate that hid that call could not falsify it.
+/// The scanned directories are the project folders the checked-out <c>UotanStudio.slnx</c> declares, so a
+/// project joins the gate the moment it joins the solution instead of waiting for an edited list here.
+/// <c>UotanStudio.Hash</c>, <c>UotanStudio.Tests</c> and <c>UotanStudio.Benchmarks</c> are outside the scanned
+/// set on purpose: the hash library owns the forwarded implementations, and the equivalence pins must call
+/// <c>System.IO.Hashing</c> directly to prove that the façade returns the same bytes as the BCL, and a gate
+/// that hid that call could not falsify it.
 /// <para>与其它架构门一致，这里按行做文本扫描。文档注释行不受规则约束，因为 XML 注释需要写出被替代的入口名。
-/// <c>UotanStudio.Tests</c> 与 <c>UotanStudio.Benchmarks</c> 刻意不在扫描集内：等价性固定用例必须直接调用
-/// <c>System.IO.Hashing</c> 才能证明门面与 BCL 产出相同字节，把该调用隐藏起来的门无法证伪。</para>
+/// 扫描目录取自检出的 <c>UotanStudio.slnx</c> 所声明的工程文件夹，因此一个工程加入解决方案时即刻纳入该门，
+/// 不需要再回来维护列表。<c>UotanStudio.Hash</c>、<c>UotanStudio.Tests</c> 与 <c>UotanStudio.Benchmarks</c>
+/// 刻意不在扫描集内：哈希库自己持有被转发的实现，而等价性固定用例必须直接调用 <c>System.IO.Hashing</c>
+/// 才能证明门面与 BCL 产出相同字节，把该调用隐藏起来的门无法证伪。</para>
 /// </remarks>
 public partial class HashBoundaryGuardTests
 {
     private const string HashProjectDirectory = "UotanStudio.Hash";
 
-    private static readonly string[] ScannedProjectDirectories =
+    private static readonly string[] ProjectDirectoriesOutsideTheScan =
     [
-        "UotanStudio.Compress",
-        "UotanStudio.Firmware",
-        "UotanStudio.Comm",
-        "UotanStudio.Delivery",
-        "UotanStudio.Mirroring",
-        "UotanStudio.Media",
-        "UotanStudio.Projects",
-        "UotanStudio.Mcp",
-        "UotanStudio.EdlTool",
-        "UotanStudio",
-        "UotanStudio.Desktop",
-        "UotanStudio.Firmware.MagicGen"
+        HashProjectDirectory,
+        "UotanStudio.Tests",
+        "UotanStudio.Benchmarks"
     ];
 
     [Fact]
@@ -45,7 +41,7 @@ public partial class HashBoundaryGuardTests
         var repositoryRoot = LocateRepositoryRoot();
         var offenders = new List<string>();
         var inspected = 0;
-        foreach (var projectDirectory in ScannedProjectDirectories)
+        foreach (var projectDirectory in ScannedProjectDirectories(repositoryRoot))
         {
             var absoluteDirectory = Path.Combine(repositoryRoot, projectDirectory);
             Assert.True(Directory.Exists(absoluteDirectory), $"The scanned project directory {projectDirectory} is missing.");
@@ -69,7 +65,7 @@ public partial class HashBoundaryGuardTests
         var repositoryRoot = LocateRepositoryRoot();
         var offenders = new List<string>();
         var declarations = 0;
-        foreach (var projectDirectory in ScannedProjectDirectories.Append(HashProjectDirectory))
+        foreach (var projectDirectory in ScannedProjectDirectories(repositoryRoot).Append(HashProjectDirectory))
         {
             foreach (var projectFile in Directory.EnumerateFiles(Path.Combine(repositoryRoot, projectDirectory), "*.csproj",
                 SearchOption.AllDirectories))
@@ -184,6 +180,21 @@ public partial class HashBoundaryGuardTests
         }
     }
 
+    private static string[] ScannedProjectDirectories(string repositoryRoot)
+    {
+        var directories = File.ReadLines(Path.Combine(repositoryRoot, "UotanStudio.slnx"))
+            .Select(line => SolutionProjectPathPattern().Match(line))
+            .Where(match => match.Success)
+            .Select(match => Path.GetDirectoryName(match.Groups["path"].Value.Replace('\\', Path.DirectorySeparatorChar))!)
+            .Where(directory => !ProjectDirectoriesOutsideTheScan.Contains(directory, StringComparer.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        Assert.True(
+            directories.Length > 0,
+            "The solution declared no production project directory to scan, so the rule never reached the production tree.");
+        return directories;
+    }
+
     private static string LocateRepositoryRoot()
     {
         Assert.True(
@@ -207,4 +218,7 @@ public partial class HashBoundaryGuardTests
 
     [GeneratedRegex(@"PackageReference\s+Include=""System\.IO\.Hashing""")]
     private static partial Regex HashingPackageReferencePattern();
+
+    [GeneratedRegex(@"<Project\s+Path=""(?<path>[^""]+\.csproj)""")]
+    private static partial Regex SolutionProjectPathPattern();
 }
