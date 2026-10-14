@@ -247,7 +247,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                             ZstdCompressor.Compress(input, tracked, new CompressionOptions
                             {
                                 Level = DeliverySuperOptions.ResolveZstdLevel(plan.Super),
-                                MaxDegreeOfParallelism = plan.Super.ZstdChunkedParallel ? FirmwareParallelism.Workers : null
+                                MaxDegreeOfParallelism = plan.Super.ZstdChunkedParallel ? Math.Max(2, FirmwareParallelism.Workers) : null
                             });
                         }, token).ConfigureAwait(false);
                         File.Delete(superOutput);

@@ -1,11 +1,13 @@
 using System.Security.Cryptography;
 using UotanStudio.Compress.Compressors;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
 namespace UotanStudio.Tests.Delivery;
 
+[Collection("Firmware concurrency")]
 public sealed class DeliverySuperZstdFrameTests : IDisposable
 {
     private const int ChunkSize = 1024 * 1024;
@@ -46,10 +48,12 @@ public sealed class DeliverySuperZstdFrameTests : IDisposable
     public async Task Export_LargeZstdSuper_ChunkedSwitchProducesMultipleFrames()
     {
         await BuildRawSuperAsync();
-        var compressed = await ExportCompressedSuperAsync("parallel", chunked: true);
+        var narrow = await ExportCompressedSuperAsync("parallel-one-worker", chunked: true, workers: 1);
+        var wide = await ExportCompressedSuperAsync("parallel-many-workers", chunked: true, workers: 8);
 
-        var frames = CountFrames(compressed);
-        Assert.True(frames > 1, $"ZstdChunkedParallel produced only {frames} frame for a {compressed.Length}-byte container.");
+        var frames = CountFrames(narrow);
+        Assert.True(frames > 1, $"ZstdChunkedParallel produced only {frames} frame for a {narrow.Length}-byte container.");
+        Assert.Equal(narrow, wide);
     }
 
     private async Task<byte[]> BuildRawSuperAsync()
@@ -75,6 +79,20 @@ public sealed class DeliverySuperZstdFrameTests : IDisposable
         var compressed = File.ReadAllBytes(Path.Combine(output, "super.zst"));
         Assert.True(compressed.Length > 4, "The compressed Super container is empty.");
         return compressed;
+    }
+
+    private async Task<byte[]> ExportCompressedSuperAsync(string folder, bool chunked, int workers)
+    {
+        var previous = FirmwareParallelism.Workers;
+        FirmwareParallelism.Workers = workers;
+        try
+        {
+            return await ExportCompressedSuperAsync(folder, chunked);
+        }
+        finally
+        {
+            FirmwareParallelism.Workers = previous;
+        }
     }
 
     private DeliveryFile Input()

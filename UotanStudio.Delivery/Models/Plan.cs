@@ -82,8 +82,8 @@ internal sealed record DeliverySuperOptions
         options.ZstdLevel is >= 1 and <= 22 ? options.ZstdLevel : DefaultZstdLevel;
 
     /// <summary>
-    /// Switch for the Super Zstd container layout, off by default: off emits one streaming frame, on splits the input into 1 MiB chunks encoded concurrently. The two layouts decode to the same plaintext but are not byte-equal.
-    /// <para>Super 的 Zstd 容器布局开关，默认关闭：关闭时输出单个流式帧，打开时按 1 MiB 切块并发编码。两种布局解码后的明文相同，但容器字节并不逐字节相等。</para>
+    /// Switch for the Super Zstd container layout, off by default: off emits one streaming frame, on splits the input into 1 MiB chunks encoded concurrently. The two layouts decode to the same plaintext but are not byte-equal. The chunked layout is emitted on every host: a worker cap of <c>1</c> still compresses this step with two workers, so one plan never yields different container bytes depending on the machine that built it.
+    /// <para>Super 的 Zstd 容器布局开关，默认关闭：关闭时输出单个流式帧，打开时按 1 MiB 切块并发编码。两种布局解码后的明文相同，但容器字节并不逐字节相等。打开后在任何主机上都会输出切块布局：并行数量上限为 <c>1</c> 时这一步仍然使用两个工作者，因此同一个计划不会因为构建机器不同而产出不同的容器字节。</para>
     /// </summary>
     public bool ZstdChunkedParallel { get; init; }
 
