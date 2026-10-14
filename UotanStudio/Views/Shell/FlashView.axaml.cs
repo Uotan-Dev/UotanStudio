@@ -12,7 +12,6 @@ using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Profile;
-using UotanStudio.Comm.Protocols.Mtk.Security;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Firmware.VendorFirmware.MediaTek;

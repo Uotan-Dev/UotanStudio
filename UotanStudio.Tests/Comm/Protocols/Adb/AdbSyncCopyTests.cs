@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Adb;
-using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

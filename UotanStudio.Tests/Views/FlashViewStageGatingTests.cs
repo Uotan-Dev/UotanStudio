@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Avalonia.Threading;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Services;

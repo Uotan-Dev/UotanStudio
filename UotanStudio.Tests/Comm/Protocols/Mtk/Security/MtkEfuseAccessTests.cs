@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Security;
 using Xunit;
 

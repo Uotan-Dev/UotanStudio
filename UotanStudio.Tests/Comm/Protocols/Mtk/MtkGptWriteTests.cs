@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Linq;
 using System.Text;
 using System.Xml.Linq;
 using UotanStudio.Comm.Protocols.Mtk;

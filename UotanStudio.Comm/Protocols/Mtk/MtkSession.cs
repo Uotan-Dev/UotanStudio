@@ -5,7 +5,6 @@ using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Mtk.Discovery;
-using UotanStudio.Comm.Protocols.Mtk.Sla;
 using UotanStudio.Comm.Protocols.Mtk.Upload;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;

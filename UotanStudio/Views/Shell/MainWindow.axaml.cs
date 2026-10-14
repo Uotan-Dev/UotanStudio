@@ -3,7 +3,6 @@ using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Input;
 using Avalonia.Styling;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Shell;

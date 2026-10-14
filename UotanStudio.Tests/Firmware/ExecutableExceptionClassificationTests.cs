@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
-using System.Security.Cryptography;
 using UotanStudio.Firmware.Executable;
 using UotanStudio.Firmware.Executable.Qualcomm;
+using UotanStudio.Hash.Digests;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -130,7 +130,7 @@ public sealed class ExecutableExceptionClassificationTests
     public void AppendRange_SignedRangeBeyondFile_ReportsCorruption()
     {
         using var stream = new MemoryStream(new byte[32]);
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = Sha256.CreateAccumulator();
 
         Assert.Throws<ExecutableCorruptedException>(() => QualcommImageAnalyzer.AppendRange(
             hash, stream, 0, 33, TestContext.Current.CancellationToken));

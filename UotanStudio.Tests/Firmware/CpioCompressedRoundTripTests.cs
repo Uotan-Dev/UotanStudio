@@ -1,7 +1,5 @@
 using System.Text;
 using UotanStudio.Firmware.Archive;
-using UotanStudio.Firmware.Archive.Models;
-using UotanStudio.Firmware.Archive.Writing;
 using UotanStudio.Firmware.Core.Repacking;
 using Xunit;
 

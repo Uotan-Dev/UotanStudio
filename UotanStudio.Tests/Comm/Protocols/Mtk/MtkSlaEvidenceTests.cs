@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Mtk;
-using UotanStudio.Comm.Protocols.Mtk.Upload;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;

@@ -1,10 +1,8 @@
-using System.Diagnostics;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Common.Evidence;
-using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Comm.Protocols.Edl.Streaming;
 using UotanStudio.Comm.Transports.Abstractions;

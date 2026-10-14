@@ -4,7 +4,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using UotanStudio.Firmware.Executable.Elf;
 using UotanStudio.Firmware.Executable.Qualcomm;
-using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

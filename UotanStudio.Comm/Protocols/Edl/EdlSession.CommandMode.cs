@@ -1,5 +1,3 @@
-using UotanStudio.Comm.Protocols.Edl;
-
 namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>

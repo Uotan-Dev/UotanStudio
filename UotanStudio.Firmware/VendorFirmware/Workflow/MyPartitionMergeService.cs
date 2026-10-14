@@ -1,7 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Firmware.FileSystem.Rebuilding;
 using UotanStudio.Firmware.Patching;
 
 namespace UotanStudio.Firmware.VendorFirmware.Workflow;
