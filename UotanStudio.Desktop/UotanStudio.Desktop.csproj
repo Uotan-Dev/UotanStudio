@@ -1,4 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- Satori GC 只对自包含与 NativeAOT 发布生效。该 SDK 会为每个请求的 RID 注入带版本的 PackageReference，
+       中央包版本管理会因此报 NU1008，所以下面把同一版本重新声明为 PackageVersion，并在还原收集引用前清空注入的版本。
+       PublishWithSatoriGC takes effect only for self-contained and NativeAOT publishes. The SDK injects versioned
+       PackageReference items per requested RID, which central package management rejects with NU1008, so the same
+       version is re-declared as PackageVersion items and stripped from the injected references before restore. -->
+  <Sdk Name="PublishWithSatoriGC" Version="10.0.13-satori.38211333846.1" />
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <PublishAot>true</PublishAot>
@@ -19,6 +26,13 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup Condition="'$(RuntimeIdentifier)$(RuntimeIdentifiers)' != ''">
+    <_SatoriGcRuntimeIdentifier Include="$(RuntimeIdentifier);$(RuntimeIdentifiers)" KeepDuplicates="false" />
+    <PackageVersion Include="@(_SatoriGcRuntimeIdentifier->'PublishWithSatoriGC.Runtime.%(Identity)')" Version="[$(SatoriPackageVersion)]" />
+    <PackageVersion Include="@(_SatoriGcRuntimeIdentifier->'PublishWithSatoriGC.AotSdk.%(Identity)')" Version="[$(SatoriPackageVersion)]" />
+    <PackageVersion Include="PublishWithSatoriGC.AotTools.$(NETCoreSdkRuntimeIdentifier)" Version="[$(SatoriPackageVersion)]" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\UotanStudio\UotanStudio.csproj" />
     <ProjectReference Include="..\UotanStudio.Mcp\UotanStudio.Mcp.csproj" />
@@ -34,4 +48,10 @@
          The scrcpy server jar is fetched into the local store by ScrcpyServerService, which checks the length
          and digest the origin publishes before use; this repository does not ship the binary. -->
   </ItemGroup>
+
+  <Target Name="_SatoriGcCentralizeVersions" BeforeTargets="CollectPackageReferences">
+    <ItemGroup>
+      <PackageReference Update="PublishWithSatoriGC.*" Version="" />
+    </ItemGroup>
+  </Target>
 </Project>
