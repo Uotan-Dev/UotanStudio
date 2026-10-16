@@ -93,7 +93,7 @@ internal static class PatchGatePolicy
         return type.StartsWith("VisualPlugin.", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool PackageMutates(Projects.VisualPluginPackage package, HashSet<string> visiting, int depth)
+    private static bool PackageMutates(VisualPluginPackage package, HashSet<string> visiting, int depth)
     {
         if (depth >= 32 || !visiting.Add(package.NodeTypeKey))
         {

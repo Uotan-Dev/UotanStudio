@@ -91,7 +91,7 @@ public partial class DeviceViewModel
         {
             if (ReferenceEquals(device.Device, endpoint))
             {
-                device.EdlProtocol = UotanStudio.Comm.Protocols.Edl.EdlProtocolState.Unknown;
+                device.EdlProtocol = Comm.Protocols.Edl.EdlProtocolState.Unknown;
             }
             LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
                 $"EDL protocol detection for {endpoint.Key} failed: {ex.Message}");
@@ -149,7 +149,7 @@ public partial class DeviceViewModel
         var monitor = App.DeviceMonitor;
         if (!monitor.HasAdbServer ||
             !device.Device.Key.StartsWith("adb:", StringComparison.Ordinal) &&
-            !UotanStudio.Comm.Devices.Services.DebugBridgeSessionOpener.AdbServerOwns(device.Device.Serial))
+            !Comm.Devices.Services.DebugBridgeSessionOpener.AdbServerOwns(device.Device.Serial))
         {
             return null;
         }
@@ -243,7 +243,7 @@ public partial class DeviceViewModel
     /// Runs an ADB shell command and returns the whitespace-collapsed trimmed output.
     /// <para>执行一条 ADB shell 命令并返回去除空白行与首尾裁剪后的文本。</para>
     /// </summary>
-    private static string RunShell(UotanStudio.Comm.Contracts.IAdbDeviceSession session, string command)
+    private static string RunShell(Comm.Contracts.IAdbDeviceSession session, string command)
         => System.Text.Encoding.UTF8.GetString(session.ExecuteCommand(command).Stdout);
 
     /// <summary>

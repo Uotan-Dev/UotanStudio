@@ -23,7 +23,7 @@ public sealed class NodeExecutionEngine
     private PatchRun? _patches;
     private VisualPluginPackage? _package;
     private IWorkflowInteractionService _interactions = UnsupportedWorkflowInteractionService.Instance;
-    private Services.Workspace.IWorkflowDocuments? _documents;
+    private Workspace.IWorkflowDocuments? _documents;
     private readonly System.Collections.Concurrent.ConcurrentStack<IAsyncDisposable> _resources = new();
 
     /// <summary>
@@ -1157,7 +1157,7 @@ internal sealed class ExecutionContextImpl : INodeExecutionContext
     public ExecutionContextImpl(IUnifiedLog log, CancellationToken token, Action<double> progress, PatchRun? patches = null,
         VisualPluginPackage? package = null, IWorkflowInteractionService? interactions = null, Action<bool>? userWait = null,
         Action<IAsyncDisposable>? registerResource = null,
-        Services.Workspace.IWorkflowDocuments? documents = null)
+        Workspace.IWorkflowDocuments? documents = null)
     {
         _log = log;
         _token = token;
@@ -1171,7 +1171,7 @@ internal sealed class ExecutionContextImpl : INodeExecutionContext
     }
 
     public IUnifiedLog Log => _log;
-    public Services.Workspace.IWorkflowDocuments? Documents { get; }
+    public Workspace.IWorkflowDocuments? Documents { get; }
     public CancellationToken CancellationToken => _token;
     public PatchRun? Patches { get; }
     public VisualPluginPackage? Package { get; }

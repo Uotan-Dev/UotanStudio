@@ -23,7 +23,7 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     /// The localized title of the save button.
     /// <para>保存按钮的本地化标题。</para>
     /// </summary>
-    public static string SaveLabel => UotanStudio.Services.LanguageService.Instance.GetString("Dock_Dtb_Save");
+    public static string SaveLabel => Services.LanguageService.Instance.GetString("Dock_Dtb_Save");
 
     /// <summary>
     /// The file path of the document.
@@ -41,7 +41,7 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
         string.IsNullOrEmpty(FilePath)
             ? string.Empty
             : string.Format(
-                UotanStudio.Services.LanguageService.Instance.GetString("Dock_File_PathFormat"),
+                Services.LanguageService.Instance.GetString("Dock_File_PathFormat"),
                 FilePath);
 
     /// <summary>
@@ -197,7 +197,7 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
         }
         catch (Exception ex)
         {
-            CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_ParseFailed", "DTB");
+            CompileError = Services.UserError.Describe(ex, "UserError_ParseFailed", "DTB");
             return;
         }
 
@@ -262,7 +262,7 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
 
         if (IsDtboContainer)
         {
-            CompileError = global::UotanStudio.Services.LanguageService.Instance.GetString("UserError_DtboReadOnly");
+            CompileError = Services.LanguageService.Instance.GetString("UserError_DtboReadOnly");
             return;
         }
 
@@ -270,7 +270,7 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
         var result = DtsFormat.Parse(source);
         CompileError = result.IsSuccess
             ? string.Empty
-            : global::UotanStudio.Services.UserError.WithDetails(string.Join("\n", result.Errors.Select(e => $"[L{e.Line}:C{e.Column}] {e.Severity}: {e.Message}")), "UserError_ParseFailed", "DTS");
+            : Services.UserError.WithDetails(string.Join("\n", result.Errors.Select(e => $"[L{e.Line}:C{e.Column}] {e.Severity}: {e.Message}")), "UserError_ParseFailed", "DTS");
 
         if (!result.IsSuccess || result.Tree is null)
         {
@@ -307,7 +307,7 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
             {
                 foreach (var ancestor in Flatten(Nodes))
                 {
-                    if (fullPath.StartsWith(ancestor.FullPath + "/", System.StringComparison.Ordinal))
+                    if (fullPath.StartsWith(ancestor.FullPath + "/", StringComparison.Ordinal))
                     {
                         ancestor.IsExpanded = true;
                     }
@@ -355,8 +355,8 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
         return best;
     }
 
-    private static System.Collections.Generic.IEnumerable<DtbNodeViewModel> Flatten(
-        System.Collections.Generic.IEnumerable<DtbNodeViewModel> roots)
+    private static IEnumerable<DtbNodeViewModel> Flatten(
+        IEnumerable<DtbNodeViewModel> roots)
     {
         foreach (var root in roots)
         {

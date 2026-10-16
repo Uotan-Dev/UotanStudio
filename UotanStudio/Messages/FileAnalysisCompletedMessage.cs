@@ -18,4 +18,4 @@ using System.Collections.Generic;
 /// The path of the analyzed file, or <see langword="null"/> when no path is available.
 /// <para>被分析文件的路径，没有可用路径时为空。</para>
 /// </param>
-public record FileAnalysisCompletedMessage(IReadOnlyList<UotanStudio.ViewModels.Editors.PropertyRow> Analysis, string? DetectedFormat, string? FilePath);
+public record FileAnalysisCompletedMessage(IReadOnlyList<ViewModels.Editors.PropertyRow> Analysis, string? DetectedFormat, string? FilePath);

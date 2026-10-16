@@ -36,7 +36,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// </remarks>
 public partial class ScreenMirrorViewModel : Document
 {
-    private Services.Mirroring.ManagedMirrorSession? _client;
+    private ManagedMirrorSession? _client;
     private int _starting;
     private readonly Lock _frameLock = new();
     private Views.Editors.ScreenMirrorPixelBuffer? _pendingFrame;
@@ -44,7 +44,7 @@ public partial class ScreenMirrorViewModel : Document
     private bool _renderScheduled;
     internal Views.Editors.ScreenMirrorGpuPresenter GpuPresenter { get; private set; } = new();
     internal PixelSize VideoPixelSize => GpuPresenter.IsAvailable && GpuPresenter.PixelSize is { Width: > 0 } size ? size : Frame?.PixelSize ?? default;
-    internal PixelSize InjectionVideoSize => UotanStudio.Views.Editors.ScreenMirrorCoordinates.ResolveInjectionSize(StreamMetadata, VideoPixelSize);
+    internal PixelSize InjectionVideoSize => Views.Editors.ScreenMirrorCoordinates.ResolveInjectionSize(StreamMetadata, VideoPixelSize);
 
     private CancellationTokenSource? _cts;
     private Thread? _decodeThread;
@@ -123,7 +123,7 @@ public partial class ScreenMirrorViewModel : Document
     }
     internal ScrcpyServerOptions? StreamOptions => _streamOptions;
     internal ScrcpyVideoMetadata? StreamMetadata => _client?.VideoMetadata;
-    internal Services.Mirroring.ScrcpyAudioMetadata? StreamMetadataAudio => _client?.AudioMetadata;
+    internal ScrcpyAudioMetadata? StreamMetadataAudio => _client?.AudioMetadata;
     internal bool IsStopped => _disposed;
     internal bool AudioDisabledByServer => _client?.AudioDisabledByServer == true;
 
@@ -182,9 +182,9 @@ public partial class ScreenMirrorViewModel : Document
             }
             catch (Exception ex)
             {
-                StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + global::UotanStudio.Services.UserError.Describe(ex);
-                UotanStudio.Services.LogService.Instance.Write(
-                    UotanStudio.Services.LogLevel.Error, "ScreenMirror", $"Start failed: {ex.Message}");
+                StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + Services.UserError.Describe(ex);
+                Services.LogService.Instance.Write(
+                    Services.LogLevel.Error, "ScreenMirror", $"Start failed: {ex.Message}");
                 _client?.Dispose(); _client = null;
             }
             finally { Interlocked.Exchange(ref _starting, 0); }
@@ -231,7 +231,7 @@ public partial class ScreenMirrorViewModel : Document
         }
     }
 
-    private void ControlLoop(Services.Mirroring.ManagedMirrorSession client, CancellationToken token)
+    private void ControlLoop(ManagedMirrorSession client, CancellationToken token)
     {
         while (!token.IsCancellationRequested && !_disposed)
         {
@@ -396,7 +396,7 @@ public partial class ScreenMirrorViewModel : Document
     /// <summary>Toggles the device screen power. <para>切换设备屏幕电源状态。</para></summary>
     public void ToggleDisplayPower() => SendSession(client => client.ToggleDisplayPower());
 
-    private void SendSession(Action<Services.Mirroring.ManagedMirrorSession> send)
+    private void SendSession(Action<ManagedMirrorSession> send)
     {
         var client = _client;
         if (client is null || !client.IsControlConnected)
@@ -432,7 +432,7 @@ public partial class ScreenMirrorViewModel : Document
         }
     }
 
-    private void DecodeLoop(Services.Mirroring.ManagedMirrorSession client, CancellationToken token)
+    private void DecodeLoop(ManagedMirrorSession client, CancellationToken token)
     {
         try
         {
@@ -444,10 +444,10 @@ public partial class ScreenMirrorViewModel : Document
                 "AV1" or "AV01" => VideoCodecId.Av1,
                 _ => throw new NotSupportedException($"Unsupported video codec '{metadata.CodecName}'."),
             };
-            long probeDeadline = Environment.TickCount64 + 3000;
+            var probeDeadline = Environment.TickCount64 + 3000;
             while (!GpuPresenter.CompositionProbeCompleted && Environment.TickCount64 < probeDeadline) Thread.Sleep(25);
             var options = ActiveDecoderOptions;
-            int rebuilds = 0;
+            var rebuilds = 0;
             while (!token.IsCancellationRequested)
             {
                 using var decoder = VideoDecoderFactory.Create(codec, options);
@@ -459,13 +459,13 @@ public partial class ScreenMirrorViewModel : Document
                 _decoderBackend = VideoDecoderFactory.GetBackendName(decoder);
                 _pixelFormatDecoder = decoder;
                 if (VideoDecoderFactory.GetFallbackReason(decoder) is { } reason)
-                    UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Warn,
+                    Services.LogService.Instance.Write(Services.LogLevel.Warn,
                         "ScreenMirror", $"GPU initialization failed; using CPU: {reason}");
                 byte[]? configuration = null;
-                int failures = 0;
-                int skipped = 0;
-                bool awaitBoundary = rebuilds > 0;
-                long boundaryDeadline = Environment.TickCount64 + MirrorDecoderRecovery.KeyFrameWaitMilliseconds;
+                var failures = 0;
+                var skipped = 0;
+                var awaitBoundary = rebuilds > 0;
+                var boundaryDeadline = Environment.TickCount64 + MirrorDecoderRecovery.KeyFrameWaitMilliseconds;
                 try
                 {
                     while (!token.IsCancellationRequested)
@@ -497,16 +497,16 @@ public partial class ScreenMirrorViewModel : Document
                             configuration = packet.Data;
                             continue;
                         }
-                        long timestampTicks = checked(packet.PresentationTimestampMicroseconds * 10);
+                        var timestampTicks = checked(packet.PresentationTimestampMicroseconds * 10);
                         Interlocked.Increment(ref _receivedFrames);
                         try
                         {
                             if (configuration is null) decoder.Decode(packet.Data, timestampTicks);
                             else
                             {
-                                int length = checked(configuration.Length + packet.Data.Length);
+                                var length = checked(configuration.Length + packet.Data.Length);
                                 if (length > 32 * 1024 * 1024) throw new InvalidDataException("Excessive scrcpy access unit.");
-                                byte[] combined = ArrayPool<byte>.Shared.Rent(length);
+                                var combined = ArrayPool<byte>.Shared.Rent(length);
                                 try
                                 {
                                     configuration.CopyTo(combined, 0);
@@ -533,7 +533,7 @@ public partial class ScreenMirrorViewModel : Document
                 {
                     options = degraded;
                     rebuilds++;
-                    UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Warn, "ScreenMirror",
+                    Services.LogService.Instance.Write(Services.LogLevel.Warn, "ScreenMirror",
                         $"Video decoding failed after {failures} frames ({error.Message}); rebuilding the decoder without hardware acceleration, {skipped} packets skipped while waiting for a key frame.");
                     SendControl(ScrcpyControlMessageWriter.ResetVideo());
                 }
@@ -541,11 +541,11 @@ public partial class ScreenMirrorViewModel : Document
         }
         catch (Exception exception) when (!token.IsCancellationRequested)
         {
-            UotanStudio.Services.LogService.Instance.Write(
-                UotanStudio.Services.LogLevel.Error, "ScreenMirror", $"Decode failed: {exception.Message}");
+            Services.LogService.Instance.Write(
+                Services.LogLevel.Error, "ScreenMirror", $"Decode failed: {exception.Message}");
             Dispatcher.UIThread.Post(() =>
             {
-                if (!_disposed) StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + global::UotanStudio.Services.UserError.Describe(exception);
+                if (!_disposed) StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + Services.UserError.Describe(exception);
             });
         }
         catch (Exception) when (token.IsCancellationRequested) { }
@@ -610,7 +610,7 @@ public partial class ScreenMirrorViewModel : Document
         GpuPresenter.CompositionFailed += (_, _) => decoder.GpuExportEnabled = false;
         decoder.GpuExportFrameCallback = frame => PublishSharedTextureFrame(frame, decoder);
         decoder.GpuExportEnabled = true;
-        UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Info, "ScreenMirror",
+        Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
             "GPU zero-copy export enabled: D3D11 shared texture.");
     }
 
@@ -752,7 +752,7 @@ public partial class ScreenMirrorViewModel : Document
     }
 
     private static string GetLocalizedString(string key)
-        => UotanStudio.Services.LanguageService.Instance.GetString(key);
+        => Services.LanguageService.Instance.GetString(key);
 
     /// <summary>Builds server options from the persisted app settings and the resolved jar version.
     /// <para>按持久化应用设置与已解析的 jar 版本构建服务端选项。</para>

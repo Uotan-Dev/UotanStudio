@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Collections.Frozen;
 using System.Text;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BlockImage.Lp;
@@ -256,6 +257,32 @@ internal sealed class ImageInputService
             ? ImageFormatKind.Payload
             : ImageFormatKind.Unknown;
     }
+
+    /// <summary>
+    /// Extensions accepted as format-conversion inputs (partition and raw images). Determined by extension only,
+    /// so the explorer's menu gate never reads a file header; optical-disc images stay out because DAT/BR targets
+    /// Android OTA partitions. OTA artifacts (<c>.dat</c>, <c>.br</c>, <c>.transfer.list</c>) are handled by the
+    /// split-volume and open-with entries instead.
+    /// <para>被接受为格式转换输入的扩展名（分区镜像与裸镜像）。只按扩展名判定，资源管理器的菜单显隐因此不读文件头；
+    /// 光盘镜像不在其内，因为 DAT/BR 的目标是 Android OTA 分区。OTA 工件（<c>.dat</c>、<c>.br</c>、
+    /// <c>.transfer.list</c>）改由分卷与打开方式入口处理。</para>
+    /// </summary>
+    private static readonly FrozenSet<string> ConversionSourceExtensions =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            ".img", ".raw", ".bin", ".simg", ".sparse", ".super", ".image"
+        }.ToFrozenSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Determines whether the path is an accepted format-conversion input. The click-time conversion validates
+    /// the source again against the active sub-project, so this predicate only decides entry visibility.
+    /// <para>判断路径是否为可接受的格式转换输入。点击时转换会再对活动子项目校验源，因此本谓词只决定入口显隐。</para>
+    /// </summary>
+    /// <param name="path">The file path. <para>文件路径。</para></param>
+    /// <returns>True for a conversion source extension. <para>是转换源扩展名时为 true。</para></returns>
+    internal static bool SupportsFormatConversion(string path)
+        => !string.IsNullOrEmpty(path)
+            && ConversionSourceExtensions.Contains(Path.GetExtension(path).ToLowerInvariant());
 
     /// <summary>
     /// Maps a format identity to the established label string that is written to persisted state.

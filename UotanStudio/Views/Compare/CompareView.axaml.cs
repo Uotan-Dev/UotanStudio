@@ -112,7 +112,7 @@ public partial class CompareView : UserControl
         public bool BrowseWired { get; set; }
 
         /// <summary>列属性变化处理器（用于退订）。 The column property-change handler (kept for unsubscribing).</summary>
-        public System.ComponentModel.PropertyChangedEventHandler? ColumnHandler { get; set; }
+        public PropertyChangedEventHandler? ColumnHandler { get; set; }
     }
 
     private void OnViewLoaded(object? sender, RoutedEventArgs e)
@@ -147,7 +147,7 @@ public partial class CompareView : UserControl
         LogService.Instance.Write(LogLevel.Error, "Compare", e.Exception.ToString());
         if (DataContext is CompareViewModel vm)
         {
-            vm.ReportError(global::UotanStudio.Services.UserError.Describe(e.Exception));
+            vm.ReportError(UserError.Describe(e.Exception));
         }
     }
 
@@ -873,7 +873,7 @@ public partial class CompareView : UserControl
         }
         catch (Exception ex)
         {
-            vm.ReportError(global::UotanStudio.Services.UserError.Describe(ex));
+            vm.ReportError(UserError.Describe(ex));
             LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
         }
     }

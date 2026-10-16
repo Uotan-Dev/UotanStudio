@@ -168,4 +168,52 @@ public class DocumentOpenRegistryTests
         Assert.Equal(expected, DocumentOpenRegistry.ResolveMode(path));
         Assert.Equal(DocumentOpenRegistry.ResolveMode(path), FileOpenMode.ResolveMode(path));
     }
+
+    [Fact]
+    public void OrderByApplicability_QcnFile_PlacesQcnEntryFirst()
+    {
+        var (entries, applicable) = DocumentOpenRegistry.OrderByApplicability(
+            DocumentOpenRegistry.MenuEntries, "backup.qcn", null);
+
+        Assert.True(applicable > 0);
+        Assert.Equal(EditorOpenMode.Qcn, entries[0].Mode);
+        Assert.Equal(DocumentOpenRegistry.MenuEntries.Count, entries.Count);
+    }
+
+    [Fact]
+    public void OrderByApplicability_PlainTextFile_KeepsRegistryOrderWithoutSeparatorBoundary()
+    {
+        var (entries, applicable) = DocumentOpenRegistry.OrderByApplicability(
+            DocumentOpenRegistry.MenuEntries, "notes.txt", null);
+
+        Assert.Equal(0, applicable);
+        Assert.Equal(DocumentOpenRegistry.MenuEntries.Select(d => d.Kind), entries.Select(d => d.Kind));
+    }
+
+    [Fact]
+    public void OrderByApplicability_SuppliedHeader_OverridesDiskContent()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "uotan-order-" + Guid.NewGuid().ToString("N") + ".bin");
+        byte[] dtb = [0xD0, 0x0D, 0xFE, 0xED, 0x00, 0x00, 0x00, 0x28];
+        var blank = new byte[8];
+        try
+        {
+            File.WriteAllBytes(path, dtb);
+
+            var (fromDisk, fromDiskApplicable) = DocumentOpenRegistry.OrderByApplicability(
+                DocumentOpenRegistry.MenuEntries, path, null);
+            var (fromBlankHeader, blankApplicable) = DocumentOpenRegistry.OrderByApplicability(
+                DocumentOpenRegistry.MenuEntries, path, blank);
+
+            Assert.Contains(fromDisk.Take(fromDiskApplicable), entry => entry.Mode == EditorOpenMode.Dtb);
+            Assert.DoesNotContain(fromBlankHeader.Take(blankApplicable), entry => entry.Mode == EditorOpenMode.Dtb);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
 }

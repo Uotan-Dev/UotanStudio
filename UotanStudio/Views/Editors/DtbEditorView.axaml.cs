@@ -82,7 +82,7 @@ public partial class DtbEditorView : UserControl
     /// Right-pane caret/selection change highlights the owning node in the left tree.
     /// <para>右栏光标/选区变化 → 左栏高亮所属节点。</para>
     /// </summary>
-    private void OnSourceCaretChanged(object? sender, System.EventArgs e)
+    private void OnSourceCaretChanged(object? sender, EventArgs e)
     {
         if (DataContext is not DtbEditorViewModel vm)
         {

@@ -29,13 +29,6 @@ public sealed partial class ExplorerNode
     /// </summary>
     public IBrush IconBrush => Icon.Brush;
 
-    /// <summary>
-    /// Whether this node is an image file; gates the explorer's "convert format" context-menu entry.
-    /// <para>是否为镜像类文件，用作资源管理器右键「格式转换」入口的显示条件。</para>
-    /// </summary>
-    public bool IsImageFile => !IsDirectory && !IsPlaceholder &&
-        ExplorerIconCatalog.IsImageExtension(Path);
-
     private ExplorerIcon? _icon;
     private ExplorerIcon Icon => _icon ??= ExplorerIconCatalog.Resolve(Path, IsDirectory, IsProjectFolder, IsPlaceholder);
 }

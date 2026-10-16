@@ -247,6 +247,71 @@ internal static class DocumentOpenRegistry
     public static IReadOnlyList<DocumentOpenDescriptor> MenuEntries { get; } =
         [.. _descriptors.Where(d => d.MenuOrder >= 0).OrderBy(d => d.MenuOrder)];
 
+    /// <summary>
+    /// Orders menu-listed descriptors by applicability for one file: entries whose probe matches come first,
+    /// everything else follows in registry order. The entries are never removed, because the open-as menu
+    /// exists to override automatic detection.
+    /// <para>按单个文件的适用性为进入菜单的描述符排序：探测命中的条目在前，其余按注册表顺序随后。
+    /// 条目从不被移除，因为「打开方式」菜单的存在意义就是覆盖自动识别。</para>
+    /// </summary>
+    /// <param name="entries">The descriptors to order. <para>待排序的描述符。</para></param>
+    /// <param name="path">The file the menu will act on. <para>菜单将作用其上的文件。</para></param>
+    /// <param name="header">The already-read file header, or null to read it on demand. <para>已读取的文件头；为 null 时按需读取。</para></param>
+    /// <returns>
+    /// Applicable entries first, then the rest, both in their original order, together with how many leading
+    /// entries form the applicable group (so a caller can place a separator on that boundary).
+    /// <para>适用的条目在前、其余在后且各自保持原序，并给出开头适用组的条目数（供调用方在该边界插入分隔符）。</para>
+    /// </returns>
+    internal static (IReadOnlyList<DocumentOpenDescriptor> Entries, int ApplicableCount) OrderByApplicability(
+        IReadOnlyList<DocumentOpenDescriptor> entries, string path, byte[]? header)
+    {
+        if (entries.Count == 0 || string.IsNullOrWhiteSpace(path))
+        {
+            return (entries, 0);
+        }
+
+        var request = new DocumentOpenRequest { Path = path, Header = header };
+        List<DocumentOpenDescriptor> applicable = [];
+        List<DocumentOpenDescriptor> remaining = [];
+        foreach (var entry in entries)
+        {
+            if (Matches(entry, request))
+            {
+                applicable.Add(entry);
+            }
+            else
+            {
+                remaining.Add(entry);
+            }
+        }
+
+        var applicableCount = applicable.Count;
+        if (applicableCount == 0 || remaining.Count == 0)
+        {
+            return (entries, applicableCount);
+        }
+
+        applicable.AddRange(remaining);
+        return (applicable, applicableCount);
+    }
+
+    private static bool Matches(DocumentOpenDescriptor entry, DocumentOpenRequest request)
+    {
+        if (entry.Probe is not { } probe)
+        {
+            return false;
+        }
+
+        try
+        {
+            return probe(request);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>Looks up by session Kind string; null when unregistered. <para>按会话 Kind 字符串查找；未登记返回 null。</para></summary>
     /// <param name="kind">The session Kind string to match verbatim. <para>需逐字匹配的会话 Kind 字符串。</para></param>
     /// <returns>The matching descriptor, or null. <para>匹配的描述符，或为 null。</para></returns>
@@ -381,7 +446,7 @@ internal static class DocumentOpenRegistry
             header is not null && extension.Value is EditorOpenMode.Auto or EditorOpenMode.Text
             && (string.IsNullOrEmpty(Path.GetExtension(path))
                 || Path.GetExtension(path).Equals(".txt", StringComparison.OrdinalIgnoreCase))
-            && UotanStudio.Services.Logging.LogFileService.LooksLikeLog(header)),
+            && Logging.LogFileService.LooksLikeLog(header)),
 
         new(EditorOpenMode.Text, static (_, _, _, extension) => extension.Value == EditorOpenMode.Text),
         new(EditorOpenMode.Log, static (_, _, _, extension) => extension.Value == EditorOpenMode.Log),
@@ -574,6 +639,11 @@ internal static class DocumentOpenRegistry
     /// </returns>
     private static byte[] ProbeHeader(DocumentOpenRequest request)
     {
+        if (request.Header is { Length: > 0 } supplied)
+        {
+            return supplied;
+        }
+
         var path = request.Path;
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {

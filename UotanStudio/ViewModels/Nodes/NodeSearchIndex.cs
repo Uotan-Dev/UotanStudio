@@ -1,4 +1,4 @@
-using Avalonia.Controls;
+using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Nodes;
 
@@ -12,24 +12,17 @@ internal static class NodeSearchIndex
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> LoadLabels()
     {
-        var labels = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        ResourceDictionary[] dictionaries = [new Locale.EnUs.Node(), new Locale.ZhCn.Node(), new Locale.EnUs.Interaction(), new Locale.ZhCn.Interaction()];
-        foreach (var dictionary in dictionaries)
+        var labels = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        foreach (var key in Locale.LocaleKeySets.Node
+                     .Concat(Locale.LocaleKeySets.Interaction))
         {
-            foreach (var entry in dictionary)
+            var values = LanguageService.Instance.GetAllTranslations(key);
+            if (values.Count > 0)
             {
-                if (entry.Key is not string key || entry.Value is not string value)
-                {
-                    continue;
-                }
-                if (!labels.TryGetValue(key, out var values))
-                {
-                    values = [];
-                    labels[key] = values;
-                }
-                values.Add(value);
+                labels[key] = values;
             }
         }
-        return labels.ToDictionary(entry => entry.Key, entry => (IReadOnlyList<string>)[.. entry.Value], StringComparer.Ordinal);
+
+        return labels;
     }
 }

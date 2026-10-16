@@ -126,7 +126,7 @@ public partial class ScreenMirrorView : UserControl
     /// <para>把文本输入转发为 scrcpy INJECT_TEXT，避免逐键映射布局差异。</para>
     /// </summary>
     /// <inheritdoc />
-    protected override void OnTextInput(Avalonia.Input.TextInputEventArgs e)
+    protected override void OnTextInput(TextInputEventArgs e)
     {
         base.OnTextInput(e);
         if (ViewModel is { } viewModel && e.Text is { Length: > 0 } text)
@@ -192,7 +192,7 @@ public partial class ScreenMirrorView : UserControl
         if (ViewModel is { } selected)
             Services.Workspace.DocumentNotifications.Publish(selected);
         if (_pressedPointer is not null || _subscribed is null) return;
-        uint button = ActionButton(e.GetCurrentPoint(FrameImage).Properties.PointerUpdateKind);
+        var button = ActionButton(e.GetCurrentPoint(FrameImage).Properties.PointerUpdateKind);
         if (button == 0 || !TranslateTouch(e, false, out var point)) return;
         _lastTouch = point;
         _pressedButton = button;
@@ -279,7 +279,7 @@ public partial class ScreenMirrorView : UserControl
         int width = size.Width, height = size.Height;
 
         if (!ScreenMirrorCoordinates.TryMap(e.GetPosition(FrameImage), FrameImage.Bounds.Size,
-            width, height, clamp, out int x, out int y)) return false;
+            width, height, clamp, out var x, out var y)) return false;
         point = (x, y, width, height);
         return true;
     }

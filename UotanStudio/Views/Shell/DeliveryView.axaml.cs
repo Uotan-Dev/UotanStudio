@@ -37,9 +37,9 @@ public partial class DeliveryView : UserControl
     private double _rightImagesHeightRatio = 0.6;
 
     /// <summary>Initializes delivery options and shared SUPER settings. <para>初始化交付配置与共用 SUPER 设置。</para></summary>
-    public DeliveryView() : this(new UotanStudio.Services.Keys.KeyLibraryService()) { }
+    public DeliveryView() : this(new Services.Keys.KeyLibraryService()) { }
 
-    internal DeliveryView(UotanStudio.Services.Keys.KeyLibraryService keyLibrary)
+    internal DeliveryView(Services.Keys.KeyLibraryService keyLibrary)
     {
         _payloadKeyLibrary = keyLibrary;
         InitializeComponent();
@@ -370,7 +370,7 @@ public partial class DeliveryView : UserControl
                 foreach (var row in Composition.Model.Container) row.IncludeInSuper = members.Contains(row.PartitionName);
             }
         }
-        catch (Exception ex) { UseProjectSuperSettingsBox.IsChecked = false; _ = ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(ex), true); return; }
+        catch (Exception ex) { UseProjectSuperSettingsBox.IsChecked = false; _ = ShowDeliveryMessageAsync(UserError.Describe(ex), true); return; }
         _appliedSourceSettings = identity;
         SuperVabBox.IsChecked = settings.DeviceType == "VAB";
         SuperAbBox.IsChecked = settings.DeviceType == "AB";
@@ -440,7 +440,7 @@ public partial class DeliveryView : UserControl
         {
             if (_attached && owner is Window window)
                 await DialogService.ShowAsync(window, LanguageService.Instance.GetString("NewProject_PickerFailed"),
-                    global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+                    UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
         finally
         {
@@ -486,7 +486,7 @@ public partial class DeliveryView : UserControl
         {
             if (_attached && owner is Window window)
                 await DialogService.ShowAsync(window, LanguageService.Instance.GetString("NewProject_PickerFailed"),
-                    global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+                    UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
         finally
         {

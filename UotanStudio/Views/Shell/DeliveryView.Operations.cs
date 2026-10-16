@@ -45,7 +45,7 @@ public partial class DeliveryView
             if (_deliveryCancellation is null) await SaveDeliveryAsync(true);
         };
         Composition.OutputRequested += async (_, _) => await RunDeliveryAsync();
-        Composition.OperationFailed += async (_, error) => await ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(error), true);
+        Composition.OperationFailed += async (_, error) => await ShowDeliveryMessageAsync(UserError.Describe(error), true);
         Composition.Model.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(Composition.Model.Status)) ToolTip.SetTip(Composition, Composition.Model.Status);
@@ -101,25 +101,33 @@ public partial class DeliveryView
             QueueDeliveryChange();
             await SaveDeliveryAsync(false);
         }
-        catch (Exception ex) { await ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(ex), true); }
+        catch (Exception ex) { await ShowDeliveryMessageAsync(UserError.Describe(ex), true); }
         finally { _generatingScripts = false; }
     }
 
+    /// <summary>
+    /// Reads the Super geometry from the form. Reading never throws: fields the author has not filled in yet
+    /// fall back to the record defaults, so merely opening a project can capture and persist the panel state.
+    /// Callers that are about to build or generate something validate the plan instead (see <c>DeliveryValidation</c>).
+    /// <para>从表单读取 Super 几何。读取不抛异常：作者尚未填写的字段回退到记录默认值，因此仅打开工程也能捕获并
+    /// 持久化面板状态。真正要构建或生成输出的调用方改为校验计划（见 <c>DeliveryValidation</c>）。</para>
+    /// </summary>
+    /// <returns>The current Super options.<para>当前的 Super 选项。</para></returns>
     private DeliverySuperOptions ReadDeliverySuperOptions()
     {
-        static uint Number(string? text, string name) => uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
-            ? value : throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_InvalidParameter", LanguageService.Instance.GetString(name)));
-        if (!ulong.TryParse(SuperSizeBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var size))
-            throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_InvalidSuperSize"));
+        static uint Number(string? text, uint fallback) => uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+            ? value : fallback;
+        var defaults = new DeliverySuperOptions();
+        _ = ulong.TryParse(SuperSizeBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var size);
         return new()
         {
             Groups = _deliveryGroups,
             DeviceSize = size,
             Group = SuperGroupNameBox.Text?.Trim() ?? "default",
             DeviceName = SuperDeviceNameBox.Text?.Trim() ?? "super",
-            MetadataSize = Number(SuperMetadataSizeBox.Text, "Delivery_MetadataSize"),
-            Slots = Number(SuperMetadataSlotsBox.Text, "Delivery_MetadataSlots"),
-            BlockSize = Number(SuperBlockSizeBox.Text, "Delivery_BlockSize"),
+            MetadataSize = Number(SuperMetadataSizeBox.Text, defaults.MetadataSize),
+            Slots = Number(SuperMetadataSlotsBox.Text, defaults.Slots),
+            BlockSize = Number(SuperBlockSizeBox.Text, defaults.BlockSize),
             Sparse = SuperSparseBox.IsChecked == true,
             VirtualAb = SuperVabBox.IsChecked == true,
             AutoZero = Composition.AutoZero && SuperAOnlyBox.IsChecked != true,
@@ -130,13 +138,22 @@ public partial class DeliveryView
         };
     }
 
+    /// <summary>
+    /// Reads the Payload options from the form. Like the Super reader this is total: an unparsable version
+    /// falls back to the record default so an untouched panel still captures, and the builders re-validate.
+    /// <para>从表单读取 Payload 选项。与 Super 读取一致，本方法不做抛出：无法解析的版本号回退到记录默认值，
+    /// 使未填写的面板仍可被捕获，构建方再行校验。</para>
+    /// </summary>
+    /// <returns>The current Payload options.<para>当前的 Payload 选项。</para></returns>
     private DeliveryPayloadOptions ReadDeliveryPayloadOptions()
     {
-        if (!uint.TryParse(PayloadVersionBox.Text, out var version) || !uint.TryParse(PayloadMinorVersionBox.Text, out var minor))
-            throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_InvalidPayloadVersion"));
+        var defaults = new DeliveryPayloadOptions();
+        _ = uint.TryParse(PayloadVersionBox.Text, out var version);
+        _ = uint.TryParse(PayloadMinorVersionBox.Text, out var minor);
+        if (version == 0) version = defaults.Version;
         return new()
         {
-            BlockSize = uint.TryParse(SuperBlockSizeBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var block) ? block : 0,
+            BlockSize = uint.TryParse(SuperBlockSizeBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var block) ? block : defaults.BlockSize,
             MaxTimestamp = long.TryParse(PayloadTimestampBox.Text, out var timestamp) ? timestamp : -1,
             SecurityPatchLevel = PayloadSecurityPatchBox.Text?.Trim() ?? "",
             Version = version,
@@ -168,7 +185,7 @@ public partial class DeliveryView
             finally { File.Delete(temporary); }
             if (root == _deliveryRoot && PackPayloadBox.IsChecked == true) DynamicPartitionsFileBox.Text = path;
         }
-        catch (Exception ex) { await ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(ex), true); }
+        catch (Exception ex) { await ShowDeliveryMessageAsync(UserError.Describe(ex), true); }
         finally { _generatingDynamicPartitions = false; }
     }
 
@@ -214,6 +231,7 @@ public partial class DeliveryView
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Warn, "Delivery", $"Delivery state capture skipped: {ex.Message}");
+            Composition.Model.Status = UserError.Describe(ex);
             return null;
         }
     }
@@ -249,7 +267,7 @@ public partial class DeliveryView
                             Composition.Model.Status = LanguageService.Instance.GetString("Delivery_EditedScriptsNeedReview");
                 }
             }
-            catch (Exception ex) { Composition.Model.Status = global::UotanStudio.Services.UserError.Describe(ex); }
+            catch (Exception ex) { Composition.Model.Status = UserError.Describe(ex); }
             finally
             {
                 _deliverySaveTimer.Stop();
@@ -285,7 +303,7 @@ public partial class DeliveryView
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Delivery", ex.Message);
-            if (report) await ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(ex), true);
+            if (report) await ShowDeliveryMessageAsync(UserError.Describe(ex), true);
         }
     }
 
@@ -320,7 +338,7 @@ public partial class DeliveryView
             ImageSelection.RestoreAssignedSources(Composition.Model.Container.Concat(Composition.Model.Output)
                 .Where(i => i.FilePath is not null).Select(i => i.FilePath!), GetReadOnlyDeliverySources());
         }
-        catch (Exception ex) { await ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(ex), true); }
+        catch (Exception ex) { await ShowDeliveryMessageAsync(UserError.Describe(ex), true); }
         finally { _restoringDelivery = false; _deliveryRefreshGate.Release(); }
         QueueDeliveryChange();
     }
@@ -451,7 +469,7 @@ public partial class DeliveryView
         catch (Exception ex)
         {
             acceptingProgress = false;
-            await ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(ex), true);
+            await ShowDeliveryMessageAsync(UserError.Describe(ex), true);
         }
         finally
         {

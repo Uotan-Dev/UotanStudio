@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Services;
 using UotanStudio.Services.Keys;
 
@@ -11,7 +12,7 @@ public partial class KeyManagerViewModel : ViewModelBase
 {
     private readonly KeyLibraryService _library;
 
-    private readonly Func<AppSettings> _loadSettings = () => SettingsPersistenceService.Instance.LoadSettings();
+    private readonly Func<AppSettings> _loadSettings = SettingsPersistenceService.Instance.LoadSettings;
     private readonly Func<string, string?, bool> _updateDefaultKeyId = SettingsPersistenceService.Instance.UpdateDefaultKeyId;
 
     private readonly Func<ManagedKeyKind, string?> _runtimeFingerprint = KeyLibraryService.GetRuntimeIdentityFingerprint;
@@ -20,7 +21,7 @@ public partial class KeyManagerViewModel : ViewModelBase
     public int[] PayloadSizes => KindIndex switch
     {
         0 => [2048],
-        1 => [3072],
+        1 => [HdcAuthentication.KeyBits],
         3 => [2048, 4096],
         _ => [2048, 4096],
     };
@@ -199,7 +200,7 @@ public partial class KeyManagerViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsBitsEditable));
         OnPropertyChanged(nameof(IsOutputDirectoryRequired));
         OnPropertyChanged(nameof(PayloadSizes));
-        PayloadBits = value == 1 ? 3072 : 2048;
+        PayloadBits = value == 1 ? HdcAuthentication.KeyBits : 2048;
     }
 
     partial void OnAlgorithmIndexChanged(int value)
@@ -235,7 +236,7 @@ public partial class KeyManagerViewModel : ViewModelBase
         RenameText = value?.Name ?? "";
         PublicKey = "";
         try { if (value is not null) PublicKey = _library.PublicText(value); }
-        catch (Exception ex) { Status = global::UotanStudio.Services.UserError.Describe(ex); }
+        catch (Exception ex) { Status = UserError.Describe(ex); }
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasCertificate));
         OnPropertyChanged(nameof(SelectedPath));
@@ -301,14 +302,14 @@ public partial class KeyManagerViewModel : ViewModelBase
             (int)ManagedKeyKind.Jar => ManagedKeyKind.Jar,
             _ => (ManagedKeyKind)KindIndex,
         };
-        var bits = kind switch { ManagedKeyKind.Adb => 2048, ManagedKeyKind.Hdc => 3072, _ => PayloadBits };
+        var bits = kind switch { ManagedKeyKind.Adb => 2048, _ => PayloadBits };
         return AddAsync(() => _library.Generate(name, kind, bits));
     }
 
     private Task GenerateApkCertificateAsync()
     {
         var name = string.IsNullOrWhiteSpace(CertificateAlias) ? Name : CertificateAlias;
-        var subject = new UotanStudio.Firmware.AndroidMeta.Apk.ApkSigningKeyOptions
+        var subject = new Firmware.AndroidMeta.Apk.ApkSigningKeyOptions
         {
             CommonName = CommonName,
             OrganizationalUnit = OrganizationalUnit,
@@ -318,18 +319,18 @@ public partial class KeyManagerViewModel : ViewModelBase
             Country = CountryCode,
         };
         var keyType = AlgorithmIndex == 1
-            ? UotanStudio.Firmware.AndroidMeta.Apk.ApkSigningKeyType.EcP256
-            : UotanStudio.Firmware.AndroidMeta.Apk.ApkSigningKeyType.Rsa2048;
+            ? Firmware.AndroidMeta.Apk.ApkSigningKeyType.EcP256
+            : Firmware.AndroidMeta.Apk.ApkSigningKeyType.Rsa2048;
 
         var size = SelectedApkKeySize;
         keyType = size switch
         {
-            2048 => UotanStudio.Firmware.AndroidMeta.Apk.ApkSigningKeyType.Rsa2048,
-            3072 => UotanStudio.Firmware.AndroidMeta.Apk.ApkSigningKeyType.Rsa3072,
-            4096 => UotanStudio.Firmware.AndroidMeta.Apk.ApkSigningKeyType.Rsa4096,
-            384 => UotanStudio.Firmware.AndroidMeta.Apk.ApkSigningKeyType.EcP384,
-            521 => UotanStudio.Firmware.AndroidMeta.Apk.ApkSigningKeyType.EcP521,
-            _ => UotanStudio.Firmware.AndroidMeta.Apk.ApkSigningKeyType.EcP256,
+            2048 => Firmware.AndroidMeta.Apk.ApkSigningKeyType.Rsa2048,
+            3072 => Firmware.AndroidMeta.Apk.ApkSigningKeyType.Rsa3072,
+            4096 => Firmware.AndroidMeta.Apk.ApkSigningKeyType.Rsa4096,
+            384 => Firmware.AndroidMeta.Apk.ApkSigningKeyType.EcP384,
+            521 => Firmware.AndroidMeta.Apk.ApkSigningKeyType.EcP521,
+            _ => Firmware.AndroidMeta.Apk.ApkSigningKeyType.EcP256,
         };
         var password = KeystorePassword;
         var validity = ValidityYears;
@@ -436,7 +437,7 @@ public partial class KeyManagerViewModel : ViewModelBase
         IsBusy = true;
         Status = "";
         try { await action(); }
-        catch (Exception ex) { Status = global::UotanStudio.Services.UserError.Describe(ex); }
+        catch (Exception ex) { Status = UserError.Describe(ex); }
         finally { IsBusy = false; }
     }
 }

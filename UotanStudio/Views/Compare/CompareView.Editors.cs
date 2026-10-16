@@ -399,10 +399,10 @@ public partial class CompareView
     }
 
     /// <summary>取差异行底色（主题画刷优先，取不到时用半透明红）。 Resolves the diff-line brush (theme first, translucent red as fallback).</summary>
-    private Avalonia.Media.IBrush ResolveDiffBrush()
-        => this.TryFindResource("DiffBackgroundBrush", out var brush) && brush is Avalonia.Media.IBrush found
+    private IBrush ResolveDiffBrush()
+        => this.TryFindResource("DiffBackgroundBrush", out var brush) && brush is IBrush found
             ? found
-            : new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb(0x40, 0xC4, 0x2B, 0x1C));
+            : new SolidColorBrush(Color.FromArgb(0x40, 0xC4, 0x2B, 0x1C));
 
     /// <summary>
     /// Pre-change handling: an edit that changes the line count (Enter, deleting a line break, multi-line paste, cutting a
@@ -466,7 +466,7 @@ public partial class CompareView
     private void ReportEditorFailure(CompareViewModel vm, Exception ex)
     {
         LogService.Instance.Write(LogLevel.Error, "Compare", ex.ToString());
-        vm.ReportError(global::UotanStudio.Services.UserError.Describe(ex));
+        vm.ReportError(UserError.Describe(ex));
     }
 
     /// <summary>取编辑器光标所在槽号（无光标时为 0）。 Returns the editor's caret slot (0 when there is no caret).</summary>
@@ -637,7 +637,7 @@ public partial class CompareView
     /// whole-row colouring.
     /// <para>差异行整行背景着色器：按行号集合画半透明色块（与行列表期间的整行变色一致）。</para>
     /// </summary>
-    private sealed class CompareLineHighlighter(Avalonia.Media.IBrush brush) : IBackgroundRenderer
+    private sealed class CompareLineHighlighter(IBrush brush) : IBackgroundRenderer
     {
         private HashSet<int> _lines = [];
 

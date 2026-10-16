@@ -15,22 +15,21 @@
                           BasedOn="{StaticResource {x:Type TreeViewItem}}">
                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay, x:DataType=viewmodels:ExplorerNode}" />
                 <Setter Property="ContextMenu">
-                    <ContextMenu x:DataType="viewmodels:ExplorerNode">
+                    <Template><ContextMenu x:DataType="viewmodels:ExplorerNode">
                         <!-- 菜单图标使用菜单自身前景色（单色，与 VS 的命令图标一致）；家族配色只用于左侧树节点。 -->
                         <!-- Menu icons use the menu's own foreground (monochrome, matching VS command icons);
                              the family colours are used by the tree nodes only. -->
-                        <!-- 文件节点右键菜单：打开方式。子项由 OpenAsMenuItem 按 DocumentOpenRegistry 在构造时构建。 -->
-                        <!-- File node open-with menu: children are built by OpenAsMenuItem from DocumentOpenRegistry. -->
-                        <controls:OpenAsMenuItem Classes="open-as"
-                                  Header="{DynamicResource Explorer_OpenAsMenu}"
+                        <!-- 文件节点右键菜单：打开方式。子项由 OpenAsMenuItem 构建，右键时按节点适用性重排。 -->
+                        <!-- File node open-with menu: children are built by OpenAsMenuItem and re-ordered per node on right-click. -->
+                        <controls:OpenAsMenuItem Header="{DynamicResource Explorer_OpenAsMenu}"
                                   IsVisible="{Binding !IsDirectory}">
                             <MenuItem.Icon>
                                 <icons:MaterialIcon Kind="OpenInNew" />
                             </MenuItem.Icon>
                         </controls:OpenAsMenuItem>
-                        <!-- 镜像类文件：格式转换（确认后输出到子项目 output/，进度显示在镜像管理面板） -->
+                        <!-- 可转换的镜像类文件：格式转换（确认后输出到子项目 output/，进度显示在镜像管理面板） -->
                         <MenuItem Header="{DynamicResource Explorer_ConvertFormat}"
-                                  IsVisible="{Binding IsImageFile}">
+                                  IsVisible="{Binding SupportsFormatConversion}">
                             <MenuItem.Icon>
                                 <icons:MaterialIcon Kind="SwapHorizontal" />
                             </MenuItem.Icon>
@@ -70,7 +69,9 @@
                                 </MenuItem.Icon>
                             </MenuItem>
                         </MenuItem>
-                        <Separator />
+                        <!-- 该分隔符只对文件出现：目录下「解包/分卷」整组隐藏，无条件显示会与下一条分隔符首尾相接。 -->
+                        <!-- Shown for files only: with "unpack/split volumes" hidden on directories, an unconditional separator would sit next to the next one. -->
+                        <Separator IsVisible="{Binding !IsDirectory}" />
                         <MenuItem Header="{DynamicResource Explorer_Unpack}" IsVisible="{Binding !IsDirectory}" Click="OnUnpack">
                             <MenuItem.Icon>
                                 <icons:MaterialIcon Kind="PackageDown" />
@@ -129,7 +130,7 @@
                                 <icons:MaterialIcon Kind="Console" />
                             </MenuItem.Icon>
                         </MenuItem>
-                    </ContextMenu>
+                    </ContextMenu></Template>
                 </Setter>
             </ControlTheme>
         </TreeView.ItemContainerTheme>

@@ -36,7 +36,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <para>设备面板单例：顶栏设备选择器与设备面板共享同一实例，
     /// 首次访问时创建并启动设备监视服务（USB 全量扫描 + 热插拔监听）。</para>
     /// </summary>
-    public ViewModels.Devices.DeviceViewModel DeviceVM => ViewModels.Devices.DeviceViewModel.EnsureInstance();
+    public Devices.DeviceViewModel DeviceVM => Devices.DeviceViewModel.EnsureInstance();
 
     /// <summary>
     /// Window title (including the current solution name), updated when a solution is opened or closed.

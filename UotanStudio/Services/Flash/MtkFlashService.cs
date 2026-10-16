@@ -119,7 +119,7 @@ public sealed class MtkFlashPreparation : IMtkFlashPlanPreview
     /// <para>获取会话在发现阶段发布的统一存储能力快照；设备几何漂移时计划执行会拒绝它。</para></summary>
     /// <value>The discovery snapshot, or null when the session reports none.
     /// <para>发现阶段的快照；会话未上报时为 null。</para></value>
-    public UotanStudio.Comm.Protocols.Mtk.Storage.MtkStorageCapabilitySnapshot? StorageCapability =>
+    public Comm.Protocols.Mtk.Storage.MtkStorageCapabilitySnapshot? StorageCapability =>
         _session.StorageCapability;
     /// <summary>Gets the read-only physical operations to preview, excluding sparse holes.
     /// <para>获取待预览的只读物理操作，不含稀疏空洞。</para></summary>

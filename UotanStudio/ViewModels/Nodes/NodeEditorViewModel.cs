@@ -25,15 +25,15 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public Services.Interactions.IWorkflowInteractionService Interactions { get; set; }
         = Services.Interactions.UnsupportedWorkflowInteractionService.Instance;
     /// <summary>Resource scope supplied by the composite editor; ordinary project canvases have no package scope.</summary>
-    public Services.Projects.VisualPluginPackage? ResourcePackage { get; set; }
+    public VisualPluginPackage? ResourcePackage { get; set; }
 
     /// <summary>Host-provided dependency check for the package currently being edited.</summary>
     public Func<IReadOnlyList<string>>? ValidatePackage { get; set; }
     private Point _nextNodeLocation = new(100, 100);
     private static readonly Point DefaultNodeLocation = new(100, 100);
 
-    private readonly ObservableCollection<NodeViewModels.FlowNodeViewModel> _selectedNodes = [];
-    private readonly ObservableCollection<NodeViewModels.BatchNodeInputViewModel> _batchInputs = [];
+    private readonly ObservableCollection<FlowNodeViewModel> _selectedNodes = [];
+    private readonly ObservableCollection<BatchNodeInputViewModel> _batchInputs = [];
 
     /// <summary>Review state for the last patch execution or preview, extracted from the editor shell.</summary>
     public PatchReviewViewModel PatchReview { get; } = new();
@@ -67,13 +67,13 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// Unified log service instance, shared between the node editor and the execution engine.
     /// <para>统一日志服务实例，节点编辑器与执行引擎共享。</para>
     /// </summary>
-    private readonly Services.LogService _log = Services.LogService.Instance;
+    private readonly LogService _log = LogService.Instance;
 
     /// <summary>
     /// Node workflow execution engine instance, lazily constructed on demand.
     /// <para>节点工作流执行引擎实例，按需懒构造。</para>
     /// </summary>
-    private Services.Execution.NodeExecutionEngine? _engine;
+    private NodeExecutionEngine? _engine;
 
     /// <summary>
     /// Cancellation token source for execution.
@@ -91,7 +91,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// Gets or sets the collection of nodes on the canvas.
     /// <para>获取或设置画布上的节点集合。</para>
     /// </summary>
-    public ObservableCollection<NodeViewModels.FlowNodeViewModel> Nodes
+    public ObservableCollection<FlowNodeViewModel> Nodes
     {
         get;
         set
@@ -115,7 +115,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// Gets or sets the collection of connections between nodes.
     /// <para>获取或设置节点间的连接线集合。</para>
     /// </summary>
-    public ObservableCollection<NodeViewModels.NodeConnectionViewModel> Connections
+    public ObservableCollection<NodeConnectionViewModel> Connections
     {
         get;
         set
@@ -254,7 +254,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// Gets or sets the currently selected node, bound to the properties panel.
     /// <para>获取或设置当前选中的节点，绑定到属性面板。</para>
     /// </summary>
-    public NodeViewModels.FlowNodeViewModel? SelectedNode
+    public FlowNodeViewModel? SelectedNode
     {
         get => field;
         set
@@ -378,12 +378,12 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     {
         PluginWorkspace = new VisualPluginWorkspaceViewModel(showVisualPluginWorkspace);
         PatchReview.PropertyChanged += (_, args) => OnPropertyChanged(args.PropertyName);
-        SelectedNodes = new ReadOnlyObservableCollection<NodeViewModels.FlowNodeViewModel>(_selectedNodes);
+        SelectedNodes = new ReadOnlyObservableCollection<FlowNodeViewModel>(_selectedNodes);
         _draftDocument = new NodeProjectDocument(string.Empty, Nodes, Connections);
         _activeDocument = _draftDocument;
         Connections.CollectionChanged += OnConnectionsChanged;
         Nodes.CollectionChanged += OnNodesChanged;
-        BatchInputs = new ReadOnlyObservableCollection<NodeViewModels.BatchNodeInputViewModel>(_batchInputs);
+        BatchInputs = new ReadOnlyObservableCollection<BatchNodeInputViewModel>(_batchInputs);
         InitializeToolbox();
         PendingConnection = new PendingConnectionViewModel(this);
         RefreshVisibleToolbox();
@@ -503,7 +503,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// The command to execute.
     /// <para>要执行的命令。</para>
     /// </param>
-    private void ExecuteCommand(NodeViewModels.EditorCommands.IEditorCommand command)
+    private void ExecuteCommand(IEditorCommand command)
     {
         if (IsExecuting)
         {
@@ -601,7 +601,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// The command to execute.
     /// <para>要执行的命令。</para>
     /// </param>
-    public void Record(NodeViewModels.EditorCommands.IEditorCommand command)
+    public void Record(IEditorCommand command)
     {
         ExecuteCommand(command);
     }
@@ -653,7 +653,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     private static WorkflowSnapshot? _clipboard;
     private int _pasteCount;
 
-    private void AttachNodePropertyTracking(NodeViewModels.FlowNodeViewModel node)
+    private void AttachNodePropertyTracking(FlowNodeViewModel node)
     {
         AttachPropertyTracking(node);
         foreach (var connector in node.Input.Concat(node.Output))
@@ -664,10 +664,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>Gets the nodes currently selected on the canvas.</summary>
-    public ReadOnlyObservableCollection<NodeViewModels.FlowNodeViewModel> SelectedNodes { get; }
+    public ReadOnlyObservableCollection<FlowNodeViewModel> SelectedNodes { get; }
 
     /// <summary>Gets the shared input properties for a multi-node selection.</summary>
-    public ReadOnlyObservableCollection<NodeViewModels.BatchNodeInputViewModel> BatchInputs { get; }
+    public ReadOnlyObservableCollection<BatchNodeInputViewModel> BatchInputs { get; }
 
     /// <summary>Gets the number of selected nodes.</summary>
     public int SelectedNodeCount => _selectedNodes.Count;
@@ -726,14 +726,14 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             value, nameof(BatchSelectedImage));
     }
 
-    private string CommonSelectionValue(Func<IEnumerable<NodeViewModels.FlowNodeViewModel>, IEnumerable<string?>> selector)
+    private string CommonSelectionValue(Func<IEnumerable<FlowNodeViewModel>, IEnumerable<string?>> selector)
     {
         if (_selectedNodes.Count == 0) return string.Empty;
         var values = selector(_selectedNodes).Distinct(StringComparer.Ordinal).ToList();
         return values.Count == 1 ? values[0] ?? string.Empty : string.Empty;
     }
 
-    private string CommonSelectionDisplay(Func<IEnumerable<NodeViewModels.FlowNodeViewModel>, IEnumerable<string?>> selector)
+    private string CommonSelectionDisplay(Func<IEnumerable<FlowNodeViewModel>, IEnumerable<string?>> selector)
     {
         if (_selectedNodes.Count == 0) return string.Empty;
         var values = selector(_selectedNodes).Distinct(StringComparer.Ordinal).ToList();
@@ -743,8 +743,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     private void ApplyBatchNodeProperty(
-        Func<NodeViewModels.FlowNodeViewModel, string> getter,
-        Action<NodeViewModels.FlowNodeViewModel, string> setter,
+        Func<FlowNodeViewModel, string> getter,
+        Action<FlowNodeViewModel, string> setter,
         string value,
         string propertyName)
     {
@@ -779,8 +779,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// Synchronizes the canvas selection with the ViewModel. The first item is kept as the primary
     /// selection for status text, while all selected nodes remain available to the batch panel.
     /// </summary>
-    public void SetSelection(IEnumerable<NodeViewModels.FlowNodeViewModel> nodes,
-        NodeViewModels.FlowNodeViewModel? primary = null)
+    public void SetSelection(IEnumerable<FlowNodeViewModel> nodes,
+        FlowNodeViewModel? primary = null)
     {
         ArgumentNullException.ThrowIfNull(nodes);
         if (_selectedConnection is not null) SelectConnection(null);
@@ -895,18 +895,18 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private static IEnumerable<string> TrackedProperties(object target) => target switch
     {
-        NodeViewModels.FlowNodeViewModel => ["NodeValueType", "NodeValue", "SelectedImage", "CustomName"],
-        NodeViewModels.NodeConnectorViewModel => ["InitialValue"],
+        FlowNodeViewModel => ["NodeValueType", "NodeValue", "SelectedImage", "CustomName"],
+        NodeConnectorViewModel => ["InitialValue"],
         _ => []
     };
 
     private static object? ReadTrackedValue(object target, string property) => (target, property) switch
     {
-        (NodeViewModels.FlowNodeViewModel node, "NodeValueType") => node.NodeValueType,
-        (NodeViewModels.FlowNodeViewModel node, "NodeValue") => node.NodeValue,
-        (NodeViewModels.FlowNodeViewModel node, "SelectedImage") => node.SelectedImage,
-        (NodeViewModels.FlowNodeViewModel node, "CustomName") => node.CustomName,
-        (NodeViewModels.NodeConnectorViewModel connector, "InitialValue") => connector.InitialValue,
+        (FlowNodeViewModel node, "NodeValueType") => node.NodeValueType,
+        (FlowNodeViewModel node, "NodeValue") => node.NodeValue,
+        (FlowNodeViewModel node, "SelectedImage") => node.SelectedImage,
+        (FlowNodeViewModel node, "CustomName") => node.CustomName,
+        (NodeConnectorViewModel connector, "InitialValue") => connector.InitialValue,
         _ => null
     };
 
@@ -914,19 +914,19 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     {
         switch (target, property)
         {
-            case (NodeViewModels.FlowNodeViewModel node, "NodeValueType"):
+            case (FlowNodeViewModel node, "NodeValueType"):
                 node.NodeValueType = value as string ?? "Text";
                 break;
-            case (NodeViewModels.FlowNodeViewModel node, "NodeValue"):
+            case (FlowNodeViewModel node, "NodeValue"):
                 node.NodeValue = value as string ?? string.Empty;
                 break;
-            case (NodeViewModels.FlowNodeViewModel node, "SelectedImage"):
+            case (FlowNodeViewModel node, "SelectedImage"):
                 node.SelectedImage = value as string ?? string.Empty;
                 break;
-            case (NodeViewModels.FlowNodeViewModel node, "CustomName"):
+            case (FlowNodeViewModel node, "CustomName"):
                 node.CustomName = value as string ?? string.Empty;
                 break;
-            case (NodeViewModels.NodeConnectorViewModel connector, "InitialValue"):
+            case (NodeConnectorViewModel connector, "InitialValue"):
                 connector.InitialValue = value;
                 break;
         }
@@ -974,7 +974,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// The node to add.
     /// <para>要添加的节点。</para>
     /// </param>
-    public void AddNode(NodeViewModels.FlowNodeViewModel node, bool preserveLocation = false)
+    public void AddNode(FlowNodeViewModel node, bool preserveLocation = false)
     {
         if (IsExecuting)
         {
@@ -986,7 +986,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             _nextNodeLocation = new Point(_nextNodeLocation.X + 40, _nextNodeLocation.Y + 40);
         }
 
-        ExecuteCommand(new NodeViewModels.EditorCommands.AddNodeCommand(Nodes, Connections, node));
+        ExecuteCommand(new AddNodeCommand(Nodes, Connections, node));
         AttachNodePropertyTracking(node);
     }
 
@@ -1002,7 +1002,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// The target connector (input port).
     /// <para>目标连接器（输入端口）。</para>
     /// </param>
-    public void CreateConnection(NodeViewModels.NodeConnectorViewModel source, NodeViewModels.NodeConnectorViewModel target)
+    public void CreateConnection(NodeConnectorViewModel source, NodeConnectorViewModel target)
     {
         if (IsExecuting)
         {
@@ -1087,10 +1087,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         if (toDelete.Count == 0) return;
 
         var commands = toDelete
-            .Select(n => (NodeViewModels.EditorCommands.IEditorCommand)new NodeViewModels.EditorCommands.RemoveNodeCommand(Nodes, Connections, n))
+            .Select(n => (IEditorCommand)new RemoveNodeCommand(Nodes, Connections, n))
             .ToList();
 
-        ExecuteCommand(new NodeViewModels.EditorCommands.CompoundCommand(commands));
+        ExecuteCommand(new CompoundCommand(commands));
         SetSelection([]);
     }
 
@@ -1102,7 +1102,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// The node to select; <c>null</c> clears the selection.
     /// <para>要选中的节点；<c>null</c> 表示清空选择。</para>
     /// </param>
-    public void SelectNode(NodeViewModels.FlowNodeViewModel? node)
+    public void SelectNode(FlowNodeViewModel? node)
     {
         SetSelection(node is null ? [] : [node], node);
     }
@@ -1216,7 +1216,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             _log.Write(LogLevel.Error, "NodeEditor", $"Run failed: {ex.Message}");
-            ExecutionStatus = global::UotanStudio.Services.UserError.Describe(ex, "UserError_RunFailed");
+            ExecutionStatus = UserError.Describe(ex, "UserError_RunFailed");
             AppendExecutionLog(ExecutionStatus);
             IsExecutionLogExpanded = true;
         }
@@ -1370,7 +1370,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// Finds the node instance ID that owns the specified connector. Returns <c>null</c> if no match.
     /// <para>查找拥有指定连接器的节点实例 ID。若无匹配则返回 <c>null</c>。</para>
     /// </summary>
-    private string? FindOwnerInstanceId(NodeViewModels.NodeConnectorViewModel connector)
+    private string? FindOwnerInstanceId(NodeConnectorViewModel connector)
     {
         foreach (var node in Nodes)
         {
@@ -1396,7 +1396,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// The connector to disconnect.
     /// </param>
     [RelayCommand]
-    private void DisconnectConnector(NodeViewModels.NodeConnectorViewModel? connector)
+    private void DisconnectConnector(NodeConnectorViewModel? connector)
     {
         if (connector == null) return;
         var related = Connections
@@ -1405,17 +1405,17 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         if (related.Count == 0) return;
 
         var commands = related
-            .Select(c => (NodeViewModels.EditorCommands.IEditorCommand)new NodeViewModels.EditorCommands.RemoveConnectionCommand(Connections, c))
+            .Select(c => (IEditorCommand)new RemoveConnectionCommand(Connections, c))
             .ToList();
-        ExecuteCommand(new NodeViewModels.EditorCommands.CompoundCommand(commands));
+        ExecuteCommand(new CompoundCommand(commands));
     }
 
     /// <summary>Removes one canvas connection through the undoable editor command stack.</summary>
     [RelayCommand]
-    private void RemoveConnection(NodeViewModels.NodeConnectionViewModel? connection)
+    private void RemoveConnection(NodeConnectionViewModel? connection)
     {
         if (connection is null || !Connections.Contains(connection)) return;
-        ExecuteCommand(new NodeViewModels.EditorCommands.RemoveConnectionCommand(Connections, connection));
+        ExecuteCommand(new RemoveConnectionCommand(Connections, connection));
     }
 
     /// <summary>
@@ -1430,7 +1430,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// A task representing the async operation.
     /// <para>表示异步操作的任务。</para>
     /// </returns>
-    public Task LoadFromAsync(Services.Projects.WorkflowSnapshot snapshot)
+    public Task LoadFromAsync(WorkflowSnapshot snapshot)
     {
         EnsureEditable();
         var graph = BuildEditableGraph(snapshot, restoreInstanceIds: true);
@@ -1452,11 +1452,11 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>Appends a portable workflow template as one undoable canvas edit.</summary>
-    public void ImportTemplate(Services.Projects.VisualPluginPackage package)
+    public void ImportTemplate(VisualPluginPackage package)
     {
         EnsureEditable();
         ArgumentNullException.ThrowIfNull(package);
-        if (package.Kind != Services.Projects.VisualPluginKind.WorkflowTemplate)
+        if (package.Kind != VisualPluginKind.WorkflowTemplate)
             throw new InvalidDataException("Only workflow-template packages can be imported into the canvas.");
 
         var errors = VisualPluginValidation.Validate(package);
@@ -1513,9 +1513,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>Captures the current canvas as a portable visual-plugin package.</summary>
-    public Services.Projects.VisualPluginPackage CreateVisualPluginPackage(
-        string name, string id, Services.Projects.VisualPluginKind kind, string author = "")
-        => Services.VisualPlugins.VisualPluginPackageBuilder.Create(name, id, kind, Nodes, Connections, author);
+    public VisualPluginPackage CreateVisualPluginPackage(
+        string name, string id, VisualPluginKind kind, string author = "")
+        => VisualPluginPackageBuilder.Create(name, id, kind, Nodes, Connections, author);
 
     public void Dispose()
     {

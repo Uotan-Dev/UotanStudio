@@ -144,7 +144,7 @@ public sealed class DeliveryProjectSettingsTests(NodeEditorUiFixture fixture) : 
                 view.FindName<CheckBox>("UseProjectSuperSettingsBox").IsChecked = true;
 
                 Assert.Null(view.FindName<ComboBox>("SuperSettingsProjectBox").SelectedItem);
-                Assert.Equal(global::UotanStudio.Services.LanguageService.Instance.GetString("Delivery_NoProjectSourceSettings"),
+                Assert.Equal(UotanStudio.Services.LanguageService.Instance.GetString("Delivery_NoProjectSourceSettings"),
                     view.FindName<UotanStudio.Views.Controls.DeliveryCompositionView>("Composition").Model.Status);
                 Assert.False(view.FindName<CheckBox>("UseProjectSuperSettingsBox").IsChecked);
                 Assert.True(view.FindName<StackPanel>("SuperSizeField").IsEnabled);
@@ -190,6 +190,31 @@ public sealed class DeliveryProjectSettingsTests(NodeEditorUiFixture fixture) : 
                 Assert.True(view.FindName<StackPanel>("SuperDeviceTypeOptions").IsEnabled);
                 Assert.False(view.FindName<StackPanel>("SuperMetadataSizeField").IsEnabled);
                 Assert.Equal("65536", view.FindName<TextBox>("SuperMetadataSizeBox").Text);
+                return Task.CompletedTask;
+            }, TestContext.Current.CancellationToken);
+        }
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task UntouchedDeliveryPanel_CapturesPlanWithRecordDefaults()
+    {
+        using var temp = new TempDirectory();
+        OpenProject(temp.Path, null);
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(() =>
+            {
+                var view = new DeliveryView();
+                var plan = view.CaptureDeliveryPlan();
+                Assert.Equal(0UL, plan.Super.DeviceSize);
+                Assert.Equal((uint)65536, plan.Super.MetadataSize);
+                Assert.Equal((uint)3, plan.Super.Slots);
+                Assert.Equal((uint)4096, plan.Super.BlockSize);
+                Assert.Equal((uint)2, plan.Payload.Version);
+                var captured = DeliveryPlanStore.CaptureElement(temp.Path, plan);
+                Assert.Equal(JsonValueKind.Object, captured.ValueKind);
                 return Task.CompletedTask;
             }, TestContext.Current.CancellationToken);
         }

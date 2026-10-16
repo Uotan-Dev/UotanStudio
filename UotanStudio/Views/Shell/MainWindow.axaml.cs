@@ -3,13 +3,9 @@ using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Input;
 using Avalonia.Styling;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Shell;
-#if DEBUG
-using Dock.Avalonia.Diagnostics;
-#endif
 
 namespace UotanStudio.Views.Shell;
 
@@ -22,9 +18,6 @@ public partial class MainWindow : Window
     private ObservableCollection<DeviceInfo>? _selectorDevices;
     private readonly List<MenuItem> _selectorDeviceItems = [];
     private readonly MainWindowNativeMenu? _nativeMenu;
-#if DEBUG
-    private IDisposable? _dockDebugOverlay;
-#endif
 
     public MainWindow() : this(new MainViewModel()) { }
 
@@ -63,19 +56,12 @@ public partial class MainWindow : Window
                 _selectorDevices.CollectionChanged -= OnSelectorDevicesChanged;
             try { _ownedViewModel.Dispose(); }
             catch (Exception ex) { Services.LogService.Instance.Write(Services.LogLevel.Error, "Lifecycle", ex.Message); }
-#if DEBUG
-            _dockDebugOverlay?.Dispose();
-            _dockDebugOverlay = null;
-#endif
         };
         Closing += MainWindow_Closing;
         Opened += (_, _) =>
         {
             if (DataContext is MainViewModel viewModel) _sessionInitialization = viewModel.InitializeAutoSaveAsync();
         };
-#if DEBUG
-        Opened += MainWindow_Opened;
-#endif
     }
 
     private void CloseChildWindows()
@@ -144,13 +130,6 @@ public partial class MainWindow : Window
         }
     }
 
-#if DEBUG
-    private void MainWindow_Opened(object? sender, EventArgs e)
-    {
-        _dockDebugOverlay?.Dispose();
-        _dockDebugOverlay = this.AttachDockDebugOverlay(new KeyGesture(Key.F9));
-    }
-#endif
 
     private async void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {

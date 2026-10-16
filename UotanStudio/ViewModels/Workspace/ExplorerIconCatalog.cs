@@ -18,26 +18,20 @@ public static class ExplorerIconCatalog
 {
     /// <summary>
     /// Extensions of image files (partition and raw images). OTA artifacts (<c>.dat</c>) and compressed
-    /// streams (<c>.br</c>) are excluded: they share the disk icon but are not conversion inputs.
+    /// streams (<c>.br</c>) are excluded: they share the disk icon but are not conversion inputs. Optical-disc
+    /// images stay in this glyph family even though they are not conversion inputs, because the two questions
+    /// are answered by different owners: this table picks the glyph, <see cref="Services.Firmware.ImageInputService"/>
+    /// decides conversion scope.
     /// <para>镜像类文件的扩展名（分区镜像与裸镜像）。不含 OTA 产物 <c>.dat</c> 与压缩流 <c>.br</c>：
-    /// 它们与镜像共用磁盘图标，但不是「格式转换」的输入。</para>
+    /// 它们与镜像共用磁盘图标，但不是「格式转换」的输入。光盘镜像保留在本字形家族内，即使它不是转换输入，
+    /// 因为这两个问题由不同所有者回答：本表只决定字形，转换范围由
+    /// <see cref="Services.Firmware.ImageInputService"/> 判定。</para>
     /// </summary>
     private static readonly FrozenSet<string> ImageFileExtensions =
         new HashSet<string>(StringComparer.Ordinal)
         {
             ".img", ".raw", ".bin", ".simg", ".sparse", ".super", ".image", ".iso"
         }.ToFrozenSet(StringComparer.Ordinal);
-
-    /// <summary>
-    /// Determines whether the path is an image file (the extension table is shared with the icon
-    /// mapping instead of being written twice).
-    /// <para>判断路径是否为镜像类文件（扩展名表与图标映射共享，避免两处各写一份）。</para>
-    /// </summary>
-    /// <param name="path">The file path. <para>文件路径。</para></param>
-    /// <returns>True for an image extension. <para>是镜像扩展名时返回 true。</para></returns>
-    public static bool IsImageExtension(string path)
-        => !string.IsNullOrEmpty(path) &&
-            ImageFileExtensions.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant());
 
     /// <summary>
     /// Resolves a node icon: placeholder nodes and unknown extensions use the generic file glyph,
@@ -70,7 +64,7 @@ public static class ExplorerIconCatalog
             return new(MaterialIconKind.FileArrowUpDownOutline, ExplorerIconPalette.Image);
         }
 
-        var extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
+        var extension = Path.GetExtension(path).ToLowerInvariant();
 
         if (ImageFileExtensions.Contains(extension))
         {

@@ -5,6 +5,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
@@ -67,9 +68,9 @@ public partial class ProjectExplorerView : UserControl
         if (!node.IsDirectory)
         {
 
-            if (string.Equals(System.IO.Path.GetExtension(node.Path), ".uotannode", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(Path.GetExtension(node.Path), ".uotannode", StringComparison.OrdinalIgnoreCase))
                 WeakReferenceMessenger.Default.Send(new OpenNodeProjectRequestMessage(
-                    System.IO.Path.GetFileNameWithoutExtension(node.Path)));
+                    Path.GetFileNameWithoutExtension(node.Path)));
             else
                 WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(node.Path));
         }
@@ -83,27 +84,27 @@ public partial class ProjectExplorerView : UserControl
     private static void OpenProjectFileForFolder(ExplorerNode node)
     {
 
-        if (System.IO.Directory.Exists(node.Path))
+        if (Directory.Exists(node.Path))
         {
-            foreach (var f in System.IO.Directory.EnumerateFiles(node.Path, "*.uotanfw"))
+            foreach (var f in Directory.EnumerateFiles(node.Path, "*.uotanfw"))
             {
                 WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(f));
                 return;
             }
         }
 
-        foreach (var f in System.IO.Directory.EnumerateFiles(node.Path, "*.uotan"))
+        foreach (var f in Directory.EnumerateFiles(node.Path, "*.uotan"))
         {
             WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(f));
             return;
         }
 
-        var parentDir = System.IO.Path.GetDirectoryName(node.Path);
+        var parentDir = Path.GetDirectoryName(node.Path);
         if (parentDir is not null)
         {
-            foreach (var f in System.IO.Directory.EnumerateFiles(parentDir, "*.uotan"))
+            foreach (var f in Directory.EnumerateFiles(parentDir, "*.uotan"))
             {
-                if (System.IO.File.Exists(f))
+                if (File.Exists(f))
                 {
                     WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(f));
                     return;
@@ -114,12 +115,51 @@ public partial class ProjectExplorerView : UserControl
 
     private void OnTreePointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (e.GetCurrentPoint(ProjectTree).Properties.PointerUpdateKind == PointerUpdateKind.RightButtonPressed &&
-            e.Source is Control { DataContext: ExplorerNode node })
+        if (e.GetCurrentPoint(ProjectTree).Properties.PointerUpdateKind != PointerUpdateKind.RightButtonPressed ||
+            e.Source is not Control { DataContext: ExplorerNode node } source)
         {
-            ProjectTree.SelectedItem = node;
+            return;
         }
+
+        ProjectTree.SelectedItem = node;
+        if (FindOwningContextMenu(source) is not { } menu)
+        {
+            return;
+        }
+
+        menu.DataContext = node;
+        FindOpenAsMenuItem(menu)?.RefreshFor(node);
     }
+
+    /// <summary>
+    /// Walks the visual parent chain for the nearest context menu owner. The right-click lands on the row's
+    /// icon or text, whose own ContextMenu is null, so the menu attached to the TreeViewItem has to be found.
+    /// <para>沿可视父链查找最近的右键菜单所有者。右键落在行内图标或文字上，这些控件自身的 ContextMenu 为空，
+    /// 因此必须上溯到 TreeViewItem 上挂载的菜单。</para>
+    /// </summary>
+    /// <param name="source">The right-clicked element. <para>被右键的元素。</para></param>
+    /// <returns>The owning context menu, or null when the source is not inside a menu owner. <para>所属右键菜单；元素不在菜单所有者内时为 null。</para></returns>
+    internal static ContextMenu? FindOwningContextMenu(Visual? source)
+    {
+        for (var current = source; current is not null; current = current.GetVisualParent())
+        {
+            if (current is Control { ContextMenu: { } menu })
+            {
+                return menu;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds the explorer's open-as entry inside a context menu.
+    /// <para>在右键菜单中查找资源管理器的「打开方式」入口。</para>
+    /// </summary>
+    /// <param name="menu">The context menu to search. <para>待搜索的右键菜单。</para></param>
+    /// <returns>The open-as entry, or null when the menu carries none. <para>「打开方式」入口；菜单不含它时为 null。</para></returns>
+    internal static OpenAsMenuItem? FindOpenAsMenuItem(ContextMenu? menu)
+        => menu?.Items.OfType<OpenAsMenuItem>().FirstOrDefault();
 
     /// <summary>
     /// Sparse conversion: converts between raw and sparse images in either direction; the source file type
@@ -162,13 +202,13 @@ public partial class ProjectExplorerView : UserControl
 
             await ImageViewModel.Instance.RunExplorerFormatConversionAsync(node.Path, direction);
             await DialogService.ShowAsync(owner, language.GetString("Image_ConvertTitle"),
-                ImageViewModel.Instance.StatusText, Ursa.Controls.MessageBoxIcon.Information);
+                ImageViewModel.Instance.StatusText, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Explorer", ex.Message);
-            await DialogService.ShowAsync(owner, language.GetString("Image_ConvertTitle"), global::UotanStudio.Services.UserError.Describe(ex),
-                Ursa.Controls.MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, language.GetString("Image_ConvertTitle"), UserError.Describe(ex),
+                MessageBoxIcon.Error);
         }
     }
 
@@ -260,7 +300,7 @@ public partial class ProjectExplorerView : UserControl
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Explorer", $"Rename failed: {ex.Message}");
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_RenameFailed"), global::UotanStudio.Services.UserError.Describe(ex), MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_RenameFailed"), UserError.Describe(ex), MessageBoxIcon.Error);
         }
     }
 
@@ -302,7 +342,7 @@ public partial class ProjectExplorerView : UserControl
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Explorer", $"Delete failed: {ex.Message}");
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_DeleteFailed"), global::UotanStudio.Services.UserError.Describe(ex), MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_DeleteFailed"), UserError.Describe(ex), MessageBoxIcon.Error);
         }
     }
 
@@ -359,7 +399,7 @@ public partial class ProjectExplorerView : UserControl
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Explorer", ex.Message);
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Paste"), global::UotanStudio.Services.UserError.Describe(ex), MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Paste"), UserError.Describe(ex), MessageBoxIcon.Error);
         }
     }
 

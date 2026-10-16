@@ -37,4 +37,8 @@ internal sealed record DocumentOpenRequest
     /// <summary>The format detection result resolved in automatic mode, reused to avoid re-probing. <para>自动模式下已完成的格式检测结果，避免二次探测。</para></summary>
     /// <value>The detection result to reuse, or null. <para>待复用的检测结果，或为 null。</para></value>
     public FormatDetectionResult? Detection { get; init; }
+
+    /// <summary>The already-read file header, so several routing probes in one pass share a single read. <para>已读取的文件头，使一次遍历中的多条路由谓词共用一次读取。</para></summary>
+    /// <value>The header bytes, or null to read them from disk. <para>文件头字节；为 null 时从磁盘读取。</para></value>
+    public byte[]? Header { get; init; }
 }

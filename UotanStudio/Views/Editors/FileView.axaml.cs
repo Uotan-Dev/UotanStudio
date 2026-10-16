@@ -34,7 +34,7 @@ public partial class FileView : UserControl
     private void UpdateEditorOwner(bool detach = false)
         => _editorOwner.Update(!detach && IsLoaded ? DataContext as FileViewModel : null, this.FindControl<AvaloniaEdit.TextEditor>("Editor"));
 
-    private void OnHexBytesEdited(object? sender, System.EventArgs e)
+    private void OnHexBytesEdited(object? sender, EventArgs e)
     {
         if (DataContext is FileViewModel vm)
         {

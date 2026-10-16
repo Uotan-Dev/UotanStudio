@@ -12,7 +12,7 @@ using Xunit;
 namespace UotanStudio.Tests.Services;
 
 [Collection("Node editor UI")]
-public sealed class NodeFactoryRegistrarTests(UotanStudio.Tests.Views.NodeEditorUiFixture fixture)
+public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
 {
     [Fact]
     public void FacadeAndRegistry_PublishSameSnapshot()

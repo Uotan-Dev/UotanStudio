@@ -143,7 +143,7 @@ public partial class DeliveryCompositionView : UserControl
     {
         if (!_packImages || !_outputToDirectory || Model.Confirmed) return;
         try { Model.Confirm(ReadPlan()); }
-        catch (Exception ex) { Model.Status = global::UotanStudio.Services.UserError.Describe(ex); OperationFailed?.Invoke(this, ex); }
+        catch (Exception ex) { Model.Status = Services.UserError.Describe(ex); OperationFailed?.Invoke(this, ex); }
         UpdateInteractionState();
     }
 
@@ -203,7 +203,7 @@ public partial class DeliveryCompositionView : UserControl
     private void UpdateAddPartitionButton() => AddZeroPartitionButton.IsEnabled =
         !IsPayload && !_isAOnly && AutoZeroPartitionsBox.IsChecked != true && CanAddPartition(ZeroPartitionNameBox.Text?.Trim() ?? string.Empty);
 
-    private void OnAddZeroPartitionClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    private void OnAddZeroPartitionClick(object? sender, RoutedEventArgs e)
     {
         var name = ZeroPartitionNameBox.Text?.Trim() ?? string.Empty;
         if (IsPayload || _isAOnly || AutoZeroPartitionsBox.IsChecked == true || !CanAddPartition(name)) return;
@@ -215,7 +215,7 @@ public partial class DeliveryCompositionView : UserControl
         UpdateEmptyState();
     }
 
-    private void OnRemoveZeroPartitionClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    private void OnRemoveZeroPartitionClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Control { DataContext: DeliveryImageItem { IsZeroSize: true } item })
         {

@@ -24,7 +24,7 @@ public sealed class KeyLibraryTests : IDisposable
         using (var privateKey = KeyLibraryService.LoadPrivateKey(library.PrivatePath(key)))
             Assert.Equal(privateKey.ExportSubjectPublicKeyInfo(), publicKey!.ExportSubjectPublicKeyInfo());
         File.Delete(library.CertificatePath(key));
-        var model = new UotanStudio.ViewModels.Shell.KeyManagerViewModel(library);
+        var model = new ViewModels.Shell.KeyManagerViewModel(library);
         var changed = new List<string?>();
         model.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
         model.SelectedKey = key;
@@ -59,12 +59,13 @@ public sealed class KeyLibraryTests : IDisposable
             var encoded = library.PublicText(key);
             Assert.DoesNotContain('\0', encoded);
             var wire = Convert.FromBase64String(encoded.Split(' ')[0]);
-            Assert.Equal(524, wire.Length);
-            Assert.Equal(64u, BinaryPrimitives.ReadUInt32LittleEndian(wire));
-            var modulus = wire[8..264];
+            const int words = 64;
+            Assert.Equal(12 + (8 * words), wire.Length);
+            Assert.Equal((uint)words, BinaryPrimitives.ReadUInt32LittleEndian(wire));
+            var modulus = wire[8..(8 + (4 * words))];
             Array.Reverse(modulus);
             publicKey.ImportParameters(new RSAParameters { Modulus = modulus, Exponent = [1, 0, 1] });
-            Assert.Equal(65537u, BinaryPrimitives.ReadUInt32LittleEndian(wire.AsSpan(520)));
+            Assert.Equal(65537u, BinaryPrimitives.ReadUInt32LittleEndian(wire.AsSpan(wire.Length - 4)));
         }
         else publicKey.ImportFromPem(library.PublicText(key));
         var data = RandomNumberGenerator.GetBytes(32);
@@ -160,7 +161,7 @@ public sealed class KeyLibraryTests : IDisposable
         var first = library.Generate("first", ManagedKeyKind.Payload, 2048);
         var second = library.Generate("second", ManagedKeyKind.Adb, 2048);
         var exported = library.Export(first, _root, true);
-        var model = new UotanStudio.ViewModels.Shell.KeyManagerViewModel(library);
+        var model = new ViewModels.Shell.KeyManagerViewModel(library);
         await model.RefreshCommand.ExecuteAsync(null);
         model.SelectedKey = first;
         await model.DeleteCommand.ExecuteAsync(null);

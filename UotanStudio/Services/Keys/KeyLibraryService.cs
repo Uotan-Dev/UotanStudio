@@ -257,7 +257,7 @@ public sealed class KeyLibraryService
                 throw new InvalidDataException("不支持的私钥 PEM 格式。");
             }
 
-            int read = 0;
+            var read = 0;
             var derRsa = RSA.Create();
             if (TryImport(() => derRsa.ImportPkcs8PrivateKey(bytes, out read))
                 || TryImport(() => derRsa.ImportRSAPrivateKey(bytes, out read)))
@@ -491,7 +491,7 @@ public sealed class KeyLibraryService
             return "SHA256:" + Convert.ToHexString(Sha256.ComputeHash(rsa.ExportSubjectPublicKeyInfo()));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
-                or System.Security.Cryptography.CryptographicException or InvalidDataException)
+                or CryptographicException or InvalidDataException)
         {
             return null;
         }
@@ -531,8 +531,10 @@ public sealed class KeyLibraryService
     {
         if (key.Kind is not (ManagedKeyKind.Adb or ManagedKeyKind.Hdc))
             throw new InvalidOperationException("仅 ADB/HDC 密钥可以发布为运行时身份。");
-        var requiredBits = key.Kind == ManagedKeyKind.Adb ? 2048 : 3072;
-        if (key.Bits != requiredBits) throw new InvalidDataException("密钥位数与用途不匹配。");
+        var acceptedBits = key.Kind == ManagedKeyKind.Adb
+            ? (IReadOnlyList<int>)[2048]
+            : HdcAuthentication.SupportedKeyBits;
+        if (!acceptedBits.Contains(key.Bits)) throw new InvalidDataException("密钥位数与用途不匹配。");
         var source = PrivatePath(key);
         var publicKey = source + ".pub";
         if (!File.Exists(publicKey)) throw new InvalidDataException("缺少公钥文件，无法发布。");
@@ -546,7 +548,7 @@ public sealed class KeyLibraryService
         {
             using (var rsa = LoadPrivateKey(source))
             {
-                if (rsa.KeySize != requiredBits) throw new InvalidDataException("密钥位数与用途不匹配。");
+                if (!acceptedBits.Contains(rsa.KeySize)) throw new InvalidDataException("密钥位数与用途不匹配。");
             }
             var publicBytes = ReadBounded(publicKey);
             try
@@ -578,9 +580,13 @@ public sealed class KeyLibraryService
         try
         {
             var path = Path.Combine(staging, PrivateName(kind));
-            var privateText = kind is ManagedKeyKind.Apk or ManagedKeyKind.Payload or ManagedKeyKind.Zip or ManagedKeyKind.Avb
-                ? key.ExportPkcs8PrivateKeyPem()
-                : ((RSA)key).ExportRSAPrivateKeyPem();
+            var privateText = kind switch
+            {
+                ManagedKeyKind.Adb or ManagedKeyKind.Hdc => key.ExportPkcs8PrivateKeyPem() + "\n",
+                ManagedKeyKind.Apk or ManagedKeyKind.Payload or ManagedKeyKind.Zip or ManagedKeyKind.Avb
+                    => key.ExportPkcs8PrivateKeyPem(),
+                _ => ((RSA)key).ExportRSAPrivateKeyPem(),
+            };
             Write(path, privateText);
             string publicText;
             if (kind == ManagedKeyKind.Adb)
@@ -589,7 +595,11 @@ public sealed class KeyLibraryService
                 using var publicRsa = RSA.Create();
                 publicRsa.ImportParameters(rsa.ExportParameters(false));
                 using var auth = new AdbAuthentication(publicRsa);
-                publicText = Encoding.UTF8.GetString(auth.BuildPublicKeyPayload()).TrimEnd('\0') + "\n";
+                publicText = Encoding.UTF8.GetString(auth.BuildPublicKeyPayload()).TrimEnd('\0');
+            }
+            else if (kind == ManagedKeyKind.Hdc)
+            {
+                publicText = HdcAuthentication.BuildPublicKeyFileText((RSA)key);
             }
             else publicText = key.ExportSubjectPublicKeyInfoPem() + "\n";
             Write(path + ".pub", publicText);
@@ -646,7 +656,7 @@ public sealed class KeyLibraryService
         if (!(kind switch
         {
             ManagedKeyKind.Adb => bits == 2048,
-            ManagedKeyKind.Hdc => bits == 3072,
+            ManagedKeyKind.Hdc => bits == HdcAuthentication.KeyBits,
             ManagedKeyKind.Payload => bits is 2048 or 4096,
             ManagedKeyKind.Jar => bits is 2048 or 4096,
             ManagedKeyKind.Apk => bits is 2048 or 3072 or 4096 or 256 or 384 or 521,

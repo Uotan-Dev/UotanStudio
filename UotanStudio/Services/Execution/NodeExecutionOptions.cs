@@ -20,7 +20,7 @@ public enum ExecutionFailurePolicy
 /// <summary>Execution policy supplied to <see cref="NodeExecutionEngine.ExecuteAsync"/>.<para>供给执行引擎的执行策略。</para></summary>
 public sealed record NodeExecutionOptions
 {
-    public Services.Workspace.IWorkflowDocuments? Documents { get; init; }
+    public Workspace.IWorkflowDocuments? Documents { get; init; }
     /// <summary>Composite entry node activation; inactive-only descendants are skipped before execution.<para>复合入口节点激活状态；仅未激活的后代在执行前被跳过。</para></summary>
     /// <value>Activation map keyed by node identifier.<para>按节点标识索引的激活映射。</para></value>
     internal IReadOnlyDictionary<string, bool>? EntryActivation { get; init; }

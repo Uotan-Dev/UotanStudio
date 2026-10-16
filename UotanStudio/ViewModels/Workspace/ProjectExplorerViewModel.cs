@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 
 namespace UotanStudio.ViewModels.Workspace;
@@ -79,7 +80,7 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
     /// Debounce timer for file-system events: coalesces bursts (bulk copies etc.) into one refresh.
     /// <para>文件系统变更事件的防抖计时器：合并高频事件（批量复制等）后统一刷新。</para>
     /// </summary>
-    private readonly System.Threading.Timer _fsDebounceTimer;
+    private readonly Timer _fsDebounceTimer;
 
     /// <summary>
     /// Creates the project explorer view model, subscribing to project-context-changed messages and building the initial directory tree.
@@ -89,7 +90,7 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
     {
         WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
 
-        _fsDebounceTimer = new System.Threading.Timer(
+        _fsDebounceTimer = new Timer(
             _ => Avalonia.Threading.Dispatcher.UIThread.Post(ApplyFileSystemChanges),
             null,
             Timeout.Infinite,
@@ -260,54 +261,6 @@ public sealed partial class ExplorerNode : ObservableObject
     /// <summary>目录展开状态。 Whether the directory is expanded.</summary>
     [ObservableProperty] private bool _isExpanded;
 
-    /// <summary>
-    /// Localized title of the "open as text" context-menu item in the explorer.
-    /// <para>资源管理器右键「以文本打开」菜单项的本地化标题。</para>
-    /// </summary>
-    public static string OpenAsTextHeader => LanguageService.Instance.GetString("Explorer_OpenAsText");
-
-    /// <summary>
-    /// Localized title of the "open as hex" context-menu item in the explorer.
-    /// <para>资源管理器右键「以十六进制打开」菜单项的本地化标题。</para>
-    /// </summary>
-    public static string OpenAsHexHeader => LanguageService.Instance.GetString("Explorer_OpenAsHex");
-
-    /// <summary>
-    /// Localized title of the "open as device tree" context-menu item in the explorer.
-    /// <para>资源管理器右键「以设备树打开」菜单项的本地化标题。</para>
-    /// </summary>
-    public static string OpenAsDtbHeader => LanguageService.Instance.GetString("Explorer_OpenAsDtb");
-
-    /// <summary>
-    /// Localized title of the "open as DEX" context-menu item in the explorer.
-    /// <para>资源管理器右键「以 DEX 打开」菜单项的本地化标题。</para>
-    /// </summary>
-    public static string OpenAsDexHeader => LanguageService.Instance.GetString("Explorer_OpenAsDex");
-
-    /// <summary>
-    /// Localized title of the "open as Manifest (AXML)" context-menu item in the explorer.
-    /// <para>资源管理器右键「以 Manifest 打开（AXML）」菜单项的本地化标题。</para>
-    /// </summary>
-    public static string OpenAsAxmlHeader => LanguageService.Instance.GetString("Explorer_OpenAsAxml");
-
-    /// <summary>
-    /// Localized title of the "open as ARSC" context-menu item in the explorer.
-    /// <para>资源管理器右键「以 ARSC 打开」菜单项的本地化标题。</para>
-    /// </summary>
-    public static string OpenAsArscHeader => LanguageService.Instance.GetString("Explorer_OpenAsArsc");
-
-    /// <summary>
-    /// Localized title of the "open as APK" context-menu item in the explorer.
-    /// <para>资源管理器右键「以 APK 打开」菜单项的本地化标题。</para>
-    /// </summary>
-    public static string OpenAsApkHeader => LanguageService.Instance.GetString("Explorer_OpenAsApk");
-
-    /// <summary>
-    /// Localized title of the "open with" submenu in the explorer.
-    /// <para>资源管理器右键「打开方式」子菜单的本地化标题。</para>
-    /// </summary>
-    public static string OpenAsMenuHeader => LanguageService.Instance.GetString("Explorer_OpenAsMenu");
-
     private bool _childrenLoaded;
 
     /// <summary>
@@ -350,8 +303,8 @@ public sealed partial class ExplorerNode : ObservableObject
             try
             {
 
-                var resolved = UotanStudio.Firmware.Core.Repacking.RepackMetadata.ResolveActualMetadataPath(Path,
-                    UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(Path));
+                var resolved = Firmware.Core.Repacking.RepackMetadata.ResolveActualMetadataPath(Path,
+                    ProjectContextService.Instance.CaptureMetadataContext(Path));
                 if (resolved is not null && File.Exists(resolved)) return resolved;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
@@ -368,6 +321,16 @@ public sealed partial class ExplorerNode : ObservableObject
     /// <para>获取是否为占位子节点（用于让尚未展开的目录显示展开箭头）。</para>
     /// </summary>
     public bool IsPlaceholder { get; }
+
+    /// <summary>
+    /// Gets whether this node is an accepted format-conversion input; gates the explorer's "convert format"
+    /// context-menu entry. The decision belongs to <see cref="ImageInputService"/>, not to the icon catalog:
+    /// the glyph family and the conversion scope answer different questions.
+    /// <para>获取该节点是否为可接受的格式转换输入，用作资源管理器右键「格式转换」入口的显示条件。
+    /// 判定归 <see cref="ImageInputService"/> 所有而非图标目录：字形家族与转换范围回答的是两个不同问题。</para>
+    /// </summary>
+    public bool SupportsFormatConversion => !IsDirectory && !IsPlaceholder &&
+        ImageInputService.SupportsFormatConversion(Path);
 
     /// <summary>
     /// Gets the collection of child nodes, populated on the directory's first expansion.
