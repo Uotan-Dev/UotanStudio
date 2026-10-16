@@ -308,7 +308,7 @@ public partial class MtkSessionTests
                 Kind = MtkStorageRegionKind.EmmcBoot1, PhysicalIdentifier = null }])
         };
 
-        Assert.Throws<InvalidOperationException>(() => snapshot.Validate());
+        Assert.Throws<InvalidOperationException>(snapshot.Validate);
     }
 
     [Fact]

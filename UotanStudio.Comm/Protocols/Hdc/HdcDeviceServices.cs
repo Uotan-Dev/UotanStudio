@@ -4,7 +4,7 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>HDC device commands, using native OpenHarmony semantics.
 /// <para>使用 OpenHarmony 原生命令语义的 HDC 设备服务。</para></summary>
-public sealed class HdcDeviceServices : UotanStudio.Comm.Contracts.IHdcDeviceServices
+public sealed class HdcDeviceServices : Contracts.IHdcDeviceServices
 {
     private readonly HdcConnection? _connection;
     private readonly HdcServerClient? _server;

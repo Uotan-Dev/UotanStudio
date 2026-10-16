@@ -125,14 +125,14 @@ internal static partial class UsbHostAPI
     public static IntPtr CreateObject(IntPtr objcClass, uint ioService, out int ioReturn)
     {
         ioReturn = Ok;
-        var alloc = ObjcRuntime.MsgSendObject(objcClass, AllocSel.Value);
+        var alloc = MsgSendObject(objcClass, AllocSel.Value);
         if (alloc == IntPtr.Zero)
         {
             ioReturn = KIOReturnError;
             return IntPtr.Zero;
         }
 
-        var obj = ObjcRuntime.MsgSendObject_Init(
+        var obj = MsgSendObject_Init(
             alloc, InitWithIOServiceSel.Value,
             ioService, options: 0, queue: IntPtr.Zero,
             out var error, interestHandler: IntPtr.Zero);
@@ -153,14 +153,14 @@ internal static partial class UsbHostAPI
     {
         if (obj != IntPtr.Zero)
         {
-            ObjcRuntime.MsgSendVoid(obj, DestroySel.Value);
-            ObjcRuntime.objc_release(obj);
+            MsgSendVoid(obj, DestroySel.Value);
+            objc_release(obj);
         }
     }
 
     /// <summary>Reads the io_service_t backing an IOUSBHostObject. <para>读取对象背后的 io_service_t。</para></summary>
     /// <param name="obj">IOUSBHostObject instance pointer. <para>IOUSBHostObject 实例指针。</para></param>
-    public static uint GetIoService(IntPtr obj) => ObjcRuntime.MsgSendUint(obj, IoServiceSel.Value);
+    public static uint GetIoService(IntPtr obj) => MsgSendUint(obj, IoServiceSel.Value);
 
     /// <summary>
     /// Reads the IOReturn code out of an NSError (0 when nil).
@@ -173,7 +173,7 @@ internal static partial class UsbHostAPI
             return KIOReturnError;
         }
 
-        var code = ObjcRuntime.MsgSendUlong(error, ErrorCodeSel.Value);
+        var code = MsgSendUlong(error, ErrorCodeSel.Value);
         return unchecked((int)code);
     }
 
@@ -191,14 +191,14 @@ internal static partial class UsbHostAPI
     /// <param name="timeoutMs">Completion timeout in ms (0 = wait forever). <para>完成超时（毫秒，0 表示无限等待）。</para></param>
     /// <param name="transferred">Actual data-stage byte count. <para>实际传输字节数。</para></param>
     /// <returns>IOReturn code (0 on success). <para>IOReturn 码（成功为 0）。</para></returns>
-    public static int SendDeviceRequest(IntPtr device, ObjcRuntime.UsbHostDeviceRequest request, byte[]? buffer, int timeoutMs, out int transferred)
+    public static int SendDeviceRequest(IntPtr device, UsbHostDeviceRequest request, byte[]? buffer, int timeoutMs, out int transferred)
     {
         transferred = 0;
         var data = buffer is { Length: > 0 } ? CreateMutableData(buffer) : IntPtr.Zero;
         try
         {
             ulong bytesTransferred = 0;
-            var ok = ObjcRuntime.MsgSendBool_DeviceRequest(
+            var ok = MsgSendBool_DeviceRequest(
                 device, SendDeviceRequestSel.Value, request, data,
                 ref bytesTransferred, timeoutMs / 1000.0, out var error);
             if (ok != 0)
@@ -213,7 +213,7 @@ internal static partial class UsbHostAPI
         {
             if (data != IntPtr.Zero)
             {
-                ObjcRuntime.objc_release(data);
+                objc_release(data);
             }
         }
     }
@@ -226,7 +226,7 @@ internal static partial class UsbHostAPI
     /// <param name="endpointAddress">Endpoint address including the direction bit (bit 7). <para>含方向位（bit 7）的端点地址。</para></param>
     public static IntPtr CopyPipe(IntPtr usbInterface, ulong endpointAddress)
     {
-        var pipe = ObjcRuntime.MsgSendObject_Ulong_Error(usbInterface, CopyPipeSel.Value, endpointAddress, out var error);
+        var pipe = MsgSendObject_Ulong_Error(usbInterface, CopyPipeSel.Value, endpointAddress, out var error);
         _ = error;
         return pipe;
     }
@@ -237,13 +237,13 @@ internal static partial class UsbHostAPI
     {
         if (pipe != IntPtr.Zero)
         {
-            ObjcRuntime.objc_release(pipe);
+            objc_release(pipe);
         }
     }
 
     /// <summary>Reads an IOUSBHostIOSource (pipe) endpoint address. <para>读取管道的端点地址。</para></summary>
     /// <param name="pipe">IOUSBHostPipe instance pointer. <para>IOUSBHostPipe 实例指针。</para></param>
-    public static ulong GetPipeEndpointAddress(IntPtr pipe) => ObjcRuntime.MsgSendUlong(pipe, EndpointAddressSel.Value);
+    public static ulong GetPipeEndpointAddress(IntPtr pipe) => MsgSendUlong(pipe, EndpointAddressSel.Value);
 
     /// <summary>
     /// Synchronous bulk/interrupt transfer
@@ -264,7 +264,7 @@ internal static partial class UsbHostAPI
         try
         {
             ulong bytesTransferred = 0;
-            var ok = ObjcRuntime.MsgSendBool_IO(
+            var ok = MsgSendBool_IO(
                 pipe, SendIoRequestSel.Value, data,
                 ref bytesTransferred, timeoutMs / 1000.0, out var error);
             if (ok != 0)
@@ -282,7 +282,7 @@ internal static partial class UsbHostAPI
         }
         finally
         {
-            ObjcRuntime.objc_release(data);
+            objc_release(data);
         }
     }
 
@@ -295,7 +295,7 @@ internal static partial class UsbHostAPI
     /// <param name="device">IOUSBHostDevice instance pointer. <para>IOUSBHostDevice 实例指针。</para></param>
     public static int ResetDevice(IntPtr device)
     {
-        var ok = ObjcRuntime.MsgSendBool_OutErr(device, ResetSel.Value, out var error);
+        var ok = MsgSendBool_OutErr(device, ResetSel.Value, out var error);
         return ok != 0 ? Ok : ReadErrorCode(error);
     }
 
@@ -313,7 +313,7 @@ internal static partial class UsbHostAPI
     {
         if (pipe != IntPtr.Zero)
         {
-            _ = ObjcRuntime.MsgSendBool_OutErr(pipe, AbortSel.Value, out _);
+            _ = MsgSendBool_OutErr(pipe, AbortSel.Value, out _);
         }
     }
 
@@ -326,7 +326,7 @@ internal static partial class UsbHostAPI
     public static int SendIoRequestZero(IntPtr pipe, int timeoutMs)
     {
         ulong unused = 0;
-        var ok = ObjcRuntime.MsgSendBool_IO(
+        var ok = MsgSendBool_IO(
             pipe, SendIoRequestSel.Value, IntPtr.Zero,
             ref unused, timeoutMs / 1000.0, out var error);
         return ok != 0 ? Ok : ReadErrorCode(error);
@@ -351,7 +351,7 @@ internal static partial class UsbHostAPI
         try
         {
             ulong bytesTransferred = 0;
-            var ok = ObjcRuntime.MsgSendBool_IO(
+            var ok = MsgSendBool_IO(
                 pipe, SendIoRequestSel.Value, data,
                 ref bytesTransferred, timeoutMs / 1000.0, out var error);
             if (ok != 0)
@@ -359,7 +359,7 @@ internal static partial class UsbHostAPI
                 transferred = checked((int)bytesTransferred);
                 if (!isWrite && transferred > 0)
                 {
-                    Buffer.MemoryCopy((void*)ObjcRuntime.MsgSendObject(data, MutableBytesSel.Value), (void*)buffer, transferred, transferred);
+                    Buffer.MemoryCopy((void*)MsgSendObject(data, MutableBytesSel.Value), (void*)buffer, transferred, transferred);
                 }
 
                 return Ok;
@@ -369,7 +369,7 @@ internal static partial class UsbHostAPI
         }
         finally
         {
-            ObjcRuntime.objc_release(data);
+            objc_release(data);
         }
     }
 
@@ -378,7 +378,7 @@ internal static partial class UsbHostAPI
         var data = CreateMutableData(length);
         if (isWrite && length > 0)
         {
-            var dst = ObjcRuntime.MsgSendObject(data, MutableBytesSel.Value);
+            var dst = MsgSendObject(data, MutableBytesSel.Value);
             unsafe
             {
                 Buffer.MemoryCopy((void*)source, (void*)dst, length, length);
@@ -401,14 +401,14 @@ internal static partial class UsbHostAPI
     /// </param>
     /// <param name="timeoutMs">Completion timeout in ms (0 = wait forever). <para>完成超时（毫秒，0 表示无限等待）。</para></param>
     /// <param name="transferred">Actual data-stage byte count. <para>实际传输字节数。</para></param>
-    public static int SendControlRequest(IntPtr pipe, ObjcRuntime.UsbHostDeviceRequest request, byte[]? buffer, int timeoutMs, out int transferred)
+    public static int SendControlRequest(IntPtr pipe, UsbHostDeviceRequest request, byte[]? buffer, int timeoutMs, out int transferred)
     {
         transferred = 0;
         var data = buffer is { Length: > 0 } ? CreateMutableData(buffer) : IntPtr.Zero;
         try
         {
             ulong bytesTransferred = 0;
-            var ok = ObjcRuntime.MsgSendBool_Control(
+            var ok = MsgSendBool_Control(
                 pipe, SendControlRequestSel.Value, request, data,
                 ref bytesTransferred, timeoutMs / 1000.0, out var error);
             if (ok != 0)
@@ -428,7 +428,7 @@ internal static partial class UsbHostAPI
         {
             if (data != IntPtr.Zero)
             {
-                ObjcRuntime.objc_release(data);
+                objc_release(data);
             }
         }
     }
@@ -438,7 +438,7 @@ internal static partial class UsbHostAPI
     /// <param name="alternateSetting">Alternate setting index from the interface descriptor. <para>来自接口描述符的备用设置索引。</para></param>
     public static int SelectAlternateSetting(IntPtr usbInterface, ulong alternateSetting)
     {
-        var ok = ObjcRuntime.MsgSendBool_Ulong_OutErr(usbInterface, SelectAltSettingSel.Value, alternateSetting, out var error);
+        var ok = MsgSendBool_Ulong_OutErr(usbInterface, SelectAltSettingSel.Value, alternateSetting, out var error);
         return ok != 0 ? Ok : ReadErrorCode(error);
     }
 
@@ -449,7 +449,7 @@ internal static partial class UsbHostAPI
     /// </summary>
     /// <param name="usbInterface">IOUSBHostInterface instance pointer. <para>IOUSBHostInterface 实例指针。</para></param>
     public static IntPtr GetInterfaceDescriptor(IntPtr usbInterface) =>
-        ObjcRuntime.MsgSendObject(usbInterface, InterfaceDescriptorSel.Value);
+        MsgSendObject(usbInterface, InterfaceDescriptorSel.Value);
 
     /// <summary>
     /// Pointer to the device/interface's packed configuration descriptor.
@@ -457,13 +457,13 @@ internal static partial class UsbHostAPI
     /// </summary>
     /// <param name="receiver">IOUSBHostDevice or IOUSBHostInterface instance pointer. <para>IOUSBHostDevice 或 IOUSBHostInterface 实例指针。</para></param>
     public static IntPtr GetConfigurationDescriptor(IntPtr receiver) =>
-        ObjcRuntime.MsgSendObject(receiver, ConfigDescriptorSel.Value);
+        MsgSendObject(receiver, ConfigDescriptorSel.Value);
 
     /// <summary>Creates an NSMutableData of the given length (+1 retained). <para>创建指定长度的 NSMutableData（+1 持有）。</para></summary>
     public static IntPtr CreateMutableData(int length)
     {
-        var autoreleased = ObjcRuntime.MsgSendObject_Ulong(NSMutableDataClass.Value, DataWithLengthSel.Value, (ulong)length);
-        return autoreleased == IntPtr.Zero ? IntPtr.Zero : ObjcRuntime.objc_retain(autoreleased);
+        var autoreleased = MsgSendObject_Ulong(NSMutableDataClass.Value, DataWithLengthSel.Value, (ulong)length);
+        return autoreleased == IntPtr.Zero ? IntPtr.Zero : objc_retain(autoreleased);
     }
 
     private static IntPtr CreateMutableData(byte[] source)
@@ -486,7 +486,7 @@ internal static partial class UsbHostAPI
 
     private static unsafe void CopyFromManaged(IntPtr data, byte[] source, int length)
     {
-        var dst = ObjcRuntime.MsgSendObject(data, MutableBytesSel.Value);
+        var dst = MsgSendObject(data, MutableBytesSel.Value);
         fixed (byte* src = source)
         {
             Buffer.MemoryCopy(src, (void*)dst, length, length);
@@ -495,7 +495,7 @@ internal static partial class UsbHostAPI
 
     private static unsafe void CopyMutableDataBack(IntPtr data, byte[] target, int length)
     {
-        var src = ObjcRuntime.MsgSendObject(data, MutableBytesSel.Value);
+        var src = MsgSendObject(data, MutableBytesSel.Value);
         fixed (byte* dst = target)
         {
             Buffer.MemoryCopy((void*)src, dst, length, length);

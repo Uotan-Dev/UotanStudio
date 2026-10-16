@@ -118,8 +118,13 @@ public sealed partial class DeviceController
         => new AdbSession(new AdbTcpTransport(host, port), authentication ?? AdbAuthentication.LoadOrCreate());
 
     /// <summary>
-    /// Opens a direct session to adbd's secure service (Android 11+ TLS) at host:port. The client presents the certificate from the pairing keystore and the server certificate is accepted as any self-signed certificate, matching trust-on-first-use semantics. The caller must connect and dispose on failure.
-    /// <para>在 host:port 上直接打开到 adbd 安全服务（Android 11+ TLS）的会话。客户端出示配对密钥库中的证书，服务器证书按首次使用即信任的方式接受任意自签证书。调用方须自行连接，并在失败时释放。</para>
+    /// Opens a direct session to adbd's secure service (Android 11+ TLS) at host:port. The client presents the
+    /// certificate derived from its host identity key for this handshake, exactly as upstream adb regenerates it
+    /// from <c>~/.android/adbkey</c>, and the server certificate is accepted as any self-signed certificate,
+    /// matching trust-on-first-use semantics. The caller must connect and dispose on failure.
+    /// <para>在 host:port 上直接打开到 adbd 安全服务（Android 11+ TLS）的会话。客户端出示本次握手由主机身份
+    /// 密钥派生的证书，与上游 adb 每次用 <c>~/.android/adbkey</c> 重新生成一致；服务器证书按首次使用即信任的方式
+    /// 接受任意自签证书。调用方须自行连接，并在失败时释放。</para>
     /// </summary>
     /// <param name="host">Device hostname or IP literal. <para>设备主机名或 IP 字面量。</para></param>
     /// <param name="port">Secure daemon port. <para>adbd 安全服务监听端口。</para></param>
@@ -129,9 +134,12 @@ public sealed partial class DeviceController
     /// </param>
     /// <returns>An unconnected direct session. <para>尚未连接的直接会话。</para></returns>
     public IAdbDeviceSession OpenSecureNetworkAdbSession(string host, int port, AdbAuthentication? authentication = null)
-        => new AdbSession(
-            new AdbTlsTransport(host, port, AdbPairingKeystore.LoadOrCreateClientCertificate()),
-            authentication ?? AdbAuthentication.LoadOrCreate());
+    {
+        var identity = authentication ?? AdbAuthentication.LoadOrCreate();
+        return new AdbSession(
+            new AdbTlsTransport(host, port, AdbHostCertificate.Create(identity.RsaKey)),
+            identity);
+    }
 
     /// <summary>
     /// Browses <c>_adb-tls-connect._tcp</c> until an instance resolves to <paramref name="host"/> and
@@ -189,7 +197,7 @@ public sealed partial class DeviceController
     /// <returns>The reported serial number, or <see langword="null"/> when claim or <c>getvar</c> fails.
     /// <para>上报的序列号；认领或 <c>getvar</c> 失败时返回 <see langword="null"/>。</para></returns>
     public string? ReadFastbootSerial(UsbDeviceInfo info)
-        => UotanStudio.Comm.Devices.Discovery.FastbootSerialReader.Read(RequiredKit, info);
+        => Discovery.FastbootSerialReader.Read(RequiredKit, info);
 
     private ICommKit RequiredKit => _kit
         ?? throw new NotSupportedException("This controller was composed without a communication kit and cannot expose the raw USB surface.");
@@ -197,13 +205,13 @@ public sealed partial class DeviceController
     /// <summary>
     /// Starts the OS-driven USB removal watch: on device removal every open lease bound to
     /// that physical device is disposed (queued commands cancelled first), its cached
-    /// properties are dropped and <see cref="DeviceController.DeviceRemoved"/> fires; on a
+    /// properties are dropped and <see cref="DeviceRemoved"/> fires; on a
     /// metadata change (mode switch) leases on the old interface are released and
-    /// <see cref="DeviceController.DeviceChanged"/> fires with the cache retained.
+    /// <see cref="DeviceChanged"/> fires with the cache retained.
     /// <para>启动操作系统驱动的 USB 移除监视：设备移除时释放绑定该物理设备的所有租约
-    /// （先取消排队指令）、丢弃缓存参数并触发 <see cref="DeviceController.DeviceRemoved"/>；
+    /// （先取消排队指令）、丢弃缓存参数并触发 <see cref="DeviceRemoved"/>；
     /// 元数据变化（模式切换）时释放旧接口租约、保留缓存并触发
-    /// <see cref="DeviceController.DeviceChanged"/>。</para>
+    /// <see cref="DeviceChanged"/>。</para>
     /// Does nothing when the controller has no communication kit or the watch already runs.
     /// <para>控制器没有通信套件或监视已在运行时不执行任何操作。</para>
     /// </summary>

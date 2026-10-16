@@ -24,7 +24,7 @@ public partial class FirehoseGptTests
         Assert.Equal(5, snapshot.Geometry.PhysicalPartitionNumber);
         Assert.Equal(protocol.Configuration.Slot, snapshot.Slot);
         Assert.True(ReferenceEquals(protocol, snapshot.Owner));
-        Assert.Equal<ulong?>(60UL, snapshot.PartitionEntryLba);
+        Assert.Equal(60UL, snapshot.PartitionEntryLba);
         Assert.Equal(60UL, snapshot.Table.PrimaryEntryArrayLba);
         Assert.Equal(95UL, snapshot.Table.BackupEntryArrayLba);
         Assert.False(protocol.RequiresReconnect);
@@ -119,7 +119,7 @@ public partial class FirehoseGptTests
         var snapshot = await protocol.ReadGptWithPartitionEntryOverridesAsync(0, null, 128u, null,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal<uint?>(128u, snapshot.PartitionEntryCount);
+        Assert.Equal(128u, snapshot.PartitionEntryCount);
         Assert.Null(snapshot.PartitionEntryLba);
         Assert.Null(snapshot.PartitionEntrySize);
         Assert.Equal("boot", Assert.Single(snapshot.Table.Partitions).Name);
@@ -179,9 +179,9 @@ public partial class FirehoseGptTests
         var snapshot = await protocol.ReadGptWithPartitionEntryOverridesAsync(2, 60UL, 128u, 128u,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal<ulong?>(60UL, snapshot.PartitionEntryLba);
-        Assert.Equal<uint?>(128u, snapshot.PartitionEntryCount);
-        Assert.Equal<uint?>(128u, snapshot.PartitionEntrySize);
+        Assert.Equal(60UL, snapshot.PartitionEntryLba);
+        Assert.Equal(128u, snapshot.PartitionEntryCount);
+        Assert.Equal(128u, snapshot.PartitionEntrySize);
         Assert.Equal(new long[] { 1, 127, 60, 95 }, GptReadStartSectors(transport));
         var arrayReads = Commands(transport).Where(command => command.Name == "read")
             .Where(command => (long)command.Attribute("start_sector")! is 60 or 95).ToArray();
@@ -214,7 +214,7 @@ public partial class FirehoseGptTests
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => other.ReadPartitionToFileAsync(snapshot,
             "boot", Path.Combine(dir.Path, "other.bin"), cancellationToken: TestContext.Current.CancellationToken));
 
-        Assert.Equal<ulong?>(60UL, snapshot.PartitionEntryLba);
+        Assert.Equal(60UL, snapshot.PartitionEntryLba);
         Assert.Equal("The GPT snapshot belongs to a different protocol or storage configuration.", error.Message);
         Assert.Empty(otherTransport.Writes);
         Assert.Empty(Directory.GetFiles(dir.Path));

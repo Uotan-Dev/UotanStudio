@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Transports.Abstractions;
@@ -303,6 +304,37 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
 
     public Action<byte[]>? OnWrte { get; init; }
 
+    /// <summary>
+    /// Gets or sets how many AUTH token challenges the simulated adbd issues before it accepts the
+    /// client, reproducing the upstream flow where each token is answered with the next host identity
+    /// and an exhausted chain ends with the public-key announcement that triggers the device prompt.
+    /// Zero keeps the no-auth handshake the other tests rely on.
+    /// <para>获取或设置模拟 adbd 在接纳客户端前下发多少个 AUTH 令牌挑战，复现上游流程：每个令牌由下一个
+    /// 主机身份应答，身份链耗尽后以公钥通告结束并触发设备提示。为 0 时保持其他测试依赖的免认证握手。</para>
+    /// </summary>
+    public int AuthTokenChallenges { get; init; }
+
+    /// <summary>
+    /// Gets the AUTH tokens the simulator issued, in order.
+    /// <para>模拟器依次下发的 AUTH 令牌。</para>
+    /// </summary>
+    public List<byte[]> AuthTokens { get; } = [];
+
+    /// <summary>
+    /// Gets the AUTH signature payloads the client returned, in order.
+    /// <para>客户端依次返回的 AUTH 签名负载。</para>
+    /// </summary>
+    public List<byte[]> AuthSignatures { get; } = [];
+
+    /// <summary>
+    /// Gets the AUTH RSAPUBLICKEY payload the client announced, or <see langword="null"/> when the
+    /// client never reached the announcement.
+    /// <para>客户端通告的 AUTH RSAPUBLICKEY 负载；客户端未走到通告时为 <see langword="null"/>。</para>
+    /// </summary>
+    public byte[]? AuthPublicKeyPayload { get; private set; }
+
+    private int _authTokensIssued;
+
     private int _closeCount;
 
     public int CloseCount => Volatile.Read(ref _closeCount);
@@ -348,9 +380,37 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
         switch (command)
         {
             case AdbCommand.Cnxn:
+                if (_authTokensIssued == 0 && AuthTokenChallenges > 0)
+                {
+                    yield return IssueAuthToken();
+                    break;
+                }
+
                 yield return AdbMessaging.Serialize(new AdbMessage(
                     AdbCommand.Cnxn, AdbConstants.ProtocolVersion, PeerMaxPayload,
                     Encoding.UTF8.GetBytes("device::fake\0")));
+                break;
+
+            case AdbCommand.Auth:
+                switch ((AdbAuthType)arg0)
+                {
+                    case AdbAuthType.Signature:
+                        AuthSignatures.Add(payload);
+                        if (AuthSignatures.Count >= AuthTokenChallenges)
+                        {
+                            yield return AnswerConnect();
+                            break;
+                        }
+
+                        yield return IssueAuthToken();
+                        break;
+
+                    case AdbAuthType.RsaPublicKey:
+                        AuthPublicKeyPayload = payload;
+                        yield return AnswerConnect();
+                        break;
+                }
+
                 break;
 
             case AdbCommand.Open:
@@ -400,6 +460,19 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
                 break;
         }
     }
+
+    private byte[] IssueAuthToken()
+    {
+        var token = new byte[AdbAuthentication.TokenSize];
+        RandomNumberGenerator.Fill(token);
+        AuthTokens.Add(token);
+        _authTokensIssued++;
+        return AdbMessaging.Serialize(new AdbMessage(AdbCommand.Auth, (uint)AdbAuthType.Token, 0, token));
+    }
+
+    private byte[] AnswerConnect() => AdbMessaging.Serialize(new AdbMessage(
+        AdbCommand.Cnxn, AdbConstants.ProtocolVersion, PeerMaxPayload,
+        Encoding.UTF8.GetBytes("device::fake\0")));
 
     private IEnumerable<byte[]> BuildSyncPullPackets(byte[] data)
     {

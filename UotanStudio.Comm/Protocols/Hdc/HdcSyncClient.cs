@@ -121,7 +121,7 @@ public sealed class TransferConfig
 /// The authenticated direct HDC connection this client opens short-lived transfer channels on.
 /// <para>本客户端在其上打开短生命周期传输通道的已认证 HDC 直连。</para>
 /// </param>
-public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, UotanStudio.Comm.Contracts.IHdcSyncClient
+public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contracts.IHdcSyncClient
 {
     /// <summary>
     /// Source bytes copied per transfer chunk. The stable daemon payload ceiling is 60 KiB and every

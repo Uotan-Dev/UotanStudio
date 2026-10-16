@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -10,14 +11,14 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 public enum HdcAuthVerifyType : byte
 {
     /// <summary>
-    /// Legacy RSA encryption mode (PKCS#1 v1.5).
-    /// <para>RSA 加密模式（PKCS#1 v1.5，类型 0）。</para>
+    /// Legacy RSA encryption mode: the whole token is RSA-encrypted with the host private key.
+    /// <para>旧版 RSA 加密模式：用主机私钥加密整个令牌。</para>
     /// </summary>
     RsaEncrypt = 0,
 
     /// <summary>
-    /// RSA-3072 with PSS padding and SHA-512 digest (primary).
-    /// <para>RSA-3072 配合 PSS 填充和 SHA-512 摘要（主模式）。</para>
+    /// RSA signature mode, negotiated as <c>authtype 1</c>; the host signs the daemon token with its private key.
+    /// <para>RSA 签名模式，按 <c>authtype 1</c> 协商；主机用私钥对守护进程令牌签名。</para>
     /// </summary>
     Rsa3072Sha512 = 1,
 
@@ -36,11 +37,13 @@ public enum HdcAuthVerifyType : byte
 
 
 /// <summary>
-/// Manages HDC RSA-3072 authentication: key generation, loading, saving,
-/// and RSA-PSS SHA-512 token signing. Aligned with the OpenHarmony HDC auth
-/// implementation (developtools_hdc/auth.cpp).
-/// <para>管理 HDC RSA-3072 认证：密钥生成、加载、保存以及 RSA-PSS SHA-512
-/// 令牌签名。与 OpenHarmony HDC 认证实现（developtools_hdc/auth.cpp）对齐。</para>
+/// Manages the HDC host identity: key generation, loading, saving and token signing.
+/// The key directory, key size and public-key payload follow the upstream HDC client
+/// (<c>developtools_hdc/src/common/auth.cpp</c>), so the official client and this application
+/// share one host identity.
+/// <para>管理 HDC 主机身份：密钥生成、加载、保存与令牌签名。密钥目录、密钥位数与公钥负载
+/// 均遵循上游 HDC 客户端（<c>developtools_hdc/src/common/auth.cpp</c>），
+/// 因此官方客户端与本应用共用同一主机身份。</para>
 /// </summary>
 public sealed class HdcAuthentication : IDisposable
 {
@@ -48,24 +51,110 @@ public sealed class HdcAuthentication : IDisposable
     /// RSA key size in bits used by HDC.
     /// <para>HDC 使用的 RSA 密钥位数。</para>
     /// </summary>
+    /// <remarks>
+    /// Upstream <c>RSA_KEY_BITS</c> in <c>src/common/define.h</c> is 3072 and <c>GenerateNewKey</c>
+    /// generates that width for the host identity the client writes and the daemon reads. A 4096-bit
+    /// host identity is not the daemon's expectation: the legacy base64 <c>RSAPublicKey</c> record
+    /// written by upstream <c>GenerateKey</c> uses a 128-word modulus table that
+    /// <c>RSAPublicKey2RSA</c> rejects outright (it demands 64 words), and the current client path
+    /// exchanges the PEM public key instead.
+    /// <para>上游 <c>src/common/define.h</c> 中的 <c>RSA_KEY_BITS</c> 为 3072，<c>GenerateNewKey</c>
+    /// 也按该位数生成客户端写入、守护进程读取的主机身份。4096 位并不是守护进程预期的身份：上游
+    /// <c>GenerateKey</c> 写出的旧版 base64 <c>RSAPublicKey</c> 记录使用 128 字模数表，而
+    /// <c>RSAPublicKey2RSA</c> 只接受 64 字，直接拒绝该记录；当前客户端链路交换的是 PEM 公钥。</para>
+    /// </remarks>
     private const int RSA_KEY_BITS = 3072;
+
+    /// <summary>
+    /// Separates the host label from the public key inside the handshake <c>buf</c> field, the upstream
+    /// <c>HDC_HOST_DAEMON_BUF_SEPARATOR</c> byte <c>0x0C</c>.
+    /// <para>在握手 <c>buf</c> 字段内分隔主机标注与公钥的字节，即上游
+    /// <c>HDC_HOST_DAEMON_BUF_SEPARATOR</c> 的 <c>0x0C</c>。</para>
+    /// </summary>
+    private const string BufferSeparator = "\f";
+
+    /// <summary>
+    /// Gets the RSA key size in bits that the HDC host identity uses, equal to upstream
+    /// <c>RSA_KEY_BITS</c>. Callers that offer or validate HDC keys must use this width so a generated
+    /// key is loadable by both the official client and this application.
+    /// <para>获取 HDC 主机身份使用的 RSA 密钥位数，与上游 <c>RSA_KEY_BITS</c> 一致。提供或校验 HDC 密钥的
+    /// 调用方必须使用该位数，生成的密钥才能被官方客户端与本应用共同加载。</para>
+    /// </summary>
+    /// <value>Upstream <c>RSA_KEY_BITS</c>, in bits. <para>上游 <c>RSA_KEY_BITS</c>，单位为位。</para></value>
+    public const int KeyBits = RSA_KEY_BITS;
+
+    /// <summary>
+    /// Gets the RSA key sizes this client accepts when loading or publishing an existing host identity.
+    /// Generation always uses <see cref="KeyBits"/>; 4096 is accepted only because earlier releases of this
+    /// application created 4096-bit identities, and the current upstream handshake carries the PEM public key
+    /// and verifies an RSA-PSS/SHA-512 signature, which both widths satisfy.
+    /// <para>获取加载或发布既有主机身份时本客户端接受的 RSA 密钥位数。生成始终使用 <see cref="KeyBits"/>；
+    /// 接受 4096 仅因为本应用早前版本会创建 4096 位身份，而当前上游握手传递 PEM 公钥并校验
+    /// RSA-PSS/SHA-512 签名，两种位数都能满足。</para>
+    /// </summary>
+    /// <value>The accepted widths, ascending. <para>可接受的位数，升序。</para></value>
+    public static IReadOnlyList<int> SupportedKeyBits { get; } = [RSA_KEY_BITS, 4096];
+
+    private static readonly UnixFileMode KeyDirectoryMode =
+        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+        | UnixFileMode.GroupRead | UnixFileMode.GroupExecute;
 
     private readonly RSA _rsa;
     private readonly HdcAuthVerifyType _verifyType;
 
     /// <summary>
-    /// Gets the default key directory (the per-user UotanStudio data directory), independent of the official HDC identity.
-    /// <para>获取 UotanStudio 独立身份的用户数据目录，不读取官方 HDC 密钥。</para>
+    /// Gets the default key directory, the same per-user location the upstream HDC client uses
+    /// (<c>GetUserKeyPath</c> in upstream <c>src/common/auth.cpp</c> joins <c>uv_os_homedir</c> with
+    /// <c>.harmony</c> and creates it with mode <c>0750</c>).
+    /// <para>获取默认密钥目录，与上游 HDC 客户端使用同一用户目录
+    /// （上游 <c>src/common/auth.cpp</c> 的 <c>GetUserKeyPath</c> 以 <c>uv_os_homedir</c> 拼接
+    /// <c>.harmony</c>，并按 <c>0750</c> 权限创建该目录）。</para>
     /// </summary>
-    /// <value>Path <c>&lt;LocalApplicationData&gt;/UotanStudio/Hdc</c>; the directory may not exist yet. <para>路径 <c>&lt;LocalApplicationData&gt;/UotanStudio/Hdc</c>；目录可能尚未创建。</para></value>
-    public static string DefaultKeyDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UotanStudio", "Hdc");
+    /// <value>Path <c>&lt;UserProfile&gt;/.harmony</c>; the directory may not exist yet. <para>路径 <c>&lt;UserProfile&gt;/.harmony</c>；目录可能尚未创建。</para></value>
+    public static string DefaultKeyDirectory => Path.Combine(GetHomeDirectory(), ".harmony");
 
     /// <summary>
-    /// Gets the default private key file path (UotanStudio/Hdc/hdckey), independent of the official HDC identity.
-    /// <para>获取 UotanStudio 独立身份的私钥文件路径。</para>
+    /// Gets the default private key file path, the same file the upstream HDC client uses.
+    /// <para>获取默认私钥文件路径，与上游 HDC 客户端使用同一文件。</para>
     /// </summary>
     /// <value><c>hdckey</c> inside <see cref="DefaultKeyDirectory"/>; the file may not exist yet. <para><see cref="DefaultKeyDirectory"/> 下的 <c>hdckey</c> 文件；文件可能尚未创建。</para></value>
     public static string DefaultKeyFilePath => Path.Combine(DefaultKeyDirectory, "hdckey");
+
+    /// <summary>
+    /// Resolves the user home directory the way upstream <c>GetUserKeyPath</c> does through
+    /// <c>uv_os_homedir</c>: <c>%USERPROFILE%</c> on Windows and <c>$HOME</c>, then the passwd entry, on
+    /// Linux and macOS.
+    /// <para>按上游 <c>GetUserKeyPath</c> 经 <c>uv_os_homedir</c> 的方式解析用户主目录：Windows 上取
+    /// <c>%USERPROFILE%</c>，Linux 与 macOS 上取 <c>$HOME</c>，随后退回 passwd 条目。</para>
+    /// </summary>
+    /// <remarks>
+    /// The managed profile lookup can fail for a service account without a profile or in a stripped
+    /// container, so the environment fallback is platform-correct rather than a shared
+    /// <c>USERPROFILE</c>-then-<c>HOME</c> chain.
+    /// <para>托管的配置文件查询在无配置文件的服务账户或精简容器里可能失败，因此环境变量兜底按平台区分，
+    /// 而不是统一的先 <c>USERPROFILE</c> 后 <c>HOME</c>。</para>
+    /// </remarks>
+    /// <returns>The user home directory path. <para>用户主目录路径。</para></returns>
+    private static string GetHomeDirectory()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrEmpty(home))
+        {
+            return home;
+        }
+
+        home = Environment.GetEnvironmentVariable(OperatingSystem.IsWindows() ? "USERPROFILE" : "HOME") ?? string.Empty;
+        return string.IsNullOrEmpty(home) ? "." : home;
+    }
+
+    /// <summary>
+    /// Gets the host name upstream <c>GetHostName</c> obtains from <c>uv_os_gethostname</c>, which is the
+    /// label the daemon shows in its connection-authorization prompt.
+    /// <para>获取上游 <c>GetHostName</c> 经 <c>uv_os_gethostname</c> 取得的主机名，即守护进程在连接授权提示中
+    /// 显示的标注。</para>
+    /// </summary>
+    /// <value>The local host name. <para>本机主机名。</para></value>
+    internal static string HostName => Dns.GetHostName();
 
     /// <summary>
     /// Gets the authentication verify type.
@@ -82,7 +171,7 @@ public sealed class HdcAuthentication : IDisposable
     /// </summary>
     /// <param name="rsa">The RSA key to use. <para>待使用的 RSA 密钥。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="rsa"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">The key is not 3072 bits. <para>密钥不是 3072 位。</para></exception>
+    /// <exception cref="ArgumentException">The key width is not in <see cref="SupportedKeyBits"/>. <para>密钥位数不在 <see cref="SupportedKeyBits"/> 中。</para></exception>
     public HdcAuthentication(RSA rsa)
         : this(rsa, HdcAuthVerifyType.Rsa3072Sha512)
     {
@@ -96,11 +185,11 @@ public sealed class HdcAuthentication : IDisposable
     /// <param name="rsa">The RSA key to use. <para>待使用的 RSA 密钥。</para></param>
     /// <param name="verifyType">The authentication verification algorithm. <para>认证验证算法。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="rsa"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">The key is not 3072 bits. <para>密钥不是 3072 位。</para></exception>
+    /// <exception cref="ArgumentException">The key width is not in <see cref="SupportedKeyBits"/>. <para>密钥位数不在 <see cref="SupportedKeyBits"/> 中。</para></exception>
     public HdcAuthentication(RSA rsa, HdcAuthVerifyType verifyType)
     {
         _rsa = rsa ?? throw new ArgumentNullException(nameof(rsa));
-        if (rsa.KeySize != RSA_KEY_BITS)
+        if (!SupportedKeyBits.Contains(rsa.KeySize))
         {
             throw new ArgumentException(
                 $"HDC authentication requires a {RSA_KEY_BITS}-bit RSA key, but got {rsa.KeySize}-bit.",
@@ -128,6 +217,16 @@ public sealed class HdcAuthentication : IDisposable
     /// <para>从 <paramref name="keyPath"/> 加载认证密钥（PEM，PKCS#1 或 PKCS#8）；
     /// 文件不存在时生成并持久化新的 3072 位密钥。公钥以 ".pub" 扩展名写入同名文件。</para>
     /// </summary>
+    /// <remarks>
+    /// A generated key is written as unencrypted PKCS#8 PEM (<c>BEGIN PRIVATE KEY</c>) and its sidecar as
+    /// the PEM <c>SUBJECT PUBLIC KEY</c> block, matching upstream <c>WritePrivateFile</c>
+    /// (<c>PEM_write_PrivateKey</c>) and <c>WritePublicFile</c> (<c>PEM_write_PUBKEY</c>) in
+    /// <c>src/common/auth.cpp</c>, so a key directory is interchangeable with the official client.
+    /// <para>生成的密钥以未加密的 PKCS#8 PEM（<c>BEGIN PRIVATE KEY</c>）写出，同名公钥写成 PEM
+    /// <c>SUBJECT PUBLIC KEY</c> 块，与上游 <c>src/common/auth.cpp</c> 的
+    /// <c>WritePrivateFile</c>（<c>PEM_write_PrivateKey</c>）和 <c>WritePublicFile</c>
+    /// （<c>PEM_write_PUBKEY</c>）一致，因此密钥目录可与官方客户端互换。</para>
+    /// </remarks>
     /// <param name="keyPath">
     /// The private key path; defaults to <see cref="DefaultKeyFilePath"/>.
     /// <para>私钥路径；默认为 <see cref="DefaultKeyFilePath"/>。</para>
@@ -144,13 +243,12 @@ public sealed class HdcAuthentication : IDisposable
             catch { existing.Dispose(); throw; }
         }
 
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
-        Directory.CreateDirectory(directory);
+        var directory = EnsureKeyDirectory(path);
         var temporaryPath = Path.Combine(directory, ".hdckey-" + Guid.NewGuid().ToString("N"));
         using var created = CreateNew();
         try
         {
-            WriteKeyFile(temporaryPath, created._rsa.ExportRSAPrivateKeyPem());
+            WriteKeyFile(temporaryPath, created._rsa.ExportPkcs8PrivateKeyPem() + "\n");
             try { File.Move(temporaryPath, path, overwrite: false); }
             catch (IOException) when (File.Exists(path))
             {
@@ -166,29 +264,83 @@ public sealed class HdcAuthentication : IDisposable
         finally { File.Delete(temporaryPath); }
     }
 
+    private static string EnsureKeyDirectory(string keyPath)
+    {
+        var directory = Path.GetDirectoryName(Path.GetFullPath(keyPath))!;
+        Directory.CreateDirectory(directory);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(directory, KeyDirectoryMode);
+        }
+
+        return directory;
+    }
+
     private static void EnsurePublicKey(string path, HdcAuthentication authentication)
     {
-        if (File.Exists(path + ".pub")) return;
-        var temporary = path + ".pub-" + Guid.NewGuid().ToString("N");
+        var publicPath = path + ".pub";
+        if (PublicKeyFileMatches(publicPath, authentication._rsa)) return;
+        var temporary = publicPath + "-" + Guid.NewGuid().ToString("N");
         try
         {
-            WriteKeyFile(temporary, authentication._rsa.ExportSubjectPublicKeyInfoPem() + "\n");
-            try { File.Move(temporary, path + ".pub", overwrite: false); }
-            catch (IOException) when (File.Exists(path + ".pub")) { }
+            WriteKeyFile(temporary, BuildPublicKeyFileText(authentication._rsa));
+            try { File.Move(temporary, publicPath, overwrite: true); }
+            catch (IOException) when (PublicKeyFileMatches(publicPath, authentication._rsa)) { }
         }
         finally { File.Delete(temporary); }
     }
 
     /// <summary>
+    /// Reports whether the sidecar public key file exists and is the PEM public half of the loaded identity.
+    /// A file left by an earlier release (the legacy Base64 <c>RSAPublicKey</c> record) or one belonging to a
+    /// different key does not match and is replaced.
+    /// <para>判断同名公钥文件是否存在且为已加载身份的 PEM 公钥。早前版本遗留的文件（旧版 Base64
+    /// <c>RSAPublicKey</c> 记录）或属于其他密钥的文件不匹配，会被替换。</para>
+    /// </summary>
+    /// <param name="publicPath">The sidecar public key path. <para>同名公钥路径。</para></param>
+    /// <param name="rsa">The loaded private identity. <para>已加载的私钥身份。</para></param>
+    /// <returns><see langword="true"/> when the file already holds this key's PEM public half.
+    /// <para>文件已保存该密钥的 PEM 公钥时返回 <see langword="true"/>。</para></returns>
+    private static bool PublicKeyFileMatches(string publicPath, RSA rsa)
+    {
+        if (!File.Exists(publicPath)) return false;
+        try
+        {
+            using var publicKey = RSA.Create();
+            publicKey.ImportFromPem(File.ReadAllText(publicPath));
+            return publicKey.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(rsa.ExportSubjectPublicKeyInfo());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                or CryptographicException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Builds the ".pub" file text in the upstream layout: the PEM <c>SubjectPublicKeyInfo</c> written by
+    /// upstream <c>WritePublicFile</c> (<c>PEM_write_PUBKEY</c>) and read back by <c>LoadPublicKey</c>,
+    /// which feeds <c>GetPublicKeyinfo</c> into the handshake. The block keeps the single trailing newline
+    /// that <c>PEM_write_PUBKEY</c> emits, because the daemon stores the handshake public key verbatim in
+    /// its known-hosts record and compares it byte-for-byte on the next connection.
+    /// <para>按上游布局构建 ".pub" 文件文本：上游 <c>WritePublicFile</c>（<c>PEM_write_PUBKEY</c>）写出的
+    /// PEM <c>SubjectPublicKeyInfo</c>，由 <c>LoadPublicKey</c> 读回并经 <c>GetPublicKeyinfo</c>
+    /// 送入握手。该块保留 <c>PEM_write_PUBKEY</c> 输出的单个结尾换行，因为守护进程把握手公钥原样存入
+    /// 已知主机记录，并在下次连接时逐字节比对。</para>
+    /// </summary>
+    /// <param name="rsa">The key whose public half is written. <para>写出其公钥部分的密钥。</para></param>
+    /// <returns>The file text, ending with the PEM closing line and its newline.
+    /// <para>文件文本，以 PEM 结束行及其换行结尾。</para></returns>
+    internal static string BuildPublicKeyFileText(RSA rsa) => rsa.ExportSubjectPublicKeyInfoPem() + "\n";
+
+    /// <summary>
     /// Signs the token using the configured verification algorithm.
-    /// When <see cref="_verifyType"/> is <see cref="HdcAuthVerifyType.Rsa3072Sha512"/>,
-    /// performs RSA-PSS with SHA-512.
-    /// When <see cref="_verifyType"/> is <see cref="HdcAuthVerifyType.RsaEncrypt"/>,
-    /// performs legacy RSA PKCS#1 v1.5 encryption.
+    /// When <see cref="_verifyType"/> is <see cref="HdcAuthVerifyType.Rsa3072Sha512"/>, the token is signed
+    /// with the private key; when it is <see cref="HdcAuthVerifyType.RsaEncrypt"/>, the whole token is
+    /// RSA-encrypted with the private key.
     /// <para>使用配置的验证算法对令牌签名。当 <see cref="_verifyType"/> 为
-    /// <see cref="HdcAuthVerifyType.Rsa3072Sha512"/> 时使用 RSA-PSS SHA-512 签名；
-    /// 当 <see cref="_verifyType"/> 为 <see cref="HdcAuthVerifyType.RsaEncrypt"/> 时使用
-    /// RSA PKCS#1 v1.5 加密。</para>
+    /// <see cref="HdcAuthVerifyType.Rsa3072Sha512"/> 时用私钥对令牌签名；
+    /// 当 <see cref="_verifyType"/> 为 <see cref="HdcAuthVerifyType.RsaEncrypt"/> 时用私钥加密整个令牌。</para>
     /// </summary>
     /// <param name="token">The token to sign. <para>待签名的令牌。</para></param>
     /// <returns>The signed payload. <para>签名后的负载。</para></returns>
@@ -203,12 +355,15 @@ public sealed class HdcAuthentication : IDisposable
     /// <param name="token">Challenge bytes from the daemon handshake; must not be empty. <para>来自守护进程握手的挑战字节；不得为空。</para></param>
     /// <param name="verifyType">Negotiated algorithm; only <see cref="HdcAuthVerifyType.Rsa3072Sha512"/> and <see cref="HdcAuthVerifyType.RsaEncrypt"/> are implemented. <para>协商算法；仅实现了 <see cref="HdcAuthVerifyType.Rsa3072Sha512"/> 与 <see cref="HdcAuthVerifyType.RsaEncrypt"/>。</para></param>
     /// <returns>
-    /// For RSA-3072, the PSS SHA-512 signature (384 bytes); for legacy mode, the PKCS#1 v1.5 blinded private encryption of the whole token (384 bytes).
-    /// <para>RSA-3072 模式返回 PSS SHA-512 签名（384 字节）；<see cref="HdcAuthVerifyType.RsaEncrypt"/> 模式返回整个令牌的 PKCS#1 v1.5 盲化私钥加密结果（384 字节）。</para>
+    /// For the RSA signature type, the signature over the token; for legacy mode, the RSA private-key
+    /// encryption of the whole token. Both are modulus-width: 384 bytes for the 3072-bit identity and
+    /// 512 bytes for the accepted 4096-bit legacy identity.
+    /// <para>RSA 签名类型返回对令牌的签名；旧版模式返回整个令牌的 RSA 私钥加密结果。
+    /// 两者均为模数宽度：3072 位身份为 384 字节，可接受的 4096 位旧版身份为 512 字节。</para>
     /// </returns>
     /// <exception cref="ArgumentException"><paramref name="token"/> is <see langword="null"/> or empty. <para><paramref name="token"/> 为 <see langword="null"/> 或空。</para></exception>
     /// <exception cref="NotSupportedException"><paramref name="verifyType"/> selects an unimplemented algorithm. <para><paramref name="verifyType"/> 选择了未实现的算法。</para></exception>
-    /// <exception cref="CryptographicException">Legacy mode requires a private key and a token that fits the 3072-bit type-1 block. <para>旧版模式要求存在私钥，且令牌能装入 3072 位 type-1 块。</para></exception>
+    /// <exception cref="CryptographicException">Legacy mode requires a private key and a token that fits the type-1 block. <para>旧版模式要求存在私钥，且令牌能装入 type-1 块。</para></exception>
     public byte[] SignToken(byte[] token, HdcAuthVerifyType verifyType)
     {
         if (token is null || token.Length == 0)
@@ -228,15 +383,20 @@ public sealed class HdcAuthentication : IDisposable
     }
 
     /// <summary>
-    /// Builds the public key payload for the HDC handshake: Base64-encoded
-    /// SubjectPublicKeyInfo (DER) suitable for the <c>buf</c> field of the handshake
-    /// message.
-    /// <para>构建 HDC 握手的公钥负载：Base64 编码的 SubjectPublicKeyInfo（DER），
-    /// 适用于握手消息的 <c>buf</c> 字段。</para>
+    /// Builds the <c>buf</c> payload of the HDC handshake public-key message, byte-for-byte the shape
+    /// upstream <c>GetPublicKeyinfo</c> produces: the local host name, the <c>\f</c> separator
+    /// (<c>HDC_HOST_DAEMON_BUF_SEPARATOR</c>), and the PEM <c>SubjectPublicKeyInfo</c> block with its single
+    /// trailing newline. The daemon splits on the first <c>\f</c>, shows the prefix as the requesting host in
+    /// its authorization prompt, and keeps the remainder as the known-hosts record, so neither the label nor
+    /// a stray newline may be invented here.
+    /// <para>构建 HDC 握手公钥消息的 <c>buf</c> 负载，与上游 <c>GetPublicKeyinfo</c> 产生的形状逐字节一致：
+    /// 本机主机名、<c>\f</c> 分隔符（<c>HDC_HOST_DAEMON_BUF_SEPARATOR</c>）、以及带单个结尾换行的 PEM
+    /// <c>SubjectPublicKeyInfo</c> 块。守护进程按第一个 <c>\f</c> 切分，把前缀作为请求主机显示在授权提示中，
+    /// 并把余下部分作为已知主机记录保存，因此这里的标注与换行都不能自行编造。</para>
     /// </summary>
-    /// <returns>The Base64-encoded public key payload bytes.
-    /// <para>Base64 编码的公钥负载字节。</para></returns>
-    public byte[] BuildDaemonPublicKeyPayload() => Encoding.UTF8.GetBytes("UotanStudio@" + Environment.MachineName + "\f" + _rsa.ExportSubjectPublicKeyInfoPem() + "\n");
+    /// <returns>The UTF-8 encoded handshake payload. <para>UTF-8 编码的握手负载。</para></returns>
+    public byte[] BuildDaemonPublicKeyPayload()
+        => Encoding.UTF8.GetBytes(HostName + BufferSeparator + BuildPublicKeyFileText(_rsa));
 
     /// <summary>
     /// Builds the handshake public-key payload: the UTF-8 bytes of the Base64-encoded DER SubjectPublicKeyInfo.
@@ -270,7 +430,8 @@ public sealed class HdcAuthentication : IDisposable
     /// <param name="path">The PEM private key file path. <para>PEM 私钥文件路径。</para></param>
     /// <returns>The loaded authentication. <para>加载的认证实例。</para></returns>
     /// <exception cref="FileNotFoundException">The key file does not exist. <para>密钥文件不存在。</para></exception>
-    /// <exception cref="InvalidOperationException">The key is not 3072 bits. <para>密钥不是 3072 位。</para></exception>
+    /// <exception cref="InvalidOperationException">The key width is not in <see cref="SupportedKeyBits"/>.
+    /// <para>密钥位数不在 <see cref="SupportedKeyBits"/> 中。</para></exception>
     public static HdcAuthentication LoadPrivateKey(string path)
     {
         if (!File.Exists(path))
@@ -303,7 +464,7 @@ public sealed class HdcAuthentication : IDisposable
             throw new InvalidOperationException($"Failed to parse PEM key at '{path}'.", ex);
         }
 
-        if (rsa.KeySize != RSA_KEY_BITS)
+        if (!SupportedKeyBits.Contains(rsa.KeySize))
         {
             var keySize = rsa.KeySize;
             rsa.Dispose();
@@ -315,9 +476,10 @@ public sealed class HdcAuthentication : IDisposable
     }
 
     /// <summary>
-    /// Saves the private key to the specified path in PEM format with restrictive
-    /// file permissions.
-    /// <para>以受限文件权限将私钥保存为 PEM 格式到指定路径。</para>
+    /// Saves the private key to the specified path as unencrypted PKCS#8 PEM, the format upstream
+    /// <c>WritePrivateFile</c> writes, with restrictive file permissions.
+    /// <para>以受限文件权限将私钥按未加密的 PKCS#8 PEM 保存到指定路径，即上游
+    /// <c>WritePrivateFile</c> 写出的格式。</para>
     /// </summary>
     /// <param name="path">The destination file path. <para>目标文件路径。</para></param>
     public void SavePrivateKey(string path)
@@ -328,22 +490,8 @@ public sealed class HdcAuthentication : IDisposable
             Directory.CreateDirectory(directory);
         }
 
-        WriteKeyFile(path, _rsa.ExportRSAPrivateKeyPem());
+        WriteKeyFile(path, _rsa.ExportPkcs8PrivateKeyPem() + "\n");
     }
-
-    /// <summary>
-    /// Gets the default private key path (UotanStudio/Hdc/hdckey).
-    /// <para>获取默认私钥路径（UotanStudio/Hdc/hdckey）。</para>
-    /// </summary>
-    /// <returns>The default private key path. <para>默认私钥路径。</para></returns>
-    public static string GetKeyPath() => DefaultKeyFilePath;
-
-    /// <summary>
-    /// Gets the default public key path (UotanStudio/Hdc/hdckey.pub).
-    /// <para>获取默认公钥路径（UotanStudio/Hdc/hdckey.pub）。</para>
-    /// </summary>
-    /// <returns>The default public key path. <para>默认公钥路径。</para></returns>
-    public static string GetPublicKeyPath() => DefaultKeyFilePath + ".pub";
 
     /// <summary>
     /// Writes key text to <paramref name="path"/> with restrictive permissions from

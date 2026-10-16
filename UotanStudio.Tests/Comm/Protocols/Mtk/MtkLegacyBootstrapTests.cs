@@ -315,7 +315,7 @@ public sealed partial class MtkSessionTests
     {
         var options = LegacyProfile() with { NorChipSelect = value };
 
-        var error = Assert.Throws<ArgumentOutOfRangeException>(() => options.Validate());
+        var error = Assert.Throws<ArgumentOutOfRangeException>(options.Validate);
         Assert.Equal(nameof(MtkLegacyOptions.NorChipSelect), error.ParamName);
         Assert.Throws<ArgumentOutOfRangeException>(() => options.BuildRuntime(0x0766, new(5, 0xFE)));
     }
@@ -327,7 +327,7 @@ public sealed partial class MtkSessionTests
     {
         var options = LegacyProfile() with { NandBmtFlag = flag };
 
-        var error = Assert.Throws<ArgumentOutOfRangeException>(() => options.Validate());
+        var error = Assert.Throws<ArgumentOutOfRangeException>(options.Validate);
         Assert.Equal(nameof(MtkLegacyOptions.NandBmtFlag), error.ParamName);
         Assert.Throws<ArgumentOutOfRangeException>(() => options.BuildRuntime(0x0766, new(5, 0xFE)));
     }

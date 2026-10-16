@@ -112,7 +112,7 @@ public sealed class DeviceControllerTests
 
         await using (var lease = await controller.OpenAsync(snapshot, endpoint.Id, TestContext.Current.CancellationToken))
         {
-            Assert.True(lease.Transport is DeviceControllerTests.Transport);
+            Assert.True(lease.Transport is Transport);
             controller.HandleDeviceRemoved(new UsbDeviceInfo
             {
                 ApiName = "native",

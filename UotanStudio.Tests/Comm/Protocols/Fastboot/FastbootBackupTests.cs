@@ -81,7 +81,7 @@ public class FastbootBackupTests
         Assert.Equal(partitionBytes, written);
         Assert.Equal(Sha256Hex(partitionBytes), Sha256Hex(written));
 
-        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        var commands = transport.Writes.Select(Encoding.UTF8.GetString).ToList();
         Assert.Contains("getvar:has-slot:boot", commands);
         Assert.Contains("getvar:partition-size:boot", commands);
         Assert.Contains("getvar:max-fetch-size", commands);
@@ -103,7 +103,7 @@ public class FastbootBackupTests
         var result = BackupService.RestoreFastbootPartition(session, "boot", imagePath, progress: null, CancellationToken.None);
 
         Assert.True(result.Success, result.Summary);
-        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        var commands = transport.Writes.Select(Encoding.UTF8.GetString).ToList();
         Assert.Contains(commands, c => c.StartsWith("download:", StringComparison.Ordinal));
         Assert.Contains("flash:boot", commands);
     }
@@ -120,7 +120,7 @@ public class FastbootBackupTests
         Assert.Throws<FastbootException>(() =>
             BackupService.RestoreFastbootPartition(session, "boot", imagePath, progress: null, CancellationToken.None));
 
-        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        var commands = transport.Writes.Select(Encoding.UTF8.GetString).ToList();
         Assert.DoesNotContain(commands, c => c.StartsWith("download:", StringComparison.Ordinal));
         Assert.DoesNotContain(commands, c => c.StartsWith("flash:", StringComparison.Ordinal));
     }
@@ -137,7 +137,7 @@ public class FastbootBackupTests
         Assert.Throws<FastbootException>(() =>
             BackupService.RestoreFastbootPartition(session, "boot", imagePath, progress: null, CancellationToken.None));
 
-        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        var commands = transport.Writes.Select(Encoding.UTF8.GetString).ToList();
         Assert.DoesNotContain(commands, c => c.StartsWith("download:", StringComparison.Ordinal));
         Assert.DoesNotContain(commands, c => c.StartsWith("flash:", StringComparison.Ordinal));
     }
@@ -155,7 +155,7 @@ public class FastbootBackupTests
         var response = session.FlashPartition("boot", ms, imageBytes.Length, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(FastbootResponseState.Success, response.State);
-        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        var commands = transport.Writes.Select(Encoding.UTF8.GetString).ToList();
         Assert.Contains("getvar:has-slot:boot", commands);
         Assert.Contains("getvar:current-slot", commands);
         Assert.Contains("flash:boot_a", commands);
@@ -173,7 +173,7 @@ public class FastbootBackupTests
         using var ms = new MemoryStream(imageBytes);
         session.FlashPartition("boot_a", ms, imageBytes.Length, cancellationToken: TestContext.Current.CancellationToken);
 
-        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        var commands = transport.Writes.Select(Encoding.UTF8.GetString).ToList();
         Assert.Contains("flash:boot_a", commands);
         Assert.DoesNotContain(commands, c => c == "flash:boot_a_a");
         Assert.DoesNotContain(commands, c => c.StartsWith("getvar:has-slot:", StringComparison.Ordinal));
@@ -191,7 +191,7 @@ public class FastbootBackupTests
         using var ms = new MemoryStream(imageBytes);
         session.FlashPartition("system_ext_a", ms, imageBytes.Length, cancellationToken: TestContext.Current.CancellationToken);
 
-        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        var commands = transport.Writes.Select(Encoding.UTF8.GetString).ToList();
         Assert.Contains("flash:system_ext_a", commands);
         Assert.DoesNotContain(commands, c => c == "flash:system_ext");
         Assert.DoesNotContain(commands, c => c == "flash:system_a");
@@ -210,7 +210,7 @@ public class FastbootBackupTests
         using var ms = new MemoryStream(imageBytes);
         session.FlashPartition("boot", ms, imageBytes.Length, cancellationToken: TestContext.Current.CancellationToken, resolveSlot: false);
 
-        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        var commands = transport.Writes.Select(Encoding.UTF8.GetString).ToList();
         Assert.DoesNotContain(commands, c => c.StartsWith("getvar:has-slot:", StringComparison.Ordinal));
         Assert.Contains("flash:boot", commands);
     }

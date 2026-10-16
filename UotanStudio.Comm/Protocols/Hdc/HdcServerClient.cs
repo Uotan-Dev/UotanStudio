@@ -33,7 +33,7 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     /// <para>遵循上游 OHOS_HDC_SERVER_PORT 环境变量，否则使用 8710；唯一定义在
     /// <c>Routing.DebugBridgeEndpoints</c>。</para></summary>
     /// <value>The default host-channel port used when no explicit port is supplied.<para>未显式提供端口时使用的默认宿主通道端口。</para></value>
-    public static int DefaultServerPort => Routing.DebugBridgeEndpoints.HdcServerPort;
+    public static int DefaultServerPort => DebugBridgeEndpoints.HdcServerPort;
     /// <summary>Maximum frame allocation.<para>单帧分配上限。</para></summary>
     public const int MaximumFrameBytes = 4 * 1024 * 1024;
     /// <summary>Maximum captured output.<para>捕获输出上限。</para></summary>
@@ -42,7 +42,7 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     /// <summary>Checks the server-initiated handshake.<para>检查服务端主动握手。</para></summary>
     /// <param name="timeoutMs">Connect-and-handshake deadline in milliseconds.<para>连接与握手的超时时限（毫秒）。</para></param>
     /// <returns><see langword="true"/> when a host channel handshake completes in time; otherwise <see langword="false"/>.<para>宿主通道握手及时完成时返回 <see langword="true"/>，否则返回 <see langword="false"/>。</para></returns>
-    /// <exception cref="System.ObjectDisposedException">This client has been disposed.<para>此客户端已被释放。</para></exception>
+    /// <exception cref="ObjectDisposedException">This client has been disposed.<para>此客户端已被释放。</para></exception>
     public bool DetectServer(int timeoutMs = 2000)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -54,13 +54,13 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     /// <returns><see langword="true"/> when the default-timeout handshake succeeds; otherwise <see langword="false"/>.<para>默认超时的握手成功时返回 <see langword="true"/>，否则返回 <see langword="false"/>。</para></returns>
     public bool IsServerRunning() => DetectServer();
     /// <summary>Validates a channel; each operation reconnects.<para>验证通道；每次操作单独重连。</para></summary>
-    /// <exception cref="System.ObjectDisposedException">This client has been disposed.<para>此客户端已被释放。</para></exception>
+    /// <exception cref="ObjectDisposedException">This client has been disposed.<para>此客户端已被释放。</para></exception>
     /// <exception cref="InvalidDataException">The host channel handshake is not a valid HDC greeting.<para>宿主通道握手不是有效的 HDC 问候。</para></exception>
     public void Connect() => ConnectAsync().GetAwaiter().GetResult();
     /// <summary>Validates a channel with cancellation.<para>可取消地验证通道。</para></summary>
     /// <param name="cancellationToken">Cancels the connect-and-handshake within its own 3-second budget.<para>在其自带的 3 秒预算内取消连接与握手。</para></param>
     /// <returns>A task that completes once the host-channel handshake succeeds.<para>宿主通道握手成功后完成的task。</para></returns>
-    /// <exception cref="System.ObjectDisposedException">This client has been disposed.<para>此客户端已被释放。</para></exception>
+    /// <exception cref="ObjectDisposedException">This client has been disposed.<para>此客户端已被释放。</para></exception>
     /// <exception cref="InvalidDataException">The host channel handshake is not a valid HDC greeting.<para>宿主通道握手不是有效的 HDC 问候。</para></exception>
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
@@ -291,7 +291,7 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     /// <para>成功终止运行中的 server 返回 <c>true</c>；未发现 server 返回 <c>false</c>。</para></returns>
     /// <param name="timeoutMs">Milliseconds to wait for the terminated process to exit.<para>等待被终止进程退出的毫秒数。</para></param>
     /// <param name="cancellationToken">Checked before any pid file is read.<para>在读取任何 pid 文件前进行检查。</para></param>
-    /// <exception cref="System.OperationCanceledException"><paramref name="cancellationToken"/> was already signaled.<para><paramref name="cancellationToken"/> 已被触发。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was already signaled.<para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<bool> KillAsync(int timeoutMs = 10000, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -341,7 +341,7 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     /// <summary>Creates a target-scoped session.<para>创建目标绑定会话。</para></summary>
     /// <param name="connectKey">Non-blank target identifier the session runs commands against.<para>会话执行命令所针对的非空白目标标识。</para></param>
     /// <returns>A session over a dedicated host-channel client.<para>基于独立宿主通道客户端的会话。</para></returns>
-    /// <exception cref="System.ObjectDisposedException">This client has been disposed.<para>此客户端已被释放。</para></exception>
+    /// <exception cref="ObjectDisposedException">This client has been disposed.<para>此客户端已被释放。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="connectKey"/> is null, empty or whitespace.<para><paramref name="connectKey"/> 为 null、空或仅含空白。</para></exception>
     public HdcSession CreateSession(string connectKey)
     {

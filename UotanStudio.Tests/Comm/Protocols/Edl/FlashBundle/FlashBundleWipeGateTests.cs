@@ -384,7 +384,7 @@ public class FlashBundleWipeGateTests
     private static FirehoseStorageGeometry Geometry() => new(0, 4096, 1048576);
 
     private static string Concatenated(ScriptedCommTransport transport)
-        => string.Concat(transport.Writes.Select(write => Encoding.UTF8.GetString(write)));
+        => string.Concat(transport.Writes.Select(Encoding.UTF8.GetString));
 
     private static EdlSession CreateSession(ScriptedCommTransport transport)
         => new(transport, new FirehoseConfiguration

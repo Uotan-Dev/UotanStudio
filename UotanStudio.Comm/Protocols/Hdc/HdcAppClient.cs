@@ -9,7 +9,7 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 /// <para>原生守护进程应用传输与 bundle-manager 完成消息。</para>
 /// </summary>
 /// <param name="connection">Established HDC connection used to open the app task channels. <para>用于打开应用任务通道的已建立 HDC 连接。</para></param>
-public sealed class HdcAppClient(HdcConnection connection) : UotanStudio.Comm.Contracts.IHdcAppClient
+public sealed class HdcAppClient(HdcConnection connection) : Contracts.IHdcAppClient
 {
     /// <summary>
     /// Transfers and installs one HAP/HSP/APP package using AppCheck/Begin/Data/Finish.

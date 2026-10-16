@@ -9,7 +9,7 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>Owns native daemon TCP mappings for one authenticated connection.<para>为一条已认证连接持有原生守护进程的 TCP 映射。</para></summary>
 /// <param name="connection">The authenticated native HDC connection that carries every mapping's control channel.<para>承载每个映射控制通道的已认证原生 HDC 连接。</para></param>
-public sealed class HdcForwardManager(HdcConnection connection) : IDisposable, UotanStudio.Comm.Contracts.IHdcForwardManager
+public sealed class HdcForwardManager(HdcConnection connection) : IDisposable, Contracts.IHdcForwardManager
 {
     private readonly Lock _gate = new();
     private readonly Dictionary<(bool Reverse, string Listen), Mapping> _mappings = [];
@@ -21,8 +21,8 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable, U
     /// <param name="reverse"><see langword="true"/> to set up a reverse (device-initiated) mapping; <see langword="false"/> for host-initiated forwarding.<para><see langword="true"/> 建立反向（设备发起）映射；<see langword="false"/> 为主机发起转发。</para></param>
     /// <param name="cancellationToken">Cancels the synchronous endpoint handshake before the mapping is registered.<para>在映射登记前取消同步的端点握手。</para></param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="localPort"/> is outside 1..65535.<para><paramref name="localPort"/> 不在 1..65535 范围内。</para></exception>
-    /// <exception cref="System.IO.IOException">The listen key already has a different open mapping.<para>该监听键已存在另一个不同的打开映射。</para></exception>
-    /// <exception cref="System.ObjectDisposedException">This manager has been disposed.<para>此管理器已被释放。</para></exception>
+    /// <exception cref="IOException">The listen key already has a different open mapping.<para>该监听键已存在另一个不同的打开映射。</para></exception>
+    /// <exception cref="ObjectDisposedException">This manager has been disposed.<para>此管理器已被释放。</para></exception>
     public void Add(int localPort, int remotePort, bool reverse = false, CancellationToken cancellationToken = default)
         => Add(localPort, $"tcp:{remotePort}", reverse, cancellationToken);
 
@@ -33,8 +33,8 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable, U
     /// <param name="cancellationToken">Cancels the synchronous endpoint handshake before the mapping is registered.<para>在映射登记前取消同步的端点握手。</para></param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="localPort"/> is outside 1..65535.<para><paramref name="localPort"/> 不在 1..65535 范围内。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="remoteEndpoint"/> is missing or not a valid supported endpoint.<para><paramref name="remoteEndpoint"/> 缺失或不是有效的受支持端点。</para></exception>
-    /// <exception cref="System.IO.IOException">The listen key already has a different open mapping.<para>该监听键已存在另一个不同的打开映射。</para></exception>
-    /// <exception cref="System.ObjectDisposedException">This manager has been disposed.<para>此管理器已被释放。</para></exception>
+    /// <exception cref="IOException">The listen key already has a different open mapping.<para>该监听键已存在另一个不同的打开映射。</para></exception>
+    /// <exception cref="ObjectDisposedException">This manager has been disposed.<para>此管理器已被释放。</para></exception>
     public void Add(int localPort, string remoteEndpoint, bool reverse = false, CancellationToken cancellationToken = default)
     {
         if (localPort is < 1 or > 65535) throw new ArgumentOutOfRangeException(nameof(localPort));

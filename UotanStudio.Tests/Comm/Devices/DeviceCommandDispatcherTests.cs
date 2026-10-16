@@ -101,7 +101,7 @@ public class DeviceCommandDispatcherTests
         await using var dispatcher = new DeviceCommandDispatcher();
         var cancellation = new OperationCanceledException("device layer aborted without a cancellable token");
 
-        var task = dispatcher.EnqueueAsync<string>("bare-cancel", _ => Task.FromException<string>(cancellation), TestContext.Current.CancellationToken);
+        var task = dispatcher.EnqueueAsync("bare-cancel", _ => Task.FromException<string>(cancellation), TestContext.Current.CancellationToken);
 
         var error = await Assert.ThrowsAsync<OperationCanceledException>(
             () => task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
@@ -117,7 +117,7 @@ public class DeviceCommandDispatcherTests
         foreign.Cancel();
         var cancellation = new OperationCanceledException(foreign.Token);
 
-        var task = dispatcher.EnqueueAsync<int>("foreign-cancel", _ => Task.FromException<int>(cancellation), TestContext.Current.CancellationToken);
+        var task = dispatcher.EnqueueAsync("foreign-cancel", _ => Task.FromException<int>(cancellation), TestContext.Current.CancellationToken);
 
         var error = await Assert.ThrowsAsync<OperationCanceledException>(
             () => task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
@@ -132,7 +132,7 @@ public class DeviceCommandDispatcherTests
         using var cancellation = new CancellationTokenSource();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var task = dispatcher.EnqueueAsync<string>("cooperative", async token =>
+        var task = dispatcher.EnqueueAsync("cooperative", async token =>
         {
             started.SetResult();
             await Task.Delay(Timeout.Infinite, token);
@@ -153,7 +153,7 @@ public class DeviceCommandDispatcherTests
         await using var dispatcher = new DeviceCommandDispatcher();
         using var cancellation = new CancellationTokenSource();
 
-        var task = dispatcher.EnqueueAsync<string>("inner-link", async token =>
+        var task = dispatcher.EnqueueAsync("inner-link", async token =>
         {
             using var inner = CancellationTokenSource.CreateLinkedTokenSource(token);
             cancellation.Cancel();

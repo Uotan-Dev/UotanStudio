@@ -135,7 +135,7 @@ public class EdlSinglePartitionTests
 
         Assert.True(result.Success, result.Summary);
 
-        var allWrites = string.Concat(transport.Writes.Select(w => Encoding.UTF8.GetString(w)));
+        var allWrites = string.Concat(transport.Writes.Select(Encoding.UTF8.GetString));
         Assert.Equal(1, CountOccurrences(allWrites, "<program"));
         Assert.Contains("boot.img", allWrites, StringComparison.Ordinal);
         Assert.DoesNotContain("system.img", allWrites, StringComparison.Ordinal);
@@ -151,12 +151,12 @@ public class EdlSinglePartitionTests
         dir.WriteBytes("boot.img", new byte[1024]);
         var imagePath = Path.Combine(dir.Path, "boot.img");
 
-        var device = new UotanStudio.ViewModels.Devices.DeviceInfo(new UotanStudio.Services.Devices.DetectedDevice
+        var device = new ViewModels.Devices.DeviceInfo(new DetectedDevice
         {
             Key = "edl-test",
             Serial = "TEST-EDL",
             Protocol = DeviceProtocolKind.Edl,
-            Transport = UotanStudio.Services.Devices.DeviceTransportKind.Usb
+            Transport = DeviceTransportKind.Usb
         });
 
         var result = await FlashService.Default.FlashImageAsync(device, "boot", imagePath, null, CancellationToken.None);

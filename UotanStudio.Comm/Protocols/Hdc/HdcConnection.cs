@@ -28,11 +28,11 @@ public sealed class HdcConnection : IDisposable
     /// whole daemon packet that follows the USB header, so the ceiling is the payload limit plus the
     /// fixed daemon PayloadHead of <see cref="HdcConstants.HeaderSize"/> bytes plus
     /// <see cref="HdcDaemonCodec.MaximumMetadataSize"/>, which is 1035 framing bytes on top of the payload limit.
-    /// Blocks above it can never satisfy <see cref="HdcDaemonCodec.Decode(System.ReadOnlySpan{byte})"/> and are rejected before their body is read.
+    /// Blocks above it can never satisfy <see cref="HdcDaemonCodec.Decode(ReadOnlySpan{byte})"/> and are rejected before their body is read.
     /// <para>HDC 单个 USB 块可声明的最大字节数。<see cref="HdcUsbHead.DataSize"/> 覆盖 USB 头之后的完整守护进程报文，
     /// 因此上限等于负载上限加上 <see cref="HdcConstants.HeaderSize"/> 字节的固定守护进程头与
     /// <see cref="HdcDaemonCodec.MaximumMetadataSize"/>，即负载上限再加 1035 字节帧开销。
-    /// 超过该值的块无法满足 <see cref="HdcDaemonCodec.Decode(System.ReadOnlySpan{byte})"/>，会在读取其主体前被拒绝。</para>
+    /// 超过该值的块无法满足 <see cref="HdcDaemonCodec.Decode(ReadOnlySpan{byte})"/>，会在读取其主体前被拒绝。</para>
     /// </summary>
     internal const int MaximumUsbBlockSize = HdcConstants.MaxPayloadSize + HdcConstants.HeaderSize + HdcDaemonCodec.MaximumMetadataSize;
 
@@ -153,7 +153,7 @@ public sealed class HdcConnection : IDisposable
     /// <para>初始化 <see cref="HdcConnection"/> 类的新实例。</para>
     /// </summary>
     /// <param name="transport">The device transport. <para>设备传输。</para></param>
-    /// <param name="authentication">The RSA-3072 authentication identity. <para>RSA-3072 认证身份。</para></param>
+    /// <param name="authentication">The HDC host authentication identity. <para>HDC 主机认证身份。</para></param>
     public HdcConnection(ICommTransport transport, HdcAuthentication authentication)
     {
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
@@ -175,7 +175,7 @@ public sealed class HdcConnection : IDisposable
     private void Connect(CancellationToken cancellationToken)
     {
         if (_transport is UsbDeviceTransport)
-            UotanStudio.Comm.Transports.Usb.Core.UsbAccessPolicy.RequireDirect(0xff, 0x50, 1);
+            Transports.Usb.Core.UsbAccessPolicy.RequireDirect(0xff, 0x50, 1);
         lock (_streamsLock)
         {
             if (_disposed)
@@ -247,7 +247,7 @@ public sealed class HdcConnection : IDisposable
                 _peerBanner = capabilities.GetValueOrDefault("devname", status);
                 authenticated = true; break;
             }
-            byte[] buffer = handshake.State switch
+            var buffer = handshake.State switch
             {
                 3 => _authentication.BuildDaemonPublicKeyPayload(),
                 2 => EncodeAuthenticationToken(_authentication.SignToken(handshake.Buffer, verifyType)),
@@ -302,7 +302,7 @@ public sealed class HdcConnection : IDisposable
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        using var cancellation = cancellationToken.Register(() => _transport.Dispose());
+        using var cancellation = cancellationToken.Register(_transport.Dispose);
         try { await Task.Run(() => Connect(cancellationToken), cancellationToken).ConfigureAwait(false); }
         catch (Exception) when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
         cancellationToken.ThrowIfCancellationRequested();
@@ -348,9 +348,9 @@ public sealed class HdcConnection : IDisposable
 
     /// <summary>
     /// Reports whether an announced USB block size exceeds what the daemon framing can encode,
-    /// so the body is never allocated for a block that <see cref="HdcDaemonCodec.Decode(System.ReadOnlySpan{byte})"/> must reject.
+    /// so the body is never allocated for a block that <see cref="HdcDaemonCodec.Decode(ReadOnlySpan{byte})"/> must reject.
     /// <para>判断声明的 USB 块大小是否超出守护进程帧编码能力，从而避免为
-    /// <see cref="HdcDaemonCodec.Decode(System.ReadOnlySpan{byte})"/> 必然拒绝的块分配主体。</para>
+    /// <see cref="HdcDaemonCodec.Decode(ReadOnlySpan{byte})"/> 必然拒绝的块分配主体。</para>
     /// </summary>
     /// <param name="dataSize">The <see cref="HdcUsbHead.DataSize"/> value carried by the USB header. <para>USB 头部携带的 <see cref="HdcUsbHead.DataSize"/> 值。</para></param>
     /// <returns><see langword="true"/> when the block is larger than <see cref="MaximumUsbBlockSize"/>. <para>块大于 <see cref="MaximumUsbBlockSize"/> 时为 <see langword="true"/>。</para></returns>

@@ -14,11 +14,11 @@ internal static class HdcTestKeys
 {
     private static readonly Lazy<RSAParameters> CachedParameters = new(() =>
     {
-        using var rsa = RSA.Create(3072);
+        using var rsa = RSA.Create(HdcAuthentication.KeyBits);
         return rsa.ExportParameters(includePrivateParameters: true);
     });
 
-    /// <summary>Creates a fresh 3072-bit RSA key from the cached parameters.</summary>
+    /// <summary>Creates a fresh host-identity-sized RSA key from the cached parameters.</summary>
     internal static RSA CreateRsa()
     {
         var rsa = RSA.Create();

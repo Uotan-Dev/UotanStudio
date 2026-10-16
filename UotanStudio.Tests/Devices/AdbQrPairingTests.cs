@@ -166,7 +166,8 @@ public sealed class AdbQrPairingTests
         using var authentication = AdbAuthentication.LoadOrCreate();
         using var stream = client.GetStream();
         var crypto = new BcTlsCrypto(new SecureRandom());
-        var certificateDer = AdbPairingKeystore.LoadOrCreateClientCertificate().RawDataMemory.ToArray();
+        using var certificate = AdbHostCertificate.Create(authentication.RsaKey);
+        var certificateDer = certificate.RawDataMemory.ToArray();
         var privateKey = DotNetUtilities.GetKeyPair(authentication.RsaKey).Private;
 
         var protocol = new TlsServerProtocol(stream);

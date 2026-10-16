@@ -206,7 +206,7 @@ public partial class SaharaTests
     public async Task HandshakeAsync_DeviceAdvertisesSmallerCommandLength_HostKeepsSuccessStatusAndFullRequestedPayload()
     {
         using var transport = new ScriptedCommTransport();
-        byte[] hello = new byte[48];
+        var hello = new byte[48];
         BinaryPrimitives.WriteUInt32LittleEndian(hello.AsSpan(0, 4), 0x01);
         BinaryPrimitives.WriteUInt32LittleEndian(hello.AsSpan(4, 4), 48);
         BinaryPrimitives.WriteUInt32LittleEndian(hello.AsSpan(8, 4), 2);

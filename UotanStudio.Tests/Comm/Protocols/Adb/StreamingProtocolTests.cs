@@ -29,7 +29,7 @@ public class StreamingProtocolTests
         var parser = new AdbShellClient.FrameParser();
         parser.Feed([(byte)ShellFrameKind.Stdout, 4, 0, 0, 0, 1]);
 
-        Assert.Throws<InvalidDataException>(() => parser.Complete());
+        Assert.Throws<InvalidDataException>(parser.Complete);
     }
 
     [Fact]

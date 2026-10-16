@@ -94,7 +94,7 @@ public static class DebugBridgeSessionOpener
         string? serial = null)
     {
         if (interfaceClass != 0xff || protocol != 1) return;
-        bool present = subclass switch
+        var present = subclass switch
         {
             0x42 => AdbServerOwns(serial),
             0x50 => HdcServerOwns(serial),

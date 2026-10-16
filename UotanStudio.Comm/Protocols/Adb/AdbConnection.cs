@@ -108,9 +108,10 @@ internal sealed class AdbConnection : IDisposable
     /// <summary>
     /// Initializes a new instance with an ordered list of authentication
     /// identities, tried in order on AUTH token challenges and disposed with
-    /// the connection.
+    /// the connection. Index 0 is the user identity, whose public half carries
+    /// the RSAPUBLICKEY announcement.
     /// <para>使用有序认证身份列表初始化新实例；AUTH 令牌挑战时按顺序尝试各身份，
-    /// 所有身份随连接一起释放。</para>
+    /// 所有身份随连接一起释放。索引 0 是用户身份，其公钥半部用于 RSAPUBLICKEY 通告。</para>
     /// </summary>
     /// <param name="transport">The device transport. <para>设备传输。</para></param>
     /// <param name="authentications">The ordered RSA authentication identities. <para>有序 RSA 认证身份列表。</para></param>
@@ -218,7 +219,7 @@ internal sealed class AdbConnection : IDisposable
 
         if (_transport is UsbDeviceTransport directUsb)
         {
-            UotanStudio.Comm.Transports.Usb.Core.UsbAccessPolicy.RequireDirect(0xff, 0x42, 1,
+            Transports.Usb.Core.UsbAccessPolicy.RequireDirect(0xff, 0x42, 1,
                 directUsb.Session.DeviceInfo.SerialNumber);
         }
 
@@ -606,6 +607,15 @@ internal sealed class AdbConnection : IDisposable
     /// Handles the AUTH handshake from the peer (TOKEN / SIGNATURE / RSAPUBLICKEY).
     /// <para>处理来自对端的 AUTH 握手（TOKEN / SIGNATURE / RSAPUBLICKEY）。</para>
     /// </summary>
+    /// <remarks>
+    /// Mirrors upstream <c>send_auth_response()</c>: each token is answered with the next identity of the
+    /// chain and, once the chain is exhausted, the <c>RSAPUBLICKEY</c> announcement carries the public half
+    /// of the user identity at index 0 (<c>adb_auth_get_userkey()</c> reads only the user key file), which is
+    /// what makes the device show the authorization prompt for this host.
+    /// <para>与上游 <c>send_auth_response()</c> 一致：每个令牌用身份链的下一个身份应答，链耗尽后的
+    /// <c>RSAPUBLICKEY</c> 通告携带索引 0 处用户身份的公钥半部（<c>adb_auth_get_userkey()</c> 只读用户密钥
+    /// 文件），正是这条通告让设备为本网段主机弹出授权提示。</para>
+    /// </remarks>
     /// <param name="message">The AUTH message. <para>AUTH 消息。</para></param>
     /// <param name="cancellationToken">Cancels the reply write. <para>取消应答写出。</para></param>
     private async ValueTask HandleAuthAsync(AdbMessage message, CancellationToken cancellationToken)
@@ -623,7 +633,7 @@ internal sealed class AdbConnection : IDisposable
                 }
                 else
                 {
-                    var publicKey = _authentications[^1].BuildPublicKeyPayload();
+                    var publicKey = _authentications[0].BuildPublicKeyPayload();
                     await SendAsync(AdbMessaging.BuildAuth(AdbAuthType.RsaPublicKey, publicKey), cancellationToken)
                         .ConfigureAwait(false);
                 }

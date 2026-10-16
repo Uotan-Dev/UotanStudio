@@ -51,7 +51,7 @@ public readonly struct ShellResult(byte[] stdout, byte[] stderr, int exitCode)
 /// Initializes a new shell client for the given command.
 /// <para>为给定命令初始化新的 shell 客户端。</para>
 /// </remarks>
-public sealed class HdcShellClient : UotanStudio.Comm.Contracts.IHdcShellClient
+public sealed class HdcShellClient : Contracts.IHdcShellClient
 {
     private readonly HdcConnection? _connection;
     private readonly HdcServerClient? _server;
@@ -95,7 +95,7 @@ public sealed class HdcShellClient : UotanStudio.Comm.Contracts.IHdcShellClient
         }
         using var stream = _connection!.OpenChannel(HdcCommand.UnityExecute, Encoding.UTF8.GetBytes(_command));
         using var stdout = new MemoryStream();
-        int exitCode = -1;
+        var exitCode = -1;
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(timeoutMs);
         var deadline = Environment.TickCount64 + timeoutMs;
 

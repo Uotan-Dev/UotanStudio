@@ -23,7 +23,7 @@ public sealed class DeviceServerWatchStateTests
         var events = new List<(bool Adb, bool Hdc)>();
         var removed = new List<DeviceEndpoint>();
         controller.DebugBridgeAvailabilityChanged += (adb, hdc) => events.Add((adb, hdc));
-        controller.DeviceRemoved += candidate => removed.Add(candidate);
+        controller.DeviceRemoved += removed.Add;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var probe = new ScriptedProbe(
             [
@@ -49,7 +49,7 @@ public sealed class DeviceServerWatchStateTests
         var events = new List<(bool Adb, bool Hdc)>();
         var removed = new List<DeviceEndpoint>();
         controller.DebugBridgeAvailabilityChanged += (adb, hdc) => events.Add((adb, hdc));
-        controller.DeviceRemoved += candidate => removed.Add(candidate);
+        controller.DeviceRemoved += removed.Add;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var probe = new ScriptedProbe(
             [
@@ -75,7 +75,7 @@ public sealed class DeviceServerWatchStateTests
         var events = new List<(bool Adb, bool Hdc)>();
         var removed = new List<DeviceEndpoint>();
         controller.DebugBridgeAvailabilityChanged += (adb, hdc) => events.Add((adb, hdc));
-        controller.DeviceRemoved += candidate => removed.Add(candidate);
+        controller.DeviceRemoved += removed.Add;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var probe = new ScriptedProbe(
             [(DebugBridgeProbeOutcome.Unknown, DebugBridgeProbeOutcome.Unknown)],
@@ -101,7 +101,7 @@ public sealed class DeviceServerWatchStateTests
         await using var secondLease = controller.AdoptSession(second, new object());
         await using var hdcLease = controller.AdoptSession(hdc, new object());
         var removed = new List<DeviceEndpoint>();
-        controller.DeviceRemoved += candidate => removed.Add(candidate);
+        controller.DeviceRemoved += removed.Add;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var probe = new ScriptedProbe(
             [
@@ -132,7 +132,7 @@ public sealed class DeviceServerWatchStateTests
         await using var controller = CreateController(source);
         await using var lease = controller.AdoptSession(endpoint, new object());
         var removed = new List<DeviceEndpoint>();
-        controller.DeviceRemoved += candidate => removed.Add(candidate);
+        controller.DeviceRemoved += removed.Add;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var probe = new ScriptedProbe(
             [(DebugBridgeProbeOutcome.Listening, DebugBridgeProbeOutcome.Refused)],
@@ -152,7 +152,7 @@ public sealed class DeviceServerWatchStateTests
         await using var lease = controller.AdoptSession(endpoint, new object());
         controller.DebugBridgeAvailabilityChanged += (_, _) => throw new InvalidOperationException("subscriber failure");
         var removed = new List<DeviceEndpoint>();
-        controller.DeviceRemoved += candidate => removed.Add(candidate);
+        controller.DeviceRemoved += removed.Add;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var probe = new ScriptedProbe(
             [(DebugBridgeProbeOutcome.Listening, DebugBridgeProbeOutcome.Refused)],

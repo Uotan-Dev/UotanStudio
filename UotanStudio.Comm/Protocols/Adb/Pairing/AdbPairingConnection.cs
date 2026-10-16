@@ -65,7 +65,7 @@ internal static class AdbPairingConnection
     private static string PairCore(string host, int port, string password, CancellationToken cancellationToken)
     {
         using var client = new TcpClient { NoDelay = true };
-        using var cancellation = cancellationToken.Register(() => client.Dispose());
+        using var cancellation = cancellationToken.Register(client.Dispose);
         try
         {
             using var timeout = new CancellationTokenSource(ConnectTimeoutMs);
@@ -98,7 +98,8 @@ internal static class AdbPairingConnection
     {
         using var authentication = AdbAuthentication.LoadOrCreate();
         var crypto = new BcTlsCrypto(new SecureRandom());
-        var certificateDer = AdbPairingKeystore.LoadOrCreateClientCertificate().RawDataMemory.ToArray();
+        using var certificate = AdbHostCertificate.Create(authentication.RsaKey);
+        var certificateDer = certificate.RawDataMemory.ToArray();
         var privateKey = DotNetUtilities.GetKeyPair(authentication.RsaKey).Private;
 
         var protocol = new TlsClientProtocol(stream);

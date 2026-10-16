@@ -86,7 +86,7 @@ public class SerialTransportTests
 
         Assert.Throws<ObjectDisposedException>(transport.Connect);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => transport.ConnectAsync(TestContext.Current.CancellationToken));
-        Assert.Throws<ObjectDisposedException>(() => transport.GetStream());
+        Assert.Throws<ObjectDisposedException>(transport.GetStream);
         Assert.Throws<ObjectDisposedException>(() => transport.Read(new byte[1], 0, 1, 10));
         Assert.Throws<ObjectDisposedException>(() => transport.Write(new byte[1], 0, 1, 10));
         Assert.Equal(0, created);
@@ -97,7 +97,7 @@ public class SerialTransportTests
     {
         using var transport = new SerialTransport("COM1");
 
-        Assert.Throws<InvalidOperationException>(() => transport.GetStream());
+        Assert.Throws<InvalidOperationException>(transport.GetStream);
         Assert.Throws<InvalidOperationException>(() => transport.Read(new byte[1], 0, 1, 10));
         Assert.Throws<InvalidOperationException>(() => transport.Write(new byte[1], 0, 1, 10));
         Assert.False(transport.IsConnected);

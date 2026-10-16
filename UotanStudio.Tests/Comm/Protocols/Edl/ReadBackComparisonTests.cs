@@ -10,7 +10,7 @@ public class ReadBackComparisonTests
     [Fact]
     public async Task FragmentedSourceAndDeviceReads_CompareAcrossBufferBoundaries()
     {
-        byte[] expected = new byte[180123];
+        var expected = new byte[180123];
         new Random(9).NextBytes(expected);
         using var source = new ShortReadStream(expected);
         source.Position = 123;
@@ -31,7 +31,7 @@ public class ReadBackComparisonTests
     {
         using var source = new MemoryStream(new byte[sourceSize]);
         using var comparison = new ReadBackComparisonStream(source, "test");
-        byte[] data = new byte[deviceSize];
+        var data = new byte[deviceSize];
         data[65537] = 42;
         await comparison.WriteAsync(data.AsMemory(), TestContext.Current.CancellationToken);
         var error = await Assert.ThrowsAsync<EdlException>(() => comparison.CompleteAsync(TestContext.Current.CancellationToken));
@@ -67,13 +67,13 @@ public class ReadBackComparisonTests
     {
         const string ack = "<?xml version=\"1.0\"?><data><response value=\"ACK\" rawmode=\"false\"/></data>";
         using var transport = new ScriptedCommTransport();
-        byte[] payload = new byte[1024];
+        var payload = new byte[1024];
         payload.AsSpan().Fill(0x41);
         transport.OnWrite = bytes => Encoding.UTF8.GetString(bytes).Contains("<read ", StringComparison.Ordinal)
             ? [Encoding.UTF8.GetBytes("<data><response value=\"ACK\" rawmode=\"true\"/></data>"), payload, Encoding.UTF8.GetBytes(ack)]
             : [Encoding.UTF8.GetBytes("<?xml version=\"1.0\"?><data><response value=\"NAK\"/></data>")];
         var protocol = new FirehoseProtocol(transport, new FirehoseConfiguration { SectorSize = 512, AutoDetectSectorSize = false, ResponseTimeoutSeconds = 1 }, timeoutMs: 100);
-        byte[] original = (byte[])payload.Clone();
+        var original = (byte[])payload.Clone();
         if (mismatch) original[17] = 0;
         using var source = new MemoryStream(original);
         if (mismatch)

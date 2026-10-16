@@ -18,7 +18,7 @@ public class FastbootDownloadNegotiationTests
         => new(transport, timeoutMs: 250);
 
     private static List<string> Commands(ScriptedCommTransport transport)
-        => [.. transport.Writes.Select(w => Encoding.UTF8.GetString(w))];
+        => [.. transport.Writes.Select(Encoding.UTF8.GetString)];
 
     private static long CountCommand(ScriptedCommTransport transport, string command)
         => Commands(transport).Count(c => c == command);

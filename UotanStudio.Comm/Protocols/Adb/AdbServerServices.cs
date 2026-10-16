@@ -334,18 +334,18 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
 
     private static async Task RequestAsync(Stream stream, string request, CancellationToken cancellationToken)
     {
-        byte[] bytes = Encoding.UTF8.GetBytes(request);
+        var bytes = Encoding.UTF8.GetBytes(request);
         if (bytes.Length > 65535) throw new ArgumentOutOfRangeException(nameof(request));
         var header = Encoding.ASCII.GetBytes(bytes.Length.ToString("X4", CultureInfo.InvariantCulture));
         await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
         await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
-        byte[] status = new byte[4];
+        var status = new byte[4];
         await stream.ReadExactlyAsync(status, cancellationToken).ConfigureAwait(false);
         if (status.AsSpan().SequenceEqual("OKAY"u8)) return;
         if (!status.AsSpan().SequenceEqual("FAIL"u8)) throw new IOException("Invalid ADB server status.");
         await stream.ReadExactlyAsync(status, cancellationToken).ConfigureAwait(false);
-        int length = int.Parse(Encoding.ASCII.GetString(status), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-        byte[] message = new byte[length];
+        var length = int.Parse(Encoding.ASCII.GetString(status), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+        var message = new byte[length];
         await stream.ReadExactlyAsync(message, cancellationToken).ConfigureAwait(false);
         throw new IOException("ADB server: " + Encoding.UTF8.GetString(message));
     }
@@ -399,7 +399,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         using Stream stream = Open("sync:");
         using var input = File.OpenRead(localPath);
         Send(stream, "SEND", Encoding.UTF8.GetBytes(remotePath + ",33188"));
-        byte[] buffer = new byte[65536];
+        var buffer = new byte[65536];
         int count;
         while ((count = input.Read(buffer)) != 0) Send(stream, "DATA", buffer.AsSpan(0, count));
         Span<byte> header = stackalloc byte[8];
@@ -407,10 +407,10 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         BinaryPrimitives.WriteUInt32LittleEndian(header[4..], checked((uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds()));
         stream.Write(header);
         stream.ReadExactly(header);
-        uint length = BinaryPrimitives.ReadUInt32LittleEndian(header[4..]);
+        var length = BinaryPrimitives.ReadUInt32LittleEndian(header[4..]);
         if (header[..4].SequenceEqual("OKAY"u8) && length == 0) return;
         if (!header[..4].SequenceEqual("FAIL"u8) || length > 65536) throw new IOException("Invalid ADB sync response.");
-        byte[] message = new byte[(int)length]; stream.ReadExactly(message);
+        var message = new byte[(int)length]; stream.ReadExactly(message);
         throw new IOException(Encoding.UTF8.GetString(message));
     }
     private static void Send(Stream stream, string id, ReadOnlySpan<byte> data)
@@ -422,7 +422,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     }
     private static void Request(Stream stream, string request)
     {
-        byte[] bytes = Encoding.UTF8.GetBytes(request);
+        var bytes = Encoding.UTF8.GetBytes(request);
         if (bytes.Length > 65535) throw new ArgumentOutOfRangeException(nameof(request));
         stream.Write(Encoding.ASCII.GetBytes(bytes.Length.ToString("X4", CultureInfo.InvariantCulture)));
         stream.Write(bytes);
@@ -430,8 +430,8 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         if (status.SequenceEqual("OKAY"u8)) return;
         if (!status.SequenceEqual("FAIL"u8)) throw new IOException("Invalid ADB server status.");
         stream.ReadExactly(status);
-        int length = int.Parse(Encoding.ASCII.GetString(status), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-        byte[] message = new byte[length]; stream.ReadExactly(message);
+        var length = int.Parse(Encoding.ASCII.GetString(status), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+        var message = new byte[length]; stream.ReadExactly(message);
         throw new IOException("ADB server: " + Encoding.UTF8.GetString(message));
     }
 }
@@ -441,7 +441,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
 /// <para>在把 ADB 数据包块适配为面向字节的流时保留未读字节。</para>
 /// </summary>
 /// <param name="stream">The ADB packet stream to adapt. <para>要适配的 ADB 包流。</para></param>
-internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream stream) : Stream
+internal sealed class AdbServiceStream(Contracts.IAdbStream stream) : Stream
 {
     private bool _disposed;
     private byte[]? _pending;

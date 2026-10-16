@@ -581,7 +581,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// <returns>The outbound chunk size in file bytes.<para>出站数据块的文件字节数。</para></returns>
     private static int ResolveOutChunk(uint requestedMaxChunk, uint peerMaxPayload)
     {
-        uint outbound = requestedMaxChunk is 0 or > InboundMaxChunkBytes ? InboundMaxChunkBytes : requestedMaxChunk;
+        var outbound = requestedMaxChunk is 0 or > InboundMaxChunkBytes ? InboundMaxChunkBytes : requestedMaxChunk;
         if (peerMaxPayload is > 0 and < InboundMaxChunkBytes)
         {
             outbound = Math.Min(outbound, peerMaxPayload);

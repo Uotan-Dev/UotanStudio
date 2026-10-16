@@ -95,7 +95,7 @@ public class UsbApiRegistryTests
         var registry = new UsbApiRegistry();
         var nameEvents = new List<string>();
         var providerEvents = new List<string>();
-        registry.ProviderNameRegistered += name => nameEvents.Add(name);
+        registry.ProviderNameRegistered += nameEvents.Add;
         registry.ProviderRegistered += provider => providerEvents.Add(provider.ApiName);
 
         registry.Register("evt-backend", () => new FakeProvider("evt-backend"));

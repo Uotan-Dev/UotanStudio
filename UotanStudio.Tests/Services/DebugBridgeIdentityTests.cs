@@ -24,7 +24,7 @@ public sealed class DebugBridgeIdentityTests : IDisposable
     public void Dispose()
     {
         Directory.Delete(_root, true);
-        DebugBridgeIdentityService.LoadSettings = () => UotanStudio.Services.SettingsPersistenceService.Instance.LoadSettings();
+        DebugBridgeIdentityService.LoadSettings = UotanStudio.Services.SettingsPersistenceService.Instance.LoadSettings;
         DebugBridgeIdentityService.UpdateDefaultKeyId = UotanStudio.Services.SettingsPersistenceService.Instance.UpdateDefaultKeyId;
     }
 
@@ -43,7 +43,8 @@ public sealed class DebugBridgeIdentityTests : IDisposable
         DebugBridgeIdentityService.EnsureDefaults(adb, hdc, libraryRoot);
         foreach (var path in paths) Assert.Equal(before[path], File.ReadAllBytes(path));
         Assert.DoesNotContain('\0', File.ReadAllText(adb + ".pub"));
-        using var key = RSA.Create(); key.ImportFromPem(File.ReadAllText(hdc)); Assert.Equal(3072, key.KeySize);
+        using var key = RSA.Create(); key.ImportFromPem(File.ReadAllText(hdc));
+        Assert.Equal(UotanStudio.Comm.Protocols.Hdc.HdcAuthentication.KeyBits, key.KeySize);
         key.ImportFromPem(File.ReadAllText(adb)); Assert.Equal(2048, key.KeySize);
     }
 

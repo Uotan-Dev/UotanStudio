@@ -432,7 +432,7 @@ internal class UsbHostDevice : UsbDevice
                 return false;
             }
 
-            IntPtr outPipe = IntPtr.Zero;
+            var outPipe = IntPtr.Zero;
             if (pipeOut != 0)
             {
                 outPipe = UsbHostAPI.CopyPipe(usbInterface, pipeOut);

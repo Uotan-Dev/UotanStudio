@@ -66,7 +66,7 @@ public sealed record PhysicalDeviceIdentity
         Guid? container = info.ContainerId is { } containerValue && containerValue != Guid.Empty
             ? containerValue
             : null;
-        string? port = info.PhysicalPortPath is { Length: > 0 } portValue && !portValue.Any(char.IsControl)
+        var port = info.PhysicalPortPath is { Length: > 0 } portValue && !portValue.Any(char.IsControl)
             ? portValue
             : null;
         return new PhysicalDeviceIdentity

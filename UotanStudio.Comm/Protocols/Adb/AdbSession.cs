@@ -114,15 +114,15 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     public IReadOnlyList<string> PeerFeatures => Connection.PeerFeatures;
 
     /// <summary>
-    /// Creates a new ADB session over the specified device transport, using the
-    /// persistent default key (loaded from %USERPROFILE%/.android/adbkey, generated
-    /// when absent).
-    /// <para>在指定设备传输上创建新的 ADB 会话，使用持久化的默认密钥（从
-    /// %USERPROFILE%/.android/adbkey 加载，不存在时生成）。</para>
+    /// Creates a new ADB session over the specified device transport, using the host identity chain:
+    /// the persistent default key (loaded from <c>~/.android/adbkey</c>, generated when absent) followed
+    /// by the identities named by <c>ADB_VENDOR_KEYS</c>.
+    /// <para>在指定设备传输上创建新的 ADB 会话，使用主机身份链：先是持久化的默认密钥（从
+    /// <c>~/.android/adbkey</c> 加载，不存在时生成），其后是 <c>ADB_VENDOR_KEYS</c> 指名的身份。</para>
     /// </summary>
     /// <param name="transport">The device transport.<para>设备传输。</para></param>
     public AdbSession(ICommTransport transport)
-        : this(transport, AdbAuthentication.LoadOrCreate())
+        : this(transport, AdbAuthentication.LoadIdentityChain())
     {
     }
 

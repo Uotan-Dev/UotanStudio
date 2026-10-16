@@ -204,10 +204,10 @@ public class DebugBridgeServerControlTests
             var stream = request.GetStream();
             var header = new byte[4];
             await stream.ReadExactlyAsync(header, ct);
-            var length = Convert.ToInt32(System.Text.Encoding.ASCII.GetString(header), 16);
+            var length = Convert.ToInt32(Encoding.ASCII.GetString(header), 16);
             var payload = new byte[length];
             await stream.ReadExactlyAsync(payload, ct);
-            Assert.Equal("host:transport:unauthorized-serial", System.Text.Encoding.UTF8.GetString(payload));
+            Assert.Equal("host:transport:unauthorized-serial", Encoding.UTF8.GetString(payload));
             await stream.WriteAsync("FAIL000cunauthorized"u8.ToArray(), ct);
         }, ct);
         await Assert.ThrowsAsync<IOException>(() => session!.ConnectAsync(ct));
@@ -222,12 +222,12 @@ public class DebugBridgeServerControlTests
         var stream = request.GetStream();
         var header = new byte[4];
         await stream.ReadExactlyAsync(header, ct);
-        var length = Convert.ToInt32(System.Text.Encoding.ASCII.GetString(header), 16);
+        var length = Convert.ToInt32(Encoding.ASCII.GetString(header), 16);
         var payload = new byte[length];
         await stream.ReadExactlyAsync(payload, ct);
-        Assert.Equal("host:devices-l", System.Text.Encoding.UTF8.GetString(payload));
-        var bytes = System.Text.Encoding.UTF8.GetBytes(listing);
-        await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes($"OKAY{bytes.Length:X4}"), ct);
+        Assert.Equal("host:devices-l", Encoding.UTF8.GetString(payload));
+        var bytes = Encoding.UTF8.GetBytes(listing);
+        await stream.WriteAsync(Encoding.ASCII.GetBytes($"OKAY{bytes.Length:X4}"), ct);
         await stream.WriteAsync(bytes, ct);
     }
 

@@ -330,7 +330,7 @@ public class FlashBundleOrchestratorTests
         Assert.Equal(2, result.ProgramEntriesSkipped);
 
         Assert.Empty(transport.Writes);
-        var allWrites = string.Concat(transport.Writes.Select(w => Encoding.UTF8.GetString(w)));
+        var allWrites = string.Concat(transport.Writes.Select(Encoding.UTF8.GetString));
         Assert.DoesNotContain("<program", allWrites, StringComparison.Ordinal);
     }
 
@@ -356,7 +356,7 @@ public class FlashBundleOrchestratorTests
         Assert.True(result.IsSuccess, string.Join("; ", result.Errors));
         Assert.Equal(1, result.ProgramEntriesProcessed);
 
-        var allWrites = string.Concat(transport.Writes.Select(w => Encoding.UTF8.GetString(w)));
+        var allWrites = string.Concat(transport.Writes.Select(Encoding.UTF8.GetString));
         Assert.Contains("system.img", allWrites, StringComparison.Ordinal);
         Assert.DoesNotContain("boot.img", allWrites, StringComparison.Ordinal);
     }
@@ -472,7 +472,7 @@ public class FlashBundleOrchestratorTests
             <data>
               <program SECTOR_SIZE_IN_BYTES="4096" file_sector_offset="0" filename="{{filename}}"
                        physical_partition_number="0" start_sector="0x8000" num_partition_sectors="{{sectors}}"
-                       label="{{System.IO.Path.GetFileNameWithoutExtension(filename)}}" sparse="false" />
+                       label="{{Path.GetFileNameWithoutExtension(filename)}}" sparse="false" />
             </data>
             """;
 

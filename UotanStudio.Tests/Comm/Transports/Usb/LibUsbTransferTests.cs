@@ -135,7 +135,7 @@ public sealed class LibUsbTransferTests
             var transfer = LibUsbTransfer.ExecuteAsync(handle, 0x81, TransferType.Interrupt,
                 new byte[8], 1000, cancel.Token, native);
             await Task.WhenAll(Task.Run(() => native.Complete(TransferStatus.Completed, 8), TestContext.Current.CancellationToken),
-                Task.Run(() => cancel.Cancel(), TestContext.Current.CancellationToken));
+                Task.Run(cancel.Cancel, TestContext.Current.CancellationToken));
             try { Assert.Equal(8, (await transfer).Count); }
             catch (OperationCanceledException) { Assert.True(cancel.IsCancellationRequested); }
             handle.Dispose();

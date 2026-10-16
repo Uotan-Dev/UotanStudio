@@ -42,7 +42,7 @@ public class EdlSessionCommandModeFacadeTests
         var session = new EdlSession(transport);
         session.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => session.EnsureCommandModeSahara());
+        Assert.Throws<ObjectDisposedException>(session.EnsureCommandModeSahara);
         Assert.Empty(transport.Writes);
     }
 }
