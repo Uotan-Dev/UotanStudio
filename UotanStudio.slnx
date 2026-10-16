@@ -12,6 +12,7 @@
   <Project Path="UotanStudio.Delivery/UotanStudio.Delivery.csproj" />
   <Project Path="UotanStudio.Media/UotanStudio.Media.csproj" />
   <Project Path="UotanStudio.Mirroring/UotanStudio.Mirroring.csproj" />
+  <Project Path="UotanStudio.RegexInfer/UotanStudio.RegexInfer.csproj" />
   <Project Path="UotanStudio.Mcp/UotanStudio.Mcp.csproj" />
   <Project Path="UotanStudio/UotanStudio.csproj">
     <BuildDependency Project="UotanStudio.Comm/UotanStudio.Comm.csproj" />

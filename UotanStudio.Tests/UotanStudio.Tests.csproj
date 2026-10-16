@@ -23,7 +23,10 @@
     <ProjectReference Include="..\UotanStudio.Delivery\UotanStudio.Delivery.csproj" />
     <!-- Comm library under test (AVB verification wiring / protocol tests) -->
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
+    <!-- Mirroring library under test (scrcpy session orchestration) -->
     <ProjectReference Include="..\UotanStudio.Mirroring\UotanStudio.Mirroring.csproj" />
+    <!-- Regex inference library under test (deterministic example-driven regex synthesis) -->
+    <ProjectReference Include="..\UotanStudio.RegexInfer\UotanStudio.RegexInfer.csproj" />
     <ProjectReference Include="..\UotanStudio.Mcp\UotanStudio.Mcp.csproj" />
     <!-- Media library under test (platform video decoder abstraction / NV12 conversion) -->
     <ProjectReference Include="..\UotanStudio.Media\UotanStudio.Media.csproj" />
