@@ -93,7 +93,7 @@ internal static class F2fsCompression
 
         var result = new byte[F2fsCompressedCluster.HeaderSize + compressed.Length];
         cluster.WriteHeaderTo(result);
-        compressed.CopyTo(result, F2fsCompressedCluster.HeaderSize);
+        compressed.AsSpan().CopyTo(result.AsSpan(F2fsCompressedCluster.HeaderSize));
         return result;
     }
 

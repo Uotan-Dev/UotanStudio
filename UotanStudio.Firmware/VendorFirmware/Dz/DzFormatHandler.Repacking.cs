@@ -96,7 +96,7 @@ internal sealed partial class DzFormatHandler
         Directory.CreateDirectory(metadataDirectory);
         var artifact = $".kdz-layout-{Guid.NewGuid():N}.bin";
         var path = FileExtraction.ResolvePath(metadataDirectory, artifact);
-        string digest = "";
+        var digest = "";
         FileExtraction.WriteAtomic(path, output =>
         {
             var buffer = new byte[64 * 1024];

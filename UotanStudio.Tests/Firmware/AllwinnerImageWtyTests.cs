@@ -97,7 +97,7 @@ public sealed class AllwinnerImageWtyTests : IDisposable
     [InlineData("payload-past-end")]
     public void Read_MalformedVariants_RejectsWithInvalidData(string failure)
     {
-        byte[] image = failure switch
+        var image = failure switch
         {
             "unknown-version" => BuildImage(0x200, [("boot0", new byte[8])]),
             "table-past-end" => [.. BuildImage(AllwinnerImageWtyFormat.HeaderVersionV1, []), 0],

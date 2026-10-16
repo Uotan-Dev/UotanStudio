@@ -195,7 +195,7 @@ public static class ApkSigner
     {
         using var hash = Sha256.CreateAccumulator();
         var buffer = new byte[81920];
-        long remaining = expectedLength;
+        var remaining = expectedLength;
         while (remaining > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -273,7 +273,7 @@ public static class ApkSigner
     {
         input.Seek(offset, SeekOrigin.Begin);
         var buffer = new byte[81920];
-        long remaining = length;
+        var remaining = length;
         while (remaining > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();

@@ -41,7 +41,7 @@ public static class MetadataReader
     /// The file ends before the structures its sparse headers declare. <para>文件在稀疏头部声明的结构结束之前就已结束。</para></exception>
     public static Stream OpenImage(string path)
     {
-        var header = UotanStudio.Firmware.Core.FormatDetector.ReadHeader(path, 4);
+        var header = Core.FormatDetector.ReadHeader(path, 4);
         return header.AsSpan().SequenceEqual((ReadOnlySpan<byte>)[0x3a, 0xff, 0x26, 0xed])
             ? new SparseReadStream(SparseReader.FromImageFile(path))
             : new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous);

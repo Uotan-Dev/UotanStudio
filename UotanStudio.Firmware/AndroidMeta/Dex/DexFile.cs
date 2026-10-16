@@ -121,7 +121,7 @@ public sealed class DexFile
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if (!File.Exists(path)) throw new DexException($"DEX file not found: {path}");
         using var stream = File.OpenRead(path);
-        return Load(UotanStudio.Firmware.AndroidMeta.IO.AndroidMetadataReader.Read(stream));
+        return Load(IO.AndroidMetadataReader.Read(stream));
     }
 
     /// <summary>

@@ -35,9 +35,9 @@ public class XzStreamingOutputTests
 
     private static void AssertSpooling(int length, byte check, bool verifyRoundTrip)
     {
-        byte[] data = new byte[length];
+        var data = new byte[length];
         new Random(123).NextBytes(data);
-        byte[] expected = XzCompressor.Compress(data, checkType: check, maxDegreeOfParallelism: 1);
+        var expected = XzCompressor.Compress(data, checkType: check, maxDegreeOfParallelism: 1);
         using var input = new MemoryStream(data);
         using var output = new NonSeekableOutput();
         XzCompressor.Compress(input, output, checkType: check, maxDegreeOfParallelism: 1);

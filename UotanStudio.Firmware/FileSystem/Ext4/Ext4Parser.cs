@@ -433,7 +433,7 @@ public sealed class Ext4Parser : IDisposable
         if (entry.Kind == Ext4EntryKind.Symlink)
         {
             var symlinkInode = ReadInode(entry.Inode);
-            var targetBytes = System.Text.Encoding.UTF8.GetBytes(ReadSymlinkTarget(symlinkInode) ?? string.Empty);
+            var targetBytes = Encoding.UTF8.GetBytes(ReadSymlinkTarget(symlinkInode) ?? string.Empty);
             output.Write(targetBytes);
             return;
         }
@@ -484,7 +484,7 @@ public sealed class Ext4Parser : IDisposable
 
         var entries = ListFiles();
         var totalCount = entries.Count;
-        var hostPaths = new UotanStudio.Firmware.FileSystem.Extraction.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path));
+        var hostPaths = new Extraction.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path));
         var totalBytes = entries.Where(e => e.Kind != Ext4EntryKind.Directory
                 && (e.Kind == Ext4EntryKind.Symlink || overwrite || !File.Exists(hostPaths.Resolve(e.Path))))
             .Sum(e => e.Kind == Ext4EntryKind.Symlink ? Encoding.UTF8.GetByteCount(e.SymlinkTarget ?? string.Empty)
@@ -847,12 +847,12 @@ public sealed class Ext4Parser : IDisposable
         if (inode.IsSymlink && !inode.HasExtents && inode.Size < 60)
         {
 
-            return System.Text.Encoding.UTF8.GetString(inode.BlockData, 0, (int)inode.Size);
+            return Encoding.UTF8.GetString(inode.BlockData, 0, (int)inode.Size);
         }
 
         using var ms = new MemoryStream();
         ReadInodeContent(inode, inode.Size, ms);
-        return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+        return Encoding.UTF8.GetString(ms.ToArray());
     }
 
     private void ReadInodeContent(Ext4Inode inode, long size, Stream output)

@@ -31,7 +31,7 @@ public class PacFormatHandlerTests
     {
         var dirSize = entries.Length * SprdFile.StructFixedSize;
         var dataOffsets = new uint[entries.Length];
-        uint offset = (uint)(SprdHead.Size + dirSize);
+        var offset = (uint)(SprdHead.Size + dirSize);
         for (var i = 0; i < entries.Length; i++)
         {
             dataOffsets[i] = offset;

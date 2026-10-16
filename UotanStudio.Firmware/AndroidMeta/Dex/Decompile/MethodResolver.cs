@@ -218,7 +218,7 @@ internal sealed class MethodResolver
     private List<MethodCandidate> CollectCandidates(string owner, string name, int arity)
     {
         var result = new List<MethodCandidate>();
-        var visited = new HashSet<string>(System.StringComparer.Ordinal);
+        var visited = new HashSet<string>(StringComparer.Ordinal);
 
         var current = owner;
         for (var depth = 0; depth < 8 && current is not null; depth++)
@@ -264,7 +264,7 @@ internal sealed class MethodResolver
 
     private IEnumerable<string> InterfacesOf(string owner)
     {
-        var visited = new HashSet<string>(System.StringComparer.Ordinal);
+        var visited = new HashSet<string>(StringComparer.Ordinal);
         var queue = new Queue<string>();
         var cls = FindClass(owner);
         if (cls is null) yield break;
@@ -399,6 +399,6 @@ internal sealed class MethodResolver
 
         if (argType == param) return 0;
         return param == "java.lang.Object" || param == "java.lang.CharSequence" || param == "java.lang.String"
-            || argType.EndsWith(param, System.StringComparison.Ordinal) ? 3 : -1;
+            || argType.EndsWith(param, StringComparison.Ordinal) ? 3 : -1;
     }
 }

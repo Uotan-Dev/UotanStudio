@@ -198,7 +198,7 @@ public sealed class DexSmaliAnnotationTests
         var classOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(100));
         var valuesOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(classOffset + 28));
         bytes[valuesOffset + 1] = header;
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), UotanStudio.Hash.Adler32.Adler32.Compute(bytes.AsSpan(12)));
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), Hash.Adler32.Adler32.Compute(bytes.AsSpan(12)));
         Assert.Throws<InvalidDataException>(() => DexFile.Load(bytes));
     }
 
@@ -211,7 +211,7 @@ public sealed class DexSmaliAnnotationTests
         var classOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(100));
         var valuesOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(classOffset + 28));
         new byte[] { 0xff, 0xff, 0xff, 0xff, 0x0f }.CopyTo(bytes, valuesOffset + 2);
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), UotanStudio.Hash.Adler32.Adler32.Compute(bytes.AsSpan(12)));
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), Hash.Adler32.Adler32.Compute(bytes.AsSpan(12)));
         Assert.Throws<InvalidDataException>(() => DexFile.Load(bytes));
     }
 
@@ -225,6 +225,6 @@ public sealed class DexSmaliAnnotationTests
             value = EncodedValue.Array([value]);
         }
         dex.Classes[0].StaticValues = [value];
-        Assert.Throws<InvalidDataException>(() => dex.ToArray());
+        Assert.Throws<InvalidDataException>(dex.ToArray);
     }
 }

@@ -62,7 +62,7 @@ internal readonly record struct Ext4DirectoryEntry
                 break;
             }
 
-            var name = UotanStudio.Firmware.FileSystem.Extraction.PortableExtractionPaths.NameEncoding.GetString(block.Slice(offset + 8, nameLength));
+            var name = Extraction.PortableExtractionPaths.NameEncoding.GetString(block.Slice(offset + 8, nameLength));
             if (nameLength == 0)
             {
                 break;

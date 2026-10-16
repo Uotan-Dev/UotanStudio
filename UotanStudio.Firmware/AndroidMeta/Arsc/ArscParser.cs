@@ -32,7 +32,7 @@ public static class ArscParser
     public static ResourceTable Parse(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
-        return Parse(UotanStudio.Firmware.AndroidMeta.IO.AndroidMetadataReader.Read(stream));
+        return Parse(IO.AndroidMetadataReader.Read(stream));
     }
 
     /// <summary>Parses an Android resource table. <para>解析 Android 资源表。</para></summary>
@@ -57,7 +57,7 @@ public static class ArscParser
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is null. <para><paramref name="data"/> 为 null。</para></exception>
     /// <exception cref="ArscException">A magic, header size, chunk size, entry offset, sparse index or package count is invalid.
     /// <para>魔数、头部大小、块大小、条目偏移、稀疏索引或包数量中存在无效值。</para></exception>
-    /// <exception cref="System.OverflowException">A declared size exceeds the range addressable by <see cref="int"/>.
+    /// <exception cref="OverflowException">A declared size exceeds the range addressable by <see cref="int"/>.
     /// <para>某个声明的大小超出 <see cref="int"/> 可表示的范围。</para></exception>
     public static ResourceTable Parse(byte[] data)
     {

@@ -266,7 +266,7 @@ public class Ext4Tests
             Assert.True(patched, "Test setup failed: 'subdir' directory entry not found.");
 
             using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
-            Assert.Throws<FileSystemCorruptedException>(() => parser.ListFiles());
+            Assert.Throws<FileSystemCorruptedException>(parser.ListFiles);
         }
         finally
         {

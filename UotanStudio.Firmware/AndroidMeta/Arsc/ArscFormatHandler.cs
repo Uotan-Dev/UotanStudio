@@ -100,7 +100,7 @@ public sealed class ArscFormatHandler : IFormatHandler
     /// <para><paramref name="cancellationToken"/> 已被触发；提取错误则以失败结果报告。</para>
     /// </exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
@@ -127,7 +127,7 @@ public sealed class ArscFormatHandler : IFormatHandler
                 return Task.FromResult(FirmwareOpResult.Fail($"Output exists and overwrite is disabled: {outputPath}"));
             }
 
-            System.IO.File.WriteAllText(outputPath, text);
+            File.WriteAllText(outputPath, text);
             return Task.FromResult(FirmwareOpResult.Ok($"Unpacked ARSC to {outputPath}", [outputPath]));
         }
         catch (OperationCanceledException)
@@ -183,7 +183,7 @@ public sealed class ArscFormatHandler : IFormatHandler
             {
                 Directory.CreateDirectory(directory);
             }
-            System.IO.File.WriteAllBytes(outputPath, bytes);
+            File.WriteAllBytes(outputPath, bytes);
             return Task.FromResult(FirmwareOpResult.Ok($"Rebuilt ARSC written to {outputPath}", [outputPath]));
         }
         catch (OperationCanceledException)

@@ -98,7 +98,7 @@ internal sealed class HarmonyUpdateAppPrimitives
         var present = await Task.Run(() => MetadataReader.ReadFromImageFile(superImagePath).PartitionNames,
             cancellationToken).ConfigureAwait(false);
         var presentSet = new HashSet<string>(present, StringComparer.OrdinalIgnoreCase);
-        var wanted = requested.Where(name => presentSet.Contains(name)).ToArray();
+        var wanted = requested.Where(presentSet.Contains).ToArray();
         var missing = requested.Where(name => !presentSet.Contains(name)).ToArray();
         progress?.Report(wanted.Length == 0 ? 100 : 5,
             wanted.Length == 0 ? "No requested partition is present in the super image" : "Extracting requested partitions");

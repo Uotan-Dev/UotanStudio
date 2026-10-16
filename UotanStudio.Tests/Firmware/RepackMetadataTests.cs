@@ -116,10 +116,10 @@ public sealed class RepackMetadataTests : IDisposable
             {
                 using var sparse = UotanStudio.Firmware.BlockImage.Sparse.IO.SparseReader.FromStream(input);
                 using var logical = new UotanStudio.Firmware.BlockImage.Sparse.IO.SparseReadStream(sparse);
-                using var sparseParser = new UotanStudio.Firmware.FileSystem.Ext4.Ext4Parser(logical);
+                using var sparseParser = new Ext4Parser(logical);
                 return sparseParser.ListEntriesWithRoot().Select(entry => entry.Path).ToArray();
             }
-            using var parser = new UotanStudio.Firmware.FileSystem.Ext4.Ext4Parser(input);
+            using var parser = new Ext4Parser(input);
             return parser.ListEntriesWithRoot().Select(entry => entry.Path).ToArray();
         }
         if (format == "EROFS")
@@ -127,7 +127,7 @@ public sealed class RepackMetadataTests : IDisposable
             using var parser = new ErofsParser(path);
             return parser.EnumerateEntries().Select(entry => entry.Path).ToArray();
         }
-        using var f2fs = new UotanStudio.Firmware.FileSystem.F2fs.F2fsParser(path);
+        using var f2fs = new F2fsParser(path);
         return f2fs.ListEntriesWithRoot().Select(entry => entry.Path).ToArray();
     }
 

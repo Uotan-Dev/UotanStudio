@@ -106,7 +106,7 @@ internal static partial class VdexFile
         {
             return (0, 0);
         }
-        long cursor = offset - 1L;
+        var cursor = offset - 1L;
         var count = quick.Leb(ref cursor);
         quick.Check(cursor, count * 2L);
         return (cursor, cursor + count * 2L);

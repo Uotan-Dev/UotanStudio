@@ -23,7 +23,7 @@ public sealed class Ext4PatchReadLimitsTests : IDisposable
         var image = Path.Combine(_root, "test.img");
         Ext4Builder.Build(source, image);
         using var parser = new Ext4Parser(File.OpenRead(image), entries, characters, TestContext.Current.CancellationToken);
-        Assert.Throws<FileSystemCorruptedException>(() => parser.ListFiles());
+        Assert.Throws<FileSystemCorruptedException>(parser.ListFiles);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public sealed class Ext4PatchReadLimitsTests : IDisposable
         using var parser = new Ext4Parser(File.OpenRead(image), 10, 1000, cancellation.Token);
         Assert.Single(parser.ListFiles());
         cancellation.Cancel();
-        Assert.Throws<OperationCanceledException>(() => parser.ListFiles());
+        Assert.Throws<OperationCanceledException>(parser.ListFiles);
     }
 
     private sealed class CancellingOutput(CancellationTokenSource cancellation) : MemoryStream

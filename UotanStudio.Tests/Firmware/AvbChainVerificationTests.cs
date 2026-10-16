@@ -398,7 +398,7 @@ public sealed class AvbChainVerificationTests
             await File.WriteAllBytesAsync(template, header, TestContext.Current.CancellationToken);
             using var otherKey = alternate ? SigningTestKeys.Create(alternate: true) : null;
             var privateKey = otherKey ?? _key;
-            var result = await AvbSigner.SignVbmetaAsync<object>(template, privateKey, output, descriptors, TestContext.Current.CancellationToken);
+            var result = await AvbSigner.SignVbmetaAsync(template, privateKey, output, descriptors, TestContext.Current.CancellationToken);
             Assert.True(result.Success, result.ErrorMessage);
             Paths[name] = output;
         }

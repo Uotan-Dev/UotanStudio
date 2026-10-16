@@ -36,7 +36,7 @@ public sealed class VendorNameFieldTests : IDisposable
     {
         var header = new Nb0EntryHeader { Name = "固件.bin", FileSize = 8 };
 
-        var error = Assert.Throws<InvalidDataException>(() => header.ToBytes());
+        var error = Assert.Throws<InvalidDataException>(header.ToBytes);
 
         Assert.Contains("NB0 entry name is not representable", error.Message);
         Assert.Contains("U+56FA", error.Message, StringComparison.Ordinal);
@@ -51,7 +51,7 @@ public sealed class VendorNameFieldTests : IDisposable
         var name = new string('x', Nb0EntryHeader.NameLength);
         var header = new Nb0EntryHeader { Name = name };
 
-        var error = Assert.Throws<InvalidDataException>(() => header.ToBytes());
+        var error = Assert.Throws<InvalidDataException>(header.ToBytes);
 
         Assert.Contains($"{name.Length} ASCII bytes exceed the 47-byte usable portion of the 48-byte Name field",
             error.Message, StringComparison.Ordinal);

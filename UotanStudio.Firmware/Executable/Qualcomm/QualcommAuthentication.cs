@@ -285,7 +285,7 @@ internal static class QualcommAuthentication
     private static QualcommVerificationStatus VerifyMetadataRootDigest(
         ReadOnlySpan<byte> claimed, uint algorithm, byte[] root)
     {
-        byte[] digest = algorithm switch
+        var digest = algorithm switch
         {
             1 => Sha1.ComputeHash(root),
             2 => Sha256.ComputeHash(root),

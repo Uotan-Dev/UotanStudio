@@ -167,7 +167,7 @@ public interface ILzma2Compressor
 
         using var buffer = new MemoryStream((int)originalSize);
         var copyBuffer = new byte[81920];
-        ulong remaining = originalSize;
+        var remaining = originalSize;
         while (remaining != 0)
         {
             var read = input.Read(copyBuffer, 0, (int)Math.Min((ulong)copyBuffer.Length, remaining));

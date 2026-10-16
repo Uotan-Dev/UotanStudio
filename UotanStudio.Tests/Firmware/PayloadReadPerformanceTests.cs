@@ -72,7 +72,7 @@ public class PayloadReadPerformanceTests
         using var reader = new VerifyingReadStream(input, expected);
         Assert.Equal(bytes[0], reader.ReadByte());
         Assert.Equal(1, reader.Position);
-        Assert.Throws<PartitionExtractionException>(() => reader.Complete());
+        Assert.Throws<PartitionExtractionException>(reader.Complete);
     }
 
     [Fact]

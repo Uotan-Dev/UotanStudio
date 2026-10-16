@@ -21,7 +21,7 @@ internal static class MappedBlockCopy
         {
             uint logical = 0;
             var remaining = size;
-            long? pending = mapBlock(0);
+            var pending = mapBlock(0);
             while (logical < blocks)
             {
                 cancellationToken.ThrowIfCancellationRequested();

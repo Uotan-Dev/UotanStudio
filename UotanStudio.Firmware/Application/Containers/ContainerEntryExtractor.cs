@@ -168,7 +168,7 @@ public static class ContainerEntryExtractor
         IProgress<double>? progress, IProgress<(long Processed, long Total)>? byteProgress = null)
     {
         var outputDir = outputDirectory;
-        await UotanStudio.Firmware.OtaDelta.Payload.PayloadParser.ExtractAsync(
+        await OtaDelta.Payload.PayloadParser.ExtractAsync(
             containerPath, [.. partitionNames], outputDir, cancellationToken, byteProgress: new CallbackProgress<(long Processed, long Total)>(sample =>
             {
                 progress?.Report(sample.Total > 0 ? sample.Processed * 100.0 / sample.Total : 0);

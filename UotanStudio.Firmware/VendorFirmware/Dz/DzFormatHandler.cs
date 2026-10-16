@@ -105,7 +105,7 @@ internal sealed partial class DzFormatHandler : IFormatHandler, IRepackMetadataP
     /// <para>成功时解包结果会与统一重打包元数据一起发布；解包或元数据预检查失败时返回携带异常信息的失败结果。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is signaled. <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

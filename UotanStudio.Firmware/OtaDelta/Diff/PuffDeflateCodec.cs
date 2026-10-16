@@ -195,20 +195,20 @@ internal static class PuffDeflateCodec
         {
             _lengths = lengths; _codes = new int[lengths.Length]; var counts = new int[16]; var next = new int[16];
             foreach (var length in lengths) { if (length > 15) throw new InvalidDataException("Invalid Huffman length."); counts[length]++; }
-            counts[0] = 0; int code = 0;
+            counts[0] = 0; var code = 0;
             for (var length = 1; length <= 15; length++)
             { code = (code + counts[length - 1]) << 1; next[length] = code; if (code + counts[length] > 1 << length) throw new InvalidDataException("Oversubscribed Huffman tree."); }
             for (var symbol = 0; symbol < lengths.Length; symbol++)
             {
                 var length = lengths[symbol]; if (length == 0) continue;
-                var canonical = next[length]++; int reversed = 0;
+                var canonical = next[length]++; var reversed = 0;
                 for (var bit = 0; bit < length; bit++) { reversed = (reversed << 1) | (canonical & 1); canonical >>= 1; }
                 _codes[symbol] = reversed; _symbols.Add((length << 16) | reversed, symbol);
             }
         }
         internal int Read(Bits bits)
         {
-            int code = 0;
+            var code = 0;
             for (var length = 1; length <= 15; length++)
             { code |= bits.Read(1) << (length - 1); if (_symbols.TryGetValue((length << 16) | code, out var symbol)) return symbol; }
             throw new InvalidDataException("Invalid Huffman symbol.");
@@ -223,7 +223,7 @@ internal static class PuffDeflateCodec
         internal int Read(int count)
         {
             if (count < 0 || count > 16 || Position < 0 || end > (long)data.Length * 8 || count > end - Position) throw new InvalidDataException("Truncated DEFLATE bits.");
-            int result = 0;
+            var result = 0;
             for (var i = 0; i < count; i++, Position++) result |= ((data[Position / 8] >> (int)(Position & 7)) & 1) << i;
             return result;
         }

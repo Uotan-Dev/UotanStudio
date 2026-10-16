@@ -94,7 +94,7 @@ public static class ApkV2V3SchemeSigner
         ]);
 
         var certificates = LengthPrefixSequence(chain.Select(static c => c.RawData));
-        byte[] attributes = protectV3
+        var attributes = protectV3
             ? LengthPrefixSequence([[0x0d, 0xf0, 0xef, 0xbe, 3, 0, 0, 0]])
             : [0, 0, 0, 0];
 

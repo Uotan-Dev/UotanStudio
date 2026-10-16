@@ -188,7 +188,7 @@ internal sealed class DtsWriter
         var printableCount = 0;
         for (var i = 0; i < value.Length; i++)
         {
-            byte b = value[i];
+            var b = value[i];
             if (b == 0)
             {
                 nullCount++;

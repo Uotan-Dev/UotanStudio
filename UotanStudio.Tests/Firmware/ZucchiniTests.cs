@@ -241,7 +241,7 @@ public class ZucchiniTests
     {
         var sourceSkips = new List<byte>(); var targetSkips = new List<byte>(); var lengths = new List<byte>();
         var extra = new List<byte>(); var deltaSkips = new List<byte>(); var differences = new List<byte>();
-        int sourceEnd = 0; uint targetEnd = 0; uint copied = 0; uint previousDelta = 0;
+        var sourceEnd = 0; uint targetEnd = 0; uint copied = 0; uint previousDelta = 0;
         foreach (var (source, target, length) in equivalences)
         {
             var delta = checked((int)source - sourceEnd);

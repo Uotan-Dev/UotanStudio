@@ -174,7 +174,7 @@ public class ContainerFormatConformanceTests
 
     private static uint ReferenceCrc32(ReadOnlySpan<byte> bytes)
     {
-        uint crc = uint.MaxValue;
+        var crc = uint.MaxValue;
         foreach (var value in bytes)
         {
             crc ^= value;

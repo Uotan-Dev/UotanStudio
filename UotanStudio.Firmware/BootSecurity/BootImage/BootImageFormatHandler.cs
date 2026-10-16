@@ -387,7 +387,7 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
     /// <para>返回携带 <see cref="FirmwareOpResult"/> 的任务，其成功消息统计已提取文件数；解析或 I/O 失败以携带异常消息的失败结果返回，而不抛出。</para>
     /// </returns>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

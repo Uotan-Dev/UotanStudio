@@ -23,7 +23,7 @@ public sealed partial class Ext4Builder
         var holes = new HashSet<int>();
         var buffer = new byte[blockSize];
         using var fs = File.OpenRead(fullPath);
-        long remaining = size;
+        var remaining = size;
         var index = 0;
         while (remaining > 0)
         {

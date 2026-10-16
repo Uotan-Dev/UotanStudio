@@ -117,7 +117,7 @@ public static class FormatDetector
         }
 
 
-        var fileExt = System.IO.Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
+        var fileExt = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
         if (!string.IsNullOrEmpty(fileExt))
         {
             List<IReadonlyFormatHandler> snapshot;

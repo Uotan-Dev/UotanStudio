@@ -83,7 +83,7 @@ public static class PacBuilder
             throw new InvalidDataException($"PAC contains more than {MaximumEntries} files.");
         }
 
-        long dataOffset = checked((long)SprdHead.Size + checked((long)files.Length * SprdFile.StructFixedSize));
+        var dataOffset = checked((long)SprdHead.Size + checked((long)files.Length * SprdFile.StructFixedSize));
         var entries = new SprdFile[files.Length];
         for (var index = 0; index < files.Length; index++)
         {
@@ -182,7 +182,7 @@ public static class PacBuilder
         {
             throw new InvalidDataException($"PAC text field is too long: {value}.");
         }
-        bytes.CopyTo(MemoryMarshal.AsBytes<ushort>(target.AsSpan()));
+        bytes.CopyTo(MemoryMarshal.AsBytes(target.AsSpan()));
     }
 
     private readonly record struct SourceFile(string Path, string Name);

@@ -130,7 +130,7 @@ public sealed class DtFormatHandler : IFormatHandler, IRepackMetadataProvider
     /// format errors do not throw. <para>任务结果在成功时列出已写文件，失败时携带错误消息；格式错误不抛异常。</para></returns>
     /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private async Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

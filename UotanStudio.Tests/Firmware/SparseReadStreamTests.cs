@@ -128,7 +128,7 @@ public sealed class SparseReadStreamTests
         using var stream = new SparseReadStream(sparse);
         Assert.Throws<NotSupportedException>(() => stream.Write([1], 0, 1));
         Assert.Throws<NotSupportedException>(() => stream.SetLength(100));
-        Assert.Throws<NotSupportedException>(() => stream.Flush());
+        Assert.Throws<NotSupportedException>(stream.Flush);
     }
 
     [Fact]

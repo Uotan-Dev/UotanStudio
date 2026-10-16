@@ -20,7 +20,7 @@ internal static class Lz4DiffApplier
         var headerLength = BinaryPrimitives.ReadUInt32BigEndian(patch[11..15]);
         if (headerLength > 16 * 1024 * 1024 || headerLength > patch.Length - 16) throw new InvalidDataException("Invalid LZ4DIFF protobuf length.");
         using var proto = new CodedInputStream(patch.Slice(16, (int)headerLength).ToArray());
-        Info? sourceInfo = null, targetInfo = null; int innerType = 0; uint tag;
+        Info? sourceInfo = null, targetInfo = null; var innerType = 0; uint tag;
         while ((tag = proto.ReadTag()) != 0)
         {
             if (tag == 10) sourceInfo = ReadInfo(proto.ReadBytes().ToByteArray());
@@ -29,7 +29,7 @@ internal static class Lz4DiffApplier
         }
         if (sourceInfo is null || targetInfo is null) throw new InvalidDataException("Missing LZ4DIFF compression info.");
         var sourceSize = ValidateBlocks(sourceInfo); var targetSize = ValidateBlocks(targetInfo);
-        var plainSource = new byte[sourceSize]; int sourcePosition = 0;
+        var plainSource = new byte[sourceSize]; var sourcePosition = 0;
         foreach (var block in sourceInfo.Blocks)
         {
             if (sourcePosition > source.Length || block.StoredLength > source.Length - sourcePosition) throw new InvalidDataException("LZ4DIFF source block exceeds input.");
@@ -37,7 +37,7 @@ internal static class Lz4DiffApplier
             if (block.StoredLength >= block.Length) stored[..block.Length].CopyTo(plain);
             else
             {
-                int padding = 0;
+                var padding = 0;
                 if (sourceInfo.ZeroPadding) while (padding < Math.Min(4096, stored.Length) && stored[padding] == 0) padding++;
                 if (LZ4Codec.PartialDecode(stored[padding..], plain) != plain.Length) throw new InvalidDataException("LZ4DIFF source decompression length mismatch.");
             }
@@ -68,7 +68,7 @@ internal static class Lz4DiffApplier
         if (!plainTargetPooled && plainTarget.Length != targetSize) throw new InvalidDataException("LZ4DIFF target length mismatch.");
         var storedTotal = targetInfo.Blocks.Aggregate(0L, (length, block) => checked(length + block.StoredLength));
         if (storedTotal != expectedLength) throw new InvalidDataException("LZ4DIFF stored output does not match destination extents.");
-        var output = new byte[expectedLength]; int position = 0;
+        var output = new byte[expectedLength]; var position = 0;
         foreach (var block in targetInfo.Blocks)
         {
             var stored = output.AsSpan(position, block.StoredLength);
@@ -111,7 +111,7 @@ internal static class Lz4DiffApplier
     }
     private static Info ReadInfo(byte[] bytes)
     {
-        using var input = new CodedInputStream(bytes); int algorithm = 0, level = 0; bool padding = false; var blocks = new List<Block>(); uint tag;
+        using var input = new CodedInputStream(bytes); int algorithm = 0, level = 0; var padding = false; var blocks = new List<Block>(); uint tag;
         while ((tag = input.ReadTag()) != 0)
         {
             if (tag == 10)

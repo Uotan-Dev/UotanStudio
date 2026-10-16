@@ -6,7 +6,7 @@ internal static class AndroidMetadataReader
 
     internal static byte[] Read(Stream stream, int maximumBytes = MaximumBytes, long? expectedLength = null)
     {
-        long? length = expectedLength;
+        var length = expectedLength;
         if (!length.HasValue && stream.CanSeek) length = stream.Length - stream.Position;
         if (length is < 0 || length > maximumBytes)
             throw new InvalidDataException($"Android metadata exceeds the {maximumBytes}-byte limit.");

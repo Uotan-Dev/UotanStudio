@@ -112,7 +112,7 @@ internal static class InstructionDecoder
         {
             throw new InvalidDataException("A DEX payload must be aligned to four bytes and contain its complete header.");
         }
-        long required = ident switch
+        var required = ident switch
         {
             0x0100 => 4L + raw[index + 1] * 2L,
             0x0200 => 2L + raw[index + 1] * 4L,

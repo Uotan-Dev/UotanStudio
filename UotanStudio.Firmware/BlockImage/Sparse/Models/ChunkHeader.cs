@@ -10,8 +10,8 @@ public readonly struct ChunkHeader
 {
     /// <summary>Chunk type identifier as stored in the file.
     /// <para>文件中存储的数据块类型标识。</para></summary>
-    /// <value>Compare against <see cref="UotanStudio.Firmware.BlockImage.Sparse.Models.ChunkType"/> values; only the four standard identifiers pass <see cref="IsValid"/>.
-    /// <para>与 <see cref="UotanStudio.Firmware.BlockImage.Sparse.Models.ChunkType"/> 值比较；仅四种标准标识能通过 <see cref="IsValid"/>。</para></value>
+    /// <value>Compare against <see cref="Models.ChunkType"/> values; only the four standard identifiers pass <see cref="IsValid"/>.
+    /// <para>与 <see cref="Models.ChunkType"/> 值比较；仅四种标准标识能通过 <see cref="IsValid"/>。</para></value>
     public ushort ChunkType { get; init; }
 
     /// <summary>Format-reserved 16-bit field between the type and the size fields.
@@ -108,10 +108,10 @@ public readonly struct ChunkHeader
 
         return ChunkType switch
         {
-            (ushort)UotanStudio.Firmware.BlockImage.Sparse.Models.ChunkType.Raw => ChunkSize > 0 && TotalSize == chunkHeaderSize + ((long)ChunkSize * blockSize),
-            (ushort)UotanStudio.Firmware.BlockImage.Sparse.Models.ChunkType.Fill => ChunkSize > 0 && TotalSize == chunkHeaderSize + 4,
-            (ushort)UotanStudio.Firmware.BlockImage.Sparse.Models.ChunkType.DontCare => ChunkSize > 0 && TotalSize == chunkHeaderSize,
-            (ushort)UotanStudio.Firmware.BlockImage.Sparse.Models.ChunkType.Crc32 => TotalSize == chunkHeaderSize + 4,
+            (ushort)Models.ChunkType.Raw => ChunkSize > 0 && TotalSize == chunkHeaderSize + ((long)ChunkSize * blockSize),
+            (ushort)Models.ChunkType.Fill => ChunkSize > 0 && TotalSize == chunkHeaderSize + 4,
+            (ushort)Models.ChunkType.DontCare => ChunkSize > 0 && TotalSize == chunkHeaderSize,
+            (ushort)Models.ChunkType.Crc32 => TotalSize == chunkHeaderSize + 4,
             _ => false,
         };
     }

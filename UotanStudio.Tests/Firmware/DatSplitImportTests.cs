@@ -102,7 +102,7 @@ public class DatSplitImportTests
         temp.WriteBytes("system.new.dat.001", original[(original.Length / 2)..]);
         var output = temp.WriteBytes("system.img", [0xCA, 0xFE]);
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        var progress = new FractionProgress(() => cancel.Cancel());
+        var progress = new FractionProgress(cancel.Cancel);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             DatSplitImporter.ReconstructDatImageAsync(first, output, progress, cancel.Token));
@@ -307,7 +307,7 @@ public class DatSplitImportTests
         temp.Write("system.transfer.list", "4\n1\n0\n0\nnew 2,0,1\n");
         var destination = temp.WriteBytes("system.new.dat", [0xAA]);
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        var progress = new CallbackProgress(() => cancel.Cancel());
+        var progress = new CallbackProgress(cancel.Cancel);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             DatSplitImporter.ImportAsync(first, destination, progress, cancel.Token));

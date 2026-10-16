@@ -39,7 +39,7 @@ internal readonly record struct QualcommMbnLayout(
             throw new ExecutableCorruptedException("Invalid MBN v7 common metadata length.");
         }
 
-        ulong metadata = qtiMetadata + oemMetadata + commonMetadata;
+        var metadata = qtiMetadata + oemMetadata + commonMetadata;
         ulong hashLength = Word(header, 20);
         if (hashLength == 0)
         {
@@ -49,8 +49,8 @@ internal readonly record struct QualcommMbnLayout(
         ulong qtiCertificate = version == 3 ? 0 : Word(header, version == 7 ? 28 : 12);
         ulong oemSignature = Word(header, version == 7 ? 32 : 28);
         ulong oemCertificate = Word(header, version == 7 ? 36 : 36);
-        ulong required = metadata + hashLength + qtiSignature + qtiCertificate + oemSignature + oemCertificate;
-        ulong declared = version == 7 ? required : Word(header, 16);
+        var required = metadata + hashLength + qtiSignature + qtiCertificate + oemSignature + oemCertificate;
+        var declared = version == 7 ? required : Word(header, 16);
         if (required > 64UL * 1024 * 1024 || hashLength > 32UL * 1024 * 1024
             || declared < required - metadata
             || (version != 7 && declared > (ulong)available - (uint)headerSize)
@@ -67,7 +67,7 @@ internal readonly record struct QualcommMbnLayout(
         var oemSig = checked(qtiCert + (int)qtiCertificate);
         var oemCert = checked(oemSig + (int)oemSignature);
         uint? softwareId = null;
-        uint algorithm = version is 6 or 7 ? 3u : 0u;
+        var algorithm = version is 6 or 7 ? 3u : 0u;
         int? qtiRootSlot = null;
         int? oemRootSlot = null;
         uint rootAlgorithm = 0;

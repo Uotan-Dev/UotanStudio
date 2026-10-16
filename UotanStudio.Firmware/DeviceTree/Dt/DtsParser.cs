@@ -73,10 +73,10 @@ internal sealed class DtsParser
 
     private bool TryRecoverToNextStatement()
     {
-        int depth = 0;
+        var depth = 0;
         while (_pos < _text.Length)
         {
-            char ch = _text[_pos];
+            var ch = _text[_pos];
             if (ch == '{') depth++;
             else if (ch == '}')
             {
@@ -1177,7 +1177,7 @@ internal sealed class DtsParser
     private byte ParseHexByte()
     {
         byte value = 0;
-        int digits = 0;
+        var digits = 0;
         while (_pos < _text.Length && IsHexDigit(_text[_pos]) && digits < 2)
         {
             value = (byte)(value * 16 + HexValue(_text[_pos]));
@@ -1232,7 +1232,7 @@ internal sealed class DtsParser
 
     private void SkipUntilSemicolon()
     {
-        int depth = 0;
+        var depth = 0;
         while (_pos < _text.Length)
         {
             if (_text[_pos] == '{') depth++;
@@ -1245,7 +1245,7 @@ internal sealed class DtsParser
     private bool Match(string s)
     {
         if (_pos + s.Length > _text.Length) return false;
-        for (int i = 0; i < s.Length; i++)
+        for (var i = 0; i < s.Length; i++)
         {
             if (_text[_pos + i] != s[i]) return false;
         }

@@ -74,7 +74,7 @@ internal static class KernelPatchInjector
         BinaryPrimitives.WriteInt64LittleEndian(preset[SetupKernelSize..], (long)imageSize);
         BinaryPrimitives.WriteInt64LittleEndian(preset[SetupPageShift..], pageShift);
         BinaryPrimitives.WriteInt64LittleEndian(preset[SetupImageOffset..], alignedKernelLength);
-        long startOffset = Align64(imageSize, PageAlignment);
+        var startOffset = Align64(imageSize, PageAlignment);
         var outAllLength = checked(alignedKernelLength + alignedKpimgLength + ExtraItemSentinelSize);
         if (outAllLength > startOffset) startOffset = Align(outAllLength, PageAlignment);
         BinaryPrimitives.WriteInt64LittleEndian(preset[SetupStartOffset..], startOffset);

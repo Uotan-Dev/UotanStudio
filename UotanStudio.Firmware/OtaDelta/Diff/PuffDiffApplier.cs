@@ -249,7 +249,7 @@ internal static class PuffDiffApplier
     }
     private static byte[] Puff(byte[] input, StreamInfo info)
     {
-        var output = new byte[info.PuffLength]; long previousBit = 0; int position = 0;
+        var output = new byte[info.PuffLength]; long previousBit = 0; var position = 0;
         for (var i = 0; i <= info.Deflates.Count; i++)
         {
             var nextBit = i == info.Deflates.Count ? (long)input.Length * 8 : info.Deflates[i].Offset;
@@ -268,7 +268,7 @@ internal static class PuffDiffApplier
     {
         var rawSize = info.Deflates.Count == 0 ? info.PuffLength : checked((info.Deflates[^1].Offset + info.Deflates[^1].Length) / 8 + info.PuffLength - (info.Puffs[^1].Offset + info.Puffs[^1].Length) / 8);
         if (rawSize < 0 || rawSize > MaximumBufferBytes) throw new InvalidDataException("PUF1 target exceeds the output limit.");
-        var output = new byte[(int)rawSize]; var tokens = input.ToArray(); long previousBit = 0; int position = 0;
+        var output = new byte[(int)rawSize]; var tokens = input.ToArray(); long previousBit = 0; var position = 0;
         for (var i = 0; i <= info.Deflates.Count; i++)
         {
             var nextBit = i == info.Deflates.Count ? rawSize * 8 : info.Deflates[i].Offset;

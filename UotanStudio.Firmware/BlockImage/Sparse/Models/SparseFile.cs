@@ -215,7 +215,7 @@ public sealed class SparseFile : IDisposable
     /// <param name="cancellationToken">Cancellation checked between sparse chunk writes; ignored for raw output.
     /// <para>在稀疏块写入之间检查的取消令牌；原始输出时忽略。</para></param>
     public void WriteToStream(Stream stream, bool sparse = true, bool includeCrc = false,
-        UotanStudio.Firmware.BlockImage.Sparse.SparseWriteOptions? options = null,
+        SparseWriteOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         if (sparse)

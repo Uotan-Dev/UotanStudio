@@ -652,7 +652,7 @@ public sealed class CpioArchiveWriter
     /// </summary>
     private static void FormatOctal(Span<char> dest, ulong value, int width)
     {
-        for (int i = width - 1; i >= 0; i--)
+        for (var i = width - 1; i >= 0; i--)
         {
             dest[i] = (char)('0' + (value & 7));
             value >>= 3;

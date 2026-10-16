@@ -255,7 +255,7 @@ public class F2fsTests
             BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan((int)rootInodeOffset, 8), 0x0000_0200_0000_0000UL);
 
             using var parser = new F2fsParser(new MemoryStream(image, writable: false));
-            Assert.Throws<FileSystemCorruptedException>(() => parser.ListFiles());
+            Assert.Throws<FileSystemCorruptedException>(parser.ListFiles);
         }
         finally
         {

@@ -31,7 +31,7 @@ public sealed partial class Ext4Builder
 
     private static int Log2(int value)
     {
-        int result = 0;
+        var result = 0;
         while (value > 1)
         {
             value >>= 1;

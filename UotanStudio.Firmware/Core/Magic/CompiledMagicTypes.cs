@@ -168,7 +168,7 @@ public enum MagicNumberType : byte
 /// Rule flag bits (subset of FILE_* semantics).
 /// <para>规则标志位（FILE_* 语义子集）。</para>
 /// </summary>
-[System.Flags]
+[Flags]
 public enum MagicFlags : uint
 {
     /// <summary>No rule flag is set. <para>未设置任何规则标志位。</para></summary>
@@ -227,7 +227,7 @@ public enum MagicFlags : uint
 /// String match modifiers (/c /W /w /f /T).
 /// <para>字符串匹配修饰（/c /W /w /f /T）。</para>
 /// </summary>
-[System.Flags]
+[Flags]
 public enum MagicStringFlags : uint
 {
     /// <summary>No string modifier is set. <para>未设置任何字符串修饰位。</para></summary>
@@ -262,7 +262,7 @@ public enum MagicStringFlags : uint
 /// Regex modifiers (/i /s /m /x).
 /// <para>正则修饰（/i /s /m /x）。</para>
 /// </summary>
-[System.Flags]
+[Flags]
 public enum MagicRegexFlags : uint
 {
     /// <summary>No regex modifier is set. <para>未设置任何正则修饰位。</para></summary>

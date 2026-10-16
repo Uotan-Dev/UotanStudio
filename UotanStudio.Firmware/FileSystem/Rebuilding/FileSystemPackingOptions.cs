@@ -90,7 +90,7 @@ internal static class FileSystemPackingOptions
 
     internal static int IntegerOption(IReadOnlyDictionary<string, string> options, string key, int fallback)
         => options.TryGetValue(key, out var value)
-            ? int.Parse(value, System.Globalization.CultureInfo.InvariantCulture) : fallback;
+            ? int.Parse(value, CultureInfo.InvariantCulture) : fallback;
 
     /// <summary>Gets an option as a nullable path: empty values (sidecar file absent) become null.
     /// <para>以可空路径形式获取选项：空值（附属文件不存在）转换为 <c>null</c>。</para></summary>

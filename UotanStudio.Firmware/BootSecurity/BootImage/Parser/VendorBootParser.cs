@@ -456,7 +456,7 @@ public class VendorBootParser : IDisposable
             };
             var source = _sourceStream!;
             ValidateRange(source, offset, size, name);
-            return new Core.Streams.BoundedReadStream(source, offset, size, leaveOpen: true, syncRoot: _sourceLock);
+            return new BoundedReadStream(source, offset, size, leaveOpen: true, syncRoot: _sourceLock);
         }
     }
 
@@ -559,7 +559,7 @@ public class VendorBootParser : IDisposable
             var size = (long)entry.RamdiskSize;
             var source = _sourceStream!;
             ValidateRange(source, offset, size, "vendor ramdisk table entry");
-            return new Core.Streams.BoundedReadStream(source, offset, size, leaveOpen: true, syncRoot: _sourceLock);
+            return new BoundedReadStream(source, offset, size, leaveOpen: true, syncRoot: _sourceLock);
         }
     }
 
@@ -658,7 +658,7 @@ public class VendorBootParser : IDisposable
     {
         try
         {
-            Core.FileExtraction.ValidateRange(offset, size, stream.Length, component);
+            FileExtraction.ValidateRange(offset, size, stream.Length, component);
         }
         catch (InvalidDataException)
         {

@@ -239,7 +239,7 @@ public sealed class NtpiReader : IDisposable
 
         var total = layout.FileEntries.Count;
         var completed = 0;
-        long trustedRemaining = maxTotalOutput;
+        var trustedRemaining = maxTotalOutput;
 
         if (total > 0 && !layout.HasRegion6)
         {

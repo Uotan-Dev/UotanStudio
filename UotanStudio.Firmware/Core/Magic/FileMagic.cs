@@ -52,17 +52,17 @@ public static class FileMagic
         try
         {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 0x4000, FileOptions.SequentialScan);
-            int len = (int)Math.Min(probeLength, fs.Length);
+            var len = (int)Math.Min(probeLength, fs.Length);
             if (len <= 0)
             {
                 return null;
             }
 
-            byte[] buffer = new byte[len];
-            int read = 0;
+            var buffer = new byte[len];
+            var read = 0;
             while (read < len)
             {
-                int n = fs.Read(buffer, read, len - read);
+                var n = fs.Read(buffer, read, len - read);
                 if (n <= 0)
                 {
                     break;

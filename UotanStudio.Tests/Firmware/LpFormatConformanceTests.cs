@@ -98,7 +98,7 @@ public class LpFormatConformanceTests
         builder.AddGroup("limited", 4096);
         builder.AddPartition("first", "limited", 1);
         builder.AddPartition("second", "limited", 1);
-        Assert.Throws<InvalidOperationException>(() => builder.Build());
+        Assert.Throws<InvalidOperationException>(builder.Build);
     }
 
     private static byte[] CreateHeader(ushort minor, int size)

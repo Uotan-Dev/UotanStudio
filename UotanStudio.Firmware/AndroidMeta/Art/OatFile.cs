@@ -114,7 +114,7 @@ internal static class OatFile
         var metadataBytes = new byte[(int)keySize];
         data.Read(headerSize, metadataBytes);
         var metadata = ParseMetadata(metadataBytes);
-        long cursor = version == 124 ? headerSize + keySize : data.U32(24);
+        var cursor = version == 124 ? headerSize + keySize : data.U32(24);
         if (cursor < headerSize + keySize)
         {
             throw new InvalidDataException("OAT DEX records overlap the header or metadata.");

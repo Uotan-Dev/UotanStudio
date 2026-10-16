@@ -150,7 +150,7 @@ internal sealed class DatFormatHandler : IFormatHandler
     /// the list does not parse, the pair is incremental, or writing fails.
     /// <para>成功时返回输出镜像名与大小元数据；镜像对不完整、解析失败、增量对或写入失败时返回失败结果。</para></returns>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options, CancellationToken cancellationToken)
@@ -381,7 +381,7 @@ internal sealed class DatFormatHandler : IFormatHandler
                         ["TransferList"] = transferListPath,
                         ["DataFile"] = dataPath,
                         ["BrotliCompressed"] = brotli ? "true" : "false",
-                        ["TotalBytes"] = size.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        ["TotalBytes"] = size.ToString(CultureInfo.InvariantCulture),
                     });
             }
             catch (OperationCanceledException)
@@ -461,8 +461,8 @@ internal sealed class DatFormatHandler : IFormatHandler
     private static int ReadMaxRangeBlocks()
         => RepackMetadata.PackingOverrides is { } overrides
             && overrides.TryGetValue("DatMaxCommandRangeBlocks", out var raw)
-            && int.TryParse(raw, System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out var parsed) && parsed > 0
+            && int.TryParse(raw, NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var parsed) && parsed > 0
             ? parsed : 0;
 
     /// <summary>

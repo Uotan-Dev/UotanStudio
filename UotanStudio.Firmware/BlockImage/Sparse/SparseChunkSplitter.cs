@@ -88,7 +88,7 @@ public static class SparseChunkSplitter
         ArgumentException.ThrowIfNullOrWhiteSpace(selectedPath);
         var selected = Path.GetFullPath(selectedPath);
         var name = Path.GetFileName(selected);
-        var match = System.Text.RegularExpressions.Regex.Match(name, @"\.sparsechunk\.(\d+)$",
+        var match = Regex.Match(name, @"\.sparsechunk\.(\d+)$",
             RegexOptions.CultureInvariant);
         if (!match.Success)
         {
@@ -108,7 +108,7 @@ public static class SparseChunkSplitter
                 continue;
             }
 
-            var candidateMatch = System.Text.RegularExpressions.Regex.Match(candidateName,
+            var candidateMatch = Regex.Match(candidateName,
                 @"\.sparsechunk\.(\d+)$", RegexOptions.CultureInvariant);
             if (!candidateMatch.Success)
             {

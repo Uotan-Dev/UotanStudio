@@ -1094,7 +1094,7 @@ public sealed partial class Ext4Builder
     private static void Populate(Node node, IReadOnlyCollection<string> excludedFiles)
     {
         var children = Directory.EnumerateFileSystemEntries(node.FullPath)
-            .Where(path => (UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Current is { } plan ? plan.Includes(path) : !UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile(path)))
+            .Where(path => (FileSystemEditPlan.Current is { } plan ? plan.Includes(path) : !Core.Repacking.RepackMetadata.IsMetadataFile(path)))
             .OrderBy(static p => Path.GetFileName(p), StringComparer.Ordinal);
         var excludedSet = excludedFiles.Count == 0
             ? null
@@ -1154,9 +1154,9 @@ public sealed partial class Ext4Builder
 
     private static void ApplyPreservedAttributes(Node node)
     {
-        if (UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Current is not { } plan) return;
+        if (FileSystemEditPlan.Current is not { } plan) return;
         var entry = plan.Get(node.FullPath);
-        node.Name = UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Name(entry.Path);
+        node.Name = FileSystemEditPlan.Name(entry.Path);
         node.RelativePath = entry.Path;
         node.Mode = entry.Mode;
         node.Uid = entry.Uid;
@@ -1356,7 +1356,7 @@ public sealed partial class Ext4Builder
         var filesToScan = nodes.Where(n => enableSparse && n.AttributeValue is null && !n.IsSymlink && !n.IsInlineData && !n.IsDirectory && n.Size > 0).ToList();
         if (filesToScan.Count > 0)
         {
-            Core.FirmwareParallelism.ForEach(filesToScan, node =>
+            FirmwareParallelism.ForEach(filesToScan, node =>
             {
                 node.HoleBlocks = DetectHoles(node.FullPath, node.Size, blockSize);
             });

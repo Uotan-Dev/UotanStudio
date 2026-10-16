@@ -132,7 +132,7 @@ public sealed class PayloadFormatHandler : IFormatHandler, IRepackMetadataProvid
     /// <para>任务结果：成功时携带解包出的分区名；载荷无法解析或写入时携带错误消息。</para></returns>
     /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

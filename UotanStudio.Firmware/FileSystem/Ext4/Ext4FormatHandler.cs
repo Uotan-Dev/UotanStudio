@@ -201,7 +201,7 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
     /// <param name="cancellationToken">Cancels parsing and writes; cancellation propagates. <para>取消解析与写入；取消会向上抛出。</para></param>
     /// <returns>A completed task: <c>Ok</c> listing every extracted entry path, or <c>Fail</c> with the error message. The source is frozen through the preservation layer before extraction. <para>已完成任务：提取前先经保留层冻结源；结果为 <c>Ok</c>（列出全部提取条目路径）或 <c>Fail</c>（含错误信息）。</para></returns>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
+        => FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

@@ -193,7 +193,7 @@ internal static class PayloadSigner
 
             input.Position = blobStart;
             var buffer = new byte[64 * 1024];
-            long remaining = dataLength;
+            var remaining = dataLength;
             while (remaining > 0)
             {
                 cancellationToken.ThrowIfCancellationRequested();

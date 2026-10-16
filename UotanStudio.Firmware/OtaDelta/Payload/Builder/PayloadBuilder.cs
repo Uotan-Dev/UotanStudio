@@ -617,7 +617,7 @@ public sealed partial class PayloadBuilder : IDisposable
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            using var data = UotanStudio.Firmware.OtaDelta.Diff.BinaryDeltaPatch.CreateTemporaryStream();
+            using var data = Diff.BinaryDeltaPatch.CreateTemporaryStream();
             var manifest = BuildManifest(data, cancellationToken);
             if (_signingKey is not null)
             {
@@ -630,7 +630,7 @@ public sealed partial class PayloadBuilder : IDisposable
             output.Write(header);
             output.Write(manifestBytes);
             data.Position = 0;
-            UotanStudio.Firmware.OtaDelta.Diff.BinaryDeltaPatch.CopyExactly(data, output, data.Length, cancellationToken);
+            Diff.BinaryDeltaPatch.CopyExactly(data, output, data.Length, cancellationToken);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception) when (cancellationToken.IsCancellationRequested)
@@ -716,9 +716,9 @@ public sealed partial class PayloadBuilder : IDisposable
         InstallOperation.Types.Type operationType, CompressionType compressionType, CancellationToken cancellationToken)
     {
         var offset = data.Position;
-        using var hashing = new UotanStudio.Firmware.Core.Streams.HashingWriteStream(data, leaveOpen: true);
+        using var hashing = new Core.Streams.HashingWriteStream(data, leaveOpen: true);
         using (var source = new MemoryStream(buffer, 0, count, writable: false))
-        using (var bounded = new UotanStudio.Firmware.Core.Streams.CountingWriteStream(hashing, count * 2L + 65536, leaveOpen: true, cancellationToken: cancellationToken))
+        using (var bounded = new Core.Streams.CountingWriteStream(hashing, count * 2L + 65536, leaveOpen: true, cancellationToken: cancellationToken))
             CompressStream(source, bounded, compressionType);
         var storedLength = hashing.BytesWritten;
         var digest = hashing.GetHashAndReset();

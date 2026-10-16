@@ -125,7 +125,7 @@ public class BootImageParser : IDisposable
         CompressionType DetectAt(long offset, uint length)
         {
             if (length == 0) return CompressionType.None;
-            Core.FileExtraction.ValidateRange(offset, length, input.Length, "Boot component");
+            FileExtraction.ValidateRange(offset, length, input.Length, "Boot component");
             input.Position = offset;
             var signature = new byte[(int)Math.Min(16u, length)];
             input.ReadExactly(signature);
@@ -259,9 +259,9 @@ public class BootImageParser : IDisposable
     /// <param name="partitionName">Partition-name hint such as <c>init_boot</c> or <c>recovery_a</c>;
     /// <see langword="null"/> disables the hint path and falls back to the content heuristic alone.
     /// <para>分区名提示（如 <c>init_boot</c>、<c>recovery_a</c>）；为 <see langword="null"/> 时仅使用内容启发式。</para></param>
-    /// <returns>The detected <see cref="Models.BootImageRole"/>; see <see cref="BootImageRoleResolver.Detect"/> for the
+    /// <returns>The detected <see cref="BootImageRole"/>; see <see cref="BootImageRoleResolver.Detect"/> for the
     /// precedence rules.
-    /// <para>检测出的 <see cref="Models.BootImageRole"/>；优先级规则见 <see cref="BootImageRoleResolver.Detect"/>。</para></returns>
+    /// <para>检测出的 <see cref="BootImageRole"/>；优先级规则见 <see cref="BootImageRoleResolver.Detect"/>。</para></returns>
     public BootImageRole DetectRole(string? partitionName = null)
         => BootImageRoleResolver.Detect(Header.HeaderVersion, Header.KernelSize, Header.RamdiskSize, partitionName);
 

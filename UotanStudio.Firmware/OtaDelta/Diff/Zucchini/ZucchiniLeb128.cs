@@ -22,8 +22,8 @@ internal static class ZucchiniLeb128
         }
 
         uint result = 0;
-        int shift = 0;
-        int i = offset;
+        var shift = 0;
+        var i = offset;
         while (true)
         {
             if (i >= source.Length)
@@ -31,8 +31,8 @@ internal static class ZucchiniLeb128
                 return -1;
             }
 
-            byte b = source[i++];
-            bool more = (b & 0x80) != 0;
+            var b = source[i++];
+            var more = (b & 0x80) != 0;
             if (shift == 28)
             {
 
@@ -69,7 +69,7 @@ internal static class ZucchiniLeb128
     {
         do
         {
-            byte b = (byte)(value & 0x7F);
+            var b = (byte)(value & 0x7F);
             value >>= 7;
             if (value != 0)
             {

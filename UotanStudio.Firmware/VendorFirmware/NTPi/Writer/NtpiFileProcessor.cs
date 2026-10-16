@@ -84,7 +84,7 @@ internal class NtpiFileProcessor(ICryptoProvider cryptoProvider, ILzma2Compresso
         var packageCounter = new CountingWriteStream(Stream.Null, long.MaxValue);
         string hash;
         long packageLength;
-        using (var hashing = new Core.Streams.HashingReadStream(source))
+        using (var hashing = new HashingReadStream(source))
         {
             _compressor.Compress(hashing, packageCounter, (ulong)originalLength);
             hash = hashing.GetHashHex();
@@ -170,7 +170,7 @@ internal class NtpiFileProcessor(ICryptoProvider cryptoProvider, ILzma2Compresso
         output.Write(encodeHeaderBuffer, 0, NtEncodeHeaderSize);
 
         var encryptedCounter = new CountingWriteStream(output, long.MaxValue, leaveOpen: true);
-        using var hashing = new Core.Streams.HashingReadStream(source);
+        using var hashing = new HashingReadStream(source);
         using (var encrypt = _cryptoProvider.CreateEncryptStream(encryptedCounter, blockKey, zeroIv, leaveOpen: true))
         {
             _compressor.Compress(hashing, encrypt, (ulong)plan.OriginalLength);

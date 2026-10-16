@@ -24,7 +24,7 @@ public class ArscFormatConformanceTests
         var type = Assert.Single(package.Types);
         Assert.Equal(configSize * 2, type.ConfigHex.Length);
         Assert.Equal(4, type.Entries.Count);
-        Assert.All(type.Entries.Take(3), entry => Assert.Null(entry));
+        Assert.All(type.Entries.Take(3), Assert.Null);
         Assert.Equal(42u, type.Entries[3]!.Value!.Data);
         Assert.Equal(ResValueType.IntDec, type.Entries[3]!.Value!.Type);
         Assert.Equal(2, type.Entries[3]!.Flags);

@@ -129,7 +129,7 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider, I
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var header = UotanStudio.Firmware.Core.FormatDetector.ReadHeader(filePath, sizeof(uint));
+            var header = FormatDetector.ReadHeader(filePath, sizeof(uint));
             var isSparse = header.Length >= sizeof(uint)
                 && BinaryPrimitives.ReadUInt32LittleEndian(header) == SparseMagic;
             var metadata = MetadataReader.ReadFromImageFile(filePath);
@@ -188,7 +188,7 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider, I
     /// <para>令牌已被取消。</para>
     /// </exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     /// <summary>

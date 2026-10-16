@@ -65,7 +65,7 @@ public sealed partial class F2fsBuilder
             NodeIno = NodeIno,
             MetaIno = MetaIno,
             Uuid = (options.Uuid ?? Guid.NewGuid()).ToByteArray(),
-            VolumeName = string.IsNullOrEmpty(options.VolumeName) && UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Current is null ? "f2fs" : options.VolumeName,
+            VolumeName = string.IsNullOrEmpty(options.VolumeName) && Rebuilding.FileSystemEditPlan.Current is null ? "f2fs" : options.VolumeName,
             CpPayload = 0,
             Version = new byte[256],
 

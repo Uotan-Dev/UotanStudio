@@ -325,7 +325,7 @@ public class BuilderStreamingTests
         using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
         var random = new Random(seed);
         var chunk = new byte[1 << 20];
-        long remaining = length;
+        var remaining = length;
         while (remaining > 0)
         {
             var count = (int)Math.Min(chunk.Length, remaining);
@@ -340,7 +340,7 @@ public class BuilderStreamingTests
         var random = new Random(seed);
         var expected = new byte[1 << 20];
         var actual = new byte[1 << 20];
-        long remaining = length;
+        var remaining = length;
         while (remaining > 0)
         {
             var count = (int)Math.Min(expected.Length, remaining);

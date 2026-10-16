@@ -128,7 +128,7 @@ public sealed class ArtOatTests : IDisposable
         using var stream = new MemoryStream(bytes);
         var data = new ArtData(stream, 0, bytes.Length, Token);
         data.WriteDexHashes();
-        Assert.Equal(UotanStudio.Hash.Adler32.Adler32.Compute(bytes.AsSpan(12)), BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(8)));
+        Assert.Equal(Hash.Adler32.Adler32.Compute(bytes.AsSpan(12)), BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(8)));
         data.VerifyDexHashes();
     }
 

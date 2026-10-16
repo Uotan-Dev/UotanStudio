@@ -157,7 +157,7 @@ internal sealed class ArtData(Stream stream, long origin, long length, Cancellat
             {
                 sha.Append(buffer.AsSpan(skip, count - skip));
             }
-            adler = UotanStudio.Hash.Adler32.Adler32.Compute(buffer.AsSpan(0, count), adler);
+            adler = Hash.Adler32.Adler32.Compute(buffer.AsSpan(0, count), adler);
             offset += count;
         }
         Span<byte> signature = stackalloc byte[20];
@@ -197,7 +197,7 @@ internal sealed class ArtData(Stream stream, long origin, long length, Cancellat
         {
             var count = (int)Math.Min(buffer.Length, length - offset);
             Read(offset, buffer.AsSpan(0, count));
-            adler = UotanStudio.Hash.Adler32.Adler32.Compute(buffer.AsSpan(0, count), adler);
+            adler = Hash.Adler32.Adler32.Compute(buffer.AsSpan(0, count), adler);
             offset += count;
         }
         Write32(8, adler);

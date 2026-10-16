@@ -70,7 +70,7 @@ internal static partial class VdexFile
                     {
                         throw new InvalidDataException("ART code items exceed the instruction work limit.");
                     }
-                    long end = cursor;
+                    var end = cursor;
                     if (modern)
                     {
                         var bounds = ModernQuickBounds(quick, modernTable?.Get((uint)index) ?? 0);
@@ -109,7 +109,7 @@ internal static partial class VdexFile
     {
         dex.Check(code, 16);
         var units = dex.U32(code + 12);
-        long start = code + 16L;
+        var start = code + 16L;
         dex.Check(start, units * 2L);
         var hadIndices = cursor < end;
         for (long pc = 0; pc < units;)

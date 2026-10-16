@@ -37,7 +37,7 @@ internal sealed class CompactOffsetTable
             throw new InvalidDataException("Compact offset index is outside its table.");
         }
         var indexOffset = checked(_table + index / 16L * 4);
-        long cursor = checked(_start + _data.U32(indexOffset));
+        var cursor = checked(_start + _data.U32(indexOffset));
         if (cursor < _start || cursor > _table - 2)
         {
             throw new InvalidDataException("Compact offset block overlaps its index table.");

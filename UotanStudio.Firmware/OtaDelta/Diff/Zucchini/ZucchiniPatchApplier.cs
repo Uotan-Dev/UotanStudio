@@ -235,7 +235,7 @@ internal static class ZucchiniPatchApplier
             var oldElement = oldData.Slice(checked((int)oldOffset), checked((int)oldLength));
             var newElement = newData.Slice(checked((int)newOffset), checked((int)newLength));
             var copies = new List<(int Destination, int Length)>();
-            long previousSource = 0; int previousDestination = 0;
+            long previousSource = 0; var previousDestination = 0;
             while (lengths.Remaining > 0)
             {
                 var encodedLength = lengths.VarUInt();
@@ -258,7 +258,7 @@ internal static class ZucchiniPatchApplier
             extra.Take(newElement.Length - previousDestination).CopyTo(newElement[previousDestination..]);
             if (srcSkips.Remaining != 0 || dstSkips.Remaining != 0 || extra.Remaining != 0)
                 throw new ZucchiniFormatException("Unused Zucchini equivalence or extra data.");
-            long copyOffset = 0; long precedingCopyLength = 0; int copyIndex = 0;
+            long copyOffset = 0; long precedingCopyLength = 0; var copyIndex = 0;
             while (deltaSkips.Remaining > 0)
             {
                 copyOffset = checked(copyOffset + deltaSkips.VarUInt());

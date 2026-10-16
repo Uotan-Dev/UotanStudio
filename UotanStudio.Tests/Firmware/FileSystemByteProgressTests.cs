@@ -50,7 +50,7 @@ public sealed class FileSystemByteProgressTests : IDisposable
         }
         var expectedBytes = 12L * 1024 * 1024 + 7;
         var events = new List<FileSystemByteProgress>();
-        var progress = new InlineProgress<FileSystemByteProgress>(sample => events.Add(sample));
+        var progress = new InlineProgress<FileSystemByteProgress>(events.Add);
         var output = Path.Combine(root, "output");
         var result = await handler.UnpackAsync(image, output, new UnpackOptions { FileSystemProgress = progress }, Token);
         Assert.True(result.Success, result.Summary);

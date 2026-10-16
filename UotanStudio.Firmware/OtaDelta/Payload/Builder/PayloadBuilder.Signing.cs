@@ -34,7 +34,7 @@ public sealed partial class PayloadBuilder
         output.Write(metadataSignature);
         data.Position = 0;
         var buffer = new byte[65536];
-        long remaining = data.Length;
+        var remaining = data.Length;
         while (remaining > 0)
         {
             token.ThrowIfCancellationRequested();

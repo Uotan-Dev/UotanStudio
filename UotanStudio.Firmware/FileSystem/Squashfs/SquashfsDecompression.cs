@@ -82,7 +82,7 @@ internal static class SquashfsDecompression
             throw new FileSystemCorruptedException($"The SquashFS gzip block expands beyond the expected {expectedSize} bytes.", ex);
         }
 
-        return Finish(output.Length, exactOutput, expectedSize, () => output.ToArray());
+        return Finish(output.Length, exactOutput, expectedSize, output.ToArray);
     }
 
     private static byte[] DecompressLzo(byte[] payload, int expectedSize, bool exactOutput)
@@ -126,7 +126,7 @@ internal static class SquashfsDecompression
             throw new FileSystemCorruptedException($"The SquashFS xz block expands beyond the expected {expectedSize} bytes.", ex);
         }
 
-        return Finish(output.Length, exactOutput, expectedSize, () => output.ToArray());
+        return Finish(output.Length, exactOutput, expectedSize, output.ToArray);
     }
 
     private static byte[] DecompressLz4(byte[] payload, int expectedSize, bool exactOutput)
@@ -172,7 +172,7 @@ internal static class SquashfsDecompression
             throw new FileSystemCorruptedException($"The SquashFS zstd block expands beyond the expected {expectedSize} bytes.", ex);
         }
 
-        return Finish(output.Length, exactOutput, expectedSize, () => output.ToArray());
+        return Finish(output.Length, exactOutput, expectedSize, output.ToArray);
     }
 
     private static byte[] Finish(long length, bool exactOutput, int expectedSize, Func<byte[]> snapshot)

@@ -205,7 +205,7 @@ public sealed class BootPatchModelsTests
             File.WriteAllBytes(bootPath, PackBootImage(kernel, ramdisk));
             File.WriteAllBytes(Path.Combine(work, "ksuinit.bin"), ksuinit);
             File.WriteAllBytes(Path.Combine(work, "lkm.bin"), lkm);
-            using (var zip = System.IO.Compression.ZipFile.Open(packagePath, System.IO.Compression.ZipArchiveMode.Create))
+            using (var zip = ZipFile.Open(packagePath, ZipArchiveMode.Create))
             {
                 zip.CreateEntryFromFile(Path.Combine(work, "ksuinit.bin"), "lib/arm64-v8a/init");
                 zip.CreateEntryFromFile(Path.Combine(work, "lkm.bin"), "lib/arm64-v8a/android13-5.15/kernelsu.ko");
@@ -244,7 +244,7 @@ public sealed class BootPatchModelsTests
             var outputPath = Path.Combine(work, "patched.img");
             File.WriteAllBytes(bootPath, PackBootImage(kernel, ramdisk));
             File.WriteAllBytes(Path.Combine(work, "lkm.bin"), "fake-kernelsu-ko"u8.ToArray());
-            using (var zip = System.IO.Compression.ZipFile.Open(packagePath, System.IO.Compression.ZipArchiveMode.Create))
+            using (var zip = ZipFile.Open(packagePath, ZipArchiveMode.Create))
             {
                 zip.CreateEntryFromFile(Path.Combine(work, "lkm.bin"), "lib/arm64-v8a/android13-5.15/kernelsu.ko");
             }

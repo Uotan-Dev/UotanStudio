@@ -50,7 +50,7 @@ internal static class DexReader
         var header = ReadHeader(data);
         if (header.HeaderSize != 0x70 || header.FileSize != data.Length)
             throw new DexException("DEX header size or file size does not match the input.");
-        var checksum = UotanStudio.Hash.Adler32.Adler32.Compute(data.AsSpan(12));
+        var checksum = Hash.Adler32.Adler32.Compute(data.AsSpan(12));
         if (checksum != header.Checksum)
         {
             throw new DexException($"DEX Adler-32 checksum 0x{checksum:X8} does not match the declared header checksum 0x{header.Checksum:X8}.");

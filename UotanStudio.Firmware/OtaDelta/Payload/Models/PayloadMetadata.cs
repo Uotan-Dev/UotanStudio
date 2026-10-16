@@ -34,9 +34,9 @@ public class PayloadMetadata
     /// </summary>
     /// <value>
     /// Used to size the manifest region while parsing; a mismatch with the bytes actually read raises
-    /// <see cref="UotanStudio.Firmware.OtaDelta.Payload.InvalidManifestException"/>.
+    /// <see cref="InvalidManifestException"/>.
     /// <para>解析时用于确定 manifest 区域大小；与实际读取的字节数不一致时抛出
-    /// <see cref="UotanStudio.Firmware.OtaDelta.Payload.InvalidManifestException"/>。</para>
+    /// <see cref="InvalidManifestException"/>。</para>
     /// </value>
     public ulong ManifestLength { get; internal set; }
 
@@ -169,7 +169,7 @@ internal static class PartitionInfoHelper
                 continue;
             }
 
-            var bytes = (ulong)Math.Max(0, UotanStudio.Firmware.OtaDelta.Payload.PayloadExtractor.ProgressSize(part, manifest.BlockSize));
+            var bytes = (ulong)Math.Max(0, PayloadExtractor.ProgressSize(part, manifest.BlockSize));
 
             list.Add(new PartitionInfoData
             {

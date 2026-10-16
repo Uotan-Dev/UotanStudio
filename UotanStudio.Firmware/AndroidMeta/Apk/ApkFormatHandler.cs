@@ -103,7 +103,7 @@ internal sealed class ApkFormatHandler : IFormatHandler
     /// <para><paramref name="cancellationToken"/> 已被触发；提取错误则以失败结果报告。</para>
     /// </exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private async Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
@@ -170,7 +170,7 @@ internal sealed class ApkFormatHandler : IFormatHandler
                 }
             }
 
-            System.IO.File.WriteAllText(metadataPath, FormatInfo(info));
+            File.WriteAllText(metadataPath, FormatInfo(info));
             extractedFiles.Insert(0, metadataPath);
             return FirmwareOpResult.Ok(
                 $"APK unpacked to {outputDirectory} ({extractedFiles.Count} files)",
@@ -228,11 +228,11 @@ internal sealed class ApkFormatHandler : IFormatHandler
 
             if (Directory.Exists(inputPath))
             {
-                UotanStudio.Firmware.AndroidMeta.Apk.ApkRepacker.Repack(inputPath, outputPath, cancellationToken: cancellationToken);
+                ApkRepacker.Repack(inputPath, outputPath, cancellationToken: cancellationToken);
                 return Task.FromResult(FirmwareOpResult.Ok($"APK repacked to {outputPath}", [outputPath]));
             }
 
-            System.IO.File.Copy(inputPath, outputPath, overwrite: true);
+            File.Copy(inputPath, outputPath, overwrite: true);
             return Task.FromResult(FirmwareOpResult.Ok($"Copied APK to {outputPath}", [outputPath]));
         }
         catch (OperationCanceledException)

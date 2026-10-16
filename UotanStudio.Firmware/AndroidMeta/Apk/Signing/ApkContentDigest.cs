@@ -135,8 +135,8 @@ internal static class ApkContentDigest
 
         const long chunkSize = ApkSignatureConstants.ContentDigestChunkSize;
         var buffer = new byte[chunkSize];
-        long remaining = length;
-        long position = offset;
+        var remaining = length;
+        var position = offset;
         while (remaining > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -162,8 +162,8 @@ internal static class ApkContentDigest
         }
 
         const long chunkSize = ApkSignatureConstants.ContentDigestChunkSize;
-        long remaining = length;
-        long position = offset;
+        var remaining = length;
+        var position = offset;
         while (remaining > 0)
         {
             var chunkLength = (int)Math.Min(chunkSize, remaining);

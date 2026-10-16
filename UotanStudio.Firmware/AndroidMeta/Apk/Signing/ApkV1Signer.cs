@@ -95,7 +95,7 @@ internal static class ApkV1Signer
             if (!unfolded.StartsWith("Name: ", StringComparison.Ordinal) || nameEnd < 6)
                 throw new InvalidDataException("Missing JAR section name. JAR 清单段缺少名称。");
             WriteSection(buffer, null, [("Name", unfolded[6..nameEnd]),
-                ("SHA-256-Digest", Convert.ToBase64String(UotanStudio.Hash.Digests.Sha256.ComputeHash(section)))]);
+                ("SHA-256-Digest", Convert.ToBase64String(Hash.Digests.Sha256.ComputeHash(section)))]);
             start += end + 4;
         }
         return buffer.ToArray();
@@ -171,7 +171,7 @@ internal static class ApkV1Signer
     /// <param name="content">Bytes to hash. <para>待摘要的字节。</para></param>
     /// <returns>The 32-byte SHA-256 digest. <para>32 字节的 SHA-256 摘要。</para></returns>
     public static byte[] Sha256(byte[] content)
-        => UotanStudio.Hash.Digests.Sha256.ComputeHash(content);
+        => Hash.Digests.Sha256.ComputeHash(content);
 
     /// <summary>
     /// Computes the SHA-256 digest of a stream (whole stream, from current position to end).
@@ -181,7 +181,7 @@ internal static class ApkV1Signer
     /// <para>可读流；读到末尾即止，且不被关闭。</para></param>
     /// <returns>The 32-byte SHA-256 digest. <para>32 字节的 SHA-256 摘要。</para></returns>
     public static byte[] Sha256(Stream content)
-        => UotanStudio.Hash.Digests.Sha256.ComputeHash(content);
+        => Hash.Digests.Sha256.ComputeHash(content);
 
     /// <summary>
     /// Writes one manifest section: main section header lines or a named individual section,

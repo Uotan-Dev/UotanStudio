@@ -242,7 +242,7 @@ internal sealed class Nb0Packer
         var entries = new List<Nb0Entry>();
         foreach (var filePath in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories).OrderBy(f => f, StringComparer.Ordinal))
         {
-            if (UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile(filePath)) continue;
+            if (Core.Repacking.RepackMetadata.IsMetadataFile(filePath)) continue;
             var relative = Path.GetRelativePath(sourceDirectory, filePath).Replace('\\', '/');
             entries.Add(new Nb0Entry(relative, filePath));
         }
@@ -457,7 +457,7 @@ public sealed class Nb0PackerBuilder
     {
         foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories).OrderBy(f => f, StringComparer.Ordinal))
         {
-            if (UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile(filePath)) continue;
+            if (Core.Repacking.RepackMetadata.IsMetadataFile(filePath)) continue;
             var relative = Path.GetRelativePath(directoryPath, filePath).Replace('\\', '/');
             var name = string.IsNullOrEmpty(prefix) ? relative : $"{prefix}/{relative}";
             Nb0EntryHeader.ValidateName(name);

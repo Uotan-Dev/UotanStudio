@@ -330,7 +330,7 @@ public static class FirmwareContextDependencyScanner
         var state = new Dictionary<string, int>(StringComparer.Ordinal);
         var path = new List<string>();
 
-        return nodes.Any(node => TryVisit(node)) ? string.Join(" -> ", path) : null;
+        return nodes.Any(TryVisit) ? string.Join(" -> ", path) : null;
 
         bool TryVisit(string node)
         {

@@ -339,7 +339,7 @@ internal sealed class SonySinFormatHandler : IReadonlyFormatHandler
         }
 
         var packedRanges = segments.OrderBy(segment => segment.PackedOffset).ToArray();
-        long packedEnd = headerSize + 8 + gptpLength;
+        var packedEnd = headerSize + 8 + gptpLength;
         foreach (var segment in packedRanges)
         {
             if (segment.PackedOffset < packedEnd)

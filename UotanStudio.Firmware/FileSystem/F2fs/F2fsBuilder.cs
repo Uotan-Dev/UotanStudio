@@ -391,7 +391,7 @@ public sealed partial class F2fsBuilder
         var totalPlannedBytes = progress is null
             ? 0L
             : ordered.Where(node => !node.IsDirectory).Sum(node => (long)node.Size);
-        Core.FirmwareParallelism.ForEach(ordered, node =>
+        FirmwareParallelism.ForEach(ordered, node =>
         {
             effective.CancellationToken.ThrowIfCancellationRequested();
             if (!node.IsDirectory)
@@ -494,7 +494,7 @@ public sealed partial class F2fsBuilder
             foreach (var childPath in Directory.EnumerateFileSystemEntries(fullPath))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Current is { } plan ? !plan.Includes(childPath) : UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile(childPath)) continue;
+                if (FileSystemEditPlan.Current is { } plan ? !plan.Includes(childPath) : Core.Repacking.RepackMetadata.IsMetadataFile(childPath)) continue;
                 var childFullPath = Path.GetFullPath(childPath);
                 if (excludedPaths?.Contains(childFullPath) == true)
                 {
@@ -1203,8 +1203,8 @@ public sealed partial class F2fsBuilder
             plan.DataSegno[t] = t < layout.DataSegments ? (uint)(mainBase + layout.NodeSegments + t) : FreeSegment();
         }
 
-        long nodeCursor = layout.NodeBlkaddr;
-        long dataCursor = layout.DataBlkaddr;
+        var nodeCursor = layout.NodeBlkaddr;
+        var dataCursor = layout.DataBlkaddr;
 
         uint AllocateDataBlock(ref long cursor, Layout l)
         {
@@ -1475,7 +1475,7 @@ public sealed partial class F2fsBuilder
         public uint XattrNid;
         public uint XattrBlock;
         public byte[] XattrBytes = [];
-        public Metadata.FileSystemInodeMetadata? SourceMetadata;
+        public FileSystemInodeMetadata? SourceMetadata;
         public int ClusterPages = F2fsCompression.ClusterPages;
         public ushort CompressFlags;
         public int ExtraWords => TotalExtraAttrWords;

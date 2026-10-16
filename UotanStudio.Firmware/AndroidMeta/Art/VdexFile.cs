@@ -215,7 +215,7 @@ internal static partial class VdexFile
         {
             throw new InvalidDataException("VDEX DEX count is outside the supported resource limit.");
         }
-        long start = 24 + 4L * count;
+        var start = 24 + 4L * count;
         var dexEnd = start + data.U32(12);
         var quickStart = dexEnd + data.U32(16);
         var quickSize = data.U32(20);

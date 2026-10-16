@@ -232,7 +232,7 @@ public class FileMagicTests
     [Fact]
     public void Identify_LinuxKernelArmZImage()
     {
-        byte[] header = new byte[0x28];
+        var header = new byte[0x28];
         header[0x24] = 0x18;
         header[0x25] = 0x28;
         header[0x26] = 0x6F;
@@ -267,7 +267,7 @@ public class FileMagicTests
     [Fact]
     public void IdentifyFile_ReadsHeader_AndIdentifies()
     {
-        string path = Path.Combine(Path.GetTempPath(), "uotan-filemagic-" + Guid.NewGuid().ToString("N")[..8] + ".png");
+        var path = Path.Combine(Path.GetTempPath(), "uotan-filemagic-" + Guid.NewGuid().ToString("N")[..8] + ".png");
         try
         {
             File.WriteAllBytes(path, Png);
@@ -288,7 +288,7 @@ public class FileMagicTests
 
     private static byte[] BuildElf(bool elf64, ushort machine, ushort type)
     {
-        byte[] header = new byte[64];
+        var header = new byte[64];
         header[0] = 0x7F;
         header[1] = (byte)'E';
         header[2] = (byte)'L';
@@ -306,7 +306,7 @@ public class FileMagicTests
 
     private static byte[] BuildKernelImage(string threeAscii, byte fourth)
     {
-        byte[] header = new byte[0x40];
+        var header = new byte[0x40];
         header[0x38] = (byte)threeAscii[0];
         header[0x39] = (byte)threeAscii[1];
         header[0x3A] = (byte)threeAscii[2];
@@ -335,13 +335,13 @@ public class FileMagicDifferentialTests
     [InlineData("cpio", new byte[] { 0x30, 0x37, 0x30, 0x37, 0x30, 0x31 })]
     public void Engine_And_FileOracle_AgreeOnFamily(string token, byte[] data)
     {
-        string? oracle = RunFileOracle(data);
+        var oracle = RunFileOracle(data);
         if (oracle is null)
         {
             Assert.Skip("No 'file' executable on PATH; differential parity requires the file(1) oracle.");
         }
 
-        string? engine = FileMagic.Describe(data);
+        var engine = FileMagic.Describe(data);
         Assert.NotNull(engine);
         Assert.Contains(token, engine, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(token, oracle!, StringComparison.OrdinalIgnoreCase);
@@ -350,7 +350,7 @@ public class FileMagicDifferentialTests
     [Fact]
     public void Engine_And_FileOracle_AgreeOnElfArchitecture()
     {
-        byte[] elf = new byte[64];
+        var elf = new byte[64];
         elf[0] = 0x7F;
         elf[1] = (byte)'E';
         elf[2] = (byte)'L';
@@ -362,7 +362,7 @@ public class FileMagicDifferentialTests
         elf[18] = 0xB7;
         elf[20] = 1;
 
-        string? oracle = RunFileOracle(elf);
+        var oracle = RunFileOracle(elf);
         if (oracle is null)
         {
             Assert.Skip("No 'file' executable on PATH; differential parity requires the file(1) oracle.");
@@ -374,7 +374,7 @@ public class FileMagicDifferentialTests
 
     private static string? RunFileOracle(byte[] data)
     {
-        string path = Path.Combine(Path.GetTempPath(), "uotan-magicdiff-" + Guid.NewGuid().ToString("N")[..8] + ".bin");
+        var path = Path.Combine(Path.GetTempPath(), "uotan-magicdiff-" + Guid.NewGuid().ToString("N")[..8] + ".bin");
         try
         {
             File.WriteAllBytes(path, data);
@@ -390,7 +390,7 @@ public class FileMagicDifferentialTests
                 return null;
             }
 
-            string stdout = proc.StandardOutput.ReadToEnd();
+            var stdout = proc.StandardOutput.ReadToEnd();
             proc.WaitForExit();
             return proc.ExitCode == 0 ? stdout.Trim() : null;
         }

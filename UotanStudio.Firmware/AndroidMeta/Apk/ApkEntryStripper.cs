@@ -232,7 +232,7 @@ public static class ApkEntryStripper
     {
         input.Seek(offset, SeekOrigin.Begin);
         var buffer = new byte[81920];
-        long remaining = length;
+        var remaining = length;
         while (remaining > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();

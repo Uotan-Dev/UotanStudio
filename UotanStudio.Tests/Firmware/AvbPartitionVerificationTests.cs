@@ -351,7 +351,7 @@ public sealed class AvbPartitionVerificationTests
             Assert.False(rejectReads);
             Assert.InRange(buffer.Length, 1, 1024 * 1024);
             cancellationToken.ThrowIfCancellationRequested();
-            var read = truncate ? 0 : base.Read(buffer.Span[..Math.Min(buffer.Length, 257)]);
+            var read = truncate ? 0 : Read(buffer.Span[..Math.Min(buffer.Length, 257)]);
             BytesRead += read;
             cancellation?.Cancel();
             return ValueTask.FromResult(read);

@@ -327,7 +327,7 @@ internal static class ApkRepacker
         }
 
         var crc = new Crc32IeeeAccumulator();
-        long uncompressed = input.Length;
+        var uncompressed = input.Length;
         var start = output.Position;
         using (var deflate = CompressionService.CreateCompressionStream(output, CompressionFormat.Deflate, new CompressionOptions { Level = ToUnifiedLevel(level) }))
         {
@@ -351,13 +351,13 @@ internal static class ApkRepacker
     }
 
     /// <summary>
-    /// Converts a BCL <see cref="System.IO.Compression.CompressionLevel"/> into the unified 0-9 level read by <see cref="CompressionOptions.Level"/>.
-    /// <para>把 BCL 的 <see cref="System.IO.Compression.CompressionLevel"/> 转换为 <see cref="CompressionOptions.Level"/> 读取的统一 0-9 等级。</para>
+    /// Converts a BCL <see cref="CompressionLevel"/> into the unified 0-9 level read by <see cref="CompressionOptions.Level"/>.
+    /// <para>把 BCL 的 <see cref="CompressionLevel"/> 转换为 <see cref="CompressionOptions.Level"/> 读取的统一 0-9 等级。</para>
     /// </summary>
     /// <param name="level">Level requested through <see cref="ApkRepackOptions.CompressionLevel"/>; all four members are mapped.
     /// <para>通过 <see cref="ApkRepackOptions.CompressionLevel"/> 请求的等级；四个成员均有对应结果。</para></param>
-    /// <returns>A level that <c>UotanStudio.Compress.Internal.CompressionLevelMapper</c> maps back to the same BCL band: 0 for <see cref="System.IO.Compression.CompressionLevel.NoCompression"/>, 1 for <see cref="System.IO.Compression.CompressionLevel.Fastest"/>, 6 for <see cref="System.IO.Compression.CompressionLevel.Optimal"/> and 9 for <see cref="System.IO.Compression.CompressionLevel.SmallestSize"/>.
-    /// <para>可被 <c>UotanStudio.Compress.Internal.CompressionLevelMapper</c> 映回同一 BCL 等级的等级值：<see cref="System.IO.Compression.CompressionLevel.NoCompression"/> 为 0，<see cref="System.IO.Compression.CompressionLevel.Fastest"/> 为 1，<see cref="System.IO.Compression.CompressionLevel.Optimal"/> 为 6，<see cref="System.IO.Compression.CompressionLevel.SmallestSize"/> 为 9。</para></returns>
+    /// <returns>A level that <c>UotanStudio.Compress.Internal.CompressionLevelMapper</c> maps back to the same BCL band: 0 for <see cref="CompressionLevel.NoCompression"/>, 1 for <see cref="CompressionLevel.Fastest"/>, 6 for <see cref="CompressionLevel.Optimal"/> and 9 for <see cref="CompressionLevel.SmallestSize"/>.
+    /// <para>可被 <c>UotanStudio.Compress.Internal.CompressionLevelMapper</c> 映回同一 BCL 等级的等级值：<see cref="CompressionLevel.NoCompression"/> 为 0，<see cref="CompressionLevel.Fastest"/> 为 1，<see cref="CompressionLevel.Optimal"/> 为 6，<see cref="CompressionLevel.SmallestSize"/> 为 9。</para></returns>
     private static int ToUnifiedLevel(CompressionLevel level)
     {
         return level switch

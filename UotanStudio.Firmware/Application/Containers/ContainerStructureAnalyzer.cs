@@ -67,7 +67,7 @@ public static class ContainerStructureAnalyzer
     /// </summary>
     private static ContainerStructure AnalyzePayload(string filePath)
     {
-        var info = UotanStudio.Firmware.OtaDelta.Payload.PayloadParser.GetPartitionInfo(filePath);
+        var info = OtaDelta.Payload.PayloadParser.GetPartitionInfo(filePath);
         var entries = info.Select(p => new ContainerEntry(p.Name, "payload", (long)p.SizeBytes, FromPayload: true))
             .ToList();
         return new ContainerStructure(ContainerKind.Payload, entries);
@@ -131,7 +131,7 @@ public static class ContainerStructureAnalyzer
 
         if (hasPayload)
         {
-            var info = UotanStudio.Firmware.OtaDelta.Payload.PayloadParser.GetPartitionInfo(filePath);
+            var info = OtaDelta.Payload.PayloadParser.GetPartitionInfo(filePath);
             entries.AddRange(info.Select(p => new ContainerEntry(p.Name, "payload", (long)p.SizeBytes, FromPayload: true)
             { PayloadMemberPath = payloadMemberPath }));
         }

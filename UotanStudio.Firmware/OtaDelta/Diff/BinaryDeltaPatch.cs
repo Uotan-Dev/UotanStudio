@@ -59,7 +59,7 @@ internal static class BinaryDeltaPatch
                 if (addLength < 0 || extraLength < 0 || addLength > outputLength - newPosition ||
                     extraLength > outputLength - newPosition - addLength)
                     throw new InvalidDataException("Invalid binary patch control tuple.");
-                long remaining = addLength;
+                var remaining = addLength;
                 while (remaining > 0)
                 {
                     ct.ThrowIfCancellationRequested();
@@ -151,7 +151,7 @@ internal static class BinaryDeltaPatch
         var newBuffer = new byte[oldBuffer.Length];
         using (var encoder = BZip2Stream.Create(diff, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
         {
-            long remaining = commonLength;
+            var remaining = commonLength;
             while (remaining > 0)
             {
                 ct.ThrowIfCancellationRequested();
