@@ -35,7 +35,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             }
             _appSettings.DeviceCommunication = _appSettings.DeviceCommunication with
             {
-                UsbBackend = (global::UotanStudio.Comm.Transports.Usb.Abstractions.UsbApiKind)value
+                UsbBackend = (Comm.Transports.Usb.Abstractions.UsbApiKind)value
             };
             OnPropertyChanged();
             DebouncedSaveSettings();
@@ -77,7 +77,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             _serverActionKey = "Settings_ServerStopFailed";
-            _serverActionError = global::UotanStudio.Services.UserError.Describe(ex);
+            _serverActionError = UserError.Describe(ex);
         }
         finally
         {
@@ -101,8 +101,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task RefreshCommunicationStatusAsync(CancellationToken cancellationToken)
     {
-        var adb = ProbeServerStatusAsync(global::UotanStudio.Comm.DeviceCommunicationConfiguration.ProbeAdbServerAsync, cancellationToken);
-        var hdc = ProbeServerStatusAsync(global::UotanStudio.Comm.DeviceCommunicationConfiguration.ProbeHdcServerAsync, cancellationToken);
+        var adb = ProbeServerStatusAsync(Comm.DeviceCommunicationConfiguration.ProbeAdbServerAsync, cancellationToken);
+        var hdc = ProbeServerStatusAsync(Comm.DeviceCommunicationConfiguration.ProbeHdcServerAsync, cancellationToken);
         await Task.WhenAll(adb, hdc);
         _adbServerStatusKey = await adb;
         _hdcServerStatusKey = await hdc;
@@ -128,10 +128,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         get => _appSettings.FirmwareParallelism;
         set
         {
-            var workers = Math.Clamp(value, 1, global::UotanStudio.Firmware.Core.FirmwareParallelism.MaximumWorkers);
+            var workers = Math.Clamp(value, 1, Firmware.Core.FirmwareParallelism.MaximumWorkers);
             if (_appSettings.FirmwareParallelism == workers) return;
             _appSettings.FirmwareParallelism = workers;
-            global::UotanStudio.Firmware.Core.FirmwareParallelism.Workers = workers;
+            Firmware.Core.FirmwareParallelism.Workers = workers;
             OnPropertyChanged();
             DebouncedSaveSettings();
         }
@@ -427,7 +427,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         InitializeFromAppSettings(_appSettings, applyLanguage);
 
         LanguageService.Instance.LanguageChanged += OnLanguageChanged;
-        LanguagePackRegistry.Instance.LanguagePackChanged += OnLanguagePackChanged;
     }
 
     /// <summary>
@@ -609,20 +608,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Listens to language pack registry change events and dynamically updates the available languages list.
-    /// <para>监听语言包注册中心变更事件，动态更新可用语言列表。</para>
-    /// </summary>
-    private void OnLanguagePackChanged(object? sender, LanguagePackChangedEventArgs e)
-    {
-
-        Languages.Clear();
-        foreach (var lang in LanguageService.Instance.AvailableLanguages)
-        {
-            Languages.Add(lang);
-        }
-    }
-
-    /// <summary>
     /// Adds a default MCP server config (HTTP transport).
     /// <para>添加一条默认的 MCP 服务器配置（HTTP 传输）。</para>
     /// </summary>
@@ -713,7 +698,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             _saveCts?.Cancel();
             _saveCts?.Dispose();
             LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
-            LanguagePackRegistry.Instance.LanguagePackChanged -= OnLanguagePackChanged;
         }
 
         _disposed = true;
