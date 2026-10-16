@@ -6,8 +6,6 @@ namespace UotanStudio.ViewModels.Workspace;
 internal partial class PropertiesViewModel
 {
 
-    private static readonly Lazy<UotanStudio.Locale.EnUs.Dock> EnglishDockResources = new();
-
     private static readonly IReadOnlyDictionary<string, string> PropertyNameResourceKeys =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -186,23 +184,7 @@ internal partial class PropertiesViewModel
     }
 
     private static string GetEnglishPropertyName(string resourceKey)
-    {
-        try
-        {
-            if (EnglishDockResources.Value.TryGetResource(resourceKey, null, out var value)
-                && value is string text
-                && !string.IsNullOrEmpty(text))
-            {
-                return text;
-            }
-        }
-        catch
-        {
-
-        }
-
-        return resourceKey;
-    }
+        => LanguageService.Instance.GetEnglish(resourceKey);
 
     private static PropertyRow CreateDynamicRow(string name, string value)
     {
@@ -295,7 +277,7 @@ internal partial class PropertiesViewModel
             }
             else if (SourceName is not null)
             {
-                Name = PropertiesViewModel.LocalizePropertyName(SourceName);
+                Name = LocalizePropertyName(SourceName);
             }
         }
     }

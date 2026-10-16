@@ -2,9 +2,13 @@ using System.Diagnostics;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.Messaging;
+#if DEBUG
+using Dock.Avalonia.Diagnostics;
+#endif
 using UotanStudio.Composition;
 using UotanStudio.Messages;
 using UotanStudio.Models;
@@ -40,8 +44,8 @@ public partial class App : Application
     /// <para>组合根拥有、在桌面退出时释放的唯一设备监视实例；<c>DeviceMonitorService</c> 不提供类型级全局单例。</para>
     /// </summary>
     /// <value>The shared desktop device monitor.<para>共享的桌面设备监视实例。</para></value>
-    internal static UotanStudio.Services.Devices.DeviceMonitorService DeviceMonitor { get; } =
-        UotanStudio.Services.Devices.DeviceMonitorService.Create();
+    internal static DeviceMonitorService DeviceMonitor { get; } =
+        DeviceMonitorService.Create();
 
     public override void Initialize()
     {
@@ -58,9 +62,12 @@ public partial class App : Application
             }
         };
 #if DEBUG
-        if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-        {
-        }
+        // Debug-only bridge to Avalonia Developer Tools; F12 opens the attached tool window.
+        // 仅 Debug 生效：连接 Avalonia 开发者工具的桥接，按 F12 打开工具窗口。
+        this.AttachDeveloperTools();
+        // The Dock overlay is attached application-wide so every window (dialogs included) toggles it.
+        // Dock 调试叠加层按应用级挂载，使所有窗口（含对话框）都能切换。
+        this.AttachDockDebugOverlay(new KeyGesture(Key.F9));
 #endif
     }
 
@@ -70,10 +77,10 @@ public partial class App : Application
         FirstChanceExceptionLogger.Install();
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
 
-        _ = Task.Run(() => FileAssociationService.Register());
+        _ = Task.Run(FileAssociationService.Register);
         _ = Services.Scrcpy.ScrcpyServerService.Shared.RunBackgroundCheckAsync(TimeSpan.FromSeconds(8));
 
-        UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
+        Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
 
         _ = PluginHost.Current.Capability;
 
@@ -100,7 +107,6 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
 
         WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, OnThemeChanged);
-        WeakReferenceMessenger.Default.Register<LanguageChangedMessage>(this, OnLanguageChanged);
         WeakReferenceMessenger.Default.Register<ExitApplicationMessage>(this, OnExitApplication);
         WeakReferenceMessenger.Default.Register<OpenDocumentRequestMessage>(this, OnOpenDocument);
         WeakReferenceMessenger.Default.Register<OpenNodeProjectRequestMessage>(this, OnOpenNodeProject);
@@ -134,8 +140,8 @@ public partial class App : Application
         }
         await ReportAsync(SplashPhase.Settings);
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
-        global::UotanStudio.Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
-        global::UotanStudio.Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
+        Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
+        Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
 
         await ReportAsync(SplashPhase.ApplyingSettings);
         ApplyTheme(settings.ThemeMode);
@@ -266,11 +272,6 @@ public partial class App : Application
         ApplyTheme(message.ThemeMode);
     }
 
-    private void OnLanguageChanged(object recipient, LanguageChangedMessage message)
-    {
-        UpdateSemiThemeLocale(message.CultureName);
-    }
-
     /// <summary>
     /// Responds to an open-document request by opening the requested workspace document.
     /// <para>响应打开文档请求，打开所请求的工作区文档。</para>
@@ -379,7 +380,7 @@ public partial class App : Application
             window.Close();
             return;
         }
-        if (ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IControlledApplicationLifetime controlled)
+        if (ApplicationLifetime is IControlledApplicationLifetime controlled)
         {
             controlled.Shutdown();
         }
@@ -402,12 +403,12 @@ public partial class App : Application
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "App", $"{error}: {ex.Message}"); }
     }
 
-    private Task RunCompareRequestAsync(string error, Func<UotanStudio.ViewModels.Compare.CompareViewModel, Task> operation)
+    private Task RunCompareRequestAsync(string error, Func<ViewModels.Compare.CompareViewModel, Task> operation)
         => RunCompareRequestAsync(error, operation, openInNewTab: false);
 
     private Task RunCompareRequestAsync(
         string error,
-        Func<UotanStudio.ViewModels.Compare.CompareViewModel, Task> operation,
+        Func<ViewModels.Compare.CompareViewModel, Task> operation,
         bool openInNewTab)
         => RunMainRequestAsync(error, main =>
         {

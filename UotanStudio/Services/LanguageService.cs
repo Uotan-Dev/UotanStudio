@@ -5,6 +5,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml.Styling;
 using CommunityToolkit.Mvvm.Messaging;
+using Irihi.Lingua;
+using UotanStudio.Locale;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Themes;
@@ -12,8 +14,11 @@ using UotanStudio.Themes;
 namespace UotanStudio.Services;
 
 /// <summary>
-/// A singleton service that provides language switching and localized string lookup for the application, supporting dynamic language pack registration and modular loading.
-/// <para>提供应用程序多语言切换与本地化字符串查询服务的单例类，支持动态语言包注册与模块化加载。</para>
+/// Singleton facade over the Irihi.Lingua generated locale managers. Resolves bundled resource
+/// keys, switches cultures across every module manager, and mirrors the active values into one
+/// Avalonia <see cref="ResourceDictionary"/> so XAML <c>DynamicResource</c> lookups refresh on
+/// language change without swapping merged dictionaries. Theme application stays here as well.
+/// <para>基于 Irihi.Lingua 源生成语言管理器的单例门面：解析内置资源键、在所有模块管理器间切换区域性，并把当前值镜像进一个 Avalonia <see cref="ResourceDictionary"/>，使 XAML 的 <c>DynamicResource</c> 随语言切换刷新而无需替换合并字典。主题应用仍由本服务负责。</para>
 /// </summary>
 public sealed class LanguageService
 {
@@ -27,32 +32,43 @@ public sealed class LanguageService
     /// <value>The shared language service instance. <para>共享的语言服务实例。</para></value>
     public static LanguageService Instance => _instance.Value;
 
-    private string _currentLanguage = "en-US";
+    private static readonly (ILinguaManager Manager, string[] Keys)[] ModuleKeys =
+    [
+        (CommonLocaleManager.Instance, LocaleKeySets.Common),
+        (MenuLocaleManager.Instance, LocaleKeySets.Menu),
+        (DockLocaleManager.Instance, LocaleKeySets.Dock),
+        (NodeLocaleManager.Instance, LocaleKeySets.Node),
+        (SettingsLocaleManager.Instance, LocaleKeySets.Settings),
+        (DeviceLocaleManager.Instance, LocaleKeySets.Device),
+        (InteractionLocaleManager.Instance, LocaleKeySets.Interaction),
+    ];
+
+    private readonly Dictionary<string, LinguaObservableString> _observables = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ILinguaManager> _owners = new(StringComparer.Ordinal);
+    private ResourceDictionary _bridge = new();
+    private readonly ObservableCollection<LanguageInfo> _availableLanguages = [];
+
+    private string _currentLanguage = FallbackCulture;
 
     /// <summary>
-    /// Gets or sets the culture name of the current language.
-    /// <para>获取或设置当前语言的区域性名称。</para>
+    /// Gets the culture name of the current language.
+    /// <para>获取当前语言的区域性名称。</para>
     /// </summary>
     /// <value>
     /// The culture name of the current language, defaults to "en-US".
     /// <para>当前语言的区域性名称，默认为 "en-US"。</para>
     /// </value>
-    public string CurrentLanguage
-    {
-        get => _currentLanguage;
-        private set => _currentLanguage = value;
-    }
+    public string CurrentLanguage => _currentLanguage;
 
     /// <summary>
-    /// Gets the list of available languages, dynamically retrieved from <see cref="LanguagePackRegistry"/>.
-    /// <para>获取当前可用的语言列表，从 <see cref="LanguagePackRegistry"/> 动态获取。</para>
+    /// Gets the available languages: the system-follow option plus each bundled culture.
+    /// <para>获取可用语言列表：跟随系统选项与每个内置语言。</para>
     /// </summary>
     /// <value>
     /// A read-only collection containing all available language information.
     /// <para>包含所有可用语言信息的只读集合。</para>
     /// </value>
-    public ReadOnlyObservableCollection<LanguageInfo> AvailableLanguages =>
-        LanguagePackRegistry.Instance.AvailableLanguages;
+    public ReadOnlyObservableCollection<LanguageInfo> AvailableLanguages { get; }
 
     /// <summary>
     /// Gets the currently applied theme key name.
@@ -77,30 +93,50 @@ public sealed class LanguageService
     public static event EventHandler? ThemeChanged;
 
     /// <summary>
-    /// Gets the culture name of the default fallback language.
-    /// <para>获取默认回退语言的文化名称。</para>
+    /// Gets the culture name of the default fallback language, which matches the invariant
+    /// (base) resource file the generator embeds.
+    /// <para>获取默认回退语言的区域性名称，对应生成器内嵌的不变（基线）资源文件。</para>
     /// </summary>
     private const string FallbackCulture = "en-US";
 
-    private LanguageService() { }
-
-    /// <summary>
-    /// Initializes the language service, automatically discovering and registering built-in language packs.
-    /// <para>初始化语言服务，自动发现并注册内置语言包。</para>
-    /// </summary>
-    public void Initialize()
+    private LanguageService()
     {
-        LanguagePackRegistry.Instance.DiscoverBuiltInPacks();
+        AvailableLanguages = new ReadOnlyObservableCollection<LanguageInfo>(_availableLanguages);
+        _availableLanguages.Add(LanguageInfo.SystemLanguage);
+        _availableLanguages.Add(new LanguageInfo("en-US", "English", "English", isBuiltIn: true));
+        _availableLanguages.Add(new LanguageInfo("zh-CN", "简体中文", "Chinese (Simplified)", isBuiltIn: true));
+
+        foreach (var (manager, keys) in ModuleKeys)
+        {
+            foreach (var key in keys)
+            {
+                // Keys are globally unique across modules; the module that owns the key answers.
+                if (manager.GetObservable(key) is LinguaObservableString observable)
+                {
+                    _observables[key] = observable;
+                    _owners[key] = manager;
+                }
+            }
+        }
     }
 
     /// <summary>
-    /// Applies the language pack for the specified culture, loading modular resources, replacing the current
-    /// locale dictionaries, and refreshing all <c>DynamicResource</c> bindings.
-    /// <para>应用指定语言的资源包，按模块加载语言资源文件，替换当前合并字典中的语言资源，并强制刷新所有 DynamicResource 绑定。</para>
+    /// Initializes the language service by attaching the locale mirror dictionary to the
+    /// application resources. Safe to call repeatedly and across headless application instances.
+    /// <para>初始化语言服务：把语言镜像字典挂载到应用程序资源。重复调用与跨无头应用实例调用均安全。</para>
+    /// </summary>
+    public void Initialize() => RefreshBridge();
+
+    /// <summary>
+    /// Applies the language for the specified culture: updates every module manager, refreshes the
+    /// locale mirror dictionary, raises <see cref="LanguageChanged"/> and sends a
+    /// <see cref="LanguageStateChangedMessage"/>.
+    /// <para>应用指定语言的区域性：更新所有模块管理器、刷新语言镜像字典、触发 <see cref="LanguageChanged"/> 并发送 <see cref="LanguageStateChangedMessage"/>。</para>
     /// </summary>
     /// <param name="language">
-    /// The culture name to apply, such as "en-US" or "zh-CN".
-    /// <para>要应用的区域性名称，如 "en-US" 或 "zh-CN"。</para>
+    /// The culture name to apply, such as "en-US" or "zh-CN". Unknown cultures fall back through
+    /// the parent-culture chain to the bundled English resources.
+    /// <para>要应用的区域性名称，如 "en-US" 或 "zh-CN"。未知区域性按父链回退到内置英文资源。</para>
     /// </param>
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="language"/> is null.
@@ -111,176 +147,203 @@ public sealed class LanguageService
         ArgumentNullException.ThrowIfNull(language);
 
         var previousLanguage = _currentLanguage;
+        var culture = ResolveCulture(language);
 
-        var appResources = Application.Current!.Resources;
-        var mergedDicts = appResources.MergedDictionaries;
+        foreach (var (manager, _) in ModuleKeys)
+            manager.UpdateCulture(culture);
 
-        var oldLocaleDicts = mergedDicts
-            .Where(d => d is ResourceDictionary rd
-                && (d is ResourceInclude ri && ri.Source?.OriginalString.Contains("Locale") == true
-                    || rd.GetType().Namespace?.StartsWith("UotanStudio.Locale", StringComparison.Ordinal) == true))
-            .ToList();
+        _currentLanguage = language;
+        RefreshBridge();
 
-        IReadOnlyList<string> modules;
-        if (LanguagePackRegistry.Instance.TryGetPack(language, out var pack) && pack != null)
-        {
-            modules = pack.ModuleNames;
-        }
-        else
-        {
-            modules = ["Common", "Menu", "Dock", "Node", "Settings", "Device", "Interaction"];
-        }
-
-        var newLocaleDicts = new List<IResourceProvider>(modules.Count);
-        foreach (var module in modules)
-        {
-            try
-            {
-                newLocaleDicts.Add(CreateLocaleDictionary(language, module));
-            }
-            catch (Exception ex) when (ex is ArgumentException)
-            {
-                Debug.WriteLine($"[LanguageService] Module '{module}' not found for '{language}', falling back to '{FallbackCulture}'");
-                var fallback = CreateFallbackDictionary(module);
-                if (fallback is not null)
-                    newLocaleDicts.Add(fallback);
-            }
-        }
-
-        if (oldLocaleDicts.Count == newLocaleDicts.Count && oldLocaleDicts.Count > 0)
-        {
-            for (var i = 0; i < oldLocaleDicts.Count; i++)
-            {
-                var index = mergedDicts.IndexOf(oldLocaleDicts[i]);
-                if (index >= 0)
-                    mergedDicts[index] = newLocaleDicts[i];
-            }
-        }
-        else
-        {
-            var insertIndex = oldLocaleDicts.Count > 0
-                ? mergedDicts.IndexOf(oldLocaleDicts[0])
-                : mergedDicts.Count;
-            foreach (var old in oldLocaleDicts)
-                mergedDicts.Remove(old);
-            if (insertIndex < 0 || insertIndex > mergedDicts.Count)
-                insertIndex = mergedDicts.Count;
-            for (var i = 0; i < newLocaleDicts.Count; i++)
-                mergedDicts.Insert(insertIndex + i, newLocaleDicts[i]);
-        }
-
-        CurrentLanguage = language;
         LanguageChanged?.Invoke(this, EventArgs.Empty);
-
         WeakReferenceMessenger.Default.Send(new LanguageStateChangedMessage(language, previousLanguage));
     }
 
     /// <summary>
-    /// Creates the locale resource dictionary for a culture and module name, throwing
-    /// <see cref="ArgumentException"/> for unsupported combinations.
-    /// <para>按区域性与模块名创建语言模块资源字典，组合不受支持时抛出 <see cref="ArgumentException"/>。</para>
+    /// Gets the localized string for the specified resource key.
+    /// Returns the key itself if the corresponding resource is not found.
+    /// <para>根据资源键获取本地化字符串。如果未找到对应资源，则返回键名本身。</para>
     /// </summary>
-    /// <param name="language">The culture name, such as "en-US" or "zh-CN".
-    /// <para>区域性名称，如 "en-US" 或 "zh-CN"。</para></param>
-    /// <param name="module">The module name. <para>模块名。</para></param>
-    /// <returns>The locale module resource dictionary. <para>语言模块资源字典。</para></returns>
-    private static IResourceProvider CreateLocaleDictionary(string language, string module)
-    {
-        return (language, module) switch
-        {
-            ("en-US", "Common") => new global::UotanStudio.Locale.EnUs.Common(),
-            ("en-US", "Menu") => new global::UotanStudio.Locale.EnUs.Menu(),
-            ("en-US", "Dock") => new global::UotanStudio.Locale.EnUs.Dock(),
-            ("en-US", "Node") => new global::UotanStudio.Locale.EnUs.Node(),
-            ("en-US", "Interaction") => new global::UotanStudio.Locale.EnUs.Interaction(),
-            ("en-US", "Settings") => new global::UotanStudio.Locale.EnUs.Settings(),
-            ("en-US", "Device") => new global::UotanStudio.Locale.EnUs.Device(),
-            ("zh-CN", "Common") => new global::UotanStudio.Locale.ZhCn.Common(),
-            ("zh-CN", "Menu") => new global::UotanStudio.Locale.ZhCn.Menu(),
-            ("zh-CN", "Dock") => new global::UotanStudio.Locale.ZhCn.Dock(),
-            ("zh-CN", "Node") => new global::UotanStudio.Locale.ZhCn.Node(),
-            ("zh-CN", "Interaction") => new global::UotanStudio.Locale.ZhCn.Interaction(),
-            ("zh-CN", "Settings") => new global::UotanStudio.Locale.ZhCn.Settings(),
-            ("zh-CN", "Device") => new global::UotanStudio.Locale.ZhCn.Device(),
-            _ => throw new ArgumentException($"Unsupported locale module: {language}/{module}", nameof(module)),
-        };
-    }
-
-    /// <summary>
-    /// Loads the specified module resource from the fallback language.
-    /// <para>加载回退语言的指定模块资源。</para>
-    /// </summary>
-    /// <param name="module">
-    /// The module name.
-    /// <para>模块名称。</para>
-    /// </param>
-    /// <returns>The fallback dictionary, or <see langword="null"/> when the module is unavailable.
-    /// <para>回退字典；模块不可用时为 <see langword="null"/>。</para></returns>
-    private static IResourceProvider? CreateFallbackDictionary(string module)
-    {
-        try
-        {
-            return CreateLocaleDictionary(FallbackCulture, module);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[LanguageService] Fallback module '{module}' also not found: {ex.Message}");
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Registers a new language pack. The available languages list is automatically updated upon successful registration.
-    /// <para>注册新的语言包。注册成功后可用语言列表自动更新。</para>
-    /// </summary>
-    /// <param name="descriptor">
-    /// The language pack descriptor to register.
-    /// <para>要注册的语言包描述符。</para>
-    /// </param>
+    /// <param name="key">The resource key to look up. <para>要查找的资源键名。</para></param>
     /// <returns>
-    /// The registration result.
-    /// <para>注册结果。</para>
+    /// The localized string associated with the specified key, or the key itself if not found.
+    /// <para>与指定键关联的本地化字符串；如果未找到则返回键名本身。</para>
     /// </returns>
     /// <exception cref="ArgumentNullException">
-    /// Thrown when <paramref name="descriptor"/> is null.
-    /// <para>当 <paramref name="descriptor"/> 为 null 时抛出。</para>
+    /// Thrown when <paramref name="key"/> is null.
+    /// <para>当 <paramref name="key"/> 为 null 时抛出。</para>
     /// </exception>
-    public LanguagePackRegistrationResult RegisterLanguagePack(LanguagePackDescriptor descriptor)
+    public string GetString(string key)
     {
-        ArgumentNullException.ThrowIfNull(descriptor);
+        ArgumentNullException.ThrowIfNull(key);
 
-        var result = LanguagePackRegistry.Instance.Register(descriptor);
+        if (_observables.TryGetValue(key, out var observable))
+            return observable.CurrentValue ?? key;
 
-        switch (result)
-        {
-            case LanguagePackRegistrationResult.Replaced:
-                WeakReferenceMessenger.Default.Send(new LanguagePackUpdatedMessage(descriptor.CultureName, descriptor.Version.ToString()));
-                break;
-            case LanguagePackRegistrationResult.RejectedVersionIncompatible:
-                WeakReferenceMessenger.Default.Send(new LanguagePackRejectedMessage(
-                    descriptor.CultureName,
-                    $"Version {descriptor.Version} is below minimum compatible version {LanguagePackRegistry.Instance.MinimumCompatibleVersion}"));
-                break;
-        }
-
-        return result;
+        Debug.WriteLine($"[LanguageService] Resource key not found: {key}");
+        return key;
     }
 
     /// <summary>
-    /// Unregisters the language pack for the specified culture.
-    /// <para>注销指定文化的语言包。</para>
+    /// Gets the bundled English (invariant base) value for a key, independent of the active
+    /// language; used as the stable fallback label for property rows and node metadata.
+    /// <para>获取键对应的内置英文（不变基线）值，不受当前语言影响；用作属性行与节点元数据的稳定回退标签。</para>
     /// </summary>
-    /// <param name="cultureName">
-    /// The culture name of the language pack to unregister.
-    /// <para>要注销的语言包区域性名称。</para>
-    /// </param>
-    /// <returns>
-    /// True if successfully unregistered; otherwise, false.
-    /// <para>如果成功注销返回 true；否则返回 false。</para>
-    /// </returns>
-    public bool UnregisterLanguagePack(string cultureName)
+    /// <param name="key">The resource key to look up. <para>要查找的资源键名。</para></param>
+    /// <returns>The English value, or <paramref name="key"/> itself when unknown.
+    /// <para>英文值；键未知时返回键名本身。</para></returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="key"/> is null.
+    /// <para>当 <paramref name="key"/> 为 null 时抛出。</para>
+    /// </exception>
+    public string GetEnglish(string key)
     {
-        return LanguagePackRegistry.Instance.Unregister(cultureName);
+        ArgumentNullException.ThrowIfNull(key);
+
+        if (_observables.TryGetValue(key, out var observable) &&
+            _owners.TryGetValue(key, out var owner) &&
+            owner.GetTranslations(observable).TryGetValue(CultureInfo.InvariantCulture, out var english) &&
+            !string.IsNullOrEmpty(english))
+        {
+            return english;
+        }
+
+        return key;
+    }
+
+    /// <summary>
+    /// Gets every bundled translation of a key across the available cultures, used to build
+    /// bilingual search indexes without changing the active application language.
+    /// <para>获取键在所有内置语言下的翻译值，用于在不改变当前应用语言的情况下构建双语搜索索引。</para>
+    /// </summary>
+    /// <param name="key">The resource key to look up. <para>要查找的资源键名。</para></param>
+    /// <returns>The distinct translation values; empty when the key is unknown.
+    /// <para>去重后的各语言值序列；键未知时为空。</para></returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="key"/> is null.
+    /// <para>当 <paramref name="key"/> 为 null 时抛出。</para>
+    /// </exception>
+    public IReadOnlyList<string> GetAllTranslations(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        if (_observables.TryGetValue(key, out var observable) &&
+            _owners.TryGetValue(key, out var owner))
+        {
+            var values = new List<string>();
+            foreach (var value in owner.GetTranslations(observable).Values)
+            {
+                if (!string.IsNullOrEmpty(value) && !values.Contains(value, StringComparer.Ordinal))
+                    values.Add(value);
+            }
+
+            return values;
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// Gets the value of a key in one explicit culture, following the same parent-culture chain
+    /// the generator uses (exact culture, then parents, then the invariant base) without changing
+    /// the active application language.
+    /// <para>按显式区域性获取键值，遵循生成器相同的父区域性链（精确匹配、逐级父级、最后回退到不变基线），不改变当前应用语言。</para>
+    /// </summary>
+    /// <param name="key">The resource key to look up. <para>要查找的资源键名。</para></param>
+    /// <param name="culture">The culture to read from. <para>要读取的区域性。</para></param>
+    /// <returns>The culture value, or <paramref name="key"/> itself when the key is unknown.
+    /// <para>该区域性下的值；键未知时返回键名本身。</para></returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="key"/> or <paramref name="culture"/> is null.
+    /// <para>当 <paramref name="key"/> 或 <paramref name="culture"/> 为 null 时抛出。</para>
+    /// </exception>
+    public string GetTranslation(string key, CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(culture);
+
+        if (_observables.TryGetValue(key, out var observable) &&
+            _owners.TryGetValue(key, out var owner))
+        {
+            var translations = owner.GetTranslations(observable);
+            var candidate = culture;
+            for (var depth = 0; depth < 10; depth++)
+            {
+                if (translations.TryGetValue(candidate, out var exact) && !string.IsNullOrEmpty(exact))
+                    return exact;
+
+                var parent = candidate.Parent;
+                if (parent.Equals(candidate) || string.IsNullOrEmpty(parent.Name))
+                    break;
+
+                candidate = parent;
+            }
+
+            if (translations.TryGetValue(CultureInfo.InvariantCulture, out var invariant) && !string.IsNullOrEmpty(invariant))
+                return invariant;
+        }
+
+        return key;
+    }
+
+    /// <summary>
+    /// Gets the localized string for the specified resource key and formats it with the provided
+    /// arguments using the template of the active language.
+    /// <para>根据资源键获取本地化字符串，并用当前语言的模板与给定参数格式化。</para>
+    /// </summary>
+    /// <param name="key">The resource key to look up. <para>要查找的资源键名。</para></param>
+    /// <param name="args">An array of arguments to format the string with. <para>用于格式化字符串的参数数组。</para></param>
+    /// <returns>
+    /// The formatted localized string, the key itself if not found, or the unformatted string if
+    /// formatting fails.
+    /// <para>格式化后的本地化字符串；未找到资源时返回键名本身；格式化失败时返回未格式化的字符串。</para>
+    /// </returns>
+    public string GetString(string key, params object[] args)
+    {
+        var format = GetString(key);
+        try
+        {
+            return string.Format(format, args);
+        }
+        catch (FormatException)
+        {
+            return format;
+        }
+        catch (IndexOutOfRangeException)
+        {
+            return format;
+        }
+    }
+
+    /// <summary>
+    /// Determines whether the key exists in a bundled locale module.
+    /// <para>判断键是否存在于内置语言模块中。</para>
+    /// </summary>
+    /// <param name="key">The resource key to probe. <para>要探测的资源键名。</para></param>
+    /// <returns>True when the key resolves to a generated observable. <para>键可解析到生成器可观测值时为 true。</para></returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="key"/> is null.
+    /// <para>当 <paramref name="key"/> 为 null 时抛出。</para>
+    /// </exception>
+    public bool ContainsKey(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        return _observables.ContainsKey(key);
+    }
+
+    /// <summary>
+    /// Initializes the application language from the current system UI culture. Chinese systems
+    /// select zh-CN; every other culture falls back to the bundled English resources.
+    /// <para>按系统当前 UI 区域性初始化应用语言。中文系统选择 zh-CN，其余区域性回退到内置英文资源。</para>
+    /// </summary>
+    public void InitializeFromSystemLanguage()
+    {
+        var culture = CultureInfo.CurrentUICulture;
+        var language = culture.Name.Equals("zh-CN", StringComparison.OrdinalIgnoreCase)
+            || culture.TwoLetterISOLanguageName.Equals("zh", StringComparison.OrdinalIgnoreCase)
+            ? "zh-CN"
+            : FallbackCulture;
+        ApplyLanguage(language);
     }
 
     /// <summary>
@@ -299,15 +362,15 @@ public sealed class LanguageService
     {
         ArgumentNullException.ThrowIfNull(themeKey);
 
-        var resourceInclude = themeKey == "DarkColors"
-            ? (IResourceProvider)new DarkColors()
+        IResourceProvider resourceInclude = themeKey == "DarkColors"
+            ? new DarkColors()
             : new LightColors();
 
         var appResources = Application.Current!.Resources;
         var mergedDicts = appResources.MergedDictionaries;
 
-        int themeIndex = -1;
-        for (int i = 0; i < mergedDicts.Count; i++)
+        var themeIndex = -1;
+        for (var i = 0; i < mergedDicts.Count; i++)
         {
             if (mergedDicts[i] is LightColors or DarkColors
                 || (mergedDicts[i] is ResourceInclude ri && ri.Source?.OriginalString.Contains("Themes") == true))
@@ -330,84 +393,56 @@ public sealed class LanguageService
         ThemeChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>
-    /// Gets the localized string for the specified resource key.
-    /// Returns the key itself if the corresponding resource is not found.
-    /// <para>根据资源键获取本地化字符串。如果未找到对应资源，则返回键名本身。</para>
-    /// </summary>
-    /// <param name="key">
-    /// The resource key to look up.
-    /// <para>要查找的资源键名。</para>
-    /// </param>
-    /// <returns>
-    /// The localized string associated with the specified key, or the key itself if not found.
-    /// <para>与指定键关联的本地化字符串；如果未找到则返回键名本身。</para>
-    /// </returns>
-    public string GetString(string key)
+    private static CultureInfo ResolveCulture(string language)
     {
-        if (Application.Current?.TryFindResource(key, null, out var value) == true && value is string str)
-            return str;
-
-        Debug.WriteLine($"[LanguageService] Resource key not found: {key}");
-        return key;
-    }
-
-    /// <summary>
-    /// Gets the localized string for the specified resource key and formats it with the provided arguments.
-    /// Returns the key itself if the corresponding resource is not found.
-    /// <para>根据资源键获取本地化字符串，并使用指定参数进行格式化。如果未找到对应资源，则返回键名本身。</para>
-    /// </summary>
-    /// <param name="key">
-    /// The resource key to look up.
-    /// <para>要查找的资源键名。</para>
-    /// </param>
-    /// <param name="args">
-    /// An array of arguments to format the string with.
-    /// <para>用于格式化字符串的参数数组。</para>
-    /// </param>
-    /// <returns>
-    /// The formatted localized string, the key itself if not found, or the unformatted string if formatting fails.
-    /// <para>格式化后的本地化字符串；如果未找到资源则返回键名本身；如果格式化失败则返回未格式化的字符串。</para>
-    /// </returns>
-    public string GetString(string key, params object[] args)
-    {
-        var format = GetString(key);
         try
         {
-            return string.Format(format, args);
+            return CultureInfo.GetCultureInfo(language);
         }
-        catch (FormatException)
+        catch (CultureNotFoundException)
         {
-            return format;
+            return CultureInfo.InvariantCulture;
         }
     }
 
     /// <summary>
-    /// Automatically initializes the application language based on the current system culture.
-    /// Prefers matching a registered language pack; falls back to the default language otherwise.
-    /// <para>根据系统当前的区域设置自动初始化应用程序语言。优先匹配已注册的语言包，否则回退到默认语言。</para>
+    /// Mirrors every active value into the locale dictionary and keeps it attached to the current
+    /// application. A headless test session replaces <see cref="Application.Current"/> while the
+    /// abandoned instance still owns the previous dictionary, and Avalonia enforces one parent per
+    /// <see cref="ResourceDictionary"/>, so the bridge is replaced with a fresh instance whenever
+    /// its owner is no longer the current application. Within one application the dictionary is
+    /// detached only for the bulk value update and re-attached at its recorded index, so one
+    /// culture switch fires exactly one resource-changed notification instead of one per key.
+    /// <para>把所有当前语言的值镜像进语言字典，并保持其挂在当前应用上。无头测试会话会替换 <see cref="Application.Current"/>，而被弃用的实例仍持有旧字典的所有权，且 Avalonia 强制每个 <see cref="ResourceDictionary"/> 只有一个父级，因此当字典的宿主不再是当前应用时就更换一个新的桥实例。同一应用内批量赋值时先摘除、按原下标挂回，使每次语言切换只触发一次资源变更通知，而不是每键一次。</para>
     /// </summary>
-    public void InitializeFromSystemLanguage()
+    private void RefreshBridge()
     {
-        var culture = CultureInfo.CurrentUICulture;
-        var cultureName = culture.Name;
-
-        if (LanguagePackRegistry.Instance.TryGetPack(cultureName, out _))
+        var app = Application.Current;
+        if (app is null)
         {
-            ApplyLanguage(cultureName);
             return;
         }
 
-        var twoLetterCode = culture.TwoLetterISOLanguageName;
-        var matchedPack = LanguagePackRegistry.Instance.GetAllPacks()
-            .FirstOrDefault(p => p.CultureName.StartsWith(twoLetterCode, StringComparison.OrdinalIgnoreCase));
+        var merged = app.Resources.MergedDictionaries;
 
-        if (matchedPack != null)
+        if (_bridge.Owner is not null && !ReferenceEquals(_bridge.Owner, app))
         {
-            ApplyLanguage(matchedPack.CultureName);
-            return;
+            _bridge = new ResourceDictionary();
         }
 
-        ApplyLanguage(FallbackCulture);
+        var index = merged.IndexOf(_bridge);
+        if (index >= 0)
+        {
+            merged.RemoveAt(index);
+        }
+        else
+        {
+            index = merged.Count;
+        }
+
+        foreach (var (key, observable) in _observables)
+            _bridge[key] = observable.CurrentValue ?? key;
+
+        merged.Insert(index, _bridge);
     }
 }

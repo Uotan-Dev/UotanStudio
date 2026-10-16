@@ -1,0 +1,1965 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>  <data name="Dock_ProjectExplorer" xml:space="preserve">
+    <value>Project Explorer</value>
+  </data>
+  <data name="Dock_Properties" xml:space="preserve">
+    <value>Properties</value>
+  </data>
+  <data name="Dock_Documents" xml:space="preserve">
+    <value>Documents</value>
+  </data>
+  <data name="FindReplace_Title" xml:space="preserve">
+    <value>Find and Replace</value>
+  </data>
+  <data name="FindReplace_Find" xml:space="preserve">
+    <value>Find</value>
+  </data>
+  <data name="FindReplace_FindPlaceholder" xml:space="preserve">
+    <value>Find...</value>
+  </data>
+  <data name="FindReplace_Replace" xml:space="preserve">
+    <value>Replace</value>
+  </data>
+  <data name="FindReplace_ReplacePlaceholder" xml:space="preserve">
+    <value>Replace...</value>
+  </data>
+  <data name="FindReplace_ReplaceAll" xml:space="preserve">
+    <value>Replace all</value>
+  </data>
+  <data name="FindReplace_Previous" xml:space="preserve">
+    <value>Previous match</value>
+  </data>
+  <data name="FindReplace_Next" xml:space="preserve">
+    <value>Next match</value>
+  </data>
+  <data name="FindReplace_Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="FindReplace_Expand" xml:space="preserve">
+    <value>Show replace</value>
+  </data>
+  <data name="FindReplace_Collapse" xml:space="preserve">
+    <value>Hide replace</value>
+  </data>
+  <data name="FindReplace_MatchCase" xml:space="preserve">
+    <value>Match case</value>
+  </data>
+  <data name="FindReplace_WholeWord" xml:space="preserve">
+    <value>Match whole word</value>
+  </data>
+  <data name="FindReplace_Regex" xml:space="preserve">
+    <value>Use regular expressions</value>
+  </data>
+  <data name="FindReplace_PreserveCase" xml:space="preserve">
+    <value>Preserve case</value>
+  </data>
+  <data name="FindReplace_Scope" xml:space="preserve">
+    <value>Search scope</value>
+  </data>
+  <data name="FindReplace_CurrentDocument" xml:space="preserve">
+    <value>Current document</value>
+  </data>
+  <data name="FindReplace_Selection" xml:space="preserve">
+    <value>Selection</value>
+  </data>
+  <data name="FindReplace_OpenDocuments" xml:space="preserve">
+    <value>All open documents</value>
+  </data>
+  <data name="FindReplace_Project" xml:space="preserve">
+    <value>Current project</value>
+  </data>
+  <data name="Dock_Properties_Name" xml:space="preserve">
+    <value>Property Name</value>
+  </data>
+  <data name="Dock_Properties_Value" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="Dock_Properties_FileName" xml:space="preserve">
+    <value>File Name</value>
+  </data>
+  <data name="Dock_Properties_ImageName" xml:space="preserve">
+    <value>Image Name</value>
+  </data>
+  <data name="Dock_Properties_ImageSize" xml:space="preserve">
+    <value>Image Size</value>
+  </data>
+  <data name="Dock_Properties_ImageType" xml:space="preserve">
+    <value>Image Type</value>
+  </data>
+  <data name="Dock_Properties_Path" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="Dock_Properties_Format" xml:space="preserve">
+    <value>Format</value>
+  </data>
+  <data name="Dock_Properties_Magic" xml:space="preserve">
+    <value>Magic Type</value>
+  </data>
+  <data name="Dock_Properties_Size" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="Dock_Properties_NoSelection" xml:space="preserve">
+    <value>Select a file to view details</value>
+  </data>
+  <data name="Dock_ProjectSetting" xml:space="preserve">
+    <value>Packing Settings</value>
+  </data>
+  <data name="Dock_Plugins" xml:space="preserve">
+    <value>Plugins</value>
+  </data>
+  <data name="PluginTool_Description" xml:space="preserve">
+    <value>Apply a patch plan from an installed workflow template.</value>
+  </data>
+  <data name="Dock_ImagesView" xml:space="preserve">
+    <value>Image Manager</value>
+  </data>
+  <data name="Dock_AiAssistant" xml:space="preserve">
+    <value>AI Assistant</value>
+  </data>
+  <data name="AI_NewConversation" xml:space="preserve">
+    <value>New conversation</value>
+  </data>
+  <data name="AI_History" xml:space="preserve">
+    <value>Conversation history</value>
+  </data>
+  <data name="AI_ClearConversation" xml:space="preserve">
+    <value>Clear conversation</value>
+  </data>
+  <data name="AI_Chat" xml:space="preserve">
+    <value>Chat</value>
+  </data>
+  <data name="AI_Agent" xml:space="preserve">
+    <value>Agent</value>
+  </data>
+  <data name="AI_Mode" xml:space="preserve">
+    <value>Conversation mode</value>
+  </data>
+  <data name="AI_Model" xml:space="preserve">
+    <value>Select model</value>
+  </data>
+  <data name="AI_Prompt" xml:space="preserve">
+    <value>Ask UotanStudio</value>
+  </data>
+  <data name="AI_ActiveDocument" xml:space="preserve">
+    <value>Active document</value>
+  </data>
+  <data name="AI_AddFiles" xml:space="preserve">
+    <value>Add files</value>
+  </data>
+  <data name="AI_RemoveFile" xml:space="preserve">
+    <value>Remove attachment</value>
+  </data>
+  <data name="AI_AddFilesFailed" xml:space="preserve">
+    <value>Could not select files. Please try again.</value>
+  </data>
+  <data name="AI_Send" xml:space="preserve">
+    <value>Send message</value>
+  </data>
+  <data name="Dock_ImageType" xml:space="preserve">
+    <value>Image Type</value>
+  </data>
+  <data name="Dock_ImageFormat" xml:space="preserve">
+    <value>Format</value>
+  </data>
+  <data name="Dock_EXT4RW" xml:space="preserve">
+    <value>EXT4 R/W</value>
+  </data>
+  <data name="Dock_SizeCalc" xml:space="preserve">
+    <value>Size Mode</value>
+  </data>
+  <data name="Dock_Auto" xml:space="preserve">
+    <value>Auto</value>
+  </data>
+  <data name="Dock_OriginalSize" xml:space="preserve">
+    <value>Original</value>
+  </data>
+  <data name="Dock_EXT4Compress" xml:space="preserve">
+    <value>EXT4 Compression</value>
+  </data>
+  <data name="Dock_NoCompress" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="Dock_Compress" xml:space="preserve">
+    <value>Compress</value>
+  </data>
+  <data name="Dock_EROFSAlgorithm" xml:space="preserve">
+    <value>EROFS Codec</value>
+  </data>
+  <data name="Dock_EROFSAlgorithmHint" xml:space="preserve">
+    <value>lz4 packs faster; lz4hc spends more time searching for a smaller image (EROFS records the same LZ4 codec either way). lzma, deflate and zstd choose a different on-disk codec. The compression level only affects the searching encoders.</value>
+  </data>
+  <data name="Dock_EROFSCompLevel" xml:space="preserve">
+    <value>EROFS Level</value>
+  </data>
+  <data name="Dock_EROFSCompLevelHint" xml:space="preserve">
+    <value>Higher values search harder for a smaller image: it drives the lz4hc search depth and the fast lz4 density/speed trade-off.</value>
+  </data>
+  <data name="Dock_EROFSFeatures" xml:space="preserve">
+    <value>EROFS Features</value>
+  </data>
+  <data name="Dock_EROFSFeaturesHint" xml:space="preserve">
+    <value>Edit the on-disk feature declaration of a preserved EROFS image, using the upstream feature names: a name sets its bit, a name prefixed with &quot;!&quot; clears it, and &quot;auto&quot; keeps both superblock words derived. Left empty, the declaration recorded from the source image is inherited unchanged.</value>
+  </data>
+  <data name="Dock_F2FSCompression" xml:space="preserve">
+    <value>F2FS Compression</value>
+  </data>
+  <data name="Dock_F2FSAlgorithm" xml:space="preserve">
+    <value>F2FS Codec</value>
+  </data>
+  <data name="Dock_F2FSCompLevel" xml:space="preserve">
+    <value>F2FS Level</value>
+  </data>
+  <data name="Dock_F2FSAndroidProfile" xml:space="preserve">
+    <value>Android F2FS</value>
+  </data>
+  <data name="Dock_F2FSAndroidProfileEnabled" xml:space="preserve">
+    <value>Native profile</value>
+  </data>
+  <data name="Dock_F2FSAndroidProfileHint" xml:space="preserve">
+    <value>Uses mkfs.f2fs and sload.f2fs for read-only, project quota and extra attributes. Requires native tools or a WSL distribution.</value>
+  </data>
+  <data name="Dock_F2FSAndroidCapacity" xml:space="preserve">
+    <value>Image capacity (bytes)</value>
+  </data>
+  <data name="Dock_F2FSAndroidCapacityHint" xml:space="preserve">
+    <value>At least 64 MiB, aligned to 2 MiB. Choose the target partition capacity explicitly.</value>
+  </data>
+  <data name="Dock_F2FSWslDistribution" xml:space="preserve">
+    <value>WSL distribution</value>
+  </data>
+  <data name="Dock_SUPERSize" xml:space="preserve">
+    <value>SUPER Size</value>
+  </data>
+  <data name="Dock_SUPERName" xml:space="preserve">
+    <value>SUPER Cluster</value>
+  </data>
+  <data name="Dock_SUPERFormat" xml:space="preserve">
+    <value>SUPER Format</value>
+  </data>
+  <data name="Dock_BRCompLevel" xml:space="preserve">
+    <value>BR Level</value>
+  </data>
+  <data name="Dock_UTCTime" xml:space="preserve">
+    <value>UTC Time</value>
+  </data>
+  <data name="Dock_DATSegments" xml:space="preserve">
+    <value>DAT Segments</value>
+  </data>
+  <data name="Dock_NoDocumentOpen" xml:space="preserve">
+    <value>No documents open</value>
+  </data>
+  <data name="Dock_NoDocumentOpenHint" xml:space="preserve">
+    <value>Open or create a project file to get started</value>
+  </data>
+  <data name="Dock_Output" xml:space="preserve">
+    <value>Output</value>
+  </data>
+  <data name="Dock_AdbLog" xml:space="preserve">
+    <value>Device logs</value>
+  </data>
+  <data name="Dock_Terminal" xml:space="preserve">
+    <value>Terminal</value>
+  </data>
+  <data name="DockMenu_Float" xml:space="preserve">
+    <value>Float</value>
+  </data>
+  <data name="DockMenu_FloatAll" xml:space="preserve">
+    <value>Float All</value>
+  </data>
+  <data name="DockMenu_Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="DockMenu_CloseOthers" xml:space="preserve">
+    <value>Close Other Tabs</value>
+  </data>
+  <data name="DockMenu_CloseAll" xml:space="preserve">
+    <value>Close All Tabs</value>
+  </data>
+  <data name="DockMenu_TabLayout" xml:space="preserve">
+    <value>Tab Layout</value>
+  </data>
+  <data name="DockMenu_TabsLeft" xml:space="preserve">
+    <value>Tabs on Left</value>
+  </data>
+  <data name="DockMenu_TabsTop" xml:space="preserve">
+    <value>Tabs on Top</value>
+  </data>
+  <data name="DockMenu_TabsRight" xml:space="preserve">
+    <value>Tabs on Right</value>
+  </data>
+  <data name="DockMenu_Show" xml:space="preserve">
+    <value>Show</value>
+  </data>
+  <data name="DockMenu_Dock" xml:space="preserve">
+    <value>Dock</value>
+  </data>
+  <data name="DockMenu_DockAsDocument" xml:space="preserve">
+    <value>Dock as Tabbed Document</value>
+  </data>
+  <data name="DockMenu_AutoHide" xml:space="preserve">
+    <value>Auto Hide</value>
+  </data>
+  <data name="Terminal_Shell" xml:space="preserve">
+    <value>Shell</value>
+  </data>
+  <data name="Terminal_New" xml:space="preserve">
+    <value>New terminal</value>
+  </data>
+  <data name="Terminal_Close" xml:space="preserve">
+    <value>Close terminal session</value>
+  </data>
+  <data name="Terminal_Clear" xml:space="preserve">
+    <value>Clear screen</value>
+  </data>
+  <data name="Terminal_Bottom" xml:space="preserve">
+    <value>Scroll to bottom</value>
+  </data>
+  <data name="Terminal_NoShell" xml:space="preserve">
+    <value>No available shell was found.</value>
+  </data>
+  <data name="Terminal_Starting" xml:space="preserve">
+    <value>Starting terminal...</value>
+  </data>
+  <data name="Terminal_StartFailed" xml:space="preserve">
+    <value>Could not start terminal: {0}</value>
+  </data>
+  <data name="Terminal_Exited" xml:space="preserve">
+    <value>Process exited with code: {0}</value>
+  </data>
+  <data name="Dock_NodeLeftPane" xml:space="preserve">
+    <value>Node Toolbox</value>
+  </data>
+  <data name="Dock_NodeRightPane" xml:space="preserve">
+    <value>Node Properties</value>
+  </data>
+  <data name="Dock_NodeBottomPane" xml:space="preserve">
+    <value>Execution Log</value>
+  </data>
+  <data name="Dialog_Rename" xml:space="preserve">
+    <value>Rename</value>
+  </data>
+  <data name="Dialog_OK" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Dialog_RenameFailed" xml:space="preserve">
+    <value>Rename failed</value>
+  </data>
+  <data name="Dialog_DeleteFailed" xml:space="preserve">
+    <value>Delete failed</value>
+  </data>
+  <data name="Dialog_NewFileFailed" xml:space="preserve">
+    <value>Could not create file</value>
+  </data>
+  <data name="Dialog_NewFolderFailed" xml:space="preserve">
+    <value>Could not create folder</value>
+  </data>
+  <data name="Dialog_ConfirmDelete" xml:space="preserve">
+    <value>Confirm Delete</value>
+  </data>
+  <data name="Dialog_ConfirmDeleteMessage" xml:space="preserve">
+    <value>Permanently delete &apos;{0}&apos;? This cannot be undone.</value>
+  </data>
+  <data name="Dialog_NewFile" xml:space="preserve">
+    <value>New File</value>
+  </data>
+  <data name="Dialog_NewFolder" xml:space="preserve">
+    <value>New Folder</value>
+  </data>
+  <data name="Explorer_InvalidItemName" xml:space="preserve">
+    <value>Enter a valid name without a path or invalid characters.</value>
+  </data>
+  <data name="Explorer_ItemAlreadyExists" xml:space="preserve">
+    <value>“{0}” already exists. Choose another name.</value>
+  </data>
+  <data name="Dialog_SelectFile" xml:space="preserve">
+    <value>Select file</value>
+  </data>
+  <data name="Dock_File_Hex" xml:space="preserve">
+    <value>Hex</value>
+  </data>
+  <data name="Dock_File_Analysis" xml:space="preserve">
+    <value>Analysis</value>
+  </data>
+  <data name="Dock_File_AnalysisTitle" xml:space="preserve">
+    <value>Firmware Analysis</value>
+  </data>
+  <data name="Dock_File_PathFormat" xml:space="preserve">
+    <value>File: {0}</value>
+  </data>
+  <data name="Dock_File_SizeFormat" xml:space="preserve">
+    <value>Size: {0:N0} bytes</value>
+  </data>
+  <data name="Dock_File_FormatFormat" xml:space="preserve">
+    <value>Format: {0}</value>
+  </data>
+  <data name="Dock_Properties_Type" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="Dock_Properties_TypeFormat" xml:space="preserve">
+    <value>Type: {0}</value>
+  </data>
+  <data name="Dock_Properties_Type_Node" xml:space="preserve">
+    <value>Node</value>
+  </data>
+  <data name="Dock_Properties_Type_Image" xml:space="preserve">
+    <value>Image</value>
+  </data>
+  <data name="Dock_Properties_Type_FileAnalysis" xml:space="preserve">
+    <value>File Analysis</value>
+  </data>
+  <data name="Dock_Properties_Type_TextDocument" xml:space="preserve">
+    <value>Text Document</value>
+  </data>
+  <data name="Dock_Properties_Type_DtbDocument" xml:space="preserve">
+    <value>Device Tree</value>
+  </data>
+  <data name="Dock_Properties_Type_DexDocument" xml:space="preserve">
+    <value>DEX</value>
+  </data>
+  <data name="Dock_Properties_Type_ManifestDocument" xml:space="preserve">
+    <value>Manifest</value>
+  </data>
+  <data name="Dock_Properties_Type_ArscDocument" xml:space="preserve">
+    <value>ARSC</value>
+  </data>
+  <data name="Dock_Properties_Type_ApkDocument" xml:space="preserve">
+    <value>APK</value>
+  </data>
+  <data name="Dock_Properties_Type_FirmwareDocument" xml:space="preserve">
+    <value>Firmware</value>
+  </data>
+  <data name="Dock_Properties_Type_HexDocument" xml:space="preserve">
+    <value>Hex</value>
+  </data>
+  <data name="Dock_Properties_Type_CompareEntry" xml:space="preserve">
+    <value>Compare Entry</value>
+  </data>
+  <data name="Dock_Properties_Fw_FileName" xml:space="preserve">
+    <value>File Name</value>
+  </data>
+  <data name="Dock_Properties_Fw_FilePath" xml:space="preserve">
+    <value>File Path</value>
+  </data>
+  <data name="Dock_Properties_Fw_Format" xml:space="preserve">
+    <value>Format</value>
+  </data>
+  <data name="Dock_Properties_Fw_Summary" xml:space="preserve">
+    <value>Summary</value>
+  </data>
+  <data name="Dock_Properties_Fw_MetadataCount" xml:space="preserve">
+    <value>Metadata Entries</value>
+  </data>
+  <data name="Dock_Properties_Fw_Components" xml:space="preserve">
+    <value>Components</value>
+  </data>
+  <data name="Dock_Properties_FileCount" xml:space="preserve">
+    <value>Files</value>
+  </data>
+  <data name="Dock_Properties_DirectoryCount" xml:space="preserve">
+    <value>Directories</value>
+  </data>
+  <data name="Dock_Properties_Metadata_AlgorithmType" xml:space="preserve">
+    <value>Algorithm type</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DescriptorsSize" xml:space="preserve">
+    <value>Descriptors size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_RollbackIndex" xml:space="preserve">
+    <value>Rollback index</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ReleaseString" xml:space="preserve">
+    <value>Release string</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FooterVersion" xml:space="preserve">
+    <value>Footer version</value>
+  </data>
+  <data name="Dock_Properties_Metadata_OriginalImageSize" xml:space="preserve">
+    <value>Original image size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_VbmetaOffset" xml:space="preserve">
+    <value>vbmeta offset</value>
+  </data>
+  <data name="Dock_Properties_Metadata_VbmetaSize" xml:space="preserve">
+    <value>vbmeta size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Type" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="Dock_Properties_Metadata_HeaderVersion" xml:space="preserve">
+    <value>Header version</value>
+  </data>
+  <data name="Dock_Properties_Metadata_PageSize" xml:space="preserve">
+    <value>Page size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_KernelSize" xml:space="preserve">
+    <value>Kernel size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_RamdiskSize" xml:space="preserve">
+    <value>Ramdisk size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_SecondSize" xml:space="preserve">
+    <value>Second image size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DtbSize" xml:space="preserve">
+    <value>DTB size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_OsVersion" xml:space="preserve">
+    <value>OS version</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CommandLine" xml:space="preserve">
+    <value>Command line</value>
+  </data>
+  <data name="Dock_Properties_Metadata_KernelCompression" xml:space="preserve">
+    <value>Kernel compression</value>
+  </data>
+  <data name="Dock_Properties_Metadata_VendorRamdiskSize" xml:space="preserve">
+    <value>Vendor ramdisk size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_RamdiskTableEntryCount" xml:space="preserve">
+    <value>Ramdisk table entries</value>
+  </data>
+  <data name="Dock_Properties_Metadata_VendorCmdline" xml:space="preserve">
+    <value>Vendor command line</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Version" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressionType" xml:space="preserve">
+    <value>Compression type</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressedOffset" xml:space="preserve">
+    <value>Compressed offset</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressedSize" xml:space="preserve">
+    <value>Compressed size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Compression" xml:space="preserve">
+    <value>Compression</value>
+  </data>
+  <data name="Dock_Properties_Metadata_EntryCount" xml:space="preserve">
+    <value>Entry count</value>
+  </data>
+  <data name="Dock_Properties_Metadata_NodeCount" xml:space="preserve">
+    <value>Node count</value>
+  </data>
+  <data name="Dock_Properties_Metadata_PropertyCount" xml:space="preserve">
+    <value>Property count</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ReservationCount" xml:space="preserve">
+    <value>Memory reservations</value>
+  </data>
+  <data name="Dock_Properties_Metadata_BootCpuId" xml:space="preserve">
+    <value>Boot CPU ID</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Format" xml:space="preserve">
+    <value>Format</value>
+  </data>
+  <data name="Dock_Properties_Metadata_BlockSize" xml:space="preserve">
+    <value>Block size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Blocks" xml:space="preserve">
+    <value>Blocks</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ImageSize" xml:space="preserve">
+    <value>Image size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_InodeCount" xml:space="preserve">
+    <value>Inodes</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FileCount" xml:space="preserve">
+    <value>Files</value>
+  </data>
+  <data name="Dock_Properties_Metadata_RootNid" xml:space="preserve">
+    <value>Root nid</value>
+  </data>
+  <data name="Dock_Properties_Metadata_VolumeName" xml:space="preserve">
+    <value>Volume name</value>
+  </data>
+  <data name="Dock_Properties_Metadata_PartitionSize" xml:space="preserve">
+    <value>Partition size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_BlockCount" xml:space="preserve">
+    <value>Block count</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DirectoryCount" xml:space="preserve">
+    <value>Directories</value>
+  </data>
+  <data name="Dock_Properties_Metadata_SegmentSize" xml:space="preserve">
+    <value>Segment size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_TotalBlocks" xml:space="preserve">
+    <value>Total blocks</value>
+  </data>
+  <data name="Dock_Properties_Metadata_TotalChunks" xml:space="preserve">
+    <value>Total chunks</value>
+  </data>
+  <data name="Dock_Properties_Metadata_InnerFormat" xml:space="preserve">
+    <value>Inner format</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FilesystemBlockSize" xml:space="preserve">
+    <value>Filesystem block size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CommandCount" xml:space="preserve">
+    <value>Commands</value>
+  </data>
+  <data name="Dock_Properties_Metadata_NewBlocks" xml:space="preserve">
+    <value>New blocks</value>
+  </data>
+  <data name="Dock_Properties_Metadata_NewDataBlocks" xml:space="preserve">
+    <value>New data blocks</value>
+  </data>
+  <data name="Dock_Properties_Metadata_TransferList" xml:space="preserve">
+    <value>Transfer list</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DataFile" xml:space="preserve">
+    <value>Data file</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DataFileType" xml:space="preserve">
+    <value>Data file type</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DataFileSize" xml:space="preserve">
+    <value>Data file size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_PatchType" xml:space="preserve">
+    <value>Patch type</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ControlBlockLength" xml:space="preserve">
+    <value>Control block length</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DiffBlockLength" xml:space="preserve">
+    <value>Diff block length</value>
+  </data>
+  <data name="Dock_Properties_Metadata_NewFileSize" xml:space="preserve">
+    <value>New file size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FileLength" xml:space="preserve">
+    <value>File length</value>
+  </data>
+  <data name="Dock_Properties_Metadata_PartitionCount" xml:space="preserve">
+    <value>Partitions</value>
+  </data>
+  <data name="Dock_Properties_Metadata_MinorVersion" xml:space="preserve">
+    <value>Minor version</value>
+  </data>
+  <data name="Dock_Properties_Metadata_HeaderType" xml:space="preserve">
+    <value>Header type</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Device" xml:space="preserve">
+    <value>Device</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ChunkCount" xml:space="preserve">
+    <value>Chunks</value>
+  </data>
+  <data name="Dock_Properties_Metadata_TotalSize" xml:space="preserve">
+    <value>Total size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_InferredFirmwareType" xml:space="preserve">
+    <value>Inferred firmware type</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Md5RecordCount" xml:space="preserve">
+    <value>MD5 records</value>
+  </data>
+  <data name="Dock_Properties_Metadata_MajorVersion" xml:space="preserve">
+    <value>Major version</value>
+  </data>
+  <data name="Dock_Properties_Metadata_PatchVersion" xml:space="preserve">
+    <value>Patch version</value>
+  </data>
+  <data name="Dock_Properties_Metadata_RegionCount" xml:space="preserve">
+    <value>Regions</value>
+  </data>
+  <data name="Dock_Properties_Metadata_HeaderSize" xml:space="preserve">
+    <value>Header size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FileSize" xml:space="preserve">
+    <value>File size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Flags" xml:space="preserve">
+    <value>Flags</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DecryptedEntries" xml:space="preserve">
+    <value>Decrypted entries</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FormatCode" xml:space="preserve">
+    <value>Format code</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ProjectName" xml:space="preserve">
+    <value>Project name</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CpuModel" xml:space="preserve">
+    <value>CPU model</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FlashType" xml:space="preserve">
+    <value>Flash type</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FirmwareName" xml:space="preserve">
+    <value>Firmware name</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ProjectId" xml:space="preserve">
+    <value>Project ID</value>
+  </data>
+  <data name="Dock_Properties_Metadata_KeyId" xml:space="preserve">
+    <value>Key ID</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressionFormat" xml:space="preserve">
+    <value>Compression format</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CanCompress" xml:space="preserve">
+    <value>Can compress</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CanDecompress" xml:space="preserve">
+    <value>Can decompress</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Entries" xml:space="preserve">
+    <value>Entries</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Entry" xml:space="preserve">
+    <value>Entry</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Summary" xml:space="preserve">
+    <value>Summary</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Error" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Size" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_SourceFilesystemSize" xml:space="preserve">
+    <value>Source filesystem size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_RebuiltSize" xml:space="preserve">
+    <value>Rebuilt size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FitsSourceFilesystemSize" xml:space="preserve">
+    <value>Fits source filesystem size</value>
+  </data>
+  <data name="Dock_Properties_Metadata_SizeExcess" xml:space="preserve">
+    <value>Size excess</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressionProfile" xml:space="preserve">
+    <value>Compression profile</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressionInference" xml:space="preserve">
+    <value>Compression inference</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressionAttempts" xml:space="preserve">
+    <value>Compression attempts</value>
+  </data>
+  <data name="Dock_FileManager" xml:space="preserve">
+    <value>File Manager</value>
+  </data>
+  <data name="FileManager_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="FileManager_NavigateUp" xml:space="preserve">
+    <value>Up one level</value>
+  </data>
+  <data name="FileManager_ViewMode" xml:space="preserve">
+    <value>Switch view</value>
+  </data>
+  <data name="FileManager_ListView" xml:space="preserve">
+    <value>List view</value>
+  </data>
+  <data name="FileManager_GridView" xml:space="preserve">
+    <value>Grid view</value>
+  </data>
+  <data name="FileManager_EmptyDirectory" xml:space="preserve">
+    <value>This directory is empty</value>
+  </data>
+  <data name="FileManager_Extract" xml:space="preserve">
+    <value>Extract</value>
+  </data>
+  <data name="FileManager_Loading" xml:space="preserve">
+    <value>Loading file directory…</value>
+  </data>
+  <data name="FileManager_FileCount" xml:space="preserve">
+    <value>Files: {0}</value>
+  </data>
+  <data name="FileManager_DirectoryCount" xml:space="preserve">
+    <value>Directories: {0}</value>
+  </data>
+  <data name="FileManager_ImageSize" xml:space="preserve">
+    <value>Size: {0}</value>
+  </data>
+  <data name="FileManager_Path" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="FileManager_Size" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="FileManager_Kind" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="FileManager_KindFile" xml:space="preserve">
+    <value>File</value>
+  </data>
+  <data name="FileManager_KindDirectory" xml:space="preserve">
+    <value>Directory</value>
+  </data>
+  <data name="FileManager_KindSymlink" xml:space="preserve">
+    <value>Symbolic Link</value>
+  </data>
+  <data name="FileManager_Unrecognized" xml:space="preserve">
+    <value>Unrecognized file: expected an ext4/EROFS/F2FS image, CPIO/TAR archive or supported compressed file</value>
+  </data>
+  <data name="Dock_Properties_Hex_FileName" xml:space="preserve">
+    <value>File Name</value>
+  </data>
+  <data name="Dock_Properties_Hex_FilePath" xml:space="preserve">
+    <value>File Path</value>
+  </data>
+  <data name="Dock_Properties_Hex_FileSize" xml:space="preserve">
+    <value>File Size</value>
+  </data>
+  <data name="Dock_Properties_Hex_ByteCount" xml:space="preserve">
+    <value>Bytes</value>
+  </data>
+  <data name="Dock_Properties_Text_FileName" xml:space="preserve">
+    <value>File Name</value>
+  </data>
+  <data name="Dock_Properties_Text_FilePath" xml:space="preserve">
+    <value>File Path</value>
+  </data>
+  <data name="Dock_Properties_Text_FileSize" xml:space="preserve">
+    <value>File Size</value>
+  </data>
+  <data name="Dock_Properties_Text_Encoding" xml:space="preserve">
+    <value>Encoding</value>
+  </data>
+  <data name="Dock_Properties_Text_LineCount" xml:space="preserve">
+    <value>Line Count</value>
+  </data>
+  <data name="Dock_Properties_Text_CharCount" xml:space="preserve">
+    <value>Character Count</value>
+  </data>
+  <data name="Dock_Properties_Text_Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="Dock_Properties_Text_LanguageAuto" xml:space="preserve">
+    <value>Auto Detect</value>
+  </data>
+  <data name="Dock_Properties_Dtb_FileName" xml:space="preserve">
+    <value>File Name</value>
+  </data>
+  <data name="Dock_Properties_Dtb_FilePath" xml:space="preserve">
+    <value>File Path</value>
+  </data>
+  <data name="Dock_Properties_Dtb_FileSize" xml:space="preserve">
+    <value>File Size</value>
+  </data>
+  <data name="Dock_Properties_Dtb_NodeCount" xml:space="preserve">
+    <value>Total Nodes</value>
+  </data>
+  <data name="Dock_Properties_Dtb_RootCompatible" xml:space="preserve">
+    <value>Root Compatible</value>
+  </data>
+  <data name="Dock_Properties_Dtb_RootAddressCells" xml:space="preserve">
+    <value>#address-cells</value>
+  </data>
+  <data name="Dock_Properties_Dtb_RootSizeCells" xml:space="preserve">
+    <value>#size-cells</value>
+  </data>
+  <data name="Dock_Properties_Dtb_MemReservations" xml:space="preserve">
+    <value>Memory Reservations</value>
+  </data>
+  <data name="Dock_Properties_Dtb_SelectedNode" xml:space="preserve">
+    <value>Selected Node</value>
+  </data>
+  <data name="Dock_Properties_Dtb_SelectedNodePath" xml:space="preserve">
+    <value>Node Path</value>
+  </data>
+  <data name="Dock_Properties_Dtb_SelectedNodeProps" xml:space="preserve">
+    <value>Property Count</value>
+  </data>
+  <data name="Dock_Properties_Dtb_SelectedNodeChildren" xml:space="preserve">
+    <value>Child Count</value>
+  </data>
+  <data name="Dock_Properties_Dex_FileName" xml:space="preserve">
+    <value>File Name</value>
+  </data>
+  <data name="Dock_Properties_Dex_FilePath" xml:space="preserve">
+    <value>File Path</value>
+  </data>
+  <data name="Dock_Properties_Dex_FileSize" xml:space="preserve">
+    <value>File Size</value>
+  </data>
+  <data name="Dock_Properties_Dex_Version" xml:space="preserve">
+    <value>DEX Version</value>
+  </data>
+  <data name="Dock_Properties_Dex_ClassCount" xml:space="preserve">
+    <value>Classes</value>
+  </data>
+  <data name="Dock_Properties_Dex_MethodCount" xml:space="preserve">
+    <value>Methods</value>
+  </data>
+  <data name="Dock_Properties_Dex_FieldCount" xml:space="preserve">
+    <value>Fields</value>
+  </data>
+  <data name="Dock_Properties_Dex_StringCount" xml:space="preserve">
+    <value>Strings</value>
+  </data>
+  <data name="Dock_Properties_Dex_TypeCount" xml:space="preserve">
+    <value>Types</value>
+  </data>
+  <data name="Dock_Properties_Dex_SelectedNode" xml:space="preserve">
+    <value>Selected Item</value>
+  </data>
+  <data name="Dock_Properties_Dex_SelectedNodeKind" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="Dock_Properties_Dex_SelectedNodeDetail" xml:space="preserve">
+    <value>Detail</value>
+  </data>
+  <data name="Dock_Properties_Dex_SelectedNodeChildren" xml:space="preserve">
+    <value>Child Count</value>
+  </data>
+  <data name="Dock_Properties_Manifest_FileName" xml:space="preserve">
+    <value>File Name</value>
+  </data>
+  <data name="Dock_Properties_Manifest_FilePath" xml:space="preserve">
+    <value>File Path</value>
+  </data>
+  <data name="Dock_Properties_Manifest_FileSize" xml:space="preserve">
+    <value>File Size</value>
+  </data>
+  <data name="Dock_Properties_Manifest_ElementCount" xml:space="preserve">
+    <value>Elements</value>
+  </data>
+  <data name="Dock_Properties_Manifest_AttributeCount" xml:space="preserve">
+    <value>Attributes</value>
+  </data>
+  <data name="Dock_Properties_Manifest_SelectedNode" xml:space="preserve">
+    <value>Selected Element</value>
+  </data>
+  <data name="Dock_Properties_Manifest_SelectedNodeNs" xml:space="preserve">
+    <value>Namespace</value>
+  </data>
+  <data name="Dock_Properties_Manifest_SelectedNodeAttrs" xml:space="preserve">
+    <value>Attribute Count</value>
+  </data>
+  <data name="Dock_Properties_Manifest_SelectedNodeChildren" xml:space="preserve">
+    <value>Child Count</value>
+  </data>
+  <data name="Dock_Properties_Manifest_SelectedNodeText" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="Dock_Properties_Arsc_FileName" xml:space="preserve">
+    <value>File Name</value>
+  </data>
+  <data name="Dock_Properties_Arsc_FilePath" xml:space="preserve">
+    <value>File Path</value>
+  </data>
+  <data name="Dock_Properties_Arsc_PackageCount" xml:space="preserve">
+    <value>Packages</value>
+  </data>
+  <data name="Dock_Properties_Arsc_TypeCount" xml:space="preserve">
+    <value>Type Tables</value>
+  </data>
+  <data name="Dock_Properties_Arsc_EntryCount" xml:space="preserve">
+    <value>Entries</value>
+  </data>
+  <data name="Dock_Properties_Arsc_SelectedNode" xml:space="preserve">
+    <value>Selected Item</value>
+  </data>
+  <data name="Dock_Properties_Arsc_SelectedNodeKind" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="Dock_Properties_Arsc_SelectedNodeDetail" xml:space="preserve">
+    <value>Detail</value>
+  </data>
+  <data name="Dock_Properties_Arsc_SelectedNodeChildren" xml:space="preserve">
+    <value>Child Count</value>
+  </data>
+  <data name="Dock_Properties_Apk_FileName" xml:space="preserve">
+    <value>File Name</value>
+  </data>
+  <data name="Dock_Properties_Apk_FilePath" xml:space="preserve">
+    <value>File Path</value>
+  </data>
+  <data name="Dock_Properties_Apk_FileSize" xml:space="preserve">
+    <value>File Size</value>
+  </data>
+  <data name="Dock_Properties_Apk_PackageName" xml:space="preserve">
+    <value>Package</value>
+  </data>
+  <data name="Dock_Properties_Apk_VersionName" xml:space="preserve">
+    <value>Version Name</value>
+  </data>
+  <data name="Dock_Properties_Apk_VersionCode" xml:space="preserve">
+    <value>Version Code</value>
+  </data>
+  <data name="Dock_Properties_Apk_Sdk" xml:space="preserve">
+    <value>SDK</value>
+  </data>
+  <data name="Dock_Properties_Apk_Signing" xml:space="preserve">
+    <value>Signing status</value>
+  </data>
+  <data name="Dock_Properties_Apk_Hardening" xml:space="preserve">
+    <value>Hardening status</value>
+  </data>
+  <data name="Dock_Properties_Apk_TargetSystem" xml:space="preserve">
+    <value>Target system</value>
+  </data>
+  <data name="Dock_Properties_Apk_MinimumSystem" xml:space="preserve">
+    <value>Minimum system</value>
+  </data>
+  <data name="Dock_Properties_Apk_Abis" xml:space="preserve">
+    <value>ABIs</value>
+  </data>
+  <data name="Dock_Properties_Apk_Permissions" xml:space="preserve">
+    <value>Permissions</value>
+  </data>
+  <data name="Editor_Yes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="Editor_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Device_RebootConfirmTitle" xml:space="preserve">
+    <value>Confirm Reboot</value>
+  </data>
+  <data name="Device_RebootConfirmMessage" xml:space="preserve">
+    <value>Are you sure you want to reboot the device to {0}?</value>
+  </data>
+  <data name="Device_FlashConfirmTitle" xml:space="preserve">
+    <value>Confirm Flash</value>
+  </data>
+  <data name="Device_FlashConfirmMessage" xml:space="preserve">
+    <value>Flashing is a risky operation that may brick your device. Continue?</value>
+  </data>
+  <data name="Device_ModeSystem" xml:space="preserve">
+    <value>system</value>
+  </data>
+  <data name="Device_ModeBootloader" xml:space="preserve">
+    <value>bootloader</value>
+  </data>
+  <data name="Device_ModeFastbootd" xml:space="preserve">
+    <value>fastbootd</value>
+  </data>
+  <data name="Device_ModeRecovery" xml:space="preserve">
+    <value>recovery</value>
+  </data>
+  <data name="Device_ModeEdl" xml:space="preserve">
+    <value>EDL mode</value>
+  </data>
+  <data name="Log_Panel_Title" xml:space="preserve">
+    <value>Global Log</value>
+  </data>
+  <data name="Log_Clear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Log_Export" xml:space="preserve">
+    <value>Export</value>
+  </data>
+  <data name="Log_Reload" xml:space="preserve">
+    <value>Reload file</value>
+  </data>
+  <data name="Log_Loading" xml:space="preserve">
+    <value>Loading log file</value>
+  </data>
+  <data name="Log_FileLoadFailed" xml:space="preserve">
+    <value>Failed to load log: {0}</value>
+  </data>
+  <data name="Log_FileTooLarge" xml:space="preserve">
+    <value>The log exceeds the supported limit (64 MiB, 250,000 lines, or 1 MiB per entry). The file has not been modified.</value>
+  </data>
+  <data name="Log_FileUnsupportedVersion" xml:space="preserve">
+    <value>This log export version is not supported.</value>
+  </data>
+  <data name="Log_FileInvalidRecord" xml:space="preserve">
+    <value>Invalid log record on line {0}.</value>
+  </data>
+  <data name="Log_ExportDone" xml:space="preserve">
+    <value>Logs exported to {0}</value>
+  </data>
+  <data name="Log_ExportFailed" xml:space="preserve">
+    <value>Failed to export logs: {0}</value>
+  </data>
+  <data name="Log_CopyDone" xml:space="preserve">
+    <value>Log entry copied to clipboard</value>
+  </data>
+  <data name="Log_LevelFilter" xml:space="preserve">
+    <value>Level</value>
+  </data>
+  <data name="Log_SourceFilter" xml:space="preserve">
+    <value>Source</value>
+  </data>
+  <data name="Log_Search" xml:space="preserve">
+    <value>Search logs</value>
+  </data>
+  <data name="Log_ClearSearch" xml:space="preserve">
+    <value>Clear search</value>
+  </data>
+  <data name="Log_AutoScroll" xml:space="preserve">
+    <value>Auto-scroll</value>
+  </data>
+  <data name="Log_UseRegex" xml:space="preserve">
+    <value>Regular expression</value>
+  </data>
+  <data name="Log_MatchCase" xml:space="preserve">
+    <value>Match case</value>
+  </data>
+  <data name="Log_Pause" xml:space="preserve">
+    <value>Pause</value>
+  </data>
+  <data name="Log_Resume" xml:space="preserve">
+    <value>Resume</value>
+  </data>
+  <data name="AdbLog_Reset" xml:space="preserve">
+    <value>Reset: clear local logs only</value>
+  </data>
+  <data name="AdbLog_ClearAll" xml:space="preserve">
+    <value>Clear: clear local logs and device log buffers</value>
+  </data>
+  <data name="AdbLog_ClearFailed" xml:space="preserve">
+    <value>Failed to clear device log buffers: {0}</value>
+  </data>
+  <data name="Log_RegexInvalid" xml:space="preserve">
+    <value>Invalid regular expression: {0}</value>
+  </data>
+  <data name="Log_RegexTimeout" xml:space="preserve">
+    <value>Regular expression timed out; simplify the pattern</value>
+  </data>
+  <data name="Log_FilterAll" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="FindReplace_Searching" xml:space="preserve">
+    <value>Searching...</value>
+  </data>
+  <data name="FindReplace_NoMatches" xml:space="preserve">
+    <value>No matches</value>
+  </data>
+  <data name="FindReplace_ResultCount" xml:space="preserve">
+    <value>{0} of {1}</value>
+  </data>
+  <data name="FindReplace_NoProject" xml:space="preserve">
+    <value>No project is open.</value>
+  </data>
+  <data name="FindReplace_Changed" xml:space="preserve">
+    <value>The document changed after searching. Search again.</value>
+  </data>
+  <data name="FindReplace_Replaced" xml:space="preserve">
+    <value>Replaced {0} matches</value>
+  </data>
+  <data name="FindReplace_ConfirmReplaceAll" xml:space="preserve">
+    <value>Replace {0} matches in {1} documents?</value>
+  </data>
+  <data name="FindReplace_EditorNotReady" xml:space="preserve">
+    <value>The editor is not ready. Retry when the document is visible.</value>
+  </data>
+  <data name="FindReplace_NotSupported" xml:space="preserve">
+    <value>This document type does not support replacement.</value>
+  </data>
+  <data name="ApkSign_Title" xml:space="preserve">
+    <value>Sign APK</value>
+  </data>
+  <data name="ApkSign_Key" xml:space="preserve">
+    <value>Private key (PKCS#8 / PKCS#1 / SEC1, PEM or DER)</value>
+  </data>
+  <data name="ApkSign_Certificate" xml:space="preserve">
+    <value>Certificate (PEM / DER / PFX)</value>
+  </data>
+  <data name="ApkSign_Output" xml:space="preserve">
+    <value>Signed APK output path</value>
+  </data>
+  <data name="ApkSign_KeyPassword" xml:space="preserve">
+    <value>Private key password (optional)</value>
+  </data>
+  <data name="ApkSign_CertificatePassword" xml:space="preserve">
+    <value>Certificate password (optional)</value>
+  </data>
+  <data name="ApkSign_Browse" xml:space="preserve">
+    <value>Select file</value>
+  </data>
+  <data name="ApkSign_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="ApkSign_Cancelled" xml:space="preserve">
+    <value>Signing cancelled.</value>
+  </data>
+  <data name="ApkSign_Execute" xml:space="preserve">
+    <value>Execute signing</value>
+  </data>
+  <data name="ApkSign_SelectApk" xml:space="preserve">
+    <value>Select APK file</value>
+  </data>
+  <data name="ApkSign_KeyLabel" xml:space="preserve">
+    <value>Signing key</value>
+  </data>
+  <data name="ApkSign_CertificateLabel" xml:space="preserve">
+    <value>Certificate</value>
+  </data>
+  <data name="ApkSign_SelectDirectory" xml:space="preserve">
+    <value>Select folder</value>
+  </data>
+  <data name="Apk_SizeFormat" xml:space="preserve">
+    <value>{0:N0} bytes</value>
+  </data>
+  <data name="Apk_Extract" xml:space="preserve">
+    <value>Extract</value>
+  </data>
+  <data name="Apk_View" xml:space="preserve">
+    <value>View</value>
+  </data>
+  <data name="Apk_Install" xml:space="preserve">
+    <value>Install</value>
+  </data>
+  <data name="Apk_Sign" xml:space="preserve">
+    <value>Sign</value>
+  </data>
+  <data name="Apk_Size" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="Apk_TargetSystem" xml:space="preserve">
+    <value>Target system</value>
+  </data>
+  <data name="Apk_MinimumSystem" xml:space="preserve">
+    <value>Minimum system</value>
+  </data>
+  <data name="Apk_SigningStatus" xml:space="preserve">
+    <value>Signing status</value>
+  </data>
+  <data name="Apk_HardeningStatus" xml:space="preserve">
+    <value>Hardening status</value>
+  </data>
+  <data name="Apk_SigningUnsigned" xml:space="preserve">
+    <value>Unsigned</value>
+  </data>
+  <data name="Apk_SigningSchemes" xml:space="preserve">
+    <value>Signed ({0})</value>
+  </data>
+  <data name="Apk_HardeningDetected" xml:space="preserve">
+    <value>Detected ({0})</value>
+  </data>
+  <data name="Apk_HardeningNotDetected" xml:space="preserve">
+    <value>Not detected</value>
+  </data>
+  <data name="MirrorProperty_Status" xml:space="preserve">
+    <value>Session status</value>
+  </data>
+  <data name="MirrorProperty_Codec" xml:space="preserve">
+    <value>Video codec</value>
+  </data>
+  <data name="MirrorProperty_Decoder" xml:space="preserve">
+    <value>Decoder backend</value>
+  </data>
+  <data name="MirrorProperty_Resolution" xml:space="preserve">
+    <value>Video resolution</value>
+  </data>
+  <data name="MirrorProperty_SourceColor" xml:space="preserve">
+    <value>Source color space</value>
+  </data>
+  <data name="MirrorProperty_PixelFormat" xml:space="preserve">
+    <value>Decoded pixel format</value>
+  </data>
+  <data name="MirrorProperty_Conversion" xml:space="preserve">
+    <value>Display conversion</value>
+  </data>
+  <data name="MirrorProperty_Presentation" xml:space="preserve">
+    <value>Presentation path</value>
+  </data>
+  <data name="MirrorProperty_ReceiveFps" xml:space="preserve">
+    <value>Receive rate (1 s)</value>
+  </data>
+  <data name="MirrorProperty_DecodeFps" xml:space="preserve">
+    <value>Decode rate (1 s)</value>
+  </data>
+  <data name="MirrorProperty_UploadFps" xml:space="preserve">
+    <value>Bitmap updates (1 s)</value>
+  </data>
+  <data name="MirrorProperty_MaxFps" xml:space="preserve">
+    <value>Frame rate limit</value>
+  </data>
+  <data name="MirrorProperty_BitRate" xml:space="preserve">
+    <value>Target bit rate</value>
+  </data>
+  <data name="MirrorProperty_ActualBitRate" xml:space="preserve">
+    <value>Received bit rate (1 s)</value>
+  </data>
+  <data name="MirrorProperty_Encoder" xml:space="preserve">
+    <value>Device encoder</value>
+  </data>
+  <data name="MirrorProperty_Audio" xml:space="preserve">
+    <value>Audio</value>
+  </data>
+  <data name="MirrorProperty_AudioFormat" xml:space="preserve">
+    <value>Audio format</value>
+  </data>
+  <data name="MirrorProperty_AudioFps" xml:space="preserve">
+    <value>Decode rate (audio, 1 s)</value>
+  </data>
+  <data name="MirrorProperty_AudioOff" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="MirrorProperty_Device" xml:space="preserve">
+    <value>Device name</value>
+  </data>
+  <data name="MirrorProperty_Version" xml:space="preserve">
+    <value>scrcpy version</value>
+  </data>
+  <data name="MirrorProperty_Unknown" xml:space="preserve">
+    <value>Not reported / not parsed</value>
+  </data>
+  <data name="MirrorProperty_Unlimited" xml:space="preserve">
+    <value>Unlimited</value>
+  </data>
+  <data name="MirrorProperty_ConversionValue" xml:space="preserve">
+    <value>BT.601 limited range → BGRA (CPU)</value>
+  </data>
+  <data name="MirrorProperty_EncoderValue" xml:space="preserve">
+    <value>Selected by Android; name not reported</value>
+  </data>
+  <data name="MirrorSetting_Apply" xml:space="preserve">
+    <value>Apply and reconnect</value>
+  </data>
+  <data name="MirrorSetting_ApplyHint" xml:space="preserve">
+    <value>Reconnect to apply changes. Backend availability depends on the system, drivers and installed plugins. The device must support the selected encoding format.</value>
+  </data>
+  <data name="MirrorSetting_UpdateServer" xml:space="preserve">
+    <value>Check for a newer scrcpy server</value>
+  </data>
+  <data name="MirrorSetting_UpdateServerHint" xml:space="preserve">
+    <value>Downloads the newest published server jar into the local cache. A running session keeps the jar it already deployed; the new one is used on the next connect.</value>
+  </data>
+  <data name="MirrorSetting_AudioBackend" xml:space="preserve">
+    <value>Audio decoder</value>
+  </data>
+  <data name="MirrorSetting_AudioCodec" xml:space="preserve">
+    <value>Audio codec</value>
+  </data>
+  <data name="MirrorSetting_Auto" xml:space="preserve">
+    <value>Automatic</value>
+  </data>
+  <data name="MirrorSetting_Backend" xml:space="preserve">
+    <value>Video decoder</value>
+  </data>
+  <data name="MirrorSetting_BitRate" xml:space="preserve">
+    <value>Video bitrate</value>
+  </data>
+  <data name="MirrorSetting_Control" xml:space="preserve">
+    <value>Remote control</value>
+  </data>
+  <data name="MirrorSetting_Full" xml:space="preserve">
+    <value>Full (0–255)</value>
+  </data>
+  <data name="MirrorSetting_GpuExport" xml:space="preserve">
+    <value>GPU zero-copy</value>
+  </data>
+  <data name="MirrorSetting_Limited" xml:space="preserve">
+    <value>Limited (16–235)</value>
+  </data>
+  <data name="MirrorSetting_Matrix" xml:space="preserve">
+    <value>Color matrix</value>
+  </data>
+  <data name="MirrorSetting_MaxFps" xml:space="preserve">
+    <value>Frame rate limit</value>
+  </data>
+  <data name="MirrorSetting_MaxSize" xml:space="preserve">
+    <value>Maximum edge</value>
+  </data>
+  <data name="MirrorSetting_Native" xml:space="preserve">
+    <value>System native</value>
+  </data>
+  <data name="MirrorSetting_Off" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="MirrorSetting_On" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="MirrorSetting_Original" xml:space="preserve">
+    <value>Original size</value>
+  </data>
+  <data name="MirrorSetting_Range" xml:space="preserve">
+    <value>Color range</value>
+  </data>
+  <data name="MirrorSetting_Unlimited" xml:space="preserve">
+    <value>Unlimited</value>
+  </data>
+  <data name="MirrorSetting_VideoCodec" xml:space="preserve">
+    <value>Target video codec</value>
+  </data>
+  <data name="MirrorSetting_Volume" xml:space="preserve">
+    <value>Playback volume</value>
+  </data>
+  <data name="MirrorProperty_AudioUnavailable" xml:space="preserve">
+    <value>Audio unavailable from device</value>
+  </data>
+  <data name="Dock_Elf_Title" xml:space="preserve">
+    <value>ELF binary information</value>
+  </data>
+  <data name="Dock_Elf_OpenHex" xml:space="preserve">
+    <value>Open as hex</value>
+  </data>
+  <data name="Dock_Elf_Loading" xml:space="preserve">
+    <value>Reading ELF metadata…</value>
+  </data>
+  <data name="Dock_Elf_LoadError" xml:space="preserve">
+    <value>Unable to read ELF information. The file may be inaccessible, malformed, truncated, or exceed metadata limits. See the log for details.</value>
+  </data>
+  <data name="Dock_Elf_Header" xml:space="preserve">
+    <value>File header</value>
+  </data>
+  <data name="Dock_Elf_Segments" xml:space="preserve">
+    <value>Program headers</value>
+  </data>
+  <data name="Dock_Elf_Sections" xml:space="preserve">
+    <value>Section headers</value>
+  </data>
+  <data name="Dock_Elf_Class" xml:space="preserve">
+    <value>Class</value>
+  </data>
+  <data name="Dock_Elf_ByteOrder" xml:space="preserve">
+    <value>Byte order</value>
+  </data>
+  <data name="Dock_Elf_LittleEndian" xml:space="preserve">
+    <value>Little endian</value>
+  </data>
+  <data name="Dock_Elf_BigEndian" xml:space="preserve">
+    <value>Big endian</value>
+  </data>
+  <data name="Dock_Elf_Type" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="Dock_Elf_None" xml:space="preserve">
+    <value>Unspecified</value>
+  </data>
+  <data name="Dock_Elf_Relocatable" xml:space="preserve">
+    <value>Relocatable object</value>
+  </data>
+  <data name="Dock_Elf_Executable" xml:space="preserve">
+    <value>Executable</value>
+  </data>
+  <data name="Dock_Elf_SharedObject" xml:space="preserve">
+    <value>Shared object / PIE</value>
+  </data>
+  <data name="Dock_Elf_Core" xml:space="preserve">
+    <value>Core dump</value>
+  </data>
+  <data name="Dock_Elf_Unknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="Dock_Elf_Machine" xml:space="preserve">
+    <value>Machine</value>
+  </data>
+  <data name="Dock_Elf_OsAbi" xml:space="preserve">
+    <value>OS / ABI</value>
+  </data>
+  <data name="Dock_Elf_AbiVersion" xml:space="preserve">
+    <value>ABI version</value>
+  </data>
+  <data name="Dock_Elf_Version" xml:space="preserve">
+    <value>ELF version</value>
+  </data>
+  <data name="Dock_Elf_EntryPoint" xml:space="preserve">
+    <value>Entry point</value>
+  </data>
+  <data name="Dock_Elf_Flags" xml:space="preserve">
+    <value>Flags</value>
+  </data>
+  <data name="Dock_Elf_FileSize" xml:space="preserve">
+    <value>File size (bytes)</value>
+  </data>
+  <data name="Dock_Elf_HeaderSize" xml:space="preserve">
+    <value>Header size (bytes)</value>
+  </data>
+  <data name="Dock_Elf_ProgramOffset" xml:space="preserve">
+    <value>Program-header offset</value>
+  </data>
+  <data name="Dock_Elf_ProgramCount" xml:space="preserve">
+    <value>Program-header count</value>
+  </data>
+  <data name="Dock_Elf_ProgramEntrySize" xml:space="preserve">
+    <value>Program-header entry size</value>
+  </data>
+  <data name="Dock_Elf_SectionOffset" xml:space="preserve">
+    <value>Section-header offset</value>
+  </data>
+  <data name="Dock_Elf_SectionCount" xml:space="preserve">
+    <value>Section-header count</value>
+  </data>
+  <data name="Dock_Elf_SectionEntrySize" xml:space="preserve">
+    <value>Section-header entry size</value>
+  </data>
+  <data name="Dock_Elf_NameTableIndex" xml:space="preserve">
+    <value>Section-name table index</value>
+  </data>
+  <data name="Dock_Elf_NoSegments" xml:space="preserve">
+    <value>This ELF has no program headers.</value>
+  </data>
+  <data name="Dock_Elf_NoSections" xml:space="preserve">
+    <value>This ELF has no section headers.</value>
+  </data>
+  <data name="Dock_Elf_Offset" xml:space="preserve">
+    <value>File offset</value>
+  </data>
+  <data name="Dock_Elf_VirtualAddress" xml:space="preserve">
+    <value>Virtual address</value>
+  </data>
+  <data name="Dock_Elf_PhysicalAddress" xml:space="preserve">
+    <value>Physical address</value>
+  </data>
+  <data name="Dock_Elf_FileBytes" xml:space="preserve">
+    <value>File size</value>
+  </data>
+  <data name="Dock_Elf_MemoryBytes" xml:space="preserve">
+    <value>Memory size</value>
+  </data>
+  <data name="Dock_Elf_Alignment" xml:space="preserve">
+    <value>Alignment</value>
+  </data>
+  <data name="Dock_Elf_Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Dock_Elf_Address" xml:space="preserve">
+    <value>Address</value>
+  </data>
+  <data name="Dock_Elf_Size" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="Dock_Elf_Link" xml:space="preserve">
+    <value>Link</value>
+  </data>
+  <data name="Dock_Elf_Info" xml:space="preserve">
+    <value>Info</value>
+  </data>
+  <data name="Dock_Elf_EntrySize" xml:space="preserve">
+    <value>Entry size</value>
+  </data>
+  <data name="Dock_Qualcomm_Title" xml:space="preserve">
+    <value>Qualcomm image analysis</value>
+  </data>
+  <data name="Dock_Qualcomm_ChooseImage" xml:space="preserve">
+    <value>Choose image</value>
+  </data>
+  <data name="Dock_Qualcomm_TrustedRoot" xml:space="preserve">
+    <value>Trusted root</value>
+  </data>
+  <data name="Dock_Qualcomm_OptionalRoot" xml:space="preserve">
+    <value>Optional PEM or DER root certificate</value>
+  </data>
+  <data name="Dock_Qualcomm_RootHint" xml:space="preserve">
+    <value>Only an explicitly selected root can establish external trust.</value>
+  </data>
+  <data name="Dock_Qualcomm_ChooseRoot" xml:space="preserve">
+    <value>Choose trusted root</value>
+  </data>
+  <data name="Dock_Qualcomm_Analyze" xml:space="preserve">
+    <value>Analyze and verify</value>
+  </data>
+  <data name="Dock_Qualcomm_Cancel" xml:space="preserve">
+    <value>Cancel analysis</value>
+  </data>
+  <data name="Dock_Qualcomm_Export" xml:space="preserve">
+    <value>Export results</value>
+  </data>
+  <data name="Dock_Qualcomm_Overview" xml:space="preserve">
+    <value>Overview</value>
+  </data>
+  <data name="Dock_Qualcomm_Segments" xml:space="preserve">
+    <value>Segments</value>
+  </data>
+  <data name="Dock_Qualcomm_Verification" xml:space="preserve">
+    <value>Verification</value>
+  </data>
+  <data name="Dock_Qualcomm_Programmer" xml:space="preserve">
+    <value>Programmer</value>
+  </data>
+  <data name="Dock_Qualcomm_Field" xml:space="preserve">
+    <value>Field</value>
+  </data>
+  <data name="Dock_Qualcomm_Value" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="Dock_Qualcomm_Idle" xml:space="preserve">
+    <value>Select an image to analyze.</value>
+  </data>
+  <data name="Dock_Qualcomm_Loading" xml:space="preserve">
+    <value>Analyzing local image…</value>
+  </data>
+  <data name="Dock_Qualcomm_Unverified" xml:space="preserve">
+    <value>Static structure recognized; device acceptance is not verified.</value>
+  </data>
+  <data name="Dock_Qualcomm_LoadError" xml:space="preserve">
+    <value>Unable to analyze this image. See the application log for details.</value>
+  </data>
+  <data name="Dock_Qualcomm_ExportError" xml:space="preserve">
+    <value>Unable to export the analysis. See the application log for details.</value>
+  </data>
+  <data name="Dock_Qualcomm_Recognized" xml:space="preserve">
+    <value>Format</value>
+  </data>
+  <data name="Dock_Qualcomm_FileSize" xml:space="preserve">
+    <value>File size</value>
+  </data>
+  <data name="Dock_Qualcomm_Digest" xml:space="preserve">
+    <value>Image digest</value>
+  </data>
+  <data name="Dock_Qualcomm_Signature" xml:space="preserve">
+    <value>Signature</value>
+  </data>
+  <data name="Dock_Qualcomm_Trust" xml:space="preserve">
+    <value>External trust</value>
+  </data>
+  <data name="Dock_Qualcomm_Device" xml:space="preserve">
+    <value>Device acceptance</value>
+  </data>
+  <data name="Dock_Qualcomm_NotChecked" xml:space="preserve">
+    <value>Not checked</value>
+  </data>
+  <data name="Dock_Qualcomm_Passed" xml:space="preserve">
+    <value>Passed</value>
+  </data>
+  <data name="Dock_Qualcomm_Failed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="Dock_Qualcomm_Unknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="Dock_Qualcomm_Unrecognized" xml:space="preserve">
+    <value>Unrecognized</value>
+  </data>
+  <data name="Dock_Qualcomm_UnrecognizedStatus" xml:space="preserve">
+    <value>No supported Qualcomm image structure was recognized.</value>
+  </data>
+  <data name="Dock_Qualcomm_Valid" xml:space="preserve">
+    <value>Valid</value>
+  </data>
+  <data name="Dock_Qualcomm_Invalid" xml:space="preserve">
+    <value>Invalid</value>
+  </data>
+  <data name="Dock_Qualcomm_NotPresent" xml:space="preserve">
+    <value>Not present</value>
+  </data>
+  <data name="Dock_Qualcomm_Unsupported" xml:space="preserve">
+    <value>Unsupported</value>
+  </data>
+  <data name="Dock_Qualcomm_MbnVersion" xml:space="preserve">
+    <value>MBN version</value>
+  </data>
+  <data name="Dock_Qualcomm_HashAlgorithm" xml:space="preserve">
+    <value>Hash algorithm</value>
+  </data>
+  <data name="Dock_Qualcomm_HashLength" xml:space="preserve">
+    <value>Hash table length</value>
+  </data>
+  <data name="Dock_Qualcomm_Architecture" xml:space="preserve">
+    <value>ELF machine</value>
+  </data>
+  <data name="Dock_Qualcomm_EntryPoint" xml:space="preserve">
+    <value>Entry point</value>
+  </data>
+  <data name="Dock_Qualcomm_MoreSegments" xml:space="preserve">
+    <value>Additional segments not shown</value>
+  </data>
+  <data name="Dock_Qualcomm_MoreDigests" xml:space="preserve">
+    <value>Additional digests not shown</value>
+  </data>
+  <data name="Dock_Qualcomm_QtiSignature" xml:space="preserve">
+    <value>QTI signature</value>
+  </data>
+  <data name="Dock_Qualcomm_OemSignature" xml:space="preserve">
+    <value>OEM signature</value>
+  </data>
+  <data name="Dock_Qualcomm_QtiChain" xml:space="preserve">
+    <value>QTI embedded chain</value>
+  </data>
+  <data name="Dock_Qualcomm_OemChain" xml:space="preserve">
+    <value>OEM embedded chain</value>
+  </data>
+  <data name="Dock_Qualcomm_Diagnostic" xml:space="preserve">
+    <value>Diagnostic</value>
+  </data>
+  <data name="Dock_Qualcomm_Metadata" xml:space="preserve">
+    <value>Signing metadata</value>
+  </data>
+  <data name="Dock_Qualcomm_ImageId" xml:space="preserve">
+    <value>Image ID</value>
+  </data>
+  <data name="Dock_Qualcomm_SoftwareId" xml:space="preserve">
+    <value>Declared software ID</value>
+  </data>
+  <data name="Dock_Qualcomm_SecondarySoftwareId" xml:space="preserve">
+    <value>Secondary software ID</value>
+  </data>
+  <data name="Dock_Qualcomm_HardwareId" xml:space="preserve">
+    <value>Declared hardware ID</value>
+  </data>
+  <data name="Dock_Qualcomm_OemId" xml:space="preserve">
+    <value>OEM ID</value>
+  </data>
+  <data name="Dock_Qualcomm_ModelId" xml:space="preserve">
+    <value>Model / OEM product ID</value>
+  </data>
+  <data name="Dock_Qualcomm_ApplicationId" xml:space="preserve">
+    <value>Application ID</value>
+  </data>
+  <data name="Dock_Qualcomm_SoftwareSize" xml:space="preserve">
+    <value>Declared software size</value>
+  </data>
+  <data name="Dock_Qualcomm_AntiRollbackVersion" xml:space="preserve">
+    <value>Declared anti-rollback version</value>
+  </data>
+  <data name="Dock_Qualcomm_RootSlot" xml:space="preserve">
+    <value>Root certificate slot (zero-based)</value>
+  </data>
+  <data name="Dock_Qualcomm_Flags" xml:space="preserve">
+    <value>Raw flags</value>
+  </data>
+  <data name="Dock_Qualcomm_SocVersions" xml:space="preserve">
+    <value>SoC version slots</value>
+  </data>
+  <data name="Dock_Qualcomm_SerialNumbers" xml:space="preserve">
+    <value>Declared serial slots</value>
+  </data>
+  <data name="Dock_Qualcomm_SocFeatureId" xml:space="preserve">
+    <value>SoC feature ID</value>
+  </data>
+  <data name="Dock_Qualcomm_JtagId" xml:space="preserve">
+    <value>JTAG ID</value>
+  </data>
+  <data name="Dock_Qualcomm_SocLifecycle" xml:space="preserve">
+    <value>Declared SoC lifecycle</value>
+  </data>
+  <data name="Dock_Qualcomm_OemLifecycle" xml:space="preserve">
+    <value>Declared OEM lifecycle</value>
+  </data>
+  <data name="Dock_Qualcomm_RootHashAlgorithm" xml:space="preserve">
+    <value>Root hash algorithm ID</value>
+  </data>
+  <data name="Dock_Qualcomm_DeclaredRootHash" xml:space="preserve">
+    <value>Declared root hash (raw)</value>
+  </data>
+  <data name="Dock_Qualcomm_MetadataLayout" xml:space="preserve">
+    <value>Metadata layout</value>
+  </data>
+  <data name="Dock_Qualcomm_MetadataVersion" xml:space="preserve">
+    <value>Metadata version</value>
+  </data>
+  <data name="Dock_Qualcomm_PackedV6" xml:space="preserve">
+    <value>MBN v6 packed fields</value>
+  </data>
+  <data name="Dock_Qualcomm_TaggedV6" xml:space="preserve">
+    <value>MBN v6 tagged fields</value>
+  </data>
+  <data name="Dock_Qualcomm_CommonV7" xml:space="preserve">
+    <value>MBN v7 common fields</value>
+  </data>
+  <data name="Dock_Qualcomm_MetadataV7" xml:space="preserve">
+    <value>MBN v7 authority fields</value>
+  </data>
+  <data name="Dock_Qualcomm_CertificateOu" xml:space="preserve">
+    <value>Certificate subject OU declarations</value>
+  </data>
+  <data name="Dock_Qualcomm_UnsupportedMetadata" xml:space="preserve">
+    <value>Uninterpreted metadata layout</value>
+  </data>
+  <data name="Dock_Qualcomm_ZeroFilledMetadata" xml:space="preserve">
+    <value>Zero-filled metadata placeholder</value>
+  </data>
+  <data name="Dock_Qualcomm_ElfClass" xml:space="preserve">
+    <value>ELF class</value>
+  </data>
+  <data name="Dock_Qualcomm_ProgramHeaderCount" xml:space="preserve">
+    <value>Program header count</value>
+  </data>
+  <data name="Dock_Qualcomm_FileOffset" xml:space="preserve">
+    <value>File offset</value>
+  </data>
+  <data name="Dock_Qualcomm_SegmentType" xml:space="preserve">
+    <value>Segment type</value>
+  </data>
+  <data name="Dock_Qualcomm_VirtualAddress" xml:space="preserve">
+    <value>Virtual address</value>
+  </data>
+  <data name="Dock_Qualcomm_PhysicalAddress" xml:space="preserve">
+    <value>Physical address</value>
+  </data>
+  <data name="Dock_Qualcomm_MemorySize" xml:space="preserve">
+    <value>Memory size</value>
+  </data>
+  <data name="Dock_Qualcomm_Alignment" xml:space="preserve">
+    <value>Alignment</value>
+  </data>
+  <data name="Dock_Qualcomm_PbtType" xml:space="preserve">
+    <value>MI_PBT segment type</value>
+  </data>
+  <data name="Dock_Qualcomm_PbtPaged" xml:space="preserve">
+    <value>MI_PBT paged segment</value>
+  </data>
+  <data name="Dock_Qualcomm_Yes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="Dock_Qualcomm_No" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="Dock_Qualcomm_MbnHeader" xml:space="preserve">
+    <value>MBN header (offset + length)</value>
+  </data>
+  <data name="Dock_Qualcomm_CommonMetadata" xml:space="preserve">
+    <value>Common metadata (offset + length)</value>
+  </data>
+  <data name="Dock_Qualcomm_QtiMetadata" xml:space="preserve">
+    <value>QTI metadata (offset + length)</value>
+  </data>
+  <data name="Dock_Qualcomm_OemMetadata" xml:space="preserve">
+    <value>OEM metadata (offset + length)</value>
+  </data>
+  <data name="Dock_Qualcomm_HashTable" xml:space="preserve">
+    <value>Hash table (offset + length)</value>
+  </data>
+  <data name="Dock_Qualcomm_QtiCertificates" xml:space="preserve">
+    <value>QTI certificates (offset + length)</value>
+  </data>
+  <data name="Dock_Qualcomm_OemCertificates" xml:space="preserve">
+    <value>OEM certificates (offset + length)</value>
+  </data>
+  <data name="Dock_Qualcomm_SblHeader" xml:space="preserve">
+    <value>SBL header (offset + length)</value>
+  </data>
+  <data name="Dock_Qualcomm_SblCode" xml:space="preserve">
+    <value>SBL code (offset + length)</value>
+  </data>
+  <data name="Dock_Qualcomm_MetadataRootHash" xml:space="preserve">
+    <value>Metadata root hash comparison</value>
+  </data>
+  <data name="Dock_Qualcomm_Subject" xml:space="preserve">
+    <value>Certificate subject</value>
+  </data>
+  <data name="Dock_Qualcomm_Issuer" xml:space="preserve">
+    <value>Certificate issuer</value>
+  </data>
+  <data name="Dock_Qualcomm_CertificateSerial" xml:space="preserve">
+    <value>Certificate serial number</value>
+  </data>
+  <data name="Dock_Qualcomm_NotBefore" xml:space="preserve">
+    <value>Valid from (UTC)</value>
+  </data>
+  <data name="Dock_Qualcomm_NotAfter" xml:space="preserve">
+    <value>Valid until (UTC)</value>
+  </data>
+  <data name="Dock_Qualcomm_CertificateAlgorithm" xml:space="preserve">
+    <value>Certificate signature algorithm OID</value>
+  </data>
+  <data name="Dock_Qualcomm_PublicKeyAlgorithm" xml:space="preserve">
+    <value>Public key algorithm OID</value>
+  </data>
+  <data name="Dock_Qualcomm_CertificateSha256" xml:space="preserve">
+    <value>Certificate SHA-256</value>
+  </data>
+  <data name="Dock_Qualcomm_CertificateSha384" xml:space="preserve">
+    <value>Certificate SHA-384</value>
+  </data>
+  <data name="Dock_Qualcomm_VerifiedAlgorithm" xml:space="preserve">
+    <value>Verified image signature algorithm</value>
+  </data>
+  <data name="Dock_Qualcomm_SelectedRootSha256" xml:space="preserve">
+    <value>Selected root SHA-256</value>
+  </data>
+  <data name="Dock_Qualcomm_EvidenceSource" xml:space="preserve">
+    <value>Static evidence source</value>
+  </data>
+  <data name="Dock_Qualcomm_StringLiteral" xml:space="preserve">
+    <value>String literal (not code-reference verified)</value>
+  </data>
+  <data name="Dock_Qualcomm_MappedHandlerTable" xml:space="preserve">
+    <value>Mapped handler table</value>
+  </data>
+  <data name="Dock_Qualcomm_QcVersion" xml:space="preserve">
+    <value>Qualcomm version string</value>
+  </data>
+  <data name="Dock_Qualcomm_OemVersion" xml:space="preserve">
+    <value>OEM version string</value>
+  </data>
+  <data name="Dock_Qualcomm_ImageVariant" xml:space="preserve">
+    <value>Image variant string</value>
+  </data>
+  <data name="Dock_Qualcomm_BuildTime" xml:space="preserve">
+    <value>Build timestamp string (timezone unspecified)</value>
+  </data>
+  <data name="Dock_Properties_Log_Error" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="Dock_Properties_Log_MatchingEntries" xml:space="preserve">
+    <value>Matching entries</value>
+  </data>
+  <data name="Dock_Properties_Log_Search" xml:space="preserve">
+    <value>Search filter</value>
+  </data>
+  <data name="Dock_Properties_Partition_Group" xml:space="preserve">
+    <value>Partition group</value>
+  </data>
+  <data name="Dock_Properties_Partition_Source" xml:space="preserve">
+    <value>Partition source</value>
+  </data>
+  <data name="Dock_Properties_SelectedEntry" xml:space="preserve">
+    <value>Selected entry</value>
+  </data>
+  <data name="Dock_Properties_SelectedResource" xml:space="preserve">
+    <value>Selected resource</value>
+  </data>
+  <data name="Dock_Properties_Type_LogDocument" xml:space="preserve">
+    <value>Offline log</value>
+  </data>
+  <data name="Dock_Properties_Type_PartitionDocument" xml:space="preserve">
+    <value>Partition table</value>
+  </data>
+</root>

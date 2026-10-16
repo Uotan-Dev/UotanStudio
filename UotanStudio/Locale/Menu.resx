@@ -1,0 +1,741 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>  <data name="Menu_File" xml:space="preserve">
+    <value>File</value>
+  </data>
+  <data name="Menu_Edit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Menu_View" xml:space="preserve">
+    <value>View</value>
+  </data>
+  <data name="Menu_Tools" xml:space="preserve">
+    <value>Tools</value>
+  </data>
+  <data name="Menu_Help" xml:space="preserve">
+    <value>Help</value>
+  </data>
+  <data name="Menu_NewProject" xml:space="preserve">
+    <value>New Project</value>
+  </data>
+  <data name="Menu_NewSolution" xml:space="preserve">
+    <value>New Solution</value>
+  </data>
+  <data name="NewProject_Name" xml:space="preserve">
+    <value>Project name</value>
+  </data>
+  <data name="NewProject_NamePlaceholder" xml:space="preserve">
+    <value>Enter a project name</value>
+  </data>
+  <data name="NewProject_Location" xml:space="preserve">
+    <value>Project location</value>
+  </data>
+  <data name="NewProject_AddImages" xml:space="preserve">
+    <value>Add ROM or images</value>
+  </data>
+  <data name="NewProject_ImagesPlaceholder" xml:space="preserve">
+    <value>Select multiple IMG files, or ZIP, Super.img, Payload.bin and other formats</value>
+  </data>
+  <data name="NewProject_UnpackImages" xml:space="preserve">
+    <value>Unpack to images</value>
+  </data>
+  <data name="NewProject_UnpackFully" xml:space="preserve">
+    <value>Fully unpack</value>
+  </data>
+  <data name="NewProject_MergeMyPartitions" xml:space="preserve">
+    <value>Merge my_ partitions into system</value>
+  </data>
+  <data name="NewProject_MergeMyPartitionsTip" xml:space="preserve">
+    <value>After unpacking, my_* partition trees are merged into the system tree and their own file_contexts and fs_config are rebased; merged my_* images are removed afterwards. Requires both unpack options and a selection pairing system with at least one my_* partition of the same slot; system_a merges my_product_a and leaves my_product_b alone.</value>
+  </data>
+  <data name="NewProject_MergingMyPartitions" xml:space="preserve">
+    <value>Merging {0} into system…</value>
+  </data>
+  <data name="NewProject_CleaningMergedPartitions" xml:space="preserve">
+    <value>Removing merged my_ images…</value>
+  </data>
+  <data name="NewProject_ImageName" xml:space="preserve">
+    <value>Image name</value>
+  </data>
+  <data name="NewProject_ImageFormat" xml:space="preserve">
+    <value>Image format</value>
+  </data>
+  <data name="NewProject_Create" xml:space="preserve">
+    <value>Create</value>
+  </data>
+  <data name="NewProject_Analyzing" xml:space="preserve">
+    <value>Reading source contents…</value>
+  </data>
+  <data name="NewProject_Creating" xml:space="preserve">
+    <value>Creating project…</value>
+  </data>
+  <data name="NewProject_CheckingSpace" xml:space="preserve">
+    <value>Checking available space…</value>
+  </data>
+  <data name="NewProject_SpaceTitle" xml:space="preserve">
+    <value>Project creation may run out of space</value>
+  </data>
+  <data name="NewProject_SpaceDetails" xml:space="preserve">
+    <value>Location: {0}
+Available: {1}
+Estimated requirement: {2}</value>
+  </data>
+  <data name="NewProject_SpaceWarning" xml:space="preserve">
+    <value>{0}
+
+This estimate covers the selected original copies, image extraction and unpacking options, with temporary workspace reserved. Full unpacking may need more space. Continuing may fail if the disk fills up.
+
+Continue creating the project?</value>
+  </data>
+  <data name="NewProject_SpaceContinue" xml:space="preserve">
+    <value>Continue creating</value>
+  </data>
+  <data name="NewProject_SpaceCancel" xml:space="preserve">
+    <value>Review options</value>
+  </data>
+  <data name="NewProject_Copying" xml:space="preserve">
+    <value>Copying original files…</value>
+  </data>
+  <data name="NewProject_Extracting" xml:space="preserve">
+    <value>Extracting and unpacking selected images…</value>
+  </data>
+  <data name="NewProject_GroupSuperPartitions" xml:space="preserve">
+    <value>super partitions — {0}</value>
+  </data>
+  <data name="NewProject_GroupPayloadPartitions" xml:space="preserve">
+    <value>payload partitions — {0}</value>
+  </data>
+  <data name="NewProject_GroupZipImages" xml:space="preserve">
+    <value>images in archive — {0}</value>
+  </data>
+  <data name="NewProject_BrowseLocation" xml:space="preserve">
+    <value>Select project location</value>
+  </data>
+  <data name="NewProject_BrowseImages" xml:space="preserve">
+    <value>Select ROM or image files</value>
+  </data>
+  <data name="NewProject_SelectFolder" xml:space="preserve">
+    <value>Select folder</value>
+  </data>
+  <data name="NewProject_SelectImages" xml:space="preserve">
+    <value>Select images</value>
+  </data>
+  <data name="NewProject_GetRom" xml:space="preserve">
+    <value>Get ROM</value>
+  </data>
+  <data name="NewProject_RemoteUrlRequired" xml:space="preserve">
+    <value>Enter a direct HTTP or HTTPS ROM URL first.</value>
+  </data>
+  <data name="NewProject_Downloading" xml:space="preserve">
+    <value>Downloading selected ROM content…</value>
+  </data>
+  <data name="NewProject_ClearImages" xml:space="preserve">
+    <value>Clear selected files</value>
+  </data>
+  <data name="NewProject_ImageFiles" xml:space="preserve">
+    <value>ROM and image files</value>
+  </data>
+  <data name="NewProject_PickerFailed" xml:space="preserve">
+    <value>Unable to select files or folder</value>
+  </data>
+  <data name="NewProject_CreateFailed" xml:space="preserve">
+    <value>Failed to create project</value>
+  </data>
+  <data name="Menu_OpenProject" xml:space="preserve">
+    <value>Open Project...</value>
+  </data>
+  <data name="Menu_OpenFolder" xml:space="preserve">
+    <value>Open Folder...</value>
+  </data>
+  <data name="Menu_OpenProjectFolderFailed" xml:space="preserve">
+    <value>The selected project folder could not be opened. Make sure it is readable and contains exactly one .uotan solution file.</value>
+  </data>
+  <data name="Menu_OpenFile" xml:space="preserve">
+    <value>Open File...</value>
+  </data>
+  <data name="Menu_SelectCreationDirectory" xml:space="preserve">
+    <value>Select where to create the item</value>
+  </data>
+  <data name="Menu_OpenFailed" xml:space="preserve">
+    <value>Unable to open</value>
+  </data>
+  <data name="Menu_OpenProjectMissing" xml:space="preserve">
+    <value>The project file could not be found: {0}</value>
+  </data>
+  <data name="Menu_OpenSolutionUnsupported" xml:space="preserve">
+    <value>The solution file carries format version {1}, which this build cannot read. It may come from a different UotanStudio version: {0}</value>
+  </data>
+  <data name="Menu_OpenSolutionUnreadable" xml:space="preserve">
+    <value>The solution file is invalid or unreadable: {0}</value>
+  </data>
+  <data name="Menu_OpenNodeProjectUnsupported" xml:space="preserve">
+    <value>A node project of this solution carries workflow format version {1}, which this build cannot read. It may come from a different UotanStudio version: {0}</value>
+  </data>
+  <data name="Menu_OpenNodeProjectUnreadable" xml:space="preserve">
+    <value>A node project of this solution is invalid or unreadable: {0}</value>
+  </data>
+  <data name="Menu_OpenRecent" xml:space="preserve">
+    <value>Open Recent</value>
+  </data>
+  <data name="Menu_Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Menu_SaveAs" xml:space="preserve">
+    <value>Save As...</value>
+  </data>
+  <data name="Menu_NewNodeProject" xml:space="preserve">
+    <value>New Node Project</value>
+  </data>
+  <data name="Menu_CreateNodeProjectNoProject" xml:space="preserve">
+    <value>Open a solution before creating a node project.</value>
+  </data>
+  <data name="Menu_ImportImage" xml:space="preserve">
+    <value>Import Image...</value>
+  </data>
+  <data name="Menu_ExportImage" xml:space="preserve">
+    <value>Export Image...</value>
+  </data>
+  <data name="Menu_Export" xml:space="preserve">
+    <value>Export...</value>
+  </data>
+  <data name="Menu_Exit" xml:space="preserve">
+    <value>Exit</value>
+  </data>
+  <data name="Menu_MacServices" xml:space="preserve">
+    <value>Services</value>
+  </data>
+  <data name="Menu_MacHide" xml:space="preserve">
+    <value>Hide UotanStudio</value>
+  </data>
+  <data name="Menu_MacHideOthers" xml:space="preserve">
+    <value>Hide Others</value>
+  </data>
+  <data name="Menu_MacShowAll" xml:space="preserve">
+    <value>Show All</value>
+  </data>
+  <data name="Menu_MacQuit" xml:space="preserve">
+    <value>Quit UotanStudio</value>
+  </data>
+  <data name="Menu_Undo" xml:space="preserve">
+    <value>Undo</value>
+  </data>
+  <data name="Menu_Redo" xml:space="preserve">
+    <value>Redo</value>
+  </data>
+  <data name="Menu_Cut" xml:space="preserve">
+    <value>Cut</value>
+  </data>
+  <data name="Menu_Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="Menu_Paste" xml:space="preserve">
+    <value>Paste</value>
+  </data>
+  <data name="Menu_Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Menu_SelectAll" xml:space="preserve">
+    <value>Select All</value>
+  </data>
+  <data name="Menu_Preferences" xml:space="preserve">
+    <value>Preferences...</value>
+  </data>
+  <data name="Menu_Workspace" xml:space="preserve">
+    <value>Workspace</value>
+  </data>
+  <data name="Menu_NodeEditor" xml:space="preserve">
+    <value>Node Editor</value>
+  </data>
+  <data name="Menu_Settings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Menu_ToggleMinimap" xml:space="preserve">
+    <value>Toggle Minimap</value>
+  </data>
+  <data name="Menu_ZoomIn" xml:space="preserve">
+    <value>Zoom In</value>
+  </data>
+  <data name="Menu_ZoomOut" xml:space="preserve">
+    <value>Zoom Out</value>
+  </data>
+  <data name="Menu_ResetZoom" xml:space="preserve">
+    <value>Reset Zoom</value>
+  </data>
+  <data name="Menu_RunWorkflow" xml:space="preserve">
+    <value>Run Workflow</value>
+  </data>
+  <data name="Menu_StopWorkflow" xml:space="preserve">
+    <value>Stop Workflow</value>
+  </data>
+  <data name="Menu_Window" xml:space="preserve">
+    <value>Window</value>
+  </data>
+  <data name="Menu_WindowProjectExplorer" xml:space="preserve">
+    <value>Project Explorer</value>
+  </data>
+  <data name="Menu_WindowProjectSetting" xml:space="preserve">
+    <value>Packing Settings</value>
+  </data>
+  <data name="Menu_WindowPlugins" xml:space="preserve">
+    <value>Plugins</value>
+  </data>
+  <data name="Menu_WindowImages" xml:space="preserve">
+    <value>Images</value>
+  </data>
+  <data name="Menu_WindowProperties" xml:space="preserve">
+    <value>Properties</value>
+  </data>
+  <data name="Menu_WindowWorkspaceLog" xml:space="preserve">
+    <value>Output</value>
+  </data>
+  <data name="Menu_WindowAdbLog" xml:space="preserve">
+    <value>Device logs</value>
+  </data>
+  <data name="Menu_WindowTerminal" xml:space="preserve">
+    <value>Terminal</value>
+  </data>
+  <data name="Menu_FlashTools" xml:space="preserve">
+    <value>Flash Tools</value>
+  </data>
+  <data name="Menu_FirmwareTools" xml:space="preserve">
+    <value>Firmware Tools</value>
+  </data>
+  <data name="Menu_DeviceManager" xml:space="preserve">
+    <value>Device Manager</value>
+  </data>
+  <data name="Menu_LogWindow" xml:space="preserve">
+    <value>Log Window</value>
+  </data>
+  <data name="Menu_UsbTreeWindow" xml:space="preserve">
+    <value>USB Tree View</value>
+  </data>
+  <data name="Tab_Device" xml:space="preserve">
+    <value>Device</value>
+  </data>
+  <data name="Menu_About" xml:space="preserve">
+    <value>About UotanStudio</value>
+  </data>
+  <data name="Menu_Documentation" xml:space="preserve">
+    <value>Documentation</value>
+  </data>
+  <data name="Menu_ReportIssue" xml:space="preserve">
+    <value>Report an Issue</value>
+  </data>
+  <data name="About_Version" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="About_Title" xml:space="preserve">
+    <value>About UotanStudio</value>
+  </data>
+  <data name="About_Description" xml:space="preserve">
+    <value>An integrated toolbox for firmware unpack/pack, board flashing and visual programming.</value>
+  </data>
+  <data name="About_FontNotice" xml:space="preserve">
+    <value>This interface uses MiSans fonts. Copyright Xiaomi Inc.</value>
+  </data>
+  <data name="About_Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="About_OpenSource" xml:space="preserve">
+    <value>Open Source Projects</value>
+  </data>
+  <data name="About_OpenRepository" xml:space="preserve">
+    <value>Repository</value>
+  </data>
+  <data name="About_OpenSourceNotice" xml:space="preserve">
+    <value>This software uses or references the following open-source projects, each governed by its own license. Most use permissive licenses (MIT / Apache-2.0, etc.) and may be used in commercial projects free of charge; LGPL-3.0 components (e.g., LibUsbDotNet) impose certain obligations on distribution (e.g., providing modified source or dynamic linking). Avalonia is licensed under the MIT License and requires no additional commercial license.</value>
+  </data>
+  <data name="Menu_CompareFiles" xml:space="preserve">
+    <value>Compare Files</value>
+  </data>
+  <data name="Menu_CompareFolders" xml:space="preserve">
+    <value>Compare Folders</value>
+  </data>
+  <data name="Menu_KeyManager" xml:space="preserve">
+    <value>Key manager</value>
+  </data>
+  <data name="Menu_VisualPluginManager" xml:space="preserve">
+    <value>Plugin manager</value>
+  </data>
+  <data name="Menu_ApkSigner" xml:space="preserve">
+    <value>Application signer</value>
+  </data>
+  <data name="Menu_FileChecksum" xml:space="preserve">
+    <value>File Checksum</value>
+  </data>
+  <data name="Menu_BootPatch" xml:space="preserve">
+    <value>Patch Boot</value>
+  </data>
+  <data name="Plugin_Search" xml:space="preserve">
+    <value>Search name, identifier or author</value>
+  </data>
+  <data name="Plugin_Library" xml:space="preserve">
+    <value>Installed packages</value>
+  </data>
+  <data name="Plugin_Import" xml:space="preserve">
+    <value>Import</value>
+  </data>
+  <data name="Plugin_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Plugin_Empty" xml:space="preserve">
+    <value>No visual plugins are installed.</value>
+  </data>
+  <data name="Plugin_SelectHint" xml:space="preserve">
+    <value>Select a package to view its details.</value>
+  </data>
+  <data name="Plugin_Template" xml:space="preserve">
+    <value>Workflow template</value>
+  </data>
+  <data name="Plugin_Composite" xml:space="preserve">
+    <value>Composite node</value>
+  </data>
+  <data name="Plugin_Script" xml:space="preserve">
+    <value>Script node</value>
+  </data>
+  <data name="Plugin_Enabled" xml:space="preserve">
+    <value>Enabled</value>
+  </data>
+  <data name="Plugin_Enable" xml:space="preserve">
+    <value>Enable</value>
+  </data>
+  <data name="Plugin_Disable" xml:space="preserve">
+    <value>Disable</value>
+  </data>
+  <data name="Plugin_UseTemplate" xml:space="preserve">
+    <value>Use template</value>
+  </data>
+  <data name="Plugin_EditGraph" xml:space="preserve">
+    <value>Edit node graph</value>
+  </data>
+  <data name="Plugin_SaveGraph" xml:space="preserve">
+    <value>Save plugin graph</value>
+  </data>
+  <data name="Plugin_Remove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Plugin_RemoveConfirm" xml:space="preserve">
+    <value>Remove “{0}” from installed visual plugins?</value>
+  </data>
+  <data name="Plugin_Id" xml:space="preserve">
+    <value>Identifier</value>
+  </data>
+  <data name="Plugin_Author" xml:space="preserve">
+    <value>Author</value>
+  </data>
+  <data name="Plugin_Platforms" xml:space="preserve">
+    <value>Platforms</value>
+  </data>
+  <data name="Plugin_RequiredNodes" xml:space="preserve">
+    <value>Required nodes</value>
+  </data>
+  <data name="Plugin_Capabilities" xml:space="preserve">
+    <value>Capabilities</value>
+  </data>
+  <data name="Plugin_Diagnostics" xml:space="preserve">
+    <value>Diagnostics</value>
+  </data>
+  <data name="Plugin_Installed" xml:space="preserve">
+    <value>Visual plugin installed</value>
+  </data>
+  <data name="Plugin_Removed" xml:space="preserve">
+    <value>Visual plugin removed</value>
+  </data>
+  <data name="Plugin_TemplateApplied" xml:space="preserve">
+    <value>Template added to the node canvas</value>
+  </data>
+  <data name="Plugin_GraphSaved" xml:space="preserve">
+    <value>Composite-node graph saved</value>
+  </data>
+  <data name="Plugin_EditScript" xml:space="preserve">
+    <value>Edit Lua script</value>
+  </data>
+  <data name="Plugin_SaveScript" xml:space="preserve">
+    <value>Save plugin script</value>
+  </data>
+  <data name="Plugin_ExportScript" xml:space="preserve">
+    <value>Export Lua source…</value>
+  </data>
+  <data name="Plugin_ScriptSaved" xml:space="preserve">
+    <value>Script-node source saved</value>
+  </data>
+  <data name="Plugin_EditorUnavailable" xml:space="preserve">
+    <value>The node editor is not available.</value>
+  </data>
+  <data name="Plugin_OperationFailed" xml:space="preserve">
+    <value>Plugin operation failed: {0}</value>
+  </data>
+  <data name="Keys_Subtitle" xml:space="preserve">
+    <value>Manage device authentication and Payload signing keys across projects.</value>
+  </data>
+  <data name="Keys_Search" xml:space="preserve">
+    <value>Search name, purpose or fingerprint</value>
+  </data>
+  <data name="Keys_Library" xml:space="preserve">
+    <value>My keys</value>
+  </data>
+  <data name="Keys_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Keys_Create" xml:space="preserve">
+    <value>Generate and import</value>
+  </data>
+  <data name="Keys_Name" xml:space="preserve">
+    <value>Key name</value>
+  </data>
+  <data name="Keys_Purpose" xml:space="preserve">
+    <value>Purpose</value>
+  </data>
+  <data name="Keys_Bits" xml:space="preserve">
+    <value>Bits</value>
+  </data>
+  <data name="Keys_Formats" xml:space="preserve">
+    <value>ADB: RSA 2048 · HDC: RSA 4096 · Payload: RSA 2048 / 4096. Private keys stay in your local library. Generating keys does not replace device identities or sign images.</value>
+  </data>
+  <data name="Keys_Generate" xml:space="preserve">
+    <value>Generate key pair</value>
+  </data>
+  <data name="Keys_GenerateCertificate" xml:space="preserve">
+    <value>Generate certificate</value>
+  </data>
+  <data name="Keys_Import" xml:space="preserve">
+    <value>Import private key…</value>
+  </data>
+  <data name="Keys_Password" xml:space="preserve">
+    <value>Import password (optional)</value>
+  </data>
+  <data name="Keys_ApkKey" xml:space="preserve">
+    <value>JAR</value>
+  </data>
+  <data name="Keys_ApkCertificate" xml:space="preserve">
+    <value>APK</value>
+  </data>
+  <data name="Keys_Zip" xml:space="preserve">
+    <value>ZIP</value>
+  </data>
+  <data name="Keys_KeystoreAlias" xml:space="preserve">
+    <value>Keystore alias</value>
+  </data>
+  <data name="Keys_KeystorePassword" xml:space="preserve">
+    <value>Keystore password</value>
+  </data>
+  <data name="Keys_ValidityYears" xml:space="preserve">
+    <value>Validity (years)</value>
+  </data>
+  <data name="Keys_CertificateHolder" xml:space="preserve">
+    <value>Certificate holder</value>
+  </data>
+  <data name="Keys_CommonName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Keys_OrganizationUnit" xml:space="preserve">
+    <value>Organizational unit</value>
+  </data>
+  <data name="Keys_Organization" xml:space="preserve">
+    <value>Organization</value>
+  </data>
+  <data name="Keys_Locality" xml:space="preserve">
+    <value>City or locality</value>
+  </data>
+  <data name="Keys_State" xml:space="preserve">
+    <value>State or province</value>
+  </data>
+  <data name="Keys_CountryCode" xml:space="preserve">
+    <value>Country code</value>
+  </data>
+  <data name="Keys_KeyConfiguration" xml:space="preserve">
+    <value>Key configuration</value>
+  </data>
+  <data name="Keys_Algorithm" xml:space="preserve">
+    <value>Key algorithm</value>
+  </data>
+  <data name="Keys_KeySizeCurve" xml:space="preserve">
+    <value>Key size / curve</value>
+  </data>
+  <data name="Keys_Rsa" xml:space="preserve">
+    <value>RSA</value>
+  </data>
+  <data name="Keys_Ec" xml:space="preserve">
+    <value>EC</value>
+  </data>
+  <data name="Keys_Rsa2048" xml:space="preserve">
+    <value>2048 (RSA)</value>
+  </data>
+  <data name="Keys_Rsa4096" xml:space="preserve">
+    <value>4096 (RSA)</value>
+  </data>
+  <data name="Keys_OutputFormat" xml:space="preserve">
+    <value>Output format</value>
+  </data>
+  <data name="Keys_SelectOutputFormat" xml:space="preserve">
+    <value>Choose certificate formats to generate</value>
+  </data>
+  <data name="Keys_FormatAll" xml:space="preserve">
+    <value>All formats (recommended)</value>
+  </data>
+  <data name="Keys_FormatJks" xml:space="preserve">
+    <value>JKS only (.keystore)</value>
+  </data>
+  <data name="Keys_OutputDirectory" xml:space="preserve">
+    <value>Output directory</value>
+  </data>
+  <data name="Keys_Browse" xml:space="preserve">
+    <value>Browse</value>
+  </data>
+  <data name="Keys_FormatPkcs12" xml:space="preserve">
+    <value>PKCS12 only (.p12)</value>
+  </data>
+  <data name="Keys_FormatPem" xml:space="preserve">
+    <value>PEM only (.key + .crt)</value>
+  </data>
+  <data name="Keys_FormatHint" xml:space="preserve">
+    <value>Generates JKS, PKCS12 and PEM formats for common Android packaging tools.</value>
+  </data>
+  <data name="Keys_Details" xml:space="preserve">
+    <value>Key details</value>
+  </data>
+  <data name="Keys_Empty" xml:space="preserve">
+    <value>Generate, import or select a key to view its details.</value>
+  </data>
+  <data name="Keys_Rename" xml:space="preserve">
+    <value>Rename</value>
+  </data>
+  <data name="Keys_CopyPublic" xml:space="preserve">
+    <value>Copy public key</value>
+  </data>
+  <data name="Keys_ExportPublic" xml:space="preserve">
+    <value>Export public key…</value>
+  </data>
+  <data name="Keys_ExportPair" xml:space="preserve">
+    <value>Export key pair…</value>
+  </data>
+  <data name="Keys_ExportCertificate" xml:space="preserve">
+    <value>Export certificate…</value>
+  </data>
+  <data name="Keys_RemoveHint" xml:space="preserve">
+    <value>Remove from the list; keep files in the library’s .deleted folder</value>
+  </data>
+  <data name="Keys_Remove" xml:space="preserve">
+    <value>Remove key</value>
+  </data>
+  <data name="Keys_New" xml:space="preserve">
+    <value>New key</value>
+  </data>
+  <data name="Keys_Delete" xml:space="preserve">
+    <value>Delete permanently</value>
+  </data>
+  <data name="Keys_DeleteHint" xml:space="preserve">
+    <value>Confirm permanent deletion of the selected key</value>
+  </data>
+  <data name="Keys_DeleteConfirm" xml:space="preserve">
+    <value>Permanently delete the key “{0}”? This cannot be undone. Exported copies are unaffected.</value>
+  </data>
+  <data name="Keys_PayloadSigning" xml:space="preserve">
+    <value>Payload signing key</value>
+  </data>
+  <data name="Keys_ChoosePayload" xml:space="preserve">
+    <value>Choose a Payload key from your library</value>
+  </data>
+  <data name="Keys_ExternalPrivate" xml:space="preserve">
+    <value>Or select an external PEM / DER private key</value>
+  </data>
+  <data name="Keys_Unsigned" xml:space="preserve">
+    <value>Unsigned</value>
+  </data>
+  <data name="Keys_PayloadSigningHint" xml:space="preserve">
+    <value>Signs both metadata and Payload. Import external private keys into the library first.</value>
+  </data>
+  <data name="Keys_ZipSigning" xml:space="preserve">
+    <value>ZIP signing</value>
+  </data>
+  <data name="Keys_ChooseZip" xml:space="preserve">
+    <value>Choose a ZIP key from your library</value>
+  </data>
+  <data name="Keys_SetCurrent" xml:space="preserve">
+    <value>Set as current key</value>
+  </data>
+  <data name="Keys_SetCurrentHint" xml:space="preserve">
+    <value>Write this key to the runtime identity and restart to apply</value>
+  </data>
+  <data name="Keys_CurrentDefault" xml:space="preserve">
+    <value>Default</value>
+  </data>
+  <data name="Keys_InUse" xml:space="preserve">
+    <value>in use</value>
+  </data>
+  <data name="Keys_AlreadyDefault" xml:space="preserve">
+    <value>Already the current default signature</value>
+  </data>
+  <data name="Keys_RestartConfirmTitle" xml:space="preserve">
+    <value>Set current key</value>
+  </data>
+  <data name="Keys_RestartConfirmMessage" xml:space="preserve">
+    <value>Set &apos;{0}&apos; as the current {1} signature? The app will save all state and restart, reopening the previous solution.</value>
+  </data>
+  <data name="Keys_DefaultSaveFailed" xml:space="preserve">
+    <value>Failed to save the default key setting.</value>
+  </data>
+  <data name="Keys_DefaultAutoName" xml:space="preserve">
+    <value>Default ADB key</value>
+  </data>
+  <data name="Keys_DefaultAutoNameHdc" xml:space="preserve">
+    <value>Default HDC key</value>
+  </data>
+</root>

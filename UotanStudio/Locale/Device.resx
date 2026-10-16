@@ -1,0 +1,672 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>  <data name="Device_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Device_Connect" xml:space="preserve">
+    <value>Connect</value>
+  </data>
+  <data name="Device_Disconnect" xml:space="preserve">
+    <value>Disconnect</value>
+  </data>
+  <data name="Device_RemoteConnection" xml:space="preserve">
+    <value>Remote Device</value>
+  </data>
+  <data name="Device_RemoteProtocol" xml:space="preserve">
+    <value>Connection protocol</value>
+  </data>
+  <data name="Device_RemoteAddress" xml:space="preserve">
+    <value>Device host (port optional, default 5555)</value>
+  </data>
+  <data name="Device_RemoteConnect" xml:space="preserve">
+    <value>Connect remote device</value>
+  </data>
+  <data name="Device_RemoteCancel" xml:space="preserve">
+    <value>Cancel connection operation</value>
+  </data>
+  <data name="Device_RemoteInvalidAddress" xml:space="preserve">
+    <value>Use host:port, IPv4:port or [IPv6]:port with a port from 1 to 65535. HDC addresses must be shorter than 32 bytes.</value>
+  </data>
+  <data name="Device_RemoteConnecting" xml:space="preserve">
+    <value>Connecting to {0}...</value>
+  </data>
+  <data name="Device_RemoteDisconnecting" xml:space="preserve">
+    <value>Disconnecting {0}...</value>
+  </data>
+  <data name="Device_RemoteConnected" xml:space="preserve">
+    <value>Server connected to {0}.</value>
+  </data>
+  <data name="Device_RemoteDisconnected" xml:space="preserve">
+    <value>Server disconnected {0}.</value>
+  </data>
+  <data name="Device_RemoteCanceled" xml:space="preserve">
+    <value>Stopped waiting for the result. Refresh to check the device state.</value>
+  </data>
+  <data name="Device_RemoteFailed" xml:space="preserve">
+    <value>Connection operation for {0} failed. Check the log.</value>
+  </data>
+  <data name="Device_QrPair" xml:space="preserve">
+    <value>Pair wireless debugging via QR code</value>
+  </data>
+  <data name="Device_QrPairTitle" xml:space="preserve">
+    <value>QR Code Wireless Pairing</value>
+  </data>
+  <data name="Device_QrPairGuide" xml:space="preserve">
+    <value>On the phone, open Settings → Developer options → Wireless debugging → &quot;Pair device with QR code&quot;, then scan the code below. The phone and this computer must be on the same network.</value>
+  </data>
+  <data name="Device_QrPairWaiting" xml:space="preserve">
+    <value>Waiting for the phone to scan the QR code...</value>
+  </data>
+  <data name="Device_QrPairPairing" xml:space="preserve">
+    <value>Found {0}. Pairing...</value>
+  </data>
+  <data name="Device_QrPairConnecting" xml:space="preserve">
+    <value>Paired. Connecting to {0}...</value>
+  </data>
+  <data name="Device_QrPairDone" xml:space="preserve">
+    <value>Connected to {0}.</value>
+  </data>
+  <data name="Device_QrPairFailed" xml:space="preserve">
+    <value>Pairing failed: {0}</value>
+  </data>
+  <data name="Device_QrPairCanceled" xml:space="preserve">
+    <value>QR pairing canceled. A new QR code is shown each time.</value>
+  </data>
+  <data name="Device_QrPairManualNeeded" xml:space="preserve">
+    <value>Paired successfully, but no connect port broadcast was found for {0}. Some phones do not advertise it; enter the port manually below.</value>
+  </data>
+  <data name="Device_QrPairManualGuide" xml:space="preserve">
+    <value>On the phone, open Wireless debugging → &quot;IP address &amp; port&quot; and enter the port shown:</value>
+  </data>
+  <data name="Device_QrPairManualPortHint" xml:space="preserve">
+    <value>Port, e.g. 37177</value>
+  </data>
+  <data name="Device_QrPairManualConnect" xml:space="preserve">
+    <value>Connect</value>
+  </data>
+  <data name="Device_QrPairManualInvalidPort" xml:space="preserve">
+    <value>Enter a port between 1 and 65535.</value>
+  </data>
+  <data name="Device_RefreshFailed" xml:space="preserve">
+    <value>Device refresh failed. Check the log.</value>
+  </data>
+  <data name="Device_NoDevices" xml:space="preserve">
+    <value>No devices detected.</value>
+  </data>
+  <data name="Device_Select" xml:space="preserve">
+    <value>Select device</value>
+  </data>
+  <data name="Device_Scanning" xml:space="preserve">
+    <value>Scanning for devices...</value>
+  </data>
+  <data name="Device_Reboot" xml:space="preserve">
+    <value>Reboot</value>
+  </data>
+  <data name="Device_RebootSystem" xml:space="preserve">
+    <value>Reboot to System</value>
+  </data>
+  <data name="Device_RebootBootloader" xml:space="preserve">
+    <value>Reboot to Bootloader</value>
+  </data>
+  <data name="Device_RebootFastbootd" xml:space="preserve">
+    <value>Reboot to Fastbootd</value>
+  </data>
+  <data name="Device_RebootRecovery" xml:space="preserve">
+    <value>Reboot to Recovery</value>
+  </data>
+  <data name="Device_RebootEdl" xml:space="preserve">
+    <value>Reboot to EDL</value>
+  </data>
+  <data name="Device_DeviceCount" xml:space="preserve">
+    <value> device(s) found.</value>
+  </data>
+  <data name="Device_Detail" xml:space="preserve">
+    <value>Device Detail</value>
+  </data>
+  <data name="Device_Connecting" xml:space="preserve">
+    <value>Connecting...</value>
+  </data>
+  <data name="Device_Reconnecting" xml:space="preserve">
+    <value>Reconnecting...</value>
+  </data>
+  <data name="Device_GroupAdb" xml:space="preserve">
+    <value>ADB Devices</value>
+  </data>
+  <data name="Device_GroupFastboot" xml:space="preserve">
+    <value>Fastboot Devices</value>
+  </data>
+  <data name="Device_GroupEdl" xml:space="preserve">
+    <value>EDL Devices</value>
+  </data>
+  <data name="Device_GroupRkdl" xml:space="preserve">
+    <value>RKDL Devices</value>
+  </data>
+  <data name="Device_EmptyHint" xml:space="preserve">
+    <value>Click Refresh to scan connected devices.</value>
+  </data>
+  <data name="Device_OpenAdbShell" xml:space="preserve">
+    <value>Open device Shell</value>
+  </data>
+  <data name="Device_ScreenMirror" xml:space="preserve">
+    <value>Screen Mirror (scrcpy)</value>
+  </data>
+  <data name="Device_FastbootReadInfo" xml:space="preserve">
+    <value>Read Fastboot Device Info</value>
+  </data>
+  <data name="Device_QuickFlash" xml:space="preserve">
+    <value>Quick Flash to boot Partition</value>
+  </data>
+  <data name="Device_DetailPlaceholder" xml:space="preserve">
+    <value>Select a device to view details</value>
+  </data>
+  <data name="Device_List" xml:space="preserve">
+    <value>Devices</value>
+  </data>
+  <data name="Device_DeviceInfo" xml:space="preserve">
+    <value>Device Information</value>
+  </data>
+  <data name="Device_FastbootInfo" xml:space="preserve">
+    <value>Fastboot Mode Information</value>
+  </data>
+  <data name="Device_EdlInfo" xml:space="preserve">
+    <value>EDL Mode Information</value>
+  </data>
+  <data name="Device_EdlProtocol" xml:space="preserve">
+    <value>Device protocol state</value>
+  </data>
+  <data name="Device_ProtocolUnknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="Device_EdlSaharaVersion" xml:space="preserve">
+    <value>Sahara protocol version</value>
+  </data>
+  <data name="Device_EdlMaxCommandLength" xml:space="preserve">
+    <value>Sahara max command length</value>
+  </data>
+  <data name="Device_EdlFirehoseVersion" xml:space="preserve">
+    <value>Firehose version</value>
+  </data>
+  <data name="Device_EdlProgrammer" xml:space="preserve">
+    <value>Programmer</value>
+  </data>
+  <data name="Device_EdlStorageType" xml:space="preserve">
+    <value>Storage type</value>
+  </data>
+  <data name="Device_EdlStorageSerial" xml:space="preserve">
+    <value>Storage serial number</value>
+  </data>
+  <data name="Device_EdlStorageFirmware" xml:space="preserve">
+    <value>Storage firmware version</value>
+  </data>
+  <data name="Device_EdlStorageManufacturer" xml:space="preserve">
+    <value>Storage manufacturer ID</value>
+  </data>
+  <data name="Device_EdlPageSize" xml:space="preserve">
+    <value>Storage page size</value>
+  </data>
+  <data name="Device_EdlSectorSize" xml:space="preserve">
+    <value>Storage block size</value>
+  </data>
+  <data name="Device_EdlCapacity" xml:space="preserve">
+    <value>Storage capacity</value>
+  </data>
+  <data name="Device_EdlMaxPayload" xml:space="preserve">
+    <value>Firehose max payload</value>
+  </data>
+  <data name="Device_TransportSerial" xml:space="preserve">
+    <value>Serial</value>
+  </data>
+  <data name="Device_RkdlInfo" xml:space="preserve">
+    <value>RKDL Mode Information</value>
+  </data>
+  <data name="Device_MtkInfo" xml:space="preserve">
+    <value>MTK Mode Information</value>
+  </data>
+  <data name="Device_MtkHardware" xml:space="preserve">
+    <value>Hardware code</value>
+  </data>
+  <data name="Device_MtkFirmware" xml:space="preserve">
+    <value>HW/SW version</value>
+  </data>
+  <data name="Device_MtkSecurityBits" xml:space="preserve">
+    <value>Security bits SBC/SLA/DAA/CERT</value>
+  </data>
+  <data name="Device_MtkBootLoaderVersion" xml:space="preserve">
+    <value>Bootloader version</value>
+  </data>
+  <data name="Device_MtkBootRomVersion" xml:space="preserve">
+    <value>Boot ROM version</value>
+  </data>
+  <data name="Device_MtkMeid" xml:space="preserve">
+    <value>MEID</value>
+  </data>
+  <data name="Device_MtkSocid" xml:space="preserve">
+    <value>SOCID</value>
+  </data>
+  <data name="Device_MtkInfoUnknown" xml:space="preserve">
+    <value>Boot ROM identity not available yet.</value>
+  </data>
+  <data name="Device_Serial" xml:space="preserve">
+    <value>Serial</value>
+  </data>
+  <data name="Device_Model" xml:space="preserve">
+    <value>Model</value>
+  </data>
+  <data name="Device_AndroidVersion" xml:space="preserve">
+    <value>System Version</value>
+  </data>
+  <data name="Device_State" xml:space="preserve">
+    <value>State</value>
+  </data>
+  <data name="Device_Transport" xml:space="preserve">
+    <value>Transport</value>
+  </data>
+  <data name="Device_LinkPort" xml:space="preserve">
+    <value>Link Port</value>
+  </data>
+  <data name="Device_UsbIds" xml:space="preserve">
+    <value>Vendor/Product ID</value>
+  </data>
+  <data name="Device_Vendor" xml:space="preserve">
+    <value>Vendor</value>
+  </data>
+  <data name="Device_Brand" xml:space="preserve">
+    <value>Brand</value>
+  </data>
+  <data name="Device_Codename" xml:space="preserve">
+    <value>Codename</value>
+  </data>
+  <data name="Device_SuAccess" xml:space="preserve">
+    <value>SU access</value>
+  </data>
+  <data name="Device_SdkVersion" xml:space="preserve">
+    <value>Android SDK</value>
+  </data>
+  <data name="Device_CpuAbi" xml:space="preserve">
+    <value>CPU ABI</value>
+  </data>
+  <data name="Device_CpuCode" xml:space="preserve">
+    <value>SoC Platform</value>
+  </data>
+  <data name="Device_Kernel" xml:space="preserve">
+    <value>Kernel Version</value>
+  </data>
+  <data name="Device_Resolution" xml:space="preserve">
+    <value>Resolution</value>
+  </data>
+  <data name="Device_Density" xml:space="preserve">
+    <value>Density</value>
+  </data>
+  <data name="Device_BoardId" xml:space="preserve">
+    <value>Board Serial</value>
+  </data>
+  <data name="Device_BlStatus" xml:space="preserve">
+    <value>Bootloader Status</value>
+  </data>
+  <data name="Device_Slot" xml:space="preserve">
+    <value>Current Slot</value>
+  </data>
+  <data name="Device_CompileVersion" xml:space="preserve">
+    <value>Build Version</value>
+  </data>
+  <data name="Device_VndkVersion" xml:space="preserve">
+    <value>VNDK Version</value>
+  </data>
+  <data name="Device_PowerOnTime" xml:space="preserve">
+    <value>Power-On Time</value>
+  </data>
+  <data name="Device_DiskType" xml:space="preserve">
+    <value>Storage Type</value>
+  </data>
+  <data name="Device_Userspace" xml:space="preserve">
+    <value>Fastboot Mode</value>
+  </data>
+  <data name="Device_Battery" xml:space="preserve">
+    <value>Battery</value>
+  </data>
+  <data name="Device_Memory" xml:space="preserve">
+    <value>Memory</value>
+  </data>
+  <data name="Device_Storage" xml:space="preserve">
+    <value>Storage</value>
+  </data>
+  <data name="Device_Unlocked" xml:space="preserve">
+    <value>Unlocked</value>
+  </data>
+  <data name="Device_Locked" xml:space="preserve">
+    <value>Locked</value>
+  </data>
+  <data name="Device_UptimeDay" xml:space="preserve">
+    <value> d </value>
+  </data>
+  <data name="Device_UptimeHour" xml:space="preserve">
+    <value>h </value>
+  </data>
+  <data name="Device_UptimeMinute" xml:space="preserve">
+    <value>m </value>
+  </data>
+  <data name="Device_UptimeSecond" xml:space="preserve">
+    <value>s</value>
+  </data>
+  <data name="Device_SystemOverview" xml:space="preserve">
+    <value>System Information</value>
+  </data>
+  <data name="Device_ResourceOverview" xml:space="preserve">
+    <value>Resource Usage</value>
+  </data>
+  <data name="Flash_Flash" xml:space="preserve">
+    <value>Flash</value>
+  </data>
+  <data name="Flash_FlashCard" xml:space="preserve">
+    <value>Flash Partition</value>
+  </data>
+  <data name="Flash_PartitionHint" xml:space="preserve">
+    <value>e.g. boot</value>
+  </data>
+  <data name="Flash_ImagePath" xml:space="preserve">
+    <value>Image path</value>
+  </data>
+  <data name="Flash_ImagePathHint" xml:space="preserve">
+    <value>Path to the image file</value>
+  </data>
+  <data name="Flash_Flashing" xml:space="preserve">
+    <value>Flashing</value>
+  </data>
+  <data name="Flash_Done" xml:space="preserve">
+    <value>Flash done</value>
+  </data>
+  <data name="Flash_Failed" xml:space="preserve">
+    <value>Flash failed</value>
+  </data>
+  <data name="Flash_Canceled" xml:space="preserve">
+    <value>Flash canceled</value>
+  </data>
+  <data name="Device_BackupPartition" xml:space="preserve">
+    <value>Backup Partition</value>
+  </data>
+  <data name="Device_RestorePartition" xml:space="preserve">
+    <value>Restore Partition</value>
+  </data>
+  <data name="Backup_SaveTitle" xml:space="preserve">
+    <value>Save Partition Backup</value>
+  </data>
+  <data name="Backup_OpenTitle" xml:space="preserve">
+    <value>Select Partition Image</value>
+  </data>
+  <data name="Backup_BackingUp" xml:space="preserve">
+    <value>Backing up</value>
+  </data>
+  <data name="Backup_Restoring" xml:space="preserve">
+    <value>Restoring</value>
+  </data>
+  <data name="Backup_Done" xml:space="preserve">
+    <value>Backup done</value>
+  </data>
+  <data name="Backup_RestoreDone" xml:space="preserve">
+    <value>Restore done</value>
+  </data>
+  <data name="Backup_Failed" xml:space="preserve">
+    <value>Backup failed</value>
+  </data>
+  <data name="Backup_RestoreFailed" xml:space="preserve">
+    <value>Restore failed</value>
+  </data>
+  <data name="Backup_SelectRawProgram" xml:space="preserve">
+    <value>Select rawprogram XML (partition geometry)</value>
+  </data>
+  <data name="Device_HdcSend" xml:space="preserve">
+    <value>Send file (HDC)</value>
+  </data>
+  <data name="Device_HdcReceive" xml:space="preserve">
+    <value>Receive file (HDC)</value>
+  </data>
+  <data name="Device_HdcInstall" xml:space="preserve">
+    <value>Install application (HDC)</value>
+  </data>
+  <data name="Device_HdcUninstall" xml:space="preserve">
+    <value>Uninstall application (HDC)</value>
+  </data>
+  <data name="Device_HdcRemotePath" xml:space="preserve">
+    <value>Device file path</value>
+  </data>
+  <data name="Device_HdcBundleName" xml:space="preserve">
+    <value>Application bundle name</value>
+  </data>
+  <data name="Device_HdcCancel" xml:space="preserve">
+    <value>Cancel HDC task</value>
+  </data>
+  <data name="Device_HdcCancelled" xml:space="preserve">
+    <value>HDC task cancelled</value>
+  </data>
+  <data name="UsbTree_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="UsbTree_Backend" xml:space="preserve">
+    <value>Backend</value>
+  </data>
+  <data name="UsbTree_BackendAuto" xml:space="preserve">
+    <value>Automatic</value>
+  </data>
+  <data name="UsbTree_BackendAutoDescription" xml:space="preserve">
+    <value>Prefers the platform-native backend and falls back to libusb when needed.</value>
+  </data>
+  <data name="UsbTree_OnlyAndroid" xml:space="preserve">
+    <value>Android related only</value>
+  </data>
+  <data name="UsbTree_ExpandAll" xml:space="preserve">
+    <value>Expand all</value>
+  </data>
+  <data name="UsbTree_CollapseAll" xml:space="preserve">
+    <value>Collapse all</value>
+  </data>
+  <data name="UsbTree_CopyText" xml:space="preserve">
+    <value>Copy as text</value>
+  </data>
+  <data name="UsbTree_NothingToCopy" xml:space="preserve">
+    <value>No topology has been read yet, so there is nothing to copy.</value>
+  </data>
+  <data name="UsbTree_CopyFailed" xml:space="preserve">
+    <value>Copying to the clipboard failed. Check the log.</value>
+  </data>
+  <data name="UsbTree_NoBackend" xml:space="preserve">
+    <value>No USB topology backend is available on this platform.</value>
+  </data>
+  <data name="UsbTree_Ready" xml:space="preserve">
+    <value>No topology read yet. Choose Refresh.</value>
+  </data>
+  <data name="UsbTree_Reading" xml:space="preserve">
+    <value>Reading the USB topology...</value>
+  </data>
+  <data name="UsbTree_ReadFailed" xml:space="preserve">
+    <value>The topology read failed. Check the log.</value>
+  </data>
+  <data name="UsbTree_BackendUnavailable" xml:space="preserve">
+    <value>The selected backend is unavailable and returned no topology.</value>
+  </data>
+  <data name="UsbTree_NodeCount" xml:space="preserve">
+    <value>{0} nodes</value>
+  </data>
+  <data name="UsbTree_Elapsed" xml:space="preserve">
+    <value>{0} ms elapsed</value>
+  </data>
+  <data name="UsbTree_DetailTitle" xml:space="preserve">
+    <value>Node details</value>
+  </data>
+  <data name="UsbTree_NoSelection" xml:space="preserve">
+    <value>Select a node on the left to see its details.</value>
+  </data>
+  <data name="UsbTree_None" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="UsbTree_NotProvided" xml:space="preserve">
+    <value>Not provided by this backend</value>
+  </data>
+  <data name="UsbTree_AdbInterfaceMissing" xml:space="preserve">
+    <value>This interface does not register the ADB interface class GUID, so a debug bridge cannot attach.</value>
+  </data>
+  <data name="UsbTree_Kind_HostController" xml:space="preserve">
+    <value>Host controller</value>
+  </data>
+  <data name="UsbTree_Kind_RootHub" xml:space="preserve">
+    <value>Root hub</value>
+  </data>
+  <data name="UsbTree_Kind_Hub" xml:space="preserve">
+    <value>Hub</value>
+  </data>
+  <data name="UsbTree_Kind_Device" xml:space="preserve">
+    <value>Device</value>
+  </data>
+  <data name="UsbTree_Kind_Function" xml:space="preserve">
+    <value>Interface function</value>
+  </data>
+  <data name="UsbTree_Kind_Unknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="UsbTree_Speed_Unknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="UsbTree_Speed_Low" xml:space="preserve">
+    <value>Low speed</value>
+  </data>
+  <data name="UsbTree_Speed_Full" xml:space="preserve">
+    <value>Full speed</value>
+  </data>
+  <data name="UsbTree_Speed_High" xml:space="preserve">
+    <value>High speed</value>
+  </data>
+  <data name="UsbTree_Speed_Super" xml:space="preserve">
+    <value>SuperSpeed</value>
+  </data>
+  <data name="UsbTree_Speed_SuperPlus" xml:space="preserve">
+    <value>SuperSpeed Plus</value>
+  </data>
+  <data name="UsbTree_CapDriver_Yes" xml:space="preserve">
+    <value>Reports driver info</value>
+  </data>
+  <data name="UsbTree_CapDriver_No" xml:space="preserve">
+    <value>No driver info</value>
+  </data>
+  <data name="UsbTree_CapInterfaces_Yes" xml:space="preserve">
+    <value>Reports interface nodes</value>
+  </data>
+  <data name="UsbTree_CapInterfaces_No" xml:space="preserve">
+    <value>No interface nodes</value>
+  </data>
+  <data name="UsbTree_CapHost_Yes" xml:space="preserve">
+    <value>Reports host controllers and root hubs</value>
+  </data>
+  <data name="UsbTree_CapHost_No" xml:space="preserve">
+    <value>No host controllers or root hubs</value>
+  </data>
+  <data name="UsbTree_CapGuids_Yes" xml:space="preserve">
+    <value>Reports device-interface GUIDs</value>
+  </data>
+  <data name="UsbTree_CapGuids_No" xml:space="preserve">
+    <value>No device-interface GUIDs</value>
+  </data>
+  <data name="UsbTree_Detail_InstanceId" xml:space="preserve">
+    <value>Instance id</value>
+  </data>
+  <data name="UsbTree_Detail_Parent" xml:space="preserve">
+    <value>Parent</value>
+  </data>
+  <data name="UsbTree_Detail_Kind" xml:space="preserve">
+    <value>Role</value>
+  </data>
+  <data name="UsbTree_Detail_Vendor" xml:space="preserve">
+    <value>Vendor</value>
+  </data>
+  <data name="UsbTree_Detail_Speed" xml:space="preserve">
+    <value>Speed</value>
+  </data>
+  <data name="UsbTree_Detail_Class" xml:space="preserve">
+    <value>Class</value>
+  </data>
+  <data name="UsbTree_Detail_ClassGuid" xml:space="preserve">
+    <value>Class GUID</value>
+  </data>
+  <data name="UsbTree_Detail_DriverService" xml:space="preserve">
+    <value>Driver service</value>
+  </data>
+  <data name="UsbTree_Detail_DriverInf" xml:space="preserve">
+    <value>Driver INF</value>
+  </data>
+  <data name="UsbTree_Detail_Interface" xml:space="preserve">
+    <value>Interface triple</value>
+  </data>
+  <data name="UsbTree_Detail_Problem" xml:space="preserve">
+    <value>Problem code</value>
+  </data>
+  <data name="UsbTree_Detail_Container" xml:space="preserve">
+    <value>Container ID</value>
+  </data>
+  <data name="UsbTree_Detail_Location" xml:space="preserve">
+    <value>Location paths</value>
+  </data>
+  <data name="UsbTree_Detail_HardwareIds" xml:space="preserve">
+    <value>Hardware IDs</value>
+  </data>
+  <data name="UsbTree_Detail_CompatibleIds" xml:space="preserve">
+    <value>Compatible IDs</value>
+  </data>
+  <data name="UsbTree_Detail_InterfaceGuids" xml:space="preserve">
+    <value>Device-interface GUIDs</value>
+  </data>
+</root>

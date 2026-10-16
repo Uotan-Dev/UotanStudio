@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>  <data name="Settings_General" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="Settings_Firmware" xml:space="preserve">
+    <value>Firmware Tools</value>
+  </data>
+  <data name="Settings_FirmwareParallelism" xml:space="preserve">
+    <value>Parallel workers</value>
+  </data>
+  <data name="Settings_FirmwareParallelismHint" xml:space="preserve">
+    <value>Default: detected physical core count. Range: 1-64. Applies to new firmware packing and extraction tasks that support parallel processing. More workers generally use more memory.</value>
+  </data>
+  <data name="Settings_ErofsRebuildOptimization" xml:space="preserve">
+    <value>EROFS rebuild search</value>
+  </data>
+  <data name="Settings_ErofsRebuildOptimizationHint" xml:space="preserve">
+    <value>Records bounded compression candidate estimates while extracting, then rebuilds a preserved EROFS image up to three times to keep the smallest candidate. Off by default. Re-extract an image before its rebuild can use the search, and rebuilds that carry packing overrides skip the preserved path entirely, so this toggle has no effect on them.</value>
+  </data>
+  <data name="Settings_Flash" xml:space="preserve">
+    <value>Flash</value>
+  </data>
+  <data name="Settings_NodeEditor" xml:space="preserve">
+    <value>Node Editor</value>
+  </data>
+  <data name="Settings_Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="Settings_Theme" xml:space="preserve">
+    <value>Theme</value>
+  </data>
+  <data name="Settings_ThemeDefault" xml:space="preserve">
+    <value>Follow System</value>
+  </data>
+  <data name="Settings_ThemeLight" xml:space="preserve">
+    <value>Light</value>
+  </data>
+  <data name="Settings_ThemeDark" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="Settings_AutoSave" xml:space="preserve">
+    <value>Auto Save</value>
+  </data>
+  <data name="Settings_DebugMode" xml:space="preserve">
+    <value>Debug Mode</value>
+  </data>
+  <data name="Settings_UnpackToolPath" xml:space="preserve">
+    <value>Unpack Tool Path</value>
+  </data>
+  <data name="Settings_TempDir" xml:space="preserve">
+    <value>Temp Directory</value>
+  </data>
+  <data name="Settings_AutoVerify" xml:space="preserve">
+    <value>Auto Verify After Unpack</value>
+  </data>
+  <data name="Settings_PathPlaceholder" xml:space="preserve">
+    <value>Enter path...</value>
+  </data>
+  <data name="Settings_DeviceTimeout" xml:space="preserve">
+    <value>Device Timeout</value>
+  </data>
+  <data name="Settings_AutoBackup" xml:space="preserve">
+    <value>Auto Backup Before Flash</value>
+  </data>
+  <data name="Settings_SnapToGrid" xml:space="preserve">
+    <value>Snap to Grid</value>
+  </data>
+  <data name="Settings_GridSize" xml:space="preserve">
+    <value>Grid Size</value>
+  </data>
+  <data name="Settings_ConnectionStyle" xml:space="preserve">
+    <value>Connection Style</value>
+  </data>
+  <data name="Settings_ConnBezier" xml:space="preserve">
+    <value>Bezier</value>
+  </data>
+  <data name="Settings_ConnLine" xml:space="preserve">
+    <value>Line</value>
+  </data>
+  <data name="Settings_ConnStep" xml:space="preserve">
+    <value>Step</value>
+  </data>
+  <data name="Settings_Appearance" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="Settings_ThemePreview" xml:space="preserve">
+    <value>Theme Preview</value>
+  </data>
+  <data name="Settings_LanguageAutoDetect" xml:space="preserve">
+    <value>Auto Detect</value>
+  </data>
+  <data name="Settings_LanguagePreview" xml:space="preserve">
+    <value>Language Preview</value>
+  </data>
+  <data name="Settings_LanguagePreviewText" xml:space="preserve">
+    <value>This is a preview of the selected language.</value>
+  </data>
+  <data name="Settings_VersionInfo" xml:space="preserve">
+    <value>Version Information</value>
+  </data>
+  <data name="Settings_FirmwareModule" xml:space="preserve">
+    <value>Firmware Unpack Module</value>
+  </data>
+  <data name="Settings_FlashModule" xml:space="preserve">
+    <value>Board Flash Module</value>
+  </data>
+  <data name="Settings_VisualProgrammingModule" xml:space="preserve">
+    <value>Visual Programming Module</value>
+  </data>
+  <data name="Settings_Version" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="Settings_CheckForUpdates" xml:space="preserve">
+    <value>Check for Updates</value>
+  </data>
+  <data name="Settings_CheckingUpdates" xml:space="preserve">
+    <value>Checking...</value>
+  </data>
+  <data name="Settings_UpToDate" xml:space="preserve">
+    <value>Already up to date</value>
+  </data>
+  <data name="Settings_UpdateAvailable" xml:space="preserve">
+    <value>Update available</value>
+  </data>
+  <data name="Settings_UpdateCheckFailed" xml:space="preserve">
+    <value>Update check failed</value>
+  </data>
+  <data name="Settings_ResetToDefaults" xml:space="preserve">
+    <value>Reset to Defaults</value>
+  </data>
+  <data name="Settings_ResetConfirm" xml:space="preserve">
+    <value>Are you sure you want to reset all settings to defaults?</value>
+  </data>
+  <data name="Settings_SettingsSaved" xml:space="preserve">
+    <value>Settings saved</value>
+  </data>
+  <data name="Settings_SaveFailed" xml:space="preserve">
+    <value>Could not save settings: {0}</value>
+  </data>
+  <data name="Settings_ThemeFollowSystem" xml:space="preserve">
+    <value>Follow System</value>
+  </data>
+  <data name="Settings_ThemeLightMode" xml:space="preserve">
+    <value>Light Mode</value>
+  </data>
+  <data name="Settings_ThemeDarkMode" xml:space="preserve">
+    <value>Dark Mode</value>
+  </data>
+  <data name="Settings_AutoDetect" xml:space="preserve">
+    <value>Auto Detect</value>
+  </data>
+  <data name="Settings_AdbPath" xml:space="preserve">
+    <value>ADB Path</value>
+  </data>
+  <data name="Settings_FastbootPath" xml:space="preserve">
+    <value>Fastboot Path</value>
+  </data>
+  <data name="Settings_Mcp" xml:space="preserve">
+    <value>MCP</value>
+  </data>
+  <data name="Settings_McpHint" xml:space="preserve">
+    <value>Maintain MCP server connections and the local exposure port here; values are written to the application settings when saved.</value>
+  </data>
+  <data name="Settings_McpServerName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Settings_McpTransport" xml:space="preserve">
+    <value>Transport</value>
+  </data>
+  <data name="Settings_McpCommand" xml:space="preserve">
+    <value>Command</value>
+  </data>
+  <data name="Settings_McpArguments" xml:space="preserve">
+    <value>Arguments</value>
+  </data>
+  <data name="Settings_McpUrl" xml:space="preserve">
+    <value>URL</value>
+  </data>
+  <data name="Settings_McpEnabled" xml:space="preserve">
+    <value>Enabled</value>
+  </data>
+  <data name="Settings_McpAdd" xml:space="preserve">
+    <value>Add Server</value>
+  </data>
+  <data name="Settings_McpRemove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Settings_McpExpose" xml:space="preserve">
+    <value>Expose as MCP server</value>
+  </data>
+  <data name="Settings_McpExposePort" xml:space="preserve">
+    <value>Port</value>
+  </data>
+  <data name="Settings_McpSave" xml:space="preserve">
+    <value>Save MCP Settings</value>
+  </data>
+  <data name="Settings_McpExposeRoot" xml:space="preserve">
+    <value>Sandbox root</value>
+  </data>
+  <data name="Settings_McpExposeRootPlaceholder" xml:space="preserve">
+    <value>Full directory path (empty = unrestricted)</value>
+  </data>
+  <data name="Settings_McpExposeRootPick" xml:space="preserve">
+    <value>Select the MCP sandbox root</value>
+  </data>
+  <data name="Settings_McpExposeRootHint" xml:space="preserve">
+    <value>Every file path an MCP client sends must resolve inside this directory. Leaving it empty exposes the whole filesystem, the behavior this setting replaces.</value>
+  </data>
+  <data name="Settings_McpExposeFlash" xml:space="preserve">
+    <value>Allow flash tools</value>
+  </data>
+  <data name="Settings_McpExposeFlashWarning" xml:space="preserve">
+    <value>Warning: enabling this registers the wiping, flashing and reboot tools on the loopback port, so any local process that can reach that port can erase or rewrite partitions on a connected device and reboot it. Keep it off unless you trust every program running on this machine.</value>
+  </data>
+  <data name="Settings_Developers" xml:space="preserve">
+    <value>Developers</value>
+  </data>
+  <data name="Settings_GitHub" xml:space="preserve">
+    <value>GitHub</value>
+  </data>
+  <data name="Settings_Coolapk" xml:space="preserve">
+    <value>Coolapk</value>
+  </data>
+  <data name="Settings_AI" xml:space="preserve">
+    <value>AI Assistant</value>
+  </data>
+  <data name="Settings_AIEndpoint" xml:space="preserve">
+    <value>API endpoint</value>
+  </data>
+  <data name="Settings_AIApiKey" xml:space="preserve">
+    <value>API key</value>
+  </data>
+  <data name="Settings_AIToggleKey" xml:space="preserve">
+    <value>Show / hide API key</value>
+  </data>
+  <data name="Settings_AIModels" xml:space="preserve">
+    <value>Model</value>
+  </data>
+  <data name="Settings_AIFetchModels" xml:space="preserve">
+    <value>Get models</value>
+  </data>
+  <data name="Settings_DeviceCommunication" xml:space="preserve">
+    <value>Device communication</value>
+  </data>
+  <data name="Settings_UsbBackend" xml:space="preserve">
+    <value>USB backend</value>
+  </data>
+  <data name="Settings_UsbAuto" xml:space="preserve">
+    <value>Automatic (platform default)</value>
+  </data>
+  <data name="Settings_UsbNative" xml:space="preserve">
+    <value>Force platform native</value>
+  </data>
+  <data name="Settings_UsbLibusb" xml:space="preserve">
+    <value>Force libusb</value>
+  </data>
+  <data name="Settings_AdbServer" xml:space="preserve">
+    <value>ADB server</value>
+  </data>
+  <data name="Settings_HdcServer" xml:space="preserve">
+    <value>HDC server</value>
+  </data>
+  <data name="Settings_ServerUnchecked" xml:space="preserve">
+    <value>Not checked</value>
+  </data>
+  <data name="Settings_ServerListening" xml:space="preserve">
+    <value>Endpoint listening</value>
+  </data>
+  <data name="Settings_ServerAbsent" xml:space="preserve">
+    <value>Not running (connection refused)</value>
+  </data>
+  <data name="Settings_ServerUnknown" xml:space="preserve">
+    <value>Unknown (connection error or timeout)</value>
+  </data>
+  <data name="Settings_StopAdbServer" xml:space="preserve">
+    <value>Stop ADB server</value>
+  </data>
+  <data name="Settings_StopHdcServer" xml:space="preserve">
+    <value>Stop HDC server</value>
+  </data>
+  <data name="Settings_ServerStopping" xml:space="preserve">
+    <value>Stopping server…</value>
+  </data>
+  <data name="Settings_ServerStopped" xml:space="preserve">
+    <value>Server stop confirmed. Device list refresh requested.</value>
+  </data>
+  <data name="Settings_ServerStopFailed" xml:space="preserve">
+    <value>Could not stop server: {0}</value>
+  </data>
+</root>

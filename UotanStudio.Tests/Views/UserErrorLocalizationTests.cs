@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Locale;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Editors;
 using Xunit;
@@ -11,6 +13,9 @@ namespace UotanStudio.Tests.Views;
 [Collection("Node editor UI")]
 public sealed class UserErrorLocalizationTests(NodeEditorUiFixture fixture)
 {
+    private static readonly CultureInfo English = CultureInfo.GetCultureInfo("en-US");
+    private static readonly CultureInfo Chinese = CultureInfo.GetCultureInfo("zh-CN");
+
     [Fact]
     public async Task Resources_BothLanguages_HaveMatchingKeysAndFormatArguments()
     {
@@ -20,15 +25,15 @@ public sealed class UserErrorLocalizationTests(NodeEditorUiFixture fixture)
         {
             pending = fixture.Session.Dispatch(() =>
             {
-                var english = new UotanStudio.Locale.EnUs.Common();
-                var chinese = new UotanStudio.Locale.ZhCn.Common();
-                var keys = english.Keys.OfType<string>().Where(key => key.StartsWith("UserError_", StringComparison.Ordinal)).Order().ToArray();
+                var service = LanguageService.Instance;
+                var keys = LocaleKeySets.Common.Where(key => key.StartsWith("UserError_", StringComparison.Ordinal)).Order().ToArray();
                 Assert.NotEmpty(keys);
-                Assert.Equal(keys, chinese.Keys.OfType<string>().Where(key => key.StartsWith("UserError_", StringComparison.Ordinal)).Order());
                 foreach (var key in keys)
                 {
-                    var en = Assert.IsType<string>(english[key]);
-                    var zh = Assert.IsType<string>(chinese[key]);
+                    var en = service.GetTranslation(key, English);
+                    var zh = service.GetTranslation(key, Chinese);
+                    Assert.NotEqual(key, en);
+                    Assert.NotEqual(key, zh);
                     Assert.False(string.IsNullOrWhiteSpace(en));
                     Assert.False(string.IsNullOrWhiteSpace(zh));
                     Assert.NotEqual(en, zh);
@@ -48,17 +53,17 @@ public sealed class UserErrorLocalizationTests(NodeEditorUiFixture fixture)
         {
             pending = fixture.Session.Dispatch(() =>
             {
-                var english = new UotanStudio.Locale.EnUs.Menu();
-                var chinese = new UotanStudio.Locale.ZhCn.Menu();
-                var keys = english.Keys.OfType<string>().Where(key => key.StartsWith("Menu_Open", StringComparison.Ordinal)).Order().ToArray();
+                var service = LanguageService.Instance;
+                var keys = LocaleKeySets.Menu.Where(key => key.StartsWith("Menu_Open", StringComparison.Ordinal)).Order().ToArray();
                 Assert.Contains("Menu_OpenProjectMissing", keys);
                 Assert.Contains("Menu_OpenSolutionUnsupported", keys);
                 Assert.Contains("Menu_OpenNodeProjectUnsupported", keys);
-                Assert.Equal(keys, chinese.Keys.OfType<string>().Where(key => key.StartsWith("Menu_Open", StringComparison.Ordinal)).Order());
                 foreach (var key in keys)
                 {
-                    var en = Assert.IsType<string>(english[key]);
-                    var zh = Assert.IsType<string>(chinese[key]);
+                    var en = service.GetTranslation(key, English);
+                    var zh = service.GetTranslation(key, Chinese);
+                    Assert.NotEqual(key, en);
+                    Assert.NotEqual(key, zh);
                     Assert.False(string.IsNullOrWhiteSpace(en));
                     Assert.False(string.IsNullOrWhiteSpace(zh));
                     Assert.NotEqual(en, zh);
@@ -78,15 +83,15 @@ public sealed class UserErrorLocalizationTests(NodeEditorUiFixture fixture)
         {
             pending = fixture.Session.Dispatch(() =>
             {
-                var english = new UotanStudio.Locale.EnUs.Common();
-                var chinese = new UotanStudio.Locale.ZhCn.Common();
-                var keys = english.Keys.OfType<string>().Where(key => key.StartsWith("Flash_", StringComparison.Ordinal)).Order().ToArray();
+                var service = LanguageService.Instance;
+                var keys = LocaleKeySets.Common.Where(key => key.StartsWith("Flash_", StringComparison.Ordinal)).Order().ToArray();
                 Assert.NotEmpty(keys);
-                Assert.Equal(keys, chinese.Keys.OfType<string>().Where(key => key.StartsWith("Flash_", StringComparison.Ordinal)).Order());
                 foreach (var key in keys)
                 {
-                    var en = Assert.IsType<string>(english[key]);
-                    var zh = Assert.IsType<string>(chinese[key]);
+                    var en = service.GetTranslation(key, English);
+                    var zh = service.GetTranslation(key, Chinese);
+                    Assert.NotEqual(key, en);
+                    Assert.NotEqual(key, zh);
                     Assert.False(string.IsNullOrWhiteSpace(en));
                     Assert.False(string.IsNullOrWhiteSpace(zh));
                     Assert.NotEqual(en, zh);

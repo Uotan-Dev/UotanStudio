@@ -1,0 +1,3246 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>  <data name="Tab_Workspace" xml:space="preserve">
+    <value>工作区</value>
+  </data>
+  <data name="Tab_Flash" xml:space="preserve">
+    <value>烧录</value>
+  </data>
+  <data name="Tab_Delivery" xml:space="preserve">
+    <value>交付</value>
+  </data>
+  <data name="Delivery_DirectOutput" xml:space="preserve">
+    <value>打包为ZIP</value>
+  </data>
+  <data name="Delivery_ZipArchiveName" xml:space="preserve">
+    <value>压缩包名称</value>
+  </data>
+  <data name="Delivery_OutputDirectory" xml:space="preserve">
+    <value>输出目录</value>
+  </data>
+  <data name="Delivery_LoadFailed" xml:space="preserve">
+    <value>无法加载镜像列表：</value>
+  </data>
+  <data name="Delivery_PackSettingsTitle" xml:space="preserve">
+    <value>打包设置</value>
+  </data>
+  <data name="Delivery_UseProjectSuperSettings" xml:space="preserve">
+    <value>使用项目Super设置</value>
+  </data>
+  <data name="Delivery_UseProjectPayloadSettings" xml:space="preserve">
+    <value>使用项目Payload设置</value>
+  </data>
+  <data name="Delivery_SelectProject" xml:space="preserve">
+    <value>选择项目</value>
+  </data>
+  <data name="Delivery_NoProjectSourceSettings" xml:space="preserve">
+    <value>当前模式没有可读取的项目配置，已取消使用项目设置。</value>
+  </data>
+  <data name="Delivery_SourceProject" xml:space="preserve">
+    <value>来源项目</value>
+  </data>
+  <data name="Delivery_DeviceType" xml:space="preserve">
+    <value>设备类型</value>
+  </data>
+  <data name="Delivery_SuperDeviceName" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="Delivery_MetadataSize" xml:space="preserve">
+    <value>元数据大小</value>
+  </data>
+  <data name="Delivery_BlockSize" xml:space="preserve">
+    <value>块大小</value>
+  </data>
+  <data name="Delivery_ZstdCompression" xml:space="preserve">
+    <value>压缩为ZST</value>
+  </data>
+  <data name="Delivery_ZstdChunkedParallel" xml:space="preserve">
+    <value>分块并行压缩</value>
+  </data>
+  <data name="Delivery_BuildFingerprint" xml:space="preserve">
+    <value>构建指纹</value>
+  </data>
+  <data name="Delivery_Incremental" xml:space="preserve">
+    <value>增量编号</value>
+  </data>
+  <data name="Delivery_SdkLevel" xml:space="preserve">
+    <value>SDK等级</value>
+  </data>
+  <data name="Delivery_MaxTimestamp" xml:space="preserve">
+    <value>最大时间戳</value>
+  </data>
+  <data name="Delivery_SecurityPatch" xml:space="preserve">
+    <value>安全补丁日期</value>
+  </data>
+  <data name="Delivery_InvalidParameter" xml:space="preserve">
+    <value>参数无效：{0}</value>
+  </data>
+  <data name="Delivery_InvalidSuperSize" xml:space="preserve">
+    <value>请填写设备 Super 大小；用 fastboot getvar super-partition-size 读取。</value>
+  </data>
+  <data name="Delivery_InvalidPayloadVersion" xml:space="preserve">
+    <value>Payload 版本无效。</value>
+  </data>
+  <data name="Delivery_EditedScriptsNeedReview" xml:space="preserve">
+    <value>配置已变化，输出前需处理已修改的脚本。</value>
+  </data>
+  <data name="Delivery_OpenProjectToSave" xml:space="preserve">
+    <value>请先打开工程再保存交付计划。</value>
+  </data>
+  <data name="Delivery_PlanSaved" xml:space="preserve">
+    <value>交付计划和文本已保存。</value>
+  </data>
+  <data name="Delivery_ProjectTransition" xml:space="preserve">
+    <value>正在切换工程，请稍后重试。</value>
+  </data>
+  <data name="Delivery_ReplaceEditedScripts" xml:space="preserve">
+    <value>配置已变化，现有脚本含手动修改。是否用新配置重新生成？取消将保留草稿并停止输出。</value>
+  </data>
+  <data name="Delivery_OutputComplete" xml:space="preserve">
+    <value>已输出 {0} 个文件：{1}</value>
+  </data>
+  <data name="Delivery_OutputCancelled" xml:space="preserve">
+    <value>输出已取消。</value>
+  </data>
+  <data name="Delivery_PendingImage" xml:space="preserve">
+    <value>待生成</value>
+  </data>
+  <data name="Delivery_BSlotReadOnly" xml:space="preserve">
+    <value>{0} (B 槽 · 只读)</value>
+  </data>
+  <data name="Delivery_AddPartitionsFirst" xml:space="preserve">
+    <value>请先添加分区镜像。</value>
+  </data>
+  <data name="Delivery_InvalidPartition" xml:space="preserve">
+    <value>分区名无效或重复。</value>
+  </data>
+  <data name="Delivery_MetadataSlots" xml:space="preserve">
+    <value>元数据槽位</value>
+  </data>
+  <data name="Delivery_PackSuper" xml:space="preserve">
+    <value>打包 Super</value>
+  </data>
+  <data name="Delivery_SuperFormat" xml:space="preserve">
+    <value>Super格式</value>
+  </data>
+  <data name="Delivery_SuperSize" xml:space="preserve">
+    <value>Super大小</value>
+  </data>
+  <data name="Delivery_SuperGroupName" xml:space="preserve">
+    <value>Super簇名</value>
+  </data>
+  <data name="Delivery_GenerateSuperEmpty" xml:space="preserve">
+    <value>仅生成Super_Empty</value>
+  </data>
+  <data name="Delivery_PayloadVersion" xml:space="preserve">
+    <value>Payload版本</value>
+  </data>
+  <data name="Delivery_PayloadMinorVersion" xml:space="preserve">
+    <value>次版本</value>
+  </data>
+  <data name="Delivery_DynamicPartitionsFile" xml:space="preserve">
+    <value>动态分区文件</value>
+  </data>
+  <data name="Delivery_SelectFile" xml:space="preserve">
+    <value>选择文件</value>
+  </data>
+  <data name="Delivery_AutoGenerate" xml:space="preserve">
+    <value>自动生成</value>
+  </data>
+  <data name="Delivery_Signature" xml:space="preserve">
+    <value>签名</value>
+  </data>
+  <data name="Delivery_SuperImageList" xml:space="preserve">
+    <value>Super镜像列表</value>
+  </data>
+  <data name="Delivery_PayloadImageList" xml:space="preserve">
+    <value>Payload镜像列表</value>
+  </data>
+  <data name="Delivery_AutoZeroPartitions" xml:space="preserve">
+    <value>自动添加零大小分区</value>
+  </data>
+  <data name="Delivery_BelongsToSuper" xml:space="preserve">
+    <value>属于Super分区</value>
+  </data>
+  <data name="Delivery_TotalImageSize" xml:space="preserve">
+    <value>镜像总大小</value>
+  </data>
+  <data name="Delivery_TotalImageSizeHint" xml:space="preserve">
+    <value>当前列表镜像文件的总大小；+ ? 表示有文件大小未知</value>
+  </data>
+  <data name="Delivery_AddZeroPartition" xml:space="preserve">
+    <value>添加零大小分区</value>
+  </data>
+  <data name="Delivery_PartitionName" xml:space="preserve">
+    <value>分区名</value>
+  </data>
+  <data name="Delivery_AddPartition" xml:space="preserve">
+    <value>添加</value>
+  </data>
+  <data name="Delivery_SelectImagesBelow" xml:space="preserve">
+    <value>从下方列表选择镜像</value>
+  </data>
+  <data name="Delivery_ScriptGenerator" xml:space="preserve">
+    <value>脚本生成器</value>
+  </data>
+  <data name="Delivery_GenerateScript" xml:space="preserve">
+    <value>生成</value>
+  </data>
+  <data name="Delivery_OutputImages" xml:space="preserve">
+    <value>输出镜像</value>
+  </data>
+  <data name="Delivery_OutputImageList" xml:space="preserve">
+    <value>输出镜像列表</value>
+  </data>
+  <data name="Delivery_OptionalImage" xml:space="preserve">
+    <value>可选</value>
+  </data>
+  <data name="Delivery_OptionalImageHint" xml:space="preserve">
+    <value>设置为用户可选镜像</value>
+  </data>
+  <data name="Delivery_ImageFileName" xml:space="preserve">
+    <value>镜像文件名</value>
+  </data>
+  <data name="Delivery_AuthorInfo" xml:space="preserve">
+    <value>作者信息（不支持TXT脚本）</value>
+  </data>
+  <data name="Delivery_SelectScripts" xml:space="preserve">
+    <value>选择脚本</value>
+  </data>
+  <data name="Delivery_DeviceCodename" xml:space="preserve">
+    <value>机型代号</value>
+  </data>
+  <data name="Delivery_AuthorInfoWatermark" xml:space="preserve">
+    <value>==================
+              刷机包信息              
+适配机型:liuqin
+移植原包的机型:sheng
+移植包安卓版本:16
+作者：暮间雾
+==================</value>
+  </data>
+  <data name="Delivery_StartOutput" xml:space="preserve">
+    <value>开始输出</value>
+  </data>
+  <data name="Delivery_OutputProgress" xml:space="preserve">
+    <value>输出进度</value>
+  </data>
+  <data name="Delivery_CloseText" xml:space="preserve">
+    <value>关闭文本</value>
+  </data>
+  <data name="Delivery_TxtScript" xml:space="preserve">
+    <value>TXT脚本</value>
+  </data>
+  <data name="Delivery_BatchShellScript" xml:space="preserve">
+    <value>Bat&amp;SH脚本</value>
+  </data>
+  <data name="Delivery_RecoveryScript" xml:space="preserve">
+    <value>卡刷脚本</value>
+  </data>
+  <data name="Delivery_ScriptEditor" xml:space="preserve">
+    <value>脚本预览与编辑</value>
+  </data>
+  <data name="Delivery_ToggleLayout" xml:space="preserve">
+    <value>切换镜像列表布局（底部 / 右侧）</value>
+  </data>
+  <data name="Delivery_Script_FastbootMissing" xml:space="preserve">
+    <value>缺少 fastboot 或不可执行；请先 chmod +x bin/*/fastboot</value>
+  </data>
+  <data name="Delivery_Script_ConnectOneDevice" xml:space="preserve">
+    <value>请连接一台 Fastboot 设备。</value>
+  </data>
+  <data name="Delivery_Script_ReadProduct" xml:space="preserve">
+    <value>无法读取设备型号。</value>
+  </data>
+  <data name="Delivery_Script_DeviceMismatch" xml:space="preserve">
+    <value>设备型号不匹配。</value>
+  </data>
+  <data name="Delivery_Script_Device" xml:space="preserve">
+    <value>机型代号：{0}</value>
+  </data>
+  <data name="Delivery_Script_AuthorInformation" xml:space="preserve">
+    <value>作者信息：</value>
+  </data>
+  <data name="Delivery_Script_MissingImage" xml:space="preserve">
+    <value>缺少镜像：{0}</value>
+  </data>
+  <data name="Delivery_Script_ZstdMissing" xml:space="preserve">
+    <value>缺少 zstd 或不可执行。</value>
+  </data>
+  <data name="Delivery_Script_DecompressionFailed" xml:space="preserve">
+    <value>解压失败。</value>
+  </data>
+  <data name="Delivery_Script_WipeSuperFailed" xml:space="preserve">
+    <value>wipe-super 失败。</value>
+  </data>
+  <data name="Delivery_Script_SuperFlashFailed" xml:space="preserve">
+    <value>Super 刷写失败。</value>
+  </data>
+  <data name="Delivery_Script_FlashFailed" xml:space="preserve">
+    <value>刷写失败。</value>
+  </data>
+  <data name="Delivery_Script_Choose" xml:space="preserve">
+    <value>请选择 {0}</value>
+  </data>
+  <data name="Delivery_Script_Skip" xml:space="preserve">
+    <value>0：跳过</value>
+  </data>
+  <data name="Delivery_Script_ChoicePrompt" xml:space="preserve">
+    <value>选择 [{0}]：</value>
+  </data>
+  <data name="Delivery_Script_Choice" xml:space="preserve">
+    <value>选择：</value>
+  </data>
+  <data name="Delivery_Script_InputCancelled" xml:space="preserve">
+    <value>输入已取消。</value>
+  </data>
+  <data name="Delivery_Script_InvalidChoice" xml:space="preserve">
+    <value>选择无效。</value>
+  </data>
+  <data name="Delivery_Script_AskWipe" xml:space="preserve">
+    <value>是否擦除 userdata 与 metadata？[y/N]：</value>
+  </data>
+  <data name="Delivery_Script_AskWipeBatch" xml:space="preserve">
+    <value>是否擦除 userdata 与 metadata？[N/Y]：</value>
+  </data>
+  <data name="Delivery_Script_AskStart" xml:space="preserve">
+    <value>是否开始刷写？[y/N]：</value>
+  </data>
+  <data name="Delivery_Script_AskStartBatch" xml:space="preserve">
+    <value>是否开始刷写？[N/Y]：</value>
+  </data>
+  <data name="Delivery_Script_EraseFailed" xml:space="preserve">
+    <value>擦除失败。</value>
+  </data>
+  <data name="Delivery_Script_RebootFailed" xml:space="preserve">
+    <value>重启失败。</value>
+  </data>
+  <data name="Delivery_Script_Completed" xml:space="preserve">
+    <value>已完成。</value>
+  </data>
+  <data name="Delivery_Script_UnlockedRequired" xml:space="preserve">
+    <value>需要已解锁的 bootloader。受 AVB 校验的镜像还需配套的 patched vbmeta，否则设备可能拒绝启动。</value>
+  </data>
+  <data name="Delivery_Script_CustomRecoveryRequired" xml:space="preserve">
+    <value>此安装包自带 update-binary，需要第三方 recovery；原厂 recovery 会拒绝它无法验证的包。</value>
+  </data>
+  <data name="Delivery_Script_SuperSizeMismatch" xml:space="preserve">
+    <value>Super 镜像按 {0} 字节的 super 构建，设备实际报告 {1} 字节；请按设备大小重新生成交付。</value>
+  </data>
+  <data name="Delivery_Script_SuperSizeUnknown" xml:space="preserve">
+    <value>设备未报告 super-partition-size，Super 大小未经校验。</value>
+  </data>
+  <data name="Delivery_Script_DeliveryFailed" xml:space="preserve">
+    <value>交付失败。请检查设备、镜像与工具。</value>
+  </data>
+  <data name="Delivery_Script_ChecksumFailed" xml:space="preserve">
+    <value>校验和验证失败，未刷写任何内容。</value>
+  </data>
+  <data name="Delivery_Script_DeviceChanged" xml:space="preserve">
+    <value>设备已变更。</value>
+  </data>
+  <data name="Delivery_Script_CannotDetermineMode" xml:space="preserve">
+    <value>无法确定 Fastboot 模式。</value>
+  </data>
+  <data name="Delivery_Script_CannotEnterFastbootd" xml:space="preserve">
+    <value>无法进入 fastbootd。</value>
+  </data>
+  <data name="Delivery_Script_CannotEnterBootloader" xml:space="preserve">
+    <value>无法进入 bootloader。</value>
+  </data>
+  <data name="Delivery_Script_ModeTransitionTimeout" xml:space="preserve">
+    <value>Fastboot 模式切换超时。</value>
+  </data>
+  <data name="Tab_Node" xml:space="preserve">
+    <value>节点</value>
+  </data>
+  <data name="Tab_Log" xml:space="preserve">
+    <value>日志</value>
+  </data>
+  <data name="Tab_Settings" xml:space="preserve">
+    <value>设置</value>
+  </data>
+  <data name="Tab_Compare" xml:space="preserve">
+    <value>对比</value>
+  </data>
+  <data name="Menu_MultiColumnFileBrowser" xml:space="preserve">
+    <value>多列文件浏览器</value>
+  </data>
+  <data name="Tab_ScreenMirror" xml:space="preserve">
+    <value>投屏</value>
+  </data>
+  <data name="ScreenMirror_Preparing" xml:space="preserve">
+    <value>正在准备投屏...</value>
+  </data>
+  <data name="ScreenMirror_Installing" xml:space="preserve">
+    <value>正在安装 scrcpy 服务端...</value>
+  </data>
+  <data name="ScreenMirror_Connecting" xml:space="preserve">
+    <value>正在连接设备...</value>
+  </data>
+  <data name="ScreenMirror_Mirroring" xml:space="preserve">
+    <value>投屏中</value>
+  </data>
+  <data name="ScreenMirror_Stopped" xml:space="preserve">
+    <value>投屏已停止</value>
+  </data>
+  <data name="ScreenMirror_Failed" xml:space="preserve">
+    <value>投屏失败：</value>
+  </data>
+  <data name="ScreenMirror_Back" xml:space="preserve">
+    <value>返回</value>
+  </data>
+  <data name="ScreenMirror_Power" xml:space="preserve">
+    <value>电源</value>
+  </data>
+  <data name="ScreenMirror_PushClipboard" xml:space="preserve">
+    <value>发送剪贴板</value>
+  </data>
+  <data name="ScreenMirror_PullClipboard" xml:space="preserve">
+    <value>获取剪贴板</value>
+  </data>
+  <data name="Flash_Package" xml:space="preserve">
+    <value>刷机包</value>
+  </data>
+  <data name="Flash_PackagePlaceholder" xml:space="preserve">
+    <value>选择刷机包、镜像目录，或粘贴 Payload 链接</value>
+  </data>
+  <data name="Flash_ChooseFile" xml:space="preserve">
+    <value>选择文件</value>
+  </data>
+  <data name="Flash_ChooseFolder" xml:space="preserve">
+    <value>选择文件夹</value>
+  </data>
+  <data name="Flash_SelectAll" xml:space="preserve">
+    <value>全选</value>
+  </data>
+  <data name="Flash_Selected" xml:space="preserve">
+    <value>已选</value>
+  </data>
+  <data name="Flash_SearchPlaceholder" xml:space="preserve">
+    <value>搜索分区</value>
+  </data>
+  <data name="Flash_Select" xml:space="preserve">
+    <value>选择</value>
+  </data>
+  <data name="Flash_Partition" xml:space="preserve">
+    <value>分区</value>
+  </data>
+  <data name="Flash_Command" xml:space="preserve">
+    <value>命令</value>
+  </data>
+  <data name="Flash_Size" xml:space="preserve">
+    <value>大小</value>
+  </data>
+  <data name="Flash_File" xml:space="preserve">
+    <value>文件</value>
+  </data>
+  <data name="Flash_NoPartitions" xml:space="preserve">
+    <value>尚未加载分区列表</value>
+  </data>
+  <data name="Flash_NoPartitionsHint" xml:space="preserve">
+    <value>选择刷机包后，可刷写分区会显示在这里。</value>
+  </data>
+  <data name="Flash_Basic" xml:space="preserve">
+    <value>基本操作</value>
+  </data>
+  <data name="Flash_ReadInfo" xml:space="preserve">
+    <value>读取设备信息</value>
+  </data>
+  <data name="Flash_ShowAllPartitions" xml:space="preserve">
+    <value>Fastbootd 显示全部分区</value>
+  </data>
+  <data name="Flash_FlashSelected" xml:space="preserve">
+    <value>刷写选中分区</value>
+  </data>
+  <data name="Flash_EraseSelected" xml:space="preserve">
+    <value>擦除选中分区</value>
+  </data>
+  <data name="Flash_DisableVbmeta" xml:space="preserve">
+    <value>禁用 vbmeta 校验</value>
+  </data>
+  <data name="Flash_DeleteCow" xml:space="preserve">
+    <value>删除COW分区</value>
+  </data>
+  <data name="Flash_ModeMismatch" xml:space="preserve">
+    <value>所选设备模式或权限不支持此刷机包及操作。</value>
+  </data>
+  <data name="Flash_FlashEdlBundle" xml:space="preserve">
+    <value>刷写完整 EDL 包</value>
+  </data>
+  <data name="Flash_AddRoot" xml:space="preserve">
+    <value>添加 Root</value>
+  </data>
+  <data name="Flash_EraseData" xml:space="preserve">
+    <value>清除所有数据</value>
+  </data>
+  <data name="Flash_RebootAfter" xml:space="preserve">
+    <value>刷写后重启设备</value>
+  </data>
+  <data name="Flash_Image" xml:space="preserve">
+    <value>镜像操作</value>
+  </data>
+  <data name="Flash_ExtractSelected" xml:space="preserve">
+    <value>提取选中镜像</value>
+  </data>
+  <data name="Flash_BuildWiredPackage" xml:space="preserve">
+    <value>一键生成线刷包</value>
+  </data>
+  <data name="Flash_Log" xml:space="preserve">
+    <value>日志</value>
+  </data>
+  <data name="Flash_ClearLog" xml:space="preserve">
+    <value>清空</value>
+  </data>
+  <data name="Flash_LogPlaceholder" xml:space="preserve">
+    <value>刷写日志输出</value>
+  </data>
+  <data name="Flash_FolderOnly" xml:space="preserve">
+    <value>请选择刷机包、镜像目录或 HTTP(S) Payload 链接。</value>
+  </data>
+  <data name="Flash_ImagesLoaded" xml:space="preserve">
+    <value>个镜像已加载</value>
+  </data>
+  <data name="Flash_DeviceChanged" xml:space="preserve">
+    <value>所选设备已变化，请刷新并重新确认。</value>
+  </data>
+  <data name="Flash_Busy" xml:space="preserve">
+    <value>正在处理...</value>
+  </data>
+  <data name="Flash_FileMissing" xml:space="preserve">
+    <value>镜像文件不存在。</value>
+  </data>
+  <data name="Flash_PackageChanged" xml:space="preserve">
+    <value>刷机包路径已更改，请先加载后再刷写。</value>
+  </data>
+  <data name="Flash_ProductMismatch" xml:space="preserve">
+    <value>设备机型与刷机清单不匹配，未写入任何数据。</value>
+  </data>
+  <data name="Flash_PartitionsLoaded" xml:space="preserve">
+    <value>个设备分区已加载</value>
+  </data>
+  <data name="Flash_SwitchSlot" xml:space="preserve">
+    <value>切换活动槽位</value>
+  </data>
+  <data name="Flash_ActiveSlot" xml:space="preserve">
+    <value>活动槽位</value>
+  </data>
+  <data name="Flash_Cancel" xml:space="preserve">
+    <value>取消操作</value>
+  </data>
+  <data name="Flash_Decompressing" xml:space="preserve">
+    <value>正在解压镜像</value>
+  </data>
+  <data name="Flash_RequiresFastbootd" xml:space="preserve">
+    <value>此刷机包要求设备处于 Fastbootd 模式。</value>
+  </data>
+  <data name="Flash_RebootConflict" xml:space="preserve">
+    <value>所选脚本步骤已包含重启，请关闭刷写后操作或取消选择该步骤。</value>
+  </data>
+  <data name="Flash_VbmetaMissing" xml:space="preserve">
+    <value>请选中 vbmeta 分区及镜像以禁用校验。</value>
+  </data>
+  <data name="Flash_ChooseRootPackage" xml:space="preserve">
+    <value>选择 Magisk 或 KernelSU 安装包</value>
+  </data>
+  <data name="Flash_RootBootMissing" xml:space="preserve">
+    <value>请仅选择一个 boot 或 init_boot 镜像用于 Root 修补。</value>
+  </data>
+  <data name="Flash_Status" xml:space="preserve">
+    <value>状态</value>
+  </data>
+  <data name="Flash_Status_Queued" xml:space="preserve">
+    <value>排队中</value>
+  </data>
+  <data name="Flash_Status_Flashing" xml:space="preserve">
+    <value>刷写中</value>
+  </data>
+  <data name="Flash_Status_Verifying" xml:space="preserve">
+    <value>校验中</value>
+  </data>
+  <data name="Flash_Status_Erasing" xml:space="preserve">
+    <value>擦除中</value>
+  </data>
+  <data name="Flash_Status_Succeeded" xml:space="preserve">
+    <value>成功</value>
+  </data>
+  <data name="Flash_Status_Failed" xml:space="preserve">
+    <value>失败</value>
+  </data>
+  <data name="Flash_Status_Skipped" xml:space="preserve">
+    <value>已跳过</value>
+  </data>
+  <data name="Flash_OverallProgress" xml:space="preserve">
+    <value>{1} 项中第 {0} 项</value>
+  </data>
+  <data name="Flash_VerifyAfterFlash" xml:space="preserve">
+    <value>刷写后校验</value>
+  </data>
+  <data name="Flash_VerifyUnsupported" xml:space="preserve">
+    <value>该协议不支持回读校验。</value>
+  </data>
+  <data name="Flash_WarningPrefix" xml:space="preserve">
+    <value>警告</value>
+  </data>
+  <data name="Flash_SkipAbsentSources" xml:space="preserve">
+    <value>跳过缺少镜像的分区</value>
+  </data>
+  <data name="Flash_ContinueOnFailure" xml:space="preserve">
+    <value>单个分区失败后继续</value>
+  </data>
+  <data name="Flash_NoDevice" xml:space="preserve">
+    <value>未选择设备</value>
+  </data>
+  <data name="Flash_Mtk" xml:space="preserve">
+    <value>联发科下载</value>
+  </data>
+  <data name="Flash_MtkPorts" xml:space="preserve">
+    <value>串口号</value>
+  </data>
+  <data name="Flash_MtkRefreshPorts" xml:space="preserve">
+    <value>刷新端口</value>
+  </data>
+  <data name="Flash_MtkDaFile" xml:space="preserve">
+    <value>选择 DA/加载器</value>
+  </data>
+  <data name="Flash_MtkEmiFile" xml:space="preserve">
+    <value>选择 EMI 参数</value>
+  </data>
+  <data name="Flash_MtkEntryIndex" xml:space="preserve">
+    <value>加载器条目</value>
+  </data>
+  <data name="Flash_MtkProtocol" xml:space="preserve">
+    <value>下载代理</value>
+  </data>
+  <data name="Flash_MtkProtocolXFlash" xml:space="preserve">
+    <value>XFlash（新芯片）</value>
+  </data>
+  <data name="Flash_MtkProtocolLegacy" xml:space="preserve">
+    <value>Legacy DA（旧芯片）</value>
+  </data>
+  <data name="Flash_MtkProtocolXml" xml:space="preserve">
+    <value>XML DA（按区域名寻址）</value>
+  </data>
+  <data name="Flash_MtkStorageKind" xml:space="preserve">
+    <value>存储类型</value>
+  </data>
+  <data name="Flash_MtkAutoMatch" xml:space="preserve">
+    <value>按芯片身份自动匹配加载器条目</value>
+  </data>
+  <data name="Flash_MtkKeyDir" xml:space="preserve">
+    <value>SLA 密钥目录</value>
+  </data>
+  <data name="Flash_MtkAuthFile" xml:space="preserve">
+    <value>DAA 认证文件（--auth）</value>
+  </data>
+  <data name="Flash_MtkBaud" xml:space="preserve">
+    <value>串口波特率</value>
+  </data>
+  <data name="Flash_MtkAttachAgent" xml:space="preserve">
+    <value>附加已运行代理</value>
+  </data>
+  <data name="Flash_MtkUsbOnlyOperation" xml:space="preserve">
+    <value>此操作需要通过 USB 持有的 MediaTek 设备；串口路径没有 BootROM 控制面。</value>
+  </data>
+  <data name="Flash_MtkRpmbMode" xml:space="preserve">
+    <value>RPMB 寻址形态</value>
+  </data>
+  <data name="Flash_MtkRpmbOffset" xml:space="preserve">
+    <value>起始帧 / 字节偏移</value>
+  </data>
+  <data name="Flash_MtkRpmbLength" xml:space="preserve">
+    <value>帧数量 / 字节长度</value>
+  </data>
+  <data name="Flash_MtkRpmbRead" xml:space="preserve">
+    <value>读取 RPMB 区域</value>
+  </data>
+  <data name="Flash_MtkRpmbReadConfirm" xml:space="preserve">
+    <value>RPMB 区域为只读捕获，但可能包含密钥等敏感数据，并会写入所选文件。确定继续？</value>
+  </data>
+  <data name="Flash_MtkRpmbCapacity" xml:space="preserve">
+    <value>读取 RPMB 容量</value>
+  </data>
+  <data name="Flash_MtkRpmbCapacityResult" xml:space="preserve">
+    <value>RPMB 容量：{0} 字节</value>
+  </data>
+  <data name="Flash_MtkRpmbCapacityUnknown" xml:space="preserve">
+    <value>该存储族没有上报 RPMB 容量。</value>
+  </data>
+  <data name="Flash_MtkRpmbRangeInvalid" xml:space="preserve">
+    <value>请按所选 RPMB 形态填写非负起始值与正数长度。</value>
+  </data>
+  <data name="Flash_MtkFullDump" xml:space="preserve">
+    <value>整用户区转储</value>
+  </data>
+  <data name="Flash_MtkFullDumpConfirm" xml:space="preserve">
+    <value>整用户区为只读采集，但可能包含敏感数据，并会在所选路径写入一个大文件；需要该代理家族已上报存储几何信息。确定继续？</value>
+  </data>
+  <data name="Flash_MtkFullDumpReported" xml:space="preserve">
+    <value>整用户区转储已按上报容量完整发布。</value>
+  </data>
+  <data name="Flash_MtkFullDumpClamped" xml:space="preserve">
+    <value>整用户区转储已发布，读取长度被下调到该家族的传输对齐界限。</value>
+  </data>
+  <data name="Flash_ExpertMode" xml:space="preserve">
+    <value>专家级控件（原始内存与安全配置）</value>
+  </data>
+  <data name="Flash_MtkStage" xml:space="preserve">
+    <value>启动阶段</value>
+  </data>
+  <data name="Flash_MtkStageAuto" xml:space="preserve">
+    <value>按检测</value>
+  </data>
+  <data name="Flash_MtkStageBootRom" xml:space="preserve">
+    <value>BootROM 阶段</value>
+  </data>
+  <data name="Flash_MtkStagePreloader" xml:space="preserve">
+    <value>Preloader 阶段</value>
+  </data>
+  <data name="Flash_MtkStageDa" xml:space="preserve">
+    <value>下载代理</value>
+  </data>
+  <data name="Flash_MtkStageNowBootRom" xml:space="preserve">
+    <value>当前阶段：BootROM。</value>
+  </data>
+  <data name="Flash_MtkStageNowPreloader" xml:space="preserve">
+    <value>当前阶段：Preloader。</value>
+  </data>
+  <data name="Flash_MtkStageNowDa" xml:space="preserve">
+    <value>当前阶段：下载代理。</value>
+  </data>
+  <data name="Flash_MtkStageNowLogging" xml:space="preserve">
+    <value>当前阶段：仅日志口。该口上没有下载代理，烧录、擦除、重启与安全配置动作保持禁用。</value>
+  </data>
+  <data name="Flash_MtkStageUndetermined" xml:space="preserve">
+    <value>无法从 USB 描述符判定阶段；确认过设备状态后可在上方声明。</value>
+  </data>
+  <data name="Flash_MtkDumpSkipHint" xml:space="preserve">
+    <value>要跳过的分区名，逗号分隔</value>
+  </data>
+  <data name="Flash_MtkDumpPartitionList" xml:space="preserve">
+    <value>转储列出的分区</value>
+  </data>
+  <data name="Flash_MtkDumpPartitionListConfirm" xml:space="preserve">
+    <value>将每个列出的分区读成独立文件，并保存两份分区表副本。不向设备写入任何内容。确定继续？</value>
+  </data>
+  <data name="Flash_MtkDumpWholeFlash" xml:space="preserve">
+    <value>转储整块存储</value>
+  </data>
+  <data name="Flash_MtkDumpWholeFlashConfirm" xml:space="preserve">
+    <value>按顺序读取上报的区域并为每区写一个镜像。不向设备写入任何内容。确定继续？</value>
+  </data>
+  <data name="Flash_MtkDumpPlanPreview" xml:space="preserve">
+    <value>计划：{0} 个分区，{1} 字节</value>
+  </data>
+  <data name="Flash_MtkDumpDone" xml:space="preserve">
+    <value>已发布 {0} 个镜像，{1} 字节</value>
+  </data>
+  <data name="Flash_MtkSectorRegionHint" xml:space="preserve">
+    <value>区域令牌</value>
+  </data>
+  <data name="Flash_MtkSectorStartHint" xml:space="preserve">
+    <value>起始扇区</value>
+  </data>
+  <data name="Flash_MtkSectorCountHint" xml:space="preserve">
+    <value>扇区数</value>
+  </data>
+  <data name="Flash_MtkReadSectors" xml:space="preserve">
+    <value>读取裸扇区窗口</value>
+  </data>
+  <data name="Flash_MtkSectorInputInvalid" xml:space="preserve">
+    <value>请填写区域令牌、不小于 0 的起始扇区，以及至少为 1 的扇区数。</value>
+  </data>
+  <data name="Flash_MtkAreaOffsetHint" xml:space="preserve">
+    <value>绝对偏移（字节）</value>
+  </data>
+  <data name="Flash_MtkAreaLengthHint" xml:space="preserve">
+    <value>长度（字节）</value>
+  </data>
+  <data name="Flash_MtkReadArea" xml:space="preserve">
+    <value>按区域无关绝对字节范围读取</value>
+  </data>
+  <data name="Flash_MtkAreaInputInvalid" xml:space="preserve">
+    <value>请填写不小于 0 的绝对偏移，以及至少为 1 的字节长度。</value>
+  </data>
+  <data name="Flash_MtkFlash" xml:space="preserve">
+    <value>开始 MTK 下载</value>
+  </data>
+  <data name="Flash_MtkPlanPreview" xml:space="preserve">
+    <value>共 {0} 项操作，合计 {1} MiB</value>
+  </data>
+  <data name="Flash_MtkTooManySteps" xml:space="preserve">
+    <value>所选 scatter 步骤过多。</value>
+  </data>
+  <data name="Flash_MtkLoadScatterHint" xml:space="preserve">
+    <value>加载 scatter 文件后才能开始 MTK 下载。</value>
+  </data>
+  <data name="Flash_MtkReboot" xml:space="preserve">
+    <value>重启设备</value>
+  </data>
+  <data name="Flash_MtkRebootFastboot" xml:space="preserve">
+    <value>重启到 bootloader</value>
+  </data>
+  <data name="Flash_MtkPowerOff" xml:space="preserve">
+    <value>关闭设备</value>
+  </data>
+  <data name="Flash_MtkReadback" xml:space="preserve">
+    <value>回读所选分区</value>
+  </data>
+  <data name="Flash_MtkShowGpt" xml:space="preserve">
+    <value>查看分区表</value>
+  </data>
+  <data name="Flash_MtkErase" xml:space="preserve">
+    <value>擦除所选分区</value>
+  </data>
+  <data name="Flash_MtkEraseConfirm" xml:space="preserve">
+    <value>将按清单声明的容量擦除所选分区，擦除后数据不可恢复。确定继续？</value>
+  </data>
+  <data name="Flash_MtkShowGptConfirm" xml:space="preserve">
+    <value>将先启动到存储就绪的代理（会向设备内存装载加载器），再读取 GPT 分区表并写入日志。确定继续？</value>
+  </data>
+  <data name="Flash_PartitionTableRow" xml:space="preserve">
+    <value>{0}：起始扇区 {1}，共 {2} 扇区</value>
+  </data>
+  <data name="Flash_PartitionTableMore" xml:space="preserve">
+    <value>……另有 {0} 个分区未列出。</value>
+  </data>
+  <data name="Flash_MtkRebootConfirm" xml:space="preserve">
+    <value>将先启动到存储就绪的代理（会向设备内存装载加载器），再请求正常启动。确定继续？</value>
+  </data>
+  <data name="Flash_MtkRebootFastbootConfirm" xml:space="preserve">
+    <value>将先启动到存储就绪的代理（会向设备内存装载加载器），再请求切换到 bootloader；设备是否以 bootloader 重新枚举取决于机型。确定继续？</value>
+  </data>
+  <data name="Flash_MtkPowerOffConfirm" xml:space="preserve">
+    <value>将先启动到存储就绪的代理（会向设备内存装载加载器），再请求关机。确定继续？</value>
+  </data>
+  <data name="Flash_MtkRebootDone" xml:space="preserve">
+    <value>已请求设备重启。</value>
+  </data>
+  <data name="Flash_MtkRebootFastbootDone" xml:space="preserve">
+    <value>已请求切换到 bootloader。</value>
+  </data>
+  <data name="Flash_MtkPowerOffDone" xml:space="preserve">
+    <value>已请求设备关机。</value>
+  </data>
+  <data name="Flash_MtkPortRequired" xml:space="preserve">
+    <value>请先选择串口。</value>
+  </data>
+  <data name="Flash_MtkDaRequired" xml:space="preserve">
+    <value>请先选择 DA/加载器文件。</value>
+  </data>
+  <data name="Flash_MtkEntryRequired" xml:space="preserve">
+    <value>请先选择加载器条目。</value>
+  </data>
+  <data name="Flash_MtkBaudRequired" xml:space="preserve">
+    <value>请先选择波特率。</value>
+  </data>
+  <data name="Flash_MtkUsbAttachUnsupported" xml:space="preserve">
+    <value>附加已运行代理仅支持串口连接。</value>
+  </data>
+  <data name="Flash_MtkAttachFamilyUnsupported" xml:space="preserve">
+    <value>附加已运行代理仅支持 XFlash 与 XML 下载代理。</value>
+  </data>
+  <data name="Flash_MtkUsbAutoMatchRequired" xml:space="preserve">
+    <value>USB 连接需勾选“按芯片身份自动匹配加载器条目”。</value>
+  </data>
+  <data name="Flash_MtkLegacyStorageUnsupported" xml:space="preserve">
+    <value>Legacy 下载代理只服务 eMMC，UFS 请选择 XFlash 或 XML 代理。</value>
+  </data>
+  <data name="Flash_MtkLegacyGroup" xml:space="preserve">
+    <value>Legacy 下载代理线上参数</value>
+  </data>
+  <data name="Flash_MtkLegacyNorSelect" xml:space="preserve">
+    <value>NOR 片选（十六进制）</value>
+  </data>
+  <data name="Flash_MtkLegacyNandChipSelect" xml:space="preserve">
+    <value>NAND 片选（十六进制）</value>
+  </data>
+  <data name="Flash_MtkLegacyNandTiming" xml:space="preserve">
+    <value>NAND 访问时序（十六进制）</value>
+  </data>
+  <data name="Flash_MtkLegacyBmtFlag" xml:space="preserve">
+    <value>NAND BMT 标志（十六进制）</value>
+  </data>
+  <data name="Flash_MtkLegacyBmtPool" xml:space="preserve">
+    <value>NAND BMT 池字节数</value>
+  </data>
+  <data name="Flash_MtkLegacyCompletion" xml:space="preserve">
+    <value>完成度档位</value>
+  </data>
+  <data name="Flash_MtkLegacyAgentPacket" xml:space="preserve">
+    <value>代理包长度（字节）</value>
+  </data>
+  <data name="Flash_MtkLegacyStoragePacket" xml:space="preserve">
+    <value>存储包长度（字节）</value>
+  </data>
+  <data name="Flash_MtkLegacyNand64Bit" xml:space="preserve">
+    <value>以 64 位上报 NAND 容量</value>
+  </data>
+  <data name="Flash_MtkLegacyForceCharge" xml:space="preserve">
+    <value>下载期间强制充电</value>
+  </data>
+  <data name="Flash_MtkLegacyParamsInvalid" xml:space="preserve">
+    <value>Legacy 线上参数格式错误或超出范围。</value>
+  </data>
+  <data name="Flash_MtkXmlPowerOffUnsupported" xml:space="preserve">
+    <value>XML 下载代理没有关机请求，只定义了重启到正常启动或 bootloader。</value>
+  </data>
+  <data name="Flash_MtkXmlEmiIgnored" xml:space="preserve">
+    <value>XML 代理的 DRAM 资源来自其自身的主机文件通道，所选 EMI 参数不会被使用。</value>
+  </data>
+  <data name="Flash_MtkLoaderEntry" xml:space="preserve">
+    <value>[{0}] 硬件 {1}:{2} · 版本 {3}</value>
+  </data>
+  <data name="Flash_MtkResultSummary" xml:space="preserve">
+    <value>MTK：{0} 项操作，写入 {1:F1} MiB</value>
+  </data>
+  <data name="Flash_MtkResultVerified" xml:space="preserve">
+    <value>，校验 {0:F1} MiB</value>
+  </data>
+  <data name="Flash_Edl" xml:space="preserve">
+    <value>EDL（Firehose）</value>
+  </data>
+  <data name="Flash_EdlStorageInfoUnknown" xml:space="preserve">
+    <value>存储信息未知，请先读取存储报告。</value>
+  </data>
+  <data name="Flash_EdlStageUnknown" xml:space="preserve">
+    <value>尚未观测到 EDL 协议阶段，因此只启用与阶段无关的动作。</value>
+  </data>
+  <data name="Flash_EdlStageSahara" xml:space="preserve">
+    <value>已观测阶段：Sahara，尚未传输加载器。</value>
+  </data>
+  <data name="Flash_EdlStageFirehose" xml:space="preserve">
+    <value>已观测阶段：Firehose，加载器已生效。</value>
+  </data>
+  <data name="Flash_EdlStageStreaming" xml:space="preserve">
+    <value>已观测阶段：流式 DLOAD 下载器。</value>
+  </data>
+  <data name="Flash_EdlRegionGroup" xml:space="preserve">
+    <value>区域回读与按分区擦除</value>
+  </data>
+  <data name="Flash_EdlRegionDirChoose" xml:space="preserve">
+    <value>选择转储目录</value>
+  </data>
+  <data name="Flash_EdlRegionConfirmBody" xml:space="preserve">
+    <value>这会向所选设备提交一条命令。确定继续？</value>
+  </data>
+  <data name="Flash_EdlReadLunResult" xml:space="preserve">
+    <value>已转储 {0}：{1} 字节，sha256 {2}</value>
+  </data>
+  <data name="Flash_EdlReadWholeFlashResult" xml:space="preserve">
+    <value>已写入 {0} 个 LUN 镜像到 {1}</value>
+  </data>
+  <data name="Flash_EdlReadManifest" xml:space="preserve">
+    <value>按清单回读范围</value>
+  </data>
+  <data name="Flash_EdlReadManifestPick" xml:space="preserve">
+    <value>选择读清单文件</value>
+  </data>
+  <data name="Flash_EdlReadManifestResult" xml:space="preserve">
+    <value>已按清单回读 {0} 个范围到 {1}</value>
+  </data>
+  <data name="Flash_EdlPreviewEraseAllResult" xml:space="preserve">
+    <value>将被擦除的分区数：{0}</value>
+  </data>
+  <data name="Flash_MtkRepairGpt" xml:space="preserve">
+    <value>修复分区表</value>
+  </data>
+  <data name="Flash_MtkRepairGptConfirm" xml:space="preserve">
+    <value>将设备自身上报的分区表写回它的主份与备份份；不引入任何外来表。确定继续？</value>
+  </data>
+  <data name="Flash_MtkRepairGptPreview" xml:space="preserve">
+    <value>预览：{0} 份副本，{1} 字节</value>
+  </data>
+  <data name="Flash_MtkRepairGptResult" xml:space="preserve">
+    <value>已写回 {0} 份副本、{1} 字节，回读校验 {2} 字节</value>
+  </data>
+  <data name="Flash_EdlReadLun" xml:space="preserve">
+    <value>转储选中的 LUN 到文件</value>
+  </data>
+  <data name="Flash_EdlReadWholeFlash" xml:space="preserve">
+    <value>转储全部 LUN</value>
+  </data>
+  <data name="Flash_EdlErasePartitionNameHint" xml:space="preserve">
+    <value>分区名</value>
+  </data>
+  <data name="Flash_EdlEraseSectorCountHint" xml:space="preserve">
+    <value>扇区数</value>
+  </data>
+  <data name="Flash_EdlErasePartitionSectors" xml:space="preserve">
+    <value>从分区起始擦除若干扇区</value>
+  </data>
+  <data name="Flash_EdlErasePartitionInputInvalid" xml:space="preserve">
+    <value>请填写分区名，并给出至少为 1 的扇区数。</value>
+  </data>
+  <data name="Flash_EdlPreviewEraseAll" xml:space="preserve">
+    <value>预览全部分区擦除</value>
+  </data>
+  <data name="Flash_EdlEraseAllConfirm" xml:space="preserve">
+    <value>我确认擦除列出的全部分区不可逆</value>
+  </data>
+  <data name="Flash_EdlEraseAll" xml:space="preserve">
+    <value>擦除 GPT 列出的全部分区</value>
+  </data>
+  <data name="Flash_EdlEraseAllConfirmRequired" xml:space="preserve">
+    <value>擦除全部分区前必须先勾选不可逆擦除确认。</value>
+  </data>
+  <data name="Flash_EdlBootableValueHint" xml:space="preserve">
+    <value>启动分区号（0-255）</value>
+  </data>
+  <data name="Flash_EdlSetBootable" xml:space="preserve">
+    <value>设置可启动存储</value>
+  </data>
+  <data name="Flash_EdlBootableValueInvalid" xml:space="preserve">
+    <value>启动分区号必须是 0 到 255 之间的整数。</value>
+  </data>
+  <data name="Flash_EdlDigestPartitionHint" xml:space="preserve">
+    <value>待取摘要的分区</value>
+  </data>
+  <data name="Flash_EdlPartitionDigest" xml:space="preserve">
+    <value>读取分区 SHA-256</value>
+  </data>
+  <data name="Flash_EdlDigestPartitionMissing" xml:space="preserve">
+    <value>请填写要读取摘要的分区名。</value>
+  </data>
+  <data name="Flash_EdlReadStorageInfo" xml:space="preserve">
+    <value>读取存储信息</value>
+  </data>
+  <data name="Flash_EdlChooseProgrammer" xml:space="preserve">
+    <value>覆盖 Programmer（引导）</value>
+  </data>
+  <data name="Flash_EdlAllowStreamDload" xml:space="preserve">
+    <value>为命令模式目标启用流式 DLOAD（不使用 Firehose Programmer）</value>
+  </data>
+  <data name="Flash_EdlSkipResponse" xml:space="preserve">
+    <value>跳过读写确认头（仅用于不回确认的下载器）</value>
+  </data>
+  <data name="Flash_EdlProgrammerChoice" xml:space="preserve">
+    <value>包内 Programmer</value>
+  </data>
+  <data name="Flash_EdlChooseProgrammerDir" xml:space="preserve">
+    <value>按目录匹配 Programmer</value>
+  </data>
+  <data name="Flash_EdlProgrammerDirEmpty" xml:space="preserve">
+    <value>该目录没有可用条目。</value>
+  </data>
+  <data name="Flash_EdlProgrammerDirAmbiguous" xml:space="preserve">
+    <value>多个条目同时匹配，请在上面的列表中显式选择。</value>
+  </data>
+  <data name="Flash_EdlProgrammerDirNoMatch" xml:space="preserve">
+    <value>没有条目的声明与设备身份相符。</value>
+  </data>
+  <data name="Flash_EdlProgrammerDirNeedsIdentity" xml:space="preserve">
+    <value>设备尚未上报 Sahara 身份，无法按证据匹配。</value>
+  </data>
+  <data name="Flash_EdlProgrammerDirMatched" xml:space="preserve">
+    <value>唯一匹配：{0}</value>
+  </data>
+  <data name="Flash_EdlQudRecovery" xml:space="preserve">
+    <value>启用 QUD HELLO 恢复（仅用于会重发握手的驱动）</value>
+  </data>
+  <data name="Flash_EdlPendingCompletion" xml:space="preserve">
+    <value>允许把一次 pending 视为完成（仅单镜像传输）</value>
+  </data>
+  <data name="Flash_EdlSerial" xml:space="preserve">
+    <value>设备序列号</value>
+  </data>
+  <data name="Flash_EdlReadbackSelected" xml:space="preserve">
+    <value>回读所选分区</value>
+  </data>
+  <data name="Flash_EdlGenerateXml" xml:space="preserve">
+    <value>生成 rawprogram XML</value>
+  </data>
+  <data name="Flash_EdlGeneralizedXml" xml:space="preserve">
+    <value>通用化 XML（适配不同存储容量）</value>
+  </data>
+  <data name="Flash_EdlSkipUfsProvision" xml:space="preserve">
+    <value>跳过 UFS 配置（provisioning）</value>
+  </data>
+  <data name="Flash_EdlSerialFlash" xml:space="preserve">
+    <value>串口刷写完整包</value>
+  </data>
+  <data name="Flash_EdlSerialPort" xml:space="preserve">
+    <value>EDL 串口</value>
+  </data>
+  <data name="Flash_EdlSerialPortRequired" xml:space="preserve">
+    <value>请先选择 EDL 串口。</value>
+  </data>
+  <data name="Flash_Auto" xml:space="preserve">
+    <value>自动</value>
+  </data>
+  <data name="Flash_EdlSectorSize" xml:space="preserve">
+    <value>扇区大小</value>
+  </data>
+  <data name="Flash_EdlSlot" xml:space="preserve">
+    <value>A/B 槽位</value>
+  </data>
+  <data name="Flash_EdlWipeFirst" xml:space="preserve">
+    <value>前导清零扇区</value>
+  </data>
+  <data name="Flash_EdlWipeFirstInvalid" xml:space="preserve">
+    <value>前导清零扇区必须是 0 或正整数。</value>
+  </data>
+  <data name="Flash_EdlMaxPayload" xml:space="preserve">
+    <value>写入块上限</value>
+  </data>
+  <data name="Flash_EdlMaxPayloadInvalid" xml:space="preserve">
+    <value>写入块上限必须是 512 的倍数，且介于 512 与 16777216 字节之间。</value>
+  </data>
+  <data name="Flash_EdlPagesPerBlock" xml:space="preserve">
+    <value>NAND 每块页数</value>
+  </data>
+  <data name="Flash_EdlPagesPerBlockInvalid" xml:space="preserve">
+    <value>NAND 每块页数必须是 0 或 1 至 65535 之间的值。</value>
+  </data>
+  <data name="Flash_EdlGptEntryLba" xml:space="preserve">
+    <value>主分区条目数组起始 LBA</value>
+  </data>
+  <data name="Flash_EdlWipeConfirm" xml:space="preserve">
+    <value>允许清单内的擦写请求</value>
+  </data>
+  <data name="Flash_EdlWipeEntire" xml:space="preserve">
+    <value>允许覆盖整片存储的擦写</value>
+  </data>
+  <data name="Flash_EdlGptEntryLbaInvalid" xml:space="preserve">
+    <value>主分区条目数组起始 LBA 必须是 0 或不小于 2 的整数。</value>
+  </data>
+  <data name="Flash_EdlGptEntryCount" xml:space="preserve">
+    <value>分区条目数量</value>
+  </data>
+  <data name="Flash_EdlGptEntryCountInvalid" xml:space="preserve">
+    <value>分区条目数量必须是 0（沿用头部自报值），或不大于 65536 的正整数。</value>
+  </data>
+  <data name="Flash_EdlGptEntrySize" xml:space="preserve">
+    <value>分区条目大小</value>
+  </data>
+  <data name="Flash_EdlGptEntrySizeInvalid" xml:space="preserve">
+    <value>分区条目大小必须是 0（沿用头部自报值），或 128 至 4096 之间 2 的幂。</value>
+  </data>
+  <data name="Flash_EdlStreamingNandGroup" xml:space="preserve">
+    <value>流式 NAND 布局、坏块表与流控</value>
+  </data>
+  <data name="Flash_EdlNandPartitionHint" xml:space="preserve">
+    <value>分区名</value>
+  </data>
+  <data name="Flash_EdlNandBlockHint" xml:space="preserve">
+    <value>块序号</value>
+  </data>
+  <data name="Flash_EdlNandBlockCountHint" xml:space="preserve">
+    <value>扫描块数</value>
+  </data>
+  <data name="Flash_EdlNandBaseHint" xml:space="preserve">
+    <value>NAND 基地址</value>
+  </data>
+  <data name="Flash_EdlNandPagesHint" xml:space="preserve">
+    <value>每块页数</value>
+  </data>
+  <data name="Flash_EdlNandSectorsHint" xml:space="preserve">
+    <value>每页扇区数</value>
+  </data>
+  <data name="Flash_EdlNandBadLenHint" xml:space="preserve">
+    <value>坏块标记长度</value>
+  </data>
+  <data name="Flash_EdlNandBadInSpare" xml:space="preserve">
+    <value>坏块标记位于备用区</value>
+  </data>
+  <data name="Flash_EdlNandConfirm" xml:space="preserve">
+    <value>确认 NAND 写入操作</value>
+  </data>
+  <data name="Flash_EdlNandTableChoose" xml:space="preserve">
+    <value>选择分区表文件</value>
+  </data>
+  <data name="Flash_EdlNandOverride" xml:space="preserve">
+    <value>允许替换已有分区表</value>
+  </data>
+  <data name="Flash_EdlNandTrusted" xml:space="preserve">
+    <value>进入受信安全模式</value>
+  </data>
+  <data name="Flash_EdlNandReadMap" xml:space="preserve">
+    <value>读取坏块表</value>
+  </data>
+  <data name="Flash_EdlNandMarkBad" xml:space="preserve">
+    <value>标记坏块</value>
+  </data>
+  <data name="Flash_EdlNandUnmarkBad" xml:space="preserve">
+    <value>清除坏块标记</value>
+  </data>
+  <data name="Flash_EdlNandRegisters" xml:space="preserve">
+    <value>读取控制器寄存器</value>
+  </data>
+  <data name="Flash_EdlNandCodeword" xml:space="preserve">
+    <value>检查码字状态</value>
+  </data>
+  <data name="Flash_EdlNandFlashMode" xml:space="preserve">
+    <value>进入 flash 模式</value>
+  </data>
+  <data name="Flash_EdlNandSecureMode" xml:space="preserve">
+    <value>进入安全模式</value>
+  </data>
+  <data name="Flash_EdlNandSendTable" xml:space="preserve">
+    <value>发送分区表</value>
+  </data>
+  <data name="Flash_EdlNandClose" xml:space="preserve">
+    <value>关闭流式会话</value>
+  </data>
+  <data name="Flash_EdlNandInputInvalid" xml:space="preserve">
+    <value>块序号须不小于 0，扫描块数至少为 1，布局各项须为非负数。</value>
+  </data>
+  <data name="Flash_EdlNandPartitionMissing" xml:space="preserve">
+    <value>请填写流式分区表里存在的分区名。</value>
+  </data>
+  <data name="Flash_EdlNandTableMissing" xml:space="preserve">
+    <value>请先选择分区表文件。</value>
+  </data>
+  <data name="Flash_EdlFactoryReset" xml:space="preserve">
+    <value>出厂重置（擦除 userdata 与 metadata）</value>
+  </data>
+  <data name="Flash_EdlFactoryResetConfirm" xml:space="preserve">
+    <value>将按设备 GPT 跨 LUN 定位 userdata 与 metadata 分区并整区擦除，数据不可恢复；缺失的分区会被跳过并报告。确定继续？</value>
+  </data>
+  <data name="Flash_EdlStorageInfoFormat" xml:space="preserve">
+    <value>LUN0 {0} B × {1} · {2:F2} GiB · GPT {3} 个分区</value>
+  </data>
+  <data name="Flash_EdlCapabilities" xml:space="preserve">
+    <value>扇区 {0} B · 载荷 {1:F1} MiB · Firehose {2}</value>
+  </data>
+  <data name="Flash_EdlCapabilityFeatures" xml:space="preserve">
+    <value>读 {0} · 写 {1} · 擦 {2} · 补丁 {3} · 稀疏 {4} · UFS {5}</value>
+  </data>
+  <data name="Flash_SupportYes" xml:space="preserve">
+    <value>支持</value>
+  </data>
+  <data name="Flash_SupportNo" xml:space="preserve">
+    <value>不支持</value>
+  </data>
+  <data name="Flash_SupportUnknown" xml:space="preserve">
+    <value>未知</value>
+  </data>
+  <data name="Flash_EdlReset" xml:space="preserve">
+    <value>重启设备</value>
+  </data>
+  <data name="Flash_EdlErase" xml:space="preserve">
+    <value>擦除所选分区</value>
+  </data>
+  <data name="Flash_EdlEraseConfirm" xml:space="preserve">
+    <value>将按清单声明的扇区范围擦除所选分区，擦除后数据不可恢复。确定继续？</value>
+  </data>
+  <data name="Flash_EdlRepairGpt" xml:space="preserve">
+    <value>修复分区表</value>
+  </data>
+  <data name="Flash_EdlRepairGptConfirm" xml:space="preserve">
+    <value>将把当前从设备读回的分区表按主、备两个范围写回；表不一致会导致设备无法启动。确定继续？</value>
+  </data>
+  <data name="Flash_EdlResetConfirm" xml:space="preserve">
+    <value>将先尝试设置可引导存储，然后通过 firehose 复位设备。确定继续？</value>
+  </data>
+  <data name="Flash_EdlResetDone" xml:space="preserve">
+    <value>已请求设备复位。</value>
+  </data>
+  <data name="Flash_EdlPowerOff" xml:space="preserve">
+    <value>设备关机</value>
+  </data>
+  <data name="Flash_EdlPowerOffConfirm" xml:space="preserve">
+    <value>将通过 firehose 关闭设备电源，需重新插拔才能继续。确定继续？</value>
+  </data>
+  <data name="Flash_EdlPowerOffDone" xml:space="preserve">
+    <value>已请求设备关机。</value>
+  </data>
+  <data name="Flash_EdlResetToEdl" xml:space="preserve">
+    <value>返回 EDL 下载模式</value>
+  </data>
+  <data name="Flash_EdlResetToEdlConfirm" xml:space="preserve">
+    <value>设备将直接复位回紧急下载模式，当前 firehose 会话随之结束。确定继续？</value>
+  </data>
+  <data name="Flash_EdlResetToEdlDone" xml:space="preserve">
+    <value>已请求设备返回 EDL。</value>
+  </data>
+  <data name="Flash_EdlSetActiveSlot" xml:space="preserve">
+    <value>活动槽位（a、b、0 或 1）</value>
+  </data>
+  <data name="Flash_EdlSetActiveSlotApply" xml:space="preserve">
+    <value>切换活动槽位</value>
+  </data>
+  <data name="Flash_EdlSetActiveSlotConfirm" xml:space="preserve">
+    <value>将修改设备上的活动 A/B 槽位，之后启动使用所选槽位。确定继续？</value>
+  </data>
+  <data name="Flash_EdlSetActiveSlotDone" xml:space="preserve">
+    <value>已请求切换活动槽位。</value>
+  </data>
+  <data name="Flash_EdlSetActiveSlotInvalid" xml:space="preserve">
+    <value>活动槽位只能填写 a、b、0 或 1。</value>
+  </data>
+  <data name="Flash_EdlUfsProfileChoose" xml:space="preserve">
+    <value>选择 UFS provisioning 描述符文件</value>
+  </data>
+  <data name="Flash_EdlUfsProfileMissing" xml:space="preserve">
+    <value>请先选择 UFS provisioning 描述符文件，再预览或提交。</value>
+  </data>
+  <data name="Flash_EdlUfsPreview" xml:space="preserve">
+    <value>预览 UFS provisioning 计划</value>
+  </data>
+  <data name="Flash_EdlUfsProvision" xml:space="preserve">
+    <value>建立 UFS 逻辑单元</value>
+  </data>
+  <data name="Flash_EdlUfsProvisionConfirm" xml:space="preserve">
+    <value>provisioning 会真实建立描述符声明的逻辑单元，空盘上无法撤销；预览不写出任何字节。确定继续？</value>
+  </data>
+  <data name="Flash_EdlUfsReset" xml:space="preserve">
+    <value>复位 UFS 设备</value>
+  </data>
+  <data name="Flash_EdlUfsResetConfirm" xml:space="preserve">
+    <value>将请求设备复位 UFS 链路，当前 firehose 会话随之结束。确定继续？</value>
+  </data>
+  <data name="Flash_CompressedSuperEmptyUnsupported" xml:space="preserve">
+    <value>不支持压缩的 super_empty 镜像。</value>
+  </data>
+  <data name="Flash_ImageNameInvalid" xml:space="preserve">
+    <value>镜像文件名不是合法的分区名。</value>
+  </data>
+  <data name="Flash_RootPackageUnsupported" xml:space="preserve">
+    <value>所选文件不是受支持的 Magisk 或 KernelSU 包。</value>
+  </data>
+  <data name="Flash_MissingExtractedImage" xml:space="preserve">
+    <value>解压产物缺失：{0}</value>
+  </data>
+  <data name="Flash_EdlImageMismatch" xml:space="preserve">
+    <value>EDL 镜像 {0} 与 rawprogram 清单不再一致。</value>
+  </data>
+  <data name="Flash_EdlGptProgrammed" xml:space="preserve">
+    <value>已按设备 GPT 写入 EDL 分区“{0}”（写入 {1} 字节，校验 {2} 字节）。</value>
+  </data>
+  <data name="Flash_EdlEraseRangeUnknown" xml:space="preserve">
+    <value>rawprogram 条目“{0}”未声明 num_partition_sectors，无法确定擦除范围。</value>
+  </data>
+  <data name="Flash_EdlEraseFailed" xml:space="preserve">
+    <value>擦除“{0}”失败。响应：{1}</value>
+  </data>
+  <data name="Flash_EdlPowerNotAcknowledged" xml:space="preserve">
+    <value>目标未确认该请求。{0}</value>
+  </data>
+  <data name="Flash_EdlActiveSlotDetected" xml:space="preserve">
+    <value>活动槽位：{0}</value>
+  </data>
+  <data name="Flash_EdlLun" xml:space="preserve">
+    <value>物理区域（LUN）</value>
+  </data>
+  <data name="Flash_EdlSerialBaud" xml:space="preserve">
+    <value>串口波特率</value>
+  </data>
+  <data name="Flash_MtkLoggingOnlyHint" xml:space="preserve">
+    <value>所选 MTK 端口仅支持日志输出，无法执行刷写命令。</value>
+  </data>
+  <data name="Flash_MtkLoaderNoEntries" xml:space="preserve">
+    <value>该 loader 配置没有可用的 DA1/DA2 区域对。</value>
+  </data>
+  <data name="Flash_MtkRpmbModeFrames" xml:space="preserve">
+    <value>按序号读取帧</value>
+  </data>
+  <data name="Flash_MtkRpmbModeByteRange" xml:space="preserve">
+    <value>按字节范围读取</value>
+  </data>
+  <data name="Flash_MtkRpmbModeFullArea" xml:space="preserve">
+    <value>读取整个 RPMB 区域</value>
+  </data>
+  <data name="Flash_MtkSpeedButton" xml:space="preserve">
+    <value>协商传输速度</value>
+  </data>
+  <data name="Flash_MtkSpeedApplied" xml:space="preserve">
+    <value>已应用的传输速度：{0}</value>
+  </data>
+  <data name="Flash_MtkSpeedFamilyUnsupported" xml:space="preserve">
+    <value>只有 XFlash 与 Legacy 下载代理家族提供传输速度协商。</value>
+  </data>
+  <data name="Flash_MtkDevCtrlGroup" xml:space="preserve">
+    <value>扩展设备控制</value>
+  </data>
+  <data name="Flash_MtkRamInfo" xml:space="preserve">
+    <value>内存信息</value>
+  </data>
+  <data name="Flash_MtkRandomId" xml:space="preserve">
+    <value>随机标识</value>
+  </data>
+  <data name="Flash_MtkStorageLife" xml:space="preserve">
+    <value>存储寿命</value>
+  </data>
+  <data name="Flash_MtkExpireDate" xml:space="preserve">
+    <value>过期日期</value>
+  </data>
+  <data name="Flash_MtkPartitionCategory" xml:space="preserve">
+    <value>分区表类别</value>
+  </data>
+  <data name="Flash_MtkBlVersion" xml:space="preserve">
+    <value>BL 版本</value>
+  </data>
+  <data name="Flash_MtkBromVersion" xml:space="preserve">
+    <value>BROM 版本</value>
+  </data>
+  <data name="Flash_MtkMeid" xml:space="preserve">
+    <value>芯片 MEID</value>
+  </data>
+  <data name="Flash_MtkSocid" xml:space="preserve">
+    <value>芯片 SOCID</value>
+  </data>
+  <data name="Flash_MtkDaVersion" xml:space="preserve">
+    <value>DA 版本</value>
+  </data>
+  <data name="Flash_MtkExpireData" xml:space="preserve">
+    <value>过期数据</value>
+  </data>
+  <data name="Flash_MtkOtpLockStatus" xml:space="preserve">
+    <value>OTP 锁定状态</value>
+  </data>
+  <data name="Flash_MtkBatteryVoltage" xml:space="preserve">
+    <value>电池电压</value>
+  </data>
+  <data name="Flash_MtkDramType" xml:space="preserve">
+    <value>DRAM 类型</value>
+  </data>
+  <data name="Flash_MtkErrorDetail" xml:space="preserve">
+    <value>错误详情</value>
+  </data>
+  <data name="Flash_MtkXmlProperty" xml:space="preserve">
+    <value>XML 属性键</value>
+  </data>
+  <data name="Flash_MtkXmlPropertyQuery" xml:space="preserve">
+    <value>读取系统属性</value>
+  </data>
+  <data name="Flash_MtkXmlPropertyRequired" xml:space="preserve">
+    <value>请先填写要查询的 XML 属性键。</value>
+  </data>
+  <data name="Flash_MtkXmlPropertyFamilyRequired" xml:space="preserve">
+    <value>XML 系统属性查询只由 XML 下载代理家族提供；请把协议选择框切换到 XML。</value>
+  </data>
+  <data name="Flash_MtkXmlPropertyResult" xml:space="preserve">
+    <value>XML 属性 {0} = {1}（信封 {2}，版本 {3}）</value>
+  </data>
+  <data name="Flash_MtkRebootMeta" xml:space="preserve">
+    <value>重启进入 META 模式</value>
+  </data>
+  <data name="Flash_MtkRebootAndroidTest" xml:space="preserve">
+    <value>重启进入 Android 测试模式</value>
+  </data>
+  <data name="Flash_MtkRebootMetaConfirm" xml:space="preserve">
+    <value>先启动到存储就绪的代理，再请求 META 模式重启；只有 XML 下载代理定义该启动目标。确定继续？</value>
+  </data>
+  <data name="Flash_MtkRebootAndroidTestConfirm" xml:space="preserve">
+    <value>先启动到存储就绪的代理，再请求 Android 测试模式重启；只有 XML 下载代理定义该启动目标。确定继续？</value>
+  </data>
+  <data name="Flash_MtkRebootMetaDone" xml:space="preserve">
+    <value>已请求 META 模式重启。</value>
+  </data>
+  <data name="Flash_MtkRebootAndroidTestDone" xml:space="preserve">
+    <value>已请求 Android 测试模式重启。</value>
+  </data>
+  <data name="Flash_MtkXmlRebootFamilyRequired" xml:space="preserve">
+    <value>META 与 Android 测试模式重启只由 XML 下载代理家族定义；请把协议选择框切换到 XML。</value>
+  </data>
+  <data name="Flash_MtkPreloaderGroup" xml:space="preserve">
+    <value>Preloader 命令阶段</value>
+  </data>
+  <data name="Flash_MtkPreloaderOffset" xml:space="preserve">
+    <value>起始地址</value>
+  </data>
+  <data name="Flash_MtkPreloaderLength" xml:space="preserve">
+    <value>长度</value>
+  </data>
+  <data name="Flash_MtkPreloaderPeek" xml:space="preserve">
+    <value>读取内存窗口</value>
+  </data>
+  <data name="Flash_MtkPreloaderReturnToBrom" xml:space="preserve">
+    <value>返回 BootROM</value>
+  </data>
+  <data name="Flash_MtkPreloaderReturnToBromConfirm" xml:space="preserve">
+    <value>武装 preloader 看门狗复位会写入设备状态，并在下次超时重启进入 BootROM。确定继续？</value>
+  </data>
+  <data name="Flash_MtkPreloaderDisableWatchdog" xml:space="preserve">
+    <value>禁用看门狗</value>
+  </data>
+  <data name="Flash_MtkPreloaderDisableWatchdogConfirm" xml:space="preserve">
+    <value>按芯片区分的看门狗禁用序列会写入设备寄存器。确定继续？</value>
+  </data>
+  <data name="Flash_MtkPreloaderJump" xml:space="preserve">
+    <value>跳转到分区</value>
+  </data>
+  <data name="Flash_MtkPreloaderPartitionName" xml:space="preserve">
+    <value>要引导的分区</value>
+  </data>
+  <data name="Flash_MtkPreloaderJumpConfirm" xml:space="preserve">
+    <value>引导指定分区会改变设备状态且预计会断开链路，因此之后必须重新打开会话。确定继续？</value>
+  </data>
+  <data name="Flash_MtkPreloaderBootloaderJump" xml:space="preserve">
+    <value>跳转到 Boot Loader</value>
+  </data>
+  <data name="Flash_MtkPreloaderBootloaderJumpConfirm" xml:space="preserve">
+    <value>跳转到 Boot Loader 会转移执行权并预计会断开链路，因此之后必须重新打开会话。确定继续？</value>
+  </data>
+  <data name="Flash_OkResult" xml:space="preserve">
+    <value>{0}：完成</value>
+  </data>
+  <data name="Flash_MtkPreloaderSessionFaulted" xml:space="preserve">
+    <value>preloader 会话在任何协议拒绝时进入 fault 状态，因此已重建；请在全新会话上重试该操作。</value>
+  </data>
+  <data name="Settings_FlashAutoBackup" xml:space="preserve">
+    <value>刷写前备份分区</value>
+  </data>
+  <data name="Settings_FlashAutoBackupDescription" xml:space="preserve">
+    <value>刷写分区前自动按当前协议备份该分区。</value>
+  </data>
+  <data name="ViewLocator_NotFound" xml:space="preserve">
+    <value>未找到: </value>
+  </data>
+  <data name="Dialog_UnsavedTitle" xml:space="preserve">
+    <value>未保存的修改</value>
+  </data>
+  <data name="Dialog_UnsavedMessage" xml:space="preserve">
+    <value>是否在关闭前保存“{0}”的修改？</value>
+  </data>
+  <data name="Dialog_DiscardChanges" xml:space="preserve">
+    <value>放弃修改</value>
+  </data>
+  <data name="Dialog_SaveFailed" xml:space="preserve">
+    <value>保存失败</value>
+  </data>
+  <data name="Dialog_SaveIncomplete" xml:space="preserve">
+    <value>仍有未保存的修改，请检查文档后重试。</value>
+  </data>
+  <data name="DangerousConfirm_Title" xml:space="preserve">
+    <value>危险操作</value>
+  </data>
+  <data name="DangerousConfirm_Ack" xml:space="preserve">
+    <value>我已理解该操作不可逆</value>
+  </data>
+  <data name="DangerousConfirm_EnterHint" xml:space="preserve">
+    <value>输入 CONFIRM 继续</value>
+  </data>
+  <data name="DangerousConfirm_ConfirmButton" xml:space="preserve">
+    <value>继续</value>
+  </data>
+  <data name="DangerousConfirm_CancelButton" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="ImageView_UnpackMode" xml:space="preserve">
+    <value>解包</value>
+  </data>
+  <data name="Image_OperationSummary" xml:space="preserve">
+    <value>成功 {0} 项，失败 {1} 项，跳过 {2} 项。详情见日志。</value>
+  </data>
+  <data name="ImageView_PackMode" xml:space="preserve">
+    <value>打包</value>
+  </data>
+  <data name="ImageView_OutputMode" xml:space="preserve">
+    <value>输出</value>
+  </data>
+  <data name="ImageView_Processing" xml:space="preserve">
+    <value>正在处理…</value>
+  </data>
+  <data name="ImageView_Flash" xml:space="preserve">
+    <value>刷入</value>
+  </data>
+  <data name="ImageView_Refresh" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="ImageView_ExtractSelected" xml:space="preserve">
+    <value>分解选中文件</value>
+  </data>
+  <data name="ImageView_SynthesizeImg" xml:space="preserve">
+    <value>合成IMG</value>
+  </data>
+  <data name="ImageView_Ext4Minimize" xml:space="preserve">
+    <value>缩容 EXT4 副本</value>
+  </data>
+  <data name="ImageView_Ext4RepairMinimize" xml:space="preserve">
+    <value>修复并缩容 EXT4 副本</value>
+  </data>
+  <data name="Image_Ext4MinimizeConfirm" xml:space="preserve">
+    <value>检查并缩容此 EXT4 镜像的副本？源镜像不会更改。</value>
+  </data>
+  <data name="Image_Ext4RepairWarning" xml:space="preserve">
+    <value>修复可能改变文件系统元数据和内容。确定修复并缩容单独的副本？源镜像不会更改。</value>
+  </data>
+  <data name="Image_Ext4Maintaining" xml:space="preserve">
+    <value>正在检查 EXT4 镜像...</value>
+  </data>
+  <data name="Image_Ext4Maintained" xml:space="preserve">
+    <value>EXT4 镜像已保存：{0}</value>
+  </data>
+  <data name="Image_Ext4MaintenanceFailed" xml:space="preserve">
+    <value>EXT4 镜像维护失败</value>
+  </data>
+  <data name="ImageView_SynthesizeBr" xml:space="preserve">
+    <value>合成BR</value>
+  </data>
+  <data name="ImageView_DeleteSelected" xml:space="preserve">
+    <value>删除选中文件</value>
+  </data>
+  <data name="ImageView_SynthesizeSuper" xml:space="preserve">
+    <value>合成SUPER</value>
+  </data>
+  <data name="ImageView_SynthesizeDat" xml:space="preserve">
+    <value>合成DAT</value>
+  </data>
+  <data name="ImageView_FlashSelected" xml:space="preserve">
+    <value>刷入选中文件</value>
+  </data>
+  <data name="ImageView_FlashSelectedHint" xml:space="preserve">
+    <value>将选中的可刷写镜像按顺序刷入当前设备</value>
+  </data>
+  <data name="ImageView_PackRom" xml:space="preserve">
+    <value>打包ZIP</value>
+  </data>
+  <data name="ImageView_BootPatch" xml:space="preserve">
+    <value>修补Boot</value>
+  </data>
+  <data name="BootPatch_File" xml:space="preserve">
+    <value>选择文件</value>
+  </data>
+  <data name="BootPatch_Boot" xml:space="preserve">
+    <value>选择Boot</value>
+  </data>
+  <data name="BootPatch_CustomFile" xml:space="preserve">
+    <value>自选文件</value>
+  </data>
+  <data name="BootPatch_NoFile" xml:space="preserve">
+    <value>不选择文件</value>
+  </data>
+  <data name="BootPatch_SelectFile" xml:space="preserve">
+    <value>选择文件</value>
+  </data>
+  <data name="BootPatch_DevicePlaceholder" xml:space="preserve">
+    <value>指定预启动设备</value>
+  </data>
+  <data name="BootPatch_ForceRootfs" xml:space="preserve">
+    <value>legacy sar</value>
+  </data>
+  <data name="BootPatch_KeepEncryption" xml:space="preserve">
+    <value>保持强加密</value>
+  </data>
+  <data name="BootPatch_InstallRecovery" xml:space="preserve">
+    <value>安装到Recovery</value>
+  </data>
+  <data name="BootPatch_KeepAvb" xml:space="preserve">
+    <value>保留AVB2.0/dm-verity</value>
+  </data>
+  <data name="BootPatch_PatchVbmeta" xml:space="preserve">
+    <value>修补VBMeta标志</value>
+  </data>
+  <data name="BootPatch_AutoDetect" xml:space="preserve">
+    <value>自动检测</value>
+  </data>
+  <data name="BootPatch_AutoDetectArchitecture" xml:space="preserve">
+    <value>自动检测（{0}）</value>
+  </data>
+  <data name="BootPatch_AutoDetectKmi" xml:space="preserve">
+    <value>自动检测（{0}）</value>
+  </data>
+  <data name="BootPatch_ArchitectureUnknown" xml:space="preserve">
+    <value>未识别</value>
+  </data>
+  <data name="BootPatch_KmiUnknown" xml:space="preserve">
+    <value>未识别</value>
+  </data>
+  <data name="BootPatch_KmiDetectionFailed" xml:space="preserve">
+    <value>无法识别 boot 内核 KMI。</value>
+  </data>
+  <data name="BootPatch_KmiDetected" xml:space="preserve">
+    <value>boot 内核 KMI：{0}</value>
+  </data>
+  <data name="BootPatch_Progress" xml:space="preserve">
+    <value>修补进度</value>
+  </data>
+  <data name="BootPatch_Start" xml:space="preserve">
+    <value>开始修补</value>
+  </data>
+  <data name="BootPatch_SuperPassword" xml:space="preserve">
+    <value>超级密码（APatch）</value>
+  </data>
+  <data name="BootPatch_ApatchPassword" xml:space="preserve">
+    <value>请输入超级密码</value>
+  </data>
+  <data name="PackDialog_PackPayload" xml:space="preserve">
+    <value>打包 Payload</value>
+  </data>
+  <data name="PackDialog_ShowOriginal" xml:space="preserve">
+    <value>显示原包镜像</value>
+  </data>
+  <data name="PackDialog_BrowseOutput" xml:space="preserve">
+    <value>选择输出位置</value>
+  </data>
+  <data name="PackDialog_SelectFolder" xml:space="preserve">
+    <value>选择目录</value>
+  </data>
+  <data name="PackDialog_Select" xml:space="preserve">
+    <value>选择</value>
+  </data>
+  <data name="PackDialog_Original" xml:space="preserve">
+    <value>原包</value>
+  </data>
+  <data name="PackDialog_NoImages" xml:space="preserve">
+    <value>暂无镜像</value>
+  </data>
+  <data name="PackDialog_AddImages" xml:space="preserve">
+    <value>添加更多镜像</value>
+  </data>
+  <data name="PackDialog_ExtraImages" xml:space="preserve">
+    <value>附加镜像 {0}</value>
+  </data>
+  <data name="PackDialog_DeliveryOutputs" xml:space="preserve">
+    <value>交付生成镜像</value>
+  </data>
+  <data name="PackDialog_DeliveryOutputsSource" xml:space="preserve">
+    <value>交付</value>
+  </data>
+  <data name="PackDialog_NodeOutputs" xml:space="preserve">
+    <value>节点工作流产物</value>
+  </data>
+  <data name="PackDialog_NodeOutputsSource" xml:space="preserve">
+    <value>节点</value>
+  </data>
+  <data name="PackDialog_RemoveGroup" xml:space="preserve">
+    <value>移除此镜像列表</value>
+  </data>
+  <data name="PackDialog_Previous" xml:space="preserve">
+    <value>上一页子项目</value>
+  </data>
+  <data name="PackDialog_Next" xml:space="preserve">
+    <value>下一页子项目</value>
+  </data>
+  <data name="PackDialog_Confirm" xml:space="preserve">
+    <value>确认</value>
+  </data>
+  <data name="ImageView_ImportHint" xml:space="preserve">
+    <value>将镜像导入项目 images/ 目录</value>
+  </data>
+  <data name="ImageView_ExportHint" xml:space="preserve">
+    <value>将选中镜像导出到外部路径</value>
+  </data>
+  <data name="ImageView_ExtractHint" xml:space="preserve">
+    <value>将选中镜像解包到对应目录</value>
+  </data>
+  <data name="ImageView_SuperHint" xml:space="preserve">
+    <value>由项目内 raw/sparse 镜像合成 super 镜像</value>
+  </data>
+  <data name="ImageView_DatHint" xml:space="preserve">
+    <value>生成 .new.dat 与 .transfer.list（Android v4）</value>
+  </data>
+  <data name="ImageView_NoSelection" xml:space="preserve">
+    <value>未选中镜像</value>
+  </data>
+  <data name="Image_ErofsSelectDevice" xml:space="preserve">
+    <value>选择 EROFS 第 {0} 个设备镜像（共 {1} 个）</value>
+  </data>
+  <data name="Image_ErofsDeviceMustBeLocal" xml:space="preserve">
+    <value>请选择本地 EROFS 设备镜像。</value>
+  </data>
+  <data name="Image_ErofsDuplicateDevice" xml:space="preserve">
+    <value>请为每个 EROFS 设备选择不同的镜像。</value>
+  </data>
+  <data name="Image_ErofsDevicePickerUnavailable" xml:space="preserve">
+    <value>无法为此 EROFS 镜像选择设备文件。</value>
+  </data>
+  <data name="ImageView_NoProject" xml:space="preserve">
+    <value>尚未打开工程</value>
+  </data>
+  <data name="ImageView_OperationDone" xml:space="preserve">
+    <value>操作完成</value>
+  </data>
+  <data name="ImageView_SelectHint" xml:space="preserve">
+    <value>将此镜像加入批量操作</value>
+  </data>
+  <data name="ImageView_SelectProject" xml:space="preserve">
+    <value>项目</value>
+  </data>
+  <data name="Image_ExtractOverwriteTitle" xml:space="preserve">
+    <value>目录已存在</value>
+  </data>
+  <data name="Image_ExtractOverwriteMessage" xml:space="preserve">
+    <value>目录 &apos;{0}&apos; 已存在，是否覆盖？</value>
+  </data>
+  <data name="Image_ExtractOverwrite" xml:space="preserve">
+    <value>覆盖</value>
+  </data>
+  <data name="Image_ExtractSkip" xml:space="preserve">
+    <value>跳过</value>
+  </data>
+  <data name="Image_PackOverwriteTitle" xml:space="preserve">
+    <value>目标文件已存在</value>
+  </data>
+  <data name="Image_PackOverwriteMessage" xml:space="preserve">
+    <value>以下文件已存在，是否覆盖？</value>
+  </data>
+  <data name="Image_UnpackedDirectoryMissingTitle" xml:space="preserve">
+    <value>解包文件夹不存在</value>
+  </data>
+  <data name="Image_UnpackedDirectoryMissingMessage" xml:space="preserve">
+    <value>未找到解包文件夹“{0}”。</value>
+  </data>
+  <data name="Log_Channel_All" xml:space="preserve">
+    <value>全部通道</value>
+  </data>
+  <data name="Log_Channel_General" xml:space="preserve">
+    <value>通用</value>
+  </data>
+  <data name="Log_Channel_Device" xml:space="preserve">
+    <value>设备</value>
+  </data>
+  <data name="Log_Channel_Flash" xml:space="preserve">
+    <value>烧录</value>
+  </data>
+  <data name="Log_Channel_Firmware" xml:space="preserve">
+    <value>固件</value>
+  </data>
+  <data name="Log_Channel_Build" xml:space="preserve">
+    <value>节点</value>
+  </data>
+  <data name="Workspace_DropNoFiles" xml:space="preserve">
+    <value>拖入内容不含可打开的文件，已忽略</value>
+  </data>
+  <data name="Workspace_DropOpenFailed" xml:space="preserve">
+    <value>打开拖入文件失败</value>
+  </data>
+  <data name="Splash_Subtitle" xml:space="preserve">
+    <value>固件工具箱 · Firmware Toolbox</value>
+  </data>
+  <data name="Splash_Initializing" xml:space="preserve">
+    <value>正在初始化...</value>
+  </data>
+  <data name="Splash_Settings" xml:space="preserve">
+    <value>正在读取设置...</value>
+  </data>
+  <data name="Splash_ApplyingSettings" xml:space="preserve">
+    <value>正在应用主题、语言和服务设置...</value>
+  </data>
+  <data name="Splash_OpeningFiles" xml:space="preserve">
+    <value>正在打开启动文件...</value>
+  </data>
+  <data name="Splash_Ready" xml:space="preserve">
+    <value>初始化完成</value>
+  </data>
+  <data name="Splash_Scanning" xml:space="preserve">
+    <value>正在扫描设备...</value>
+  </data>
+  <data name="Splash_FoundDevices" xml:space="preserve">
+    <value>发现 {0} 台设备</value>
+  </data>
+  <data name="Splash_Preparing" xml:space="preserve">
+    <value>正在准备主界面...</value>
+  </data>
+  <data name="Splash_Services" xml:space="preserve">
+    <value>正在加载工作区服务...</value>
+  </data>
+  <data name="Splash_Nodes" xml:space="preserve">
+    <value>正在准备节点编辑器...</value>
+  </data>
+  <data name="Splash_Workspace" xml:space="preserve">
+    <value>正在创建工作区布局...</value>
+  </data>
+  <data name="MainWindow_Title" xml:space="preserve">
+    <value>UotanStudio 固件工具箱</value>
+  </data>
+  <data name="Document_BuildProp" xml:space="preserve">
+    <value>build.prop</value>
+  </data>
+  <data name="Document_InitRc" xml:space="preserve">
+    <value>init.rc</value>
+  </data>
+  <data name="ProjectExplorer_Outer" xml:space="preserve">
+    <value>外部</value>
+  </data>
+  <data name="ProjectExplorer_Inner" xml:space="preserve">
+    <value>内部</value>
+  </data>
+  <data name="ProjectExplorer_Innermost" xml:space="preserve">
+    <value>最内层</value>
+  </data>
+  <data name="Explorer_OpenAsText" xml:space="preserve">
+    <value>以文本打开</value>
+  </data>
+  <data name="Explorer_OpenAsLog" xml:space="preserve">
+    <value>以日志打开</value>
+  </data>
+  <data name="Explorer_OpenAsHex" xml:space="preserve">
+    <value>以十六进制打开</value>
+  </data>
+  <data name="Explorer_OpenAsDtb" xml:space="preserve">
+    <value>以设备树打开</value>
+  </data>
+  <data name="Explorer_OpenAsDex" xml:space="preserve">
+    <value>以 DEX 打开</value>
+  </data>
+  <data name="Explorer_OpenAsAxml" xml:space="preserve">
+    <value>以 Manifest 打开</value>
+  </data>
+  <data name="Explorer_OpenAsArsc" xml:space="preserve">
+    <value>以 ARSC 打开</value>
+  </data>
+  <data name="Explorer_OpenAsApk" xml:space="preserve">
+    <value>以 APK 打开</value>
+  </data>
+  <data name="Explorer_OpenAsFirmware" xml:space="preserve">
+    <value>在固件信息中打开</value>
+  </data>
+  <data name="Explorer_OpenAsFileSystem" xml:space="preserve">
+    <value>以文件管理视图打开</value>
+  </data>
+  <data name="Explorer_OpenAsMenu" xml:space="preserve">
+    <value>打开方式</value>
+  </data>
+  <data name="Explorer_NewEmptySubProject" xml:space="preserve">
+    <value>新建子项目</value>
+  </data>
+  <data name="Explorer_ImportExistingSubProject" xml:space="preserve">
+    <value>导入现有子项目</value>
+  </data>
+  <data name="Explorer_Add" xml:space="preserve">
+    <value>添加</value>
+  </data>
+  <data name="Explorer_NewFile" xml:space="preserve">
+    <value>新建文件</value>
+  </data>
+  <data name="Explorer_NewFolder" xml:space="preserve">
+    <value>新建文件夹</value>
+  </data>
+  <data name="Explorer_Unpack" xml:space="preserve">
+    <value>解包/解压</value>
+  </data>
+  <data name="Explorer_SplitVolumes" xml:space="preserve">
+    <value>分卷 DAT / TWRP</value>
+  </data>
+  <data name="Explorer_SplitImport" xml:space="preserve">
+    <value>合并导入为单一文件...</value>
+  </data>
+  <data name="Explorer_SplitReconstruct" xml:space="preserve">
+    <value>重建完整 DAT 镜像...</value>
+  </data>
+  <data name="Explorer_SplitRequiresNewDat" xml:space="preserve">
+    <value>重建完整镜像需要带编号的 new-data 卷及同组 transfer list。补丁卷只能导入为补丁文件。</value>
+  </data>
+  <data name="Explorer_SplitRequiresTransferList" xml:space="preserve">
+    <value>导入 DAT 卷需要同组 transfer list。</value>
+  </data>
+  <data name="Explorer_SplitOverwrite" xml:space="preserve">
+    <value>是否替换已有输出文件？如果操作失败或取消，原文件内容会保留。
+{0}</value>
+  </data>
+  <data name="Explorer_SplitWorking" xml:space="preserve">
+    <value>正在处理分卷...</value>
+  </data>
+  <data name="Explorer_SplitBytes" xml:space="preserve">
+    <value>{0:N0} / {1:N0} 字节</value>
+  </data>
+  <data name="Explorer_SplitPercent" xml:space="preserve">
+    <value>已完成 {0:P0}</value>
+  </data>
+  <data name="Explorer_SplitDone" xml:space="preserve">
+    <value>已生成输出：{0}</value>
+  </data>
+  <data name="Explorer_SplitCancelled" xml:space="preserve">
+    <value>分卷操作已取消，已有输出未更改。</value>
+  </data>
+  <data name="Explorer_Rename" xml:space="preserve">
+    <value>重命名</value>
+  </data>
+  <data name="Explorer_CopyFullPath" xml:space="preserve">
+    <value>复制完整路径</value>
+  </data>
+  <data name="Explorer_OpenInFileExplorer" xml:space="preserve">
+    <value>在文件资源管理器中打开</value>
+  </data>
+  <data name="Explorer_OpenInMultiColumnBrowser" xml:space="preserve">
+    <value>在多列文件浏览器中打开</value>
+  </data>
+  <data name="Explorer_OpenInTerminal" xml:space="preserve">
+    <value>在终端打开</value>
+  </data>
+  <data name="Explorer_NodeProject" xml:space="preserve">
+    <value>节点项目</value>
+  </data>
+  <data name="Explorer_Yes" xml:space="preserve">
+    <value>是</value>
+  </data>
+  <data name="Explorer_No" xml:space="preserve">
+    <value>否</value>
+  </data>
+  <data name="Explorer_ConvertFormat" xml:space="preserve">
+    <value>格式转换</value>
+  </data>
+  <data name="Explorer_ConvertSparse" xml:space="preserve">
+    <value>稀疏转换</value>
+  </data>
+  <data name="Explorer_ConvertImgToDat" xml:space="preserve">
+    <value>IMG 转 DAT</value>
+  </data>
+  <data name="Explorer_ConvertImgToBr" xml:space="preserve">
+    <value>IMG 转 BR</value>
+  </data>
+  <data name="Explorer_Checksum" xml:space="preserve">
+    <value>校验</value>
+  </data>
+  <data name="Checksum_Title" xml:space="preserve">
+    <value>校验</value>
+  </data>
+  <data name="Checksum_FileName" xml:space="preserve">
+    <value>文件名</value>
+  </data>
+  <data name="Checksum_ChooseFile" xml:space="preserve">
+    <value>选择文件</value>
+  </data>
+  <data name="Checksum_Verify" xml:space="preserve">
+    <value>校验</value>
+  </data>
+  <data name="Checksum_Copy" xml:space="preserve">
+    <value>复制</value>
+  </data>
+  <data name="Checksum_Paste" xml:space="preserve">
+    <value>粘贴</value>
+  </data>
+  <data name="Checksum_PasteAndVerify" xml:space="preserve">
+    <value>粘贴并校验</value>
+  </data>
+  <data name="Checksum_Correct" xml:space="preserve">
+    <value>正确</value>
+  </data>
+  <data name="Checksum_Wrong" xml:space="preserve">
+    <value>错误</value>
+  </data>
+  <data name="Dock_Dtb_Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Dock_Dtb_Tree" xml:space="preserve">
+    <value>设备树</value>
+  </data>
+  <data name="Dock_Dtb_Source" xml:space="preserve">
+    <value>设备树源</value>
+  </data>
+  <data name="Dock_Dtb_CompileError" xml:space="preserve">
+    <value>编译错误</value>
+  </data>
+  <data name="Dock_Dex_Save" xml:space="preserve">
+    <value>重建并保存</value>
+  </data>
+  <data name="Dock_Dex_Disassembling" xml:space="preserve">
+    <value>正在解析与反汇编，请稍候…</value>
+  </data>
+  <data name="Dock_Dex_Entry" xml:space="preserve">
+    <value>DEX 条目</value>
+  </data>
+  <data name="Dock_Dex_MergeView" xml:space="preserve">
+    <value>合并视图</value>
+  </data>
+  <data name="Dock_Dex_Resource" xml:space="preserve">
+    <value>资源条目</value>
+  </data>
+  <data name="Dock_Dex_ResourceExport" xml:space="preserve">
+    <value>导出资源</value>
+  </data>
+  <data name="Dock_Dex_ResourceReplace" xml:space="preserve">
+    <value>替换资源</value>
+  </data>
+  <data name="Dock_Dex_SignKey" xml:space="preserve">
+    <value>签名密钥</value>
+  </data>
+  <data name="Dock_Dex_Sign" xml:space="preserve">
+    <value>签名</value>
+  </data>
+  <data name="Dock_Manifest_Save" xml:space="preserve">
+    <value>重建并保存</value>
+  </data>
+  <data name="Dock_Manifest_Header" xml:space="preserve">
+    <value>Manifest</value>
+  </data>
+  <data name="Dock_Manifest_Busy" xml:space="preserve">
+    <value>正在解析 Manifest，请稍候…</value>
+  </data>
+  <data name="Dock_Manifest_ToggleRightView" xml:space="preserve">
+    <value>切换右侧视图</value>
+  </data>
+  <data name="Dock_Arsc_Save" xml:space="preserve">
+    <value>重建并保存</value>
+  </data>
+  <data name="Dock_Arsc_Busy" xml:space="preserve">
+    <value>正在解析资源表，请稍候…</value>
+  </data>
+  <data name="Dock_Hex_Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Dock_Hex_Busy" xml:space="preserve">
+    <value>正在加载文件，请稍候…</value>
+  </data>
+  <data name="Dock_Apk_Busy" xml:space="preserve">
+    <value>正在分析 APK，请稍候…</value>
+  </data>
+  <data name="FirmwareInfo_Title" xml:space="preserve">
+    <value>固件信息</value>
+  </data>
+  <data name="FirmwareInfo_FormatName" xml:space="preserve">
+    <value>格式名</value>
+  </data>
+  <data name="FirmwareInfo_Summary" xml:space="preserve">
+    <value>摘要</value>
+  </data>
+  <data name="FirmwareInfo_Metadata" xml:space="preserve">
+    <value>元数据</value>
+  </data>
+  <data name="FirmwareInfo_Entries" xml:space="preserve">
+    <value>条目</value>
+  </data>
+  <data name="FirmwareInfo_Components" xml:space="preserve">
+    <value>组件</value>
+  </data>
+  <data name="FirmwareInfo_Loading" xml:space="preserve">
+    <value>正在读取固件信息，请稍候…</value>
+  </data>
+  <data name="FirmwareInfo_Error" xml:space="preserve">
+    <value>读取失败</value>
+  </data>
+  <data name="FirmwareInfo_Unrecognized" xml:space="preserve">
+    <value>无法识别该文件格式</value>
+  </data>
+  <data name="Dock_Partition_Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Dock_Partition_Partitions" xml:space="preserve">
+    <value>分区</value>
+  </data>
+  <data name="Dock_Partition_Properties" xml:space="preserve">
+    <value>属性</value>
+  </data>
+  <data name="Dock_Partition_NoSelection" xml:space="preserve">
+    <value>请选择一个分区以编辑其属性。</value>
+  </data>
+  <data name="Dock_Partition_Name" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="Dock_Partition_Start" xml:space="preserve">
+    <value>起始（扇区）</value>
+  </data>
+  <data name="Dock_Partition_Size" xml:space="preserve">
+    <value>大小（扇区）</value>
+  </data>
+  <data name="Dock_Partition_Type" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="Dock_Partition_TypeHint" xml:space="preserve">
+    <value>如 linear / zero / mtd / 0x83 / GPT GUID</value>
+  </data>
+  <data name="Dock_Partition_Add" xml:space="preserve">
+    <value>添加分区</value>
+  </data>
+  <data name="Dock_Partition_Remove" xml:space="preserve">
+    <value>删除分区</value>
+  </data>
+  <data name="Dock_Partition_Unallocated" xml:space="preserve">
+    <value>未分配</value>
+  </data>
+  <data name="Dock_Partition_CapacityFormat" xml:space="preserve">
+    <value>容量：{0} 扇区（{1}）</value>
+  </data>
+  <data name="Dock_Partition_UsedFormat" xml:space="preserve">
+    <value>已用至：{0} 扇区（{1}）</value>
+  </data>
+  <data name="Dock_Qcn_Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Dock_Qcn_Items" xml:space="preserve">
+    <value>NV 条目</value>
+  </data>
+  <data name="Dock_Qcn_Search" xml:space="preserve">
+    <value>搜索 id 或名称</value>
+  </data>
+  <data name="Dock_Qcn_Properties" xml:space="preserve">
+    <value>条目属性</value>
+  </data>
+  <data name="Dock_Qcn_NoSelection" xml:space="preserve">
+    <value>选择一个 NV 条目以查看并编辑其数据。</value>
+  </data>
+  <data name="Dock_Qcn_Structured" xml:space="preserve">
+    <value>结构化值</value>
+  </data>
+  <data name="Dock_Qcn_StructuredInvalid" xml:space="preserve">
+    <value>值无效，条目数据未修改。</value>
+  </data>
+  <data name="Dock_Qcn_ImeiCheckInvalid" xml:space="preserve">
+    <value>警告：Luhn 校验位与前 14 位不一致。</value>
+  </data>
+  <data name="Dock_Qcn_Data" xml:space="preserve">
+    <value>原始数据（128 字节）</value>
+  </data>
+  <data name="Dock_Qcn_ItemId" xml:space="preserve">
+    <value>条目 Id</value>
+  </data>
+  <data name="Dock_Qcn_Name" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="Dock_Qcn_Stream" xml:space="preserve">
+    <value>所在流</value>
+  </data>
+  <data name="Dock_Qcn_Length" xml:space="preserve">
+    <value>有效长度</value>
+  </data>
+  <data name="Dock_Qcn_Busy" xml:space="preserve">
+    <value>正在解析 QCN，请稍候…</value>
+  </data>
+  <data name="Compare_Equal" xml:space="preserve">
+    <value>相等</value>
+  </data>
+  <data name="Compare_Different" xml:space="preserve">
+    <value>不同</value>
+  </data>
+  <data name="Compare_LeftOnly" xml:space="preserve">
+    <value>仅左侧</value>
+  </data>
+  <data name="Compare_RightOnly" xml:space="preserve">
+    <value>仅右侧</value>
+  </data>
+  <data name="Compare_Refresh" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="Compare_CopyLeftToRight" xml:space="preserve">
+    <value>复制到右侧</value>
+  </data>
+  <data name="Compare_CopyRightToLeft" xml:space="preserve">
+    <value>复制到左侧</value>
+  </data>
+  <data name="Compare_OpenTextCompare" xml:space="preserve">
+    <value>打开文本比较</value>
+  </data>
+  <data name="Compare_NextDiff" xml:space="preserve">
+    <value>下一差异</value>
+  </data>
+  <data name="Compare_PrevDiff" xml:space="preserve">
+    <value>上一差异</value>
+  </data>
+  <data name="Compare_TextSummary" xml:space="preserve">
+    <value>差异 {0} 行 · 共 {1} 行</value>
+  </data>
+  <data name="Compare_HexSummary" xml:space="preserve">
+    <value>差异 {0} 字节 · {1} 个区段</value>
+  </data>
+  <data name="Compare_FileCompare" xml:space="preserve">
+    <value>文件比较</value>
+  </data>
+  <data name="Compare_FolderCompare" xml:space="preserve">
+    <value>文件夹比较</value>
+  </data>
+  <data name="Compare_StartCompare" xml:space="preserve">
+    <value>开启对比</value>
+  </data>
+  <data name="Compare_StopCompare" xml:space="preserve">
+    <value>结束对比</value>
+  </data>
+  <data name="Compare_GoUp" xml:space="preserve">
+    <value>返回上一级</value>
+  </data>
+  <data name="Compare_NoParentFolder" xml:space="preserve">
+    <value>已在最顶层，无法再返回上一级。</value>
+  </data>
+  <data name="Compare_AddFolder" xml:space="preserve">
+    <value>添加文件夹</value>
+  </data>
+  <data name="Compare_PathPlaceholder" xml:space="preserve">
+    <value>输入目录或文件路径</value>
+  </data>
+  <data name="Compare_LoadPath" xml:space="preserve">
+    <value>加载此路径到本列</value>
+  </data>
+  <data name="Compare_CloseColumn" xml:space="preserve">
+    <value>关闭此列</value>
+  </data>
+  <data name="Compare_SaveFile" xml:space="preserve">
+    <value>保存本列修改到文件</value>
+  </data>
+  <data name="Compare_CopyTextToOtherSide" xml:space="preserve">
+    <value>复制到另一侧</value>
+  </data>
+  <data name="Compare_DeleteSelectedRows" xml:space="preserve">
+    <value>删除所选行</value>
+  </data>
+  <data name="Compare_EnterFolder" xml:space="preserve">
+    <value>进入此文件夹</value>
+  </data>
+  <data name="Compare_CopyToOtherSide" xml:space="preserve">
+    <value>复制到另一边</value>
+  </data>
+  <data name="Compare_MoveToOtherSide" xml:space="preserve">
+    <value>移动到另一边</value>
+  </data>
+  <data name="Compare_CopyToLeftColumn" xml:space="preserve">
+    <value>复制到左边</value>
+  </data>
+  <data name="Compare_CopyToRightColumn" xml:space="preserve">
+    <value>复制到右边</value>
+  </data>
+  <data name="Compare_MoveToLeftColumn" xml:space="preserve">
+    <value>移动到左边</value>
+  </data>
+  <data name="Compare_MoveToRightColumn" xml:space="preserve">
+    <value>移动到右边</value>
+  </data>
+  <data name="Compare_NoNeighbourFolder" xml:space="preserve">
+    <value>相邻列没有可用于接收的文件夹。</value>
+  </data>
+  <data name="Compare_NoDropFolder" xml:space="preserve">
+    <value>该行不是文件夹，不能作为拖拽目标。</value>
+  </data>
+  <data name="Compare_ColumnHint" xml:space="preserve">
+    <value>在路径框中输入目录或文件路径，再点击右侧的确认按钮加载内容。</value>
+  </data>
+  <data name="Compare_CompareEmpty" xml:space="preserve">
+    <value>此列暂无对比内容。</value>
+  </data>
+  <data name="Compare_FolderSummary" xml:space="preserve">
+    <value>相等 {0} · 不同 {1} · 仅左侧 {2} · 仅右侧 {3}</value>
+  </data>
+  <data name="Compare_SingleSideFile" xml:space="preserve">
+    <value>对侧没有对应文件，另一侧留空</value>
+  </data>
+  <data name="Compare_EmptyPath" xml:space="preserve">
+    <value>请先在路径框中输入路径。</value>
+  </data>
+  <data name="Compare_PathNotFound" xml:space="preserve">
+    <value>路径不存在：{0}</value>
+  </data>
+  <data name="Compare_NeedTwoColumns" xml:space="preserve">
+    <value>开启对比需要恰好两个文件列有内容，当前为 {0} 列。</value>
+  </data>
+  <data name="Compare_MixedKinds" xml:space="preserve">
+    <value>对比的两列必须同为文件或同为目录。</value>
+  </data>
+  <data name="Compare_AddColumnWhileComparing" xml:space="preserve">
+    <value>对比进行中不能添加文件列，请先结束对比。</value>
+  </data>
+  <data name="Compare_DropHint" xml:space="preserve">
+    <value>将文件或文件夹拖入此处，每个路径占用一个文件列
+也可以用顶部的「添加文件夹」，或在列内输入路径后加载。</value>
+  </data>
+  <data name="Compare_HexRaw" xml:space="preserve">
+    <value>十六进制原始数据</value>
+  </data>
+  <data name="Compare_Metadata" xml:space="preserve">
+    <value>元数据</value>
+  </data>
+  <data name="Compare_Unrecognized" xml:space="preserve">
+    <value>无法识别的固件格式</value>
+  </data>
+  <data name="Progress_ItemsStats" xml:space="preserve">
+    <value>{0} / {1} 项 · {2} · 剩余 {3}</value>
+  </data>
+  <data name="Progress_ItemsStatsNoEta" xml:space="preserve">
+    <value>{0} / {1} 项 · {2}</value>
+  </data>
+  <data name="Progress_StatusPercent" xml:space="preserve">
+    <value>{0} · {1:0.#}%</value>
+  </data>
+  <data name="Image_FsStageFile" xml:space="preserve">
+    <value>{0}：{1}</value>
+  </data>
+  <data name="Image_FsPreparing" xml:space="preserve">
+    <value>正在准备源镜像</value>
+  </data>
+  <data name="Image_FsExtracting" xml:space="preserve">
+    <value>正在解包</value>
+  </data>
+  <data name="Image_FsVerifyingImage" xml:space="preserve">
+    <value>正在校验原始镜像</value>
+  </data>
+  <data name="Image_FsVerifyingFiles" xml:space="preserve">
+    <value>正在校验解包文件</value>
+  </data>
+  <data name="Image_FsReadingMetadata" xml:space="preserve">
+    <value>正在读取文件属性</value>
+  </data>
+  <data name="Image_FsBuildingImage" xml:space="preserve">
+    <value>正在构建镜像</value>
+  </data>
+  <data name="Image_FsWritingDat" xml:space="preserve">
+    <value>正在写入 DAT</value>
+  </data>
+  <data name="Image_FsCompressing" xml:space="preserve">
+    <value>正在压缩</value>
+  </data>
+  <data name="Progress_ProcessedStats" xml:space="preserve">
+    <value>已处理 {0} · 速度 {2}</value>
+  </data>
+  <data name="Delivery_ProgressChecking" xml:space="preserve">
+    <value>正在检查输入</value>
+  </data>
+  <data name="Delivery_ProgressSuper" xml:space="preserve">
+    <value>正在构建 Super</value>
+  </data>
+  <data name="Delivery_ProgressSparse" xml:space="preserve">
+    <value>正在转换 Sparse</value>
+  </data>
+  <data name="Delivery_ProgressCompress" xml:space="preserve">
+    <value>正在压缩 Super</value>
+  </data>
+  <data name="Delivery_ProgressCopy" xml:space="preserve">
+    <value>正在复制镜像</value>
+  </data>
+  <data name="Delivery_ProgressPayloadPrepare" xml:space="preserve">
+    <value>正在准备 Payload 分区</value>
+  </data>
+  <data name="Delivery_ProgressPayloadWrite" xml:space="preserve">
+    <value>正在写入 Payload</value>
+  </data>
+  <data name="Delivery_ProgressTools" xml:space="preserve">
+    <value>正在准备刷写工具</value>
+  </data>
+  <data name="Delivery_ProgressDownload" xml:space="preserve">
+    <value>正在下载刷写工具</value>
+  </data>
+  <data name="Delivery_ProgressPackage" xml:space="preserve">
+    <value>正在打包 ZIP</value>
+  </data>
+  <data name="Delivery_ProgressVerify" xml:space="preserve">
+    <value>正在校验输出</value>
+  </data>
+  <data name="Delivery_ProgressEquivalence" xml:space="preserve">
+    <value>正在校验镜像等价性</value>
+  </data>
+  <data name="Delivery_ProgressDone" xml:space="preserve">
+    <value>输出完成</value>
+  </data>
+  <data name="Progress_Stats" xml:space="preserve">
+    <value>{0} / {1} · 速度 {2} · 剩余 {3}</value>
+  </data>
+  <data name="Progress_StatsNoEta" xml:space="preserve">
+    <value>{0} / {1} · 速度 {2}</value>
+  </data>
+  <data name="Image_ConvertTitle" xml:space="preserve">
+    <value>镜像格式转换</value>
+  </data>
+  <data name="Image_ConvertConfirm" xml:space="preserve">
+    <value>操作内容：{0}
+预期输出文件：
+{1}
+
+是否确定继续？</value>
+  </data>
+  <data name="Image_ConvertSparseToRaw" xml:space="preserve">
+    <value>将稀疏镜像（sparse）转换为原始镜像（raw）</value>
+  </data>
+  <data name="Image_ConvertRawToSparse" xml:space="preserve">
+    <value>将原始镜像（raw）转换为稀疏镜像（sparse）</value>
+  </data>
+  <data name="Image_ConvertImgToDat" xml:space="preserve">
+    <value>将镜像 {0} 转换为 Android DAT（生成 NEW.dat 与 transfer.list）</value>
+  </data>
+  <data name="Image_ConvertImgToBr" xml:space="preserve">
+    <value>将镜像 {0} 转换为 Brotli 压缩 DAT（生成 NEW.dat.br 与 transfer.list）</value>
+  </data>
+  <data name="Image_ConvertStage" xml:space="preserve">
+    <value>正在转换镜像格式：{0}</value>
+  </data>
+  <data name="Image_ConvertSummary" xml:space="preserve">
+    <value>转换完成：{0}</value>
+  </data>
+  <data name="Image_ConvertFailed" xml:space="preserve">
+    <value>镜像格式转换失败，请查看日志。</value>
+  </data>
+  <data name="Delivery_DiskSpaceWarning" xml:space="preserve">
+    <value>磁盘剩余空间不足：输出目录所在分区剩余 {0}，预计需要 {1}。是否继续输出？</value>
+  </data>
+  <data name="Delivery_DiskSpaceTitle" xml:space="preserve">
+    <value>磁盘空间不足</value>
+  </data>
+  <data name="Delivery_DiskSpaceContinue" xml:space="preserve">
+    <value>继续</value>
+  </data>
+  <data name="Delivery_DiskSpaceCancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Delivery_OverwriteTitle" xml:space="preserve">
+    <value>目标文件已存在</value>
+  </data>
+  <data name="Delivery_OverwritePrompt" xml:space="preserve">
+    <value>以下输出文件已存在，是否全部覆盖</value>
+  </data>
+  <data name="Delivery_OverwriteMore" xml:space="preserve">
+    <value>…及另外 {0} 个文件</value>
+  </data>
+  <data name="FirmwareField_General" xml:space="preserve">
+    <value>基本信息</value>
+  </data>
+  <data name="FirmwareField_Features" xml:space="preserve">
+    <value>文件系统特性与状态</value>
+  </data>
+  <data name="FirmwareField_Descriptor" xml:space="preserve">
+    <value>描述符</value>
+  </data>
+  <data name="FirmwareField_FileName" xml:space="preserve">
+    <value>文件名</value>
+  </data>
+  <data name="FirmwareField_FileSize" xml:space="preserve">
+    <value>实际文件大小（字节）</value>
+  </data>
+  <data name="FirmwareField_Format" xml:space="preserve">
+    <value>格式</value>
+  </data>
+  <data name="FirmwareField_BlockSize" xml:space="preserve">
+    <value>块大小（字节）</value>
+  </data>
+  <data name="FirmwareField_Blocks" xml:space="preserve">
+    <value>块数量</value>
+  </data>
+  <data name="FirmwareField_BlockCount" xml:space="preserve">
+    <value>块数量</value>
+  </data>
+  <data name="FirmwareField_ImageSize" xml:space="preserve">
+    <value>镜像大小（字节）</value>
+  </data>
+  <data name="FirmwareField_PartitionSize" xml:space="preserve">
+    <value>文件系统容量（字节）</value>
+  </data>
+  <data name="FirmwareField_InodeCount" xml:space="preserve">
+    <value>inode 数量</value>
+  </data>
+  <data name="FirmwareField_FileCount" xml:space="preserve">
+    <value>文件数量</value>
+  </data>
+  <data name="FirmwareField_Container" xml:space="preserve">
+    <value>容器类型</value>
+  </data>
+  <data name="FirmwareField_RkfwVersion" xml:space="preserve">
+    <value>固件版本</value>
+  </data>
+  <data name="FirmwareField_MergeVersion" xml:space="preserve">
+    <value>合并工具版本代码</value>
+  </data>
+  <data name="FirmwareField_ChipId" xml:space="preserve">
+    <value>芯片标识（原始值）</value>
+  </data>
+  <data name="FirmwareField_ReleaseTime" xml:space="preserve">
+    <value>发布时间（UTC）</value>
+  </data>
+  <data name="FirmwareField_LoaderOffset" xml:space="preserve">
+    <value>加载器偏移（字节）</value>
+  </data>
+  <data name="FirmwareField_LoaderSize" xml:space="preserve">
+    <value>加载器大小（字节）</value>
+  </data>
+  <data name="FirmwareField_ImageOffset" xml:space="preserve">
+    <value>内嵌镜像偏移（字节）</value>
+  </data>
+  <data name="FirmwareField_ChecksumStatus" xml:space="preserve">
+    <value>校验状态</value>
+  </data>
+  <data name="FirmwareField_NotVerified" xml:space="preserve">
+    <value>元数据预览未校验</value>
+  </data>
+  <data name="FirmwareField_Verified" xml:space="preserve">
+    <value>已校验</value>
+  </data>
+  <data name="FirmwareField_DirectoryCount" xml:space="preserve">
+    <value>目录数量</value>
+  </data>
+  <data name="FirmwareField_RootNid" xml:space="preserve">
+    <value>根节点 NID</value>
+  </data>
+  <data name="FirmwareField_VolumeName" xml:space="preserve">
+    <value>卷标</value>
+  </data>
+  <data name="FirmwareField_Uuid" xml:space="preserve">
+    <value>文件系统 UUID</value>
+  </data>
+  <data name="FirmwareField_Checksum" xml:space="preserve">
+    <value>超级块校验和（原始值）</value>
+  </data>
+  <data name="FirmwareField_SbExtSlots" xml:space="preserve">
+    <value>超级块扩展槽数量</value>
+  </data>
+  <data name="FirmwareField_BuildTime" xml:space="preserve">
+    <value>构建时间（Unix 秒）</value>
+  </data>
+  <data name="FirmwareField_BuildTimeNsec" xml:space="preserve">
+    <value>构建时间（纳秒部分）</value>
+  </data>
+  <data name="FirmwareField_MetaBlkAddr" xml:space="preserve">
+    <value>元数据起始块</value>
+  </data>
+  <data name="FirmwareField_XattrBlkAddr" xml:space="preserve">
+    <value>扩展属性起始块</value>
+  </data>
+  <data name="FirmwareField_ExtraDevices" xml:space="preserve">
+    <value>额外设备数量</value>
+  </data>
+  <data name="FirmwareField_DevtSlotoff" xml:space="preserve">
+    <value>设备表槽偏移</value>
+  </data>
+  <data name="FirmwareField_DirBlkBits" xml:space="preserve">
+    <value>目录块大小位数</value>
+  </data>
+  <data name="FirmwareField_XattrPrefixCount" xml:space="preserve">
+    <value>扩展属性前缀数量</value>
+  </data>
+  <data name="FirmwareField_XattrPrefixStart" xml:space="preserve">
+    <value>扩展属性前缀起始位置</value>
+  </data>
+  <data name="FirmwareField_PackedNid" xml:space="preserve">
+    <value>打包数据节点 NID</value>
+  </data>
+  <data name="FirmwareField_MetaBoxNid" xml:space="preserve">
+    <value>元数据容器 NID</value>
+  </data>
+  <data name="FirmwareField_FeatureCompat" xml:space="preserve">
+    <value>兼容特性</value>
+  </data>
+  <data name="FirmwareField_FeatureIncompat" xml:space="preserve">
+    <value>不兼容特性</value>
+  </data>
+  <data name="FirmwareField_FeatureRoCompat" xml:space="preserve">
+    <value>只读兼容特性</value>
+  </data>
+  <data name="FirmwareField_AvailableCompressionAlgorithms" xml:space="preserve">
+    <value>声明的压缩算法能力</value>
+  </data>
+  <data name="FirmwareField_FreeBlocksCount" xml:space="preserve">
+    <value>空闲块数量</value>
+  </data>
+  <data name="FirmwareField_FreeInodesCount" xml:space="preserve">
+    <value>空闲 inode 数量</value>
+  </data>
+  <data name="FirmwareField_FirstDataBlock" xml:space="preserve">
+    <value>首个数据块</value>
+  </data>
+  <data name="FirmwareField_BlocksPerGroup" xml:space="preserve">
+    <value>每组块数量</value>
+  </data>
+  <data name="FirmwareField_InodesPerGroup" xml:space="preserve">
+    <value>每组 inode 数量</value>
+  </data>
+  <data name="FirmwareField_RevLevel" xml:space="preserve">
+    <value>修订版本</value>
+  </data>
+  <data name="FirmwareField_InodeSize" xml:space="preserve">
+    <value>inode 大小（字节）</value>
+  </data>
+  <data name="FirmwareField_EffectiveDescSize" xml:space="preserve">
+    <value>组描述符大小（字节）</value>
+  </data>
+  <data name="FirmwareField_DefHashVersion" xml:space="preserve">
+    <value>目录哈希版本</value>
+  </data>
+  <data name="FirmwareField_JournalInum" xml:space="preserve">
+    <value>日志 inode</value>
+  </data>
+  <data name="FirmwareField_LastOrphan" xml:space="preserve">
+    <value>最后孤立 inode</value>
+  </data>
+  <data name="FirmwareField_State" xml:space="preserve">
+    <value>文件系统状态</value>
+  </data>
+  <data name="FirmwareField_MajorVersion" xml:space="preserve">
+    <value>主版本</value>
+  </data>
+  <data name="FirmwareField_MinorVersion" xml:space="preserve">
+    <value>次版本</value>
+  </data>
+  <data name="FirmwareField_SectorSize" xml:space="preserve">
+    <value>扇区大小（字节）</value>
+  </data>
+  <data name="FirmwareField_SectorsPerBlock" xml:space="preserve">
+    <value>每块扇区数量</value>
+  </data>
+  <data name="FirmwareField_BlocksPerSeg" xml:space="preserve">
+    <value>每段块数量</value>
+  </data>
+  <data name="FirmwareField_SegsPerSec" xml:space="preserve">
+    <value>每区段的段数量</value>
+  </data>
+  <data name="FirmwareField_SecsPerZone" xml:space="preserve">
+    <value>每区域的区段数量</value>
+  </data>
+  <data name="FirmwareField_ChecksumOffset" xml:space="preserve">
+    <value>校验和偏移</value>
+  </data>
+  <data name="FirmwareField_SectionCount" xml:space="preserve">
+    <value>区段数量</value>
+  </data>
+  <data name="FirmwareField_SegmentCount" xml:space="preserve">
+    <value>总段数量</value>
+  </data>
+  <data name="FirmwareField_SegmentSize" xml:space="preserve">
+    <value>段大小（字节）</value>
+  </data>
+  <data name="FirmwareField_SegmentCountCkpt" xml:space="preserve">
+    <value>检查点段数量</value>
+  </data>
+  <data name="FirmwareField_SegmentCountSit" xml:space="preserve">
+    <value>SIT 段数量</value>
+  </data>
+  <data name="FirmwareField_SegmentCountNat" xml:space="preserve">
+    <value>NAT 段数量</value>
+  </data>
+  <data name="FirmwareField_SegmentCountSsa" xml:space="preserve">
+    <value>SSA 段数量</value>
+  </data>
+  <data name="FirmwareField_SegmentCountMain" xml:space="preserve">
+    <value>主区域段数量</value>
+  </data>
+  <data name="FirmwareField_Segment0Blkaddr" xml:space="preserve">
+    <value>首段起始块</value>
+  </data>
+  <data name="FirmwareField_CpBlkaddr" xml:space="preserve">
+    <value>检查点起始块</value>
+  </data>
+  <data name="FirmwareField_SitBlkaddr" xml:space="preserve">
+    <value>SIT 起始块</value>
+  </data>
+  <data name="FirmwareField_NatBlkaddr" xml:space="preserve">
+    <value>NAT 起始块</value>
+  </data>
+  <data name="FirmwareField_SsaBlkaddr" xml:space="preserve">
+    <value>SSA 起始块</value>
+  </data>
+  <data name="FirmwareField_MainBlkaddr" xml:space="preserve">
+    <value>主区域起始块</value>
+  </data>
+  <data name="FirmwareField_RootIno" xml:space="preserve">
+    <value>根目录 inode</value>
+  </data>
+  <data name="FirmwareField_NodeIno" xml:space="preserve">
+    <value>节点 inode</value>
+  </data>
+  <data name="FirmwareField_MetaIno" xml:space="preserve">
+    <value>元数据 inode</value>
+  </data>
+  <data name="FirmwareField_CpPayload" xml:space="preserve">
+    <value>检查点载荷块数量</value>
+  </data>
+  <data name="FirmwareField_Feature" xml:space="preserve">
+    <value>文件系统特性</value>
+  </data>
+  <data name="FirmwareField_Version" xml:space="preserve">
+    <value>创建或最后修改的内核版本</value>
+  </data>
+  <data name="FirmwareField_CheckpointVer" xml:space="preserve">
+    <value>当前检查点版本</value>
+  </data>
+  <data name="FirmwareField_UserBlockCount" xml:space="preserve">
+    <value>用户块数量</value>
+  </data>
+  <data name="FirmwareField_ValidBlockCount" xml:space="preserve">
+    <value>有效块数量</value>
+  </data>
+  <data name="FirmwareField_RsvdSegmentCount" xml:space="preserve">
+    <value>保留段数量</value>
+  </data>
+  <data name="FirmwareField_OverprovSegmentCount" xml:space="preserve">
+    <value>预留空间段数量</value>
+  </data>
+  <data name="FirmwareField_FreeSegmentCount" xml:space="preserve">
+    <value>空闲段数量</value>
+  </data>
+  <data name="FirmwareField_ValidNodeCount" xml:space="preserve">
+    <value>有效节点数量</value>
+  </data>
+  <data name="FirmwareField_NextFreeNid" xml:space="preserve">
+    <value>下一个空闲 NID</value>
+  </data>
+  <data name="FirmwareField_ElapsedTime" xml:space="preserve">
+    <value>累计运行时间（秒）</value>
+  </data>
+  <data name="FirmwareField_CheckpointFlags" xml:space="preserve">
+    <value>检查点标志</value>
+  </data>
+  <data name="FirmwareField_FooterVersion" xml:space="preserve">
+    <value>AVB 尾部版本</value>
+  </data>
+  <data name="FirmwareField_OriginalImageSize" xml:space="preserve">
+    <value>原镜像大小（字节）</value>
+  </data>
+  <data name="FirmwareField_VbmetaOffset" xml:space="preserve">
+    <value>VBMeta 文件偏移（字节）</value>
+  </data>
+  <data name="FirmwareField_VbmetaSize" xml:space="preserve">
+    <value>VBMeta 数据大小（字节）</value>
+  </data>
+  <data name="FirmwareField_RequiredLibavbVersion" xml:space="preserve">
+    <value>最低 libavb 版本</value>
+  </data>
+  <data name="FirmwareField_AlgorithmType" xml:space="preserve">
+    <value>签名算法编号</value>
+  </data>
+  <data name="FirmwareField_AlgorithmName" xml:space="preserve">
+    <value>签名算法</value>
+  </data>
+  <data name="FirmwareField_Flags" xml:space="preserve">
+    <value>标志</value>
+  </data>
+  <data name="FirmwareField_HashtreeDisabled" xml:space="preserve">
+    <value>已禁用哈希树校验</value>
+  </data>
+  <data name="FirmwareField_VerificationDisabled" xml:space="preserve">
+    <value>已禁用 AVB 验证</value>
+  </data>
+  <data name="FirmwareField_VerificationStatus" xml:space="preserve">
+    <value>验证状态</value>
+  </data>
+  <data name="FirmwareField_NotPerformed" xml:space="preserve">
+    <value>未执行签名、信任链或分区内容验证</value>
+  </data>
+  <data name="FirmwareField_RollbackIndex" xml:space="preserve">
+    <value>回滚索引</value>
+  </data>
+  <data name="FirmwareField_RollbackIndexLocation" xml:space="preserve">
+    <value>回滚索引位置</value>
+  </data>
+  <data name="FirmwareField_ReleaseString" xml:space="preserve">
+    <value>生成工具版本</value>
+  </data>
+  <data name="FirmwareField_AuthenticationDataBlockSize" xml:space="preserve">
+    <value>认证数据块大小（字节）</value>
+  </data>
+  <data name="FirmwareField_AuxiliaryDataBlockSize" xml:space="preserve">
+    <value>辅助数据块大小（字节）</value>
+  </data>
+  <data name="FirmwareField_Hash" xml:space="preserve">
+    <value>认证哈希</value>
+  </data>
+  <data name="FirmwareField_Signature" xml:space="preserve">
+    <value>签名</value>
+  </data>
+  <data name="FirmwareField_PublicKey" xml:space="preserve">
+    <value>公钥（AVB 二进制格式）</value>
+  </data>
+  <data name="FirmwareField_PublicKeyMetadata" xml:space="preserve">
+    <value>公钥元数据</value>
+  </data>
+  <data name="FirmwareField_PublicKeySha256" xml:space="preserve">
+    <value>公钥 SHA-256 指纹</value>
+  </data>
+  <data name="FirmwareField_PublicKeyBits" xml:space="preserve">
+    <value>公钥声明位数</value>
+  </data>
+  <data name="FirmwareField_DescriptorsOffset" xml:space="preserve">
+    <value>描述符在辅助块内的偏移</value>
+  </data>
+  <data name="FirmwareField_DescriptorsSize" xml:space="preserve">
+    <value>描述符总大小（字节）</value>
+  </data>
+  <data name="FirmwareField_DescriptorCount" xml:space="preserve">
+    <value>描述符数量</value>
+  </data>
+  <data name="FirmwareField_Tag" xml:space="preserve">
+    <value>描述符标签</value>
+  </data>
+  <data name="FirmwareField_Size" xml:space="preserve">
+    <value>大小（字节）</value>
+  </data>
+  <data name="FirmwareField_Type" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="FirmwareField_Key" xml:space="preserve">
+    <value>属性名</value>
+  </data>
+  <data name="FirmwareField_Value" xml:space="preserve">
+    <value>属性值</value>
+  </data>
+  <data name="FirmwareField_ValueHex" xml:space="preserve">
+    <value>属性值（十六进制）</value>
+  </data>
+  <data name="FirmwareField_Property" xml:space="preserve">
+    <value>属性</value>
+  </data>
+  <data name="FirmwareField_Hashtree" xml:space="preserve">
+    <value>哈希树</value>
+  </data>
+  <data name="FirmwareField_KernelCmdline" xml:space="preserve">
+    <value>内核命令行</value>
+  </data>
+  <data name="FirmwareField_ChainPartition" xml:space="preserve">
+    <value>链式分区</value>
+  </data>
+  <data name="FirmwareField_Unknown" xml:space="preserve">
+    <value>未知类型</value>
+  </data>
+  <data name="FirmwareField_HashAlgorithm" xml:space="preserve">
+    <value>哈希算法</value>
+  </data>
+  <data name="FirmwareField_PartitionName" xml:space="preserve">
+    <value>分区名</value>
+  </data>
+  <data name="FirmwareField_Salt" xml:space="preserve">
+    <value>盐值</value>
+  </data>
+  <data name="FirmwareField_Digest" xml:space="preserve">
+    <value>摘要</value>
+  </data>
+  <data name="FirmwareField_RootDigest" xml:space="preserve">
+    <value>根摘要</value>
+  </data>
+  <data name="FirmwareField_DmVerityVersion" xml:space="preserve">
+    <value>dm-verity 版本</value>
+  </data>
+  <data name="FirmwareField_TreeOffset" xml:space="preserve">
+    <value>哈希树偏移（字节）</value>
+  </data>
+  <data name="FirmwareField_TreeSize" xml:space="preserve">
+    <value>哈希树大小（字节）</value>
+  </data>
+  <data name="FirmwareField_DataBlockSize" xml:space="preserve">
+    <value>数据块大小（字节）</value>
+  </data>
+  <data name="FirmwareField_HashBlockSize" xml:space="preserve">
+    <value>哈希块大小（字节）</value>
+  </data>
+  <data name="FirmwareField_FecNumRoots" xml:space="preserve">
+    <value>FEC 根数量</value>
+  </data>
+  <data name="FirmwareField_FecOffset" xml:space="preserve">
+    <value>FEC 偏移（字节）</value>
+  </data>
+  <data name="FirmwareField_FecSize" xml:space="preserve">
+    <value>FEC 大小（字节）</value>
+  </data>
+  <data name="FirmwareField_RawData" xml:space="preserve">
+    <value>原始数据（十六进制）</value>
+  </data>
+  <data name="FirmwareField_True" xml:space="preserve">
+    <value>是</value>
+  </data>
+  <data name="FirmwareField_False" xml:space="preserve">
+    <value>否</value>
+  </data>
+  <data name="FirmwareField_Empty" xml:space="preserve">
+    <value>（空）</value>
+  </data>
+  <data name="FirmwareField_HashOffset" xml:space="preserve">
+    <value>认证哈希在认证块内的偏移</value>
+  </data>
+  <data name="FirmwareField_HashSize" xml:space="preserve">
+    <value>认证哈希大小（字节）</value>
+  </data>
+  <data name="FirmwareField_SignatureOffset" xml:space="preserve">
+    <value>签名在认证块内的偏移</value>
+  </data>
+  <data name="FirmwareField_SignatureSize" xml:space="preserve">
+    <value>签名大小（字节）</value>
+  </data>
+  <data name="FirmwareField_PublicKeyOffset" xml:space="preserve">
+    <value>公钥在辅助块内的偏移</value>
+  </data>
+  <data name="FirmwareField_PublicKeySize" xml:space="preserve">
+    <value>公钥大小（字节）</value>
+  </data>
+  <data name="FirmwareField_PublicKeyMetadataOffset" xml:space="preserve">
+    <value>公钥元数据在辅助块内的偏移</value>
+  </data>
+  <data name="FirmwareField_PublicKeyMetadataSize" xml:space="preserve">
+    <value>公钥元数据大小（字节）</value>
+  </data>
+  <data name="FirmwareInfo_AvbSummary" xml:space="preserve">
+    <value>显示文件声明的签名、哈希、回滚保护和描述符配置。读取配置不代表签名可信或分区内容已通过验证；AVB 签名也不代表镜像内容已加密。</value>
+  </data>
+  <data name="FirmwareInfo_FilesystemSummary" xml:space="preserve">
+    <value>{0} 超级块特性和文件系统布局参数。特性标志表示格式能力，不代表每个文件都启用了该特性；未知位保留在原始十六进制值中。</value>
+  </data>
+  <data name="FirmwareInfo_FatSummary" xml:space="preserve">
+    <value>{0} 卷引导记录几何信息与目录布局参数。簇数描述声明容量，不代表镜像实际携带的数据量。</value>
+  </data>
+  <data name="FirmwareField_TotalBlocks" xml:space="preserve">
+    <value>总块数量</value>
+  </data>
+  <data name="FirmwareField_TotalChunks" xml:space="preserve">
+    <value>数据块条目数量</value>
+  </data>
+  <data name="FirmwareField_FileHeaderSize" xml:space="preserve">
+    <value>文件头大小（字节）</value>
+  </data>
+  <data name="FirmwareField_ChunkHeaderSize" xml:space="preserve">
+    <value>块头大小（字节）</value>
+  </data>
+  <data name="FirmwareField_ImageChecksum" xml:space="preserve">
+    <value>镜像 CRC32 原始值（0 表示未提供）</value>
+  </data>
+  <data name="FirmwareField_PartitionCount" xml:space="preserve">
+    <value>分区数量</value>
+  </data>
+  <data name="FirmwareField_ManifestLength" xml:space="preserve">
+    <value>清单大小（字节）</value>
+  </data>
+  <data name="FirmwareField_MetadataSignatureLength" xml:space="preserve">
+    <value>元数据签名大小（字节）</value>
+  </data>
+  <data name="FirmwareField_BaseOffset" xml:space="preserve">
+    <value>载荷数据文件偏移（字节）</value>
+  </data>
+  <data name="FirmwareField_MaxTimestamp" xml:space="preserve">
+    <value>最大时间戳（Unix 秒）</value>
+  </data>
+  <data name="FirmwareField_SignaturesOffset" xml:space="preserve">
+    <value>签名在载荷数据内的偏移（字节）</value>
+  </data>
+  <data name="FirmwareField_SignaturesSize" xml:space="preserve">
+    <value>载荷签名大小（字节）</value>
+  </data>
+  <data name="FirmwareField_PartialUpdate" xml:space="preserve">
+    <value>部分更新</value>
+  </data>
+  <data name="FirmwareField_HeaderSize" xml:space="preserve">
+    <value>头部大小（字节）</value>
+  </data>
+  <data name="FirmwareField_ProductName" xml:space="preserve">
+    <value>产品名称</value>
+  </data>
+  <data name="FirmwareField_HeaderVersion" xml:space="preserve">
+    <value>头部版本</value>
+  </data>
+  <data name="FirmwareField_PageSize" xml:space="preserve">
+    <value>页大小（字节）</value>
+  </data>
+  <data name="FirmwareField_KernelSize" xml:space="preserve">
+    <value>内核大小（字节）</value>
+  </data>
+  <data name="FirmwareField_RamdiskSize" xml:space="preserve">
+    <value>Ramdisk 大小（字节）</value>
+  </data>
+  <data name="FirmwareField_SecondSize" xml:space="preserve">
+    <value>第二阶段大小（字节）</value>
+  </data>
+  <data name="FirmwareField_DtbSize" xml:space="preserve">
+    <value>DTB 大小（字节）</value>
+  </data>
+  <data name="FirmwareField_OsVersion" xml:space="preserve">
+    <value>系统版本</value>
+  </data>
+  <data name="FirmwareField_CommandLine" xml:space="preserve">
+    <value>命令行</value>
+  </data>
+  <data name="FirmwareField_KernelCompression" xml:space="preserve">
+    <value>内核压缩格式</value>
+  </data>
+  <data name="FirmwareField_RamdiskCompression" xml:space="preserve">
+    <value>Ramdisk 压缩格式</value>
+  </data>
+  <data name="FirmwareField_OsVersionRaw" xml:space="preserve">
+    <value>系统版本与安全补丁级别（原始值）</value>
+  </data>
+  <data name="FirmwareField_VendorRamdiskSize" xml:space="preserve">
+    <value>厂商 Ramdisk 大小（字节）</value>
+  </data>
+  <data name="FirmwareField_RamdiskTableEntryCount" xml:space="preserve">
+    <value>Ramdisk 表条目数量</value>
+  </data>
+  <data name="FirmwareField_VendorCmdline" xml:space="preserve">
+    <value>厂商命令行</value>
+  </data>
+  <data name="FirmwareField_VendorName" xml:space="preserve">
+    <value>厂商名称</value>
+  </data>
+  <data name="FirmwareField_KernelLoadAddress" xml:space="preserve">
+    <value>内核加载地址</value>
+  </data>
+  <data name="FirmwareField_RamdiskLoadAddress" xml:space="preserve">
+    <value>Ramdisk 加载地址</value>
+  </data>
+  <data name="FirmwareField_TagsLoadAddress" xml:space="preserve">
+    <value>标签加载地址</value>
+  </data>
+  <data name="FirmwareField_DtbAddress" xml:space="preserve">
+    <value>DTB 加载地址</value>
+  </data>
+  <data name="FirmwareInfo_PayloadSummary" xml:space="preserve">
+    <value>OTA 载荷清单与签名布局信息。存在签名不代表已验证其可信性。</value>
+  </data>
+  <data name="FirmwareInfo_SparseSummary" xml:space="preserve">
+    <value>Android Sparse 容器头部信息。逻辑镜像大小与实际文件大小不同。</value>
+  </data>
+  <data name="FirmwareInfo_BootSummary" xml:space="preserve">
+    <value>启动镜像头部、组件大小、压缩格式与加载地址信息。具体字段取决于启动镜像类型。</value>
+  </data>
+  <data name="FirmwareField_PartitionHash" xml:space="preserve">
+    <value>分区哈希</value>
+  </data>
+  <data name="Explorer_OpenAsAuto" xml:space="preserve">
+    <value>自动识别</value>
+  </data>
+  <data name="Explorer_OpenAsElf" xml:space="preserve">
+    <value>ELF 二进制信息</value>
+  </data>
+  <data name="Explorer_OpenAsQualcomm" xml:space="preserve">
+    <value>Qualcomm 镜像分析</value>
+  </data>
+  <data name="Explorer_OpenAsQcn" xml:space="preserve">
+    <value>QCN NV 备份</value>
+  </data>
+  <data name="Explorer_OpenAsPartition" xml:space="preserve">
+    <value>分区表</value>
+  </data>
+  <data name="UserError_OperationFailed" xml:space="preserve">
+    <value>操作未完成。请查看错误详情。</value>
+  </data>
+  <data name="UserError_Details" xml:space="preserve">
+    <value>错误详情（原始信息）：</value>
+  </data>
+  <data name="UserError_Cancelled" xml:space="preserve">
+    <value>操作已取消。</value>
+  </data>
+  <data name="UserError_Timeout" xml:space="preserve">
+    <value>操作超时。请检查设备或网络连接后重试。</value>
+  </data>
+  <data name="UserError_NotFound" xml:space="preserve">
+    <value>找不到所需的文件或目录。请检查路径。</value>
+  </data>
+  <data name="UserError_AccessDenied" xml:space="preserve">
+    <value>没有执行此操作的权限。请检查文件或设备的访问权限。</value>
+  </data>
+  <data name="UserError_ConnectionRefused" xml:space="preserve">
+    <value>连接被拒绝。请检查目标服务是否正在运行。</value>
+  </data>
+  <data name="UserError_ConnectionFailed" xml:space="preserve">
+    <value>无法完成连接。请检查设备、服务或网络状态。</value>
+  </data>
+  <data name="UserError_InvalidData" xml:space="preserve">
+    <value>无法读取或解析输入数据。数据可能不完整，或格式不受支持。</value>
+  </data>
+  <data name="UserError_Cryptography" xml:space="preserve">
+    <value>加密、解密或签名操作失败。请检查密钥和输入数据。</value>
+  </data>
+  <data name="UserError_NotSupported" xml:space="preserve">
+    <value>当前环境或输入不支持此操作。</value>
+  </data>
+  <data name="UserError_InvalidInput" xml:space="preserve">
+    <value>输入参数无效。请检查填写的内容或所选文件。</value>
+  </data>
+  <data name="UserError_Io" xml:space="preserve">
+    <value>读写操作失败。请检查路径、存储空间及设备连接。</value>
+  </data>
+  <data name="UserError_ParseFailed" xml:space="preserve">
+    <value>解析 {0} 失败。</value>
+  </data>
+  <data name="UserError_RebuildFailed" xml:space="preserve">
+    <value>重新构建 {0} 失败。</value>
+  </data>
+  <data name="UserError_AnalyzeFailed" xml:space="preserve">
+    <value>分析 {0} 失败。</value>
+  </data>
+  <data name="UserError_LoadFailed" xml:space="preserve">
+    <value>加载失败。</value>
+  </data>
+  <data name="UserError_SaveFailed" xml:space="preserve">
+    <value>保存失败。</value>
+  </data>
+  <data name="UserError_SavePartitionFailed" xml:space="preserve">
+    <value>保存分区表失败。</value>
+  </data>
+  <data name="UserError_RunFailed" xml:space="preserve">
+    <value>执行失败。</value>
+  </data>
+  <data name="UserError_SuperFailed" xml:space="preserve">
+    <value>合成 super 镜像失败。</value>
+  </data>
+  <data name="UserError_FlashFailed" xml:space="preserve">
+    <value>刷入选中的镜像失败。</value>
+  </data>
+  <data name="UserError_PathNotFound" xml:space="preserve">
+    <value>找不到文件：{0}</value>
+  </data>
+  <data name="UserError_DtboReadOnly" xml:space="preserve">
+    <value>DTB 编辑器仅支持浏览 DTBO 容器。请先提取 overlay，再进行编辑。</value>
+  </data>
+  <data name="UserError_DexMissing" xml:space="preserve">
+    <value>容器内没有 classes*.dex 条目。</value>
+  </data>
+  <data name="UserError_DexMergedReadOnly" xml:space="preserve">
+    <value>合并视图仅供浏览。请选择具体 DEX 条目后再保存。</value>
+  </data>
+  <data name="UserError_DexNotSelected" xml:space="preserve">
+    <value>未选择 DEX 条目，无法写回。</value>
+  </data>
+  <data name="UserError_PartitionUnrecognized" xml:space="preserve">
+    <value>无法识别分区表。需要 LP super 元数据、GPT、MBR、Amlogic 或 Rockchip parameter 文件（CMDLINE: mtdparts=...）。</value>
+  </data>
+  <data name="UserError_PartitionInvalidEdit" xml:space="preserve">
+    <value>分区编辑无效。请检查分区参数。</value>
+  </data>
+  <data name="UserError_Failed" xml:space="preserve">
+    <value>失败</value>
+  </data>
+  <data name="UserError_SigningFailed" xml:space="preserve">
+    <value>签名失败。</value>
+  </data>
+  <data name="UserError_PartitionNameRequired" xml:space="preserve">
+    <value>分区名称不能为空。</value>
+  </data>
+  <data name="UserError_PartitionNameLong" xml:space="preserve">
+    <value>分区名称过长（最多 36 个字符）：{0}</value>
+  </data>
+  <data name="UserError_PartitionStartInvalid" xml:space="preserve">
+    <value>分区起始值无效：{0}</value>
+  </data>
+  <data name="UserError_PartitionSizeInvalid" xml:space="preserve">
+    <value>分区大小值无效：{0}</value>
+  </data>
+  <data name="UserError_PartitionOverlap" xml:space="preserve">
+    <value>分区“{0}”与分区“{1}”重叠。</value>
+  </data>
+  <data name="UserError_PluginUnavailable" xml:space="preserve">
+    <value>插件不可用。请检查兼容性和所需依赖。</value>
+  </data>
+  <data name="UserError_QcnUnrecognized" xml:space="preserve">
+    <value>该文件不是 Qualcomm QCN NV 备份文件。</value>
+  </data>
+  <data name="UserError_QcnLoadFailed" xml:space="preserve">
+    <value>读取 QCN 文件失败。</value>
+  </data>
+  <data name="UserError_QcnSaveFailed" xml:space="preserve">
+    <value>保存 QCN 文件失败。</value>
+  </data>
+</root>

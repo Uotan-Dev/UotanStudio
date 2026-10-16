@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>  <data name="Settings_General" xml:space="preserve">
+    <value>通用设置</value>
+  </data>
+  <data name="Settings_Firmware" xml:space="preserve">
+    <value>固件工具</value>
+  </data>
+  <data name="Settings_FirmwareParallelism" xml:space="preserve">
+    <value>并行数量</value>
+  </data>
+  <data name="Settings_FirmwareParallelismHint" xml:space="preserve">
+    <value>默认使用当前设备的物理核心数量，可设置为 1-64。用于支持并行的固件打包和解包，修改后对新任务生效。数量越大，内存占用通常越高。</value>
+  </data>
+  <data name="Settings_ErofsRebuildOptimization" xml:space="preserve">
+    <value>EROFS 重建搜索</value>
+  </data>
+  <data name="Settings_ErofsRebuildOptimizationHint" xml:space="preserve">
+    <value>解包时采集有上限的压缩候选估算，回写受保留的 EROFS 镜像时在这些候选之间搜索，为保留最小结果最多完整重建三次，默认关闭。开启后需重新解包镜像才会采集估算；带打包覆盖项的重打包不走受保留重建路径，本开关对其没有效果。</value>
+  </data>
+  <data name="Settings_Flash" xml:space="preserve">
+    <value>烧录设置</value>
+  </data>
+  <data name="Settings_NodeEditor" xml:space="preserve">
+    <value>节点编辑器</value>
+  </data>
+  <data name="Settings_Language" xml:space="preserve">
+    <value>语言</value>
+  </data>
+  <data name="Settings_Theme" xml:space="preserve">
+    <value>主题</value>
+  </data>
+  <data name="Settings_ThemeDefault" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="Settings_ThemeLight" xml:space="preserve">
+    <value>浅色</value>
+  </data>
+  <data name="Settings_ThemeDark" xml:space="preserve">
+    <value>深色</value>
+  </data>
+  <data name="Settings_AutoSave" xml:space="preserve">
+    <value>自动保存</value>
+  </data>
+  <data name="Settings_DebugMode" xml:space="preserve">
+    <value>调试模式</value>
+  </data>
+  <data name="Settings_UnpackToolPath" xml:space="preserve">
+    <value>解包工具路径</value>
+  </data>
+  <data name="Settings_TempDir" xml:space="preserve">
+    <value>临时文件目录</value>
+  </data>
+  <data name="Settings_AutoVerify" xml:space="preserve">
+    <value>解包后自动校验</value>
+  </data>
+  <data name="Settings_PathPlaceholder" xml:space="preserve">
+    <value>输入路径...</value>
+  </data>
+  <data name="Settings_DeviceTimeout" xml:space="preserve">
+    <value>设备超时时间</value>
+  </data>
+  <data name="Settings_AutoBackup" xml:space="preserve">
+    <value>烧录前自动备份</value>
+  </data>
+  <data name="Settings_SnapToGrid" xml:space="preserve">
+    <value>网格对齐</value>
+  </data>
+  <data name="Settings_GridSize" xml:space="preserve">
+    <value>网格大小</value>
+  </data>
+  <data name="Settings_ConnectionStyle" xml:space="preserve">
+    <value>连接线样式</value>
+  </data>
+  <data name="Settings_ConnBezier" xml:space="preserve">
+    <value>贝塞尔曲线</value>
+  </data>
+  <data name="Settings_ConnLine" xml:space="preserve">
+    <value>直线</value>
+  </data>
+  <data name="Settings_ConnStep" xml:space="preserve">
+    <value>阶梯线</value>
+  </data>
+  <data name="Settings_Appearance" xml:space="preserve">
+    <value>外观设置</value>
+  </data>
+  <data name="Settings_ThemePreview" xml:space="preserve">
+    <value>主题预览</value>
+  </data>
+  <data name="Settings_LanguageAutoDetect" xml:space="preserve">
+    <value>自动检测</value>
+  </data>
+  <data name="Settings_LanguagePreview" xml:space="preserve">
+    <value>语言预览</value>
+  </data>
+  <data name="Settings_LanguagePreviewText" xml:space="preserve">
+    <value>这是所选语言的预览文本。</value>
+  </data>
+  <data name="Settings_VersionInfo" xml:space="preserve">
+    <value>版本信息</value>
+  </data>
+  <data name="Settings_FirmwareModule" xml:space="preserve">
+    <value>固件解打包模块</value>
+  </data>
+  <data name="Settings_FlashModule" xml:space="preserve">
+    <value>开发板烧录模块</value>
+  </data>
+  <data name="Settings_VisualProgrammingModule" xml:space="preserve">
+    <value>可视化编程模块</value>
+  </data>
+  <data name="Settings_Version" xml:space="preserve">
+    <value>版本</value>
+  </data>
+  <data name="Settings_CheckForUpdates" xml:space="preserve">
+    <value>检查更新</value>
+  </data>
+  <data name="Settings_CheckingUpdates" xml:space="preserve">
+    <value>检查中...</value>
+  </data>
+  <data name="Settings_UpToDate" xml:space="preserve">
+    <value>已是最新版本</value>
+  </data>
+  <data name="Settings_UpdateAvailable" xml:space="preserve">
+    <value>有可用更新</value>
+  </data>
+  <data name="Settings_UpdateCheckFailed" xml:space="preserve">
+    <value>更新检查失败</value>
+  </data>
+  <data name="Settings_ResetToDefaults" xml:space="preserve">
+    <value>恢复默认设置</value>
+  </data>
+  <data name="Settings_ResetConfirm" xml:space="preserve">
+    <value>确定要恢复所有设置为默认值吗？</value>
+  </data>
+  <data name="Settings_SettingsSaved" xml:space="preserve">
+    <value>设置已保存</value>
+  </data>
+  <data name="Settings_SaveFailed" xml:space="preserve">
+    <value>保存设置失败：{0}</value>
+  </data>
+  <data name="Settings_ThemeFollowSystem" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="Settings_ThemeLightMode" xml:space="preserve">
+    <value>浅色模式</value>
+  </data>
+  <data name="Settings_ThemeDarkMode" xml:space="preserve">
+    <value>深色模式</value>
+  </data>
+  <data name="Settings_AutoDetect" xml:space="preserve">
+    <value>自动检测</value>
+  </data>
+  <data name="Settings_AdbPath" xml:space="preserve">
+    <value>ADB 路径</value>
+  </data>
+  <data name="Settings_FastbootPath" xml:space="preserve">
+    <value>Fastboot 路径</value>
+  </data>
+  <data name="Settings_Mcp" xml:space="preserve">
+    <value>MCP</value>
+  </data>
+  <data name="Settings_McpHint" xml:space="preserve">
+    <value>在此维护 MCP 服务器连接与本地暴露端口；保存后写入应用设置。</value>
+  </data>
+  <data name="Settings_McpServerName" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="Settings_McpTransport" xml:space="preserve">
+    <value>传输</value>
+  </data>
+  <data name="Settings_McpCommand" xml:space="preserve">
+    <value>命令</value>
+  </data>
+  <data name="Settings_McpArguments" xml:space="preserve">
+    <value>参数</value>
+  </data>
+  <data name="Settings_McpUrl" xml:space="preserve">
+    <value>URL</value>
+  </data>
+  <data name="Settings_McpEnabled" xml:space="preserve">
+    <value>启用</value>
+  </data>
+  <data name="Settings_McpAdd" xml:space="preserve">
+    <value>添加服务器</value>
+  </data>
+  <data name="Settings_McpRemove" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="Settings_McpExpose" xml:space="preserve">
+    <value>暴露为 MCP 服务器</value>
+  </data>
+  <data name="Settings_McpExposePort" xml:space="preserve">
+    <value>端口</value>
+  </data>
+  <data name="Settings_McpSave" xml:space="preserve">
+    <value>保存 MCP 设置</value>
+  </data>
+  <data name="Settings_McpExposeRoot" xml:space="preserve">
+    <value>沙箱根目录</value>
+  </data>
+  <data name="Settings_McpExposeRootPlaceholder" xml:space="preserve">
+    <value>完整目录路径（留空表示不限制）</value>
+  </data>
+  <data name="Settings_McpExposeRootPick" xml:space="preserve">
+    <value>选择 MCP 沙箱根目录</value>
+  </data>
+  <data name="Settings_McpExposeRootHint" xml:space="preserve">
+    <value>MCP 客户端传入的所有文件路径都必须落在该目录内。留空将暴露整个文件系统，即本设置引入前的行为。</value>
+  </data>
+  <data name="Settings_McpExposeFlash" xml:space="preserve">
+    <value>允许刷写工具</value>
+  </data>
+  <data name="Settings_McpExposeFlashWarning" xml:space="preserve">
+    <value>警告：开启后会在回环端口上注册擦除、刷写与重启工具，任何能访问该端口的本机进程都可以擦除或改写已连接设备的分区并重启设备。除非你信任本机上运行的所有程序，否则请保持关闭。</value>
+  </data>
+  <data name="Settings_Developers" xml:space="preserve">
+    <value>开发成员</value>
+  </data>
+  <data name="Settings_GitHub" xml:space="preserve">
+    <value>GitHub</value>
+  </data>
+  <data name="Settings_Coolapk" xml:space="preserve">
+    <value>酷安</value>
+  </data>
+  <data name="Settings_AI" xml:space="preserve">
+    <value>AI 助手</value>
+  </data>
+  <data name="Settings_AIEndpoint" xml:space="preserve">
+    <value>API 地址</value>
+  </data>
+  <data name="Settings_AIApiKey" xml:space="preserve">
+    <value>API 密钥</value>
+  </data>
+  <data name="Settings_AIToggleKey" xml:space="preserve">
+    <value>显示 / 隐藏 API 密钥</value>
+  </data>
+  <data name="Settings_AIModels" xml:space="preserve">
+    <value>模型</value>
+  </data>
+  <data name="Settings_AIFetchModels" xml:space="preserve">
+    <value>获取模型列表</value>
+  </data>
+  <data name="Settings_DeviceCommunication" xml:space="preserve">
+    <value>设备通信</value>
+  </data>
+  <data name="Settings_UsbBackend" xml:space="preserve">
+    <value>USB 通信后端</value>
+  </data>
+  <data name="Settings_UsbAuto" xml:space="preserve">
+    <value>自动（平台默认）</value>
+  </data>
+  <data name="Settings_UsbNative" xml:space="preserve">
+    <value>强制平台原生</value>
+  </data>
+  <data name="Settings_UsbLibusb" xml:space="preserve">
+    <value>强制 libusb</value>
+  </data>
+  <data name="Settings_AdbServer" xml:space="preserve">
+    <value>ADB server</value>
+  </data>
+  <data name="Settings_HdcServer" xml:space="preserve">
+    <value>HDC server</value>
+  </data>
+  <data name="Settings_ServerUnchecked" xml:space="preserve">
+    <value>尚未检查</value>
+  </data>
+  <data name="Settings_ServerListening" xml:space="preserve">
+    <value>端口正在监听</value>
+  </data>
+  <data name="Settings_ServerAbsent" xml:space="preserve">
+    <value>未运行（连接被拒绝）</value>
+  </data>
+  <data name="Settings_ServerUnknown" xml:space="preserve">
+    <value>无法确认（连接错误或超时）</value>
+  </data>
+  <data name="Settings_StopAdbServer" xml:space="preserve">
+    <value>停止 ADB server</value>
+  </data>
+  <data name="Settings_StopHdcServer" xml:space="preserve">
+    <value>停止 HDC server</value>
+  </data>
+  <data name="Settings_ServerStopping" xml:space="preserve">
+    <value>正在停止 server…</value>
+  </data>
+  <data name="Settings_ServerStopped" xml:space="preserve">
+    <value>已确认 server 停止，设备列表已请求刷新。</value>
+  </data>
+  <data name="Settings_ServerStopFailed" xml:space="preserve">
+    <value>停止 server 失败：{0}</value>
+  </data>
+</root>

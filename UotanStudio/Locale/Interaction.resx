@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>  <data name="Interaction_Submit" xml:space="preserve">
+    <value>Submit</value>
+  </data>
+  <data name="Interaction_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Interaction_Browse" xml:space="preserve">
+    <value>Browse…</value>
+  </data>
+  <data name="Interaction_Error_Required" xml:space="preserve">
+    <value>A value or confirmation is required.</value>
+  </data>
+  <data name="Interaction_Error_Number" xml:space="preserve">
+    <value>Enter a valid number.</value>
+  </data>
+  <data name="Interaction_Error_Range" xml:space="preserve">
+    <value>The value is outside the allowed range.</value>
+  </data>
+  <data name="Interaction_Error_Choice" xml:space="preserve">
+    <value>Select one of the available options.</value>
+  </data>
+  <data name="Interaction_Error_Length" xml:space="preserve">
+    <value>The value exceeds the length limit.</value>
+  </data>
+  <data name="Interaction_Error_File" xml:space="preserve">
+    <value>Select an existing file.</value>
+  </data>
+  <data name="Interaction_Error_Directory" xml:space="preserve">
+    <value>Select an existing directory.</value>
+  </data>
+  <data name="Interaction_Error_Path" xml:space="preserve">
+    <value>Enter a valid output path.</value>
+  </data>
+  <data name="Node_UI_Content_Text" xml:space="preserve">
+    <value>Text content</value>
+  </data>
+  <data name="Node_UI_Content_Divider" xml:space="preserve">
+    <value>Divider</value>
+  </data>
+  <data name="Node_UI_Content_Image" xml:space="preserve">
+    <value>Image content</value>
+  </data>
+  <data name="Node_UI_Field_Text" xml:space="preserve">
+    <value>Text field</value>
+  </data>
+  <data name="Node_UI_Field_Number" xml:space="preserve">
+    <value>Number field</value>
+  </data>
+  <data name="Node_UI_Field_Boolean" xml:space="preserve">
+    <value>Confirmation field</value>
+  </data>
+  <data name="Node_UI_Field_Choice" xml:space="preserve">
+    <value>Choice field</value>
+  </data>
+  <data name="Node_UI_Field_MultiChoice" xml:space="preserve">
+    <value>Multiple choice</value>
+  </data>
+  <data name="Node_UI_Field_File" xml:space="preserve">
+    <value>File field</value>
+  </data>
+  <data name="Node_UI_Field_Directory" xml:space="preserve">
+    <value>Directory field</value>
+  </data>
+  <data name="Node_UI_Field_SavePath" xml:space="preserve">
+    <value>Save path field</value>
+  </data>
+  <data name="Node_UI_Layout_Row" xml:space="preserve">
+    <value>Row layout</value>
+  </data>
+  <data name="Node_UI_Layout_Column" xml:space="preserve">
+    <value>Column layout</value>
+  </data>
+  <data name="Node_UI_Layout_Group" xml:space="preserve">
+    <value>Field group</value>
+  </data>
+  <data name="Node_UI_Layout_Pages" xml:space="preserve">
+    <value>Page layout</value>
+  </data>
+  <data name="Node_UI_Condition_Equals" xml:space="preserve">
+    <value>Field equals condition</value>
+  </data>
+  <data name="Node_UI_Form_Create" xml:space="preserve">
+    <value>Create form</value>
+  </data>
+  <data name="Node_UI_Dialog_Show" xml:space="preserve">
+    <value>Show form dialog</value>
+  </data>
+  <data name="Node_UI_Result_Read" xml:space="preserve">
+    <value>Read submitted field</value>
+  </data>
+  <data name="Node_UI_Dialog_Confirm" xml:space="preserve">
+    <value>Request confirmation</value>
+  </data>
+  <data name="Interaction_Error_Type" xml:space="preserve">
+    <value>The field value has the wrong type.</value>
+  </data>
+  <data name="Node_UI_Notification_Show" xml:space="preserve">
+    <value>Show notification</value>
+  </data>
+  <data name="Node_UI_Progress_Open" xml:space="preserve">
+    <value>Open progress</value>
+  </data>
+  <data name="Node_UI_Progress_Update" xml:space="preserve">
+    <value>Update progress</value>
+  </data>
+  <data name="Node_UI_Progress_Close" xml:space="preserve">
+    <value>Close progress</value>
+  </data>
+  <data name="Node_Conn_FieldID" xml:space="preserve">
+    <value>Field ID</value>
+  </data>
+  <data name="Node_Conn_Label" xml:space="preserve">
+    <value>Label</value>
+  </data>
+  <data name="Node_Conn_Description" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="Node_Conn_Required" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Node_Conn_Default" xml:space="preserve">
+    <value>Default</value>
+  </data>
+  <data name="Node_Conn_Options" xml:space="preserve">
+    <value>Options</value>
+  </data>
+  <data name="Node_Conn_Minimum" xml:space="preserve">
+    <value>Minimum</value>
+  </data>
+  <data name="Node_Conn_Maximum" xml:space="preserve">
+    <value>Maximum</value>
+  </data>
+  <data name="Node_Conn_Sensitive" xml:space="preserve">
+    <value>Sensitive</value>
+  </data>
+  <data name="Node_Conn_VisibleWhen" xml:space="preserve">
+    <value>Visible when</value>
+  </data>
+  <data name="Node_Conn_EnabledWhen" xml:space="preserve">
+    <value>Enabled when</value>
+  </data>
+  <data name="Node_Conn_RequiredWhen" xml:space="preserve">
+    <value>Required when</value>
+  </data>
+  <data name="Node_Conn_First" xml:space="preserve">
+    <value>First component</value>
+  </data>
+  <data name="Node_Conn_Second" xml:space="preserve">
+    <value>Second component</value>
+  </data>
+  <data name="Node_Conn_Expected" xml:space="preserve">
+    <value>Expected value</value>
+  </data>
+  <data name="Node_Conn_ValueType" xml:space="preserve">
+    <value>Value type</value>
+  </data>
+  <data name="Node_Conn_Content" xml:space="preserve">
+    <value>Content</value>
+  </data>
+  <data name="Node_Conn_SubmitLabel" xml:space="preserve">
+    <value>Submit label</value>
+  </data>
+  <data name="Node_Conn_CancelLabel" xml:space="preserve">
+    <value>Cancel label</value>
+  </data>
+  <data name="Node_Conn_Form" xml:space="preserve">
+    <value>Form</value>
+  </data>
+  <data name="Node_Conn_Submitted" xml:space="preserve">
+    <value>Submitted</value>
+  </data>
+  <data name="Node_Conn_Cancelled" xml:space="preserve">
+    <value>Cancelled</value>
+  </data>
+  <data name="Node_Conn_TimedOut" xml:space="preserve">
+    <value>Timed out</value>
+  </data>
+  <data name="Node_Conn_Selection" xml:space="preserve">
+    <value>Selection</value>
+  </data>
+  <data name="Node_Conn_Component" xml:space="preserve">
+    <value>Component</value>
+  </data>
+  <data name="Node_Conn_Handle" xml:space="preserve">
+    <value>Progress handle</value>
+  </data>
+  <data name="Interaction_SensitiveValue" xml:space="preserve">
+    <value>Hidden sensitive value</value>
+  </data>
+  <data name="Node_Conn_MaxLength" xml:space="preserve">
+    <value>Maximum length</value>
+  </data>
+  <data name="Node_Conn_Title" xml:space="preserve">
+    <value>Title</value>
+  </data>
+</root>

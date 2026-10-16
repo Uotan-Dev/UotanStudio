@@ -12,6 +12,10 @@
     <!-- 仅显式包含非 XAML 资源（图标等）；.axaml 由 Avalonia 默认 glob（**/*.axaml）纳入，
          显式重复声明 Locale/Themes 会与默认项重复，导致 AVLN2002 重复 x:Class。 -->
     <AvaloniaResource Include="Assets\**" />
+    <!-- Lingua 源生成器从 AdditionalFiles 读取 Locale/*.resx 并生成强类型 manager；这些 .resx
+         必须从 SDK 默认 EmbeddedResource glob 移除，否则语言变体会生成 satellite assembly。 -->
+    <AdditionalFiles Include="Locale\**\*.resx" />
+    <EmbeddedResource Remove="Locale\**\*.resx" />
   </ItemGroup>
 
 
@@ -51,6 +55,7 @@
     </PackageReference>
     <PackageReference Include="Irihi.Ursa" />
     <PackageReference Include="Irihi.Ursa.Themes.Semi" />
+    <PackageReference Include="Irihi.Lingua" />
     <PackageReference Include="Material.Icons.Avalonia" />
     <PackageReference Include="Semi.Avalonia" />
     <PackageReference Include="Semi.Avalonia.AvaloniaEdit" />

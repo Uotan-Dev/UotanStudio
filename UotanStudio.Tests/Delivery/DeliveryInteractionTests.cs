@@ -231,10 +231,12 @@ public sealed class DeliveryInteractionTests : IDisposable
         var vendorRow = Assert.Single(vm.Container, i => i.PartitionName == "vendor");
         vendorRow.PartitionName = "boot";
         Assert.Equal("vendor", vendorRow.PartitionName);
-        Assert.Equal("Delivery_InvalidPartition", vm.Status);
+        Assert.Equal(UotanStudio.Services.LanguageService.Instance.GetString("Delivery_InvalidPartition"), vm.Status);
+        Assert.NotEqual("Delivery_InvalidPartition", vm.Status);
         vendorRow.PartitionName = "bad name!";
         Assert.Equal("vendor", vendorRow.PartitionName);
-        Assert.Equal("Delivery_InvalidPartition", vm.Status);
+        Assert.Equal(UotanStudio.Services.LanguageService.Instance.GetString("Delivery_InvalidPartition"), vm.Status);
+        Assert.NotEqual("Delivery_InvalidPartition", vm.Status);
         vendorRow.PartitionName = "vendor_b";
         Assert.Equal("vendor_b", vendorRow.PartitionName);
         Assert.Equal(2, vm.Container.Count);

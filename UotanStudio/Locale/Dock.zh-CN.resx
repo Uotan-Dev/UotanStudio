@@ -1,0 +1,1965 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>  <data name="Dock_ProjectExplorer" xml:space="preserve">
+    <value>项目资源管理器</value>
+  </data>
+  <data name="Dock_Properties" xml:space="preserve">
+    <value>属性</value>
+  </data>
+  <data name="Dock_Documents" xml:space="preserve">
+    <value>文档</value>
+  </data>
+  <data name="FindReplace_Title" xml:space="preserve">
+    <value>查找与替换</value>
+  </data>
+  <data name="FindReplace_Find" xml:space="preserve">
+    <value>查找</value>
+  </data>
+  <data name="FindReplace_FindPlaceholder" xml:space="preserve">
+    <value>查找...</value>
+  </data>
+  <data name="FindReplace_Replace" xml:space="preserve">
+    <value>替换</value>
+  </data>
+  <data name="FindReplace_ReplacePlaceholder" xml:space="preserve">
+    <value>替换...</value>
+  </data>
+  <data name="FindReplace_ReplaceAll" xml:space="preserve">
+    <value>全部替换</value>
+  </data>
+  <data name="FindReplace_Previous" xml:space="preserve">
+    <value>上一处匹配</value>
+  </data>
+  <data name="FindReplace_Next" xml:space="preserve">
+    <value>下一处匹配</value>
+  </data>
+  <data name="FindReplace_Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="FindReplace_Expand" xml:space="preserve">
+    <value>展开替换</value>
+  </data>
+  <data name="FindReplace_Collapse" xml:space="preserve">
+    <value>收起替换</value>
+  </data>
+  <data name="FindReplace_MatchCase" xml:space="preserve">
+    <value>区分大小写</value>
+  </data>
+  <data name="FindReplace_WholeWord" xml:space="preserve">
+    <value>全字匹配</value>
+  </data>
+  <data name="FindReplace_Regex" xml:space="preserve">
+    <value>使用正则表达式</value>
+  </data>
+  <data name="FindReplace_PreserveCase" xml:space="preserve">
+    <value>保留大小写</value>
+  </data>
+  <data name="FindReplace_Scope" xml:space="preserve">
+    <value>搜索范围</value>
+  </data>
+  <data name="FindReplace_CurrentDocument" xml:space="preserve">
+    <value>当前文档</value>
+  </data>
+  <data name="FindReplace_Selection" xml:space="preserve">
+    <value>选定内容</value>
+  </data>
+  <data name="FindReplace_OpenDocuments" xml:space="preserve">
+    <value>所有打开的文档</value>
+  </data>
+  <data name="FindReplace_Project" xml:space="preserve">
+    <value>当前项目</value>
+  </data>
+  <data name="Dock_Properties_Name" xml:space="preserve">
+    <value>属性名称</value>
+  </data>
+  <data name="Dock_Properties_Value" xml:space="preserve">
+    <value>值</value>
+  </data>
+  <data name="Dock_Properties_FileName" xml:space="preserve">
+    <value>文件名</value>
+  </data>
+  <data name="Dock_Properties_ImageName" xml:space="preserve">
+    <value>镜像名称</value>
+  </data>
+  <data name="Dock_Properties_ImageSize" xml:space="preserve">
+    <value>镜像大小</value>
+  </data>
+  <data name="Dock_Properties_ImageType" xml:space="preserve">
+    <value>镜像类型</value>
+  </data>
+  <data name="Dock_Properties_Path" xml:space="preserve">
+    <value>路径</value>
+  </data>
+  <data name="Dock_Properties_Format" xml:space="preserve">
+    <value>格式</value>
+  </data>
+  <data name="Dock_Properties_Magic" xml:space="preserve">
+    <value>魔数类型</value>
+  </data>
+  <data name="Dock_Properties_Size" xml:space="preserve">
+    <value>大小</value>
+  </data>
+  <data name="Dock_Properties_NoSelection" xml:space="preserve">
+    <value>选择文件以查看详情</value>
+  </data>
+  <data name="Dock_ProjectSetting" xml:space="preserve">
+    <value>打包设置</value>
+  </data>
+  <data name="Dock_Plugins" xml:space="preserve">
+    <value>插件</value>
+  </data>
+  <data name="PluginTool_Description" xml:space="preserve">
+    <value>从已安装的工作流模板中一键应用修补方案。</value>
+  </data>
+  <data name="Dock_ImagesView" xml:space="preserve">
+    <value>镜像文件管理</value>
+  </data>
+  <data name="Dock_ImageType" xml:space="preserve">
+    <value>镜像类型</value>
+  </data>
+  <data name="Dock_ImageFormat" xml:space="preserve">
+    <value>镜像格式</value>
+  </data>
+  <data name="Dock_EXT4RW" xml:space="preserve">
+    <value>EXT4读写</value>
+  </data>
+  <data name="Dock_SizeCalc" xml:space="preserve">
+    <value>大小计算</value>
+  </data>
+  <data name="Dock_Auto" xml:space="preserve">
+    <value>自动</value>
+  </data>
+  <data name="Dock_OriginalSize" xml:space="preserve">
+    <value>原大小</value>
+  </data>
+  <data name="Dock_EXT4Compress" xml:space="preserve">
+    <value>EXT4压缩</value>
+  </data>
+  <data name="Dock_NoCompress" xml:space="preserve">
+    <value>不压</value>
+  </data>
+  <data name="Dock_Compress" xml:space="preserve">
+    <value>压缩</value>
+  </data>
+  <data name="Dock_EROFSAlgorithm" xml:space="preserve">
+    <value>EROFS算法</value>
+  </data>
+  <data name="Dock_EROFSAlgorithmHint" xml:space="preserve">
+    <value>lz4 打包更快；lz4hc 用更多打包时间换取更小镜像（两者写盘的编解码器都是 LZ4）。lzma、deflate 与 zstd 会选用不同的磁盘编解码器。压缩等级只作用于带搜索的编码器。</value>
+  </data>
+  <data name="Dock_EROFSCompLevel" xml:space="preserve">
+    <value>EROFS压缩等级</value>
+  </data>
+  <data name="Dock_EROFSCompLevelHint" xml:space="preserve">
+    <value>等级越高压缩越密：对 lz4hc 是搜索深度，对快速 lz4 是密度与速度的权衡。</value>
+  </data>
+  <data name="Dock_EROFSFeatures" xml:space="preserve">
+    <value>EROFS特性</value>
+  </data>
+  <data name="Dock_EROFSFeaturesHint" xml:space="preserve">
+    <value>编辑受保留 EROFS 镜像的磁盘特性声明，使用上游特性名：名称置位，加 &quot;!&quot; 前缀清除，&quot;auto&quot; 让两个超级块字保持推导。留空则原样继承源镜像记录下来的声明。</value>
+  </data>
+  <data name="Dock_F2FSCompression" xml:space="preserve">
+    <value>F2FS 压缩</value>
+  </data>
+  <data name="Dock_F2FSAlgorithm" xml:space="preserve">
+    <value>F2FS 算法</value>
+  </data>
+  <data name="Dock_F2FSCompLevel" xml:space="preserve">
+    <value>F2FS 压缩等级</value>
+  </data>
+  <data name="Dock_F2FSAndroidProfile" xml:space="preserve">
+    <value>Android F2FS</value>
+  </data>
+  <data name="Dock_F2FSAndroidProfileEnabled" xml:space="preserve">
+    <value>原生配置</value>
+  </data>
+  <data name="Dock_F2FSAndroidProfileHint" xml:space="preserve">
+    <value>通过 mkfs.f2fs 和 sload.f2fs 生成只读、项目配额和扩展属性；需要原生工具或 WSL 发行版。</value>
+  </data>
+  <data name="Dock_F2FSAndroidCapacity" xml:space="preserve">
+    <value>镜像容量（字节）</value>
+  </data>
+  <data name="Dock_F2FSAndroidCapacityHint" xml:space="preserve">
+    <value>至少 64 MiB，且须按 2 MiB 对齐。请明确指定目标分区容量。</value>
+  </data>
+  <data name="Dock_F2FSWslDistribution" xml:space="preserve">
+    <value>WSL 发行版</value>
+  </data>
+  <data name="Dock_SUPERSize" xml:space="preserve">
+    <value>SUPER大小</value>
+  </data>
+  <data name="Dock_SUPERName" xml:space="preserve">
+    <value>SUPER簇名</value>
+  </data>
+  <data name="Dock_SUPERFormat" xml:space="preserve">
+    <value>SUPER格式</value>
+  </data>
+  <data name="Dock_BRCompLevel" xml:space="preserve">
+    <value>BR压缩等级</value>
+  </data>
+  <data name="Dock_UTCTime" xml:space="preserve">
+    <value>UTC时间戳</value>
+  </data>
+  <data name="Dock_DATSegments" xml:space="preserve">
+    <value>DAT分段数量</value>
+  </data>
+  <data name="Dock_NoDocumentOpen" xml:space="preserve">
+    <value>未打开任何文档</value>
+  </data>
+  <data name="Dock_NoDocumentOpenHint" xml:space="preserve">
+    <value>打开或创建一个工程文件以开始</value>
+  </data>
+  <data name="Dock_Output" xml:space="preserve">
+    <value>输出</value>
+  </data>
+  <data name="Dock_AdbLog" xml:space="preserve">
+    <value>设备日志</value>
+  </data>
+  <data name="Dock_Terminal" xml:space="preserve">
+    <value>终端</value>
+  </data>
+  <data name="DockMenu_Float" xml:space="preserve">
+    <value>浮动</value>
+  </data>
+  <data name="DockMenu_FloatAll" xml:space="preserve">
+    <value>全部浮动</value>
+  </data>
+  <data name="DockMenu_Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="DockMenu_CloseOthers" xml:space="preserve">
+    <value>关闭其他标签页</value>
+  </data>
+  <data name="DockMenu_CloseAll" xml:space="preserve">
+    <value>关闭所有标签页</value>
+  </data>
+  <data name="DockMenu_TabLayout" xml:space="preserve">
+    <value>标签布局</value>
+  </data>
+  <data name="DockMenu_TabsLeft" xml:space="preserve">
+    <value>将标签置于左侧</value>
+  </data>
+  <data name="DockMenu_TabsTop" xml:space="preserve">
+    <value>将标签置于顶部</value>
+  </data>
+  <data name="DockMenu_TabsRight" xml:space="preserve">
+    <value>将标签置于右侧</value>
+  </data>
+  <data name="DockMenu_Show" xml:space="preserve">
+    <value>显示</value>
+  </data>
+  <data name="DockMenu_Dock" xml:space="preserve">
+    <value>停靠</value>
+  </data>
+  <data name="DockMenu_DockAsDocument" xml:space="preserve">
+    <value>停靠为标签式文档</value>
+  </data>
+  <data name="DockMenu_AutoHide" xml:space="preserve">
+    <value>自动隐藏</value>
+  </data>
+  <data name="Terminal_Shell" xml:space="preserve">
+    <value>Shell</value>
+  </data>
+  <data name="Terminal_New" xml:space="preserve">
+    <value>新建终端</value>
+  </data>
+  <data name="Terminal_Close" xml:space="preserve">
+    <value>关闭终端会话</value>
+  </data>
+  <data name="Terminal_Clear" xml:space="preserve">
+    <value>清屏</value>
+  </data>
+  <data name="Terminal_Bottom" xml:space="preserve">
+    <value>滚动到底部</value>
+  </data>
+  <data name="Terminal_NoShell" xml:space="preserve">
+    <value>没有找到可用的 Shell。</value>
+  </data>
+  <data name="Terminal_Starting" xml:space="preserve">
+    <value>正在启动终端…</value>
+  </data>
+  <data name="Terminal_StartFailed" xml:space="preserve">
+    <value>终端启动失败：{0}</value>
+  </data>
+  <data name="Terminal_Exited" xml:space="preserve">
+    <value>进程已退出，退出代码：{0}</value>
+  </data>
+  <data name="Dock_NodeLeftPane" xml:space="preserve">
+    <value>节点工具箱</value>
+  </data>
+  <data name="Dock_NodeRightPane" xml:space="preserve">
+    <value>节点属性</value>
+  </data>
+  <data name="Dock_NodeBottomPane" xml:space="preserve">
+    <value>执行日志</value>
+  </data>
+  <data name="Dialog_Rename" xml:space="preserve">
+    <value>重命名</value>
+  </data>
+  <data name="Dialog_OK" xml:space="preserve">
+    <value>确定</value>
+  </data>
+  <data name="Dialog_RenameFailed" xml:space="preserve">
+    <value>重命名失败</value>
+  </data>
+  <data name="Dialog_DeleteFailed" xml:space="preserve">
+    <value>删除失败</value>
+  </data>
+  <data name="Dialog_NewFileFailed" xml:space="preserve">
+    <value>新建文件失败</value>
+  </data>
+  <data name="Dialog_NewFolderFailed" xml:space="preserve">
+    <value>新建文件夹失败</value>
+  </data>
+  <data name="Dialog_ConfirmDelete" xml:space="preserve">
+    <value>确认删除</value>
+  </data>
+  <data name="Dialog_ConfirmDeleteMessage" xml:space="preserve">
+    <value>确定要永久删除「{0}」吗？此操作无法撤销。</value>
+  </data>
+  <data name="Dialog_NewFile" xml:space="preserve">
+    <value>新建文件</value>
+  </data>
+  <data name="Dialog_NewFolder" xml:space="preserve">
+    <value>新建文件夹</value>
+  </data>
+  <data name="Explorer_InvalidItemName" xml:space="preserve">
+    <value>请输入有效的名称，不要包含路径或特殊字符。</value>
+  </data>
+  <data name="Explorer_ItemAlreadyExists" xml:space="preserve">
+    <value>“{0}”已存在，请使用其他名称。</value>
+  </data>
+  <data name="Dialog_SelectFile" xml:space="preserve">
+    <value>选择文件</value>
+  </data>
+  <data name="Dock_File_Hex" xml:space="preserve">
+    <value>十六进制</value>
+  </data>
+  <data name="Dock_File_Analysis" xml:space="preserve">
+    <value>结构分析</value>
+  </data>
+  <data name="Dock_File_AnalysisTitle" xml:space="preserve">
+    <value>固件结构分析</value>
+  </data>
+  <data name="Dock_File_PathFormat" xml:space="preserve">
+    <value>文件：{0}</value>
+  </data>
+  <data name="Dock_File_SizeFormat" xml:space="preserve">
+    <value>大小：{0:N0} 字节</value>
+  </data>
+  <data name="Dock_File_FormatFormat" xml:space="preserve">
+    <value>格式：{0}</value>
+  </data>
+  <data name="Dock_Properties_Type" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="Dock_Properties_TypeFormat" xml:space="preserve">
+    <value>类型：{0}</value>
+  </data>
+  <data name="Dock_Properties_Type_Node" xml:space="preserve">
+    <value>节点</value>
+  </data>
+  <data name="Dock_Properties_Type_Image" xml:space="preserve">
+    <value>镜像</value>
+  </data>
+  <data name="Dock_Properties_Type_FileAnalysis" xml:space="preserve">
+    <value>文件分析</value>
+  </data>
+  <data name="Dock_Properties_Type_TextDocument" xml:space="preserve">
+    <value>文本文档</value>
+  </data>
+  <data name="Dock_Properties_Type_DtbDocument" xml:space="preserve">
+    <value>设备树</value>
+  </data>
+  <data name="Dock_Properties_Type_DexDocument" xml:space="preserve">
+    <value>DEX</value>
+  </data>
+  <data name="Dock_Properties_Type_ManifestDocument" xml:space="preserve">
+    <value>Manifest</value>
+  </data>
+  <data name="Dock_Properties_Type_ArscDocument" xml:space="preserve">
+    <value>ARSC</value>
+  </data>
+  <data name="Dock_Properties_Type_ApkDocument" xml:space="preserve">
+    <value>APK</value>
+  </data>
+  <data name="Dock_Properties_Type_FirmwareDocument" xml:space="preserve">
+    <value>固件</value>
+  </data>
+  <data name="Dock_Properties_Type_HexDocument" xml:space="preserve">
+    <value>十六进制</value>
+  </data>
+  <data name="Dock_Properties_Type_CompareEntry" xml:space="preserve">
+    <value>对比条目</value>
+  </data>
+  <data name="Dock_Properties_Fw_FileName" xml:space="preserve">
+    <value>文件名</value>
+  </data>
+  <data name="Dock_Properties_Fw_FilePath" xml:space="preserve">
+    <value>文件路径</value>
+  </data>
+  <data name="Dock_Properties_Fw_Format" xml:space="preserve">
+    <value>格式</value>
+  </data>
+  <data name="Dock_Properties_Fw_Summary" xml:space="preserve">
+    <value>摘要</value>
+  </data>
+  <data name="Dock_Properties_Fw_MetadataCount" xml:space="preserve">
+    <value>元数据条目数</value>
+  </data>
+  <data name="Dock_Properties_Fw_Components" xml:space="preserve">
+    <value>组件数</value>
+  </data>
+  <data name="Dock_Properties_FileCount" xml:space="preserve">
+    <value>文件数</value>
+  </data>
+  <data name="Dock_Properties_DirectoryCount" xml:space="preserve">
+    <value>目录数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_AlgorithmType" xml:space="preserve">
+    <value>算法类型</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DescriptorsSize" xml:space="preserve">
+    <value>描述符大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_RollbackIndex" xml:space="preserve">
+    <value>回滚索引</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ReleaseString" xml:space="preserve">
+    <value>发布字符串</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FooterVersion" xml:space="preserve">
+    <value>尾部版本</value>
+  </data>
+  <data name="Dock_Properties_Metadata_OriginalImageSize" xml:space="preserve">
+    <value>原始镜像大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_VbmetaOffset" xml:space="preserve">
+    <value>vbmeta 偏移</value>
+  </data>
+  <data name="Dock_Properties_Metadata_VbmetaSize" xml:space="preserve">
+    <value>vbmeta 大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Type" xml:space="preserve">
+    <value>种类</value>
+  </data>
+  <data name="Dock_Properties_Metadata_HeaderVersion" xml:space="preserve">
+    <value>头部版本</value>
+  </data>
+  <data name="Dock_Properties_Metadata_PageSize" xml:space="preserve">
+    <value>页大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_KernelSize" xml:space="preserve">
+    <value>内核大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_RamdiskSize" xml:space="preserve">
+    <value>Ramdisk 大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_SecondSize" xml:space="preserve">
+    <value>第二镜像大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DtbSize" xml:space="preserve">
+    <value>DTB 大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_OsVersion" xml:space="preserve">
+    <value>系统版本</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CommandLine" xml:space="preserve">
+    <value>命令行</value>
+  </data>
+  <data name="Dock_Properties_Metadata_KernelCompression" xml:space="preserve">
+    <value>内核压缩</value>
+  </data>
+  <data name="Dock_Properties_Metadata_VendorRamdiskSize" xml:space="preserve">
+    <value>Vendor ramdisk 大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_RamdiskTableEntryCount" xml:space="preserve">
+    <value>Ramdisk 表条目数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_VendorCmdline" xml:space="preserve">
+    <value>Vendor 命令行</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Version" xml:space="preserve">
+    <value>版本</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressionType" xml:space="preserve">
+    <value>压缩类型</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressedOffset" xml:space="preserve">
+    <value>压缩数据偏移</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressedSize" xml:space="preserve">
+    <value>压缩大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Compression" xml:space="preserve">
+    <value>压缩</value>
+  </data>
+  <data name="Dock_Properties_Metadata_EntryCount" xml:space="preserve">
+    <value>条目数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_NodeCount" xml:space="preserve">
+    <value>节点数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_PropertyCount" xml:space="preserve">
+    <value>属性数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ReservationCount" xml:space="preserve">
+    <value>内存保留数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_BootCpuId" xml:space="preserve">
+    <value>启动 CPU ID</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Format" xml:space="preserve">
+    <value>格式</value>
+  </data>
+  <data name="Dock_Properties_Metadata_BlockSize" xml:space="preserve">
+    <value>块大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Blocks" xml:space="preserve">
+    <value>块数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ImageSize" xml:space="preserve">
+    <value>镜像大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_InodeCount" xml:space="preserve">
+    <value>inode 数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FileCount" xml:space="preserve">
+    <value>文件数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_RootNid" xml:space="preserve">
+    <value>根 nid</value>
+  </data>
+  <data name="Dock_Properties_Metadata_VolumeName" xml:space="preserve">
+    <value>卷名</value>
+  </data>
+  <data name="Dock_Properties_Metadata_PartitionSize" xml:space="preserve">
+    <value>分区大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_BlockCount" xml:space="preserve">
+    <value>块数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DirectoryCount" xml:space="preserve">
+    <value>目录数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_SegmentSize" xml:space="preserve">
+    <value>段大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_TotalBlocks" xml:space="preserve">
+    <value>总块数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_TotalChunks" xml:space="preserve">
+    <value>总块组数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_InnerFormat" xml:space="preserve">
+    <value>内部格式</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FilesystemBlockSize" xml:space="preserve">
+    <value>文件系统块大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CommandCount" xml:space="preserve">
+    <value>命令数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_NewBlocks" xml:space="preserve">
+    <value>新增块数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_NewDataBlocks" xml:space="preserve">
+    <value>新增数据块数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_TransferList" xml:space="preserve">
+    <value>传输列表</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DataFile" xml:space="preserve">
+    <value>数据文件</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DataFileType" xml:space="preserve">
+    <value>数据文件类型</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DataFileSize" xml:space="preserve">
+    <value>数据文件大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_PatchType" xml:space="preserve">
+    <value>补丁类型</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ControlBlockLength" xml:space="preserve">
+    <value>控制块长度</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DiffBlockLength" xml:space="preserve">
+    <value>差异块长度</value>
+  </data>
+  <data name="Dock_Properties_Metadata_NewFileSize" xml:space="preserve">
+    <value>新文件大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FileLength" xml:space="preserve">
+    <value>文件长度</value>
+  </data>
+  <data name="Dock_Properties_Metadata_PartitionCount" xml:space="preserve">
+    <value>分区数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_MinorVersion" xml:space="preserve">
+    <value>次版本</value>
+  </data>
+  <data name="Dock_Properties_Metadata_HeaderType" xml:space="preserve">
+    <value>头部类型</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Device" xml:space="preserve">
+    <value>设备</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ChunkCount" xml:space="preserve">
+    <value>块组数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_TotalSize" xml:space="preserve">
+    <value>总大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_InferredFirmwareType" xml:space="preserve">
+    <value>推断固件类型</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Md5RecordCount" xml:space="preserve">
+    <value>MD5 记录数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_MajorVersion" xml:space="preserve">
+    <value>主版本</value>
+  </data>
+  <data name="Dock_Properties_Metadata_PatchVersion" xml:space="preserve">
+    <value>补丁版本</value>
+  </data>
+  <data name="Dock_Properties_Metadata_RegionCount" xml:space="preserve">
+    <value>区域数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_HeaderSize" xml:space="preserve">
+    <value>头部大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FileSize" xml:space="preserve">
+    <value>文件大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Flags" xml:space="preserve">
+    <value>标志</value>
+  </data>
+  <data name="Dock_Properties_Metadata_DecryptedEntries" xml:space="preserve">
+    <value>解密条目数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FormatCode" xml:space="preserve">
+    <value>格式代码</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ProjectName" xml:space="preserve">
+    <value>项目名称</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CpuModel" xml:space="preserve">
+    <value>CPU 型号</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FlashType" xml:space="preserve">
+    <value>刷写类型</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FirmwareName" xml:space="preserve">
+    <value>固件名称</value>
+  </data>
+  <data name="Dock_Properties_Metadata_ProjectId" xml:space="preserve">
+    <value>项目 ID</value>
+  </data>
+  <data name="Dock_Properties_Metadata_KeyId" xml:space="preserve">
+    <value>密钥 ID</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressionFormat" xml:space="preserve">
+    <value>压缩格式</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CanCompress" xml:space="preserve">
+    <value>支持压缩</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CanDecompress" xml:space="preserve">
+    <value>支持解压</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Entries" xml:space="preserve">
+    <value>条目数</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Entry" xml:space="preserve">
+    <value>条目</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Summary" xml:space="preserve">
+    <value>摘要</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Error" xml:space="preserve">
+    <value>错误</value>
+  </data>
+  <data name="Dock_Properties_Metadata_Size" xml:space="preserve">
+    <value>大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_SourceFilesystemSize" xml:space="preserve">
+    <value>源文件系统大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_RebuiltSize" xml:space="preserve">
+    <value>重建大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_FitsSourceFilesystemSize" xml:space="preserve">
+    <value>适合源文件系统大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_SizeExcess" xml:space="preserve">
+    <value>超出大小</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressionProfile" xml:space="preserve">
+    <value>压缩配置</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressionInference" xml:space="preserve">
+    <value>压缩推断</value>
+  </data>
+  <data name="Dock_Properties_Metadata_CompressionAttempts" xml:space="preserve">
+    <value>压缩尝试次数</value>
+  </data>
+  <data name="Dock_FileManager" xml:space="preserve">
+    <value>文件管理器</value>
+  </data>
+  <data name="FileManager_Refresh" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="FileManager_NavigateUp" xml:space="preserve">
+    <value>返回上级目录</value>
+  </data>
+  <data name="FileManager_ViewMode" xml:space="preserve">
+    <value>切换视图</value>
+  </data>
+  <data name="FileManager_ListView" xml:space="preserve">
+    <value>列表视图</value>
+  </data>
+  <data name="FileManager_GridView" xml:space="preserve">
+    <value>网格视图</value>
+  </data>
+  <data name="FileManager_EmptyDirectory" xml:space="preserve">
+    <value>此目录为空</value>
+  </data>
+  <data name="FileManager_Extract" xml:space="preserve">
+    <value>提取</value>
+  </data>
+  <data name="FileManager_Loading" xml:space="preserve">
+    <value>正在加载文件目录…</value>
+  </data>
+  <data name="FileManager_FileCount" xml:space="preserve">
+    <value>文件数：{0}</value>
+  </data>
+  <data name="FileManager_DirectoryCount" xml:space="preserve">
+    <value>目录数：{0}</value>
+  </data>
+  <data name="FileManager_ImageSize" xml:space="preserve">
+    <value>大小：{0}</value>
+  </data>
+  <data name="FileManager_Path" xml:space="preserve">
+    <value>路径</value>
+  </data>
+  <data name="FileManager_Size" xml:space="preserve">
+    <value>大小</value>
+  </data>
+  <data name="FileManager_Kind" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="FileManager_KindFile" xml:space="preserve">
+    <value>文件</value>
+  </data>
+  <data name="FileManager_KindDirectory" xml:space="preserve">
+    <value>目录</value>
+  </data>
+  <data name="FileManager_KindSymlink" xml:space="preserve">
+    <value>符号链接</value>
+  </data>
+  <data name="FileManager_Unrecognized" xml:space="preserve">
+    <value>无法识别的文件：支持 ext4/EROFS/F2FS 镜像、CPIO/TAR 归档及受支持的压缩文件</value>
+  </data>
+  <data name="Dock_Properties_Hex_FileName" xml:space="preserve">
+    <value>文件名</value>
+  </data>
+  <data name="Dock_Properties_Hex_FilePath" xml:space="preserve">
+    <value>文件路径</value>
+  </data>
+  <data name="Dock_Properties_Hex_FileSize" xml:space="preserve">
+    <value>文件大小</value>
+  </data>
+  <data name="Dock_Properties_Hex_ByteCount" xml:space="preserve">
+    <value>字节数</value>
+  </data>
+  <data name="Dock_Properties_Text_FileName" xml:space="preserve">
+    <value>文件名</value>
+  </data>
+  <data name="Dock_Properties_Text_FilePath" xml:space="preserve">
+    <value>文件路径</value>
+  </data>
+  <data name="Dock_Properties_Text_FileSize" xml:space="preserve">
+    <value>文件大小</value>
+  </data>
+  <data name="Dock_Properties_Text_Encoding" xml:space="preserve">
+    <value>编码</value>
+  </data>
+  <data name="Dock_Properties_Text_LineCount" xml:space="preserve">
+    <value>行数</value>
+  </data>
+  <data name="Dock_Properties_Text_CharCount" xml:space="preserve">
+    <value>字符数</value>
+  </data>
+  <data name="Dock_Properties_Text_Language" xml:space="preserve">
+    <value>语法语言</value>
+  </data>
+  <data name="Dock_Properties_Text_LanguageAuto" xml:space="preserve">
+    <value>自动检测</value>
+  </data>
+  <data name="Dock_Properties_Dtb_FileName" xml:space="preserve">
+    <value>文件名</value>
+  </data>
+  <data name="Dock_Properties_Dtb_FilePath" xml:space="preserve">
+    <value>文件路径</value>
+  </data>
+  <data name="Dock_Properties_Dtb_FileSize" xml:space="preserve">
+    <value>文件大小</value>
+  </data>
+  <data name="Dock_Properties_Dtb_NodeCount" xml:space="preserve">
+    <value>节点总数</value>
+  </data>
+  <data name="Dock_Properties_Dtb_RootCompatible" xml:space="preserve">
+    <value>根节点 compatible</value>
+  </data>
+  <data name="Dock_Properties_Dtb_RootAddressCells" xml:space="preserve">
+    <value>#address-cells</value>
+  </data>
+  <data name="Dock_Properties_Dtb_RootSizeCells" xml:space="preserve">
+    <value>#size-cells</value>
+  </data>
+  <data name="Dock_Properties_Dtb_MemReservations" xml:space="preserve">
+    <value>内存保留条目</value>
+  </data>
+  <data name="Dock_Properties_Dtb_SelectedNode" xml:space="preserve">
+    <value>选中节点</value>
+  </data>
+  <data name="Dock_Properties_Dtb_SelectedNodePath" xml:space="preserve">
+    <value>节点路径</value>
+  </data>
+  <data name="Dock_Properties_Dtb_SelectedNodeProps" xml:space="preserve">
+    <value>属性数</value>
+  </data>
+  <data name="Dock_Properties_Dtb_SelectedNodeChildren" xml:space="preserve">
+    <value>子节点数</value>
+  </data>
+  <data name="Dock_Properties_Dex_FileName" xml:space="preserve">
+    <value>文件名</value>
+  </data>
+  <data name="Dock_Properties_Dex_FilePath" xml:space="preserve">
+    <value>文件路径</value>
+  </data>
+  <data name="Dock_Properties_Dex_FileSize" xml:space="preserve">
+    <value>文件大小</value>
+  </data>
+  <data name="Dock_Properties_Dex_Version" xml:space="preserve">
+    <value>DEX 版本</value>
+  </data>
+  <data name="Dock_Properties_Dex_ClassCount" xml:space="preserve">
+    <value>类数</value>
+  </data>
+  <data name="Dock_Properties_Dex_MethodCount" xml:space="preserve">
+    <value>方法数</value>
+  </data>
+  <data name="Dock_Properties_Dex_FieldCount" xml:space="preserve">
+    <value>字段数</value>
+  </data>
+  <data name="Dock_Properties_Dex_StringCount" xml:space="preserve">
+    <value>字符串数</value>
+  </data>
+  <data name="Dock_Properties_Dex_TypeCount" xml:space="preserve">
+    <value>类型数</value>
+  </data>
+  <data name="Dock_Properties_Dex_SelectedNode" xml:space="preserve">
+    <value>选中项</value>
+  </data>
+  <data name="Dock_Properties_Dex_SelectedNodeKind" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="Dock_Properties_Dex_SelectedNodeDetail" xml:space="preserve">
+    <value>详情</value>
+  </data>
+  <data name="Dock_Properties_Dex_SelectedNodeChildren" xml:space="preserve">
+    <value>子项数</value>
+  </data>
+  <data name="Dock_Properties_Manifest_FileName" xml:space="preserve">
+    <value>文件名称</value>
+  </data>
+  <data name="Dock_Properties_Manifest_FilePath" xml:space="preserve">
+    <value>文件路径</value>
+  </data>
+  <data name="Dock_Properties_Manifest_FileSize" xml:space="preserve">
+    <value>文件大小</value>
+  </data>
+  <data name="Dock_Properties_Manifest_ElementCount" xml:space="preserve">
+    <value>元素数</value>
+  </data>
+  <data name="Dock_Properties_Manifest_AttributeCount" xml:space="preserve">
+    <value>属性数</value>
+  </data>
+  <data name="Dock_Properties_Manifest_SelectedNode" xml:space="preserve">
+    <value>选中元素</value>
+  </data>
+  <data name="Dock_Properties_Manifest_SelectedNodeNs" xml:space="preserve">
+    <value>命名空间</value>
+  </data>
+  <data name="Dock_Properties_Manifest_SelectedNodeAttrs" xml:space="preserve">
+    <value>属性数</value>
+  </data>
+  <data name="Dock_Properties_Manifest_SelectedNodeChildren" xml:space="preserve">
+    <value>子元素数</value>
+  </data>
+  <data name="Dock_Properties_Manifest_SelectedNodeText" xml:space="preserve">
+    <value>文本</value>
+  </data>
+  <data name="Dock_Properties_Arsc_FileName" xml:space="preserve">
+    <value>文件名称</value>
+  </data>
+  <data name="Dock_Properties_Arsc_FilePath" xml:space="preserve">
+    <value>文件路径</value>
+  </data>
+  <data name="Dock_Properties_Arsc_PackageCount" xml:space="preserve">
+    <value>包数</value>
+  </data>
+  <data name="Dock_Properties_Arsc_TypeCount" xml:space="preserve">
+    <value>类型表数</value>
+  </data>
+  <data name="Dock_Properties_Arsc_EntryCount" xml:space="preserve">
+    <value>条目数</value>
+  </data>
+  <data name="Dock_Properties_Arsc_SelectedNode" xml:space="preserve">
+    <value>选中项</value>
+  </data>
+  <data name="Dock_Properties_Arsc_SelectedNodeKind" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="Dock_Properties_Arsc_SelectedNodeDetail" xml:space="preserve">
+    <value>详情</value>
+  </data>
+  <data name="Dock_Properties_Arsc_SelectedNodeChildren" xml:space="preserve">
+    <value>子项数</value>
+  </data>
+  <data name="Dock_Properties_Apk_FileName" xml:space="preserve">
+    <value>文件名称</value>
+  </data>
+  <data name="Dock_Properties_Apk_FilePath" xml:space="preserve">
+    <value>文件路径</value>
+  </data>
+  <data name="Dock_Properties_Apk_FileSize" xml:space="preserve">
+    <value>文件大小</value>
+  </data>
+  <data name="Dock_Properties_Apk_PackageName" xml:space="preserve">
+    <value>包名</value>
+  </data>
+  <data name="Dock_Properties_Apk_VersionName" xml:space="preserve">
+    <value>版本名</value>
+  </data>
+  <data name="Dock_Properties_Apk_VersionCode" xml:space="preserve">
+    <value>版本号</value>
+  </data>
+  <data name="Dock_Properties_Apk_Sdk" xml:space="preserve">
+    <value>SDK</value>
+  </data>
+  <data name="Dock_Properties_Apk_Signing" xml:space="preserve">
+    <value>签名状态</value>
+  </data>
+  <data name="Dock_Properties_Apk_Hardening" xml:space="preserve">
+    <value>加固状态</value>
+  </data>
+  <data name="Dock_Properties_Apk_TargetSystem" xml:space="preserve">
+    <value>目标系统</value>
+  </data>
+  <data name="Dock_Properties_Apk_MinimumSystem" xml:space="preserve">
+    <value>最低系统</value>
+  </data>
+  <data name="Dock_Properties_Apk_Abis" xml:space="preserve">
+    <value>ABI</value>
+  </data>
+  <data name="Dock_Properties_Apk_Permissions" xml:space="preserve">
+    <value>权限数</value>
+  </data>
+  <data name="Editor_Yes" xml:space="preserve">
+    <value>是</value>
+  </data>
+  <data name="Editor_Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Device_RebootConfirmTitle" xml:space="preserve">
+    <value>确认重启</value>
+  </data>
+  <data name="Device_RebootConfirmMessage" xml:space="preserve">
+    <value>确定要将设备重启到 {0} 吗？</value>
+  </data>
+  <data name="Device_FlashConfirmTitle" xml:space="preserve">
+    <value>确认刷写</value>
+  </data>
+  <data name="Device_FlashConfirmMessage" xml:space="preserve">
+    <value>刷写操作存在风险，可能导致设备变砖。是否继续？</value>
+  </data>
+  <data name="Device_ModeSystem" xml:space="preserve">
+    <value>系统</value>
+  </data>
+  <data name="Device_ModeBootloader" xml:space="preserve">
+    <value>Bootloader</value>
+  </data>
+  <data name="Device_ModeFastbootd" xml:space="preserve">
+    <value>Fastbootd</value>
+  </data>
+  <data name="Device_ModeRecovery" xml:space="preserve">
+    <value>Recovery</value>
+  </data>
+  <data name="Device_ModeEdl" xml:space="preserve">
+    <value>EDL 模式</value>
+  </data>
+  <data name="Log_Panel_Title" xml:space="preserve">
+    <value>全局日志</value>
+  </data>
+  <data name="Log_Clear" xml:space="preserve">
+    <value>清空</value>
+  </data>
+  <data name="Log_Export" xml:space="preserve">
+    <value>导出</value>
+  </data>
+  <data name="Log_Reload" xml:space="preserve">
+    <value>重新加载文件</value>
+  </data>
+  <data name="Log_Loading" xml:space="preserve">
+    <value>正在加载日志文件</value>
+  </data>
+  <data name="Log_FileLoadFailed" xml:space="preserve">
+    <value>加载日志失败：{0}</value>
+  </data>
+  <data name="Log_FileTooLarge" xml:space="preserve">
+    <value>日志超过支持的范围（64 MiB、250,000 行或单条 1 MiB），原文件未被修改。</value>
+  </data>
+  <data name="Log_FileUnsupportedVersion" xml:space="preserve">
+    <value>暂不支持此版本的日志导出文件。</value>
+  </data>
+  <data name="Log_FileInvalidRecord" xml:space="preserve">
+    <value>第 {0} 行的日志记录格式无效。</value>
+  </data>
+  <data name="Log_ExportDone" xml:space="preserve">
+    <value>日志已导出到 {0}</value>
+  </data>
+  <data name="Log_ExportFailed" xml:space="preserve">
+    <value>导出日志失败：{0}</value>
+  </data>
+  <data name="Log_CopyDone" xml:space="preserve">
+    <value>日志条目已复制到剪贴板</value>
+  </data>
+  <data name="Log_LevelFilter" xml:space="preserve">
+    <value>级别</value>
+  </data>
+  <data name="Log_SourceFilter" xml:space="preserve">
+    <value>组件</value>
+  </data>
+  <data name="Log_Search" xml:space="preserve">
+    <value>搜索日志</value>
+  </data>
+  <data name="Log_ClearSearch" xml:space="preserve">
+    <value>清除搜索</value>
+  </data>
+  <data name="Log_AutoScroll" xml:space="preserve">
+    <value>自动滚动</value>
+  </data>
+  <data name="Log_UseRegex" xml:space="preserve">
+    <value>正则表达式</value>
+  </data>
+  <data name="Log_MatchCase" xml:space="preserve">
+    <value>区分大小写</value>
+  </data>
+  <data name="Log_Pause" xml:space="preserve">
+    <value>暂停</value>
+  </data>
+  <data name="Log_Resume" xml:space="preserve">
+    <value>继续</value>
+  </data>
+  <data name="AdbLog_Reset" xml:space="preserve">
+    <value>重置：仅清除本地日志</value>
+  </data>
+  <data name="AdbLog_ClearAll" xml:space="preserve">
+    <value>清空：清除本地日志及设备日志缓冲区</value>
+  </data>
+  <data name="AdbLog_ClearFailed" xml:space="preserve">
+    <value>清空设备日志缓冲区失败：{0}</value>
+  </data>
+  <data name="Log_RegexInvalid" xml:space="preserve">
+    <value>正则表达式无效：{0}</value>
+  </data>
+  <data name="Log_RegexTimeout" xml:space="preserve">
+    <value>正则匹配超时，请简化表达式</value>
+  </data>
+  <data name="Log_FilterAll" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="Dock_AiAssistant" xml:space="preserve">
+    <value>AI 对话助手</value>
+  </data>
+  <data name="AI_NewConversation" xml:space="preserve">
+    <value>新建对话</value>
+  </data>
+  <data name="AI_History" xml:space="preserve">
+    <value>对话历史</value>
+  </data>
+  <data name="AI_ClearConversation" xml:space="preserve">
+    <value>清空对话</value>
+  </data>
+  <data name="AI_Chat" xml:space="preserve">
+    <value>聊天</value>
+  </data>
+  <data name="AI_Agent" xml:space="preserve">
+    <value>智能体</value>
+  </data>
+  <data name="AI_Mode" xml:space="preserve">
+    <value>对话模式</value>
+  </data>
+  <data name="AI_Model" xml:space="preserve">
+    <value>选择模型</value>
+  </data>
+  <data name="AI_Prompt" xml:space="preserve">
+    <value>询问 UotanStudio</value>
+  </data>
+  <data name="AI_ActiveDocument" xml:space="preserve">
+    <value>活动文档</value>
+  </data>
+  <data name="AI_AddFiles" xml:space="preserve">
+    <value>添加文件</value>
+  </data>
+  <data name="AI_RemoveFile" xml:space="preserve">
+    <value>移除附件</value>
+  </data>
+  <data name="AI_AddFilesFailed" xml:space="preserve">
+    <value>无法选择文件，请重试。</value>
+  </data>
+  <data name="AI_Send" xml:space="preserve">
+    <value>发送消息</value>
+  </data>
+  <data name="FindReplace_Searching" xml:space="preserve">
+    <value>正在查找...</value>
+  </data>
+  <data name="FindReplace_NoMatches" xml:space="preserve">
+    <value>无匹配项</value>
+  </data>
+  <data name="FindReplace_ResultCount" xml:space="preserve">
+    <value>第 {0} 项，共 {1} 项</value>
+  </data>
+  <data name="FindReplace_NoProject" xml:space="preserve">
+    <value>尚未打开项目。</value>
+  </data>
+  <data name="FindReplace_Changed" xml:space="preserve">
+    <value>文档在查找后发生了变化，请重新查找。</value>
+  </data>
+  <data name="FindReplace_Replaced" xml:space="preserve">
+    <value>已替换 {0} 项</value>
+  </data>
+  <data name="FindReplace_ConfirmReplaceAll" xml:space="preserve">
+    <value>替换 {1} 个文档中的 {0} 处匹配？</value>
+  </data>
+  <data name="FindReplace_EditorNotReady" xml:space="preserve">
+    <value>编辑器尚未就绪，请在文档显示后重试。</value>
+  </data>
+  <data name="FindReplace_NotSupported" xml:space="preserve">
+    <value>此文档类型不支持替换。</value>
+  </data>
+  <data name="ApkSign_Title" xml:space="preserve">
+    <value>APK 签名</value>
+  </data>
+  <data name="ApkSign_Key" xml:space="preserve">
+    <value>私钥（PKCS#8 / PKCS#1 / SEC1，PEM 或 DER）</value>
+  </data>
+  <data name="ApkSign_Certificate" xml:space="preserve">
+    <value>证书（PEM / DER / PFX）</value>
+  </data>
+  <data name="ApkSign_Output" xml:space="preserve">
+    <value>已签名 APK 输出路径</value>
+  </data>
+  <data name="ApkSign_KeyPassword" xml:space="preserve">
+    <value>私钥密码（可选）</value>
+  </data>
+  <data name="ApkSign_CertificatePassword" xml:space="preserve">
+    <value>证书密码（可选）</value>
+  </data>
+  <data name="ApkSign_Browse" xml:space="preserve">
+    <value>选择文件</value>
+  </data>
+  <data name="ApkSign_Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="ApkSign_Cancelled" xml:space="preserve">
+    <value>签名已取消。</value>
+  </data>
+  <data name="ApkSign_Execute" xml:space="preserve">
+    <value>执行签名</value>
+  </data>
+  <data name="ApkSign_SelectApk" xml:space="preserve">
+    <value>选择 APK 文件</value>
+  </data>
+  <data name="ApkSign_KeyLabel" xml:space="preserve">
+    <value>签名</value>
+  </data>
+  <data name="ApkSign_CertificateLabel" xml:space="preserve">
+    <value>证书</value>
+  </data>
+  <data name="ApkSign_SelectDirectory" xml:space="preserve">
+    <value>选择目录</value>
+  </data>
+  <data name="Apk_SizeFormat" xml:space="preserve">
+    <value>{0:N0} 字节</value>
+  </data>
+  <data name="Apk_Extract" xml:space="preserve">
+    <value>解压</value>
+  </data>
+  <data name="Apk_View" xml:space="preserve">
+    <value>查看</value>
+  </data>
+  <data name="Apk_Install" xml:space="preserve">
+    <value>安装</value>
+  </data>
+  <data name="Apk_Sign" xml:space="preserve">
+    <value>签名</value>
+  </data>
+  <data name="Apk_Size" xml:space="preserve">
+    <value>大小</value>
+  </data>
+  <data name="Apk_TargetSystem" xml:space="preserve">
+    <value>目标系统</value>
+  </data>
+  <data name="Apk_MinimumSystem" xml:space="preserve">
+    <value>最低系统</value>
+  </data>
+  <data name="Apk_SigningStatus" xml:space="preserve">
+    <value>签名状态</value>
+  </data>
+  <data name="Apk_HardeningStatus" xml:space="preserve">
+    <value>加固状态</value>
+  </data>
+  <data name="Apk_SigningUnsigned" xml:space="preserve">
+    <value>未签名</value>
+  </data>
+  <data name="Apk_SigningSchemes" xml:space="preserve">
+    <value>已签名（{0}）</value>
+  </data>
+  <data name="Apk_HardeningDetected" xml:space="preserve">
+    <value>已检测到（{0}）</value>
+  </data>
+  <data name="Apk_HardeningNotDetected" xml:space="preserve">
+    <value>未检测到</value>
+  </data>
+  <data name="MirrorProperty_Status" xml:space="preserve">
+    <value>会话状态</value>
+  </data>
+  <data name="MirrorProperty_Codec" xml:space="preserve">
+    <value>视频编码</value>
+  </data>
+  <data name="MirrorProperty_Decoder" xml:space="preserve">
+    <value>解码后端</value>
+  </data>
+  <data name="MirrorProperty_Resolution" xml:space="preserve">
+    <value>视频分辨率</value>
+  </data>
+  <data name="MirrorProperty_SourceColor" xml:space="preserve">
+    <value>源色彩空间</value>
+  </data>
+  <data name="MirrorProperty_PixelFormat" xml:space="preserve">
+    <value>解码像素格式</value>
+  </data>
+  <data name="MirrorProperty_Conversion" xml:space="preserve">
+    <value>显示色彩转换</value>
+  </data>
+  <data name="MirrorProperty_Presentation" xml:space="preserve">
+    <value>呈现路径</value>
+  </data>
+  <data name="MirrorProperty_ReceiveFps" xml:space="preserve">
+    <value>接收帧率（1秒）</value>
+  </data>
+  <data name="MirrorProperty_DecodeFps" xml:space="preserve">
+    <value>解码帧率（1秒）</value>
+  </data>
+  <data name="MirrorProperty_UploadFps" xml:space="preserve">
+    <value>位图更新率（1秒）</value>
+  </data>
+  <data name="MirrorProperty_MaxFps" xml:space="preserve">
+    <value>帧率上限</value>
+  </data>
+  <data name="MirrorProperty_BitRate" xml:space="preserve">
+    <value>目标码率</value>
+  </data>
+  <data name="MirrorProperty_ActualBitRate" xml:space="preserve">
+    <value>接收码率（1秒）</value>
+  </data>
+  <data name="MirrorProperty_Encoder" xml:space="preserve">
+    <value>设备编码器</value>
+  </data>
+  <data name="MirrorProperty_Audio" xml:space="preserve">
+    <value>音频</value>
+  </data>
+  <data name="MirrorProperty_AudioFormat" xml:space="preserve">
+    <value>音频格式</value>
+  </data>
+  <data name="MirrorProperty_AudioFps" xml:space="preserve">
+    <value>解码率（音频，1秒）</value>
+  </data>
+  <data name="MirrorProperty_AudioOff" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="MirrorProperty_Device" xml:space="preserve">
+    <value>设备名称</value>
+  </data>
+  <data name="MirrorProperty_Version" xml:space="preserve">
+    <value>scrcpy 版本</value>
+  </data>
+  <data name="MirrorProperty_Unknown" xml:space="preserve">
+    <value>未报告／未解析</value>
+  </data>
+  <data name="MirrorProperty_Unlimited" xml:space="preserve">
+    <value>不限制</value>
+  </data>
+  <data name="MirrorProperty_ConversionValue" xml:space="preserve">
+    <value>BT.601 有限范围 → BGRA（CPU）</value>
+  </data>
+  <data name="MirrorProperty_EncoderValue" xml:space="preserve">
+    <value>Android 自动选择；未报告名称</value>
+  </data>
+  <data name="MirrorSetting_Apply" xml:space="preserve">
+    <value>应用并重新连接</value>
+  </data>
+  <data name="MirrorSetting_ApplyHint" xml:space="preserve">
+    <value>修改后重新连接生效。可用后端取决于系统、驱动和已安装插件；设备端编码格式也需要设备支持。</value>
+  </data>
+  <data name="MirrorSetting_UpdateServer" xml:space="preserve">
+    <value>检查新的 scrcpy 服务端</value>
+  </data>
+  <data name="MirrorSetting_UpdateServerHint" xml:space="preserve">
+    <value>把最新发布的 server jar 下载到本地缓存。已开始的会话继续使用它已部署的 jar，新版本从下一次连接生效。</value>
+  </data>
+  <data name="MirrorSetting_AudioBackend" xml:space="preserve">
+    <value>音频解码后端</value>
+  </data>
+  <data name="MirrorSetting_AudioCodec" xml:space="preserve">
+    <value>音频编码</value>
+  </data>
+  <data name="MirrorSetting_Auto" xml:space="preserve">
+    <value>自动</value>
+  </data>
+  <data name="MirrorSetting_Backend" xml:space="preserve">
+    <value>视频解码后端</value>
+  </data>
+  <data name="MirrorSetting_BitRate" xml:space="preserve">
+    <value>视频码率</value>
+  </data>
+  <data name="MirrorSetting_Control" xml:space="preserve">
+    <value>允许远程控制</value>
+  </data>
+  <data name="MirrorSetting_Full" xml:space="preserve">
+    <value>全范围（0–255）</value>
+  </data>
+  <data name="MirrorSetting_GpuExport" xml:space="preserve">
+    <value>GPU 零拷贝</value>
+  </data>
+  <data name="MirrorSetting_Limited" xml:space="preserve">
+    <value>有限范围（16–235）</value>
+  </data>
+  <data name="MirrorSetting_Matrix" xml:space="preserve">
+    <value>色彩矩阵</value>
+  </data>
+  <data name="MirrorSetting_MaxFps" xml:space="preserve">
+    <value>帧率上限</value>
+  </data>
+  <data name="MirrorSetting_MaxSize" xml:space="preserve">
+    <value>最长边上限</value>
+  </data>
+  <data name="MirrorSetting_Native" xml:space="preserve">
+    <value>系统原生</value>
+  </data>
+  <data name="MirrorSetting_Off" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="MirrorSetting_On" xml:space="preserve">
+    <value>开启</value>
+  </data>
+  <data name="MirrorSetting_Original" xml:space="preserve">
+    <value>原始尺寸</value>
+  </data>
+  <data name="MirrorSetting_Range" xml:space="preserve">
+    <value>色彩范围</value>
+  </data>
+  <data name="MirrorSetting_Unlimited" xml:space="preserve">
+    <value>不限</value>
+  </data>
+  <data name="MirrorSetting_VideoCodec" xml:space="preserve">
+    <value>目标视频编码</value>
+  </data>
+  <data name="MirrorSetting_Volume" xml:space="preserve">
+    <value>播放音量</value>
+  </data>
+  <data name="MirrorProperty_AudioUnavailable" xml:space="preserve">
+    <value>设备未提供音频</value>
+  </data>
+  <data name="Dock_Elf_Title" xml:space="preserve">
+    <value>ELF 二进制信息</value>
+  </data>
+  <data name="Dock_Elf_OpenHex" xml:space="preserve">
+    <value>以十六进制打开</value>
+  </data>
+  <data name="Dock_Elf_Loading" xml:space="preserve">
+    <value>正在读取 ELF 元数据…</value>
+  </data>
+  <data name="Dock_Elf_LoadError" xml:space="preserve">
+    <value>无法读取 ELF 信息：文件可能无法访问、结构损坏、内容截断或超出元数据限制。详细原因请查看日志。</value>
+  </data>
+  <data name="Dock_Elf_Header" xml:space="preserve">
+    <value>文件头</value>
+  </data>
+  <data name="Dock_Elf_Segments" xml:space="preserve">
+    <value>程序段</value>
+  </data>
+  <data name="Dock_Elf_Sections" xml:space="preserve">
+    <value>节区</value>
+  </data>
+  <data name="Dock_Elf_Class" xml:space="preserve">
+    <value>位数</value>
+  </data>
+  <data name="Dock_Elf_ByteOrder" xml:space="preserve">
+    <value>字节序</value>
+  </data>
+  <data name="Dock_Elf_LittleEndian" xml:space="preserve">
+    <value>小端</value>
+  </data>
+  <data name="Dock_Elf_BigEndian" xml:space="preserve">
+    <value>大端</value>
+  </data>
+  <data name="Dock_Elf_Type" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="Dock_Elf_None" xml:space="preserve">
+    <value>未指定</value>
+  </data>
+  <data name="Dock_Elf_Relocatable" xml:space="preserve">
+    <value>可重定位文件</value>
+  </data>
+  <data name="Dock_Elf_Executable" xml:space="preserve">
+    <value>可执行文件</value>
+  </data>
+  <data name="Dock_Elf_SharedObject" xml:space="preserve">
+    <value>共享对象 / PIE</value>
+  </data>
+  <data name="Dock_Elf_Core" xml:space="preserve">
+    <value>核心转储</value>
+  </data>
+  <data name="Dock_Elf_Unknown" xml:space="preserve">
+    <value>未知</value>
+  </data>
+  <data name="Dock_Elf_Machine" xml:space="preserve">
+    <value>目标架构</value>
+  </data>
+  <data name="Dock_Elf_OsAbi" xml:space="preserve">
+    <value>操作系统 / ABI</value>
+  </data>
+  <data name="Dock_Elf_AbiVersion" xml:space="preserve">
+    <value>ABI 版本</value>
+  </data>
+  <data name="Dock_Elf_Version" xml:space="preserve">
+    <value>ELF 版本</value>
+  </data>
+  <data name="Dock_Elf_EntryPoint" xml:space="preserve">
+    <value>入口地址</value>
+  </data>
+  <data name="Dock_Elf_Flags" xml:space="preserve">
+    <value>标志</value>
+  </data>
+  <data name="Dock_Elf_FileSize" xml:space="preserve">
+    <value>文件大小（字节）</value>
+  </data>
+  <data name="Dock_Elf_HeaderSize" xml:space="preserve">
+    <value>文件头大小（字节）</value>
+  </data>
+  <data name="Dock_Elf_ProgramOffset" xml:space="preserve">
+    <value>程序头表偏移</value>
+  </data>
+  <data name="Dock_Elf_ProgramCount" xml:space="preserve">
+    <value>程序段数量</value>
+  </data>
+  <data name="Dock_Elf_ProgramEntrySize" xml:space="preserve">
+    <value>程序头条目大小</value>
+  </data>
+  <data name="Dock_Elf_SectionOffset" xml:space="preserve">
+    <value>节区头表偏移</value>
+  </data>
+  <data name="Dock_Elf_SectionCount" xml:space="preserve">
+    <value>节区数量</value>
+  </data>
+  <data name="Dock_Elf_SectionEntrySize" xml:space="preserve">
+    <value>节区头条目大小</value>
+  </data>
+  <data name="Dock_Elf_NameTableIndex" xml:space="preserve">
+    <value>节区名称表索引</value>
+  </data>
+  <data name="Dock_Elf_NoSegments" xml:space="preserve">
+    <value>此 ELF 不含程序头表。</value>
+  </data>
+  <data name="Dock_Elf_NoSections" xml:space="preserve">
+    <value>此 ELF 不含节区头表。</value>
+  </data>
+  <data name="Dock_Elf_Offset" xml:space="preserve">
+    <value>文件偏移</value>
+  </data>
+  <data name="Dock_Elf_VirtualAddress" xml:space="preserve">
+    <value>虚拟地址</value>
+  </data>
+  <data name="Dock_Elf_PhysicalAddress" xml:space="preserve">
+    <value>物理地址</value>
+  </data>
+  <data name="Dock_Elf_FileBytes" xml:space="preserve">
+    <value>文件大小</value>
+  </data>
+  <data name="Dock_Elf_MemoryBytes" xml:space="preserve">
+    <value>内存大小</value>
+  </data>
+  <data name="Dock_Elf_Alignment" xml:space="preserve">
+    <value>对齐</value>
+  </data>
+  <data name="Dock_Elf_Name" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="Dock_Elf_Address" xml:space="preserve">
+    <value>地址</value>
+  </data>
+  <data name="Dock_Elf_Size" xml:space="preserve">
+    <value>大小</value>
+  </data>
+  <data name="Dock_Elf_Link" xml:space="preserve">
+    <value>关联节区</value>
+  </data>
+  <data name="Dock_Elf_Info" xml:space="preserve">
+    <value>附加信息</value>
+  </data>
+  <data name="Dock_Elf_EntrySize" xml:space="preserve">
+    <value>条目大小</value>
+  </data>
+  <data name="Dock_Qualcomm_Title" xml:space="preserve">
+    <value>Qualcomm 镜像分析</value>
+  </data>
+  <data name="Dock_Qualcomm_ChooseImage" xml:space="preserve">
+    <value>选择镜像</value>
+  </data>
+  <data name="Dock_Qualcomm_TrustedRoot" xml:space="preserve">
+    <value>可信根</value>
+  </data>
+  <data name="Dock_Qualcomm_OptionalRoot" xml:space="preserve">
+    <value>可选 PEM 或 DER 根证书</value>
+  </data>
+  <data name="Dock_Qualcomm_RootHint" xml:space="preserve">
+    <value>只有显式提供的可信根才能建立外部信任。</value>
+  </data>
+  <data name="Dock_Qualcomm_ChooseRoot" xml:space="preserve">
+    <value>选择可信根</value>
+  </data>
+  <data name="Dock_Qualcomm_Analyze" xml:space="preserve">
+    <value>分析并验证</value>
+  </data>
+  <data name="Dock_Qualcomm_Cancel" xml:space="preserve">
+    <value>取消分析</value>
+  </data>
+  <data name="Dock_Qualcomm_Export" xml:space="preserve">
+    <value>导出结果</value>
+  </data>
+  <data name="Dock_Qualcomm_Overview" xml:space="preserve">
+    <value>概览</value>
+  </data>
+  <data name="Dock_Qualcomm_Segments" xml:space="preserve">
+    <value>段</value>
+  </data>
+  <data name="Dock_Qualcomm_Verification" xml:space="preserve">
+    <value>验证</value>
+  </data>
+  <data name="Dock_Qualcomm_Programmer" xml:space="preserve">
+    <value>Programmer</value>
+  </data>
+  <data name="Dock_Qualcomm_Field" xml:space="preserve">
+    <value>字段</value>
+  </data>
+  <data name="Dock_Qualcomm_Value" xml:space="preserve">
+    <value>值</value>
+  </data>
+  <data name="Dock_Qualcomm_Idle" xml:space="preserve">
+    <value>选择待分析的镜像。</value>
+  </data>
+  <data name="Dock_Qualcomm_Loading" xml:space="preserve">
+    <value>正在分析本地镜像…</value>
+  </data>
+  <data name="Dock_Qualcomm_Unverified" xml:space="preserve">
+    <value>已识别静态结构；未验证设备是否接受。</value>
+  </data>
+  <data name="Dock_Qualcomm_LoadError" xml:space="preserve">
+    <value>无法分析此镜像。详情请查看应用日志。</value>
+  </data>
+  <data name="Dock_Qualcomm_ExportError" xml:space="preserve">
+    <value>无法导出分析结果。详情请查看应用日志。</value>
+  </data>
+  <data name="Dock_Qualcomm_Recognized" xml:space="preserve">
+    <value>格式</value>
+  </data>
+  <data name="Dock_Qualcomm_FileSize" xml:space="preserve">
+    <value>文件大小</value>
+  </data>
+  <data name="Dock_Qualcomm_Digest" xml:space="preserve">
+    <value>镜像摘要</value>
+  </data>
+  <data name="Dock_Qualcomm_Signature" xml:space="preserve">
+    <value>签名</value>
+  </data>
+  <data name="Dock_Qualcomm_Trust" xml:space="preserve">
+    <value>外部信任</value>
+  </data>
+  <data name="Dock_Qualcomm_Device" xml:space="preserve">
+    <value>设备接受状态</value>
+  </data>
+  <data name="Dock_Qualcomm_NotChecked" xml:space="preserve">
+    <value>未检查</value>
+  </data>
+  <data name="Dock_Qualcomm_Passed" xml:space="preserve">
+    <value>通过</value>
+  </data>
+  <data name="Dock_Qualcomm_Failed" xml:space="preserve">
+    <value>失败</value>
+  </data>
+  <data name="Dock_Qualcomm_Unknown" xml:space="preserve">
+    <value>未知</value>
+  </data>
+  <data name="Dock_Qualcomm_Unrecognized" xml:space="preserve">
+    <value>未识别</value>
+  </data>
+  <data name="Dock_Qualcomm_UnrecognizedStatus" xml:space="preserve">
+    <value>未识别出受支持的 Qualcomm 镜像结构。</value>
+  </data>
+  <data name="Dock_Qualcomm_Valid" xml:space="preserve">
+    <value>有效</value>
+  </data>
+  <data name="Dock_Qualcomm_Invalid" xml:space="preserve">
+    <value>无效</value>
+  </data>
+  <data name="Dock_Qualcomm_NotPresent" xml:space="preserve">
+    <value>不存在</value>
+  </data>
+  <data name="Dock_Qualcomm_Unsupported" xml:space="preserve">
+    <value>不支持</value>
+  </data>
+  <data name="Dock_Qualcomm_MbnVersion" xml:space="preserve">
+    <value>MBN 版本</value>
+  </data>
+  <data name="Dock_Qualcomm_HashAlgorithm" xml:space="preserve">
+    <value>哈希算法</value>
+  </data>
+  <data name="Dock_Qualcomm_HashLength" xml:space="preserve">
+    <value>哈希表长度</value>
+  </data>
+  <data name="Dock_Qualcomm_Architecture" xml:space="preserve">
+    <value>ELF 机器类型</value>
+  </data>
+  <data name="Dock_Qualcomm_EntryPoint" xml:space="preserve">
+    <value>入口地址</value>
+  </data>
+  <data name="Dock_Qualcomm_MoreSegments" xml:space="preserve">
+    <value>未显示的其他段</value>
+  </data>
+  <data name="Dock_Qualcomm_MoreDigests" xml:space="preserve">
+    <value>未显示的其他摘要</value>
+  </data>
+  <data name="Dock_Qualcomm_QtiSignature" xml:space="preserve">
+    <value>QTI 签名</value>
+  </data>
+  <data name="Dock_Qualcomm_OemSignature" xml:space="preserve">
+    <value>OEM 签名</value>
+  </data>
+  <data name="Dock_Qualcomm_QtiChain" xml:space="preserve">
+    <value>QTI 内嵌证书链</value>
+  </data>
+  <data name="Dock_Qualcomm_OemChain" xml:space="preserve">
+    <value>OEM 内嵌证书链</value>
+  </data>
+  <data name="Dock_Qualcomm_Diagnostic" xml:space="preserve">
+    <value>诊断</value>
+  </data>
+  <data name="Dock_Qualcomm_Metadata" xml:space="preserve">
+    <value>签名元数据</value>
+  </data>
+  <data name="Dock_Qualcomm_ImageId" xml:space="preserve">
+    <value>镜像标识</value>
+  </data>
+  <data name="Dock_Qualcomm_SoftwareId" xml:space="preserve">
+    <value>声明的软件标识</value>
+  </data>
+  <data name="Dock_Qualcomm_SecondarySoftwareId" xml:space="preserve">
+    <value>第二软件标识</value>
+  </data>
+  <data name="Dock_Qualcomm_HardwareId" xml:space="preserve">
+    <value>声明的硬件标识</value>
+  </data>
+  <data name="Dock_Qualcomm_OemId" xml:space="preserve">
+    <value>OEM 标识</value>
+  </data>
+  <data name="Dock_Qualcomm_ModelId" xml:space="preserve">
+    <value>型号 / OEM 产品标识</value>
+  </data>
+  <data name="Dock_Qualcomm_ApplicationId" xml:space="preserve">
+    <value>应用标识</value>
+  </data>
+  <data name="Dock_Qualcomm_SoftwareSize" xml:space="preserve">
+    <value>声明的软件大小</value>
+  </data>
+  <data name="Dock_Qualcomm_AntiRollbackVersion" xml:space="preserve">
+    <value>声明的反回滚版本</value>
+  </data>
+  <data name="Dock_Qualcomm_RootSlot" xml:space="preserve">
+    <value>根证书槽位（从零开始）</value>
+  </data>
+  <data name="Dock_Qualcomm_Flags" xml:space="preserve">
+    <value>原始标志</value>
+  </data>
+  <data name="Dock_Qualcomm_SocVersions" xml:space="preserve">
+    <value>SoC 版本槽位</value>
+  </data>
+  <data name="Dock_Qualcomm_SerialNumbers" xml:space="preserve">
+    <value>声明的序列号槽位</value>
+  </data>
+  <data name="Dock_Qualcomm_SocFeatureId" xml:space="preserve">
+    <value>SoC 特性标识</value>
+  </data>
+  <data name="Dock_Qualcomm_JtagId" xml:space="preserve">
+    <value>JTAG 标识</value>
+  </data>
+  <data name="Dock_Qualcomm_SocLifecycle" xml:space="preserve">
+    <value>声明的 SoC 生命周期</value>
+  </data>
+  <data name="Dock_Qualcomm_OemLifecycle" xml:space="preserve">
+    <value>声明的 OEM 生命周期</value>
+  </data>
+  <data name="Dock_Qualcomm_RootHashAlgorithm" xml:space="preserve">
+    <value>根摘要算法标识</value>
+  </data>
+  <data name="Dock_Qualcomm_DeclaredRootHash" xml:space="preserve">
+    <value>声明的根摘要（原始值）</value>
+  </data>
+  <data name="Dock_Qualcomm_MetadataLayout" xml:space="preserve">
+    <value>元数据布局</value>
+  </data>
+  <data name="Dock_Qualcomm_MetadataVersion" xml:space="preserve">
+    <value>元数据版本</value>
+  </data>
+  <data name="Dock_Qualcomm_PackedV6" xml:space="preserve">
+    <value>MBN v6 紧凑字段</value>
+  </data>
+  <data name="Dock_Qualcomm_TaggedV6" xml:space="preserve">
+    <value>MBN v6 带编号字段</value>
+  </data>
+  <data name="Dock_Qualcomm_CommonV7" xml:space="preserve">
+    <value>MBN v7 公共字段</value>
+  </data>
+  <data name="Dock_Qualcomm_MetadataV7" xml:space="preserve">
+    <value>MBN v7 签名方字段</value>
+  </data>
+  <data name="Dock_Qualcomm_CertificateOu" xml:space="preserve">
+    <value>证书主题 OU 声明</value>
+  </data>
+  <data name="Dock_Qualcomm_UnsupportedMetadata" xml:space="preserve">
+    <value>未解释的元数据布局</value>
+  </data>
+  <data name="Dock_Qualcomm_ZeroFilledMetadata" xml:space="preserve">
+    <value>全零元数据占位</value>
+  </data>
+  <data name="Dock_Qualcomm_ElfClass" xml:space="preserve">
+    <value>ELF 位宽</value>
+  </data>
+  <data name="Dock_Qualcomm_ProgramHeaderCount" xml:space="preserve">
+    <value>程序头数量</value>
+  </data>
+  <data name="Dock_Qualcomm_FileOffset" xml:space="preserve">
+    <value>文件偏移</value>
+  </data>
+  <data name="Dock_Qualcomm_SegmentType" xml:space="preserve">
+    <value>段类型</value>
+  </data>
+  <data name="Dock_Qualcomm_VirtualAddress" xml:space="preserve">
+    <value>虚拟地址</value>
+  </data>
+  <data name="Dock_Qualcomm_PhysicalAddress" xml:space="preserve">
+    <value>物理地址</value>
+  </data>
+  <data name="Dock_Qualcomm_MemorySize" xml:space="preserve">
+    <value>内存大小</value>
+  </data>
+  <data name="Dock_Qualcomm_Alignment" xml:space="preserve">
+    <value>对齐值</value>
+  </data>
+  <data name="Dock_Qualcomm_PbtType" xml:space="preserve">
+    <value>MI_PBT 段类型</value>
+  </data>
+  <data name="Dock_Qualcomm_PbtPaged" xml:space="preserve">
+    <value>MI_PBT 分页段</value>
+  </data>
+  <data name="Dock_Qualcomm_Yes" xml:space="preserve">
+    <value>是</value>
+  </data>
+  <data name="Dock_Qualcomm_No" xml:space="preserve">
+    <value>否</value>
+  </data>
+  <data name="Dock_Qualcomm_MbnHeader" xml:space="preserve">
+    <value>MBN 头（偏移 + 长度）</value>
+  </data>
+  <data name="Dock_Qualcomm_CommonMetadata" xml:space="preserve">
+    <value>公共元数据（偏移 + 长度）</value>
+  </data>
+  <data name="Dock_Qualcomm_QtiMetadata" xml:space="preserve">
+    <value>QTI 元数据（偏移 + 长度）</value>
+  </data>
+  <data name="Dock_Qualcomm_OemMetadata" xml:space="preserve">
+    <value>OEM 元数据（偏移 + 长度）</value>
+  </data>
+  <data name="Dock_Qualcomm_HashTable" xml:space="preserve">
+    <value>摘要表（偏移 + 长度）</value>
+  </data>
+  <data name="Dock_Qualcomm_QtiCertificates" xml:space="preserve">
+    <value>QTI 证书（偏移 + 长度）</value>
+  </data>
+  <data name="Dock_Qualcomm_OemCertificates" xml:space="preserve">
+    <value>OEM 证书（偏移 + 长度）</value>
+  </data>
+  <data name="Dock_Qualcomm_SblHeader" xml:space="preserve">
+    <value>SBL 头（偏移 + 长度）</value>
+  </data>
+  <data name="Dock_Qualcomm_SblCode" xml:space="preserve">
+    <value>SBL 代码（偏移 + 长度）</value>
+  </data>
+  <data name="Dock_Qualcomm_MetadataRootHash" xml:space="preserve">
+    <value>元数据根摘要比较</value>
+  </data>
+  <data name="Dock_Qualcomm_Subject" xml:space="preserve">
+    <value>证书主题</value>
+  </data>
+  <data name="Dock_Qualcomm_Issuer" xml:space="preserve">
+    <value>证书颁发者</value>
+  </data>
+  <data name="Dock_Qualcomm_CertificateSerial" xml:space="preserve">
+    <value>证书序列号</value>
+  </data>
+  <data name="Dock_Qualcomm_NotBefore" xml:space="preserve">
+    <value>有效期起点（UTC）</value>
+  </data>
+  <data name="Dock_Qualcomm_NotAfter" xml:space="preserve">
+    <value>有效期终点（UTC）</value>
+  </data>
+  <data name="Dock_Qualcomm_CertificateAlgorithm" xml:space="preserve">
+    <value>证书签名算法 OID</value>
+  </data>
+  <data name="Dock_Qualcomm_PublicKeyAlgorithm" xml:space="preserve">
+    <value>公钥算法 OID</value>
+  </data>
+  <data name="Dock_Qualcomm_CertificateSha256" xml:space="preserve">
+    <value>证书 SHA-256</value>
+  </data>
+  <data name="Dock_Qualcomm_CertificateSha384" xml:space="preserve">
+    <value>证书 SHA-384</value>
+  </data>
+  <data name="Dock_Qualcomm_VerifiedAlgorithm" xml:space="preserve">
+    <value>已验证的镜像签名算法</value>
+  </data>
+  <data name="Dock_Qualcomm_SelectedRootSha256" xml:space="preserve">
+    <value>选中根证书 SHA-256</value>
+  </data>
+  <data name="Dock_Qualcomm_EvidenceSource" xml:space="preserve">
+    <value>静态证据来源</value>
+  </data>
+  <data name="Dock_Qualcomm_StringLiteral" xml:space="preserve">
+    <value>字符串字面量（未验证代码引用）</value>
+  </data>
+  <data name="Dock_Qualcomm_MappedHandlerTable" xml:space="preserve">
+    <value>已映射的处理函数表</value>
+  </data>
+  <data name="Dock_Qualcomm_QcVersion" xml:space="preserve">
+    <value>Qualcomm 版本字符串</value>
+  </data>
+  <data name="Dock_Qualcomm_OemVersion" xml:space="preserve">
+    <value>OEM 版本字符串</value>
+  </data>
+  <data name="Dock_Qualcomm_ImageVariant" xml:space="preserve">
+    <value>镜像变体字符串</value>
+  </data>
+  <data name="Dock_Qualcomm_BuildTime" xml:space="preserve">
+    <value>构建时间字符串（时区未声明）</value>
+  </data>
+  <data name="Dock_Properties_Log_Error" xml:space="preserve">
+    <value>错误</value>
+  </data>
+  <data name="Dock_Properties_Log_MatchingEntries" xml:space="preserve">
+    <value>匹配日志数</value>
+  </data>
+  <data name="Dock_Properties_Log_Search" xml:space="preserve">
+    <value>搜索条件</value>
+  </data>
+  <data name="Dock_Properties_Partition_Group" xml:space="preserve">
+    <value>分区组</value>
+  </data>
+  <data name="Dock_Properties_Partition_Source" xml:space="preserve">
+    <value>分区来源</value>
+  </data>
+  <data name="Dock_Properties_SelectedEntry" xml:space="preserve">
+    <value>选中条目</value>
+  </data>
+  <data name="Dock_Properties_SelectedResource" xml:space="preserve">
+    <value>选中资源</value>
+  </data>
+  <data name="Dock_Properties_Type_LogDocument" xml:space="preserve">
+    <value>离线日志</value>
+  </data>
+  <data name="Dock_Properties_Type_PartitionDocument" xml:space="preserve">
+    <value>分区表</value>
+  </data>
+</root>

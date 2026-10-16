@@ -1,0 +1,2232 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>  <data name="Node_Toolbox" xml:space="preserve">
+    <value>Toolbox</value>
+  </data>
+  <data name="Node_Toolbox_Destructive" xml:space="preserve">
+    <value>May modify device</value>
+  </data>
+  <data name="Node_Properties" xml:space="preserve">
+    <value>Properties</value>
+  </data>
+  <data name="Node_ExecLog" xml:space="preserve">
+    <value>Execution Log</value>
+  </data>
+  <data name="Node_Canvas" xml:space="preserve">
+    <value>Node Canvas</value>
+  </data>
+  <data name="Node_SearchNodes" xml:space="preserve">
+    <value>Search nodes...</value>
+  </data>
+  <data name="Node_ZoomIn" xml:space="preserve">
+    <value>Zoom In</value>
+  </data>
+  <data name="Node_ZoomOut" xml:space="preserve">
+    <value>Zoom Out</value>
+  </data>
+  <data name="Node_ResetZoom" xml:space="preserve">
+    <value>Reset Zoom</value>
+  </data>
+  <data name="Node_CloseTab" xml:space="preserve">
+    <value>Close this node project in the editor</value>
+  </data>
+  <data name="Node_Undo" xml:space="preserve">
+    <value>Undo</value>
+  </data>
+  <data name="Node_Redo" xml:space="preserve">
+    <value>Redo</value>
+  </data>
+  <data name="Node_FitAll" xml:space="preserve">
+    <value>Fit all nodes</value>
+  </data>
+  <data name="Node_FocusSelection" xml:space="preserve">
+    <value>Focus selection</value>
+  </data>
+  <data name="Node_CompactNodes" xml:space="preserve">
+    <value>Compact node ports</value>
+  </data>
+  <data name="Node_ValidateGraph" xml:space="preserve">
+    <value>Validate workflow</value>
+  </data>
+  <data name="Node_BrowsePath" xml:space="preserve">
+    <value>Browse path</value>
+  </data>
+  <data name="Node_Graph_MissingEndpoint" xml:space="preserve">
+    <value>A connection endpoint is missing or ambiguous.</value>
+  </data>
+  <data name="Node_Graph_InvalidIdentity" xml:space="preserve">
+    <value>A node identity or position is invalid or duplicated.</value>
+  </data>
+  <data name="Node_Graph_InvalidPort" xml:space="preserve">
+    <value>A port identity or connection limit is invalid.</value>
+  </data>
+  <data name="Node_Graph_Unavailable" xml:space="preserve">
+    <value>This node implementation is unavailable.</value>
+  </data>
+  <data name="Node_Graph_Cycle" xml:space="preserve">
+    <value>Cycle detected in workflow.</value>
+  </data>
+  <data name="Node_Graph_Required" xml:space="preserve">
+    <value>Required input: {0}.</value>
+  </data>
+  <data name="Node_Graph_Empty" xml:space="preserve">
+    <value>The workflow contains no nodes.</value>
+  </data>
+  <data name="Node_Graph_Running" xml:space="preserve">
+    <value>The workflow cannot be edited while running.</value>
+  </data>
+  <data name="Node_Graph_Valid" xml:space="preserve">
+    <value>Workflow validation passed.</value>
+  </data>
+  <data name="Node_ToggleMinimap" xml:space="preserve">
+    <value>Toggle Minimap</value>
+  </data>
+  <data name="Node_DeleteSelected" xml:space="preserve">
+    <value>Delete nodes</value>
+  </data>
+  <data name="Node_DeleteConnection" xml:space="preserve">
+    <value>Delete connection</value>
+  </data>
+  <data name="Node_DeleteSelectionCount" xml:space="preserve">
+    <value>Delete nodes ({0})</value>
+  </data>
+  <data name="Node_BatchSelection" xml:space="preserve">
+    <value>Batch selection</value>
+  </data>
+  <data name="Node_BatchSelectedSuffix" xml:space="preserve">
+    <value>nodes selected</value>
+  </data>
+  <data name="Node_BatchConstant" xml:space="preserve">
+    <value>Common constant properties</value>
+  </data>
+  <data name="Node_BatchMixed" xml:space="preserve">
+    <value>Mixed values</value>
+  </data>
+  <data name="Node_Run" xml:space="preserve">
+    <value>Run</value>
+  </data>
+  <data name="Node_Stop" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="Node_ImportTemplate" xml:space="preserve">
+    <value>Import template or composite</value>
+  </data>
+  <data name="Node_ExportTemplate" xml:space="preserve">
+    <value>Export workflow template</value>
+  </data>
+  <data name="Node_ExportComposite" xml:space="preserve">
+    <value>Export and install composite node</value>
+  </data>
+  <data name="Node_DefaultTemplateName" xml:space="preserve">
+    <value>Workflow Template</value>
+  </data>
+  <data name="Node_DefaultCompositeName" xml:space="preserve">
+    <value>Composite Node</value>
+  </data>
+  <data name="Node_ImportSucceeded" xml:space="preserve">
+    <value>Workflow template imported</value>
+  </data>
+  <data name="Node_TemplateExported" xml:space="preserve">
+    <value>Workflow template exported</value>
+  </data>
+  <data name="Node_CompositeExported" xml:space="preserve">
+    <value>Composite node exported and installed</value>
+  </data>
+  <data name="Node_OperationFailed" xml:space="preserve">
+    <value>Operation failed: {0}</value>
+  </data>
+  <data name="Node_FilePickerUnavailable" xml:space="preserve">
+    <value>File selection is unavailable in the current window.</value>
+  </data>
+  <data name="Node_NodesLabel" xml:space="preserve">
+    <value> nodes</value>
+  </data>
+  <data name="Node_ConnectionsLabel" xml:space="preserve">
+    <value> connections</value>
+  </data>
+  <data name="Node_NoSelection" xml:space="preserve">
+    <value>Select a node to view properties</value>
+  </data>
+  <data name="Node_StatusReady" xml:space="preserve">
+    <value>Ready</value>
+  </data>
+  <data name="Node_Const_ValueType" xml:space="preserve">
+    <value>Value Type</value>
+  </data>
+  <data name="Node_Const_Value" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="Node_Const_Hint" xml:space="preserve">
+    <value>Broadcasts a fixed value to connected downstream ports.</value>
+  </data>
+  <data name="Node_ProjImg_Select" xml:space="preserve">
+    <value>Image</value>
+  </data>
+  <data name="Node_ProjImg_Hint" xml:space="preserve">
+    <value>Outputs the absolute path of the selected project image.</value>
+  </data>
+  <data name="Node_Firmware_Container_Unpack" xml:space="preserve">
+    <value>Unpack Firmware</value>
+  </data>
+  <data name="Node_Firmware_Container_Pack" xml:space="preserve">
+    <value>Pack Firmware</value>
+  </data>
+  <data name="Node_Validation_Signature_Verify" xml:space="preserve">
+    <value>Assert AVB vbmeta signature</value>
+  </data>
+  <data name="Node_Boot_CommandLine_Edit" xml:space="preserve">
+    <value>Boot Cmdline Edit</value>
+  </data>
+  <data name="Node_Firmware_Container_Extract" xml:space="preserve">
+    <value>Extract Partition</value>
+  </data>
+  <data name="Node_Build_Ota_CreateDelta" xml:space="preserve">
+    <value>OTA Delta</value>
+  </data>
+  <data name="Node_Build_Signature_Merge" xml:space="preserve">
+    <value>Unsupported signature append</value>
+  </data>
+  <data name="Node_Build_Slots_Merge" xml:space="preserve">
+    <value>Unsupported slot concatenation</value>
+  </data>
+  <data name="Node_Firmware_Cpio_Unpack" xml:space="preserve">
+    <value>CPIO Unpack</value>
+  </data>
+  <data name="Node_Firmware_Cpio_Pack" xml:space="preserve">
+    <value>CPIO Pack</value>
+  </data>
+  <data name="Node_Image_Super_Unpack" xml:space="preserve">
+    <value>Super Unpack</value>
+  </data>
+  <data name="Node_Image_Super_Pack" xml:space="preserve">
+    <value>Super Pack</value>
+  </data>
+  <data name="Node_Image_Sparse_Convert" xml:space="preserve">
+    <value>Sparse Convert</value>
+  </data>
+  <data name="Node_Build_Dat_Convert" xml:space="preserve">
+    <value>Write DAT</value>
+  </data>
+  <data name="Node_Device_Target_Select" xml:space="preserve">
+    <value>Select Device</value>
+  </data>
+  <data name="Node_Device_Property_Read" xml:space="preserve">
+    <value>Get Property</value>
+  </data>
+  <data name="Node_Device_Partition_Flash" xml:space="preserve">
+    <value>Flash Partition</value>
+  </data>
+  <data name="Node_Device_Partition_Erase" xml:space="preserve">
+    <value>Erase Partition</value>
+  </data>
+  <data name="Node_Device_Power_Reboot" xml:space="preserve">
+    <value>Reboot Device</value>
+  </data>
+  <data name="Node_Device_Storage_EraseAll" xml:space="preserve">
+    <value>Erase All</value>
+  </data>
+  <data name="Node_Device_Ota_Sideload" xml:space="preserve">
+    <value>OTA Sideload</value>
+  </data>
+  <data name="Node_Device_State_Query" xml:space="preserve">
+    <value>Query Device State</value>
+  </data>
+  <data name="Node_Device_Table_Read" xml:space="preserve">
+    <value>Read Partition Table</value>
+  </data>
+  <data name="Node_Device_Slot_Query" xml:space="preserve">
+    <value>Query Slot</value>
+  </data>
+  <data name="Node_Device_Slot_Switch" xml:space="preserve">
+    <value>Switch Slot</value>
+  </data>
+  <data name="Node_Device_Recovery_Clean" xml:space="preserve">
+    <value>Recovery Wipe</value>
+  </data>
+  <data name="Node_Device_Shell_Command" xml:space="preserve">
+    <value>Run Shell Command</value>
+  </data>
+  <data name="Node_File_Binary_Read" xml:space="preserve">
+    <value>Read File</value>
+  </data>
+  <data name="Node_Data_Value_Constant" xml:space="preserve">
+    <value>Constant</value>
+  </data>
+  <data name="Node_Resource_Project_Image" xml:space="preserve">
+    <value>Project Image</value>
+  </data>
+  <data name="Node_Data_Cipher_Decrypt" xml:space="preserve">
+    <value>Decrypt</value>
+  </data>
+  <data name="Node_Data_Compression_Decompress" xml:space="preserve">
+    <value>Decompress</value>
+  </data>
+  <data name="Node_Data_Value_Convert" xml:space="preserve">
+    <value>Format Convert</value>
+  </data>
+  <data name="Node_Validation_Data_Hash" xml:space="preserve">
+    <value>Checksum</value>
+  </data>
+  <data name="Node_Data_Value_Compare" xml:space="preserve">
+    <value>Compare</value>
+  </data>
+  <data name="Node_Data_Bytes_Concat" xml:space="preserve">
+    <value>Concat</value>
+  </data>
+  <data name="Node_Data_Bytes_Slice" xml:space="preserve">
+    <value>Slice</value>
+  </data>
+  <data name="Node_Data_Cipher_Encrypt" xml:space="preserve">
+    <value>Encrypt</value>
+  </data>
+  <data name="Node_Data_Compression_Compress" xml:space="preserve">
+    <value>Compress</value>
+  </data>
+  <data name="Node_Data_Bytes_Swap" xml:space="preserve">
+    <value>Byte Swap</value>
+  </data>
+  <data name="Node_Network_File_Download" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="Node_Mirroring_Session_Start" xml:space="preserve">
+    <value>Start Mirroring</value>
+  </data>
+  <data name="Node_Mirroring_Session_Stop" xml:space="preserve">
+    <value>Stop Mirroring</value>
+  </data>
+  <data name="Node_Flow_Execution_Start" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="Node_Flow_Execution_End" xml:space="preserve">
+    <value>End</value>
+  </data>
+  <data name="Node_Flow_Condition_Branch" xml:space="preserve">
+    <value>Branch</value>
+  </data>
+  <data name="Node_Flow_Collection_Loop" xml:space="preserve">
+    <value>Loop</value>
+  </data>
+  <data name="Node_Flow_Execution_Delay" xml:space="preserve">
+    <value>Delay</value>
+  </data>
+  <data name="Node_Flow_Execution_Parallel" xml:space="preserve">
+    <value>Parallel</value>
+  </data>
+  <data name="Node_Flow_Execution_Terminate" xml:space="preserve">
+    <value>Terminate</value>
+  </data>
+  <data name="Node_Feedback_Log_Write" xml:space="preserve">
+    <value>Log Output</value>
+  </data>
+  <data name="Node_Feedback_Progress_Report" xml:space="preserve">
+    <value>Progress Report</value>
+  </data>
+  <data name="Node_File_Artifact_Publish" xml:space="preserve">
+    <value>Publish file</value>
+  </data>
+  <data name="Node_Conn_Path" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="Node_Conn_Data" xml:space="preserve">
+    <value>Data</value>
+  </data>
+  <data name="Node_Conn_Input" xml:space="preserve">
+    <value>Input</value>
+  </data>
+  <data name="Node_Conn_Format" xml:space="preserve">
+    <value>Format</value>
+  </data>
+  <data name="Node_Conn_Output" xml:space="preserve">
+    <value>Output</value>
+  </data>
+  <data name="Node_Conn_Algorithm" xml:space="preserve">
+    <value>Algorithm</value>
+  </data>
+  <data name="Node_Conn_Hash" xml:space="preserve">
+    <value>Hash</value>
+  </data>
+  <data name="Node_Conn_DataA" xml:space="preserve">
+    <value>Data A</value>
+  </data>
+  <data name="Node_Conn_DataB" xml:space="preserve">
+    <value>Data B</value>
+  </data>
+  <data name="Node_Conn_Match" xml:space="preserve">
+    <value>Match</value>
+  </data>
+  <data name="Node_Conn_FirmwarePath" xml:space="preserve">
+    <value>Firmware Path</value>
+  </data>
+  <data name="Node_Conn_OutputDir" xml:space="preserve">
+    <value>Output Dir</value>
+  </data>
+  <data name="Node_Conn_Partitions" xml:space="preserve">
+    <value>Partitions</value>
+  </data>
+  <data name="Node_Conn_InputDir" xml:space="preserve">
+    <value>Input Dir</value>
+  </data>
+  <data name="Node_Conn_Config" xml:space="preserve">
+    <value>Config</value>
+  </data>
+  <data name="Node_Conn_LegacyOutputPath" xml:space="preserve">
+    <value>Legacy output path</value>
+  </data>
+  <data name="Node_Conn_InputImage" xml:space="preserve">
+    <value>Input image</value>
+  </data>
+  <data name="Node_Conn_ExpectedSHA256" xml:space="preserve">
+    <value>Expected SHA-256</value>
+  </data>
+  <data name="Node_Conn_TimeoutSeconds" xml:space="preserve">
+    <value>Timeout (seconds)</value>
+  </data>
+  <data name="Node_Conn_Firmware" xml:space="preserve">
+    <value>Firmware</value>
+  </data>
+  <data name="Node_Conn_Valid" xml:space="preserve">
+    <value>Valid</value>
+  </data>
+  <data name="Node_Conn_Report" xml:space="preserve">
+    <value>Report</value>
+  </data>
+  <data name="Node_Conn_PartitionName" xml:space="preserve">
+    <value>Partition Name</value>
+  </data>
+  <data name="Node_Conn_Image" xml:space="preserve">
+    <value>Image</value>
+  </data>
+  <data name="Node_Conn_ImageFile" xml:space="preserve">
+    <value>Image file</value>
+  </data>
+  <data name="Node_Conn_Mode" xml:space="preserve">
+    <value>Mode</value>
+  </data>
+  <data name="Node_Conn_Device" xml:space="preserve">
+    <value>Device</value>
+  </data>
+  <data name="Node_Conn_Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Node_Conn_Partition" xml:space="preserve">
+    <value>Partition</value>
+  </data>
+  <data name="Node_Conn_Result" xml:space="preserve">
+    <value>Result</value>
+  </data>
+  <data name="Node_Conn_Message" xml:space="preserve">
+    <value>Message</value>
+  </data>
+  <data name="Node_Conn_Level" xml:space="preserve">
+    <value>Level</value>
+  </data>
+  <data name="Node_Conn_Progress" xml:space="preserve">
+    <value>Progress</value>
+  </data>
+  <data name="Node_Conn_URL" xml:space="preserve">
+    <value>URL</value>
+  </data>
+  <data name="Node_Conn_RequestHeaders" xml:space="preserve">
+    <value>Request Headers</value>
+  </data>
+  <data name="Node_Conn_SourceURL" xml:space="preserve">
+    <value>Source URL</value>
+  </data>
+  <data name="Node_Conn_Bytes" xml:space="preserve">
+    <value>Bytes</value>
+  </data>
+  <data name="Node_PortType_Any" xml:space="preserve">
+    <value>Any</value>
+  </data>
+  <data name="Node_PortType_Device" xml:space="preserve">
+    <value>Device</value>
+  </data>
+  <data name="Node_PortType_Flow" xml:space="preserve">
+    <value>Flow</value>
+  </data>
+  <data name="Node_PortType_Path" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="Node_PortType_Data" xml:space="preserve">
+    <value>Data</value>
+  </data>
+  <data name="Node_PortType_Text" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="Node_PortType_Number" xml:space="preserve">
+    <value>Number</value>
+  </data>
+  <data name="Node_PortType_Boolean" xml:space="preserve">
+    <value>Boolean</value>
+  </data>
+  <data name="Node_Conn_ArchivePath" xml:space="preserve">
+    <value>Archive Path</value>
+  </data>
+  <data name="Node_Conn_Body" xml:space="preserve">
+    <value>Body</value>
+  </data>
+  <data name="Node_Conn_Completed" xml:space="preserve">
+    <value>Completed</value>
+  </data>
+  <data name="Node_Conn_Bootloader" xml:space="preserve">
+    <value>Bootloader</value>
+  </data>
+  <data name="Node_Conn_Cipher" xml:space="preserve">
+    <value>Cipher</value>
+  </data>
+  <data name="Node_Conn_Combined" xml:space="preserve">
+    <value>Combined</value>
+  </data>
+  <data name="Node_Conn_Compressed" xml:space="preserve">
+    <value>Compressed</value>
+  </data>
+  <data name="Node_Conn_Condition" xml:space="preserve">
+    <value>Condition</value>
+  </data>
+  <data name="Node_Conn_Count" xml:space="preserve">
+    <value>Count</value>
+  </data>
+  <data name="Node_Conn_DexPath" xml:space="preserve">
+    <value>Dex Path</value>
+  </data>
+  <data name="Node_Conn_False" xml:space="preserve">
+    <value>False</value>
+  </data>
+  <data name="Node_Conn_GroupName" xml:space="preserve">
+    <value>Group Name</value>
+  </data>
+  <data name="Node_Conn_Key" xml:space="preserve">
+    <value>Key</value>
+  </data>
+  <data name="Node_Conn_Length" xml:space="preserve">
+    <value>Length</value>
+  </data>
+  <data name="Node_Conn_Merged" xml:space="preserve">
+    <value>Merged</value>
+  </data>
+  <data name="Node_Conn_Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Node_Conn_Offset" xml:space="preserve">
+    <value>Offset</value>
+  </data>
+  <data name="Node_Conn_OtaPackage" xml:space="preserve">
+    <value>OTA Package</value>
+  </data>
+  <data name="Node_Conn_Serial" xml:space="preserve">
+    <value>Serial</value>
+  </data>
+  <data name="Node_Conn_Signature" xml:space="preserve">
+    <value>Signature</value>
+  </data>
+  <data name="Node_Conn_Signed" xml:space="preserve">
+    <value>Signed</value>
+  </data>
+  <data name="Node_Conn_SignedApk" xml:space="preserve">
+    <value>Signed APK</value>
+  </data>
+  <data name="Node_Conn_Slice" xml:space="preserve">
+    <value>Slice</value>
+  </data>
+  <data name="Node_Conn_SlotA" xml:space="preserve">
+    <value>Slot A</value>
+  </data>
+  <data name="Node_Conn_SlotB" xml:space="preserve">
+    <value>Slot B</value>
+  </data>
+  <data name="Node_Conn_Summary" xml:space="preserve">
+    <value>Summary</value>
+  </data>
+  <data name="Node_Conn_ToSparse" xml:space="preserve">
+    <value>To Sparse</value>
+  </data>
+  <data name="Node_Conn_TransferList" xml:space="preserve">
+    <value>Transfer List</value>
+  </data>
+  <data name="Node_Conn_True" xml:space="preserve">
+    <value>True</value>
+  </data>
+  <data name="Node_Conn_Value" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="Node_Conn_Parameter" xml:space="preserve">
+    <value>Parameter</value>
+  </data>
+  <data name="Node_Conn_BootImage" xml:space="preserve">
+    <value>Boot image</value>
+  </data>
+  <data name="Node_Conn_Command" xml:space="preserve">
+    <value>Command</value>
+  </data>
+  <data name="Node_Conn_LocalPath" xml:space="preserve">
+    <value>Local Path</value>
+  </data>
+  <data name="Node_Conn_RemotePath" xml:space="preserve">
+    <value>Remote Path</value>
+  </data>
+  <data name="Node_Conn_Package" xml:space="preserve">
+    <value>Package</value>
+  </data>
+  <data name="Node_Conn_Bundle" xml:space="preserve">
+    <value>Bundle</value>
+  </data>
+  <data name="Node_Conn_LocalPort" xml:space="preserve">
+    <value>Local Port</value>
+  </data>
+  <data name="Node_Conn_RemotePort" xml:space="preserve">
+    <value>Remote Port</value>
+  </data>
+  <data name="Node_CatFirmware" xml:space="preserve">
+    <value>Firmware</value>
+  </data>
+  <data name="Node_CatFirmwareContainer" xml:space="preserve">
+    <value>Firmware Containers</value>
+  </data>
+  <data name="Node_CatFirmwareImage" xml:space="preserve">
+    <value>Image Processing</value>
+  </data>
+  <data name="Node_CatAndroid" xml:space="preserve">
+    <value>Android Packages &amp; Signing</value>
+  </data>
+  <data name="Node_CatDelivery" xml:space="preserve">
+    <value>Delivery Formats</value>
+  </data>
+  <data name="Node_CatFlash" xml:space="preserve">
+    <value>Flash</value>
+  </data>
+  <data name="Node_CatData" xml:space="preserve">
+    <value>Data</value>
+  </data>
+  <data name="Node_CatNetwork" xml:space="preserve">
+    <value>Network</value>
+  </data>
+  <data name="Node_CatFlow" xml:space="preserve">
+    <value>Flow</value>
+  </data>
+  <data name="Node_CatOutput" xml:space="preserve">
+    <value>Output</value>
+  </data>
+  <data name="Node_CatVisualPlugins" xml:space="preserve">
+    <value>Visual Plugins</value>
+  </data>
+  <data name="Node_PluginWorkspace" xml:space="preserve">
+    <value>Plugin workspace</value>
+  </data>
+  <data name="Node_PluginWorkspaceEmpty" xml:space="preserve">
+    <value>Install a composite-node plugin to edit its internal graph.</value>
+  </data>
+  <data name="Node_OpenPluginEditor" xml:space="preserve">
+    <value>Open visual editor</value>
+  </data>
+  <data name="Node_Prop_Category" xml:space="preserve">
+    <value>Category</value>
+  </data>
+  <data name="Node_Prop_Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Node_Prop_Type" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="Node_Prop_Location" xml:space="preserve">
+    <value>Location</value>
+  </data>
+  <data name="Node_Prop_CustomName" xml:space="preserve">
+    <value>Custom name</value>
+  </data>
+  <data name="Node_Prop_Inputs" xml:space="preserve">
+    <value>Inputs</value>
+  </data>
+  <data name="Node_Prop_Outputs" xml:space="preserve">
+    <value>Outputs</value>
+  </data>
+  <data name="Node_Status_Idle" xml:space="preserve">
+    <value>Idle</value>
+  </data>
+  <data name="Node_Status_Pending" xml:space="preserve">
+    <value>Pending</value>
+  </data>
+  <data name="Node_Status_Running" xml:space="preserve">
+    <value>Running</value>
+  </data>
+  <data name="Node_Status_Succeeded" xml:space="preserve">
+    <value>Succeeded</value>
+  </data>
+  <data name="Node_Status_Failed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="Node_Status_Skipped" xml:space="preserve">
+    <value>Skipped</value>
+  </data>
+  <data name="Node_Status_Cancelled" xml:space="preserve">
+    <value>Cancelled</value>
+  </data>
+  <data name="Node_Build_Apk_Sign" xml:space="preserve">
+    <value>Sign APK</value>
+  </data>
+  <data name="Node_CatPatch" xml:space="preserve">
+    <value>Firmware patches</value>
+  </data>
+  <data name="Node_File_Text_Read" xml:space="preserve">
+    <value>Read configuration text</value>
+  </data>
+  <data name="Node_File_Text_Publish" xml:space="preserve">
+    <value>Write new configuration file</value>
+  </data>
+  <data name="Node_Validation_Condition_Evaluate" xml:space="preserve">
+    <value>Evaluate patch condition</value>
+  </data>
+  <data name="Node_Validation_Boolean_Assert" xml:space="preserve">
+    <value>Assert patch condition</value>
+  </data>
+  <data name="Node_Config_Text_Edit" xml:space="preserve">
+    <value>Patch text</value>
+  </data>
+  <data name="Node_Config_AndroidProperty_Edit" xml:space="preserve">
+    <value>Edit Android property</value>
+  </data>
+  <data name="Node_Config_Xml_Edit" xml:space="preserve">
+    <value>Edit XML</value>
+  </data>
+  <data name="Node_Patch_SelectFolder" xml:space="preserve">
+    <value>Select patch target directory</value>
+  </data>
+  <data name="Node_Patch_AssertionFailed" xml:space="preserve">
+    <value>Patch assertion failed; this branch has stopped.</value>
+  </data>
+  <data name="Node_Conn_Root" xml:space="preserve">
+    <value>Target root</value>
+  </data>
+  <data name="Node_Conn_Pattern" xml:space="preserve">
+    <value>Relative path pattern</value>
+  </data>
+  <data name="Node_Conn_ExpectedMatches" xml:space="preserve">
+    <value>Expected matches</value>
+  </data>
+  <data name="Node_Conn_Files" xml:space="preserve">
+    <value>Files</value>
+  </data>
+  <data name="Node_Conn_Encoding" xml:space="preserve">
+    <value>Encoding</value>
+  </data>
+  <data name="Node_Conn_ExpectedValue" xml:space="preserve">
+    <value>Expected value</value>
+  </data>
+  <data name="Node_Conn_UpperVersion" xml:space="preserve">
+    <value>Maximum version</value>
+  </data>
+  <data name="Node_Conn_Operation" xml:space="preserve">
+    <value>Operation</value>
+  </data>
+  <data name="Node_Conn_Find" xml:space="preserve">
+    <value>Find</value>
+  </data>
+  <data name="Node_Conn_Replacement" xml:space="preserve">
+    <value>Replacement</value>
+  </data>
+  <data name="Node_Conn_Regex" xml:space="preserve">
+    <value>Use regular expression</value>
+  </data>
+  <data name="Node_Conn_AllowCreate" xml:space="preserve">
+    <value>Allow creating key</value>
+  </data>
+  <data name="Node_Conn_CheckOldValue" xml:space="preserve">
+    <value>Check old value</value>
+  </data>
+  <data name="Node_Conn_ExpectedOldValue" xml:space="preserve">
+    <value>Expected old value</value>
+  </data>
+  <data name="Node_Conn_Exists" xml:space="preserve">
+    <value>Exists</value>
+  </data>
+  <data name="Node_Conn_Changed" xml:space="preserve">
+    <value>Changed</value>
+  </data>
+  <data name="Node_Conn_XPath" xml:space="preserve">
+    <value>XPath</value>
+  </data>
+  <data name="Node_Conn_Namespaces" xml:space="preserve">
+    <value>Namespace mappings</value>
+  </data>
+  <data name="Node_Conn_AttributeName" xml:space="preserve">
+    <value>Attribute name</value>
+  </data>
+  <data name="Node_Conn_Values" xml:space="preserve">
+    <value>Values</value>
+  </data>
+  <data name="Node_Choice_aes" xml:space="preserve">
+    <value>AES-256-CBC</value>
+  </data>
+  <data name="Node_Choice_hex" xml:space="preserve">
+    <value>Hexadecimal</value>
+  </data>
+  <data name="Node_Choice_base64" xml:space="preserve">
+    <value>Base64</value>
+  </data>
+  <data name="Node_Choice_text" xml:space="preserve">
+    <value>UTF-8 text</value>
+  </data>
+  <data name="Node_Choice_string" xml:space="preserve">
+    <value>UTF-8 text</value>
+  </data>
+  <data name="Node_Choice_aes_256" xml:space="preserve">
+    <value>AES-256-CBC</value>
+  </data>
+  <data name="Node_Choice_xor" xml:space="preserve">
+    <value>XOR (not secure encryption)</value>
+  </data>
+  <data name="Node_Choice_gzip" xml:space="preserve">
+    <value>GZip</value>
+  </data>
+  <data name="Node_Choice_deflate" xml:space="preserve">
+    <value>Deflate</value>
+  </data>
+  <data name="Node_Choice_utf8" xml:space="preserve">
+    <value>UTF-8 (no BOM)</value>
+  </data>
+  <data name="Node_Choice_utf8_bom" xml:space="preserve">
+    <value>UTF-8 (BOM)</value>
+  </data>
+  <data name="Node_Choice_utf16_le" xml:space="preserve">
+    <value>UTF-16 LE</value>
+  </data>
+  <data name="Node_Choice_utf16_be" xml:space="preserve">
+    <value>UTF-16 BE</value>
+  </data>
+  <data name="Node_Choice_Equals" xml:space="preserve">
+    <value>Equals</value>
+  </data>
+  <data name="Node_Choice_Contains" xml:space="preserve">
+    <value>Contains</value>
+  </data>
+  <data name="Node_Choice_Regex" xml:space="preserve">
+    <value>Regular expression</value>
+  </data>
+  <data name="Node_Choice_VersionRange" xml:space="preserve">
+    <value>Version range (inclusive)</value>
+  </data>
+  <data name="Node_Choice_FileExists" xml:space="preserve">
+    <value>File exists</value>
+  </data>
+  <data name="Node_Choice_DirectoryExists" xml:space="preserve">
+    <value>Directory exists</value>
+  </data>
+  <data name="Node_Choice_Replace" xml:space="preserve">
+    <value>Replace</value>
+  </data>
+  <data name="Node_Choice_InsertBefore" xml:space="preserve">
+    <value>Insert before match</value>
+  </data>
+  <data name="Node_Choice_InsertAfter" xml:space="preserve">
+    <value>Insert after match</value>
+  </data>
+  <data name="Node_Choice_Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Node_Choice_Set" xml:space="preserve">
+    <value>Set</value>
+  </data>
+  <data name="Node_Choice_SetValue" xml:space="preserve">
+    <value>Set value</value>
+  </data>
+  <data name="Node_Choice_SetAttribute" xml:space="preserve">
+    <value>Set attribute</value>
+  </data>
+  <data name="Node_Choice_AppendElement" xml:space="preserve">
+    <value>Append child element</value>
+  </data>
+  <data name="Node_Conn_Text" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="Node_Conn_Flow" xml:space="preserve">
+    <value>Flow</value>
+  </data>
+  <data name="Node_Conn_OutputPath" xml:space="preserve">
+    <value>Output path</value>
+  </data>
+  <data name="Node_Conn_Reason" xml:space="preserve">
+    <value>Failure reason</value>
+  </data>
+  <data name="Node_Workspace_Directory_Open" xml:space="preserve">
+    <value>Open patch workspace</value>
+  </data>
+  <data name="Node_Workspace_Text_Stage" xml:space="preserve">
+    <value>Stage configuration change</value>
+  </data>
+  <data name="Node_Workspace_File_Import" xml:space="preserve">
+    <value>Add or replace file</value>
+  </data>
+  <data name="Node_Workspace_File_Delete" xml:space="preserve">
+    <value>Delete file</value>
+  </data>
+  <data name="Node_Workspace_File_Exists" xml:space="preserve">
+    <value>Check staged file</value>
+  </data>
+  <data name="Node_Validation_File_Hash" xml:space="preserve">
+    <value>Hash file (SHA-256)</value>
+  </data>
+  <data name="Node_Validation_Hash_Verify" xml:space="preserve">
+    <value>Verify file SHA-256</value>
+  </data>
+  <data name="Node_Validation_Count_Assert" xml:space="preserve">
+    <value>Assert result count</value>
+  </data>
+  <data name="Node_Validation_Changes_Verify" xml:space="preserve">
+    <value>Verify changed file set</value>
+  </data>
+  <data name="Node_Conn_Workspace" xml:space="preserve">
+    <value>Patch workspace</value>
+  </data>
+  <data name="Node_Conn_RelativePath" xml:space="preserve">
+    <value>Relative path</value>
+  </data>
+  <data name="Node_Conn_ExpectedHash" xml:space="preserve">
+    <value>Expected SHA-256</value>
+  </data>
+  <data name="Node_Conn_ExpectedPaths" xml:space="preserve">
+    <value>Expected changed paths (one per line)</value>
+  </data>
+  <data name="Node_PortType_PatchWorkspace" xml:space="preserve">
+    <value>Patch workspace</value>
+  </data>
+  <data name="Node_Choice_Add" xml:space="preserve">
+    <value>Add only</value>
+  </data>
+  <data name="Node_Choice_Upsert" xml:space="preserve">
+    <value>Add or replace</value>
+  </data>
+  <data name="Node_Patch_Preview" xml:space="preserve">
+    <value>Preview patch</value>
+  </data>
+  <data name="Node_Patch_PreviewHint" xml:space="preserve">
+    <value>Validate and review staged changes without publishing files.</value>
+  </data>
+  <data name="Node_Patch_PreviewUnsupported" xml:space="preserve">
+    <value>This workflow contains nodes that do not support preview; nothing was executed.</value>
+  </data>
+  <data name="Node_Patch_PreviewFinished" xml:space="preserve">
+    <value>Patch preview completed; original files were not changed.</value>
+  </data>
+  <data name="Node_Patch_RunFinished" xml:space="preserve">
+    <value>Workflow completed</value>
+  </data>
+  <data name="Node_Patch_RunPartial" xml:space="preserve">
+    <value>Workflow ended with {0} failed nodes.</value>
+  </data>
+  <data name="Node_Patch_RunCancelled" xml:space="preserve">
+    <value>Workflow cancelled</value>
+  </data>
+  <data name="Node_Patch_RunFailed" xml:space="preserve">
+    <value>Workflow failed</value>
+  </data>
+  <data name="Node_Patch_Absent" xml:space="preserve">
+    <value>Absent</value>
+  </data>
+  <data name="Node_Patch_Before" xml:space="preserve">
+    <value>Before</value>
+  </data>
+  <data name="Node_Patch_After" xml:space="preserve">
+    <value>After</value>
+  </data>
+  <data name="Node_Patch_ReportHint" xml:space="preserve">
+    <value>Hashes identify complete files; text previews show up to 2048 characters. Only Applied means changes were published.</value>
+  </data>
+  <data name="Node_PatchChange_Added" xml:space="preserve">
+    <value>Added file</value>
+  </data>
+  <data name="Node_PatchChange_Modified" xml:space="preserve">
+    <value>Modified file</value>
+  </data>
+  <data name="Node_PatchChange_Deleted" xml:space="preserve">
+    <value>Deleted file</value>
+  </data>
+  <data name="Node_PatchChange_Unchanged" xml:space="preserve">
+    <value>Unchanged</value>
+  </data>
+  <data name="Node_PatchOutcome_None" xml:space="preserve">
+    <value>Patch changes</value>
+  </data>
+  <data name="Node_PatchOutcome_Staged" xml:space="preserve">
+    <value>Changes staged</value>
+  </data>
+  <data name="Node_PatchOutcome_Previewed" xml:space="preserve">
+    <value>Preview (not applied)</value>
+  </data>
+  <data name="Node_PatchOutcome_Applied" xml:space="preserve">
+    <value>Patch applied</value>
+  </data>
+  <data name="Node_PatchOutcome_AlreadyApplied" xml:space="preserve">
+    <value>Patch target already satisfied</value>
+  </data>
+  <data name="Node_PatchOutcome_Discarded" xml:space="preserve">
+    <value>Workflow did not succeed; changes discarded</value>
+  </data>
+  <data name="Node_PatchOutcome_Conflict" xml:space="preserve">
+    <value>Patch conflict; changes not applied</value>
+  </data>
+  <data name="Node_PatchOutcome_RolledBack" xml:space="preserve">
+    <value>Publication failed; original files restored</value>
+  </data>
+  <data name="Node_PatchOutcome_RecoveryRequired" xml:space="preserve">
+    <value>Recovery failed; backups retained</value>
+  </data>
+  <data name="Node_Patch_UnsupportedGraph" xml:space="preserve">
+    <value>This patch graph contains nodes outside staging or preview support. Use transaction-aware patch nodes; nothing was executed.</value>
+  </data>
+  <data name="Node_Config_Json_Edit" xml:space="preserve">
+    <value>Edit JSON value</value>
+  </data>
+  <data name="Node_Config_Ini_Edit" xml:space="preserve">
+    <value>Edit INI value</value>
+  </data>
+  <data name="Node_Conn_JSONPointer" xml:space="preserve">
+    <value>JSON Pointer (empty = root)</value>
+  </data>
+  <data name="Node_Conn_JSONValue" xml:space="preserve">
+    <value>JSON value</value>
+  </data>
+  <data name="Node_Conn_ExpectedOldJSON" xml:space="preserve">
+    <value>Expected old JSON value</value>
+  </data>
+  <data name="Node_Conn_Section" xml:space="preserve">
+    <value>Section (empty = global)</value>
+  </data>
+  <data name="Node_Patch_JsonHint" xml:space="preserve">
+    <value>Use /name/0 pointers; escape ~ as ~0 and / as ~1. Values are JSON: quote strings, leave numbers, true/false and null unquoted. Changes reserialize the document. Array deletion requires an old-value check and shifts later indices.</value>
+  </data>
+  <data name="Node_Patch_IniHint" xml:space="preserve">
+    <value>Case-sensitive [section] and key=value syntax. An empty section selects global keys. # and ; start whole-line comments; inside values they are literal. Duplicate sections/keys and multiline values are rejected.</value>
+  </data>
+  <data name="Node_Validation_Format_Detect" xml:space="preserve">
+    <value>Inspect file format</value>
+  </data>
+  <data name="Node_Workspace_File_Find" xml:space="preserve">
+    <value>Find staged workspace files</value>
+  </data>
+  <data name="Node_Conn_ExpectedFormat" xml:space="preserve">
+    <value>Expected format</value>
+  </data>
+  <data name="Node_Conn_RequiredEvidence" xml:space="preserve">
+    <value>Required evidence</value>
+  </data>
+  <data name="Node_Conn_Evidence" xml:space="preserve">
+    <value>Evidence</value>
+  </data>
+  <data name="Node_Conn_Detail" xml:space="preserve">
+    <value>Inspection detail</value>
+  </data>
+  <data name="Node_Conn_StructureValid" xml:space="preserve">
+    <value>Structure checked</value>
+  </data>
+  <data name="Node_Conn_RelativePaths" xml:space="preserve">
+    <value>Relative paths</value>
+  </data>
+  <data name="Node_Patch_FormatHint" xml:space="preserve">
+    <value>Inspects staged content, not the extension. Structure checks currently cover JSON, XML, explicit INI, ELF, sparse and vbmeta. Other recognized formats report signature only. This does not verify hashes, signatures, filesystem consistency or device compatibility.</value>
+  </data>
+  <data name="Node_PatchFormat_Unknown" xml:space="preserve">
+    <value>No supported content signature or configuration structure found</value>
+  </data>
+  <data name="Node_PatchFormat_SignatureOnly" xml:space="preserve">
+    <value>Content signature found; structure has not been validated</value>
+  </data>
+  <data name="Node_PatchFormat_Configuration" xml:space="preserve">
+    <value>Configuration parsed within the size, depth and complexity limits</value>
+  </data>
+  <data name="Node_PatchFormat_ElfTables" xml:space="preserve">
+    <value>ELF header and metadata table ranges checked; execution and dynamic linking not verified</value>
+  </data>
+  <data name="Node_PatchFormat_SparseChunks" xml:space="preserve">
+    <value>Sparse header, chunk ranges and block totals checked; CRC not verified</value>
+  </data>
+  <data name="Node_PatchFormat_AvbDescriptors" xml:space="preserve">
+    <value>VBMeta metadata and descriptor ranges checked; signature and trust chain not verified</value>
+  </data>
+  <data name="Node_PatchFormat_RejectedStructure" xml:space="preserve">
+    <value>Malformed, truncated, unsupported or over-limit structure; cannot satisfy the precondition</value>
+  </data>
+  <data name="Node_Choice_Unknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="Node_Choice_Json" xml:space="preserve">
+    <value>JSON</value>
+  </data>
+  <data name="Node_Choice_Xml" xml:space="preserve">
+    <value>XML</value>
+  </data>
+  <data name="Node_Choice_Ini" xml:space="preserve">
+    <value>INI (explicit dialect)</value>
+  </data>
+  <data name="Node_Choice_Elf" xml:space="preserve">
+    <value>ELF</value>
+  </data>
+  <data name="Node_Choice_Sparse" xml:space="preserve">
+    <value>Android sparse</value>
+  </data>
+  <data name="Node_Choice_ExtFamily" xml:space="preserve">
+    <value>EXT2/3/4 shared signature</value>
+  </data>
+  <data name="Node_Choice_Erofs" xml:space="preserve">
+    <value>EROFS</value>
+  </data>
+  <data name="Node_Choice_F2fs" xml:space="preserve">
+    <value>F2FS</value>
+  </data>
+  <data name="Node_Choice_Boot" xml:space="preserve">
+    <value>Android boot / init_boot</value>
+  </data>
+  <data name="Node_Choice_VendorBoot" xml:space="preserve">
+    <value>Android vendor_boot</value>
+  </data>
+  <data name="Node_Choice_Vbmeta" xml:space="preserve">
+    <value>AVB vbmeta</value>
+  </data>
+  <data name="Node_Choice_Payload" xml:space="preserve">
+    <value>Android OTA Payload</value>
+  </data>
+  <data name="Node_Choice_Dtb" xml:space="preserve">
+    <value>DTB</value>
+  </data>
+  <data name="Node_Choice_Dtbo" xml:space="preserve">
+    <value>DTBO</value>
+  </data>
+  <data name="Node_Choice_Dex" xml:space="preserve">
+    <value>DEX / compact DEX</value>
+  </data>
+  <data name="Node_Choice_Zip" xml:space="preserve">
+    <value>ZIP</value>
+  </data>
+  <data name="Node_Choice_Cpio" xml:space="preserve">
+    <value>CPIO</value>
+  </data>
+  <data name="Node_Choice_Gzip" xml:space="preserve">
+    <value>Gzip</value>
+  </data>
+  <data name="Node_Choice_Xz" xml:space="preserve">
+    <value>XZ</value>
+  </data>
+  <data name="Node_Choice_Zstd" xml:space="preserve">
+    <value>Zstandard</value>
+  </data>
+  <data name="Node_Choice_Lz4" xml:space="preserve">
+    <value>LZ4</value>
+  </data>
+  <data name="Node_Choice_Bsdiff" xml:space="preserve">
+    <value>bsdiff</value>
+  </data>
+  <data name="Node_Choice_Rockchip" xml:space="preserve">
+    <value>Rockchip RKAF / RKFW</value>
+  </data>
+  <data name="Node_Choice_Ops" xml:space="preserve">
+    <value>OnePlus OPS</value>
+  </data>
+  <data name="Node_Choice_Ozip" xml:space="preserve">
+    <value>OPPO OZIP</value>
+  </data>
+  <data name="Node_Choice_Ntpi" xml:space="preserve">
+    <value>NTPI</value>
+  </data>
+  <data name="Node_Choice_Amlogic" xml:space="preserve">
+    <value>Amlogic ampack</value>
+  </data>
+  <data name="Node_Choice_Signature" xml:space="preserve">
+    <value>Content signature</value>
+  </data>
+  <data name="Node_Choice_Structure" xml:space="preserve">
+    <value>Validated structure</value>
+  </data>
+  <data name="Node_Resource_Asset_Open" xml:space="preserve">
+    <value>Select package resource</value>
+  </data>
+  <data name="Node_Resource_Asset_ReadText" xml:space="preserve">
+    <value>Read resource text</value>
+  </data>
+  <data name="Node_Workspace_Asset_Stage" xml:space="preserve">
+    <value>Stage package resource</value>
+  </data>
+  <data name="Node_Conn_AssetID" xml:space="preserve">
+    <value>Resource ID</value>
+  </data>
+  <data name="Node_Conn_Asset" xml:space="preserve">
+    <value>Resource</value>
+  </data>
+  <data name="Node_PortType_PatchAsset" xml:space="preserve">
+    <value>Package resource</value>
+  </data>
+  <data name="Node_Patch_AssetHint" xml:space="preserve">
+    <value>Use the resource ID from this composite&apos;s resource list. Reading or importing verifies its length and SHA-256.</value>
+  </data>
+  <data name="Node_Patch_MissingPackage" xml:space="preserve">
+    <value>This node requires a composite package resource scope. Open the composite editor or run the installed composite.</value>
+  </data>
+  <data name="Node_Patch_MissingAsset" xml:space="preserve">
+    <value>Connect a package resource before reading or importing it.</value>
+  </data>
+  <data name="Node_Patch_MissingWorkspace" xml:space="preserve">
+    <value>Connect a patch workspace before importing a resource.</value>
+  </data>
+  <data name="Plugin_Resources" xml:space="preserve">
+    <value>Package resources</value>
+  </data>
+  <data name="Plugin_ResourceId" xml:space="preserve">
+    <value>Resource ID (letters, digits, dots, underscores, hyphens)</value>
+  </data>
+  <data name="Plugin_AddResource" xml:space="preserve">
+    <value>Add file</value>
+  </data>
+  <data name="Plugin_RemoveResource" xml:space="preserve">
+    <value>Remove selected</value>
+  </data>
+  <data name="Plugin_ExportBundle" xml:space="preserve">
+    <value>Export resource bundle</value>
+  </data>
+  <data name="Plugin_ResourceBusy" xml:space="preserve">
+    <value>Wait for the current operation to finish before editing resources.</value>
+  </data>
+  <data name="Plugin_ResourceHelp" xml:space="preserve">
+    <value>Use these IDs in Select package resource nodes. Removing a referenced resource causes execution to fail. Save or export to include changes.</value>
+  </data>
+  <data name="Plugin_DependencyUnavailable" xml:space="preserve">
+    <value>Required package is unavailable or disabled: {0}</value>
+  </data>
+  <data name="Plugin_DependencyVersionMismatch" xml:space="preserve">
+    <value>Package {0} has version {1}; required range is [{2}, {3}), where * means unbounded.</value>
+  </data>
+  <data name="Plugin_PackageConflict" xml:space="preserve">
+    <value>Cannot be enabled together with package: {0}</value>
+  </data>
+  <data name="Plugin_RuntimeUnavailable" xml:space="preserve">
+    <value>Package {0} was disabled, removed, updated or became unavailable. Refresh the composite before running it.</value>
+  </data>
+  <data name="Plugin_CodeRuntimeDisabled" xml:space="preserve">
+    <value>This build runs ahead-of-time (AOT) or trimmed, so code-dependent plugins cannot run. Data plugins are unaffected, and JIT builds support every plugin kind.</value>
+  </data>
+  <data name="Plugin_Requirements" xml:space="preserve">
+    <value>Package dependencies and conflicts</value>
+  </data>
+  <data name="Plugin_DependencyHelp" xml:space="preserve">
+    <value>Installed/enabled packages only; this does not apply prerequisite patches. One line: package.id minimum maximum. Use * for no bound; minimum is inclusive and maximum exclusive. Versions use major.minor.patch (e.g. 1.2.3). An ID alone accepts any version.</value>
+  </data>
+  <data name="Plugin_Dependencies" xml:space="preserve">
+    <value>Required packages</value>
+  </data>
+  <data name="Plugin_Conflicts" xml:space="preserve">
+    <value>Conflicting packages (one ID per line)</value>
+  </data>
+  <data name="Plugin_RequirementsInvalid" xml:space="preserve">
+    <value>Invalid dependency/conflict declaration. Check IDs, duplicate entries, numeric version bounds and self-references.</value>
+  </data>
+  <data name="Plugin_Version" xml:space="preserve">
+    <value>Package version</value>
+  </data>
+  <data name="Node_Validation_Applicability_Check" xml:space="preserve">
+    <value>Check patch applicability</value>
+  </data>
+  <data name="Node_Conn_Compatible" xml:space="preserve">
+    <value>Compatible target</value>
+  </data>
+  <data name="Node_Conn_OriginalStateMatches" xml:space="preserve">
+    <value>Complete original state matches</value>
+  </data>
+  <data name="Node_Conn_DesiredStateMatches" xml:space="preserve">
+    <value>Complete desired state matches</value>
+  </data>
+  <data name="Node_Conn_Applicability" xml:space="preserve">
+    <value>Applicability</value>
+  </data>
+  <data name="Node_Conn_ShouldApply" xml:space="preserve">
+    <value>Should apply</value>
+  </data>
+  <data name="Node_Applicability_Applicable" xml:space="preserve">
+    <value>Ready to apply</value>
+  </data>
+  <data name="Node_Applicability_AlreadyApplied" xml:space="preserve">
+    <value>Already applied</value>
+  </data>
+  <data name="Node_Applicability_NotApplicable" xml:space="preserve">
+    <value>Not applicable</value>
+  </data>
+  <data name="Node_Applicability_Conflict" xml:space="preserve">
+    <value>Conflicting state</value>
+  </data>
+  <data name="Node_Patch_ApplicabilityHint" xml:space="preserve">
+    <value>Check the complete original and desired states. Connect Should apply to a branch condition and place mutations on its True flow. This query does not skip unconnected mutations. Matching both states or neither on a compatible target fails the run.</value>
+  </data>
+  <data name="Node_Patch_ApplicabilityConflict" xml:space="preserve">
+    <value>The target matches both original and desired states, or neither complete state. Review the patch conditions before applying it.</value>
+  </data>
+  <data name="Node_PatchOutcome_NotApplicable" xml:space="preserve">
+    <value>Patch not applicable; no changes applied</value>
+  </data>
+  <data name="Node_PatchOutcome_NoChanges" xml:space="preserve">
+    <value>No file changes applied; review individual applicability results</value>
+  </data>
+  <data name="Node_Flow_Applicability_Gate" xml:space="preserve">
+    <value>Gate patch application</value>
+  </data>
+  <data name="Node_Conn_Apply" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="Node_Conn_Skip" xml:space="preserve">
+    <value>Skip</value>
+  </data>
+  <data name="Node_Patch_ApplyGateHint" xml:space="preserve">
+    <value>Connect changes to Apply and read-only follow-up to Skip. In this graph, every file-changing node must be reachable only through an Apply output. Gates inside loop/parallel bodies are not supported yet; place the gate before the controller.</value>
+  </data>
+  <data name="Node_Patch_GateGraphLimit" xml:space="preserve">
+    <value>A gated graph supports at most 1024 nodes and 4096 connections.</value>
+  </data>
+  <data name="Node_Patch_GateFlowRequired" xml:space="preserve">
+    <value>Connect control-flow outputs to control-flow inputs using valid node identities.</value>
+  </data>
+  <data name="Node_Patch_GateNestedControl" xml:space="preserve">
+    <value>An application gate cannot run inside a loop or parallel body yet. Place it before the controller.</value>
+  </data>
+  <data name="Node_Patch_UnguardedMutation" xml:space="preserve">
+    <value>The file-changing node &apos;{0}&apos; is not exclusively controlled by an Apply output. Connect its flow input to the application path and remove bypass/Skip paths. A composite must expose a flow input to be controlled from outside.</value>
+  </data>
+  <data name="Node_Conn_ExecutionFlow" xml:space="preserve">
+    <value>Execution flow</value>
+  </data>
+  <data name="Node_Patch_CompositeLimit" xml:space="preserve">
+    <value>A patch run cannot invoke more than 4096 composite nodes.</value>
+  </data>
+  <data name="Node_Patch_CompositeReportHint" xml:space="preserve">
+    <value>Composite execution results are listed separately. Completed execution does not mean changes were published; check the overall publication result.</value>
+  </data>
+  <data name="Node_CompositeStatus_Running" xml:space="preserve">
+    <value>Executing</value>
+  </data>
+  <data name="Node_CompositeStatus_Succeeded" xml:space="preserve">
+    <value>Execution completed (publication is reported separately)</value>
+  </data>
+  <data name="Node_CompositeStatus_Failed" xml:space="preserve">
+    <value>Execution failed</value>
+  </data>
+  <data name="Node_CompositeStatus_Cancelled" xml:space="preserve">
+    <value>Execution cancelled</value>
+  </data>
+  <data name="Node_Patch_CompositeParent" xml:space="preserve">
+    <value>Inside invocation #{0}</value>
+  </data>
+  <data name="Node_Patch_CompositeRoot" xml:space="preserve">
+    <value>Root workflow invocation</value>
+  </data>
+  <data name="Node_CompositeApplicability_None" xml:space="preserve">
+    <value>Applicability not checked</value>
+  </data>
+  <data name="Node_CompositeApplicability_Observed" xml:space="preserve">
+    <value>Observed preflight states (including nested calls): {0}</value>
+  </data>
+  <data name="Node_CompositeApplicability_Applicable" xml:space="preserve">
+    <value>Applicable</value>
+  </data>
+  <data name="Node_CompositeApplicability_AlreadyApplied" xml:space="preserve">
+    <value>Already applied</value>
+  </data>
+  <data name="Node_CompositeApplicability_NotApplicable" xml:space="preserve">
+    <value>Not applicable</value>
+  </data>
+  <data name="Node_CompositeApplicability_Conflict" xml:space="preserve">
+    <value>Conflict</value>
+  </data>
+  <data name="Node_Patch_AttributionLimit" xml:space="preserve">
+    <value>A patch run cannot record more than 100000 file/invocation associations.</value>
+  </data>
+  <data name="Node_Patch_StagedBy" xml:space="preserve">
+    <value>Staged by: {0}. Later edits may replace earlier content; see the net change and publication result.</value>
+  </data>
+  <data name="Node_CompositeSkip_Condition" xml:space="preserve">
+    <value>Not invoked: condition selected another branch</value>
+  </data>
+  <data name="Node_CompositeSkip_UpstreamFailure" xml:space="preserve">
+    <value>Not invoked: an upstream node failed</value>
+  </data>
+  <data name="Node_Patch_CompositeReportTruncated" xml:space="preserve">
+    <value>The report reached its capacity; additional skipped composites are omitted.</value>
+  </data>
+  <data name="Node_CompositeSkip_PreflightRejected" xml:space="preserve">
+    <value>Not invoked: workflow preflight rejected execution</value>
+  </data>
+  <data name="Node_CompositeSkip_NotReached" xml:space="preserve">
+    <value>Not invoked: workflow ended without reaching this composite</value>
+  </data>
+  <data name="Node_Workspace_Partition_Resolve" xml:space="preserve">
+    <value>Resolve partition file path</value>
+  </data>
+  <data name="Node_Conn_Layout" xml:space="preserve">
+    <value>Layout</value>
+  </data>
+  <data name="Node_Conn_PartitionPath" xml:space="preserve">
+    <value>Partition-local path</value>
+  </data>
+  <data name="Node_Choice_PartitionDirectories" xml:space="preserve">
+    <value>Workspace contains partition directories</value>
+  </data>
+  <data name="Node_Choice_PartitionRoot" xml:space="preserve">
+    <value>Workspace is the selected partition root</value>
+  </data>
+  <data name="Node_Choice_SystemAsRoot" xml:space="preserve">
+    <value>Workspace is a system-as-root image root</value>
+  </data>
+  <data name="Node_Patch_PartitionPathHint" xml:space="preserve">
+    <value>Select the actual extracted layout explicitly. A leading / is relative to the declared partition. System-as-root maps only system paths below system/. This does not detect partition identity or open images. Exists includes staged changes; connect it to an assertion when the file is required.</value>
+  </data>
+  <data name="Node_Patch_InvalidPartition" xml:space="preserve">
+    <value>Select a supported Android filesystem partition.</value>
+  </data>
+  <data name="Node_Patch_InvalidPartitionPath" xml:space="preserve">
+    <value>Use a bounded partition-local path with / separators.</value>
+  </data>
+  <data name="Node_Patch_InvalidPartitionLayout" xml:space="preserve">
+    <value>Invalid partition layout; system-as-root accepts only the system partition.</value>
+  </data>
+  <data name="Node_Choice_system" xml:space="preserve">
+    <value>system</value>
+  </data>
+  <data name="Node_Choice_vendor" xml:space="preserve">
+    <value>vendor</value>
+  </data>
+  <data name="Node_Choice_product" xml:space="preserve">
+    <value>product</value>
+  </data>
+  <data name="Node_Choice_system_ext" xml:space="preserve">
+    <value>system_ext</value>
+  </data>
+  <data name="Node_Choice_odm" xml:space="preserve">
+    <value>odm</value>
+  </data>
+  <data name="Node_Choice_vendor_dlkm" xml:space="preserve">
+    <value>vendor_dlkm</value>
+  </data>
+  <data name="Node_Choice_odm_dlkm" xml:space="preserve">
+    <value>odm_dlkm</value>
+  </data>
+  <data name="Node_Choice_system_dlkm" xml:space="preserve">
+    <value>system_dlkm</value>
+  </data>
+  <data name="Node_Binary_Pattern_Find" xml:space="preserve">
+    <value>Find masked binary pattern</value>
+  </data>
+  <data name="Node_Conn_FindMask" xml:space="preserve">
+    <value>Find mask</value>
+  </data>
+  <data name="Node_Conn_StartOffset" xml:space="preserve">
+    <value>Start offset</value>
+  </data>
+  <data name="Node_Conn_SearchLength" xml:space="preserve">
+    <value>Search length</value>
+  </data>
+  <data name="Node_Conn_Alignment" xml:space="preserve">
+    <value>Alignment</value>
+  </data>
+  <data name="Node_Conn_SkipMatches" xml:space="preserve">
+    <value>Skip matches</value>
+  </data>
+  <data name="Node_Conn_Offsets" xml:space="preserve">
+    <value>Offsets</value>
+  </data>
+  <data name="Node_Patch_BinaryFindHint" xml:space="preserve">
+    <value>Enter hexadecimal byte pairs (up to 4096 bytes). Empty mask means FF for every byte; otherwise supply the same number of mask bytes. Matching compares masked bits and includes overlaps. Offset/length/alignment/skip use decimal integers; length -1 means to EOF. Alignment uses absolute file offsets. Expected matches is the exact remaining count after skip. No file is modified.</value>
+  </data>
+  <data name="Node_Binary_Pattern_Replace" xml:space="preserve">
+    <value>Replace masked binary pattern</value>
+  </data>
+  <data name="Node_Conn_ReplaceMask" xml:space="preserve">
+    <value>Replacement mask</value>
+  </data>
+  <data name="Node_Patch_BinaryReplaceHint" xml:space="preserve">
+    <value>Uses the binary search range, alignment, skip and exact count rules. Replacement and optional bit mask must match the find length; empty masks mean FF. Unselected replacement bits retain their original value. Overlapping replacement windows fail. Changes remain staged until the outer workflow succeeds; preview discards them. Use applicability checks to distinguish already-patched files.</value>
+  </data>
+  <data name="Node_Patch_BinaryPreviewHint" xml:space="preserve">
+    <value>Replacement windows in staging order (before → after), not the final net diff. File publication is reported separately.</value>
+  </data>
+  <data name="Node_Patch_BinaryPreviewRow" xml:space="preserve">
+    <value>{0}, {1} bytes, {2}: {3} → {4} {5}</value>
+  </data>
+  <data name="Node_Patch_BytesTruncated" xml:space="preserve">
+    <value>(first 64 bytes only)</value>
+  </data>
+  <data name="Node_Patch_WindowsTruncated" xml:space="preserve">
+    <value>Additional replacement windows are omitted.</value>
+  </data>
+  <data name="Node_Config_Fstab_Edit" xml:space="preserve">
+    <value>Edit Android fstab</value>
+  </data>
+  <data name="Node_Conn_Field" xml:space="preserve">
+    <value>Field</value>
+  </data>
+  <data name="Node_Conn_MountPoint" xml:space="preserve">
+    <value>Mount point</value>
+  </data>
+  <data name="Node_Conn_FileSystemFilter" xml:space="preserve">
+    <value>Filesystem filter (optional)</value>
+  </data>
+  <data name="Node_Conn_FlagName" xml:space="preserve">
+    <value>Flag name</value>
+  </data>
+  <data name="Node_Choice_BlockDevice" xml:space="preserve">
+    <value>Block device</value>
+  </data>
+  <data name="Node_Choice_MountPoint" xml:space="preserve">
+    <value>Mount point</value>
+  </data>
+  <data name="Node_Choice_FileSystem" xml:space="preserve">
+    <value>Filesystem type</value>
+  </data>
+  <data name="Node_Choice_MountOptions" xml:space="preserve">
+    <value>Mount options</value>
+  </data>
+  <data name="Node_Choice_FsMgrFlags" xml:space="preserve">
+    <value>fs_mgr flags</value>
+  </data>
+  <data name="Node_Choice_SetFlag" xml:space="preserve">
+    <value>Set flag</value>
+  </data>
+  <data name="Node_Choice_DeleteFlag" xml:space="preserve">
+    <value>Delete flag</value>
+  </data>
+  <data name="Node_Patch_FstabHint" xml:space="preserve">
+    <value>Android five-column fstab only, not recovery or /proc/mounts dialects. Select literal mount point and optionally filesystem type; match count is exact. Set value replaces one field. Flag operations edit comma-separated mount options or fs_mgr flags; empty value creates a bare flag. The old-value guard checks the complete selected field. Spacing, comments and unedited content are preserved. This does not validate device-specific flag support or mountability.</value>
+  </data>
+  <data name="Node_Choice_DeleteEntry" xml:space="preserve">
+    <value>Delete selected entry lines</value>
+  </data>
+  <data name="Node_Conn_BlockDevice" xml:space="preserve">
+    <value>Block device</value>
+  </data>
+  <data name="Node_Conn_FileSystem" xml:space="preserve">
+    <value>Filesystem type</value>
+  </data>
+  <data name="Node_Conn_MountOptions" xml:space="preserve">
+    <value>Mount options</value>
+  </data>
+  <data name="Node_Conn_FsMgrFlags" xml:space="preserve">
+    <value>fs_mgr flags</value>
+  </data>
+  <data name="Node_Patch_FstabAddHint" xml:space="preserve">
+    <value>Appends five fields using the existing newline style. An identical mount-point/filesystem entry is unchanged; a duplicate or different entry with that pair is a conflict. Other filesystem candidates remain untouched. Count reports existing matches (zero for a new entry). Text is not published until connected to a write/stage node. Device-specific flags and mountability are not validated.</value>
+  </data>
+  <data name="Node_Config_InitRc_Query" xml:space="preserve">
+    <value>Query Android init.rc</value>
+  </data>
+  <data name="Node_Config_InitRc_EditCommand" xml:space="preserve">
+    <value>Edit Android init.rc</value>
+  </data>
+  <data name="Node_Conn_SectionKind" xml:space="preserve">
+    <value>Section kind</value>
+  </data>
+  <data name="Node_Conn_Selector" xml:space="preserve">
+    <value>Section selector</value>
+  </data>
+  <data name="Node_Conn_Directive" xml:space="preserve">
+    <value>Directive name</value>
+  </data>
+  <data name="Node_Conn_ExpectedSections" xml:space="preserve">
+    <value>Expected section count</value>
+  </data>
+  <data name="Node_Choice_Service" xml:space="preserve">
+    <value>Service</value>
+  </data>
+  <data name="Node_Choice_Action" xml:space="preserve">
+    <value>Action</value>
+  </data>
+  <data name="Node_Choice_Import" xml:space="preserve">
+    <value>Import</value>
+  </data>
+  <data name="Node_Patch_InitRcHint" xml:space="preserve">
+    <value>Select a service name, an exact action trigger expression, or an import path. Section and statement counts are exact. An empty directive queries the header. Editing replaces or deletes body statements only; replacement includes the same directive name and its arguments. Old-value checks compare the complete raw statement. Quotes, escapes and continuations follow Android init syntax. Imports and properties are not expanded. This does not validate device-specific commands, service options or bootability. Connect edited text to a stage/write node to publish.</value>
+  </data>
+  <data name="Node_Config_InitRc_AddCommand" xml:space="preserve">
+    <value>Add Android init.rc statement</value>
+  </data>
+  <data name="Node_Conn_Statement" xml:space="preserve">
+    <value>Statement</value>
+  </data>
+  <data name="Node_Conn_IdentityArguments" xml:space="preserve">
+    <value>Identity argument count</value>
+  </data>
+  <data name="Node_Patch_InitRcAddHint" xml:space="preserve">
+    <value>Append one statement to selected service/action bodies. Identity includes the directive and the specified number of leading arguments: zero for a unique service option, one for a setprop property key. Identical decoded tokens preserve the original; duplicate identities or different remaining arguments are conflicts. Other identities coexist. Count reports sections already containing the statement. New statements use four-space indentation and the document newline style. This does not validate command semantics or bootability.</value>
+  </data>
+  <data name="Node_Config_InitRc_AddSection" xml:space="preserve">
+    <value>Add Android init.rc section</value>
+  </data>
+  <data name="Node_Conn_SectionText" xml:space="preserve">
+    <value>Complete section text</value>
+  </data>
+  <data name="Node_Patch_InitRcAddSectionHint" xml:space="preserve">
+    <value>Supply exactly one complete service, action or import section. Identity is the service name, exact action trigger tokens or import path. An existing section with identical decoded header and ordered body tokens is unchanged; duplicate identities or different contents are conflicts. The fragment is appended verbatim, preserving its internal newlines and comments; required separator/end newlines follow the target document. Count is one for an existing equivalent section, zero when added. Imports are not expanded and runtime semantics are not validated. Connect to a stage/write node to publish.</value>
+  </data>
+  <data name="Node_Config_InitRc_EditHeader" xml:space="preserve">
+    <value>Edit Android init.rc header</value>
+  </data>
+  <data name="Node_Patch_InitRcHeaderHint" xml:space="preserve">
+    <value>Select exactly one service, action or import. Supply its complete replacement header of the same kind, without body or trailing comment. Preserves the body, indentation and existing trailing comment. Optional old-value checks compare the complete raw header. A new identity conflicting with another section is rejected. Renaming does not update start/stop commands or other references; check those separately. Runtime command, trigger and path semantics are not validated. Publish using a stage/write node.</value>
+  </data>
+  <data name="Node_Conn_Placement" xml:space="preserve">
+    <value>Insertion placement</value>
+  </data>
+  <data name="Node_Conn_AnchorStatement" xml:space="preserve">
+    <value>Complete anchor statement</value>
+  </data>
+  <data name="Node_Choice_End" xml:space="preserve">
+    <value>End of section</value>
+  </data>
+  <data name="Node_Choice_BeforeAnchor" xml:space="preserve">
+    <value>Before anchor</value>
+  </data>
+  <data name="Node_Choice_AfterAnchor" xml:space="preserve">
+    <value>After anchor</value>
+  </data>
+  <data name="Node_Patch_InitRcPlacementHint" xml:space="preserve">
+    <value>End preserves the existing append behavior. Before/after requires exactly one body statement with matching decoded tokens in each selected section. Supply the full anchor without a trailing comment. Continuations remain intact. Repeated application requires the existing statement to be the adjacent body statement on the selected side, ignoring comment-only/blank lines; a different position is a conflict.</value>
+  </data>
+  <data name="Node_Config_InitRc_EditArgument" xml:space="preserve">
+    <value>Edit Android init.rc argument</value>
+  </data>
+  <data name="Node_Conn_ArgumentIndex" xml:space="preserve">
+    <value>Argument index</value>
+  </data>
+  <data name="Node_Patch_InitRcArgumentHint" xml:space="preserve">
+    <value>Zero-based argument index excludes the directive: setprop key value uses index 1 for value; service name executable uses index 1 for executable. Empty directive selects a single header. Value and expected old value are decoded text, not quoted init syntax; escaping is generated automatically. Existing arguments only; unrelated spacing, quotes, comments and tokens are preserved. Header identity conflicts are rejected; references are not rewritten. Runtime semantics are not validated. Publish using a stage/write node.</value>
+  </data>
+  <data name="Node_Config_InitRc_FindReferences" xml:space="preserve">
+    <value>Check init service references</value>
+  </data>
+  <data name="Node_Conn_ExternalServices" xml:space="preserve">
+    <value>External service names</value>
+  </data>
+  <data name="Node_Conn_ReferencesValid" xml:space="preserve">
+    <value>Inspected references resolved</value>
+  </data>
+  <data name="Node_Conn_Services" xml:space="preserve">
+    <value>Known services</value>
+  </data>
+  <data name="Node_Conn_MissingServices" xml:space="preserve">
+    <value>Missing services</value>
+  </data>
+  <data name="Node_Conn_DynamicReferences" xml:space="preserve">
+    <value>Dynamic references</value>
+  </data>
+  <data name="Node_Conn_InvalidReferences" xml:space="preserve">
+    <value>Malformed reference commands</value>
+  </data>
+  <data name="Node_Conn_AmbiguousServices" xml:space="preserve">
+    <value>Ambiguous service declarations</value>
+  </data>
+  <data name="Node_Patch_InitRcReferencesHint" xml:space="preserve">
+    <value>Checks start, stop, restart, enable and exec_start in actions and service onrestart commands. External service names are caller-declared, one literal name per line; imports are not read. Property-dependent arguments remain unresolved. Duplicate local service names are ambiguous, including override cases whose load order is unknown. The boolean covers only these named references, not full init syntax, other commands, interfaces, classes or bootability. Count is inspected commands. Connect the boolean to Assert to block publication on unresolved references.</value>
+  </data>
+  <data name="Node_Config_FsConfig_Edit" xml:space="preserve">
+    <value>Edit UotanStudio fs_config</value>
+  </data>
+  <data name="Node_Conn_ImagePath" xml:space="preserve">
+    <value>Image path</value>
+  </data>
+  <data name="Node_Conn_UID" xml:space="preserve">
+    <value>UID</value>
+  </data>
+  <data name="Node_Conn_GID" xml:space="preserve">
+    <value>GID</value>
+  </data>
+  <data name="Node_Conn_ExpectedUID" xml:space="preserve">
+    <value>Expected UID</value>
+  </data>
+  <data name="Node_Conn_ExpectedGID" xml:space="preserve">
+    <value>Expected GID</value>
+  </data>
+  <data name="Node_Conn_ExpectedMode" xml:space="preserve">
+    <value>Expected permission mode</value>
+  </data>
+  <data name="Node_Patch_FsConfigHint" xml:space="preserve">
+    <value>Edits the space-delimited metadata dialect consumed by UotanStudio builders. UID/GID are unsigned decimal; modes are decimal (493) or zero-prefixed octal (0755), not unprefixed Android octal. Query returns zero-prefixed octal. Select exactly one literal image path; duplicates fail. Edits emit decimal permissions and retain trailing capability data without interpreting or applying it. This changes sidecar text, not host permissions or an image directly. Rebuild integration, SELinux labels and xattrs require their own operations.</value>
+  </data>
+  <data name="Node_Patch_FsConfigEntryHint" xml:space="preserve">
+    <value>UotanStudio metadata dialect: decimal UID/GID, decimal or zero-prefixed octal permissions. Add appends a missing literal path with trailing capability placeholder 0; identical ownership/permissions preserve existing source and opaque capability data, while different values or duplicate paths conflict. Delete removes the whole entry line; absent entries are unchanged unless an old-value guard requires one. Count reports existing matches. Does not add/delete the actual file, apply capabilities or rebuild an image; compose those operations separately.</value>
+  </data>
+  <data name="Node_Config_FileContexts_Edit" xml:space="preserve">
+    <value>Edit file_contexts label</value>
+  </data>
+  <data name="Node_Conn_PathExpression" xml:space="preserve">
+    <value>Exact path expression</value>
+  </data>
+  <data name="Node_Conn_MetadataOnly" xml:space="preserve">
+    <value>Metadata only</value>
+  </data>
+  <data name="Node_Conn_FileKind" xml:space="preserve">
+    <value>File kind qualifier</value>
+  </data>
+  <data name="Node_Conn_Context" xml:space="preserve">
+    <value>SELinux context</value>
+  </data>
+  <data name="Node_Choice_Any" xml:space="preserve">
+    <value>Unqualified rule</value>
+  </data>
+  <data name="Node_Choice_Regular" xml:space="preserve">
+    <value>Regular file</value>
+  </data>
+  <data name="Node_Choice_Directory" xml:space="preserve">
+    <value>Directory</value>
+  </data>
+  <data name="Node_Choice_Symlink" xml:space="preserve">
+    <value>Symbolic link</value>
+  </data>
+  <data name="Node_Choice_Block" xml:space="preserve">
+    <value>Block device</value>
+  </data>
+  <data name="Node_Choice_Character" xml:space="preserve">
+    <value>Character device</value>
+  </data>
+  <data name="Node_Choice_Pipe" xml:space="preserve">
+    <value>Named pipe</value>
+  </data>
+  <data name="Node_Choice_Socket" xml:space="preserve">
+    <value>Socket</value>
+  </data>
+  <data name="Node_Patch_FileContextHint" xml:space="preserve">
+    <value>Select one text rule by its exact path-expression spelling and file-kind qualifier. Unqualified selects only a two-field rule, not every kind. Regexes are not executed or converted to host paths. Edit replaces only the context token, preserving order, spacing and full-line comments. Duplicate identities, malformed fields and old-value mismatches fail. Context shape checking is not loaded-policy validation; overlap/precedence, compiled contexts and actual image xattr publication remain separate.</value>
+  </data>
+  <data name="Node_Patch_FileContextEntryHint" xml:space="preserve">
+    <value>Identity is the exact path expression plus file-kind qualifier. Add appends a missing rule; an identical existing label is unchanged and a different label or duplicate identity conflicts. Delete removes the whole rule line; missing is unchanged unless an old-label guard requires it. Count reports existing matches. Other rules retain their order, but adding/removing rules can affect effective labels: regex overlap, precedence and loaded-policy validity are not checked. Does not modify image xattrs directly.</value>
+  </data>
+  <data name="Node_Image_Text_Read" xml:space="preserve">
+    <value>Read text inside filesystem image</value>
+  </data>
+  <data name="Node_Choice_Direct" xml:space="preserve">
+    <value>Direct</value>
+  </data>
+  <data name="Node_Choice_GitHub_Mirror" xml:space="preserve">
+    <value>GitHub mirror</value>
+  </data>
+  <data name="Node_Conn_Source" xml:space="preserve">
+    <value>Source</value>
+  </data>
+  <data name="Node_Choice_EXT4" xml:space="preserve">
+    <value>EXT4</value>
+  </data>
+  <data name="Node_Choice_EROFS" xml:space="preserve">
+    <value>EROFS</value>
+  </data>
+  <data name="Node_Patch_ImageReadTextHint" xml:space="preserve">
+    <value>Reads a literal regular file from a raw EXT4/EROFS image, including staged image replacements. Links, traversal, special files and files over 16 MiB are rejected; decoded text is limited to 4 Mi characters. Enumeration has entry/path budgets and supports cancellation. The full image hash is checked before/after reading and retained as a publication dependency. Hash output identifies the extracted file. Sparse/Super/Payload containers require separate extraction. This node reads only; image modification/rebuild is separate.</value>
+  </data>
+  <data name="Node_Image_Text_Stage" xml:space="preserve">
+    <value>Write text inside filesystem image</value>
+  </data>
+  <data name="Node_Conn_ImageCapacity" xml:space="preserve">
+    <value>Image capacity (bytes)</value>
+  </data>
+  <data name="Node_Conn_ExtractionBudget" xml:space="preserve">
+    <value>Extraction budget (bytes)</value>
+  </data>
+  <data name="Node_Patch_InvalidImageBytes" xml:space="preserve">
+    <value>Image capacity and extraction budget must be positive decimal integer byte counts.</value>
+  </data>
+  <data name="Node_Patch_ImageCapacityHint" xml:space="preserve">
+    <value>Enter the target partition capacity in bytes. It is required and is not inferred from the input image size.</value>
+  </data>
+  <data name="Node_Patch_ImageWriteTextHint" xml:space="preserve">
+    <value>Replaces an existing regular file in a raw EXT4/EROFS image and stages a metadata-preserving rebuild. Expected hash optionally checks the old extracted file. Identical encoded bytes skip rebuilding. Capacity is required; extraction budget checks declared sizes. Preview discards the result; publication occurs only after the entire graph succeeds. Each changed write rebuilds the image. Links, new files, Sparse containers, AVB/signature updates and device validation are separate operations.</value>
+  </data>
+  <data name="Node_Image_Edit_CollectText" xml:space="preserve">
+    <value>Collect image text edit</value>
+  </data>
+  <data name="Node_Image_Edit_Apply" xml:space="preserve">
+    <value>Apply image text edits</value>
+  </data>
+  <data name="Node_Conn_ImageEdits" xml:space="preserve">
+    <value>Image edits</value>
+  </data>
+  <data name="Node_PortType_ImageEdits" xml:space="preserve">
+    <value>Image edits</value>
+  </data>
+  <data name="Node_Patch_ImageEditsRequired" xml:space="preserve">
+    <value>Connect an image edit collection before applying it.</value>
+  </data>
+  <data name="Node_Patch_ImageBatchHint" xml:space="preserve">
+    <value>Chain collection nodes through Image edits; leave the first collection input unconnected. Each adds one distinct existing file without modifying the image. Limits: 256 files, 4 Mi characters per text and 16 Mi characters total. Apply validates all old hashes, rebuilds once and stages one image; preview discards it. Capacity is required. Collections are immutable so branches do not alter each other.</value>
+  </data>
+  <data name="Node_Image_File_ReadAttributes" xml:space="preserve">
+    <value>Read image file attributes</value>
+  </data>
+  <data name="Node_Image_File_SetAttributes" xml:space="preserve">
+    <value>Set image file attributes</value>
+  </data>
+  <data name="Node_Patch_InvalidImageAttributes" xml:space="preserve">
+    <value>UID/GID must be unsigned decimal integers; permission mode must contain three or four octal digits.</value>
+  </data>
+  <data name="Node_Patch_ImageAttributesHint" xml:space="preserve">
+    <value>Reads or changes actual inode UID/GID and permissions in raw EXT4/EROFS, including root (/), without following links. UID/GID use unsigned decimal; mode uses three or four octal digits (644, 0755, 4755). Query returns four digits. Set retains file type, optionally checks old attributes and stages a capacity-limited rebuild. Identical attributes skip rebuilding. Hardlink aliases share changes; access ACL owner/mask-or-group/other permissions follow chmod rules while named entries remain intact. Malformed ACLs are rejected. ACL/capability/SELinux editing, AVB signing and device acceptance are separate.</value>
+  </data>
+  <data name="Node_Image_Xattr_Read" xml:space="preserve">
+    <value>Read image extended attribute</value>
+  </data>
+  <data name="Node_Patch_ImageReadXattrHint" xml:space="preserve">
+    <value>Reads one raw extended attribute from the current EXT4/EROFS image, without following links. Data contains at most 64 KiB of original bytes. Exists distinguishes an empty value from a missing attribute. Names use printable ASCII with a namespace dot, up to 255 characters. The image remains a publication dependency. No text decoding, SELinux policy checks or capability/ACL interpretation is performed.</value>
+  </data>
+  <data name="Node_Image_Xattr_Set" xml:space="preserve">
+    <value>Set image user attribute</value>
+  </data>
+  <data name="Node_Image_Xattr_Delete" xml:space="preserve">
+    <value>Delete image user attribute</value>
+  </data>
+  <data name="Node_Conn_HexValue" xml:space="preserve">
+    <value>Hex value</value>
+  </data>
+  <data name="Node_Conn_ExpectedHexValue" xml:space="preserve">
+    <value>Expected hex value</value>
+  </data>
+  <data name="Node_Conn_ExpectedExists" xml:space="preserve">
+    <value>Expected exists</value>
+  </data>
+  <data name="Node_Patch_InvalidXattrHex" xml:space="preserve">
+    <value>Enter an even number of hexadecimal digits without spaces or prefixes, up to 64 KiB of bytes. Empty means an empty value.</value>
+  </data>
+  <data name="Node_Patch_ImageXattrEditHint" xml:space="preserve">
+    <value>Sets or deletes a user.* extended attribute on an existing raw EXT4/EROFS inode. Hex values use paired digits without spaces or 0x; empty sets an existing empty value. Delete removes the attribute. Optional old-value checks use Expected exists to distinguish absence from empty. Hardlink aliases share edits. Capacity is required; preview discards the rebuilt image. Identical sets and absent deletes are unchanged. Security, ACL and trusted namespaces require separate operations.</value>
+  </data>
+  <data name="Node_Encapsulate" xml:space="preserve">
+    <value>Encapsulate as composite</value>
+  </data>
+  <data name="Node_ExpandComposite" xml:space="preserve">
+    <value>Expand composite</value>
+  </data>
+  <data name="Node_CollapseComposite" xml:space="preserve">
+    <value>Collapse expanded composite</value>
+  </data>
+  <data name="Node_InterfaceHint" xml:space="preserve">
+    <value>Crossing connections and missing required inputs are selected automatically. Expose other parameters and edit names, order and defaults.</value>
+  </data>
+  <data name="Node_InterfaceInputs" xml:space="preserve">
+    <value>Public inputs</value>
+  </data>
+  <data name="Node_InterfaceOutputs" xml:space="preserve">
+    <value>Public outputs</value>
+  </data>
+  <data name="Node_InterfaceRequired" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Node_InterfaceDefault" xml:space="preserve">
+    <value>Default value</value>
+  </data>
+  <data name="Node_InterfaceOrder" xml:space="preserve">
+    <value>Display order</value>
+  </data>
+  <data name="Node_Status_WaitingForInput" xml:space="preserve">
+    <value>Waiting for user input</value>
+  </data>
+  <data name="Node_Category_Inputs" xml:space="preserve">
+    <value>Inputs and resources</value>
+  </data>
+  <data name="Node_Category_Data" xml:space="preserve">
+    <value>Files and data</value>
+  </data>
+  <data name="Node_Category_Validation" xml:space="preserve">
+    <value>Detection and validation</value>
+  </data>
+  <data name="Node_Category_Configuration" xml:space="preserve">
+    <value>Configuration editing</value>
+  </data>
+  <data name="Node_Category_Firmware" xml:space="preserve">
+    <value>Firmware and images</value>
+  </data>
+  <data name="Node_Category_Build" xml:space="preserve">
+    <value>Build and delivery</value>
+  </data>
+  <data name="Node_Category_Device" xml:space="preserve">
+    <value>Device operations</value>
+  </data>
+  <data name="Node_Category_Mirroring" xml:space="preserve">
+    <value>Screen mirroring</value>
+  </data>
+  <data name="Node_Category_Flow" xml:space="preserve">
+    <value>Flow control</value>
+  </data>
+  <data name="Node_Category_Interaction" xml:space="preserve">
+    <value>Interaction and feedback</value>
+  </data>
+  <data name="Node_Category_Composite" xml:space="preserve">
+    <value>My composite nodes</value>
+  </data>
+  <data name="Node_Category_Script" xml:space="preserve">
+    <value>My script nodes</value>
+  </data>
+  <data name="Node_Toolbox_Favorites" xml:space="preserve">
+    <value>Favorites</value>
+  </data>
+  <data name="Node_Toolbox_Recent" xml:space="preserve">
+    <value>Recently used</value>
+  </data>
+  <data name="Node_Toolbox_Favorite" xml:space="preserve">
+    <value>Add to favorites</value>
+  </data>
+  <data name="Node_Toolbox_Unfavorite" xml:space="preserve">
+    <value>Remove from favorites</value>
+  </data>
+  <data name="Node_Family_Text" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="Node_Family_Edit" xml:space="preserve">
+    <value>Image edits</value>
+  </data>
+  <data name="Node_Family_File" xml:space="preserve">
+    <value>Files</value>
+  </data>
+  <data name="Node_Family_Xattr" xml:space="preserve">
+    <value>Extended attributes</value>
+  </data>
+  <data name="Node_Family_FileContexts" xml:space="preserve">
+    <value>SELinux file contexts</value>
+  </data>
+  <data name="Node_Family_FsConfig" xml:space="preserve">
+    <value>File ownership and modes</value>
+  </data>
+  <data name="Node_Family_InitRc" xml:space="preserve">
+    <value>Android init.rc</value>
+  </data>
+  <data name="Node_Family_Fstab" xml:space="preserve">
+    <value>Android fstab</value>
+  </data>
+  <data name="Node_Family_Pattern" xml:space="preserve">
+    <value>Binary patterns</value>
+  </data>
+  <data name="Node_Family_Partition" xml:space="preserve">
+    <value>Partitions</value>
+  </data>
+  <data name="Node_Family_Applicability" xml:space="preserve">
+    <value>Applicability</value>
+  </data>
+  <data name="Node_Family_Asset" xml:space="preserve">
+    <value>Package resources</value>
+  </data>
+  <data name="Node_Family_Format" xml:space="preserve">
+    <value>Formats</value>
+  </data>
+  <data name="Node_Family_Json" xml:space="preserve">
+    <value>JSON</value>
+  </data>
+  <data name="Node_Family_Ini" xml:space="preserve">
+    <value>INI</value>
+  </data>
+  <data name="Node_Family_Directory" xml:space="preserve">
+    <value>Directories</value>
+  </data>
+  <data name="Node_Family_Hash" xml:space="preserve">
+    <value>Hashes</value>
+  </data>
+  <data name="Node_Family_Count" xml:space="preserve">
+    <value>Counts</value>
+  </data>
+  <data name="Node_Family_Changes" xml:space="preserve">
+    <value>Changes</value>
+  </data>
+  <data name="Node_Family_Condition" xml:space="preserve">
+    <value>Conditions</value>
+  </data>
+  <data name="Node_Family_Boolean" xml:space="preserve">
+    <value>Boolean checks</value>
+  </data>
+  <data name="Node_Family_AndroidProperty" xml:space="preserve">
+    <value>Android properties</value>
+  </data>
+  <data name="Node_Family_Xml" xml:space="preserve">
+    <value>XML</value>
+  </data>
+  <data name="Node_Family_Container" xml:space="preserve">
+    <value>Firmware containers</value>
+  </data>
+  <data name="Node_Family_Signature" xml:space="preserve">
+    <value>Signatures</value>
+  </data>
+  <data name="Node_Family_Apk" xml:space="preserve">
+    <value>APK</value>
+  </data>
+  <data name="Node_Family_Ota" xml:space="preserve">
+    <value>OTA</value>
+  </data>
+  <data name="Node_Family_Slots" xml:space="preserve">
+    <value>Slots</value>
+  </data>
+  <data name="Node_Family_Cpio" xml:space="preserve">
+    <value>CPIO</value>
+  </data>
+  <data name="Node_Family_Super" xml:space="preserve">
+    <value>Super</value>
+  </data>
+  <data name="Node_Family_Sparse" xml:space="preserve">
+    <value>Sparse</value>
+  </data>
+  <data name="Node_Family_Dat" xml:space="preserve">
+    <value>DAT</value>
+  </data>
+  <data name="Node_Family_Target" xml:space="preserve">
+    <value>Device selection</value>
+  </data>
+  <data name="Node_Family_Property" xml:space="preserve">
+    <value>Device properties</value>
+  </data>
+  <data name="Node_Family_Power" xml:space="preserve">
+    <value>Power and reboot</value>
+  </data>
+  <data name="Node_Family_Storage" xml:space="preserve">
+    <value>Device storage</value>
+  </data>
+  <data name="Node_Family_Binary" xml:space="preserve">
+    <value>Binary files</value>
+  </data>
+  <data name="Node_Family_Value" xml:space="preserve">
+    <value>Values</value>
+  </data>
+  <data name="Node_Family_Project" xml:space="preserve">
+    <value>Project resources</value>
+  </data>
+  <data name="Node_Family_Cipher" xml:space="preserve">
+    <value>Encryption</value>
+  </data>
+  <data name="Node_Family_Compression" xml:space="preserve">
+    <value>Compression</value>
+  </data>
+  <data name="Node_Family_Data" xml:space="preserve">
+    <value>Data validation</value>
+  </data>
+  <data name="Node_Family_Bytes" xml:space="preserve">
+    <value>Bytes</value>
+  </data>
+  <data name="Node_Family_GitHub" xml:space="preserve">
+    <value>GitHub</value>
+  </data>
+  <data name="Node_Family_Execution" xml:space="preserve">
+    <value>Execution</value>
+  </data>
+  <data name="Node_Family_Collection" xml:space="preserve">
+    <value>Collections</value>
+  </data>
+  <data name="Node_Family_Log" xml:space="preserve">
+    <value>Logs</value>
+  </data>
+  <data name="Node_Family_Progress" xml:space="preserve">
+    <value>Progress</value>
+  </data>
+  <data name="Node_Family_Artifact" xml:space="preserve">
+    <value>Artifacts</value>
+  </data>
+  <data name="Node_Family_Notification" xml:space="preserve">
+    <value>Notifications</value>
+  </data>
+  <data name="Node_Family_Content" xml:space="preserve">
+    <value>Content</value>
+  </data>
+  <data name="Node_Family_Field" xml:space="preserve">
+    <value>Input fields</value>
+  </data>
+  <data name="Node_Family_Layout" xml:space="preserve">
+    <value>Layouts</value>
+  </data>
+  <data name="Node_Family_Form" xml:space="preserve">
+    <value>Forms</value>
+  </data>
+  <data name="Node_Family_Dialog" xml:space="preserve">
+    <value>Dialogs</value>
+  </data>
+  <data name="Node_Family_Result" xml:space="preserve">
+    <value>Results</value>
+  </data>
+  <data name="Node_AdvancedParameters" xml:space="preserve">
+    <value>Show advanced parameters</value>
+  </data>
+  <data name="Node_Interaction_UnsupportedHost" xml:space="preserve">
+    <value>This workflow requires an interactive host. No operations were started.</value>
+  </data>
+  <data name="Node_Interaction_RecursiveGraph" xml:space="preserve">
+    <value>The workflow contains a recursive or excessively nested composite graph.</value>
+  </data>
+  <data name="Node_Destructive_Title" xml:space="preserve">
+    <value>Confirm destructive device operations</value>
+  </data>
+  <data name="Node_Destructive_Message" xml:space="preserve">
+    <value>This run contains the following destructive device operations and may not be recoverable. Confirm to continue.</value>
+  </data>
+  <data name="Node_Destructive_Confirm" xml:space="preserve">
+    <value>Run anyway</value>
+  </data>
+  <data name="Node_Destructive_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Node_Destructive_Rejected" xml:space="preserve">
+    <value>The workflow contains destructive device operations and was rejected because user confirmation was not given.</value>
+  </data>
+  <data name="Node_Destructive_UnsupportedHost" xml:space="preserve">
+    <value>The current host cannot ask for interactive consent; workflows with destructive device operations will not run.</value>
+  </data>
+  <data name="Node_Connection_SameDirection" xml:space="preserve">
+    <value>Cannot connect: both ports have the same direction.</value>
+  </data>
+  <data name="Node_Connection_SameNode" xml:space="preserve">
+    <value>Cannot connect: source and target belong to the same node.</value>
+  </data>
+  <data name="Node_Connection_Duplicate" xml:space="preserve">
+    <value>Cannot connect: these ports are already connected.</value>
+  </data>
+  <data name="Node_Connection_Incompatible" xml:space="preserve">
+    <value>Cannot connect: the port types are incompatible.</value>
+  </data>
+  <data name="Node_Connection_MaxReached" xml:space="preserve">
+    <value>Cannot connect: a port has reached its connection limit.</value>
+  </data>
+  <data name="Node_PortType_UiComponent" xml:space="preserve">
+    <value>UI component</value>
+  </data>
+  <data name="Node_PortType_UiForm" xml:space="preserve">
+    <value>Form</value>
+  </data>
+  <data name="Node_PortType_Record" xml:space="preserve">
+    <value>Record</value>
+  </data>
+  <data name="Node_PortType_List" xml:space="preserve">
+    <value>List</value>
+  </data>
+  <data name="Node_PortType_Artifact" xml:space="preserve">
+    <value>File artifact</value>
+  </data>
+  <data name="Node_EditInterface" xml:space="preserve">
+    <value>Edit public interface</value>
+  </data>
+  <data name="Node_Toolbox_Presets" xml:space="preserve">
+    <value>Create from preset</value>
+  </data>
+  <data name="Node_Preset_Flash_boot" xml:space="preserve">
+    <value>Flash boot partition</value>
+  </data>
+  <data name="Node_Preset_Flash_bootloader" xml:space="preserve">
+    <value>Flash bootloader partition</value>
+  </data>
+  <data name="Node_Preset_Flash_super" xml:space="preserve">
+    <value>Flash super partition</value>
+  </data>
+  <data name="Node_File_Artifact_Open" xml:space="preserve">
+    <value>Open file artifact</value>
+  </data>
+  <data name="Node_Conn_Artifact" xml:space="preserve">
+    <value>File artifact</value>
+  </data>
+  <data name="Node_Publish_ChooseSource" xml:space="preserve">
+    <value>Connect exactly one source: binary data or a file artifact.</value>
+  </data>
+  <data name="Node_Pack_RequiresMetadata" xml:space="preserve">
+    <value>This directory has no repack metadata. Use CPIO Pack to create a new CPIO archive.</value>
+  </data>
+  <data name="Node_Network_Timeout" xml:space="preserve">
+    <value>The download timed out.</value>
+  </data>
+  <data name="Node_Device_InvalidInput" xml:space="preserve">
+    <value>The device operation is missing a valid device, partition or input file.</value>
+  </data>
+  <data name="Node_Device_RebootFailed" xml:space="preserve">
+    <value>The device rejected the reboot request.</value>
+  </data>
+  <data name="Node_Mirroring_NoSession" xml:space="preserve">
+    <value>The mirroring session is not active.</value>
+  </data>
+  <data name="Node_Category_Workspace" xml:space="preserve">
+    <value>Workspace operations</value>
+  </data>
+  <data name="Node_Workspace_Document_Resolve" xml:space="preserve">
+    <value>Resolve open document</value>
+  </data>
+  <data name="Node_Workspace_Document_ReadText" xml:space="preserve">
+    <value>Read document text</value>
+  </data>
+  <data name="Node_Workspace_Document_ReplaceText" xml:space="preserve">
+    <value>Replace document text</value>
+  </data>
+  <data name="Node_Family_Document" xml:space="preserve">
+    <value>Open documents</value>
+  </data>
+  <data name="Node_PortType_Document" xml:space="preserve">
+    <value>Document snapshot</value>
+  </data>
+  <data name="Node_Conn_Document" xml:space="preserve">
+    <value>Document</value>
+  </data>
+  <data name="Node_Conn_CanEdit" xml:space="preserve">
+    <value>Editable</value>
+  </data>
+  <data name="Node_Document_NotFound" xml:space="preserve">
+    <value>No unique open document matches the selection.</value>
+  </data>
+  <data name="Node_Document_Closed" xml:space="preserve">
+    <value>The selected document is no longer open.</value>
+  </data>
+  <data name="Node_Document_ReadOnly" xml:space="preserve">
+    <value>This document does not support the requested text operation.</value>
+  </data>
+  <data name="Node_Document_Changed" xml:space="preserve">
+    <value>The document changed after it was read. Read it again before applying changes.</value>
+  </data>
+  <data name="Node_Document_TooLarge" xml:space="preserve">
+    <value>Document text exceeds the 8 MiB character limit.</value>
+  </data>
+  <data name="Node_Document_Unsupported" xml:space="preserve">
+    <value>This workflow host has no open-document workspace.</value>
+  </data>
+  <data name="Node_Document_TextRequired" xml:space="preserve">
+    <value>A text value is required. Empty text clears the document.</value>
+  </data>
+</root>
