@@ -84,7 +84,7 @@ public sealed class ProjectExplorerSplitVolumesTests(NodeEditorUiFixture fixture
     public async Task ExecuteSplitOperationAsync_PatchVolumes_ImportsOnlyAndPreservesImage()
     {
         var token = TestContext.Current.CancellationToken;
-        using var temp = new UotanStudio.Tests.Comm.TestDoubles.TempDirectory();
+        using var temp = new Comm.TestDoubles.TempDirectory();
         var selected = Path.Combine(temp.Path, "system.patch.dat.000");
         await File.WriteAllBytesAsync(selected, [1, 2], token);
         await File.WriteAllBytesAsync(Path.Combine(temp.Path, "system.patch.dat.001"), [3, 4], token);
@@ -109,7 +109,7 @@ public sealed class ProjectExplorerSplitVolumesTests(NodeEditorUiFixture fixture
     public async Task ExecuteSplitOperationAsync_FullNewDat_ReconstructsImageAndHonorsCancellation()
     {
         var token = TestContext.Current.CancellationToken;
-        using var temp = new UotanStudio.Tests.Comm.TestDoubles.TempDirectory();
+        using var temp = new Comm.TestDoubles.TempDirectory();
         var original = Enumerable.Range(0, DatReader.BlockSize).Select(i => (byte)i).ToArray();
         var source = Path.Combine(temp.Path, "source.img");
         await File.WriteAllBytesAsync(source, original, token);

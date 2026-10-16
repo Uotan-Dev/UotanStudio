@@ -75,7 +75,7 @@ public partial class LogWindow : Window
     /// </summary>
     private async Task ExportLogsAsync()
     {
-        var topLevel = TopLevel.GetTopLevel(this);
+        var topLevel = GetTopLevel(this);
         if (topLevel is null)
         {
             return;

@@ -148,7 +148,7 @@ public partial class ProjectExplorerView
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Explorer", ex.Message);
-            await DialogService.ShowAsync(owner, title, global::UotanStudio.Services.UserError.Describe(ex),
+            await DialogService.ShowAsync(owner, title, UserError.Describe(ex),
                 MessageBoxIcon.Error);
         }
         finally

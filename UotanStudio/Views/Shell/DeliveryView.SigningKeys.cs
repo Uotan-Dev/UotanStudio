@@ -55,7 +55,7 @@ public partial class DeliveryView
                         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                     .Select(p => p.index + 1).DefaultIfEmpty(-1).First();
         }
-        catch (Exception ex) { Composition.Model.Status = global::UotanStudio.Services.UserError.Describe(ex); }
+        catch (Exception ex) { Composition.Model.Status = UserError.Describe(ex); }
         finally { _selectingPayloadKey = false; }
     }
 
@@ -75,7 +75,7 @@ public partial class DeliveryView
                 _zipSigningCertificatePath = key is null ? "" : _payloadKeyLibrary.EnsureCertificate(key);
                 QueueDeliveryChange();
             }
-            catch (Exception ex) { Composition.Model.Status = global::UotanStudio.Services.UserError.Describe(ex); }
+            catch (Exception ex) { Composition.Model.Status = UserError.Describe(ex); }
             finally { _selectingZipSigningKey = false; }
         };
         RefreshZipSigningKeys();
@@ -97,7 +97,7 @@ public partial class DeliveryView
                         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                     .Select(p => p.index + 1).DefaultIfEmpty(-1).First();
         }
-        catch (Exception ex) { Composition.Model.Status = global::UotanStudio.Services.UserError.Describe(ex); }
+        catch (Exception ex) { Composition.Model.Status = UserError.Describe(ex); }
         finally { _selectingZipSigningKey = false; }
     }
 }

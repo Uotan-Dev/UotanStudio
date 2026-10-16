@@ -114,7 +114,7 @@ public sealed class SettingsMcpExposureHeadlessTests(NodeEditorUiFixture fixture
                 var view = new SettingsView { DataContext = settings };
                 window = new Window { Content = view, Width = 1000, Height = 3000 };
                 Application.Current!.Resources["AssetImageConverter"] =
-                    new UotanStudio.Converters.AssetImageConverter();
+                    new Converters.AssetImageConverter();
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
                 window.UpdateLayout();

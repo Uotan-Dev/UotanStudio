@@ -149,7 +149,7 @@ public static class FlashScriptReader
     {
         var tokens = new List<string>();
         var current = new System.Text.StringBuilder();
-        char quote = '\0';
+        var quote = '\0';
         foreach (var character in line)
         {
             if (character is '"' or '\'')

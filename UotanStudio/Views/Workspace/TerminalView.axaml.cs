@@ -85,12 +85,12 @@ public partial class TerminalView : UserControl
             Margin = new Thickness(8, 4, 0, 4),
             AllowWindowOps = false
         };
-        terminal.Bind(DockTerminal.BackgroundProperty, new DynamicResourceExtension("PageBackground"));
-        terminal.Bind(DockTerminal.ForegroundProperty, new DynamicResourceExtension("TextForeground"));
-        terminal.Bind(DockTerminal.CursorColorProperty, new DynamicResourceExtension("TextForeground"));
+        terminal.Bind(Iciclecreek.Terminal.TerminalView.BackgroundProperty, new DynamicResourceExtension("PageBackground"));
+        terminal.Bind(Iciclecreek.Terminal.TerminalView.ForegroundProperty, new DynamicResourceExtension("TextForeground"));
+        terminal.Bind(Iciclecreek.Terminal.TerminalView.CursorColorProperty, new DynamicResourceExtension("TextForeground"));
         terminal.PropertyChanged += (_, e) =>
         {
-            if (e.Property == DockTerminal.CurrentDirectoryProperty && terminal.CurrentDirectory is { Length: > 0 } cwd)
+            if (e.Property == Iciclecreek.Terminal.TerminalView.CurrentDirectoryProperty && terminal.CurrentDirectory is { Length: > 0 } cwd)
                 session.WorkingDirectory = cwd;
         };
         terminal.ProcessExited += (_, e) =>
@@ -113,8 +113,8 @@ public partial class TerminalView : UserControl
         }
         terminal.PropertyChanged += (_, e) =>
         {
-            if (e.Property == DockTerminal.ViewportYProperty || e.Property == DockTerminal.MaxScrollbackProperty
-                || e.Property == DockTerminal.ViewportLinesProperty || e.Property == DockTerminal.IsAlternateBufferProperty)
+            if (e.Property == Iciclecreek.Terminal.TerminalView.ViewportYProperty || e.Property == Iciclecreek.Terminal.TerminalView.MaxScrollbackProperty
+                || e.Property == Iciclecreek.Terminal.TerminalView.ViewportLinesProperty || e.Property == Iciclecreek.Terminal.TerminalView.IsAlternateBufferProperty)
                 UpdateScrollBar();
         };
         scrollBar.Scroll += (_, e) =>
@@ -125,10 +125,10 @@ public partial class TerminalView : UserControl
         };
         var menu = new ContextMenu();
         var copy = new MenuItem();
-        copy.Bind(MenuItem.HeaderProperty, new DynamicResourceExtension("Menu_Copy"));
+        copy.Bind(HeaderedSelectingItemsControl.HeaderProperty, new DynamicResourceExtension("Menu_Copy"));
         copy.Click += async (_, _) => await terminal.CopyAsync();
         var paste = new MenuItem();
-        paste.Bind(MenuItem.HeaderProperty, new DynamicResourceExtension("Menu_Paste"));
+        paste.Bind(HeaderedSelectingItemsControl.HeaderProperty, new DynamicResourceExtension("Menu_Paste"));
         paste.Click += async (_, _) => await terminal.PasteAsync();
         menu.Items.Add(copy);
         menu.Items.Add(paste);

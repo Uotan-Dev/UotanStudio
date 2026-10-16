@@ -46,7 +46,7 @@ public partial class FirmwareNodeViewModel
             : string.IsNullOrWhiteSpace(config) ? DefaultOutputFor(inputDir) : config;
 
         using var metadataScope = RepackMetadata.UseContext(
-            UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(inputDir));
+            Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(inputDir));
         var repack = RepackMetadata.Read(inputDir)
             ?? throw new InvalidDataException(LanguageService.Instance.GetString("Node_Pack_RequiresMetadata"));
         if (!repack.CanPackDirectory)

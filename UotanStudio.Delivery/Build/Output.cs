@@ -189,7 +189,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         CheckDirectory(output);
         var sources = plan.Files.Concat(plan.Container).Where(f => f.SourcePath.Length > 0).ToArray();
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        var plannedOutputs = PlannedOutputPaths(plan).Select(path => Path.GetFullPath(path)).ToArray();
+        var plannedOutputs = PlannedOutputPaths(plan).Select(Path.GetFullPath).ToArray();
         foreach (var source in sources)
         {
             if (string.Equals(Path.GetFullPath(output), GetDirectoryNameOrRoot(source.SourcePath), comparison))

@@ -141,7 +141,7 @@ public sealed partial class FlashBundleOrchestrator
             : [];
         if (absentPrograms.Count > 0)
         {
-            programs.RemoveAll(entry => absentPrograms.Contains(entry));
+            programs.RemoveAll(absentPrograms.Contains);
         }
         List<PatchEntry>? patches = null;
         if (!options.SkipPatch && !string.IsNullOrEmpty(options.PatchPath))

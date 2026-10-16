@@ -43,7 +43,7 @@ public sealed partial class MtkSession
             byte[]? information = null;
             byte[]? response = null;
             string? challengeDigest = null;
-            bool noProviderRecorded = false;
+            var noProviderRecorded = false;
             try
             {
                 var status = await QueryXFlashControlAsync(channel, 0x040016, token, 4).ConfigureAwait(false);

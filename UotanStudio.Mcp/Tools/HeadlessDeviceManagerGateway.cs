@@ -109,7 +109,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway, IBoo
     }
 
     private async Task<TResult> RunAdbAsync<TResult>(string serial,
-        Func<UotanStudio.Comm.Contracts.IAdbDeviceSession, Task<TResult>> operation,
+        Func<IAdbDeviceSession, Task<TResult>> operation,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
@@ -118,7 +118,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway, IBoo
         var endpoint = SelectAdb(snapshot, serial);
         await using var lease = await _controller.OpenAsync(snapshot, endpoint.Id, DeviceSessionKind.Adb,
             cancellationToken).ConfigureAwait(false);
-        if (!lease.TryGetSession<UotanStudio.Comm.Contracts.IAdbDeviceSession>(out var session))
+        if (!lease.TryGetSession<IAdbDeviceSession>(out var session))
         {
             throw new InvalidOperationException("ADB endpoint has no supported session.");
         }
@@ -133,7 +133,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway, IBoo
     }
 
     private TResult RunAdb<TResult>(string serial,
-        Func<UotanStudio.Comm.Contracts.IAdbDeviceSession, TResult> operation,
+        Func<IAdbDeviceSession, TResult> operation,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
@@ -142,7 +142,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway, IBoo
         var lease = Complete(_controller.OpenAsync(snapshot, endpoint.Id, DeviceSessionKind.Adb, cancellationToken));
         try
         {
-            if (!lease.TryGetSession<UotanStudio.Comm.Contracts.IAdbDeviceSession>(out var session))
+            if (!lease.TryGetSession<IAdbDeviceSession>(out var session))
             {
                 throw new InvalidOperationException("ADB endpoint has no supported session.");
             }

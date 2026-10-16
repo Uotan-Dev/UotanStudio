@@ -32,9 +32,9 @@ internal static class ScreenMirrorCoordinates
         if (width <= 0 || height <= 0 || bounds.Width <= 0 || bounds.Height <= 0
             || !double.IsFinite(bounds.Width) || !double.IsFinite(bounds.Height)
             || !double.IsFinite(local.X) || !double.IsFinite(local.Y)) return false;
-        double scale = Math.Min(bounds.Width / width, bounds.Height / height);
-        double px = (local.X - (bounds.Width - width * scale) / 2) / scale;
-        double py = (local.Y - (bounds.Height - height * scale) / 2) / scale;
+        var scale = Math.Min(bounds.Width / width, bounds.Height / height);
+        var px = (local.X - (bounds.Width - width * scale) / 2) / scale;
+        var py = (local.Y - (bounds.Height - height * scale) / 2) / scale;
 
         if (!clamp && (px < 0 || py < 0 || px >= width || py >= height)) return false;
         x = (int)Math.Clamp(px, 0, width - 1);

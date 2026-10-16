@@ -370,7 +370,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             }
             catch (Exception ex)
             {
-                _owner.ReportError(global::UotanStudio.Services.UserError.Describe(ex));
+                _owner.ReportError(UserError.Describe(ex));
                 LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
             }
 
@@ -401,7 +401,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         }
         catch (Exception ex)
         {
-            _owner.ReportError(global::UotanStudio.Services.UserError.Describe(ex));
+            _owner.ReportError(UserError.Describe(ex));
             LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
         }
     }
@@ -697,7 +697,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         {
             Rows = null;
             TreeRoot = null;
-            _owner.ReportError(global::UotanStudio.Services.UserError.Describe(ex));
+            _owner.ReportError(UserError.Describe(ex));
             LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
         }
         finally

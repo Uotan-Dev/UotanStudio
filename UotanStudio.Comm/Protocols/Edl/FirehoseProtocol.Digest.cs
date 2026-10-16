@@ -175,13 +175,13 @@ public sealed partial class FirehoseProtocol
         var start = 0;
         while (start + 64 <= text.Length)
         {
-            if (System.Uri.IsHexDigit(text[start]) && System.Uri.IsHexDigit(text[start + 63]))
+            if (Uri.IsHexDigit(text[start]) && Uri.IsHexDigit(text[start + 63]))
             {
                 var candidate = text.AsSpan(start, 64);
                 var allHex = true;
                 foreach (var character in candidate)
                 {
-                    if (!System.Uri.IsHexDigit(character))
+                    if (!Uri.IsHexDigit(character))
                     {
                         allHex = false;
                         break;

@@ -71,7 +71,7 @@ internal partial class ImageViewModel
         {
             LogService.Instance.Write(LogLevel.Error, "Explorer", ex.Message);
             if (TopLevelExtensions.GetTopLevel() is Avalonia.Controls.Window owner)
-                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dock_ImagesView"), global::UotanStudio.Services.UserError.Describe(ex),
+                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dock_ImagesView"), UserError.Describe(ex),
                     Ursa.Controls.MessageBoxIcon.Error);
         }
     }
@@ -216,12 +216,12 @@ internal partial class ImageViewModel
     {
         paths.ValidateExtraction();
         var targetDirectory = ResolveUnpackTargetDirectory(paths);
-        using var metadataScope = UotanStudio.Firmware.Core.Repacking.RepackMetadata.UseContext(
+        using var metadataScope = Firmware.Core.Repacking.RepackMetadata.UseContext(
             ProjectContextService.Instance.CaptureMetadataContext(targetDirectory));
-        UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
+        Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
         var format = ImageInputService.ParseFormatLabel(entry.Format);
         var handler = ImageInputService.IsBootFamilyFormat(format)
-            ? new UotanStudio.Firmware.BootSecurity.BootImage.BootImageFormatHandler()
+            ? new Firmware.BootSecurity.BootImage.BootImageFormatHandler()
             : FormatDetector.Detect(paths.Source) ?? throw new IOException("Unsupported firmware format.");
         if (Directory.Exists(targetDirectory)
             && !await RequestExtractOverwriteAsync(targetDirectory))
@@ -251,7 +251,7 @@ internal partial class ImageViewModel
                 byteProgress: byteProgress, erofsExtraDevicePaths: erofsDevices, cancellationToken: cancellationToken),
             _ => await Task.Run(async () =>
             {
-                var options = new UotanStudio.Firmware.Core.UnpackOptions { FileSystemProgress = byteProgress };
+                var options = new Firmware.Core.UnpackOptions { FileSystemProgress = byteProgress };
                 if (itemProgress is not null) options.Progress = new FirmwareItemProgress(itemProgress);
                 var unpacked = await handler.UnpackAsync(paths.Source, targetDirectory, options, cancellationToken);
                 return FirmwareOpResult.From(unpacked);

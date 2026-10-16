@@ -83,7 +83,7 @@ public sealed class ScrcpyServerReleaseTests : IDisposable
         var service = new ScrcpyServerService(new HttpClient(), cacheRoot: NewStoreRoot());
 
         Assert.Null(service.ReadInstall());
-        var error = Assert.Throws<FileNotFoundException>(() => service.Resolve());
+        var error = Assert.Throws<FileNotFoundException>(service.Resolve);
 
         Assert.Contains("scrcpy-server.jar", error.Message, StringComparison.Ordinal);
     }
@@ -106,7 +106,7 @@ public sealed class ScrcpyServerReleaseTests : IDisposable
 
         File.WriteAllBytes(service.JarPathFor("9.9.9"), new byte[] { 1, 2, 3, 4, 6 });
 
-        Assert.Throws<FileNotFoundException>(() => service.Resolve());
+        Assert.Throws<FileNotFoundException>(service.Resolve);
     }
 
     [Fact]

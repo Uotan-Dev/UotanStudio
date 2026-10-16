@@ -114,7 +114,7 @@ internal sealed class McpExposureService
 
             var serverHost = new McpServerHost(sandbox, allowFlash,
                 new DesktopDeviceManagerGateway(), McpLauncher.CreateDesktopDeliveryTools(),
-                () => new global::UotanStudio.Services.Delivery.DeliveryKeyProvider());
+                () => new Delivery.DeliveryKeyProvider());
             var host = new McpHttpServerHost(serverHost.BuildTools(), serverHost.BuildResources());
             host.Start(effectivePort);
 

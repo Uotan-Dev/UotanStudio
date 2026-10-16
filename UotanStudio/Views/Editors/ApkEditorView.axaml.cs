@@ -71,7 +71,7 @@ public partial class ApkEditorView : UserControl
         catch (Exception ex)
         {
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Apk_Extract"),
-                global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+                UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -112,7 +112,7 @@ public partial class ApkEditorView : UserControl
         catch (Exception ex)
         {
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Apk_Install"),
-                global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+                UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -123,7 +123,7 @@ public partial class ApkEditorView : UserControl
             return;
         }
 
-        var window = new UotanStudio.Views.Shell.ApkSigningWindow(vm);
+        var window = new Shell.ApkSigningWindow(vm);
         await window.ShowDialog(owner);
     }
 

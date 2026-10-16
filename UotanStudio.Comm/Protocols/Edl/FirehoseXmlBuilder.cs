@@ -161,7 +161,7 @@ public static partial class FirehoseXmlBuilder
         string digest, string digestSignature, int signatureSize,
         string? label = null, int? slot = null)
     {
-        if (digest is not { Length: 64 } || digest.Any(character => !System.Uri.IsHexDigit(character)))
+        if (digest is not { Length: 64 } || digest.Any(character => !Uri.IsHexDigit(character)))
         {
             throw new ArgumentOutOfRangeException(nameof(digest),
                 "The write digest must be 64 hexadecimal characters.");

@@ -56,7 +56,7 @@ public sealed partial class MtkSession
             byte[]? challenge = null;
             byte[]? response = null;
             string? challengeDigest = null;
-            bool noProviderRecorded = false;
+            var noProviderRecorded = false;
             try
             {
                 var property = await QueryXmlSystemPropertyOwnedAsync(channel, "DA.SLA",

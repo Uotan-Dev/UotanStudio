@@ -99,7 +99,7 @@ public sealed class PackingOptionPropagationTests
 
         Assert.True(result.Success, result.Summary);
         Assert.True(File.Exists(output));
-        using var parser = new UotanStudio.Firmware.FileSystem.Ext4.Ext4Parser(output);
+        using var parser = new Ext4Parser(output);
         Assert.Equal(new FileInfo(output).Length, parser.PartitionSize);
     }
 
@@ -187,7 +187,7 @@ public sealed class PackingOptionPropagationTests
         var extracted = Path.Combine(temp.Path, "extracted");
         Directory.CreateDirectory(source);
         File.WriteAllText(Path.Combine(source, "file"), "content");
-        var handler = new UotanStudio.Firmware.FileSystem.Ext4.Ext4FormatHandler();
+        var handler = new Ext4FormatHandler();
         Assert.True((await handler.PackAsync(source, image, TestContext.Current.CancellationToken)).Success);
         Assert.True((await handler.UnpackAsync(image, extracted,
             cancellationToken: TestContext.Current.CancellationToken)).Success);

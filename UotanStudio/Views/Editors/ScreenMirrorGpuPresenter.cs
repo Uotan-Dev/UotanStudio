@@ -128,16 +128,16 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         }
         try
         {
-            int generation = Volatile.Read(ref _compositionGeneration);
+            var generation = Volatile.Read(ref _compositionGeneration);
             var elementVisual = ElementComposition.GetElementVisual(host);
             if (elementVisual is null) return;
             var interop = await elementVisual.Compositor.TryGetCompositionGpuInterop();
             if (Volatile.Read(ref _compositionGeneration) != generation) return;
             if (interop is null) return;
-            bool keyedMutex = interop.SupportedImageHandleTypes.Contains(KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle)
+            var keyedMutex = interop.SupportedImageHandleTypes.Contains(KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle)
                 && interop.GetSynchronizationCapabilities(KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle)
                     .HasFlag(CompositionGpuImportedImageSynchronizationCapabilities.KeyedMutex);
-            bool iosurface = interop.SupportedImageHandleTypes.Contains(KnownPlatformGraphicsExternalImageHandleTypes.IOSurfaceRef)
+            var iosurface = interop.SupportedImageHandleTypes.Contains(KnownPlatformGraphicsExternalImageHandleTypes.IOSurfaceRef)
                 && interop.GetSynchronizationCapabilities(KnownPlatformGraphicsExternalImageHandleTypes.IOSurfaceRef)
                     .HasFlag(CompositionGpuImportedImageSynchronizationCapabilities.Automatic);
             if (!keyedMutex && !iosurface) return;
@@ -224,7 +224,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             visual.Visible = false;
             return;
         }
-        double scale = Math.Min(bounds.Width / width, bounds.Height / height);
+        var scale = Math.Min(bounds.Width / width, bounds.Height / height);
         if (double.IsInfinity(scale) || scale <= 0) return;
         visual.Size = new Vector(width * scale, height * scale);
         visual.Offset = new Vector3D((bounds.Width - width * scale) / 2, (bounds.Height - height * scale) / 2, 0);
@@ -278,7 +278,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     [SupportedOSPlatform("windows")]
     private async void PresentSharedTexture(D3D11SharedVideoFrame frame)
     {
-        int generation = Volatile.Read(ref _compositionGeneration);
+        var generation = Volatile.Read(ref _compositionGeneration);
         try
         {
             var interop = _interop;
@@ -307,7 +307,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     [SupportedOSPlatform("macos")]
     private async void PresentIosurface(IosurfaceVideoFrame frame)
     {
-        int generation = Volatile.Read(ref _compositionGeneration);
+        var generation = Volatile.Read(ref _compositionGeneration);
         try
         {
             var interop = _interop;
@@ -555,10 +555,10 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                 if (!owner._closed) owner._available = true;
                 if (_frame is not { } image) return;
                 image.Draw(lease.SkCanvas, bounds, lease.CurrentOpacity, lease.GrContext);
-                long previous = Interlocked.Read(ref owner._lastDrawn);
+                var previous = Interlocked.Read(ref owner._lastDrawn);
                 while (image.Sequence > previous)
                 {
-                    long observed = Interlocked.CompareExchange(ref owner._lastDrawn, image.Sequence, previous);
+                    var observed = Interlocked.CompareExchange(ref owner._lastDrawn, image.Sequence, previous);
                     if (observed == previous) { Interlocked.Increment(ref owner._draws); break; }
                     previous = observed;
                 }
@@ -687,7 +687,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
 
         public override void Draw(SKCanvas canvas, Rect bounds, double opacity, GRContext? gpu)
         {
-            float scale = (float)Math.Min(bounds.Width / Width, bounds.Height / Height);
+            var scale = (float)Math.Min(bounds.Width / Width, bounds.Height / Height);
             if (scale <= 0) return;
             SKImage first;
             SKImage? chroma;
@@ -803,7 +803,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
 
         public override void Draw(SKCanvas canvas, Rect bounds, double opacity, GRContext? gpu)
         {
-            float scale = (float)Math.Min(bounds.Width / Width, bounds.Height / Height);
+            var scale = (float)Math.Min(bounds.Width / Width, bounds.Height / Height);
             if (scale <= 0) return;
             if (gpu is null) throw new NotSupportedException("Zero-copy presentation requires a Skia GPU context.");
             try { EnsureImported(gpu); }
@@ -854,7 +854,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         internal void DestroyNative()
         {
             if (Interlocked.Exchange(ref _destroyed, 1) != 0) return;
-            foreach (uint texture in _textures) EglDmaBufImage.DeleteTexture(texture);
+            foreach (var texture in _textures) EglDmaBufImage.DeleteTexture(texture);
             _textures.Clear();
             _luma?.Dispose();
             _chroma?.Dispose();

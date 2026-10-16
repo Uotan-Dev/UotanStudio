@@ -41,7 +41,7 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
     [Fact]
     public async Task Preview_BinaryReplacement_ShowsBeforeAfterBytesWithoutPublishing()
     {
-        using var temp = new UotanStudio.Tests.Comm.TestDoubles.TempDirectory();
+        using var temp = new Comm.TestDoubles.TempDirectory();
         var path = Path.Combine(temp.Path, "binary");
         var token = TestContext.Current.CancellationToken;
         await File.WriteAllBytesAsync(path, [0xAA, 0xBB], token);
@@ -288,8 +288,8 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
         {
             dispatch = fixture.Session.Dispatch(() =>
             {
-                Assert.Equal("Inspect file format", new global::UotanStudio.Locale.EnUs.Node()["Node_Validation_Format_Detect"]);
-                Assert.Equal("探测文件格式", new global::UotanStudio.Locale.ZhCn.Node()["Node_Validation_Format_Detect"]);
+                Assert.Equal("Inspect file format", LanguageService.Instance.GetEnglish("Node_Validation_Format_Detect"));
+                Assert.Contains("探测文件格式", LanguageService.Instance.GetAllTranslations("Node_Validation_Format_Detect"));
                 using var editor = new NodeEditorViewModel();
                 var node = PatchNodeViewModel.Create("Validation.Format.Detect");
                 editor.Nodes.Add(node);

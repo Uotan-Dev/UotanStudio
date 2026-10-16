@@ -121,7 +121,7 @@ public class HexViewer : Grid
         Children.Add(_scroll);
         Children.Add(_gotoBox);
 
-        _viewport.BytesEdited += (_, _) => BytesEdited?.Invoke(this, System.EventArgs.Empty);
+        _viewport.BytesEdited += (_, _) => BytesEdited?.Invoke(this, EventArgs.Empty);
         _viewport.GotoRequested += (_, _) => ShowGoto();
         _viewport.SetData(_data);
     }
@@ -732,7 +732,7 @@ public class HexViewer : Grid
                     PasteFromClipboard();
                     break;
                 case Key.G when ctrl:
-                    GotoRequested?.Invoke(this, System.EventArgs.Empty);
+                    GotoRequested?.Invoke(this, EventArgs.Empty);
                     break;
                 case Key.Tab:
                     return;
@@ -873,7 +873,7 @@ public class HexViewer : Grid
 
             _data[_caretOffset] = value;
             _editedOffsets.Add(_caretOffset);
-            BytesEdited?.Invoke(this, System.EventArgs.Empty);
+            BytesEdited?.Invoke(this, EventArgs.Empty);
             InvalidateVisual();
         }
 
@@ -997,7 +997,7 @@ public class HexViewer : Grid
             {
                 _hasSelection = false;
                 _selectionAnchor = -1;
-                BytesEdited?.Invoke(this, System.EventArgs.Empty);
+                BytesEdited?.Invoke(this, EventArgs.Empty);
                 SetCaret(start + count - 1);
             }
         }

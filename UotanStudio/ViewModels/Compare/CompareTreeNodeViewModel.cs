@@ -284,7 +284,7 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
             return string.Empty;
         }
 
-        var name = System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(path));
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
         return string.IsNullOrEmpty(name) ? path : name;
     }
 }

@@ -484,7 +484,7 @@ public sealed class FirmwareService
         {
             return await Task.Run(() =>
             {
-                using var keyMaterial = UotanStudio.Firmware.AndroidMeta.Apk.ApkSignerKeyMaterial.Load(
+                using var keyMaterial = ApkSignerKeyMaterial.Load(
                     keyPath, keyPassword, certPath, certPassword);
                 var options = new UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSigningOptions
                 {
@@ -975,7 +975,7 @@ public sealed class FirmwareService
     /// <returns>Operation result. <para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> ConvertSparseAsync(string inputPath, string outputPath, bool toSparse, CancellationToken cancellationToken = default)
     {
-        return await Task.Run<FirmwareOpResult>(() =>
+        return await Task.Run(() =>
         {
             try
             {
@@ -1188,7 +1188,7 @@ public sealed class FirmwareService
 
     private async Task<FirmwareOpResult> UnpackFileSystemImageCoreAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default, IProgress<FileSystemByteProgress>? byteProgress = null)
     {
-        return await Task.Run<FirmwareOpResult>(() =>
+        return await Task.Run(() =>
         {
             try
             {
@@ -1259,7 +1259,7 @@ public sealed class FirmwareService
     /// <returns>Operation result. <para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> WriteDatAsync(string transferListPath, string outputPath, CancellationToken cancellationToken = default)
     {
-        return await Task.Run<FirmwareOpResult>(() =>
+        return await Task.Run(() =>
         {
             try
             {
@@ -1405,9 +1405,9 @@ public sealed class FirmwareService
         {
             if (partitions is null || partitions.Count == 0)
                 return FirmwareOpResult.Fail("No partitions supplied. 未提供任何分区。");
-            var files = partitions.Select(p => new UotanStudio.Services.Delivery.DeliveryFile
+            var files = partitions.Select(p => new Delivery.DeliveryFile
             { Partition = p.Name, SourcePath = p.Path }).ToArray();
-            await UotanStudio.Services.Delivery.DeliverySuperBuilder.BuildAsync(files, new()
+            await Delivery.DeliverySuperBuilder.BuildAsync(files, new()
             {
                 DeviceSize = deviceSize,
                 Group = string.IsNullOrWhiteSpace(groupName) ? "default" : groupName,

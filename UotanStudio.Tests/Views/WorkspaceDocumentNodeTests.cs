@@ -16,7 +16,7 @@ public sealed class WorkspaceDocumentNodeTests(NodeEditorUiFixture fixture)
     public async Task ExecuteAsync_OpenUnsavedDocument_ChangesBufferWithoutSaving()
     {
         var token = TestContext.Current.CancellationToken;
-        using var temporary = new UotanStudio.Tests.Comm.TestDoubles.TempDirectory();
+        using var temporary = new Comm.TestDoubles.TempDirectory();
         var path = Path.Combine(temporary.Path, "document.txt");
         await File.WriteAllTextAsync(path, "disk", token);
         Task dispatch;

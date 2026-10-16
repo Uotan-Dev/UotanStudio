@@ -764,9 +764,9 @@ public partial class NodeEditorView : UserControl
             return;
         }
 
-        var files = await storage.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = UotanStudio.Services.LanguageService.Instance.GetString("Dialog_SelectFile"),
+            Title = Services.LanguageService.Instance.GetString("Dialog_SelectFile"),
             AllowMultiple = false
         });
         if (files is { Count: > 0 } && files[0].TryGetLocalPath() is { Length: > 0 } localPath)
@@ -817,7 +817,7 @@ public partial class NodeEditorView : UserControl
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException or InvalidOperationException)
         {
-            vm.ExecutionStatus = string.Format(Services.LanguageService.Instance.GetString("Node_OperationFailed"), global::UotanStudio.Services.UserError.Describe(ex));
+            vm.ExecutionStatus = string.Format(Services.LanguageService.Instance.GetString("Node_OperationFailed"), Services.UserError.Describe(ex));
         }
     }
 
@@ -858,7 +858,7 @@ public partial class NodeEditorView : UserControl
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
         {
-            vm.ExecutionStatus = string.Format(Services.LanguageService.Instance.GetString("Node_OperationFailed"), global::UotanStudio.Services.UserError.Describe(ex));
+            vm.ExecutionStatus = string.Format(Services.LanguageService.Instance.GetString("Node_OperationFailed"), Services.UserError.Describe(ex));
         }
     }
 

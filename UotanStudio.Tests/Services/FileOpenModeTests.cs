@@ -60,7 +60,7 @@ public class FileOpenModeTests
 
         var volume = KernelExFatVolume();
         var exFatPath = WriteTempFile("exfat-volume", volume);
-        var fat = new UotanStudio.Tests.Firmware.Fat.FatImageBuilder(12)
+        var fat = new Firmware.Fat.FatImageBuilder(12)
             .AddFile("NOTE.TXT", [1, 2, 3])
             .WriteTo(Path.Combine(Path.GetTempPath(), "uotan-fat-mode-" + Guid.NewGuid().ToString("N") + ".img"));
         try

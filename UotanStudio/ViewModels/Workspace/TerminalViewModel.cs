@@ -139,7 +139,7 @@ internal partial class TerminalSessionViewModel(TerminalProfile profile, string 
         {
             if (!_disposed)
             {
-                _failure = global::UotanStudio.Services.UserError.Describe(ex);
+                _failure = UserError.Describe(ex);
                 LogService.Instance.Write(LogLevel.Error, "Terminal", ex.Message);
             }
         }

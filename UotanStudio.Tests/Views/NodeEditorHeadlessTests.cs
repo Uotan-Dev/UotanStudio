@@ -256,7 +256,7 @@ public sealed class NodeEditorHeadlessTests(NodeEditorUiFixture fixture)
                 try
                 {
                     window.Show();
-                    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    Dispatcher.UIThread.RunJobs();
                     window.UpdateLayout();
                     var canvas = view.FindControl<Control>("Editor");
                     Assert.NotNull(canvas);
@@ -264,7 +264,7 @@ public sealed class NodeEditorHeadlessTests(NodeEditorUiFixture fixture)
 
                     window.Width = 1400;
                     window.Height = 900;
-                    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    Dispatcher.UIThread.RunJobs();
                     window.UpdateLayout();
 
                     Assert.True(canvas.Bounds.Width > initialSize.Width, $"Canvas width: {initialSize.Width} -> {canvas.Bounds.Width}");

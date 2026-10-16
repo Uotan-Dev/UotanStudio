@@ -21,7 +21,7 @@ public class IntEqualConverter : IValueConverter
     /// <returns>True when both sides denote the same integer. <para>两侧表示同一整数时为 true。</para></returns>
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is int intValue && parameter is string paramStr && int.TryParse(paramStr, out int paramValue))
+        if (value is int intValue && parameter is string paramStr && int.TryParse(paramStr, out var paramValue))
         {
             return intValue == paramValue;
         }

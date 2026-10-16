@@ -530,7 +530,7 @@ internal static class EdlStreamingNandService
     {
         ArgumentNullException.ThrowIfNull(device);
         var options = RequireStreamDloadInitialization(initialization);
-        return App.DeviceMonitor.RunEdlAsync<TResult>(device.Device, async session =>
+        return App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
         {
             var streaming = await InitializeStreamingSessionAsync(session, options, programmerPath, ct)
                 .ConfigureAwait(false);

@@ -26,7 +26,7 @@ public sealed partial class DeviceMonitorService
     {
         var snapshot = _controller.RefreshAsync().GetAwaiter().GetResult();
         return [.. snapshot.Endpoints.Where(endpoint =>
-            endpoint.Source == UotanStudio.Comm.Devices.Discovery.UsbDiscoverySource.SourceName &&
+            endpoint.Source == Comm.Devices.Discovery.UsbDiscoverySource.SourceName &&
             endpoint.Route == "direct-usb" && endpoint.UsbInfo is not null)
             .Select(endpoint => endpoint.UsbInfo!)];
     }

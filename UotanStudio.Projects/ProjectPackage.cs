@@ -81,8 +81,8 @@ public static class ProjectPackage
             using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Read))
             {
                 if (archive.Entries.Count > 100000) throw new InvalidDataException("Package has too many entries.");
-                long remaining = 64L * 1024 * 1024 * 1024;
-                long remainingNames = 8L * 1024 * 1024;
+                var remaining = 64L * 1024 * 1024 * 1024;
+                var remainingNames = 8L * 1024 * 1024;
                 var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var entry in archive.Entries)
                 {

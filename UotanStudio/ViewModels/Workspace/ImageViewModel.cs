@@ -235,7 +235,7 @@ internal partial class ImageViewModel : Tool
     /// <para>在 UI 线程上刷新「刷入选中文件」命令的可用状态，避免后台线程直接修改控件状态触发异常。</para>
     /// </summary>
     private void RefreshFlashSelectedEnablement()
-        => Dispatcher.UIThread.Post(() => FlashSelectedCommand.NotifyCanExecuteChanged());
+        => Dispatcher.UIThread.Post(FlashSelectedCommand.NotifyCanExecuteChanged);
 
     /// <summary>
     /// Responds to project-context-changed messages: asynchronously scans the <c>images/</c> directory

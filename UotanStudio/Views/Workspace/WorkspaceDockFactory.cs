@@ -153,7 +153,7 @@ public class WorkspaceDockFactory : Factory
         var mainLayout = new ProportionalDock
         {
             Id = "WorkspaceMainLayout",
-            Orientation = Dock.Model.Core.Orientation.Horizontal,
+            Orientation = Orientation.Horizontal,
             Proportion = double.NaN,
             VisibleDockables = CreateList<IDockable>(
                 leftTools,
@@ -161,7 +161,7 @@ public class WorkspaceDockFactory : Factory
                 new ProportionalDock
                 {
                     Id = "WorkspaceCenterColumn",
-                    Orientation = Dock.Model.Core.Orientation.Vertical,
+                    Orientation = Orientation.Vertical,
                     Proportion = 0.7,
                     VisibleDockables = CreateList<IDockable>(
                         documentDock,
@@ -173,7 +173,7 @@ public class WorkspaceDockFactory : Factory
                 new ProportionalDock
                 {
                     Id = "WorkspaceRightColumn",
-                    Orientation = Dock.Model.Core.Orientation.Vertical,
+                    Orientation = Orientation.Vertical,
                     Proportion = 0.15,
                     VisibleDockables = CreateList<IDockable>(
                         rightToolsTop,
@@ -237,13 +237,13 @@ public class WorkspaceDockFactory : Factory
         {
             ["ProjectExplorer"] = () => _projectExplorer ??= new ProjectExplorerViewModel { Id = "ProjectExplorer" },
             ["Properties"] = () => _properties ??= new PropertiesViewModel { Id = "Properties" },
-            ["Device"] = () => DeviceViewModel.EnsureInstance()
+            ["Device"] = DeviceViewModel.EnsureInstance
         };
 
         HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>
         {
-            [nameof(IDockWindow)] = () => CreateHostWindow(),
-            ["ManagedHostWindow"] = () => CreateManagedHostWindow()
+            [nameof(IDockWindow)] = CreateHostWindow,
+            ["ManagedHostWindow"] = CreateManagedHostWindow
         };
 
         DefaultHostWindowLocator = () => CreateHostWindow();
@@ -253,7 +253,7 @@ public class WorkspaceDockFactory : Factory
 
     private static HostWindow CreateHostWindow()
     {
-        var options = new Dock.Model.Core.DockManagerOptions { IsDockingEnabled = true };
+        var options = new DockManagerOptions { IsDockingEnabled = true };
         var hwnd = new HostWindow(options);
 
         hwnd.ShowInTaskbar = true;
@@ -263,7 +263,7 @@ public class WorkspaceDockFactory : Factory
 
     private static ManagedHostWindow CreateManagedHostWindow()
     {
-        var options = new Dock.Model.Core.DockManagerOptions { IsDockingEnabled = true };
+        var options = new DockManagerOptions { IsDockingEnabled = true };
         return new ManagedHostWindow(options);
     }
 
@@ -338,7 +338,7 @@ public class WorkspaceDockFactory : Factory
             _terminals?.Remove(terminal);
         }
 
-        UotanStudio.Services.Workspace.Documents.DocumentOpenRegistry
+        Services.Workspace.Documents.DocumentOpenRegistry
             .ByInstance(dockable)?.Cleanup?.Invoke(dockable);
     }
 }

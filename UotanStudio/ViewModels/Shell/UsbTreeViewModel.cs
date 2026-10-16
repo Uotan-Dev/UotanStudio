@@ -361,7 +361,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         {
             var backend = kind;
             Backends.Add(new UsbTreeBackendOption(backend,
-                () => backend.ToString(),
+                backend.ToString,
                 () => DescribeCapabilities(_capabilitiesOf(backend))));
         }
 

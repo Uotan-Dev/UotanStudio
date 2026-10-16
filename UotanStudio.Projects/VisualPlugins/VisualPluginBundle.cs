@@ -220,7 +220,7 @@ public static class VisualPluginBundle
     private static async Task CopyVerifiedAsync(Stream source, Stream destination, VisualPluginAsset asset,
         CancellationToken cancellationToken)
     {
-        using var hash = UotanStudio.Hash.Digests.Sha256.CreateAccumulator();
+        using var hash = Hash.Digests.Sha256.CreateAccumulator();
         var buffer = new byte[131072];
         var remaining = asset.Length;
         while (remaining > 0)

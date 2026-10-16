@@ -61,8 +61,8 @@ internal sealed class McpClientConnectionService
                     Name = server.Name,
                     Transport = server.Transport switch
                     {
-                        McpTransportKind.Stdio => global::UotanStudio.Mcp.McpTransportKind.Stdio,
-                        _ => global::UotanStudio.Mcp.McpTransportKind.Http
+                        McpTransportKind.Stdio => UotanStudio.Mcp.McpTransportKind.Stdio,
+                        _ => UotanStudio.Mcp.McpTransportKind.Http
                     },
                     Command = server.Command,
                     Arguments = server.Arguments,

@@ -139,7 +139,7 @@ public sealed class ImageBrowserSessionTests
         session.Dispose();
         Assert.Equal(0, parser.Count);
         Assert.Equal(0, source.Count);
-        Assert.Throws<ObjectDisposedException>(() => session.AcquireLease());
+        Assert.Throws<ObjectDisposedException>(session.AcquireLease);
         first.Dispose();
         first.Dispose();
         Assert.Equal(0, parser.Count);

@@ -155,7 +155,7 @@ internal partial class ImageViewModel
         }
         catch (Exception ex)
         {
-            StatusText = global::UotanStudio.Services.UserError.Describe(ex);
+            StatusText = UserError.Describe(ex);
             LogService.Instance.Write(LogLevel.Error, "Images", $"Import failed: {ex.Message}  导入失败：{ex.Message}");
             if (progress is not null || byteProgress is not null) throw;
         }
@@ -258,7 +258,7 @@ internal partial class ImageViewModel
         }
         catch (Exception ex)
         {
-            StatusText = global::UotanStudio.Services.UserError.Describe(ex);
+            StatusText = UserError.Describe(ex);
             throw;
         }
         finally
@@ -350,7 +350,7 @@ internal partial class ImageViewModel
         }
         catch (Exception ex)
         {
-            StatusText = global::UotanStudio.Services.UserError.Describe(ex);
+            StatusText = UserError.Describe(ex);
             LogService.Instance.Write(LogLevel.Error, "Images", $"Export failed: {ex.Message}  导出失败：{ex.Message}");
         }
         finally { IsOperating = false; }

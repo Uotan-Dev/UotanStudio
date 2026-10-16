@@ -33,18 +33,18 @@ public partial class DexEditorView : UserControl
         UpdateEditorOwner();
         if (sender is not DexEditorView view) return;
         if (view._viewModel is not null) view._viewModel.ResourceOperationRequested -= OnResourceOperationRequested;
-        view._viewModel = view.DataContext as UotanStudio.ViewModels.Editors.DexEditorViewModel;
+        view._viewModel = view.DataContext as DexEditorViewModel;
         if (view._viewModel is not null) view._viewModel.ResourceOperationRequested += OnResourceOperationRequested;
     }
 
     private void UpdateEditorOwner(bool detach = false)
         => _editorOwner.Update(!detach && IsLoaded ? DataContext as DexEditorViewModel : null, SourceEditor);
 
-    private UotanStudio.ViewModels.Editors.DexEditorViewModel? _viewModel;
+    private DexEditorViewModel? _viewModel;
 
     private async void OnResourceOperationRequested(object? sender, bool replace)
     {
-        if (sender is not UotanStudio.ViewModels.Editors.DexEditorViewModel vm || TopLevel.GetTopLevel(this) is not { } topLevel) return;
+        if (sender is not DexEditorViewModel vm || TopLevel.GetTopLevel(this) is not { } topLevel) return;
         try
         {
             if (replace)
@@ -64,7 +64,7 @@ public partial class DexEditorView : UserControl
                 var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
                 {
                     Title = LanguageService.Instance.GetString("Dock_Dex_ResourceExport"),
-                    SuggestedFileName = System.IO.Path.GetFileName(vm.SelectedResource?.Name),
+                    SuggestedFileName = Path.GetFileName(vm.SelectedResource?.Name),
                 });
                 if (file?.TryGetLocalPath() is { } outputPath)
                 {
@@ -74,7 +74,7 @@ public partial class DexEditorView : UserControl
         }
         catch (Exception ex)
         {
-            vm.CompileError = global::UotanStudio.Services.UserError.Describe(ex);
+            vm.CompileError = UserError.Describe(ex);
         }
     }
 }

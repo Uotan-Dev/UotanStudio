@@ -55,7 +55,7 @@ public partial class AdbLogView : UserControl
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        UotanStudio.Views.Controls.LogEditorMetrics.ApplyLineHeight(LogEditor);
+        Controls.LogEditorMetrics.ApplyLineHeight(LogEditor);
         LanguageService.ThemeChanged += OnThemeChanged;
         _scroller = LogEditor.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
         _scroller?.SetCurrentValue(ScrollViewer.AllowAutoHideProperty, true);

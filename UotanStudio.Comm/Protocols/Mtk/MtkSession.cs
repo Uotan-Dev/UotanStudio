@@ -198,7 +198,7 @@ public sealed partial class MtkSession : IProtocolSession
     /// <param name="cancellationToken">The operation cancellation token. 取消令牌。</param>
     /// <returns>An initialized bootloader session which owns the USB transport.
     /// 拥有 USB 传输的已初始化 bootloader 会话。</returns>
-    internal static async Task<MtkSession> OpenUsbAsync(UotanStudio.Comm.Transports.Usb.Abstractions.IUsbDeviceSession session,
+    internal static async Task<MtkSession> OpenUsbAsync(IUsbDeviceSession session,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);

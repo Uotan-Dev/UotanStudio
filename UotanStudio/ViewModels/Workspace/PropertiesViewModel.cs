@@ -910,20 +910,20 @@ internal partial class PropertiesViewModel : Tool
 
         switch (node.Payload)
         {
-            case UotanStudio.Firmware.AndroidMeta.Arsc.ResPackage pkg:
+            case Firmware.AndroidMeta.Arsc.ResPackage pkg:
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNode", pkg.Name));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeKind", $"0x{pkg.Id:x2}"));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeChildren", pkg.Types.Count.ToString("N0")));
                 break;
 
-            case UotanStudio.Firmware.AndroidMeta.Arsc.ResType type:
+            case Firmware.AndroidMeta.Arsc.ResType type:
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNode", $"0x{type.Id:x2}"));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeKind", "type"));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeDetail", type.ConfigDescription));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeChildren", type.Entries.Count.ToString("N0")));
                 break;
 
-            case UotanStudio.ViewModels.Editors.ResEntryEntry entry:
+            case ResEntryEntry entry:
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNode", entry.Key));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeKind", entry.Entry.Value?.Type.ToString() ?? "<null>"));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeDetail", entry.ValueText));
@@ -1105,7 +1105,7 @@ internal partial class PropertiesViewModel : Tool
 
         ContentType = PropertiesContentType.CompareEntry;
         HasSelection = true;
-        SelectedNodeTitle = System.IO.Path.GetFileName(path);
+        SelectedNodeTitle = Path.GetFileName(path);
         AddMagicRow(isDirectory ? null : path);
 
         Properties.Add(CreateLocalizedRow("Dock_Properties_FileName", SelectedNodeTitle));

@@ -14,6 +14,6 @@ internal static class JsonArrayAotExtensions
         /// <para>经非泛型 <c>IList&lt;JsonNode?&gt;</c> 接口把节点追加到 <see cref="JsonArray"/>，保持 AOT 安全。</para></summary>
         /// <param name="node">The node to append.<para>要追加的节点。</para></param>
         public void Append(JsonNode? node) =>
-            ((System.Collections.Generic.IList<JsonNode?>)array).Add(node);
+            ((IList<JsonNode?>)array).Add(node);
     }
 }

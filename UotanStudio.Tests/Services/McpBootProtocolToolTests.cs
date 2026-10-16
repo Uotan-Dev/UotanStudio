@@ -249,7 +249,7 @@ public sealed class McpBootProtocolToolTests : IDisposable
         public DeviceSessionKind Kind => kind;
 
         public Task<object> CreateAsync(DeviceEndpoint endpoint, IAsyncDisposable transport,
-            CancellationToken cancellationToken) => Task.FromResult<object>(new object());
+            CancellationToken cancellationToken) => Task.FromResult(new object());
     }
 
     private sealed class RecordingOpener : IDeviceTransportOpener

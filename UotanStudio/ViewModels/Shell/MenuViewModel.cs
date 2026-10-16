@@ -535,7 +535,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString(
-                isDirectory ? "Dialog_NewFolderFailed" : "Dialog_NewFileFailed"), global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+                isDirectory ? "Dialog_NewFolderFailed" : "Dialog_NewFileFailed"), UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -556,7 +556,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
-                global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+                UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -586,7 +586,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
-                global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+                UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -738,7 +738,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         {
             if (owner is not null)
                 await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Explorer_NodeProject"),
-                    global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+                    UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -774,7 +774,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var context = ProjectContextService.Instance;
         if (!context.IsProjectOpen || context.RootDirectory is null)
         {
-            Services.LogService.Instance.Write(LogLevel.Warn, "Menu", "Add sub-project aborted: no solution is open");
+            LogService.Instance.Write(LogLevel.Warn, "Menu", "Add sub-project aborted: no solution is open");
             return;
         }
 
@@ -1048,7 +1048,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Export", ex.Message);
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Export"), global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Export"), UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -1095,7 +1095,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var selected = ImageViewModel.EnsureInstance().SelectedImage;
         if (selected is null)
         {
-            Services.LogService.Instance.Write(LogLevel.Warn, "Menu", "Export image aborted: no image selected");
+            LogService.Instance.Write(LogLevel.Warn, "Menu", "Export image aborted: no image selected");
             return;
         }
 
@@ -1479,14 +1479,14 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void Documentation()
     {
-        Services.ExternalLinkService.TryOpen("https://github.com/UotanStudio/UotanStudio/wiki");
+        ExternalLinkService.TryOpen("https://github.com/UotanStudio/UotanStudio/wiki");
     }
 
     /// <summary>Open the issue reporting page. <para>打开问题反馈页面。</para></summary>
     [RelayCommand]
     private void ReportIssue()
     {
-        Services.ExternalLinkService.TryOpen("https://github.com/UotanStudio/UotanStudio/issues");
+        ExternalLinkService.TryOpen("https://github.com/UotanStudio/UotanStudio/issues");
     }
 
     /// <summary>

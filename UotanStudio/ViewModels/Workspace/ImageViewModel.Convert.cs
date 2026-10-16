@@ -184,7 +184,7 @@ internal partial class ImageViewModel
         var datPath = Path.Combine(outputDir, baseName + ".new.dat");
         var transferPath = Path.Combine(outputDir, baseName + ".transfer.list");
 
-        string rawInput = source;
+        var rawInput = source;
         string? stagingRaw = null;
         var rawPhases = 1;
         long rawSize;

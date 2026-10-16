@@ -533,7 +533,7 @@ public partial class CompareView
         LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
         if (DataContext is CompareViewModel vm)
         {
-            vm.ReportError(global::UotanStudio.Services.UserError.Describe(ex));
+            vm.ReportError(UserError.Describe(ex));
         }
     }
 
@@ -634,7 +634,7 @@ public partial class CompareView
     /// 再以 <c>TryGetFiles</c> 直接探测（与 Drop 消费一致），最后扫描格式列表中的系统文件格式名。</para>
     /// </summary>
     private bool HasFilePayload(IDataTransfer transfer)
-        => UotanStudio.Views.Controls.FileDropPaths.HasFilePayload(transfer, "CompareView")
+        => Controls.FileDropPaths.HasFilePayload(transfer, "CompareView")
             || LooksLikeExistingPath(transfer)
             || _draggingPath is not null;
 
@@ -798,7 +798,7 @@ public partial class CompareView
     /// 格式（<c>FileDrop</c>）取条目数据（宽容枚举 <see cref="IStorageItem"/>）。</para>
     /// </summary>
     private static IReadOnlyList<string> TryExtractPaths(IDataTransfer transfer)
-        => UotanStudio.Views.Controls.FileDropPaths.TryExtractPaths(transfer, "CompareView");
+        => Controls.FileDropPaths.TryExtractPaths(transfer, "CompareView");
 
     /// <summary>
     /// Extracts paths from a drag payload: the platform file formats first (external drags such as Explorer), then the

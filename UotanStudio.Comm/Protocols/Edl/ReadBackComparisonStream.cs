@@ -34,14 +34,14 @@ internal sealed class ReadBackComparisonStream(Stream source, string filename) :
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        int offset = 0;
+        var offset = 0;
         while (offset < buffer.Length)
         {
-            int count = Math.Min(_buffer.Length, buffer.Length - offset);
-            int read = await ReadSourceAsync(count, cancellationToken).ConfigureAwait(false);
+            var count = Math.Min(_buffer.Length, buffer.Length - offset);
+            var read = await ReadSourceAsync(count, cancellationToken).ConfigureAwait(false);
             if (_mismatchOffset < 0)
             {
-                for (int i = 0; i < read; i++)
+                for (var i = 0; i < read; i++)
                 {
                     if (_buffer[i] == buffer.Span[offset + i]) continue;
                     _mismatchOffset = checked(_received + offset + i);
@@ -67,10 +67,10 @@ internal sealed class ReadBackComparisonStream(Stream source, string filename) :
                 _initialized = true;
             }
             count = (int)Math.Min(count, _sourceLength - _sourceRead);
-            int read = 0;
+            var read = 0;
             while (read < count)
             {
-                int n = await source.ReadAsync(_buffer.AsMemory(read, count - read), cancellationToken).ConfigureAwait(false);
+                var n = await source.ReadAsync(_buffer.AsMemory(read, count - read), cancellationToken).ConfigureAwait(false);
                 if (n == 0) { _sourceEnded = true; break; }
                 read += n;
                 _sourceRead += n;

@@ -21,7 +21,7 @@ public sealed class ImageInputServiceTests
     {
         var warnings = new List<string>();
         var service = new ImageInputService(
-            resolve ?? (path => File.Exists(path) || Directory.Exists(path) ? System.IO.Path.GetFullPath(path) : null),
+            resolve ?? (path => File.Exists(path) || Directory.Exists(path) ? Path.GetFullPath(path) : null),
             (_, message) => warnings.Add(message));
         return (service, warnings);
     }
@@ -294,7 +294,7 @@ public sealed class ImageInputServiceTests
     public void DetectFormat_HeaderReadFailure_FallsBackToExtension()
     {
         using var temp = new TempDirectory();
-        var dir = System.IO.Path.Combine(temp.Path, "sub.img");
+        var dir = Path.Combine(temp.Path, "sub.img");
         Directory.CreateDirectory(dir);
 
         Assert.Equal("raw", ImageInputService.DetectFormat(dir));
@@ -354,7 +354,7 @@ public sealed class ImageInputServiceTests
     public void ResolveSourcePath_MissingFile_ReturnsNull()
     {
         using var temp = new TempDirectory();
-        var missing = System.IO.Path.Combine(temp.Path, "gone.img");
+        var missing = Path.Combine(temp.Path, "gone.img");
         var (service, warnings) = CreateService(resolve: path => path);
 
         Assert.Null(service.ResolveSourcePath(missing, isDirectory: false, operation: "extract"));
@@ -366,7 +366,7 @@ public sealed class ImageInputServiceTests
     public void ResolveSourcePath_DirectoryEntryChecksDirectoryExistence()
     {
         using var temp = new TempDirectory();
-        var dir = System.IO.Path.Combine(temp.Path, "system");
+        var dir = Path.Combine(temp.Path, "system");
         Directory.CreateDirectory(dir);
         var (service, warnings) = CreateService(resolve: path => path);
 
@@ -475,7 +475,7 @@ public sealed class ImageInputServiceTests
     {
         using var temp = new TempDirectory();
 
-        Assert.False(ImageInputService.ContainsFileSystem(System.IO.Path.Combine(temp.Path, "gone.img")));
+        Assert.False(ImageInputService.ContainsFileSystem(Path.Combine(temp.Path, "gone.img")));
         Assert.False(ImageInputService.ContainsFileSystem(string.Empty));
     }
 
@@ -484,7 +484,7 @@ public sealed class ImageInputServiceTests
     {
         using var temp = new TempDirectory();
         var raw = temp.WriteBytes("system.raw", MakeExt4Superblock());
-        var sparse = System.IO.Path.Combine(temp.Path, "system.simg");
+        var sparse = Path.Combine(temp.Path, "system.simg");
         UotanStudio.Firmware.BlockImage.Sparse.SparseImageConverter.ConvertRawToSparse(raw, sparse, 4096);
 
         Assert.Equal("sparse", ImageInputService.DetectFormat(sparse));
@@ -498,7 +498,7 @@ public sealed class ImageInputServiceTests
         var payload = new byte[8192];
         System.Text.Encoding.ASCII.GetBytes("ANDROID!").CopyTo(payload, 0);
         var raw = temp.WriteBytes("boot.raw", payload);
-        var sparse = System.IO.Path.Combine(temp.Path, "boot.simg");
+        var sparse = Path.Combine(temp.Path, "boot.simg");
         UotanStudio.Firmware.BlockImage.Sparse.SparseImageConverter.ConvertRawToSparse(raw, sparse, 4096);
 
         Assert.Equal("sparse", ImageInputService.DetectFormat(sparse));
@@ -511,7 +511,7 @@ public sealed class ImageInputServiceTests
         using var source = new TempDirectory();
         source.WriteBytes("system.img", MakeExt4Superblock());
         using var output = new TempDirectory();
-        var image = System.IO.Path.Combine(output.Path, "super.img");
+        var image = Path.Combine(output.Path, "super.img");
         var packed = await new UotanStudio.Firmware.BlockImage.Lp.LpFormatHandler()
             .PackAsync(source.Path, image, TestContext.Current.CancellationToken);
         Assert.True(packed.Success, packed.Summary);

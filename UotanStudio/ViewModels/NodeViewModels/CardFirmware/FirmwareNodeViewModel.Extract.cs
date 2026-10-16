@@ -48,9 +48,9 @@ public partial class FirmwareNodeViewModel
         if (!string.IsNullOrWhiteSpace(partition))
         {
             var imagePath = Path.Combine(outputDir, partition + ".img");
-            WriteOutput("Image", new UotanStudio.Services.Projects.FileArtifact(imagePath));
+            WriteOutput("Image", new Services.Projects.FileArtifact(imagePath));
             WriteOutput("Image File", imagePath);
-            WriteOutput("Artifact", new UotanStudio.Services.Projects.FileArtifact(imagePath));
+            WriteOutput("Artifact", new Services.Projects.FileArtifact(imagePath));
         }
         WriteOutput("Output Dir", outputDir);
         context.Log.Write(LogLevel.Info, Title, $"{result.Summary}  已提取。");

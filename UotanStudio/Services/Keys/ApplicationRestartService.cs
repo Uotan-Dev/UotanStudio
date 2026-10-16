@@ -28,7 +28,7 @@ internal static class ApplicationRestartService
             return false;
         }
 
-        string? solutionPath = ProjectContextService.Instance.CurrentSolutionPath;
+        var solutionPath = ProjectContextService.Instance.CurrentSolutionPath;
 
         mainWindow.Closed += (_, _) =>
         {

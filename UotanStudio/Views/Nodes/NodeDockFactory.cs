@@ -136,8 +136,8 @@ public class NodeDockFactory : Factory
 
         HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>
         {
-            [nameof(IDockWindow)] = () => CreateHostWindow(),
-            ["ManagedHostWindow"] = () => CreateManagedHostWindow()
+            [nameof(IDockWindow)] = CreateHostWindow,
+            ["ManagedHostWindow"] = CreateManagedHostWindow
         };
 
         DefaultHostWindowLocator = () => CreateHostWindow();
@@ -147,13 +147,13 @@ public class NodeDockFactory : Factory
 
     private static HostWindow CreateHostWindow()
     {
-        var options = new Dock.Model.Core.DockManagerOptions { IsDockingEnabled = true };
+        var options = new DockManagerOptions { IsDockingEnabled = true };
         return new HostWindow(options);
     }
 
     private static ManagedHostWindow CreateManagedHostWindow()
     {
-        var options = new Dock.Model.Core.DockManagerOptions { IsDockingEnabled = true };
+        var options = new DockManagerOptions { IsDockingEnabled = true };
         return new ManagedHostWindow(options);
     }
 

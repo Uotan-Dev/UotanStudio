@@ -32,7 +32,7 @@ public sealed class DefaultSignatureTests : IDisposable
         Assert.Equal("runtime", Assert.Single(library.List()).Name);
         Assert.Equal("SHA256:" + Convert.ToHexString(SHA256.HashData(rsa.ExportSubjectPublicKeyInfo())), first.Fingerprint);
         Assert.NotNull(library.FindByFingerprint(ManagedKeyKind.Adb, first.Fingerprint));
-        using var hdcRsa = RSA.Create(3072);
+        using var hdcRsa = RSA.Create(UotanStudio.Comm.Protocols.Hdc.HdcAuthentication.KeyBits);
         var hdcPath = Path.Combine(_root, "runtime-hdckey");
         File.WriteAllText(hdcPath, hdcRsa.ExportRSAPrivateKeyPem());
         var hdc = library.ImportIdentity("hdc", ManagedKeyKind.Hdc, hdcPath);
@@ -62,7 +62,7 @@ public sealed class DefaultSignatureTests : IDisposable
         Assert.Throws<InvalidOperationException>(() => library.PublishDefault(payload, target));
         Assert.Equal(File.ReadAllBytes(library.PrivatePath(adb)), File.ReadAllBytes(target));
 
-        var hdc = library.Generate("hdc", ManagedKeyKind.Hdc, 3072);
+        var hdc = library.Generate("hdc", ManagedKeyKind.Hdc, UotanStudio.Comm.Protocols.Hdc.HdcAuthentication.KeyBits);
         var hdcTarget = Path.Combine(_root, "runtime", "hdckey");
         library.PublishDefault(hdc, hdcTarget);
         using var hdcVerify = UotanStudio.Comm.Protocols.Hdc.HdcAuthentication.LoadPrivateKey(hdcTarget);
@@ -123,7 +123,7 @@ public sealed class DefaultSignatureTests : IDisposable
         }
         finally
         {
-            DebugBridgeIdentityService.LoadSettings = () => UotanStudio.Services.SettingsPersistenceService.Instance.LoadSettings();
+            DebugBridgeIdentityService.LoadSettings = UotanStudio.Services.SettingsPersistenceService.Instance.LoadSettings;
             DebugBridgeIdentityService.UpdateDefaultKeyId = UotanStudio.Services.SettingsPersistenceService.Instance.UpdateDefaultKeyId;
         }
     }
@@ -153,7 +153,7 @@ public sealed class DefaultSignatureTests : IDisposable
         var adb = library.Generate("adb", ManagedKeyKind.Adb, 2048);
         var other = library.Generate("other", ManagedKeyKind.Adb, 2048);
         var defaults = new Dictionary<string, string>();
-        var model = new UotanStudio.ViewModels.Shell.KeyManagerViewModel(library,
+        var model = new ViewModels.Shell.KeyManagerViewModel(library,
             () => new UotanStudio.Services.AppSettings
             {
                 AdbDefaultKeyId = defaults.TryGetValue("Adb", out var adbId) ? adbId : "",
@@ -185,10 +185,10 @@ public sealed class DefaultSignatureTests : IDisposable
         Directory.CreateDirectory(_root);
         var library = Library;
         var adb = library.Generate("adb", ManagedKeyKind.Adb, 2048);
-        var hdc = library.Generate("hdc", ManagedKeyKind.Hdc, 3072);
+        var hdc = library.Generate("hdc", ManagedKeyKind.Hdc, UotanStudio.Comm.Protocols.Hdc.HdcAuthentication.KeyBits);
         var other = library.Generate("other", ManagedKeyKind.Adb, 2048);
         var defaults = new Dictionary<string, string>();
-        var model = new UotanStudio.ViewModels.Shell.KeyManagerViewModel(library,
+        var model = new ViewModels.Shell.KeyManagerViewModel(library,
             () => new UotanStudio.Services.AppSettings
             {
                 AdbDefaultKeyId = defaults.TryGetValue("Adb", out var adbId) ? adbId : "",
@@ -219,7 +219,7 @@ public sealed class DefaultSignatureTests : IDisposable
         Assert.True(model.IsSelectedDefault);
 
         defaults["Adb"] = "";
-        var fallbackModel = new UotanStudio.ViewModels.Shell.KeyManagerViewModel(library,
+        var fallbackModel = new ViewModels.Shell.KeyManagerViewModel(library,
             () => new UotanStudio.Services.AppSettings
             {
                 AdbDefaultKeyId = defaults.TryGetValue("Adb", out var adbId2) ? adbId2 : "",
@@ -238,9 +238,9 @@ public sealed class DefaultSignatureTests : IDisposable
         Directory.CreateDirectory(_root);
         var library = Library;
         var adb = library.Generate("adb", ManagedKeyKind.Adb, 2048);
-        var hdc = library.Generate("hdc", ManagedKeyKind.Hdc, 3072);
+        var hdc = library.Generate("hdc", ManagedKeyKind.Hdc, UotanStudio.Comm.Protocols.Hdc.HdcAuthentication.KeyBits);
 
-        var model = new UotanStudio.ViewModels.Shell.KeyManagerViewModel(library,
+        var model = new ViewModels.Shell.KeyManagerViewModel(library,
             () => new UotanStudio.Services.AppSettings
             {
                 AdbDefaultKeyId = "dead-adb-id",
@@ -260,7 +260,7 @@ public sealed class DefaultSignatureTests : IDisposable
         model.SelectedKey = hdc;
         Assert.True(model.IsSelectedDefault);
 
-        var explicitModel = new UotanStudio.ViewModels.Shell.KeyManagerViewModel(library,
+        var explicitModel = new ViewModels.Shell.KeyManagerViewModel(library,
             () => new UotanStudio.Services.AppSettings { AdbDefaultKeyId = adb.Id, HdcDefaultKeyId = "" },
             (_, _) => true,
             _ => null);

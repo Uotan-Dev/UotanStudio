@@ -93,7 +93,7 @@ public sealed class ChecksumServiceTests
     public async Task ComputeAsync_MissingFile_Throws()
     {
         using var directory = new TempDirectory();
-        var path = System.IO.Path.Combine(directory.Path, "missing.bin");
+        var path = Path.Combine(directory.Path, "missing.bin");
 
         await Assert.ThrowsAsync<FileNotFoundException>(
             () => ChecksumService.ComputeAsync(path, All, TestContext.Current.CancellationToken));

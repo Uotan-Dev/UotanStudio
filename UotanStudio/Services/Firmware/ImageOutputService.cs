@@ -71,7 +71,7 @@ internal static class ImageOutputService
             {
                 var compressed = dat + ".br";
                 CompressionFile.CompressFile(dat, compressed,
-                    UotanStudio.Compress.CompressionFormat.Brotli,
+                    Compress.CompressionFormat.Brotli,
                     new() { Level = brotliLevel },
                     FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.Compressing));
                 dat = compressed;

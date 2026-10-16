@@ -47,7 +47,7 @@ public sealed class InteractionTests
         var secret = field.Input.Single(port => port.Title == "Default");
         secret.InitialValue = "do-not-save";
         secret.Data = "do-not-save";
-        var dto = Assert.Single(UotanStudio.Services.Projects.WorkflowPersistenceService.BuildNodeDtos([field]));
+        var dto = Assert.Single(WorkflowPersistenceService.BuildNodeDtos([field]));
         Assert.False(secret.HasPersistableInitialValue);
         Assert.False(dto.InputInitialValues?.ContainsKey("Default") == true);
         Assert.False(dto.InputInitialValuesByPortId?.ContainsKey(secret.StableId) == true);
@@ -210,7 +210,7 @@ public sealed class InteractionTests
         var state = new InteractionFormState(Form(new InteractionElement { Id = "flag", Kind = InteractionElementKind.BooleanField }));
         state.SetValue("flag", new InteractionValue { Text = "yes" });
         Assert.Equal("Type", state.Validate()["flag"]);
-        Assert.Throws<InvalidOperationException>(() => state.Submit());
+        Assert.Throws<InvalidOperationException>(state.Submit);
     }
 
     [Fact]

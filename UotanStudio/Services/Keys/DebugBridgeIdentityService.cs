@@ -7,8 +7,8 @@ namespace UotanStudio.Services.Keys;
 /// <para>在设备发现之前，为原生会话准备所需的持久化调试桥身份。</para></summary>
 internal static class DebugBridgeIdentityService
 {
-    internal static Func<AppSettings> LoadSettings = () => UotanStudio.Services.SettingsPersistenceService.Instance.LoadSettings();
-    internal static Func<string, string?, bool> UpdateDefaultKeyId = UotanStudio.Services.SettingsPersistenceService.Instance.UpdateDefaultKeyId;
+    internal static Func<AppSettings> LoadSettings = SettingsPersistenceService.Instance.LoadSettings;
+    internal static Func<string, string?, bool> UpdateDefaultKeyId = SettingsPersistenceService.Instance.UpdateDefaultKeyId;
 
     internal static void EnsureDefaults(string? adbPath = null, string? hdcPath = null, string? libraryRoot = null)
     {
@@ -32,7 +32,7 @@ internal static class DebugBridgeIdentityService
     {
         try
         {
-            var name = UotanStudio.Services.LanguageService.Instance.GetString(resourceKey);
+            var name = LanguageService.Instance.GetString(resourceKey);
             if (string.IsNullOrEmpty(name) || name == resourceKey) name = fallbackName;
             var library = new KeyLibraryService(libraryRoot);
             var imported = library.ImportIdentity(name, kind, path ??
@@ -41,7 +41,7 @@ internal static class DebugBridgeIdentityService
         }
         catch (Exception ex)
         {
-            UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Warn, "Keys", ex.Message);
+            LogService.Instance.Write(LogLevel.Warn, "Keys", ex.Message);
         }
     }
 

@@ -246,7 +246,7 @@ internal static class MiscToolHandlers
         {
             var resolved = sandbox.Resolve(path, mustExist: true);
             GuardMetaSize(resolved);
-            var table = UotanStudio.Firmware.AndroidMeta.Arsc.ArscParser.Parse(File.ReadAllBytes(resolved));
+            var table = Firmware.AndroidMeta.Arsc.ArscParser.Parse(File.ReadAllBytes(resolved));
             var packages = table.Packages.Select(p => new ArscPackagePayload(
                 p.Name,
                 (int)p.Id,

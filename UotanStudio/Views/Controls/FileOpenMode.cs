@@ -129,7 +129,7 @@ public static class FileOpenMode
     /// <para>文件名或完整路径。</para>
     /// </param>
     public static EditorOpenMode ResolveMode(string path) =>
-        UotanStudio.Services.Workspace.Documents.DocumentOpenRegistry.ResolveMode(path);
+        Services.Workspace.Documents.DocumentOpenRegistry.ResolveMode(path);
 
     /// <summary>
     /// Resolves the open mode; for unknown/no-extension files, uses the loaded header bytes as a magic
@@ -146,7 +146,7 @@ public static class FileOpenMode
     /// <para>可选的已加载文件头部字节；为 <c>null</c> 时不计 magic 兜底。</para>
     /// </param>
     public static EditorOpenMode ResolveMode(string path, byte[]? header, FormatDetectionResult? detection = null) =>
-        UotanStudio.Services.Workspace.Documents.DocumentOpenRegistry.ResolveMode(path, header, detection);
+        Services.Workspace.Documents.DocumentOpenRegistry.ResolveMode(path, header, detection);
 
     /// <summary>
     /// Determines whether a bounded content sample is clearly binary. Samples with a UTF text BOM remain
@@ -357,8 +357,8 @@ public static class FileOpenMode
         }
 
         var magic = BinaryPrimitives.ReadUInt32BigEndian(header);
-        return magic == UotanStudio.Firmware.DeviceTree.Dt.FdtConstants.FdtMagic
-            || magic == UotanStudio.Firmware.DeviceTree.Dt.FdtConstants.DtboMagic;
+        return magic == Firmware.DeviceTree.Dt.FdtConstants.FdtMagic
+            || magic == Firmware.DeviceTree.Dt.FdtConstants.DtboMagic;
     }
 
     /// <summary>
@@ -486,7 +486,7 @@ public static class FileOpenMode
     public static bool IsLpMetadataMagic(ReadOnlySpan<byte> header) =>
         header.Length >= LpMetadataHeaderLength
         && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(4096, 4))
-            == UotanStudio.Firmware.BlockImage.Lp.MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
+            == Firmware.BlockImage.Lp.MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
 
     /// <summary>
     /// Whether the header bytes hold Rockchip parameter text: the content must be printable
@@ -598,14 +598,14 @@ public static class FileOpenMode
     /// <para>判断头部字节是否携带扇区对齐的 GPT 签名（<c>EFI PART</c>）。</para>
     /// </summary>
     public static bool IsGptMagic(ReadOnlySpan<byte> header) =>
-        UotanStudio.Models.GptTable.HasSignature(header);
+        Models.GptTable.HasSignature(header);
 
     /// <summary>
     /// Whether the header contains a populated MBR partition table rather than a FAT boot record.
     /// <para>判断头部是否包含有效的非空 MBR 分区表，排除 FAT 卷引导扇区。</para>
     /// </summary>
     public static bool IsMbrMagic(ReadOnlySpan<byte> header) =>
-        UotanStudio.Models.MbrTable.HasPartitionTable(header);
+        Models.MbrTable.HasPartitionTable(header);
 
     /// <summary>
     /// Determines whether the file content is a GPT partition table (reads the header and checks the

@@ -158,7 +158,7 @@ public class EdlUfsProvisionServiceTests
             FirehoseXmlBuilder.BuildUfsBody(bodies[1], 2),
             FirehoseXmlBuilder.BuildUfsEpilogue(epilogue, true, 2)
         };
-        var actual = transport.Writes.Skip(1).Select(bytes => Encoding.UTF8.GetString(bytes)).ToArray();
+        var actual = transport.Writes.Skip(1).Select(Encoding.UTF8.GetString).ToArray();
         Assert.Equal(expected, actual);
         var last = XDocument.Parse(Encoding.UTF8.GetString(transport.Writes[^1])).Root!.Element("ufs")!;
         Assert.Equal("1", (string?)last.Attribute("commit"));

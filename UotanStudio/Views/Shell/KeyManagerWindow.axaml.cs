@@ -65,7 +65,7 @@ public partial class KeyManagerWindow : Window
             language.GetString("Keys_SetCurrent"));
         if (!confirmed) return;
         await Model.SetCurrentDefaultCommand.ExecuteAsync(null);
-        if (Model.Status == "") UotanStudio.Services.Keys.ApplicationRestartService.RestartWithSolution();
+        if (Model.Status == "") ApplicationRestartService.RestartWithSolution();
     }
 
     private void UpdateCreationActionsLayout()
@@ -100,7 +100,7 @@ public partial class KeyManagerWindow : Window
                 string.Format(language.GetString("Keys_DeleteConfirm"), key.Name), language.GetString("Menu_Delete")))
                 await model.DeleteKeyAsync(key);
         }
-        catch (Exception ex) { model.Status = global::UotanStudio.Services.UserError.Describe(ex); }
+        catch (Exception ex) { model.Status = UserError.Describe(ex); }
         finally { _confirmingDeletion = false; }
     }
 

@@ -386,7 +386,7 @@ public sealed class ScrcpyServerService
         {
             await Task.Delay(startupDelay, cancellationToken).ConfigureAwait(false);
             var artifact = await EnsureLatestAsync(cancellationToken).ConfigureAwait(false);
-            Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
+            LogService.Instance.Write(LogLevel.Info, "ScreenMirror",
                 $"scrcpy server ready: {artifact.Version} ({artifact.Source}).");
         }
         catch (OperationCanceledException)
@@ -394,7 +394,7 @@ public sealed class ScrcpyServerService
         }
         catch (Exception ex)
         {
-            Services.LogService.Instance.Write(Services.LogLevel.Warn, "ScreenMirror",
+            LogService.Instance.Write(LogLevel.Warn, "ScreenMirror",
                 $"scrcpy server update skipped: {ex.Message}");
         }
     }
@@ -453,7 +453,7 @@ public sealed class ScrcpyServerService
     private void Report(ScrcpyServerProgress progress)
     {
         _progress?.Report(progress);
-        Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror", $"scrcpy server: {progress.Message}");
+        LogService.Instance.Write(LogLevel.Info, "ScreenMirror", $"scrcpy server: {progress.Message}");
     }
 }
 

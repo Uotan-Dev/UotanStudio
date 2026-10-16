@@ -172,7 +172,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         DeviceTransportKind.Tcp => "Network",
         DeviceTransportKind.Serial => "Serial",
         DeviceTransportKind.Usb when EdlSerialPort.Length > 0 =>
-            $"{UotanStudio.Services.LanguageService.Instance.GetString("Device_TransportSerial")} ({EdlSerialPort})",
+            $"{Services.LanguageService.Instance.GetString("Device_TransportSerial")} ({EdlSerialPort})",
         DeviceTransportKind.Usb => "USB",
         _ => "Unknown",
     };

@@ -129,7 +129,7 @@ public partial class HexEditorViewModel : Document, ICommandSaveableDocument
             var info = new FileInfo(path);
             if (!info.Exists)
             {
-                CompileError = global::UotanStudio.Services.LanguageService.Instance.GetString("UserError_PathNotFound", path);
+                CompileError = LanguageService.Instance.GetString("UserError_PathNotFound", path);
                 return;
             }
 
@@ -142,7 +142,7 @@ public partial class HexEditorViewModel : Document, ICommandSaveableDocument
         catch (Exception ex)
         {
             RawBytes = null;
-            CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_LoadFailed");
+            CompileError = UserError.Describe(ex, "UserError_LoadFailed");
         }
         finally
         {
@@ -175,7 +175,7 @@ public partial class HexEditorViewModel : Document, ICommandSaveableDocument
         }
         catch (Exception ex)
         {
-            CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_SaveFailed");
+            CompileError = UserError.Describe(ex, "UserError_SaveFailed");
         }
         finally
         {

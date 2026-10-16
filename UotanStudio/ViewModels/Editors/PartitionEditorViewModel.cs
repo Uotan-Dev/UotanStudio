@@ -284,7 +284,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 {
                     if (!FileOpenMode.IsRockchipParameter(path))
                     {
-                        CompileError = global::UotanStudio.Services.LanguageService.Instance.GetString("UserError_PartitionUnrecognized");
+                        CompileError = LanguageService.Instance.GetString("UserError_PartitionUnrecognized");
                         return;
                     }
 
@@ -300,7 +300,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
 
                     if (rockchip is null)
                     {
-                        CompileError = global::UotanStudio.Services.LanguageService.Instance.GetString("UserError_PartitionUnrecognized");
+                        CompileError = LanguageService.Instance.GetString("UserError_PartitionUnrecognized");
                         return;
                     }
 
@@ -390,7 +390,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
         }
         catch (Exception ex)
         {
-            CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_SavePartitionFailed");
+            CompileError = UserError.Describe(ex, "UserError_SavePartitionFailed");
         }
         finally { IsBusy = false; }
     }
@@ -432,7 +432,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             var extentStart = (int)partition.FirstExtentIndex;
             var extentCount = (int)partition.NumExtents;
             var extents = new List<LpMetadataExtent>(extentCount);
-            for (int j = 0; j < extentCount && extentStart + j < metadata.Extents.Count; j++)
+            for (var j = 0; j < extentCount && extentStart + j < metadata.Extents.Count; j++)
                 extents.Add(metadata.Extents[extentStart + j]);
 
             ulong start = 0;

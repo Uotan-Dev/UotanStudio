@@ -197,7 +197,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             byte[]? header = null;
             try
             {
-                header = UotanStudio.Firmware.Core.FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
+                header = FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
             }
             catch
             {

@@ -89,8 +89,8 @@ internal static class MyPartitionMergePlanner
         var orderedSystems = systemCandidates
             .OrderBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        string? chosenPath = orderedSystems.Length > 0 ? orderedSystems[0].Path : null;
-        char? chosenSlot = orderedSystems.Length > 0 ? orderedSystems[0].Slot : null;
+        var chosenPath = orderedSystems.Length > 0 ? orderedSystems[0].Path : null;
+        var chosenSlot = orderedSystems.Length > 0 ? orderedSystems[0].Slot : null;
         List<string> myTrees = [.. myCandidates
             .Where(candidate => SlotsMerge(candidate.Slot, chosenSlot))
             .Select(candidate => candidate.Path)];

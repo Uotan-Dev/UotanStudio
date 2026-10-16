@@ -11,8 +11,8 @@ public partial class ScreenMirrorViewModel
     {
         IAudioDecoder? decoder = null;
         IAudioSink? sink = null;
-        bool sinkFailed = false;
-        int sinkBits = 0;
+        var sinkFailed = false;
+        var sinkBits = 0;
         try
         {
             AudioCodecId codec = client.AudioMetadata?.CodecName switch

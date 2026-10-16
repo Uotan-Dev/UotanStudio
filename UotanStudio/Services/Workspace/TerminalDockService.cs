@@ -24,7 +24,7 @@ internal sealed class TerminalDockService(IFactory factory, IDock defaultHost) :
         host ??= defaultHost;
         var model = new TerminalViewModel(++_nextId, profile,
             source => CreateTerminal(source.SelectedProfile, GetHost(_entries.Single(entry => entry.Model == source))),
-            source => factory.CloseDockable(source));
+            factory.CloseDockable);
         _entries.Add(new Entry(model, host));
         factory.AddDockable(host, model);
         if (activate) Activate(model);

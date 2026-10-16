@@ -153,7 +153,7 @@ internal static class FlashEdlBundleService
     private static string DescribeFailure(FlashBundleResult result)
     {
         var interrupted = result.Items.FirstOrDefault(item =>
-            item.Outcome is not UotanStudio.Comm.Protocols.Common.Evidence.CommandOutcomeKind.Completed);
+            item.Outcome is not Comm.Protocols.Common.Evidence.CommandOutcomeKind.Completed);
         return $"EDL bundle failed: outcome={result.FinalOutcome}, failure={(result.FailureKind?.ToString() ?? "unclassified")}, " +
             $"item={(interrupted is null ? "-" : $"{interrupted.Kind}:{interrupted.Outcome}/{interrupted.FailureKind?.ToString() ?? "-"}")}, " +
             $"requiresReconnect={result.RequiresReconnect}, acknowledgedBytes={result.TotalBytesWritten}, " +

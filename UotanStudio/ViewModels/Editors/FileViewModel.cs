@@ -191,7 +191,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
         }
         catch (Exception ex)
         {
-            CompileError = global::UotanStudio.Services.UserError.Describe(ex);
+            CompileError = UserError.Describe(ex);
             RawBytes = null;
             Text = string.Empty;
             IsBinary = false;
@@ -449,14 +449,14 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
                 {
                     const int probeSize = 4096;
                     using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, probeSize, FileOptions.SequentialScan);
-                    int read = fs.Read(_magicProbeBuffer, 0, probeSize);
+                    var read = fs.Read(_magicProbeBuffer, 0, probeSize);
                     magic = FileMagic.Describe(_magicProbeBuffer.AsSpan(0, read));
                 }
                 catch
                 {
                 }
 
-                string format = magic ?? "Unknown / 未知格式";
+                var format = magic ?? "Unknown / 未知格式";
                 AddAnalysis("Format", format);
                 AddAnalysis("Size", $"{new FileInfo(path).Length:N0} bytes");
                 NotifyAnalysisComplete(path);

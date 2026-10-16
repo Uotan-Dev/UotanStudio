@@ -28,7 +28,7 @@ internal partial class PropertiesViewModel
         ContentType = PropertiesContentType.ScreenMirror;
         HasSelection = true;
         SelectedNodeTitle = mirror.Title;
-        foreach (string key in MirrorKeys)
+        foreach (var key in MirrorKeys)
         {
             Properties.Add(CreateLocalizedRow("MirrorProperty_" + key, "—"));
         }
@@ -60,12 +60,12 @@ internal partial class PropertiesViewModel
         var meta = mirror.StreamMetadata;
         Avalonia.PixelSize? size = mirror.VideoPixelSize is { Width: > 0 } pixels ? pixels : null;
         var svc = LanguageService.Instance;
-        string waiting = "—";
+        var waiting = "—";
         string received = waiting, decoded = waiting, uploaded = waiting, bitrate = waiting;
         double seconds = 0;
         if (sample)
         {
-            long now = Stopwatch.GetTimestamp();
+            var now = Stopwatch.GetTimestamp();
             seconds = (now - _mirrorSampleTime) / (double)Stopwatch.Frequency;
             var counters = mirror.ReadCounters();
             if (seconds > 0)
@@ -88,11 +88,11 @@ internal partial class PropertiesViewModel
             var audioMeta = mirror.StreamMetadataAudio;
             audioValue = mirror.AudioDisabledByServer ? svc.GetString("MirrorProperty_AudioUnavailable") : audioMeta?.CodecName.ToUpperInvariant() ?? waiting;
         }
-        int audioRate = mirror.AudioSampleRate;
-        int audioChannels = mirror.AudioChannels;
-        string audioFormat = !mirror.AudioEnabled ? waiting
+        var audioRate = mirror.AudioSampleRate;
+        var audioChannels = mirror.AudioChannels;
+        var audioFormat = !mirror.AudioEnabled ? waiting
             : audioRate > 0 ? $"{audioRate} Hz · {audioChannels} ch" : waiting;
-        string audioFps = !mirror.AudioEnabled ? waiting
+        var audioFps = !mirror.AudioEnabled ? waiting
             : sample && audioRate > 0
                 ? seconds > 0 ? $"{Math.Max(0, mirror.AudioDecodedFrames - _mirrorAudioFrames) / seconds:F1} fps" : waiting
                 : waiting;
@@ -108,7 +108,7 @@ internal partial class PropertiesViewModel
             options is null ? waiting : $"{options.VideoBitRate / 1_000_000.0:F2} Mbps", bitrate,
             svc.GetString("MirrorProperty_EncoderValue"), audioValue, string.IsNullOrEmpty(mirror.AudioBackend) ? audioFormat : $"{audioFormat} ? {mirror.AudioBackend}", audioFps,
             mirror.DeviceName, options?.ServerVersion ?? waiting];
-        for (int i = 0; i < values.Length; i++)
+        for (var i = 0; i < values.Length; i++)
         {
             Properties[i].RefreshLocalizedName();
             Properties[i].Value = values[i];

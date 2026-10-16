@@ -10,7 +10,7 @@ namespace UotanStudio.Services.Execution;
 /// </summary>
 public interface INodeExecutionContext
 {
-    Services.Workspace.IWorkflowDocuments? Documents => null;
+    Workspace.IWorkflowDocuments? Documents => null;
     /// <summary>
     /// Unified log service; all node execution logs are pushed through this.
     /// <para>统一日志服务，所有节点执行日志通过此推送。</para>

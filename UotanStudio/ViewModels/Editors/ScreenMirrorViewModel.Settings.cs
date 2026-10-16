@@ -19,9 +19,9 @@ public partial class ScreenMirrorViewModel
         get
         {
             var composition = GpuPresenter.Composition;
-            bool windowsExport = OperatingSystem.IsWindows() && composition is { WindowsKeyedMutex: true }
+            var windowsExport = OperatingSystem.IsWindows() && composition is { WindowsKeyedMutex: true }
                 && _activeSettings.ScreenMirrorGpuExport != GpuExportPreference.Off;
-            bool macExport = OperatingSystem.IsMacOS() && composition is { MacIosurface: true }
+            var macExport = OperatingSystem.IsMacOS() && composition is { MacIosurface: true }
                 && _activeSettings.ScreenMirrorGpuExport != GpuExportPreference.Off;
             return new VideoDecoderOptions
             {
@@ -79,7 +79,7 @@ public partial class ScreenMirrorViewModel
         catch (Exception error)
         {
             StatusText = error.Message;
-            Services.LogService.Instance.Write(Services.LogLevel.Warn, "ScreenMirror",
+            LogService.Instance.Write(LogLevel.Warn, "ScreenMirror",
                 $"scrcpy server update failed: {error.Message}");
         }
         finally
@@ -113,14 +113,14 @@ public partial class ScreenMirrorViewModel
             _audioSampleRate = _audioChannels = 0;
             var latest = SettingsPersistenceService.Instance.LoadSettings();
             CopyMirrorSettings(PendingSettings, latest);
-            if (!SettingsPersistenceService.Instance.TrySaveSettings(latest, out string? saveError))
+            if (!SettingsPersistenceService.Instance.TrySaveSettings(latest, out var saveError))
                 throw new IOException(saveError ?? "Unable to save mirroring settings.");
             HasPendingMirrorSettings = false;
             StartForDevice(_serial!);
         }
         catch (Exception error)
         {
-            StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + global::UotanStudio.Services.UserError.Describe(error);
+            StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + UserError.Describe(error);
             LogService.Instance.Write(LogLevel.Error, "ScreenMirror", error.Message);
         }
         finally { IsApplyingMirrorSettings = false; }

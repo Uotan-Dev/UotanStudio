@@ -505,7 +505,7 @@ public partial class QcnNvItemViewModel : ObservableObject
     /// </param>
     public bool Matches(string search)
     {
-        if (Id.ToString(System.Globalization.CultureInfo.InvariantCulture).Contains(search, StringComparison.OrdinalIgnoreCase)
+        if (Id.ToString(CultureInfo.InvariantCulture).Contains(search, StringComparison.OrdinalIgnoreCase)
             || IdHex.Contains(search, StringComparison.OrdinalIgnoreCase)
             || (KnownName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
             || (Category?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)

@@ -90,7 +90,7 @@ public class DecryptNodeViewModel : FlowNodeViewModel
         }
         var algorithm = (Convert.ToString(ReadInput("Algorithm"), CultureInfo.InvariantCulture) ?? "aes").Trim().ToLowerInvariant();
 
-        byte[]? plain = algorithm switch
+        var plain = algorithm switch
         {
             "aes" or "aes-256" => AesDecrypt(data, key),
             "xor" => XorDecrypt(data, key),
@@ -114,7 +114,7 @@ public class DecryptNodeViewModel : FlowNodeViewModel
     private static byte[]? AesDecrypt(byte[] data, byte[] keyMaterial)
     {
         using var aes = Aes.Create();
-        aes.Key = UotanStudio.Hash.Digests.Sha256.ComputeHash(keyMaterial);
+        aes.Key = Hash.Digests.Sha256.ComputeHash(keyMaterial);
         var ivLength = aes.BlockSize / 8;
         if (data.Length <= ivLength)
         {
@@ -136,7 +136,7 @@ public class DecryptNodeViewModel : FlowNodeViewModel
     /// </summary>
     private static byte[] XorDecrypt(byte[] data, byte[] keyMaterial)
     {
-        var key = UotanStudio.Hash.Digests.Sha256.ComputeHash(keyMaterial);
+        var key = Hash.Digests.Sha256.ComputeHash(keyMaterial);
         var result = new byte[data.Length];
         for (var i = 0; i < data.Length; i++)
         {

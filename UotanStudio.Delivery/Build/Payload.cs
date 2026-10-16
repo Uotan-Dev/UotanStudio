@@ -217,7 +217,7 @@ internal static class DeliveryPayloadBuilder
         input.Position = 0;
         using var metadata = Sha256.CreateAccumulator();
         var buffer = new byte[1024 * 1024];
-        long remaining = size;
+        var remaining = size;
         while (remaining > 0)
         {
             var count = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), token).ConfigureAwait(false);

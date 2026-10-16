@@ -34,11 +34,11 @@ sealed class Program
             };
             try
             {
-                if (!Enum.TryParse<UotanStudio.Services.Devices.DeviceProtocolKind>(protocolName, out var protocol) ||
-                    protocol is not (UotanStudio.Services.Devices.DeviceProtocolKind.Adb or
-                        UotanStudio.Services.Devices.DeviceProtocolKind.Hdc))
+                if (!Enum.TryParse<Services.Devices.DeviceProtocolKind>(protocolName, out var protocol) ||
+                    protocol is not (Services.Devices.DeviceProtocolKind.Adb or
+                        Services.Devices.DeviceProtocolKind.Hdc))
                     throw new ArgumentException("An ADB or HDC protocol is required.");
-                using var manager = UotanStudio.Services.Devices.DeviceMonitorService.Create();
+                using var manager = Services.Devices.DeviceMonitorService.Create();
                 var target = manager.Scan().SingleOrDefault(candidate => candidate.Protocol == protocol &&
                     string.Equals(candidate.Serial, serial, StringComparison.Ordinal))
                     ?? throw new IOException("The selected server target is no longer available.");
@@ -54,7 +54,7 @@ sealed class Program
             }
         }
 
-        if (UotanStudio.Mcp.McpLauncher.IsHeadlessRequested(args))
+        if (Mcp.McpLauncher.IsHeadlessRequested(args))
         {
             using var cts = new CancellationTokenSource();
             Console.CancelKeyPress += (_, e) =>
@@ -64,7 +64,7 @@ sealed class Program
             };
             try
             {
-                UotanStudio.Mcp.McpLauncher.RunHeadlessAsync(args, cts.Token).GetAwaiter().GetResult();
+                Mcp.McpLauncher.RunHeadlessAsync(args, cts.Token).GetAwaiter().GetResult();
                 return 0;
             }
             catch (OperationCanceledException)
@@ -73,14 +73,14 @@ sealed class Program
             }
         }
 
-        if (UotanStudio.Mcp.McpLauncher.IsCompanionRequested(args))
+        if (Mcp.McpLauncher.IsCompanionRequested(args))
         {
-            _ = Task.Run(() => UotanStudio.Mcp.McpLauncher.RunCompanionAsync(
-                args, new UotanStudio.Services.Mcp.DesktopDeviceManagerGateway(),
-                () => new UotanStudio.Services.Delivery.DeliveryKeyProvider()));
+            _ = Task.Run(() => Mcp.McpLauncher.RunCompanionAsync(
+                args, new Services.Mcp.DesktopDeviceManagerGateway(),
+                () => new Services.Delivery.DeliveryKeyProvider()));
         }
 
-        int mirrorFlag = Array.IndexOf(args, "--open-screen-mirror");
+        var mirrorFlag = Array.IndexOf(args, "--open-screen-mirror");
         if (mirrorFlag >= 0 && mirrorFlag + 1 < args.Length)
         {
             App.StartupScreenMirrorSerial = args[mirrorFlag + 1];

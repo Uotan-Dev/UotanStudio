@@ -215,7 +215,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         }
         var algorithm = (Convert.ToString(ReadInput("Algorithm"), System.Globalization.CultureInfo.InvariantCulture) ?? "aes").Trim().ToLowerInvariant();
 
-        byte[] cipher = algorithm switch
+        var cipher = algorithm switch
         {
             "aes" or "aes-256" => AesEncrypt(data, key),
             "xor" => XorCipher(data, key),
@@ -242,7 +242,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         }
 
         var algorithm = (Convert.ToString(ReadInput("Algorithm"), System.Globalization.CultureInfo.InvariantCulture) ?? "gzip").Trim().ToLowerInvariant();
-        byte[] compressed = algorithm switch
+        var compressed = algorithm switch
         {
             "deflate" => CompressWith(data, mode => CompressionService.CreateCompressionStream(mode, CompressionFormat.Deflate)),
             "gzip" => CompressWith(data, mode => CompressionService.CreateCompressionStream(mode, CompressionFormat.Gzip)),
@@ -277,7 +277,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
     private static byte[] AesEncrypt(byte[] data, byte[] keyMaterial)
     {
         using var aes = Aes.Create();
-        aes.Key = UotanStudio.Hash.Digests.Sha256.ComputeHash(keyMaterial);
+        aes.Key = Hash.Digests.Sha256.ComputeHash(keyMaterial);
         aes.IV = RandomNumberGenerator.GetBytes(aes.BlockSize / 8);
         aes.Mode = CipherMode.CBC;
         aes.Padding = PaddingMode.PKCS7;
@@ -288,7 +288,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
 
     private static byte[] XorCipher(byte[] data, byte[] keyMaterial)
     {
-        var key = UotanStudio.Hash.Digests.Sha256.ComputeHash(keyMaterial);
+        var key = Hash.Digests.Sha256.ComputeHash(keyMaterial);
         var result = new byte[data.Length];
         for (var i = 0; i < data.Length; i++)
         {

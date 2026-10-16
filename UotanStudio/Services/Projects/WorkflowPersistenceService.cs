@@ -73,7 +73,7 @@ public static class WorkflowPersistenceService
                 continue;
             }
 
-            var text = System.Convert.ToString(connector.InitialValue, System.Globalization.CultureInfo.InvariantCulture);
+            var text = Convert.ToString(connector.InitialValue, System.Globalization.CultureInfo.InvariantCulture);
             if (text is null)
             {
                 continue;

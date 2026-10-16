@@ -71,7 +71,7 @@ public sealed class ScreenMirrorVideoControl : Control
         if (!model.GpuPresenter.UsesCompositionSurface && !model.GpuPresenter.IsAvailable && model.Frame is { } bitmap)
         {
             var size = bitmap.Size;
-            double scale = Math.Min(bounds.Width / size.Width, bounds.Height / size.Height);
+            var scale = Math.Min(bounds.Width / size.Width, bounds.Height / size.Height);
             var destination = new Rect((bounds.Width - size.Width * scale) / 2, (bounds.Height - size.Height * scale) / 2, size.Width * scale, size.Height * scale);
             context.DrawImage(bitmap, new Rect(size), destination);
         }

@@ -37,7 +37,7 @@ public partial class WorkspaceView : UserControl
         InitializeComponent();
         InitializeDocumentSearch();
 
-        DockControl.AddHandler(InputElement.ContextRequestedEvent, OnDockContextRequested,
+        DockControl.AddHandler(ContextRequestedEvent, OnDockContextRequested,
             RoutingStrategies.Bubble, handledEventsToo: true);
 
         DockMenuIcons.EnsureWired();

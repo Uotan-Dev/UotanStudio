@@ -112,7 +112,7 @@ public partial class VisualPluginEditorWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
         {
-            ShowResult(string.Format(LanguageService.Instance.GetString("Plugin_OperationFailed"), global::UotanStudio.Services.UserError.Describe(ex)),
+            ShowResult(string.Format(LanguageService.Instance.GetString("Plugin_OperationFailed"), UserError.Describe(ex)),
                 NotificationType.Error);
         }
         catch (OperationCanceledException) { }

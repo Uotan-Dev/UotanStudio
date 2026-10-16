@@ -497,8 +497,8 @@ public partial class FlashView : UserControl
                 if (path.EndsWith(".img", StringComparison.OrdinalIgnoreCase) &&
                     await Task.Run(() =>
                     {
-                        UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
-                        return UotanStudio.Firmware.Core.FormatDetector.Detect(path) is UotanStudio.Firmware.BlockImage.Lp.LpFormatHandler;
+                        Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
+                        return Firmware.Core.FormatDetector.Detect(path) is Firmware.BlockImage.Lp.LpFormatHandler;
                     }))
                 {
                     var partitions = await FlashSuperService.ListAsync(path, CancellationToken.None);
@@ -858,7 +858,7 @@ public partial class FlashView : UserControl
         _rootPackagePath = null;
         try
         {
-            var detection = await new UotanStudio.Firmware.BootSecurity.Patcher.BootPatchService()
+            var detection = await new Firmware.BootSecurity.Patcher.BootPatchService()
                 .DetectAsync(path);
             if (!FlashRootImage.IsSupportedPackage(detection))
             {

@@ -118,7 +118,7 @@ public class OutputNodeViewModel : FlowNodeViewModel
 
         if (NodeDataUtil.ToBool(ReadInput("Stdout"), false))
         {
-            System.Console.WriteLine($"[{Title}] {message}");
+            Console.WriteLine($"[{Title}] {message}");
         }
     }
 

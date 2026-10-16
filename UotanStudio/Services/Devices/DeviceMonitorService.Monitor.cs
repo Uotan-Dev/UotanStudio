@@ -86,9 +86,9 @@ public sealed partial class DeviceMonitorService
 
     private DeviceMonitorService()
     {
-        _controller = UotanStudio.Comm.Devices.Services.DeviceControllerFactory.CreateDefault();
+        _controller = Comm.Devices.Services.DeviceControllerFactory.CreateDefault();
         _edlConnections = new EdlConnectionCache((device, token) => Task.Run(
-            () => LeaseEndpoint(device, sessionKind: UotanStudio.Comm.Contracts.DeviceSessionKind.Edl,
+            () => LeaseEndpoint(device, sessionKind: Comm.Contracts.DeviceSessionKind.Edl,
                 cancellationToken: token), token), ScheduleChange);
         RestorePairedNetworkTargets();
     }

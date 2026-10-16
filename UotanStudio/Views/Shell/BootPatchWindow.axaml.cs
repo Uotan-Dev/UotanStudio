@@ -88,7 +88,7 @@ public partial class BootPatchWindow : Window
                 ProgressText.Text = $"{_detection.Kind}: {string.Join(", ", _detection.Architectures)}{kmi}{boot}";
             }
         }
-        catch (Exception ex) { SetDetection(null); ProgressText.Text = global::UotanStudio.Services.UserError.Describe(ex); }
+        catch (Exception ex) { SetDetection(null); ProgressText.Text = UserError.Describe(ex); }
     }
 
     private void SetDetection(BootPatchDetection? detection)
@@ -229,7 +229,7 @@ public partial class BootPatchWindow : Window
             });
             ProgressText.Text = $"{result.OutputPath} ({result.Changes.Count} changes)";
         }
-        catch (Exception ex) { ProgressText.Text = global::UotanStudio.Services.UserError.Describe(ex); }
+        catch (Exception ex) { ProgressText.Text = UserError.Describe(ex); }
         finally { MainBusyContainer.IsLoading = false; _isPatching = false; UpdateStartEnabled(); }
     }
     private void OnCancelClick(object? sender, RoutedEventArgs e) => Close();

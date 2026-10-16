@@ -28,7 +28,7 @@ public partial class MainView : UserControl
         MainTabs.SelectedIndex = WorkspaceTabIndex;
         MainTabs.PropertyChanged += (_, change) =>
         {
-            if (change.Property == TabbedPage.SelectedIndexProperty)
+            if (change.Property == SelectingMultiPage.SelectedIndexProperty)
             {
                 EnsureSelectedPage();
             }

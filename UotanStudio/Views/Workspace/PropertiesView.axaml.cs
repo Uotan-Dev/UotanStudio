@@ -19,7 +19,7 @@ public partial class PropertiesView : UserControl
             sender is DataGrid { Columns.Count: > 0 } grid)
         {
 
-            grid.Columns[0].MaxWidth = System.Math.Max(1, e.NewSize.Width / 2);
+            grid.Columns[0].MaxWidth = Math.Max(1, e.NewSize.Width / 2);
         }
     }
 }

@@ -81,11 +81,11 @@ internal sealed class MainWindowNativeMenu : IDisposable
                     if (item.Header is TextBlock text)
                         _subscriptions.Add(native.Bind(NativeMenuItem.HeaderProperty, text.GetObservable(TextBlock.TextProperty)));
                     else
-                        _subscriptions.Add(native.Bind(NativeMenuItem.HeaderProperty, item.GetObservable(MenuItem.HeaderProperty)));
+                        _subscriptions.Add(native.Bind(NativeMenuItem.HeaderProperty, item.GetObservable(Avalonia.Controls.Primitives.HeaderedSelectingItemsControl.HeaderProperty)));
                     _subscriptions.Add(native.Bind(NativeMenuItem.CommandProperty, item.GetObservable(MenuItem.CommandProperty)));
                     _subscriptions.Add(native.Bind(NativeMenuItem.CommandParameterProperty, item.GetObservable(MenuItem.CommandParameterProperty)));
-                    _subscriptions.Add(native.Bind(NativeMenuItem.IsEnabledProperty, item.GetObservable(MenuItem.IsEnabledProperty)));
-                    _subscriptions.Add(native.Bind(NativeMenuItem.IsVisibleProperty, item.GetObservable(MenuItem.IsVisibleProperty)));
+                    _subscriptions.Add(native.Bind(NativeMenuItem.IsEnabledProperty, item.GetObservable(InputElement.IsEnabledProperty)));
+                    _subscriptions.Add(native.Bind(NativeMenuItem.IsVisibleProperty, item.GetObservable(Visual.IsVisibleProperty)));
                     _subscriptions.Add(native.Bind(NativeMenuItem.ToggleTypeProperty, item.GetObservable(MenuItem.ToggleTypeProperty)));
                     _subscriptions.Add(native.Bind(NativeMenuItem.IsCheckedProperty, item.GetObservable(MenuItem.IsCheckedProperty)));
                     if (item.Items.Count > 0 || item.ItemsSource is not null)

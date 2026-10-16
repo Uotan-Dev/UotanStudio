@@ -26,7 +26,7 @@ public static class FastbootPartitionReader
             throw new ArgumentException("A Fastboot device is required.", nameof(device));
         }
 
-        return Task.Run<IReadOnlyList<(string Name, long Size)>>(() =>
+        return Task.Run(() =>
         {
             ct.ThrowIfCancellationRequested();
             return App.DeviceMonitor.RunFastboot(device, session =>

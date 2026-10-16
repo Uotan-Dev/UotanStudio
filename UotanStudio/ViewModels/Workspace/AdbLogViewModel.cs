@@ -105,7 +105,7 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
             }
             catch (ArgumentException ex)
             {
-                SearchError = string.Format(LanguageService.Instance.GetString("Log_RegexInvalid"), global::UotanStudio.Services.UserError.Describe(ex));
+                SearchError = string.Format(LanguageService.Instance.GetString("Log_RegexInvalid"), UserError.Describe(ex));
             }
         }
         ReapplyFilter();
@@ -230,7 +230,7 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
             catch (OperationCanceledException) when (capture.IsCancellationRequested) { }
             catch (Exception ex)
             {
-                if (!capture.IsCancellationRequested) error = global::UotanStudio.Services.UserError.Describe(ex);
+                if (!capture.IsCancellationRequested) error = UserError.Describe(ex);
             }
             finally
             {

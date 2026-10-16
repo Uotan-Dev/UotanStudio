@@ -735,7 +735,7 @@ internal static partial class DeliveryPackageBuilder
             throw new InvalidDataException("ZIP already has a comment.");
         file.Position = 0;
         using var digest = Sha256.CreateAccumulator();
-        var buffer = new byte[1024 * 1024]; long remaining = file.Length - 2;
+        var buffer = new byte[1024 * 1024]; var remaining = file.Length - 2;
         while (remaining > 0)
         {
             var count = await file.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), token);
@@ -751,7 +751,7 @@ internal static partial class DeliveryPackageBuilder
         BinaryPrimitives.WriteUInt16LittleEndian(comment.AsSpan(total - 6), checked((ushort)(cms.Length + 6)));
         comment[total - 4] = 255; comment[total - 3] = 255;
         BinaryPrimitives.WriteUInt16LittleEndian(comment.AsSpan(total - 2), (ushort)total);
-        if (comment.AsSpan().IndexOf(new byte[] { 0x50, 0x4b, 0x05, 0x06 }) >= 0) throw new System.Security.Cryptography.CryptographicException("Spurious ZIP end marker in signature.");
+        if (comment.AsSpan().IndexOf(new byte[] { 0x50, 0x4b, 0x05, 0x06 }) >= 0) throw new CryptographicException("Spurious ZIP end marker in signature.");
         file.Position = file.Length - 2;
         var length = new byte[2]; BinaryPrimitives.WriteUInt16LittleEndian(length, (ushort)total);
         await file.WriteAsync(length, token); await file.WriteAsync(comment, token);

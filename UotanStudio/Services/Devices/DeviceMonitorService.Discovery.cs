@@ -186,11 +186,11 @@ public sealed partial class DeviceMonitorService
     };
 
     internal static string? PhysicalUsbId(UsbDeviceInfo info, string? serial)
-        => UotanStudio.Comm.Devices.Discovery.UsbPhysicalIdentity.Of(info, serial);
+        => UsbPhysicalIdentity.Of(info, serial);
 
     internal static string? FindServerUsbIdentity(IReadOnlyList<UsbDeviceInfo> infos, string serial,
         DeviceProtocolKind protocol)
-        => UotanStudio.Comm.Devices.Discovery.UsbPhysicalIdentity.ServerPhysicalId(infos, serial, ProtocolToken(protocol));
+        => UsbPhysicalIdentity.ServerPhysicalId(infos, serial, ProtocolToken(protocol));
 
     internal static IReadOnlyList<IReadOnlyList<DetectedDevice>> GroupPhysicalDevices(
         IEnumerable<DetectedDevice> endpoints)

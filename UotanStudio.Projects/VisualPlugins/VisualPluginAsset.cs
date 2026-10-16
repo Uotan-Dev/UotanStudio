@@ -107,7 +107,7 @@ public sealed class VisualPluginAsset
             throw new InvalidDataException("Patch resource exceeds the per-resource size limit.");
         }
         var length = stream.Length;
-        using var hash = UotanStudio.Hash.Digests.Sha256.CreateAccumulator();
+        using var hash = Hash.Digests.Sha256.CreateAccumulator();
         var remaining = length;
         var buffer = new byte[131072];
         while (remaining > 0)

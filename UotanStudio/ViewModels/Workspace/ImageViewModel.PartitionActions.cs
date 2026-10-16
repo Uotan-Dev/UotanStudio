@@ -160,7 +160,7 @@ internal partial class ImageViewModel
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Images", $"Delete unpacked directory failed: {ex.Message}");
-            await DialogService.ShowAsync(owner, language.GetString("Dialog_DeleteFailed"), global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, language.GetString("Dialog_DeleteFailed"), UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -217,7 +217,7 @@ internal partial class ImageViewModel
             if (!result.Success)
             {
                 LogService.Instance.Write(LogLevel.Error, "Images", result.Summary);
-                StatusText = global::UotanStudio.Services.LanguageService.Instance.GetString("UserError_SuperFailed");
+                StatusText = LanguageService.Instance.GetString("UserError_SuperFailed");
                 ProgressPercent = 0;
                 return;
             }
@@ -226,19 +226,19 @@ internal partial class ImageViewModel
             StatusText = $"Synthesized super image  已合成 super 镜像";
             ProgressPercent = 100;
             if (!hadExistingOutput && File.Exists(outputPath)
-                && ImageViewModel.CreateOutputOperation(HistoryOperationKind.SynthesizeSuper,
+                && CreateOutputOperation(HistoryOperationKind.SynthesizeSuper,
                     "Synthesize super image", [outputPath]) is { } operation)
             {
                 OperationHistoryService.Instance.Record(
                     operation.Description, operation,
-                    () => ImageViewModel.UndoOutput(operation),
-                    () => ImageViewModel.RedoOutput(operation));
+                    () => UndoOutput(operation),
+                    () => RedoOutput(operation));
             }
         }
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize super failed: {ex.Message}  合成 super 失败：{ex.Message}");
-            StatusText = global::UotanStudio.Services.UserError.Describe(ex, "UserError_SuperFailed");
+            StatusText = UserError.Describe(ex, "UserError_SuperFailed");
             ProgressPercent = 0;
         }
     }
@@ -330,7 +330,7 @@ internal partial class ImageViewModel
         catch (Exception ex)
         {
             ProgressPercent = 0;
-            StatusText = global::UotanStudio.Services.UserError.Describe(ex, "UserError_FlashFailed");
+            StatusText = UserError.Describe(ex, "UserError_FlashFailed");
             LogService.Instance.Write(LogLevel.Error, "Images", $"Flash selected failed: {ex.Message}  选中文件刷入失败：{ex.Message}");
         }
     }

@@ -42,7 +42,7 @@ public partial class FirmwareNodeViewModel
 
         var outputDir = DeriveOutputDir(path);
         using var metadataScope = RepackMetadata.UseContext(
-            UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(outputDir));
+            Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(outputDir));
         if (IsMetadataOnlyRequested())
         {
             await ExecuteMetadataOnlyUnpackAsync(context, path, outputDir).ConfigureAwait(false);
@@ -92,7 +92,7 @@ public partial class FirmwareNodeViewModel
 
     private async Task ExecuteMetadataOnlyUnpackAsync(INodeExecutionContext context, string path, string outputDir)
     {
-        UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
+        Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
         var handler = FormatDetector.Detect(path)
             ?? throw new InvalidDataException("No format handler can read this container, so repack metadata cannot be exported alone.");
         var result = await handler.UnpackAsync(path, outputDir,

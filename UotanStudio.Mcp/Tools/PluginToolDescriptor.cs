@@ -40,6 +40,6 @@ internal sealed record PluginToolDescriptor(
 internal sealed record PluginToolContext(
     PathSandbox Sandbox,
     IDeviceManagerGateway DeviceManager,
-    Func<UotanStudio.Services.Delivery.IDeliveryTools?>? DeliveryTools,
-    Func<UotanStudio.Services.Delivery.IDeliverySigningKeyProvider?>? SigningKeys,
+    Func<Services.Delivery.IDeliveryTools?>? DeliveryTools,
+    Func<Services.Delivery.IDeliverySigningKeyProvider?>? SigningKeys,
     bool AllowFlash);

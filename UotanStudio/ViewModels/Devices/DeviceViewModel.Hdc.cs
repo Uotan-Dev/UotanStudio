@@ -118,9 +118,9 @@ public partial class DeviceViewModel
         catch (OperationCanceledException) { StatusText = language.GetString("Device_HdcCancelled"); }
         catch (Exception ex)
         {
-            StatusText = $"{title}: {(global::UotanStudio.Services.UserError.Describe(ex))}";
+            StatusText = $"{title}: {(UserError.Describe(ex))}";
             LogService.Instance.Write(LogLevel.Error, "DeviceManager", StatusText);
-            await DialogService.ShowAsync(owner, title, global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, title, UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 }

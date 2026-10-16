@@ -14,12 +14,12 @@ internal sealed class ScreenMirrorPixelBuffer
 
     internal void Update(DecodedVideoFrame frame, VideoColorMatrix matrix, VideoColorRange range)
     {
-        int length = Nv12ToBgraConverter.GetBgraBufferSize(frame.Width, frame.Height);
+        var length = Nv12ToBgraConverter.GetBgraBufferSize(frame.Width, frame.Height);
         if (Pixels.Length != length) Pixels = GC.AllocateUninitializedArray<byte>(length);
         if (frame.PixelFormat == VideoPixelFormat.Bgra32)
         {
-            int rowBytes = checked(frame.Width * 4);
-            for (int row = 0; row < frame.Height; row++)
+            var rowBytes = checked(frame.Width * 4);
+            for (var row = 0; row < frame.Height; row++)
                 frame.Span.Slice(row * frame.Stride, rowBytes).CopyTo(Pixels.AsSpan(row * rowBytes, rowBytes));
         }
         else

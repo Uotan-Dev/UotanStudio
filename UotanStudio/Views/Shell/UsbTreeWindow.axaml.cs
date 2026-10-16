@@ -70,7 +70,7 @@ public partial class UsbTreeWindow : Window
             return;
         }
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        var clipboard = GetTopLevel(this)?.Clipboard;
         if (clipboard is null)
         {
             _model.StatusText = LanguageService.Instance.GetString("UsbTree_CopyFailed");

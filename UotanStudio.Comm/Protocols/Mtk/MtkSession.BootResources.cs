@@ -80,7 +80,7 @@ public sealed partial class MtkSession
             RequireState(MtkSessionState.Bootloader);
             cancellationToken.ThrowIfCancellationRequested();
             var buffer = new byte[1024];
-            bool terminalSlaRecorded = false;
+            var terminalSlaRecorded = false;
             try
             {
                 await EchoAsync([kind == MtkBootResourceKind.RootCertificate ? (byte)0xE0 : (byte)0xE2],

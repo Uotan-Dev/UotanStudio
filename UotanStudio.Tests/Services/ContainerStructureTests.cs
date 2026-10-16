@@ -230,7 +230,7 @@ public sealed class ContainerStructureTests
     {
         using var temp = new TempDirectory();
         var zipPath = Path.Combine(temp.Path, "rom.zip");
-        using (var archive = System.IO.Compression.ZipFile.Open(zipPath, System.IO.Compression.ZipArchiveMode.Create))
+        using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
         {
             var image = archive.CreateEntry("firmware/system.img");
             using (var stream = image.Open())
@@ -266,7 +266,7 @@ public sealed class ContainerStructureTests
         }
 
         var zipPath = Path.Combine(temp.Path, "ota.zip");
-        using (var archive = System.IO.Compression.ZipFile.Open(zipPath, System.IO.Compression.ZipArchiveMode.Create))
+        using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
         {
             archive.CreateEntryFromFile(payload, memberName);
             var image = archive.CreateEntry("vendor.img");
@@ -378,7 +378,7 @@ public sealed class ContainerStructureTests
         var zipPath = Path.Combine(temp.Path, "rom.zip");
         var content = new byte[2048];
         new Random(13).NextBytes(content);
-        using (var archive = System.IO.Compression.ZipFile.Open(zipPath, System.IO.Compression.ZipArchiveMode.Create))
+        using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
         {
             var entry = archive.CreateEntry("images/system.img");
             using var stream = entry.Open();
@@ -403,7 +403,7 @@ public sealed class ContainerStructureTests
         }
 
         var zipPath = Path.Combine(temp.Path, "ota.zip");
-        using (var archive = System.IO.Compression.ZipFile.Open(zipPath, System.IO.Compression.ZipArchiveMode.Create))
+        using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
         {
             archive.CreateEntryFromFile(payload, "payload.bin");
         }

@@ -23,6 +23,6 @@ public sealed class ImageFlashPartitionNameTests
         => Assert.Equal(expected, ImageViewModel.GetEntryBaseName(new ImageEntryViewModel
         {
             RelativePath = relativePath,
-            DisplayName = System.IO.Path.GetFileName(relativePath)
+            DisplayName = Path.GetFileName(relativePath)
         }));
 }
