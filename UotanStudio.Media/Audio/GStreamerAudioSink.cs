@@ -107,10 +107,10 @@ public sealed class GStreamerAudioSink(bool alsa = false) : IAudioSink
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_pipeline is null) throw new InvalidOperationException("Audio sink is not open.");
-        int align = Channels * (_bits / 8);
+        var align = Channels * (_bits / 8);
         if (pcm.Length > AudioFormatLimits.MaximumPacketBytes || pcm.Length % align != 0) throw new ArgumentException("Invalid PCM packet.", nameof(pcm));
         if (pcm.IsEmpty) return;
-        long deadline = Environment.TickCount64 + 2000;
+        var deadline = Environment.TickCount64 + 2000;
         while (_pipeline.QueuedBytes > (ulong)(SampleRate * align / 2))
         {
             _pipeline.CheckError();
@@ -123,12 +123,12 @@ public sealed class GStreamerAudioSink(bool alsa = false) : IAudioSink
             _samples += pcm.Length / align;
             return;
         }
-        byte[] bytes = ArrayPool<byte>.Shared.Rent(pcm.Length);
+        var bytes = ArrayPool<byte>.Shared.Rent(pcm.Length);
         try
         {
             pcm.CopyTo(bytes);
             Span<byte> samples = bytes.AsSpan(0, pcm.Length);
-            for (int i = 0; i < samples.Length; i += _bits / 8)
+            for (var i = 0; i < samples.Length; i += _bits / 8)
             {
                 if (_bits == 16) BinaryPrimitives.WriteInt16LittleEndian(samples[i..], (short)(BinaryPrimitives.ReadInt16LittleEndian(samples[i..]) * Volume));
                 else BinaryPrimitives.WriteSingleLittleEndian(samples[i..], BinaryPrimitives.ReadSingleLittleEndian(samples[i..]) * Volume);

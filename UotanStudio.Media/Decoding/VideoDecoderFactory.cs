@@ -222,7 +222,7 @@ public static class VideoDecoderFactory
     public static string? GetFallbackReason(IVideoDecoder decoder)
     {
         if (decoder is not FallbackVideoDecoder selection) return null;
-        string? nested = selection.ActiveDecoder is { } active ? GetFallbackReason(active) : null;
+        var nested = selection.ActiveDecoder is { } active ? GetFallbackReason(active) : null;
         return nested is null ? selection.FallbackReason : $"{selection.FallbackReason}; {nested}";
     }
 

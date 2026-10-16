@@ -85,7 +85,7 @@ public sealed unsafe class VaApiSession : IDisposable
         {
             _display = VaNative.vaGetDisplayDRM(_fd);
             if (_display == 0) throw new NotSupportedException("VA DRM display is unavailable.");
-            int result = VaNative.vaInitialize(_display, out int major, out int minor);
+            var result = VaNative.vaInitialize(_display, out var major, out var minor);
             Check(result, "initialize");
             Version = new Version(major, minor);
         }
@@ -156,20 +156,20 @@ public sealed unsafe class VaApiSession : IDisposable
     public IReadOnlyList<VaApiCapability> QueryCapabilities()
     {
         CheckReady();
-        int[] profiles = new int[BoundedCount(VaNative.vaMaxNumProfiles(_display))];
-        int[] entries = new int[BoundedCount(VaNative.vaMaxNumEntrypoints(_display))];
+        var profiles = new int[BoundedCount(VaNative.vaMaxNumProfiles(_display))];
+        var entries = new int[BoundedCount(VaNative.vaMaxNumEntrypoints(_display))];
         var result = new List<VaApiCapability>();
         fixed (int* p = profiles)
         {
-            Check(VaNative.vaQueryConfigProfiles(_display, p, out int profileCount), "query profiles");
+            Check(VaNative.vaQueryConfigProfiles(_display, p, out var profileCount), "query profiles");
             if ((uint)profileCount > profiles.Length) throw new InvalidDataException("Invalid VA profile count.");
-            for (int i = 0; i < profileCount; i++)
+            for (var i = 0; i < profileCount; i++)
             {
                 fixed (int* e = entries)
                 {
-                    Check(VaNative.vaQueryConfigEntrypoints(_display, p[i], e, out int entryCount), "query entrypoints");
+                    Check(VaNative.vaQueryConfigEntrypoints(_display, p[i], e, out var entryCount), "query entrypoints");
                     if ((uint)entryCount > entries.Length) throw new InvalidDataException("Invalid VA entrypoint count.");
-                    for (int j = 0; j < entryCount; j++) result.Add(new(p[i], e[j]));
+                    for (var j = 0; j < entryCount; j++) result.Add(new(p[i], e[j]));
                 }
             }
         }
@@ -264,7 +264,7 @@ public sealed unsafe class VaApiSession : IDisposable
     {
         CheckReady();
         ArgumentNullException.ThrowIfNull(buffers);
-        uint target = _surfaces[surfaceIndex];
+        var target = _surfaces[surfaceIndex];
         if (buffers.Count is < 1 or > 4096) throw new ArgumentOutOfRangeException(nameof(buffers));
         var ids = new List<uint>(buffers.Count);
         long total = 0;
@@ -282,7 +282,7 @@ public sealed unsafe class VaApiSession : IDisposable
                 fixed (byte* data = buffer.Data.Span)
                 {
                     Check(VaNative.vaCreateBuffer(_display, _context, buffer.Type, buffer.ElementSize,
-                        (uint)buffer.Data.Length / buffer.ElementSize, data, out uint id), "create buffer");
+                        (uint)buffer.Data.Length / buffer.ElementSize, data, out var id), "create buffer");
                     ids.Add(id);
                 }
             }
@@ -294,7 +294,7 @@ public sealed unsafe class VaApiSession : IDisposable
             }
             finally { Check(VaNative.vaEndPicture(_display, _context), "end picture"); }
         }
-        finally { foreach (uint id in ids) _ = VaNative.vaDestroyBuffer(_display, id); }
+        finally { foreach (var id in ids) _ = VaNative.vaDestroyBuffer(_display, id); }
     }
 
     /// <summary>
@@ -318,7 +318,7 @@ public sealed unsafe class VaApiSession : IDisposable
     public DmaBufSurface ExportSurface(int index)
     {
         CheckReady();
-        uint id = _surfaces[index];
+        var id = _surfaces[index];
         Check(VaNative.vaSyncSurface(_display, id), "sync surface");
         var descriptor = new DmaBufDescriptor();
         Check(VaNative.vaExportSurfaceHandle(_display, id, 0x40000000, 1 | 8, &descriptor), "export DRM PRIME 2");

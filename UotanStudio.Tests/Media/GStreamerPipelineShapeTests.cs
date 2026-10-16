@@ -18,8 +18,8 @@ public sealed class GStreamerPipelineShapeTests
 
     private static int Count(string haystack, string needle)
     {
-        int total = 0;
-        for (int index = haystack.IndexOf(needle, StringComparison.Ordinal); index >= 0; index = haystack.IndexOf(needle, index + needle.Length, StringComparison.Ordinal))
+        var total = 0;
+        for (var index = haystack.IndexOf(needle, StringComparison.Ordinal); index >= 0; index = haystack.IndexOf(needle, index + needle.Length, StringComparison.Ordinal))
             total++;
         return total;
     }
@@ -27,7 +27,7 @@ public sealed class GStreamerPipelineShapeTests
     [Fact]
     public void BuildPipeline_DirectNv12_NegotiatesOnDecoderPadWithoutConverter()
     {
-        string description = Build(GStreamerPlanePath.DirectNv12);
+        var description = Build(GStreamerPlanePath.DirectNv12);
         Assert.Contains($"! {Parser} ! {Element} ! {OutputCaps} !", description, StringComparison.Ordinal);
         Assert.DoesNotContain("videoconvert", description, StringComparison.Ordinal);
         Assert.DoesNotContain("video/x-raw !", description, StringComparison.Ordinal);
@@ -36,7 +36,7 @@ public sealed class GStreamerPipelineShapeTests
     [Fact]
     public void BuildPipeline_CpuConverter_RetainsBareRawCapsAndExactlyOneConverterStage()
     {
-        string description = Build(GStreamerPlanePath.CpuConverter);
+        var description = Build(GStreamerPlanePath.CpuConverter);
         Assert.Contains($"! {Element} ! video/x-raw ! videoconvert ! {OutputCaps} !", description, StringComparison.Ordinal);
         Assert.Equal(1, Count(description, "videoconvert"));
     }
@@ -44,9 +44,9 @@ public sealed class GStreamerPipelineShapeTests
     [Fact]
     public void BuildPipeline_BothPaths_ShareBoundedAppsrcPrefixAndAppsinkSuffix()
     {
-        string direct = Build(GStreamerPlanePath.DirectNv12);
-        string converter = Build(GStreamerPlanePath.CpuConverter);
-        string prefix = $"appsrc name=input is-live=true format=time block=false max-bytes={GstPipeline.MaximumQueuedBytes} caps={InputCaps}";
+        var direct = Build(GStreamerPlanePath.DirectNv12);
+        var converter = Build(GStreamerPlanePath.CpuConverter);
+        var prefix = $"appsrc name=input is-live=true format=time block=false max-bytes={GstPipeline.MaximumQueuedBytes} caps={InputCaps}";
         Assert.StartsWith(prefix, direct, StringComparison.Ordinal);
         Assert.StartsWith(prefix, converter, StringComparison.Ordinal);
         Assert.EndsWith($"! {SinkTail}", direct, StringComparison.Ordinal);

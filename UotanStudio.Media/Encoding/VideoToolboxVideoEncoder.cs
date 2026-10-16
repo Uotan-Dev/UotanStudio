@@ -86,7 +86,7 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
         VideoFrameLimits.ValidateDimensions(width, height);
         ArgumentNullException.ThrowIfNull(packetCallback);
         _codec = codec; _width = width; _height = height; _callback = packetCallback;
-        nint specification = VtNative.Dictionary();
+        var specification = VtNative.Dictionary();
         try
         {
             VtNative.SetBoolean(specification, VtNative.Vt, "kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder", true);
@@ -138,10 +138,10 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
         CheckReady();
         ArgumentNullException.ThrowIfNull(frame);
         if (frame.Width != _width || frame.Height != _height) throw new ArgumentException("Frame dimensions do not match the encoder.", nameof(frame));
-        int required = VideoFrameLimits.Nv12Length(frame.Width, frame.Height, frame.Stride);
+        var required = VideoFrameLimits.Nv12Length(frame.Width, frame.Height, frame.Stride);
         if (frame.Span.Length < required) throw new ArgumentException("Truncated NV12 frame.", nameof(frame));
         if (frame.TimestampTicks < 0 || frame.TimestampTicks <= _lastTimestamp) throw new ArgumentException("Timestamps must strictly increase.", nameof(frame));
-        VtNative.Check(VtNative.CVPixelBufferCreate(0, (nuint)_width, (nuint)_height, VtNative.Nv12, 0, out nint image), "create encoder pixels");
+        VtNative.Check(VtNative.CVPixelBufferCreate(0, (nuint)_width, (nuint)_height, VtNative.Nv12, 0, out var image), "create encoder pixels");
         try
         {
             VtNative.Check(VtNative.CVPixelBufferLockBaseAddress(image, 0), "lock encoder pixels");
@@ -149,14 +149,14 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
             {
                 for (nuint plane = 0; plane < 2; plane++)
                 {
-                    int rows = plane == 0 ? _height : (_height + 1) / 2;
-                    int rowBytes = plane == 0 ? _width : (_width + 1) & ~1;
-                    nuint pitch = VtNative.CVPixelBufferGetBytesPerRowOfPlane(image, plane);
-                    nint pointer = VtNative.CVPixelBufferGetBaseAddressOfPlane(image, plane);
+                    var rows = plane == 0 ? _height : (_height + 1) / 2;
+                    var rowBytes = plane == 0 ? _width : (_width + 1) & ~1;
+                    var pitch = VtNative.CVPixelBufferGetBytesPerRowOfPlane(image, plane);
+                    var pointer = VtNative.CVPixelBufferGetBaseAddressOfPlane(image, plane);
                     if (pointer == 0 || pitch < (nuint)rowBytes || pitch > VideoFrameLimits.MaximumFrameBytes
                         || VtNative.CVPixelBufferGetHeightOfPlane(image, plane) < (nuint)rows) throw new InvalidDataException("Invalid encoder pixel plane.");
-                    int start = plane == 0 ? 0 : frame.Stride * _height;
-                    for (int row = 0; row < rows; row++)
+                    var start = plane == 0 ? 0 : frame.Stride * _height;
+                    for (var row = 0; row < rows; row++)
                         frame.Span.Slice(start + row * frame.Stride, rowBytes).CopyTo(new Span<byte>((byte*)pointer + checked((nuint)row * pitch), rowBytes));
                 }
             }
@@ -235,19 +235,19 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
 
     private EncodedVideoPacket CopyPacket(nint sample)
     {
-        nint block = VtNative.CMSampleBufferGetDataBuffer(sample);
-        nint format = VtNative.CMSampleBufferGetFormatDescription(sample);
+        var block = VtNative.CMSampleBufferGetDataBuffer(sample);
+        var format = VtNative.CMSampleBufferGetFormatDescription(sample);
         if (block == 0 || format == 0) throw new InvalidDataException("Missing encoded sample data or format.");
-        nuint length = VtNative.CMBlockBufferGetDataLength(block);
+        var length = VtNative.CMBlockBufferGetDataLength(block);
         if (length == 0 || length > VideoFrameLimits.MaximumAccessUnitBytes) throw new InvalidDataException("Invalid encoded packet length.");
         using var output = new MemoryStream();
-        int prefixBytes = 0;
+        var prefixBytes = 0;
         nuint parameterCount = 1;
         for (nuint i = 0; i < parameterCount; i++)
         {
             nint parameter;
             nuint size;
-            int status = _codec == VideoCodecId.H264
+            var status = _codec == VideoCodecId.H264
                 ? VtNative.CMVideoFormatDescriptionGetH264ParameterSetAtIndex(format, i, out parameter, out size, out parameterCount, out prefixBytes)
                 : VtNative.CMVideoFormatDescriptionGetHEVCParameterSetAtIndex(format, i, out parameter, out size, out parameterCount, out prefixBytes);
             VtNative.Check(status, "encoded parameter set");
@@ -255,13 +255,13 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
             WriteNal(output, new ReadOnlySpan<byte>((void*)parameter, checked((int)size)));
         }
         if (prefixBytes is not (1 or 2 or 4)) throw new InvalidDataException("Invalid encoded NAL length size.");
-        byte[] bytes = new byte[(int)length];
+        var bytes = new byte[(int)length];
         fixed (byte* data = bytes) VtNative.Check(VtNative.CMBlockBufferCopyDataBytes(block, 0, length, data), "copy encoded packet");
-        int offset = 0;
+        var offset = 0;
         while (offset < bytes.Length)
         {
             if (bytes.Length - offset < prefixBytes) throw new InvalidDataException("Truncated encoded NAL length.");
-            uint size = prefixBytes switch
+            var size = prefixBytes switch
             {
                 1 => bytes[offset],
                 2 => BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(offset)),

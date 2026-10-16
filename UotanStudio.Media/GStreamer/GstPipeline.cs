@@ -10,7 +10,7 @@ internal sealed unsafe class GstPipeline : IDisposable
     internal GstPipeline(string description, bool hasSink = true)
     {
         GstNative.Initialize();
-        _pipeline = GstNative.gst_parse_launch(description, out nint error);
+        _pipeline = GstNative.gst_parse_launch(description, out var error);
         try
         {
             if (error != 0) throw new NotSupportedException(GstNative.ReadError(error));
@@ -31,7 +31,7 @@ internal sealed unsafe class GstPipeline : IDisposable
         CheckError();
         if (GstNative.gst_app_src_get_current_level_bytes(_source) + (ulong)packet.Length > MaximumQueuedBytes)
             throw new InvalidOperationException("GStreamer input queue exceeded its bounded budget.");
-        nint buffer = GstNative.gst_buffer_new_allocate(0, (nuint)packet.Length, 0);
+        var buffer = GstNative.gst_buffer_new_allocate(0, (nuint)packet.Length, 0);
         if (buffer == 0) throw new OutOfMemoryException();
         try
         {
@@ -40,14 +40,14 @@ internal sealed unsafe class GstPipeline : IDisposable
             GstNative.SetTimestamp(buffer, ticks);
         }
         catch { GstNative.gst_mini_object_unref(buffer); throw; }
-        int flow = GstNative.gst_app_src_push_buffer(_source, buffer);
+        var flow = GstNative.gst_app_src_push_buffer(_source, buffer);
         if (flow != 0) { CheckError(); throw new InvalidOperationException($"GStreamer input flow failed: {flow}."); }
     }
     internal nint Pull(ulong timeout = 0)
     {
         CheckThread();
         CheckError();
-        nint sample = GstNative.gst_app_sink_try_pull_sample(_sink, timeout);
+        var sample = GstNative.gst_app_sink_try_pull_sample(_sink, timeout);
         if (sample == 0) CheckError();
         return sample;
     }
@@ -60,11 +60,11 @@ internal sealed unsafe class GstPipeline : IDisposable
     }
     internal void CheckError()
     {
-        nint message = GstNative.gst_bus_pop_filtered(_bus, 2);
+        var message = GstNative.gst_bus_pop_filtered(_bus, 2);
         if (message == 0) return;
         try
         {
-            GstNative.gst_message_parse_error(message, out nint error, out nint debug);
+            GstNative.gst_message_parse_error(message, out var error, out var debug);
             if (debug != 0) GstNative.g_free(debug);
             throw new InvalidOperationException(GstNative.ReadError(error));
         }

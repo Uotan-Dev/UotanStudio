@@ -15,7 +15,7 @@ public class ScreenMirrorCoordinatesTests
     [InlineData(1000, 562.5, 500, 281.25, 800, 450)]
     public void UniformStretch_MapsImageLocalCoordinates(double bw, double bh, double px, double py, int x, int y)
     {
-        Assert.True(ScreenMirrorCoordinates.TryMap(new Point(px, py), new Size(bw, bh), 1600, 900, false, out int actualX, out int actualY));
+        Assert.True(ScreenMirrorCoordinates.TryMap(new Point(px, py), new Size(bw, bh), 1600, 900, false, out var actualX, out var actualY));
         Assert.Equal((x, y), (actualX, actualY));
     }
 
@@ -30,14 +30,14 @@ public class ScreenMirrorCoordinatesTests
     [Fact]
     public void CapturedDragOutsideImage_ClampsToValidPixel()
     {
-        Assert.True(ScreenMirrorCoordinates.TryMap(new Point(-50, 1000), new Size(800, 600), 1600, 900, true, out int x, out int y));
+        Assert.True(ScreenMirrorCoordinates.TryMap(new Point(-50, 1000), new Size(800, 600), 1600, 900, true, out var x, out var y));
         Assert.Equal((0, 899), (x, y));
     }
 
     [Fact]
     public void PortraitFrame_MapsCenterAndRejectsSideBars()
     {
-        Assert.True(ScreenMirrorCoordinates.TryMap(new Point(400, 300), new Size(800, 600), 900, 1600, false, out int x, out int y));
+        Assert.True(ScreenMirrorCoordinates.TryMap(new Point(400, 300), new Size(800, 600), 900, 1600, false, out var x, out var y));
         Assert.Equal((450, 800), (x, y));
         Assert.False(ScreenMirrorCoordinates.TryMap(new Point(20, 300), new Size(800, 600), 900, 1600, false, out _, out _));
     }

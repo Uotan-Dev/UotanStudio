@@ -112,7 +112,7 @@ public static unsafe class Nv12ToBgraConverter
         }
 
         Validate(width, height, nv12Stride, destination.Length, destinationStride);
-        int sourceLength = VideoFrameLimits.Nv12Length(width, height, nv12Stride);
+        var sourceLength = VideoFrameLimits.Nv12Length(width, height, nv12Stride);
         if (nv12.Length < sourceLength)
         {
             throw new ArgumentException("The source does not contain complete NV12 planes.", nameof(nv12));
@@ -192,10 +192,10 @@ public static unsafe class Nv12ToBgraConverter
     {
         var coefficients = Nv12ConversionTable.For(matrix, range);
         int yOffset = coefficients.LumaOffset, yScale = coefficients.LumaScale;
-        int red = coefficients.RedFromChromaRed;
-        int greenU = -coefficients.GreenFromChromaBlue;
-        int greenV = -coefficients.GreenFromChromaRed;
-        int blue = coefficients.BlueFromChromaBlue;
+        var red = coefficients.RedFromChromaRed;
+        var greenU = -coefficients.GreenFromChromaBlue;
+        var greenV = -coefficients.GreenFromChromaRed;
+        var blue = coefficients.BlueFromChromaBlue;
         var yPlane = src;
         var uvPlane = src + (long)nv12Stride * height;
         var uvStride = nv12Stride;
@@ -209,7 +209,7 @@ public static unsafe class Nv12ToBgraConverter
             var verticalWeight = (row & 1) != 0 ? 1 : 0;
             var dstRow = dst + (long)row * dstStride;
 
-            int col = 0;
+            var col = 0;
             if (Vector128.IsHardwareAccelerated)
             {
                 for (; col <= width - 4; col += 4)

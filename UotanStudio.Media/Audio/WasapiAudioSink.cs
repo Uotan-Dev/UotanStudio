@@ -100,7 +100,7 @@ public sealed unsafe partial class WasapiAudioSink : IAudioSink
         CheckThread();
         AudioFormatLimits.Validate(channels, sampleRate, bitsPerSample);
         Close();
-        int hr = MfInterop.CoInitializeEx(0, 0);
+        var hr = MfInterop.CoInitializeEx(0, 0);
         if (hr != unchecked((int)0x80010106)) Check(hr, "COM initialization");
         _comOwned = hr >= 0;
         try
@@ -163,13 +163,13 @@ public sealed unsafe partial class WasapiAudioSink : IAudioSink
         CheckThread();
         if (!IsOpen) throw new InvalidOperationException("Audio sink is not open.");
         if (pcm.Length > AudioFormatLimits.MaximumPacketBytes || pcm.Length % _blockAlign != 0) throw new ArgumentException("Invalid PCM packet.", nameof(pcm));
-        long deadline = Environment.TickCount64 + 2000;
+        var deadline = Environment.TickCount64 + 2000;
         while (!pcm.IsEmpty)
         {
             uint padding;
             Check(((delegate* unmanaged[Stdcall]<nint, uint*, int>)Slot(_client, 6))(_client, &padding), "padding");
             if (padding > _capacity) throw new InvalidDataException("Invalid WASAPI padding.");
-            uint frames = Math.Min(_capacity - padding, (uint)(pcm.Length / _blockAlign));
+            var frames = Math.Min(_capacity - padding, (uint)(pcm.Length / _blockAlign));
             if (frames == 0)
             {
                 if (Environment.TickCount64 >= deadline) throw new TimeoutException("Audio endpoint stopped consuming PCM.");
@@ -178,7 +178,7 @@ public sealed unsafe partial class WasapiAudioSink : IAudioSink
             }
             nint data;
             Check(((delegate* unmanaged[Stdcall]<nint, uint, nint*, int>)Slot(_render, 3))(_render, frames, &data), "GetBuffer");
-            int bytes = checked((int)frames * _blockAlign);
+            var bytes = checked((int)frames * _blockAlign);
             pcm[..bytes].CopyTo(new Span<byte>((void*)data, bytes));
             Check(((delegate* unmanaged[Stdcall]<nint, uint, uint, int>)Slot(_render, 4))(_render, frames, 0), "ReleaseBuffer");
             pcm = pcm[bytes..];

@@ -84,7 +84,7 @@ internal sealed class PcmAudioDecoder : IAudioDecoder
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_callback is null) throw new InvalidOperationException("PCM decoder is not initialized.");
         if (packet.IsEmpty || packet.Length % 4 != 0 || packet.Length > AudioFormatLimits.MaximumPacketBytes) throw new InvalidDataException("Invalid stereo PCM packet.");
-        byte[] data = ArrayPool<byte>.Shared.Rent(packet.Length);
+        var data = ArrayPool<byte>.Shared.Rent(packet.Length);
         packet.CopyTo(data);
         using var frame = new DecodedAudioFrame(data, packet.Length, packet.Length / 4, 2, 48000, 16, timestampTicks);
         _callback(frame);
@@ -230,16 +230,16 @@ public sealed unsafe class GStreamerAudioDecoder(AudioCodecId codec) : IAudioDec
     {
         if (_inCallback) throw new InvalidOperationException("Decoder callbacks cannot reenter the decoder.");
         if (_pipeline is null) return;
-        for (int i = 0; i < 4096; i++)
+        for (var i = 0; i < 4096; i++)
         {
-            nint sample = _pipeline.Pull(i == 0 ? 10_000_000UL : 0);
+            var sample = _pipeline.Pull(i == 0 ? 10_000_000UL : 0);
             if (sample == 0) return;
             try
             {
-                nint source = GstNative.gst_sample_get_buffer(sample);
-                nuint length = source == 0 ? 0 : GstNative.gst_buffer_get_size(source);
+                var source = GstNative.gst_sample_get_buffer(sample);
+                var length = source == 0 ? 0 : GstNative.gst_buffer_get_size(source);
                 if (length == 0 || length > AudioFormatLimits.MaximumPacketBytes || length % 4 != 0) throw new InvalidDataException("Invalid GStreamer PCM output.");
-                byte[] data = ArrayPool<byte>.Shared.Rent((int)length);
+                var data = ArrayPool<byte>.Shared.Rent((int)length);
                 fixed (byte* target = data)
                 {
                     if (GstNative.gst_buffer_extract(source, 0, target, length) != length) { ArrayPool<byte>.Shared.Return(data); throw new InvalidDataException("Truncated PCM buffer."); }

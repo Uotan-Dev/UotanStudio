@@ -12,8 +12,8 @@ internal static class AudioFormatLimits
     internal static (int Rate, int Channels) ParseAacConfig(ReadOnlySpan<byte> config)
     {
         if (config.Length is < 2 or > 64) throw new InvalidDataException("Invalid AAC AudioSpecificConfig length.");
-        int objectType = config[0] >> 3;
-        int index = ((config[0] & 7) << 1) | (config[1] >> 7);
+        var objectType = config[0] >> 3;
+        var index = ((config[0] & 7) << 1) | (config[1] >> 7);
         ReadOnlySpan<int> rates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
         int rate, channels;
         if (index == 15)

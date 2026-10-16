@@ -28,7 +28,7 @@ public class FallbackVideoDecoderTests
         decoder.Dispose();
         Assert.True(cpu.Disposed);
         Assert.False(decoder.IsInitialized);
-        Assert.Throws<ObjectDisposedException>(() => decoder.Reset());
+        Assert.Throws<ObjectDisposedException>(decoder.Reset);
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public class FallbackVideoDecoderTests
         var first = new StubDecoder { FailInitialization = true };
         var second = new StubDecoder();
         var cpu = new StubDecoder();
-        int attempts = 0;
+        var attempts = 0;
         using var decoder = new FallbackVideoDecoder(() => ++attempts == 1 ? first : second, () => cpu);
         decoder.Initialize(VideoCodecId.H264, 64, 64, _ => { });
         decoder.Initialize(VideoCodecId.H264, 176, 144, _ => { });

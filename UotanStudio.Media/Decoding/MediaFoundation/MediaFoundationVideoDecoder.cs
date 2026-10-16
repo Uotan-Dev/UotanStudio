@@ -98,7 +98,7 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
         ReleaseTransform();
         if (!_mfOwned)
         {
-            int hr = MfInterop.CoInitializeEx(0, 0);
+            var hr = MfInterop.CoInitializeEx(0, 0);
             if (hr != unchecked((int)0x80010106)) Check(hr, "CoInitializeEx");
             _comOwned = hr >= 0;
             _ownerThread = Environment.CurrentManagedThreadId;
@@ -120,7 +120,7 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
             }
         }
 
-        Check(MfInterop.MFCreateMediaType(out nint input), "MFCreateMediaType");
+        Check(MfInterop.MFCreateMediaType(out var input), "MFCreateMediaType");
         try
         {
             Check(MfCom.SetGuid(input, MfInterop.MtMajorType, MfInterop.MediaTypeVideo), "major type");
@@ -128,14 +128,14 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
             Check(MfCom.SetUInt64(input, MfInterop.MtFrameSize, ((ulong)(uint)width << 32) | (uint)height), "frame size");
             var registration = new MftRegisterTypeInfo(MfInterop.MediaTypeVideo, format);
             Check(MfInterop.MFTEnumEx(MfInterop.CategoryVideoDecoder, MfInterop.MftEnumFlags,
-                registration, 0, out nint activates, out uint count), "MFTEnumEx");
+                registration, 0, out var activates, out var count), "MFTEnumEx");
             try
             {
-                for (int i = 0; i < count; i++)
+                for (var i = 0; i < count; i++)
                 {
-                    nint activate = Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size));
+                    var activate = Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size));
                     nint transform = 0;
-                    int hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out transform);
+                    var hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out transform);
                     if (hr < 0) { MfCom.Release(transform); continue; }
                     _transform = transform;
                     if (MfCom.SetType(transform, input, true) >= 0 && SelectOutputType())
@@ -148,7 +148,7 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
             }
             finally
             {
-                for (int i = 0; i < count; i++) MfCom.Release(Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size)));
+                for (var i = 0; i < count; i++) MfCom.Release(Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size)));
                 Marshal.FreeCoTaskMem(activates);
             }
             if (_transform == 0) throw new NotSupportedException($"No synchronous Media Foundation NV12 decoder accepts {codec}.");
@@ -205,11 +205,11 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
     {
         CheckReady();
         VideoFrameLimits.ValidateAccessUnit(accessUnit);
-        nint sample = CreateSample(accessUnit, 0, 0);
+        var sample = CreateSample(accessUnit, 0, 0);
         try
         {
             Check(MfCom.SetTime(sample, timestampTicks), "sample time");
-            int hr = MfCom.Input(_transform, sample);
+            var hr = MfCom.Input(_transform, sample);
             if (hr == MfInterop.MfENotAccepting)
             {
                 DrainOutput();
@@ -294,12 +294,12 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
 
     internal static void ConfigureLowLatency(nint transform, VideoCodecId codec)
     {
-        if (MfCom.GetAttributes(transform, out nint attributes) >= 0 && attributes != 0)
+        if (MfCom.GetAttributes(transform, out var attributes) >= 0 && attributes != 0)
         {
             try { Check(MfCom.SetUInt32(attributes, new Guid("9c27891a-ed7a-40e1-88e8-b22727a024ee"), 1), "low latency attribute"); }
             finally { MfCom.Release(attributes); }
         }
-        int hr = MfCom.QueryInterface(transform, new Guid("901db4c7-31ce-41a2-85dc-8fa0bf41b8da"), out nint codecApi);
+        var hr = MfCom.QueryInterface(transform, new Guid("901db4c7-31ce-41a2-85dc-8fa0bf41b8da"), out var codecApi);
         if (hr < 0) return;
         try
         {
@@ -326,22 +326,22 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
     {
         for (uint index = 0; index < 256; index++)
         {
-            int hr = MfCom.OutputType(_transform, index, out nint type);
+            var hr = MfCom.OutputType(_transform, index, out var type);
             if (hr < 0) { MfCom.Release(type); return false; }
             try
             {
                 if (MfCom.GetGuid(type, MfInterop.MtSubtype, out Guid subtype) < 0 || subtype != MfInterop.VideoFormatNv12) continue;
                 if (applyOverrides && !ApplyColorOverrides(type, _options.ColorMatrix, _options.ColorRange)) continue;
                 if (MfCom.SetType(_transform, type, false) < 0) continue;
-                Check(MfCom.GetUInt64(type, MfInterop.MtFrameSize, out ulong size), "output dimensions");
-                _ = MfCom.GetUInt32(type, MfInterop.MtVideoNominalRange, out uint range);
-                _ = MfCom.GetUInt32(type, MfInterop.MtYuvMatrix, out uint matrix);
+                Check(MfCom.GetUInt64(type, MfInterop.MtFrameSize, out var size), "output dimensions");
+                _ = MfCom.GetUInt32(type, MfInterop.MtVideoNominalRange, out var range);
+                _ = MfCom.GetUInt32(type, MfInterop.MtYuvMatrix, out var matrix);
                 _colorMatrix = matrix switch { 1 => VideoColorMatrix.Bt709, 2 => VideoColorMatrix.Bt601, _ => VideoColorMatrix.Auto };
                 _colorRange = range switch { 1 => VideoColorRange.Full, 2 => VideoColorRange.Limited, _ => VideoColorRange.Auto };
                 _width = checked((int)(size >> 32));
                 _height = checked((int)(size & uint.MaxValue));
                 VideoFrameLimits.ValidateDimensions(_width, _height);
-                _stride = MfCom.GetUInt32(type, MfInterop.MtDefaultStride, out uint stride) >= 0
+                _stride = MfCom.GetUInt32(type, MfInterop.MtDefaultStride, out var stride) >= 0
                     ? checked((int)stride) : checked((_width + 1) & ~1);
                 _ = VideoFrameLimits.Nv12Length(_width, _height, _stride);
                 return true;
@@ -365,15 +365,15 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
 
     private void DrainOutput()
     {
-        for (int attempts = 0; attempts < 256; attempts++)
+        for (var attempts = 0; attempts < 256; attempts++)
         {
             Check(MfCom.OutputInfo(_transform, out var info), "GetOutputStreamInfo");
-            nint supplied = (info.Flags & MfInterop.MftOutputStreamProvidesSamples) == 0
+            var supplied = (info.Flags & MfInterop.MftOutputStreamProvidesSamples) == 0
                 ? CreateSample([], info.Size, info.Alignment) : 0;
             var output = new MftOutputDataBuffer { Sample = supplied };
             try
             {
-                int hr = MfCom.Output(_transform, ref output);
+                var hr = MfCom.Output(_transform, ref output);
                 if (hr == MfInterop.MfETransformNeedMoreInput) return;
                 if (hr == MfInterop.MfETransformStreamChange)
                 {
@@ -396,16 +396,16 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
 
     private void EmitFrame(nint sample)
     {
-        Check(MfCom.ContiguousBuffer(sample, out nint buffer), "ConvertToContiguousBuffer");
+        Check(MfCom.ContiguousBuffer(sample, out var buffer), "ConvertToContiguousBuffer");
         try
         {
-            Check(MfCom.Lock(buffer, out nint source, out uint length), "buffer lock");
+            Check(MfCom.Lock(buffer, out var source, out var length), "buffer lock");
             try
             {
-                int required = VideoFrameLimits.Nv12Length(_width, _height, _stride);
+                var required = VideoFrameLimits.Nv12Length(_width, _height, _stride);
                 if (length < required) throw new InvalidDataException("Truncated NV12 output.");
-                byte[] pooled = ArrayPool<byte>.Shared.Rent(required);
-                _ = MfCom.GetTime(sample, out long timestamp);
+                var pooled = ArrayPool<byte>.Shared.Rent(required);
+                _ = MfCom.GetTime(sample, out var timestamp);
                 using var frame = new DecodedVideoFrame(pooled, required, _width, _height, _stride, timestamp) { ColorMatrix = _colorMatrix, ColorRange = _colorRange };
                 new ReadOnlySpan<byte>((void*)source, required).CopyTo(pooled);
                 _inCallback = true;
@@ -419,21 +419,21 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
 
     private static nint CreateSample(ReadOnlySpan<byte> data, uint capacity, uint alignment)
     {
-        uint size = Math.Max((uint)data.Length, capacity);
+        var size = Math.Max((uint)data.Length, capacity);
         if (size > VideoFrameLimits.MaximumFrameBytes) throw new InvalidDataException("MFT buffer exceeds the frame limit.");
         if (alignment > 4096 || alignment != 0 && (alignment & (alignment - 1)) != 0)
             throw new InvalidDataException("Invalid MFT buffer alignment.");
-        Check(MfInterop.MFCreateAlignedMemoryBuffer(Math.Max(size, 1), alignment == 0 ? 0 : alignment - 1, out nint buffer), "MFCreateAlignedMemoryBuffer");
+        Check(MfInterop.MFCreateAlignedMemoryBuffer(Math.Max(size, 1), alignment == 0 ? 0 : alignment - 1, out var buffer), "MFCreateAlignedMemoryBuffer");
         try
         {
             if (!data.IsEmpty)
             {
-                Check(MfCom.Lock(buffer, out nint target, out _), "buffer lock");
+                Check(MfCom.Lock(buffer, out var target, out _), "buffer lock");
                 try { data.CopyTo(new Span<byte>((void*)target, data.Length)); }
                 finally { Check(MfCom.Unlock(buffer), "buffer unlock"); }
                 Check(MfCom.SetLength(buffer, (uint)data.Length), "buffer length");
             }
-            Check(MfInterop.MFCreateSample(out nint sample), "MFCreateSample");
+            Check(MfInterop.MFCreateSample(out var sample), "MFCreateSample");
             try { Check(MfCom.AddBuffer(sample, buffer), "AddBuffer"); return sample; }
             catch { MfCom.Release(sample); throw; }
         }

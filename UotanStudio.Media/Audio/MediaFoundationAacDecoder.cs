@@ -104,7 +104,7 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
         ReleaseTransform();
         if (!_mfOwned)
         {
-            int hr = MfInterop.CoInitializeEx(0, 0);
+            var hr = MfInterop.CoInitializeEx(0, 0);
             if (hr != unchecked((int)0x80010106)) Check(hr, "CoInitializeEx");
             _comOwned = hr >= 0;
             _ownerThread = Environment.CurrentManagedThreadId;
@@ -148,10 +148,10 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
         CheckReady();
         if (packet.IsEmpty || packet.Length > 16 * 1024 * 1024) throw new InvalidDataException("Invalid audio packet.");
         if (_transform == 0) InitializeTransform();
-        nint sample = CreateSample(packet, timestampTicks);
+        var sample = CreateSample(packet, timestampTicks);
         try
         {
-            int hr = MfCom.Input(_transform, sample);
+            var hr = MfCom.Input(_transform, sample);
             if (hr == MfInterop.MfENotAccepting)
             {
                 DrainOutput();
@@ -183,7 +183,7 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
 
     private void InitializeTransform()
     {
-        Check(MfInterop.MFCreateMediaType(out nint input), "MFCreateMediaType");
+        Check(MfInterop.MFCreateMediaType(out var input), "MFCreateMediaType");
         try
         {
             Check(MfCom.SetGuid(input, MfInterop.MtMajorType, MfInterop.MediaTypeAudio), "major type");
@@ -194,21 +194,21 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
                 Check(MfCom.SetUInt32(input, MfInterop.MtAudioSamplesPerSecond, (uint)rate), "AAC sample rate");
                 Check(MfCom.SetUInt32(input, MfInterop.MtAudioNumChannels, (uint)channels), "AAC channels");
                 Check(MfCom.SetUInt32(input, new Guid("bfbabe79-7434-4d1c-94f0-72a3b9e17188"), 0), "raw AAC payload");
-                byte[] userData = new byte[12 + config.Length];
+                var userData = new byte[12 + config.Length];
                 userData[2] = 0xFE;
                 config.CopyTo(userData, 12);
                 Check(MfCom.SetBytes(input, MfInterop.MtUserData, userData), "codec private data");
             }
             var registration = new MftRegisterTypeInfo(MfInterop.MediaTypeAudio, MfInterop.AudioFormatAac);
             Check(MfInterop.MFTEnumEx(MfInterop.CategoryAudioDecoder, MfInterop.MftEnumFlags,
-                registration, 0, out nint activates, out uint count), "MFTEnumEx");
+                registration, 0, out var activates, out var count), "MFTEnumEx");
             try
             {
-                for (int i = 0; i < count; i++)
+                for (var i = 0; i < count; i++)
                 {
-                    nint activate = Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size));
+                    var activate = Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size));
                     nint transform = 0;
-                    int hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out transform);
+                    var hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out transform);
                     if (hr < 0) { MfCom.Release(transform); continue; }
                     _transform = transform;
                     if (MfCom.SetType(_transform, input, true) >= 0) break;
@@ -217,7 +217,7 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
             }
             finally
             {
-                for (int i = 0; i < count; i++) MfCom.Release(Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size)));
+                for (var i = 0; i < count; i++) MfCom.Release(Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size)));
                 Marshal.FreeCoTaskMem(activates);
             }
             if (_transform == 0) throw new NotSupportedException("No synchronous Media Foundation AAC decoder is available.");
@@ -233,16 +233,16 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
     {
         for (uint index = 0; index < 256; index++)
         {
-            int hr = MfCom.OutputType(_transform, index, out nint type);
+            var hr = MfCom.OutputType(_transform, index, out var type);
             if (hr < 0) { MfCom.Release(type); return false; }
             try
             {
                 if (MfCom.GetGuid(type, MfInterop.MtSubtype, out Guid subtype) < 0 || subtype != MfInterop.AudioFormatPcm) continue;
-                if (MfCom.GetUInt32(type, MfInterop.MtAudioBitsPerSample, out uint outputBits) < 0 || outputBits != 16) continue;
+                if (MfCom.GetUInt32(type, MfInterop.MtAudioBitsPerSample, out var outputBits) < 0 || outputBits != 16) continue;
                 if (MfCom.SetType(_transform, type, false) < 0) continue;
-                _channels = MfCom.GetUInt32(type, MfInterop.MtAudioNumChannels, out uint channels) >= 0 ? checked((int)channels) : 2;
-                _sampleRate = MfCom.GetUInt32(type, MfInterop.MtAudioSamplesPerSecond, out uint rate) >= 0 ? checked((int)rate) : 48000;
-                _bitsPerSample = MfCom.GetUInt32(type, MfInterop.MtAudioBitsPerSample, out uint bits) >= 0 ? checked((int)bits) : 16;
+                _channels = MfCom.GetUInt32(type, MfInterop.MtAudioNumChannels, out var channels) >= 0 ? checked((int)channels) : 2;
+                _sampleRate = MfCom.GetUInt32(type, MfInterop.MtAudioSamplesPerSecond, out var rate) >= 0 ? checked((int)rate) : 48000;
+                _bitsPerSample = MfCom.GetUInt32(type, MfInterop.MtAudioBitsPerSample, out var bits) >= 0 ? checked((int)bits) : 16;
                 if (_channels is < 1 or > 8 || _sampleRate is < 8000 or > 192000 || _bitsPerSample is not (16 or 32))
                     throw new InvalidDataException($"Unsupported PCM output: {_channels}ch {_sampleRate}Hz {_bitsPerSample}bit.");
                 return true;
@@ -255,15 +255,15 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
     private void DrainOutput()
     {
         if (_transform == 0) return;
-        for (int attempts = 0; attempts < 256; attempts++)
+        for (var attempts = 0; attempts < 256; attempts++)
         {
             Check(MfCom.OutputInfo(_transform, out var info), "GetOutputStreamInfo");
-            nint supplied = (info.Flags & MfInterop.MftOutputStreamProvidesSamples) == 0
+            var supplied = (info.Flags & MfInterop.MftOutputStreamProvidesSamples) == 0
                 ? CreateOutputSample(info.Size, info.Alignment) : 0;
             var output = new MftOutputDataBuffer { Sample = supplied };
             try
             {
-                int hr = MfCom.Output(_transform, ref output);
+                var hr = MfCom.Output(_transform, ref output);
                 if (hr == MfInterop.MfETransformNeedMoreInput) return;
                 if (hr == MfInterop.MfETransformStreamChange)
                 {
@@ -287,13 +287,13 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
     private nint CreateOutputSample(uint capacity, uint alignment)
     {
         if (capacity > AudioFormatLimits.MaximumPacketBytes) throw new InvalidDataException("Excessive MFT audio output capacity.");
-        uint size = Math.Max(capacity, 1);
+        var size = Math.Max(capacity, 1);
         if (alignment > 4096 || alignment != 0 && (alignment & (alignment - 1)) != 0)
             throw new InvalidDataException("Invalid audio MFT buffer alignment.");
-        Check(MfInterop.MFCreateAlignedMemoryBuffer(size, alignment == 0 ? 0 : alignment - 1, out nint buffer), "MFCreateAlignedMemoryBuffer");
+        Check(MfInterop.MFCreateAlignedMemoryBuffer(size, alignment == 0 ? 0 : alignment - 1, out var buffer), "MFCreateAlignedMemoryBuffer");
         try
         {
-            Check(MfInterop.MFCreateSample(out nint sample), "MFCreateSample");
+            Check(MfInterop.MFCreateSample(out var sample), "MFCreateSample");
             try { Check(MfCom.AddBuffer(sample, buffer), "AddBuffer"); return sample; }
             catch { MfCom.Release(sample); throw; }
         }
@@ -302,20 +302,20 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
 
     private void EmitFrame(nint sample)
     {
-        Check(MfCom.ContiguousBuffer(sample, out nint buffer), "ConvertToContiguousBuffer");
+        Check(MfCom.ContiguousBuffer(sample, out var buffer), "ConvertToContiguousBuffer");
         try
         {
-            Check(MfCom.Lock(buffer, out nint source, out uint length), "buffer lock");
+            Check(MfCom.Lock(buffer, out var source, out var length), "buffer lock");
             try
             {
                 if (_bitsPerSample != 16 && _bitsPerSample != 32) throw new InvalidDataException("Unsupported PCM bit depth.");
-                int blockAlign = _channels * (_bitsPerSample / 8);
+                var blockAlign = _channels * (_bitsPerSample / 8);
                 if (blockAlign == 0 || length < (uint)blockAlign || length > 16 * 1024 * 1024)
                     throw new InvalidDataException("Invalid audio output length.");
-                int sampleCount = checked((int)(length / (uint)blockAlign));
-                int required = checked(sampleCount * blockAlign);
-                byte[] pooled = System.Buffers.ArrayPool<byte>.Shared.Rent(required);
-                _ = MfCom.GetTime(sample, out long timestamp);
+                var sampleCount = checked((int)(length / (uint)blockAlign));
+                var required = checked(sampleCount * blockAlign);
+                var pooled = System.Buffers.ArrayPool<byte>.Shared.Rent(required);
+                _ = MfCom.GetTime(sample, out var timestamp);
                 new ReadOnlySpan<byte>((void*)source, required).CopyTo(pooled);
                 using var frame = new DecodedAudioFrame(pooled, required, sampleCount, _channels, _sampleRate, _bitsPerSample, timestamp);
                 _inCallback = true;
@@ -329,19 +329,19 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
 
     private static nint CreateSample(ReadOnlySpan<byte> data, long timestampTicks)
     {
-        uint size = Math.Max((uint)data.Length, 1);
+        var size = Math.Max((uint)data.Length, 1);
         if (size > 16 * 1024 * 1024) throw new InvalidDataException("Audio MFT buffer exceeds the packet limit.");
-        Check(MfInterop.MFCreateMemoryBuffer(size, out nint buffer), "MFCreateMemoryBuffer");
+        Check(MfInterop.MFCreateMemoryBuffer(size, out var buffer), "MFCreateMemoryBuffer");
         try
         {
             if (!data.IsEmpty)
             {
-                Check(MfCom.Lock(buffer, out nint target, out _), "buffer lock");
+                Check(MfCom.Lock(buffer, out var target, out _), "buffer lock");
                 try { data.CopyTo(new Span<byte>((void*)target, data.Length)); }
                 finally { Check(MfCom.Unlock(buffer), "buffer unlock"); }
                 Check(MfCom.SetLength(buffer, (uint)data.Length), "buffer length");
             }
-            Check(MfInterop.MFCreateSample(out nint sample), "MFCreateSample");
+            Check(MfInterop.MFCreateSample(out var sample), "MFCreateSample");
             try
             {
                 Check(MfCom.AddBuffer(sample, buffer), "AddBuffer");

@@ -24,7 +24,7 @@ public class VaApiDecoderTests
     {
         var first = new FakeSession();
         var second = new FakeSession();
-        int attempts = 0;
+        var attempts = 0;
         using var decoder = new VaApiVideoDecoder(new(), (requested, node) =>
         {
             Assert.Equal(codec, requested);
@@ -94,7 +94,7 @@ public class VaApiDecoderTests
         var session = new FakeSession();
         session.Frames.Enqueue(Frame(321));
         using var decoder = new VaApiVideoDecoder(new() { ColorRange = VideoColorRange.Full }, (_, _) => session);
-        int count = 0;
+        var count = 0;
         decoder.Initialize(VideoCodecId.H264, 64, 64, frame =>
         {
             Assert.Equal(321, frame.TimestampTicks);
@@ -117,9 +117,9 @@ public class VaApiDecoderTests
         session.Frames.Enqueue(info);
         using var decoder = new VaApiVideoDecoder(new(), (_, _) => session);
         decoder.Initialize(VideoCodecId.H264, 64, 64, _ => throw new Exception("Unexpected callback"));
-        Assert.Throws<InvalidDataException>(() => decoder.Poll());
+        Assert.Throws<InvalidDataException>(decoder.Poll);
         Assert.Equal(0, session.Copies);
-        Assert.Throws<InvalidOperationException>(() => decoder.Poll());
+        Assert.Throws<InvalidOperationException>(decoder.Poll);
         decoder.Reset();
         decoder.Poll();
         Assert.Equal(1, session.Resets);
@@ -131,7 +131,7 @@ public class VaApiDecoderTests
         var session = new FakeSession();
         session.Frames.Enqueue(Frame(20));
         using var decoder = new VaApiVideoDecoder(new(), (_, _) => session);
-        int count = 0;
+        var count = 0;
         decoder.Initialize(VideoCodecId.H264, 64, 64, _ => count++);
         decoder.Drain();
         decoder.Drain();
@@ -152,7 +152,7 @@ public class VaApiDecoderTests
             () => new VaApiVideoDecoder(new(), (_, _) => fallbackSession));
         selection.Initialize(VideoCodecId.H265, 64, 64, _ => { });
         Assert.Contains("no VLD profile", selection.FallbackReason);
-        Assert.Throws<ObjectDisposedException>(() => hardware.Poll());
+        Assert.Throws<ObjectDisposedException>(hardware.Poll);
     }
 
     [Fact]
@@ -163,9 +163,9 @@ public class VaApiDecoderTests
         DecodedVideoFrame? borrowed = null;
         using var decoder = new VaApiVideoDecoder(new(), (_, _) => session);
         decoder.Initialize(VideoCodecId.Av1, 64, 64, frame => { borrowed = frame; throw new ArithmeticException(); });
-        Assert.Throws<ArithmeticException>(() => decoder.Poll());
+        Assert.Throws<ArithmeticException>(decoder.Poll);
         Assert.Throws<ObjectDisposedException>(() => borrowed!.Buffer);
-        Assert.Throws<InvalidOperationException>(() => decoder.Poll());
+        Assert.Throws<InvalidOperationException>(decoder.Poll);
         decoder.Reset();
         decoder.Poll();
     }
@@ -194,7 +194,7 @@ public class VaApiDecoderTests
         {
             Packets.Add((packet.ToArray(), timestamp));
             _ended = packet.IsEmpty;
-            return Statuses.TryDequeue(out int value) ? value : 0;
+            return Statuses.TryDequeue(out var value) ? value : 0;
         }
         public int Receive(out VaFrameInfo info) => Frames.TryDequeue(out info) ? 1 : _ended ? 3 : 0;
         public void Copy(Span<byte> destination) { Copies++; destination.Fill(128); }

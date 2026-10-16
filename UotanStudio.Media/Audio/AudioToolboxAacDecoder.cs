@@ -103,7 +103,7 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
         if (codecConfig.Length is 0 or > 64) throw new InvalidDataException("AAC AudioSpecificConfig is required (2-64 bytes).");
         if (_thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The decoder must remain on its owning thread.");
         Release();
-        (int rate, int channels) = AudioFormatLimits.ParseAacConfig(codecConfig);
+        (var rate, var channels) = AudioFormatLimits.ParseAacConfig(codecConfig);
         var source = new AudioStreamBasicDescription
         {
             SampleRate = rate,
@@ -172,8 +172,8 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
     {
         CheckReady();
         if (packet.IsEmpty || packet.Length > 1024 * 1024) throw new InvalidDataException("Invalid AAC packet.");
-        int bufferBytes = 1024 * 2 * _channels;
-        byte[]? buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(bufferBytes);
+        var bufferBytes = 1024 * 2 * _channels;
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(bufferBytes);
         try
         {
             fixed (byte* input = packet, outputData = buffer)
@@ -189,10 +189,10 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
                     NumberBuffers = 1,
                     Buffer0 = new AudioBuffer { NumberChannels = (uint)_channels, DataByteSize = (uint)bufferBytes, Data = (nint)outputData },
                 };
-                int status = AudioConverterFillComplexBuffer(_converter, &InputProc, GCHandle.ToIntPtr(_self), ref packets, &output, null);
+                var status = AudioConverterFillComplexBuffer(_converter, &InputProc, GCHandle.ToIntPtr(_self), ref packets, &output, null);
                 if (status != 0 && status != InputCallbackError) Check(status, "decode packet");
                 if (packets == 0) return;
-                int bytes = checked((int)output.Buffer0.DataByteSize);
+                var bytes = checked((int)output.Buffer0.DataByteSize);
                 if (bytes > bufferBytes || bytes != packets * _channels * 2) throw new InvalidDataException("Invalid AudioConverter PCM output.");
                 using var frame = new DecodedAudioFrame(buffer, bytes, (int)packets, _channels, _sampleRate, 16, timestampTicks);
                 buffer = null;

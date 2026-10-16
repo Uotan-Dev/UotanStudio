@@ -239,21 +239,21 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
         VideoFrameLimits.ValidateAccessUnit(accessUnit);
         try
         {
-            bool hasPicture = _codec == VideoCodecId.Av1 && Av1Obu.ContainsFrame(accessUnit);
+            var hasPicture = _codec == VideoCodecId.Av1 && Av1Obu.ContainsFrame(accessUnit);
             if (_codec != VideoCodecId.Av1)
             {
                 foreach (Range range in AnnexB.Split(accessUnit))
                 {
                     ReadOnlySpan<byte> nal = accessUnit[range];
                     if (_codec == VideoCodecId.H265 && nal.Length < 2) throw new InvalidDataException("Truncated HEVC NAL header.");
-                    int type = _codec == VideoCodecId.H264 ? nal[0] & 31 : (nal[0] >> 1) & 63;
+                    var type = _codec == VideoCodecId.H264 ? nal[0] & 31 : (nal[0] >> 1) & 63;
                     hasPicture |= _codec == VideoCodecId.H264 ? type is >= 1 and <= 5 : type <= 31;
                 }
             }
             byte[]? combined = null;
             if (_configuration is not null)
             {
-                int length = checked(_configuration.Length + accessUnit.Length);
+                var length = checked(_configuration.Length + accessUnit.Length);
                 if (length > VideoFrameLimits.MaximumAccessUnitBytes) throw new InvalidDataException("Pending access unit exceeds 32 MiB.");
                 combined = new byte[length];
                 _configuration.CopyTo(combined, 0);
@@ -262,15 +262,15 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
             }
             if (!hasPicture) { _configuration = combined ?? accessUnit.ToArray(); return; }
             _configuration = null;
-            int status = _session!.Send(accessUnit, timestampTicks);
+            var status = _session!.Send(accessUnit, timestampTicks);
             if (status == 2)
             {
-                ReadFrames(out int frames);
+                ReadFrames(out var frames);
                 status = _session.Send(accessUnit, timestampTicks);
                 if (status == 2 && ExportActive)
                 {
-                    long deadline = Environment.TickCount64 + ExportReleaseWaitMilliseconds;
-                    int reclaims = 0;
+                    var deadline = Environment.TickCount64 + ExportReleaseWaitMilliseconds;
+                    var reclaims = 0;
                     while (status == 2)
                     {
                         if (Environment.TickCount64 >= deadline)
@@ -331,14 +331,14 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
         if (_ended) return;
         try
         {
-            int status = _session!.Send([], 0);
+            var status = _session!.Send([], 0);
             if (status == 2)
             {
                 ReadFrames(out _);
                 status = _session.Send([], 0);
                 if (status == 2 && ExportActive)
                 {
-                    long deadline = Environment.TickCount64 + 5000;
+                    var deadline = Environment.TickCount64 + 5000;
                     while (status == 2)
                     {
                         if (Environment.TickCount64 >= deadline)
@@ -366,7 +366,7 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
     /// </summary>
     private bool TryDeliverExport(in VaFrameInfo info)
     {
-        int status = _session!.Export(out VaDmaBufFrame raw);
+        var status = _session!.Export(out VaDmaBufFrame raw);
         if (status != 0)
         {
             _exportFailed = true;
@@ -434,15 +434,15 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
     {
         for (count = 0; count < 4096; count++)
         {
-            int status = _session!.Receive(out VaFrameInfo info);
+            var status = _session!.Receive(out VaFrameInfo info);
             if (status == 2) return 0;
             if (status is 0 or 3) return status;
             if (status != 1) throw new InvalidDataException("Unexpected VA-API receive status.");
             if (_exportEnabled && !_exportFailed && DmabufFrameCallback is not null && TryDeliverExport(in info)) continue;
-            int length = VideoFrameLimits.Nv12Length(info.Width, info.Height, info.Stride);
+            var length = VideoFrameLimits.Nv12Length(info.Width, info.Height, info.Stride);
             if (info.Length != length || info.Matrix is < 0 or > 2 || info.Range is < 0 or > 2)
                 throw new InvalidDataException("Invalid VA-API output layout or color metadata.");
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(length);
+            var buffer = ArrayPool<byte>.Shared.Rent(length);
             try { _session.Copy(buffer.AsSpan(0, length)); }
             catch { ArrayPool<byte>.Shared.Return(buffer); throw; }
             using var frame = new DecodedVideoFrame(buffer, length, info.Width, info.Height, info.Stride, info.Timestamp)

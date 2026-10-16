@@ -154,7 +154,7 @@ public sealed class ScrcpyClientConnectTests
     private static void WriteSession(MemoryStream stream, int width, int height, bool clientRequested)
     {
         var session = new byte[12];
-        ulong flags = ScrcpyConstants.PacketFlagSession | (uint)width;
+        var flags = ScrcpyConstants.PacketFlagSession | (uint)width;
         if (clientRequested) flags |= ScrcpyConstants.SessionFlagClientResize;
         BinaryPrimitives.WriteUInt64BigEndian(session, flags);
         BinaryPrimitives.WriteInt32BigEndian(session.AsSpan(8), height);

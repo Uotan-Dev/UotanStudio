@@ -19,23 +19,23 @@ public class Nv12ToBgraConverterTests
     [InlineData(1920, 3)]
     public void Convert_RandomPixelsAndPaddedRows_MatchScalarReference(int width, int height)
     {
-        int stride = ((width + 1) & ~1) + 6;
-        int outputStride = width * 4 + 13;
-        byte[] source = new byte[stride * (height + (height + 1) / 2)];
+        var stride = ((width + 1) & ~1) + 6;
+        var outputStride = width * 4 + 13;
+        var source = new byte[stride * (height + (height + 1) / 2)];
         new Random(42).NextBytes(source);
-        byte[] actual = new byte[outputStride * height];
+        var actual = new byte[outputStride * height];
         Array.Fill(actual, (byte)0xa5);
         Nv12ToBgraConverter.Convert(source, width, height, stride, actual, outputStride);
-        for (int row = 0; row < height; row++)
+        for (var row = 0; row < height; row++)
         {
-            for (int col = 0; col < width; col++)
+            for (var col = 0; col < width; col++)
             {
-                int uvRow = stride * height + (row / 2) * stride;
-                int uvRowNext = row / 2 + 1 < (height + 1) / 2 ? uvRow + stride : uvRow;
+                var uvRow = stride * height + (row / 2) * stride;
+                var uvRowNext = row / 2 + 1 < (height + 1) / 2 ? uvRow + stride : uvRow;
                 var u = SampleChroma(source, uvRow, uvRowNext, col >> 1, width, row & 1);
                 var v = SampleChroma(source, uvRow + 1, uvRowNext + 1, col >> 1, width, row & 1);
                 var expected = ExpectedPixel(source[row * stride + col], u, v);
-                int offset = row * outputStride + col * 4;
+                var offset = row * outputStride + col * 4;
                 Assert.Equal(expected, (actual[offset], actual[offset + 1], actual[offset + 2], actual[offset + 3]));
             }
             Assert.All(actual.AsSpan(row * outputStride + width * 4, 13).ToArray(), value => Assert.Equal(0xa5, value));

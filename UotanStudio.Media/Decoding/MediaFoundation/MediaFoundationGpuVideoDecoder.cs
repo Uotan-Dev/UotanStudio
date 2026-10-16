@@ -228,14 +228,14 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     {
         CheckReady();
         VideoFrameLimits.ValidateAccessUnit(accessUnit);
-        nint sample = CreateSample(accessUnit);
+        var sample = CreateSample(accessUnit);
         try
         {
             Check(MfCom.SetTime(sample, timestampTicks), "sample time");
             if (_isAsync) PumpUntilInputAccepted(sample);
             else
             {
-                int hr = MfCom.Input(_transform, sample);
+                var hr = MfCom.Input(_transform, sample);
                 if (hr == MfInterop.MfENotAccepting)
                 {
                     DrainSynchronousOutput();
@@ -319,7 +319,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     {
         CheckReady();
         if (!_isAsync) return;
-        for (int i = 0; i < 4096; i++)
+        for (var i = 0; i < 4096; i++)
             if (!PumpEvent()) return;
         throw new InvalidOperationException("Decoder event queue exceeded the polling limit.");
     }
@@ -345,7 +345,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private void AcquireLifetime()
     {
-        int hr = MfInterop.CoInitializeEx(0, MfInterop.CoInitMultithreaded);
+        var hr = MfInterop.CoInitializeEx(0, MfInterop.CoInitMultithreaded);
         if (hr != unchecked((int)0x80010106)) Check(hr, "CoInitializeEx");
         _comOwned = hr >= 0;
         _ownerThread = Environment.CurrentManagedThreadId;
@@ -404,7 +404,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         {
             Check(MfCom.QueryInterface(_device, D3D11Interop.IidVideoDevice, out _videoDevice), "ID3D11VideoDevice");
             Check(MfCom.QueryInterface(_context, D3D11Interop.IidVideoContext, out _videoContext), "ID3D11VideoContext");
-            if (MfCom.QueryInterface(_context, D3D11Interop.IidMultithread, out nint multithread) >= 0)
+            if (MfCom.QueryInterface(_context, D3D11Interop.IidMultithread, out var multithread) >= 0)
             {
                 try
                 {
@@ -422,7 +422,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private void CreateDeviceManager()
     {
-        Check(MfInterop.MFCreateDXGIDeviceManager(out uint token, out _deviceManager), "MFCreateDXGIDeviceManager");
+        Check(MfInterop.MFCreateDXGIDeviceManager(out var token, out _deviceManager), "MFCreateDXGIDeviceManager");
         try
         {
             Check(MfCom.DxgiResetDevice(_deviceManager, _device, token), "ResetDevice");
@@ -441,15 +441,15 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         Guid inputSubtype = format;
         var registration = new MftRegisterTypeInfo(MfInterop.MediaTypeVideo, inputSubtype);
         Check(MfInterop.MFTEnumEx(MfInterop.CategoryVideoDecoder, MfInterop.MftEnumFlagsAsyncHardware | MfInterop.MftEnumFlags,
-            registration, 0, out nint activates, out uint count), "MFTEnumEx(D3D11 candidates)");
+            registration, 0, out var activates, out var count), "MFTEnumEx(D3D11 candidates)");
         var failures = new List<string>();
         try
         {
-            for (int i = 0; i < count; i++)
+            for (var i = 0; i < count; i++)
             {
-                nint activate = Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size));
+                var activate = Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size));
                 nint transform = 0;
-                int hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out transform);
+                var hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out transform);
                 if (hr < 0) { failures.Add($"activate: 0x{hr:X8}"); MfCom.Release(transform); continue; }
                 _transform = transform;
                 try
@@ -466,7 +466,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         }
         finally
         {
-            for (int i = 0; i < count; i++) MfCom.Release(Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size)));
+            for (var i = 0; i < count; i++) MfCom.Release(Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size)));
             Marshal.FreeCoTaskMem(activates);
         }
         if (_transform == 0)
@@ -476,11 +476,11 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private bool TryConfigureDecoder(nint transform, VideoCodecId codec, int width, int height)
     {
-        if (MfCom.GetAttributes(transform, out nint attributes) < 0 || attributes == 0) return false;
+        if (MfCom.GetAttributes(transform, out var attributes) < 0 || attributes == 0) return false;
         try
         {
-            if (MfCom.GetUInt32(attributes, MfInterop.SaD3D11Aware, out uint aware) < 0 || aware == 0) return false;
-            _isAsync = MfCom.GetUInt32(attributes, MfInterop.TransformAsync, out uint asyncFlag) >= 0 && asyncFlag != 0;
+            if (MfCom.GetUInt32(attributes, MfInterop.SaD3D11Aware, out var aware) < 0 || aware == 0) return false;
+            _isAsync = MfCom.GetUInt32(attributes, MfInterop.TransformAsync, out var asyncFlag) >= 0 && asyncFlag != 0;
             if (_isAsync) Check(MfCom.SetUInt32(attributes, MfInterop.TransformAsyncUnlock, 1), "unlock async MFT");
 
         }
@@ -498,7 +498,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private bool BuildInputType(VideoCodecId codec, int width, int height)
     {
-        Check(MfInterop.MFCreateMediaType(out nint input), "MFCreateMediaType");
+        Check(MfInterop.MFCreateMediaType(out var input), "MFCreateMediaType");
         _inputType = input;
         Check(MfCom.SetGuid(input, MfInterop.MtMajorType, MfInterop.MediaTypeVideo), "major type");
         Check(MfCom.SetGuid(input, MfInterop.MtSubtype, CodecGuid(codec)), "subtype");
@@ -513,18 +513,18 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     {
         for (uint index = 0; index < 64; index++)
         {
-            int hr = MfCom.OutputType(_transform, index, out nint type);
+            var hr = MfCom.OutputType(_transform, index, out var type);
             if (hr < 0) { MfCom.Release(type); return false; }
             try
             {
                 if (MfCom.GetGuid(type, MfInterop.MtSubtype, out Guid subtype) < 0 || subtype != MfInterop.VideoFormatNv12) continue;
                 if (MfCom.SetType(_transform, type, false) < 0) continue;
-                Check(MfCom.GetUInt64(type, MfInterop.MtFrameSize, out ulong size), "output dimensions");
+                Check(MfCom.GetUInt64(type, MfInterop.MtFrameSize, out var size), "output dimensions");
                 _width = checked((int)(size >> 32));
                 _height = checked((int)(size & uint.MaxValue));
                 VideoFrameLimits.ValidateDimensions(_width, _height);
-                _ = MfCom.GetUInt32(type, MfInterop.MtVideoNominalRange, out uint range);
-                _ = MfCom.GetUInt32(type, MfInterop.MtYuvMatrix, out uint matrix);
+                _ = MfCom.GetUInt32(type, MfInterop.MtVideoNominalRange, out var range);
+                _ = MfCom.GetUInt32(type, MfInterop.MtYuvMatrix, out var matrix);
                 if (_options.ColorRange != VideoColorRange.Auto) range = _options.ColorRange == VideoColorRange.Full ? 1u : 2u;
                 if (_options.ColorMatrix != VideoColorMatrix.Auto) matrix = _options.ColorMatrix == VideoColorMatrix.Bt709 ? 1u : 2u;
                 _inputColorSpace = ((range == 1 ? 2u : 1u) << 4) | (matrix == 1 ? 4u : 0u);
@@ -606,12 +606,12 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             BindFlags = D3D11Interop.BindRenderTarget | D3D11Interop.BindShaderResource,
             MiscFlags = DxgiInterop.MiscSharedKeyedMutex,
         };
-        Check(MfCom.D3DCreateTexture2D(_device, desc, 0, out nint texture), "CreateTexture2D(export slot)");
+        Check(MfCom.D3DCreateTexture2D(_device, desc, 0, out var texture), "CreateTexture2D(export slot)");
         nint keyedMutex = 0, outputView = 0;
         try
         {
             Check(MfCom.QueryInterface(texture, DxgiInterop.IidDxgiKeyedMutex, out keyedMutex), "IDXGIKeyedMutex(export slot)");
-            Check(MfCom.QueryInterface(texture, DxgiInterop.IidDxgiResource, out nint resource), "IDXGIResource(export slot)");
+            Check(MfCom.QueryInterface(texture, DxgiInterop.IidDxgiResource, out var resource), "IDXGIResource(export slot)");
             nint sharedHandle;
             try
             {
@@ -650,7 +650,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private bool AcquireExportSlot(MediaFoundationExportSlot slot)
     {
-        int hr = DxgiInterop.AcquireSync(slot.KeyedMutex, 0, 0);
+        var hr = DxgiInterop.AcquireSync(slot.KeyedMutex, 0, 0);
         if (hr == DxgiInterop.WaitTimeout) return false;
         if (hr == DxgiInterop.WaitAbandoned)
         {
@@ -672,14 +672,14 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         WaitForEventCondition(drain: false);
         Check(MfCom.Input(_transform, sample), "ProcessInput");
         _inputRequests--;
-        for (int i = 0; i < 4096; i++)
+        for (var i = 0; i < 4096; i++)
             if (!PumpEvent()) return;
         throw new InvalidOperationException("Decoder event queue exceeded the per-packet limit.");
     }
 
     private void WaitForEventCondition(bool drain)
     {
-        long deadline = Environment.TickCount64 + 5000;
+        var deadline = Environment.TickCount64 + 5000;
         while (drain ? !_drainComplete : _inputRequests == 0)
         {
             if (Environment.TickCount64 >= deadline)
@@ -689,9 +689,9 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     }
     private void DiscardPendingEvents()
     {
-        for (int i = 0; i < 4096; i++)
+        for (var i = 0; i < 4096; i++)
         {
-            int hr = MfCom.GetEvent(_eventGenerator, 1, out nint mediaEvent);
+            var hr = MfCom.GetEvent(_eventGenerator, 1, out var mediaEvent);
             MfCom.Release(mediaEvent);
             if (hr == D3D11Interop.MfENoEventsAvailable) return;
             Check(hr, "discard flushed event");
@@ -701,12 +701,12 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private bool PumpEvent()
     {
-        int hr = MfCom.GetEvent(_eventGenerator, 1, out nint mediaEvent);
+        var hr = MfCom.GetEvent(_eventGenerator, 1, out var mediaEvent);
         try
         {
             if (hr == D3D11Interop.MfENoEventsAvailable) return false;
             Check(hr, "GetEvent");
-            Check(MfCom.EventType(mediaEvent, out uint type), "event type");
+            Check(MfCom.EventType(mediaEvent, out var type), "event type");
             int status;
             Check(((delegate* unmanaged[Stdcall]<nint, int*, int>)MfCom.PublicSlot(mediaEvent, 35))(mediaEvent, &status), "event status");
             Check(status, "asynchronous event");
@@ -723,17 +723,17 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private void DrainSynchronousOutput()
     {
-        for (int i = 0; i < 4096; i++)
+        for (var i = 0; i < 4096; i++)
             if (!ProduceOutput()) return;
         throw new InvalidOperationException("Decoder output exceeded the per-packet frame limit.");
     }
 
     private bool ProduceOutput()
     {
-        for (int attempt = 0; attempt < 8; attempt++)
+        for (var attempt = 0; attempt < 8; attempt++)
         {
             var output = new MftOutputDataBuffer();
-            int hr = MfCom.Output(_transform, ref output);
+            var hr = MfCom.Output(_transform, ref output);
             try
             {
                 if (hr == MfInterop.MfETransformStreamChange)
@@ -758,19 +758,19 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private void ConvertSample(nint sample)
     {
-        Check(MfCom.GetTime(sample, out long timestamp), "sample time");
-        Check(MfCom.BufferCount(sample, out uint buffers), "GetBufferCount");
+        Check(MfCom.GetTime(sample, out var timestamp), "sample time");
+        Check(MfCom.BufferCount(sample, out var buffers), "GetBufferCount");
         if (buffers == 0) throw new InvalidDataException("Decoder produced a sample without buffers.");
-        Check(MfCom.GetBufferByIndex(sample, 0, out nint buffer), "GetBufferByIndex");
+        Check(MfCom.GetBufferByIndex(sample, 0, out var buffer), "GetBufferByIndex");
         try
         {
-            Check(MfCom.QueryInterface(buffer, D3D11Interop.IidDxgiBuffer, out nint dxgiBuffer), "IMFDXGIBuffer");
+            Check(MfCom.QueryInterface(buffer, D3D11Interop.IidDxgiBuffer, out var dxgiBuffer), "IMFDXGIBuffer");
             try
             {
-                Check(MfCom.DxgiGetResource(dxgiBuffer, D3D11Interop.IidTexture2D, out nint sourceTexture), "GetResource(Texture2D)");
+                Check(MfCom.DxgiGetResource(dxgiBuffer, D3D11Interop.IidTexture2D, out var sourceTexture), "GetResource(Texture2D)");
                 try
                 {
-                    Check(MfCom.DxgiSubresourceIndex(dxgiBuffer, out uint subresource), "GetSubresourceIndex");
+                    Check(MfCom.DxgiSubresourceIndex(dxgiBuffer, out var subresource), "GetSubresourceIndex");
                     if (_options.PreferNv12Output)
                     {
                         if (ExportActive) ExportSample(sourceTexture, subresource, timestamp);
@@ -813,22 +813,22 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         Check(MfCom.D3DMap(_context, _stagingTexture, 0, 1, 0, out var mapped), "Map(NV12 staging)");
         try
         {
-            int rowBytes = checked((_width + 1) & ~1);
-            int sourceStride = checked((int)mapped.RowPitch);
+            var rowBytes = checked((_width + 1) & ~1);
+            var sourceStride = checked((int)mapped.RowPitch);
             if (sourceStride < rowBytes) throw new InvalidDataException("NV12 staging row is truncated.");
-            int length = VideoFrameLimits.Nv12Length(_width, _height, rowBytes);
-            byte[] pixels = GetReadbackBuffer(length);
+            var length = VideoFrameLimits.Nv12Length(_width, _height, rowBytes);
+            var pixels = GetReadbackBuffer(length);
             using var frame = new DecodedVideoFrame(pixels, length, _width, _height, rowBytes, timestampTicks)
             {
                 ReturnBufferToPool = false,
                 ColorMatrix = (_inputColorSpace & 4) != 0 ? VideoColorMatrix.Bt709 : VideoColorMatrix.Bt601,
                 ColorRange = (_inputColorSpace & 0x30) == 0x20 ? VideoColorRange.Full : VideoColorRange.Limited,
             };
-            for (int row = 0; row < _height; row++)
+            for (var row = 0; row < _height; row++)
                 new ReadOnlySpan<byte>((byte*)mapped.pData + (nint)row * sourceStride, rowBytes)
                     .CopyTo(pixels.AsSpan(row * rowBytes, rowBytes));
-            byte* uv = (byte*)mapped.pData + checked((nint)desc.Height * sourceStride);
-            for (int row = 0; row < (_height + 1) / 2; row++)
+            var uv = (byte*)mapped.pData + checked((nint)desc.Height * sourceStride);
+            for (var row = 0; row < (_height + 1) / 2; row++)
                 new ReadOnlySpan<byte>(uv + (nint)row * sourceStride, rowBytes)
                     .CopyTo(pixels.AsSpan((_height + row) * rowBytes, rowBytes));
             _inCallback = true;
@@ -881,7 +881,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             ViewDimension = D3D11Interop.VpivDimensionTexture2D,
             Texture2DArraySlice = subresource,
         };
-        Check(MfCom.D3DCreateVideoProcessorInputView(_videoDevice, sourceTexture, _processorEnumerator, inputViewDesc, out nint inputView), "CreateVideoProcessorInputView");
+        Check(MfCom.D3DCreateVideoProcessorInputView(_videoDevice, sourceTexture, _processorEnumerator, inputViewDesc, out var inputView), "CreateVideoProcessorInputView");
         try
         {
             var stream = new D3D11Interop.VideoProcessorStream
@@ -905,9 +905,9 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         Check(MfCom.D3DMap(_context, _stagingTexture, 0, 1, 0, out var mapped), "Map(staging)");
         try
         {
-            int stride = checked((int)mapped.RowPitch);
-            int rowBytes = checked(_width * 4);
-            int required = checked(rowBytes * _height);
+            var stride = checked((int)mapped.RowPitch);
+            var rowBytes = checked(_width * 4);
+            var required = checked(rowBytes * _height);
             if (stride < rowBytes) throw new InvalidDataException("Staging readback is truncated.");
             using var frame = new PointerDecodedVideoFrame((byte*)mapped.pData, required, _width, _height, stride, timestampTicks)
             {
@@ -931,17 +931,17 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private static nint CreateSample(ReadOnlySpan<byte> data)
     {
         if (data.Length > VideoFrameLimits.MaximumFrameBytes) throw new InvalidDataException("MFT buffer exceeds the frame limit.");
-        Check(MfInterop.MFCreateAlignedMemoryBuffer((uint)Math.Max(data.Length, 1), 0, out nint buffer), "MFCreateAlignedMemoryBuffer");
+        Check(MfInterop.MFCreateAlignedMemoryBuffer((uint)Math.Max(data.Length, 1), 0, out var buffer), "MFCreateAlignedMemoryBuffer");
         try
         {
             if (!data.IsEmpty)
             {
-                Check(MfCom.Lock(buffer, out nint target, out _), "buffer lock");
+                Check(MfCom.Lock(buffer, out var target, out _), "buffer lock");
                 try { data.CopyTo(new Span<byte>((void*)target, data.Length)); }
                 finally { Check(MfCom.Unlock(buffer), "buffer unlock"); }
                 Check(MfCom.SetLength(buffer, (uint)data.Length), "buffer length");
             }
-            Check(MfInterop.MFCreateSample(out nint sample), "MFCreateSample");
+            Check(MfInterop.MFCreateSample(out var sample), "MFCreateSample");
             try { Check(MfCom.AddBuffer(sample, buffer), "AddBuffer"); return sample; }
             catch { MfCom.Release(sample); throw; }
         }

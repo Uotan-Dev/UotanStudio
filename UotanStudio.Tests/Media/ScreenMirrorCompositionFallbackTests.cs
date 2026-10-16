@@ -32,7 +32,7 @@ public sealed class ScreenMirrorCompositionFallbackTests
     [SupportedOSPlatform("macos")]
     public void PublishIosurface_WithoutAttachedComposition_ReleasesFrameAndReportsFallback()
     {
-        int released = 0;
+        var released = 0;
         var frame = new IosurfaceVideoFrame(11, 12, 8, 4, 0, () => Interlocked.Increment(ref released));
         using var presenter = new ScreenMirrorGpuPresenter();
         Assert.False(presenter.PublishIosurface(frame));

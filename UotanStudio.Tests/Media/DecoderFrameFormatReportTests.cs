@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using UotanStudio.Media.Acceleration.Linux;
 using UotanStudio.Media.Decoding;
 using UotanStudio.Media.Decoding.MediaFoundation;
@@ -9,6 +10,7 @@ namespace UotanStudio.Tests.Media;
 public sealed class DecoderFrameFormatReportTests
 {
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void MediaFoundationGpuDecoder_WithoutAnExportRing_ReportsNv12()
     {
         using var decoder = new MediaFoundationGpuVideoDecoder();
@@ -16,6 +18,7 @@ public sealed class DecoderFrameFormatReportTests
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void MediaFoundationGpuDecoder_ExportSwitchesWithoutARingDoNotOverClaimBgra()
     {
         using var decoder = new MediaFoundationGpuVideoDecoder { GpuExportEnabled = true, GpuExportFrameCallback = static _ => { } };
@@ -23,6 +26,7 @@ public sealed class DecoderFrameFormatReportTests
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void MediaFoundationCpuDecoder_ReportsNv12()
     {
         using var decoder = new MediaFoundationVideoDecoder();
@@ -30,6 +34,7 @@ public sealed class DecoderFrameFormatReportTests
     }
 
     [Fact]
+    [SupportedOSPlatform("macos")]
     public void VideoToolboxDecoder_WithoutExport_ReportsNv12()
     {
         using var decoder = new VideoToolboxVideoDecoder();
@@ -37,6 +42,7 @@ public sealed class DecoderFrameFormatReportTests
     }
 
     [Fact]
+    [SupportedOSPlatform("linux")]
     public void VaApiDecoder_ReportsNv12BecauseExportIsAFrameHandleNotACallbackLayout()
     {
         using var decoder = new VaApiVideoDecoder();

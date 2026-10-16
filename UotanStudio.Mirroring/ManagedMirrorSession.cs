@@ -218,7 +218,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     {
         try
         {
-            byte[] buffer = new byte[4096];
+            var buffer = new byte[4096];
             while (Volatile.Read(ref _disposed) == 0)
             {
                 int count;

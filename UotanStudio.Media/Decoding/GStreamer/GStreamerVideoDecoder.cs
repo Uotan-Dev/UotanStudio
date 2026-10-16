@@ -106,7 +106,7 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     public bool IsInitialized => _pipeline is not null;
     internal static string[] Candidates(VideoCodecId codec, bool hardware)
     {
-        string name = codec switch { VideoCodecId.H264 => "h264", VideoCodecId.H265 => "h265", VideoCodecId.Av1 => "av1", _ => throw new ArgumentOutOfRangeException(nameof(codec)) };
+        var name = codec switch { VideoCodecId.H264 => "h264", VideoCodecId.H265 => "h265", VideoCodecId.Av1 => "av1", _ => throw new ArgumentOutOfRangeException(nameof(codec)) };
         if (!hardware) return codec switch { VideoCodecId.H264 => ["avdec_h264", "openh264dec"], VideoCodecId.H265 => ["avdec_h265"], _ => ["dav1ddec", "av1dec", "avdec_av1"] };
         if (OperatingSystem.IsWindows()) return [$"d3d11{name}dec", $"d3d12{name}dec", $"nv{name}dec"];
         if (OperatingSystem.IsMacOS()) return ["vtdec_hw"];
@@ -130,10 +130,10 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     /// </returns>
     internal static string? ColorimetryFor(VideoColorMatrix matrix, VideoColorRange range)
     {
-        int r = range switch { VideoColorRange.Full => 1, VideoColorRange.Limited => 2, _ => 0 };
-        int m = matrix switch { VideoColorMatrix.Bt709 => 3, VideoColorMatrix.Bt601 => 4, VideoColorMatrix.Bt2020 => 6, _ => 0 };
+        var r = range switch { VideoColorRange.Full => 1, VideoColorRange.Limited => 2, _ => 0 };
+        var m = matrix switch { VideoColorMatrix.Bt709 => 3, VideoColorMatrix.Bt601 => 4, VideoColorMatrix.Bt2020 => 6, _ => 0 };
         if (r == 0 && m == 0) return null;
-        (int t, int p) = m switch { 3 => (5, 1), 4 => (4, 4), 6 => (13, 7), _ => (0, 0) };
+        (var t, var p) = m switch { 3 => (5, 1), 4 => (4, 4), 6 => (13, 7), _ => (0, 0) };
         return $"{r}:{m}:{t}:{p}";
     }
     /// <summary>
@@ -188,13 +188,13 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
         PlanePath = GStreamerPlanePath.CpuConverter;
         GstNative.Initialize();
         _codec = codec; _width = width; _height = height; _callback = frameCallback; _sequence = 0;
-        string name = codec switch { VideoCodecId.H264 => "h264", VideoCodecId.H265 => "h265", VideoCodecId.Av1 => "av1", _ => throw new ArgumentOutOfRangeException(nameof(codec)) };
-        string format = codec == VideoCodecId.Av1 ? "obu-stream,alignment=tu" : "byte-stream,alignment=au";
+        var name = codec switch { VideoCodecId.H264 => "h264", VideoCodecId.H265 => "h265", VideoCodecId.Av1 => "av1", _ => throw new ArgumentOutOfRangeException(nameof(codec)) };
+        var format = codec == VideoCodecId.Av1 ? "obu-stream,alignment=tu" : "byte-stream,alignment=au";
         var errors = new List<string>();
-        string? colorimetry = ColorimetryFor(_options.ColorMatrix, _options.ColorRange);
-        string inputCaps = $"video/x-{name},stream-format={format},width={width},height={height}";
-        string outputCaps = $"video/x-raw,format=NV12{(colorimetry is null ? "" : $",colorimetry={colorimetry}")}";
-        foreach (string candidate in Candidates(codec, _hardware))
+        var colorimetry = ColorimetryFor(_options.ColorMatrix, _options.ColorRange);
+        var inputCaps = $"video/x-{name},stream-format={format},width={width},height={height}";
+        var outputCaps = $"video/x-raw,format=NV12{(colorimetry is null ? "" : $",colorimetry={colorimetry}")}";
+        foreach (var candidate in Candidates(codec, _hardware))
         {
             if (!GstNative.HasElement(candidate)) continue;
             GStreamerPlanePath path = GstNative.CanOutputNv12(candidate) ? GStreamerPlanePath.DirectNv12 : GStreamerPlanePath.CpuConverter;
@@ -245,7 +245,7 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     /// </returns>
     internal static string BuildPipeline(string parser, string element, string inputCaps, string outputCaps, GStreamerPlanePath path)
     {
-        string stages = path == GStreamerPlanePath.DirectNv12
+        var stages = path == GStreamerPlanePath.DirectNv12
             ? $"{element} ! {outputCaps}"
             : $"{element} ! video/x-raw ! videoconvert ! {outputCaps}";
         return $"appsrc name=input is-live=true format=time block=false max-bytes={GstPipeline.MaximumQueuedBytes} caps={inputCaps} ! {parser} ! {stages} ! appsink name=output sync=false max-buffers=8 drop=false enable-last-sample=false";
@@ -320,9 +320,9 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     public void Poll() { CheckReady(); ReadFrames(0); }
     private void ReadFrames(ulong timeout)
     {
-        for (int i = 0; i < 4096; i++)
+        for (var i = 0; i < 4096; i++)
         {
-            nint sample = _pipeline!.Pull(i == 0 ? timeout : 0);
+            var sample = _pipeline!.Pull(i == 0 ? timeout : 0);
             if (sample == 0) return;
             try { Deliver(sample); }
             finally { GstNative.gst_mini_object_unref(sample); }
@@ -331,22 +331,22 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     }
     private void Deliver(nint sample)
     {
-        nint caps = GstNative.gst_sample_get_caps(sample);
+        var caps = GstNative.gst_sample_get_caps(sample);
         if (caps == 0) throw new InvalidDataException("Missing video output caps.");
-        nint structure = GstNative.gst_caps_get_structure(caps, 0);
+        var structure = GstNative.gst_caps_get_structure(caps, 0);
         RequireNv12(GstNative.ReadStructureString(structure, "format"));
-        if (GstNative.gst_structure_get_int(structure, "width", out int width) == 0 || GstNative.gst_structure_get_int(structure, "height", out int height) == 0)
+        if (GstNative.gst_structure_get_int(structure, "width", out var width) == 0 || GstNative.gst_structure_get_int(structure, "height", out var height) == 0)
             throw new InvalidDataException("Missing video dimensions.");
         VideoFrameLimits.ValidateDimensions(width, height);
-        int nativeStride = checked((width + 3) & ~3);
-        int nativeYHeight = checked((height + 1) & ~1);
-        int nativeSize = checked(nativeStride * (nativeYHeight + (height + 1) / 2));
-        nint source = GstNative.gst_sample_get_buffer(sample);
-        nint meta = source == 0 ? 0 : GstNative.gst_buffer_get_video_meta(source);
+        var nativeStride = checked((width + 3) & ~3);
+        var nativeYHeight = checked((height + 1) & ~1);
+        var nativeSize = checked(nativeStride * (nativeYHeight + (height + 1) / 2));
+        var source = GstNative.gst_sample_get_buffer(sample);
+        var meta = source == 0 ? 0 : GstNative.gst_buffer_get_video_meta(source);
         if (source == 0 || (meta == 0 && GstNative.gst_buffer_get_size(source) != (nuint)nativeSize)) throw new InvalidDataException("Unexpected GStreamer NV12 memory layout.");
-        int stride = (width + 1) & ~1;
-        int size = VideoFrameLimits.Nv12Length(width, height, stride);
-        byte[] pixels = ArrayPool<byte>.Shared.Rent(size);
+        var stride = (width + 1) & ~1;
+        var size = VideoFrameLimits.Nv12Length(width, height, stride);
+        var pixels = ArrayPool<byte>.Shared.Rent(size);
         try
         {
             fixed (byte* target = pixels)
@@ -358,14 +358,14 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
                 }
                 else
                 {
-                    for (int y = 0; y < height; y++) CopyRow(source, y * nativeStride, target + y * stride, stride);
-                    for (int y = 0; y < (height + 1) / 2; y++) CopyRow(source, (nativeYHeight + y) * nativeStride, target + (height + y) * stride, stride);
+                    for (var y = 0; y < height; y++) CopyRow(source, y * nativeStride, target + y * stride, stride);
+                    for (var y = 0; y < (height + 1) / 2; y++) CopyRow(source, (nativeYHeight + y) * nativeStride, target + (height + y) * stride, stride);
                 }
             }
         }
         catch { ArrayPool<byte>.Shared.Return(pixels); throw; }
         var color = new GstNative.Colorimetry();
-        nint colorText = GstNative.gst_structure_get_string(structure, "colorimetry");
+        var colorText = GstNative.gst_structure_get_string(structure, "colorimetry");
         if (colorText != 0) GstNative.gst_video_colorimetry_from_string(out color, colorText);
         using var frame = new DecodedVideoFrame(pixels, size, width, height, stride, GstNative.GetTimestamp(source))
         {
@@ -377,15 +377,15 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     }
     private static void CopyPlane(nint meta, uint plane, byte* target, int targetStride, int rowBytes, int rows)
     {
-        if (GstNative.gst_video_meta_map(meta, plane, out var map, out nint data, out int stride, 1) == 0)
+        if (GstNative.gst_video_meta_map(meta, plane, out var map, out var data, out var stride, 1) == 0)
             throw new InvalidDataException("Cannot map GStreamer video plane.");
         try
         {
             if (Math.Abs((long)stride) < rowBytes) throw new InvalidDataException("Invalid video plane stride.");
-            for (int row = 0; row < rows; row++)
+            for (var row = 0; row < rows; row++)
             {
-                nint address = checked(data + checked(row * stride));
-                long offset = checked((long)address - (long)map.Data);
+                var address = checked(data + checked(row * stride));
+                var offset = checked((long)address - (long)map.Data);
                 if (offset < 0 || (ulong)offset + (uint)rowBytes > (ulong)map.Size) throw new InvalidDataException("Video plane exceeds mapped memory.");
                 new ReadOnlySpan<byte>((void*)address, rowBytes).CopyTo(new Span<byte>(target + row * targetStride, rowBytes));
                 if (targetStride > rowBytes) new Span<byte>(target + row * targetStride + rowBytes, targetStride - rowBytes).Clear();
@@ -412,7 +412,7 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     {
         CheckReady();
         _pipeline!.End();
-        long deadline = Environment.TickCount64 + 5000;
+        var deadline = Environment.TickCount64 + 5000;
         do
         {
             ReadFrames(10_000_000);

@@ -238,10 +238,10 @@ public sealed class ScrcpyClient : IDisposable
     /// <paramref name="session"/> or <paramref name="options"/> is <see langword="null"/>.
     /// <para><paramref name="session"/> 或 <paramref name="options"/> 为 <see langword="null"/>。</para>
     /// </exception>
-    public ScrcpyClient(UotanStudio.Comm.Contracts.IAdbDeviceSession session, ScrcpyServerOptions options)
+    public ScrcpyClient(Comm.Contracts.IAdbDeviceSession session, ScrcpyServerOptions options)
     {
         ArgumentNullException.ThrowIfNull(session);
-        _open = service => session.OpenServiceStream(service);
+        _open = session.OpenServiceStream;
         _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
@@ -395,14 +395,14 @@ public sealed class ScrcpyClient : IDisposable
 
         if (_options.SendStreamMeta)
         {
-            uint codec = ReadStreamCodecId(_videoStream, timeoutMs, "video");
+            var codec = ReadStreamCodecId(_videoStream, timeoutMs, "video");
             var session = ReadExact(_videoStream, ScrcpyConstants.HeaderLength, timeoutMs);
             ApplySessionPacket(session, codec);
         }
 
         if (_audioStream is not null && _options.SendStreamMeta)
         {
-            uint codecId = ReadStreamCodecId(_audioStream, timeoutMs, "audio");
+            var codecId = ReadStreamCodecId(_audioStream, timeoutMs, "audio");
             if (codecId == ScrcpyConstants.StreamDisabledByServer)
             {
                 // The server could not capture audio and expects video-only mirroring to continue.
@@ -431,7 +431,7 @@ public sealed class ScrcpyClient : IDisposable
     private uint ReadStreamCodecId(Stream stream, int timeoutMs, string streamName)
     {
         var header = ReadExact(stream, ScrcpyConstants.StreamMetaLength, timeoutMs);
-        uint codecId = BinaryPrimitives.ReadUInt32BigEndian(header);
+        var codecId = BinaryPrimitives.ReadUInt32BigEndian(header);
         if (codecId == ScrcpyConstants.StreamDisabledByServer)
         {
             throw new InvalidDataException(
@@ -468,7 +468,7 @@ public sealed class ScrcpyClient : IDisposable
     /// </remarks>
     private void ApplySessionPacket(ReadOnlySpan<byte> header, uint codec)
     {
-        ulong flagsAndWidth = BinaryPrimitives.ReadUInt64BigEndian(header);
+        var flagsAndWidth = BinaryPrimitives.ReadUInt64BigEndian(header);
         if ((flagsAndWidth & ScrcpyConstants.PacketFlagSession) == 0)
         {
             throw new InvalidDataException(
@@ -483,8 +483,8 @@ public sealed class ScrcpyClient : IDisposable
                 "The session packet carries unexpected flag bits. 会话包携带了未预期的标志位。");
         }
 
-        int width = unchecked((int)(flagsAndWidth & 0xFFFF_FFFF));
-        int height = BinaryPrimitives.ReadInt32BigEndian(header.Slice(8, 4));
+        var width = unchecked((int)(flagsAndWidth & 0xFFFF_FFFF));
+        var height = BinaryPrimitives.ReadInt32BigEndian(header.Slice(8, 4));
         if (width is < 1 or > 16384 || height is < 1 or > 16384)
         {
             throw new InvalidDataException(

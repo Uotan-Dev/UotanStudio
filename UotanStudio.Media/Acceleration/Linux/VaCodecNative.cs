@@ -36,15 +36,15 @@ internal sealed unsafe partial class VaCodecNative(VaCodecHandle handle) : IVaCo
     {
         if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("VA-API requires Linux.");
         if (AbiVersion() != 2) throw new NotSupportedException("Incompatible VA-API bridge ABI (expected 2).");
-        string[] nodes = renderNode is not null ? [renderNode] : VaApiSession.RenderNodes();
+        var nodes = renderNode is not null ? [renderNode] : VaApiSession.RenderNodes();
         var errors = new List<string>();
-        byte* errorBuffer = stackalloc byte[ErrorBytes];
-        foreach (string node in nodes)
+        var errorBuffer = stackalloc byte[ErrorBytes];
+        foreach (var node in nodes)
         {
             try
             {
                 using var capabilities = new VaApiSession(node);
-                bool supported = false;
+                var supported = false;
                 foreach (VaApiCapability capability in capabilities.QueryCapabilities())
                     supported |= VaApiSession.SupportsCodec(capability, codec);
                 if (!supported)
@@ -52,7 +52,7 @@ internal sealed unsafe partial class VaCodecNative(VaCodecHandle handle) : IVaCo
                     errors.Add($"{node}: no 8-bit VLD profile for {codec}");
                     continue;
                 }
-                int status = OpenNative((int)codec, node, out nint pointer, errorBuffer);
+                var status = OpenNative((int)codec, node, out var pointer, errorBuffer);
                 var owner = new VaCodecHandle(pointer);
                 if (status < 0 || owner.IsInvalid)
                 {
@@ -72,27 +72,27 @@ internal sealed unsafe partial class VaCodecNative(VaCodecHandle handle) : IVaCo
 
     public int Send(ReadOnlySpan<byte> packet, long timestamp)
     {
-        byte* error = stackalloc byte[ErrorBytes];
+        var error = stackalloc byte[ErrorBytes];
         fixed (byte* data = packet)
             return Check(SendNative(handle, data, packet.Length, timestamp, error), error);
     }
 
     public int Receive(out VaFrameInfo info)
     {
-        byte* error = stackalloc byte[ErrorBytes];
+        var error = stackalloc byte[ErrorBytes];
         return Check(ReceiveNative(handle, out info, error), error);
     }
 
     public void Copy(Span<byte> destination)
     {
-        byte* error = stackalloc byte[ErrorBytes];
+        var error = stackalloc byte[ErrorBytes];
         fixed (byte* data = destination)
             Check(CopyNative(handle, data, destination.Length, error), error);
     }
 
     public int Export(out VaDmaBufFrame frame)
     {
-        byte* error = stackalloc byte[ErrorBytes];
+        var error = stackalloc byte[ErrorBytes];
         return Check(ExportNative(handle, out frame, error), error);
     }
 
@@ -104,7 +104,7 @@ internal sealed unsafe partial class VaCodecNative(VaCodecHandle handle) : IVaCo
     private static string ReadError(byte* error)
     {
         ReadOnlySpan<byte> bytes = new(error, ErrorBytes);
-        int end = bytes.IndexOf((byte)0);
+        var end = bytes.IndexOf((byte)0);
         return System.Text.Encoding.UTF8.GetString(end < 0 ? bytes : bytes[..end]);
     }
 

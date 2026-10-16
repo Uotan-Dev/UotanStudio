@@ -13,18 +13,18 @@ internal static unsafe partial class GstNative
     static GstNative() => NativeLibrary.SetDllImportResolver(typeof(GstNative).Assembly, Resolve);
     private static nint Resolve(string name, Assembly assembly, DllImportSearchPath? searchPath)
     {
-        string? stem = name switch { Gst => "gstreamer-1.0", App => "gstapp-1.0", Glib => "glib-2.0", Video => "gstvideo-1.0", _ => null };
+        var stem = name switch { Gst => "gstreamer-1.0", App => "gstapp-1.0", Glib => "glib-2.0", Video => "gstvideo-1.0", _ => null };
         if (stem is null) return 0;
-        string file = OperatingSystem.IsWindows() ? $"lib{stem}-0.dll" : OperatingSystem.IsMacOS() ? $"lib{stem}.0.dylib" : $"lib{stem}.so.0";
-        if (NativeLibrary.TryLoad(file, assembly, searchPath, out nint handle)) return handle;
+        var file = OperatingSystem.IsWindows() ? $"lib{stem}-0.dll" : OperatingSystem.IsMacOS() ? $"lib{stem}.0.dylib" : $"lib{stem}.so.0";
+        if (NativeLibrary.TryLoad(file, assembly, searchPath, out var handle)) return handle;
         if (OperatingSystem.IsMacOS() && NativeLibrary.TryLoad($"/Library/Frameworks/GStreamer.framework/Versions/1.0/lib/{file}", out handle)) return handle;
         throw new DllNotFoundException($"GStreamer runtime library is missing: {file}. Install GStreamer 1.24 or newer with the required codec plugins.");
     }
     internal static void Initialize()
     {
-        if (gst_init_check(0, 0, out nint error) == 0) throw new NotSupportedException(ReadError(error));
+        if (gst_init_check(0, 0, out var error) == 0) throw new NotSupportedException(ReadError(error));
         if (error != 0) g_error_free(error);
-        gst_version(out uint major, out uint minor, out _, out _);
+        gst_version(out var major, out var minor, out _, out _);
         if (major != 1 || minor < 24) throw new NotSupportedException("GStreamer 1.24 or newer is required.");
     }
     internal static string ReadError(nint error)
@@ -35,7 +35,7 @@ internal static unsafe partial class GstNative
     }
     internal static bool HasElement(string name)
     {
-        nint factory = gst_element_factory_find(name);
+        var factory = gst_element_factory_find(name);
         if (factory == 0) return false;
         gst_object_unref(factory);
         return true;
@@ -61,19 +61,19 @@ internal static unsafe partial class GstNative
     /// </returns>
     internal static bool CanOutputNv12(string name)
     {
-        nint element = gst_element_factory_make(name, null);
+        var element = gst_element_factory_make(name, null);
         if (element == 0) return false;
         try
         {
-            nint pad = gst_element_get_static_pad(element, "src");
+            var pad = gst_element_get_static_pad(element, "src");
             if (pad == 0) return false;
             try
             {
-                nint filter = gst_caps_from_string("video/x-raw,format=NV12");
+                var filter = gst_caps_from_string("video/x-raw,format=NV12");
                 if (filter == 0) return false;
                 try
                 {
-                    nint queried = gst_pad_query_caps(pad, filter);
+                    var queried = gst_pad_query_caps(pad, filter);
                     if (queried == 0) return false;
                     try { return gst_caps_is_empty(queried) == 0; }
                     finally { gst_caps_unref(queried); }
@@ -87,13 +87,13 @@ internal static unsafe partial class GstNative
     internal static int BufferPtsOffset => IntPtr.Size == 8 ? 72 : 40;
     internal static void SetTimestamp(nint buffer, long ticks)
     {
-        long nanoseconds = checked(ticks * 100);
+        var nanoseconds = checked(ticks * 100);
         Marshal.WriteInt64(buffer, BufferPtsOffset, nanoseconds);
         Marshal.WriteInt64(buffer, BufferPtsOffset + 8, -1);
     }
     internal static long GetTimestamp(nint buffer)
     {
-        long value = Marshal.ReadInt64(buffer, BufferPtsOffset);
+        var value = Marshal.ReadInt64(buffer, BufferPtsOffset);
         return value < 0 ? 0 : value / 100;
     }
     [StructLayout(LayoutKind.Sequential)]
@@ -131,7 +131,7 @@ internal static unsafe partial class GstNative
     /// </returns>
     internal static string? ReadStructureString(nint structure, string field)
     {
-        nint value = gst_structure_get_string(structure, field);
+        var value = gst_structure_get_string(structure, field);
         return value == 0 ? null : Marshal.PtrToStringUTF8(value);
     }
     [LibraryImport(Gst)] internal static partial int gst_init_check(nint argc, nint argv, out nint error);

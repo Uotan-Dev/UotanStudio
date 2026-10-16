@@ -121,7 +121,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
             ComponentSubType = ComponentSubTypeDefault,
             ComponentManufacturer = ComponentManufacturer,
         };
-        nint component = AudioComponentFindNext(0, &description);
+        var component = AudioComponentFindNext(0, &description);
         if (component == 0) throw new InvalidOperationException("AudioUnit default output component is unavailable.");
         Check(AudioComponentInstanceNew(component, out _unit), "AudioComponentInstanceNew");
         _self = GCHandle.Alloc(this);
@@ -177,7 +177,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
     public void Write(ReadOnlySpan<byte> pcm)
     {
         CheckOpen();
-        int blockAlign = _channels * 2;
+        var blockAlign = _channels * 2;
         if (pcm.Length % blockAlign != 0) throw new ArgumentException("PCM length is not frame aligned.", nameof(pcm));
         if (pcm.IsEmpty) return;
 
@@ -194,7 +194,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
             if (sink is null || data == 0) return -50;
             var buffer = (AudioBufferList*)data;
             if (buffer->NumberBuffers != 1 || buffer->Buffer0.Data == 0) return -50;
-            uint required = checked(frames * (uint)sink._channels * 4);
+            var required = checked(frames * (uint)sink._channels * 4);
             if (required > buffer->Buffer0.DataByteSize || required > AudioFormatLimits.MaximumPacketBytes) return -50;
             var destination = new Span<byte>((void*)buffer->Buffer0.Data, checked((int)required));
             var staging = sink._staging;

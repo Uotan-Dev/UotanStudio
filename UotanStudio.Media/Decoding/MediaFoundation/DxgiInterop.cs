@@ -135,13 +135,13 @@ internal static unsafe partial class DxgiInterop
     /// <para>某个 DXGI 调用失败。</para></exception>
     public static nint FindAdapterByLuid(ReadOnlySpan<byte> adapterLuid)
     {
-        Check(CreateDXGIFactory1(IidDxgiFactory1, out nint factory), "CreateDXGIFactory1");
+        Check(CreateDXGIFactory1(IidDxgiFactory1, out var factory), "CreateDXGIFactory1");
         nint match = 0;
         try
         {
             for (uint index = 0; ; index++)
             {
-                int hr = EnumAdapters(factory, index, out nint adapter);
+                var hr = EnumAdapters(factory, index, out var adapter);
                 if (hr == unchecked((int)0x887A0002)) break;
                 Check(hr, "EnumAdapters");
                 try

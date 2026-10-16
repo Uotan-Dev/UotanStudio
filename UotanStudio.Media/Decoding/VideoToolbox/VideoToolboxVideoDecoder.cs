@@ -197,12 +197,12 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
         CheckReady();
         List<Range> ranges = AnnexB.Split(accessUnit);
         var payload = new List<Range>();
-        bool hasPicture = false;
+        var hasPicture = false;
         foreach (Range range in ranges)
         {
             ReadOnlySpan<byte> nal = accessUnit[range];
             if (_codec == VideoCodecId.H265 && nal.Length < 2) throw new InvalidDataException("Truncated HEVC NAL header.");
-            int type = _codec == VideoCodecId.H264 ? nal[0] & 31 : (nal[0] >> 1) & 63;
+            var type = _codec == VideoCodecId.H264 ? nal[0] & 31 : (nal[0] >> 1) & 63;
             if (_codec == VideoCodecId.H264 && type == 7 || _codec == VideoCodecId.H265 && type == 33) Update(ref _sps, nal);
             else if (_codec == VideoCodecId.H264 && type == 8 || _codec == VideoCodecId.H265 && type == 34) Update(ref _pps, nal);
             else if (_codec == VideoCodecId.H265 && type == 32) Update(ref _vps, nal);
@@ -216,15 +216,15 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
         if (_sps is null || _pps is null || _codec == VideoCodecId.H265 && _vps is null)
             throw new InvalidDataException("Video frame arrived before complete codec parameter sets.");
         if (_dirty || _session == 0) CreateSession();
-        byte[] bytes = AnnexB.ToLengthPrefixed(accessUnit, payload);
+        var bytes = AnnexB.ToLengthPrefixed(accessUnit, payload);
         VtNative.Check(VtNative.CMBlockBufferCreateWithMemoryBlock(0, 0, (nuint)bytes.Length, 0, 0, 0,
-            (nuint)bytes.Length, 0, out nint block), "create block buffer");
+            (nuint)bytes.Length, 0, out var block), "create block buffer");
         try
         {
             fixed (byte* data = bytes) VtNative.Check(VtNative.CMBlockBufferReplaceDataBytes(data, block, 0, (nuint)bytes.Length), "copy access unit");
             var timing = new CmTiming { Presentation = CmTime.FromTicks(timestampTicks) };
-            nuint size = (nuint)bytes.Length;
-            VtNative.Check(VtNative.CMSampleBufferCreateReady(0, block, _format, 1, 1, &timing, 1, &size, out nint sample), "create sample");
+            var size = (nuint)bytes.Length;
+            VtNative.Check(VtNative.CMSampleBufferCreateReady(0, block, _format, 1, 1, &timing, 1, &size, out var sample), "create sample");
             try
             {
                 VtNative.Check(VtNative.VTDecompressionSessionDecodeFrame(_session, sample, 0, 0, out _), "decode frame");
@@ -307,8 +307,8 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
         ReleaseSession();
         fixed (byte* sps = _sps, pps = _pps, vps = _vps)
         {
-            byte** sets = stackalloc byte*[3];
-            nuint* sizes = stackalloc nuint[3];
+            var sets = stackalloc byte*[3];
+            var sizes = stackalloc nuint[3];
             if (_codec == VideoCodecId.H264)
             {
                 sets[0] = sps; sets[1] = pps;
@@ -324,14 +324,14 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
         }
         if (ExportActive)
         {
-            nint exportAttributes = VtNative.PixelAttributes(VtNative.Bgra, gpuCompatible: true);
+            var exportAttributes = VtNative.PixelAttributes(VtNative.Bgra, gpuCompatible: true);
             try
             {
                 if (TryCreateSession(exportAttributes)) return;
             }
             finally { VtNative.CFRelease(exportAttributes); }
         }
-        nint attributes = VtNative.PixelAttributes();
+        var attributes = VtNative.PixelAttributes();
         try { TryCreateSession(attributes); }
         finally { VtNative.CFRelease(attributes); }
     }
@@ -401,10 +401,10 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
         VtNative.CFRetain(image);
         try
         {
-            nint iosurface = VtNative.CVPixelBufferGetIOSurface(image);
+            var iosurface = VtNative.CVPixelBufferGetIOSurface(image);
             if (iosurface == 0) throw new NotSupportedException("VideoToolbox produced a BGRA buffer without an IOSurface.");
-            int width = checked((int)VtNative.CVPixelBufferGetWidth(image));
-            int height = checked((int)VtNative.CVPixelBufferGetHeight(image));
+            var width = checked((int)VtNative.CVPixelBufferGetWidth(image));
+            var height = checked((int)VtNative.CVPixelBufferGetHeight(image));
             _exportFrames.Enqueue(new IosurfaceVideoFrame(image, iosurface, width, height, timestamp, () => VtNative.CFRelease(image)));
         }
         catch
@@ -438,31 +438,31 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     {
         if (VtNative.CVPixelBufferGetPixelFormatType(image) != VtNative.Nv12 || VtNative.CVPixelBufferGetPlaneCount(image) != 2)
             throw new NotSupportedException("VideoToolbox did not produce 8-bit video-range NV12.");
-        int width = checked((int)VtNative.CVPixelBufferGetWidth(image));
-        int height = checked((int)VtNative.CVPixelBufferGetHeight(image));
-        int stride = checked((width + 1) & ~1);
-        int length = VideoFrameLimits.Nv12Length(width, height, stride);
+        var width = checked((int)VtNative.CVPixelBufferGetWidth(image));
+        var height = checked((int)VtNative.CVPixelBufferGetHeight(image));
+        var stride = checked((width + 1) & ~1);
+        var length = VideoFrameLimits.Nv12Length(width, height, stride);
         VtNative.Check(VtNative.CVPixelBufferLockBaseAddress(image, 1), "lock decoded pixels");
         try
         {
-            byte[] bytes = ArrayPool<byte>.Shared.Rent(length);
+            var bytes = ArrayPool<byte>.Shared.Rent(length);
             try
             {
                 bytes.AsSpan(0, length).Clear();
                 for (nuint plane = 0; plane < 2; plane++)
                 {
-                    int rows = plane == 0 ? height : (height + 1) / 2;
-                    int rowBytes = plane == 0 ? width : stride;
-                    nuint pitch = VtNative.CVPixelBufferGetBytesPerRowOfPlane(image, plane);
-                    nint pointer = VtNative.CVPixelBufferGetBaseAddressOfPlane(image, plane);
+                    var rows = plane == 0 ? height : (height + 1) / 2;
+                    var rowBytes = plane == 0 ? width : stride;
+                    var pitch = VtNative.CVPixelBufferGetBytesPerRowOfPlane(image, plane);
+                    var pointer = VtNative.CVPixelBufferGetBaseAddressOfPlane(image, plane);
                     if (pointer == 0 || pitch < (nuint)rowBytes || pitch > VideoFrameLimits.MaximumFrameBytes
                         || VtNative.CVPixelBufferGetHeightOfPlane(image, plane) < (nuint)rows) throw new InvalidDataException("Invalid CoreVideo plane layout.");
-                    int start = plane == 0 ? 0 : stride * height;
-                    for (int row = 0; row < rows; row++)
+                    var start = plane == 0 ? 0 : stride * height;
+                    for (var row = 0; row < rows; row++)
                         new ReadOnlySpan<byte>((byte*)pointer + checked((nuint)row * pitch), rowBytes).CopyTo(bytes.AsSpan(start + row * stride, rowBytes));
                 }
                 VideoColorMatrix matrix = VideoColorMatrix.Auto;
-                nint attachment = VtNative.CVBufferCopyAttachment(image, VtNative.Symbol(VtNative.Cv, "kCVImageBufferYCbCrMatrixKey"), 0);
+                var attachment = VtNative.CVBufferCopyAttachment(image, VtNative.Symbol(VtNative.Cv, "kCVImageBufferYCbCrMatrixKey"), 0);
                 if (attachment != 0)
                 {
                     try

@@ -75,7 +75,7 @@ internal sealed class ExportSlotRing<TSlot> : IDisposable where TSlot : class
         _tryAcquire = tryAcquire;
         try
         {
-            for (int index = 0; index < capacity; index++) _entries.Add(new Entry(createSlot(index)));
+            for (var index = 0; index < capacity; index++) _entries.Add(new Entry(createSlot(index)));
         }
         catch
         {

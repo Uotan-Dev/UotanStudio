@@ -11,7 +11,7 @@ public sealed class ScreenMirrorPixelBufferTests
     [Fact]
     public void BorrowedReadback_DisposalInvalidatesFrameWithoutReturningSessionArray()
     {
-        byte[] pixels = new byte[24];
+        var pixels = new byte[24];
         var frame = new GpuDecodedVideoFrame(pixels, 24, 3, 2, 12, 0)
         { ReturnBufferToPool = false };
         var buffer = new ScreenMirrorPixelBuffer();
@@ -27,7 +27,7 @@ public sealed class ScreenMirrorPixelBufferTests
     [Fact]
     public void DesktopDefaults_ReadBackNv12BeforeAnyDraw()
     {
-        var mirror = new UotanStudio.ViewModels.Editors.ScreenMirrorViewModel();
+        var mirror = new ViewModels.Editors.ScreenMirrorViewModel();
         Assert.False(mirror.GpuPresenter.IsAvailable);
         Assert.True(mirror.ActiveDecoderOptions.PreferNv12Output);
     }
@@ -42,7 +42,7 @@ public sealed class ScreenMirrorPixelBufferTests
         Assert.Equal(16 * 16 * 4, storage.Length);
         frame.Buffer.AsSpan(0, frame.Length).Fill(42);
         Assert.All(storage, value => Assert.Equal(17, value));
-        for (int i = 0; i < 1000; i++) buffer.Update(frame, VideoColorMatrix.Auto, VideoColorRange.Auto);
+        for (var i = 0; i < 1000; i++) buffer.Update(frame, VideoColorMatrix.Auto, VideoColorRange.Auto);
         Assert.Same(storage, buffer.Pixels);
         Assert.All(storage, value => Assert.Equal(42, value));
     }

@@ -20,6 +20,6 @@ public sealed class ScreenMirrorTransportTests
             Protocol = DeviceProtocolKind.Adb,
             Transport = DeviceTransportKind.Tcp
         };
-        Assert.Throws<IOException>(() => UotanStudio.App.DeviceMonitor.OpenAdbLease(target));
+        Assert.Throws<IOException>(() => App.DeviceMonitor.OpenAdbLease(target));
     }
 }

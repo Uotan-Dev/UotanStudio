@@ -33,7 +33,7 @@ public sealed class ScreenMirrorGpuPresenterTests
             using var actual = new SKBitmap(info);
             Assert.True(surface.ReadPixels(info, actual.GetPixels(), actual.RowBytes, 0, 0));
             var bytes = actual.Bytes;
-            for (int i = 0; i < expected.Length; i++) Assert.InRange(Math.Abs(expected[i] - bytes[i]), 0, 2);
+            for (var i = 0; i < expected.Length; i++) Assert.InRange(Math.Abs(expected[i] - bytes[i]), 0, 2);
         }
         finally { image.Release(); }
     }
@@ -48,7 +48,7 @@ public sealed class ScreenMirrorGpuPresenterTests
         Assert.True(source.Publish(frame, VideoColorMatrix.Auto, VideoColorRange.Auto));
         var second = source.CreateOperation(new Rect(0, 0, 5, 3));
         Assert.True(source.Publish(frame, VideoColorMatrix.Auto, VideoColorRange.Auto));
-        for (int i = 0; i < 1000; i++) Assert.True(source.Publish(frame, VideoColorMatrix.Auto, VideoColorRange.Auto));
+        for (var i = 0; i < 1000; i++) Assert.True(source.Publish(frame, VideoColorMatrix.Auto, VideoColorRange.Auto));
         Assert.Equal(3, source.LiveFrames);
         Assert.Equal(1000, source.Skipped);
         first.Dispose(); first.Dispose();
@@ -65,16 +65,16 @@ public sealed class ScreenMirrorGpuPresenterTests
     public void PaintNv12_SwappedChroma_MatchesCpuConverterOnExchangedChromaBytes()
     {
         const int width = 6, height = 4, stride = 8;
-        byte[] planes = new byte[stride * (height + height / 2)];
-        for (int row = 0; row < height; row++)
-            for (int col = 0; col < width; col++) planes[row * stride + col] = (byte)(30 + row * 47 + col * 9);
-        for (int i = stride * height; i < planes.Length; i += 2)
+        var planes = new byte[stride * (height + height / 2)];
+        for (var row = 0; row < height; row++)
+            for (var col = 0; col < width; col++) planes[row * stride + col] = (byte)(30 + row * 47 + col * 9);
+        for (var i = stride * height; i < planes.Length; i += 2)
         {
             planes[i] = 70;
             planes[i + 1] = 205;
         }
-        byte[] exchanged = (byte[])planes.Clone();
-        for (int i = stride * height; i < exchanged.Length; i += 2)
+        var exchanged = (byte[])planes.Clone();
+        for (var i = stride * height; i < exchanged.Length; i += 2)
             (exchanged[i], exchanged[i + 1]) = (planes[i + 1], planes[i]);
 
         var expected = new byte[Nv12ToBgraConverter.GetBgraBufferSize(width, height)];
@@ -92,23 +92,23 @@ public sealed class ScreenMirrorGpuPresenterTests
         using var actual = new SKBitmap(info);
         Assert.True(surface.ReadPixels(info, actual.GetPixels(), actual.RowBytes, 0, 0));
         var bytes = actual.Bytes;
-        for (int i = 0; i < expected.Length; i++) Assert.InRange(Math.Abs(expected[i] - bytes[i]), 0, 2);
+        for (var i = 0; i < expected.Length; i++) Assert.InRange(Math.Abs(expected[i] - bytes[i]), 0, 2);
     }
 
     [Fact]
     public void PaintNv12_UnswappedChroma_DivergesFromExchangedChromaReference()
     {
         const int width = 6, height = 4, stride = 8;
-        byte[] planes = new byte[stride * (height + height / 2)];
+        var planes = new byte[stride * (height + height / 2)];
         planes.AsSpan(0, stride * height).Fill(140);
-        for (int i = stride * height; i < planes.Length; i += 2)
+        for (var i = stride * height; i < planes.Length; i += 2)
         {
             planes[i] = 40;
             planes[i + 1] = 220;
         }
         var exchangedExpected = new byte[Nv12ToBgraConverter.GetBgraBufferSize(width, height)];
-        byte[] exchanged = (byte[])planes.Clone();
-        for (int i = stride * height; i < exchanged.Length; i += 2)
+        var exchanged = (byte[])planes.Clone();
+        for (var i = stride * height; i < exchanged.Length; i += 2)
             (exchanged[i], exchanged[i + 1]) = (planes[i + 1], planes[i]);
         Nv12ToBgraConverter.Convert(exchanged, width, height, stride, exchangedExpected, matrix: VideoColorMatrix.Bt601, range: VideoColorRange.Limited);
 
@@ -128,10 +128,10 @@ public sealed class ScreenMirrorGpuPresenterTests
 
     private static DecodedVideoFrame Frame()
     {
-        byte[] bytes = ArrayPool<byte>.Shared.Rent(40);
+        var bytes = ArrayPool<byte>.Shared.Rent(40);
         bytes.AsSpan(0, 40).Fill(255);
-        for (int row = 0; row < 3; row++)
-            for (int col = 0; col < 5; col++) bytes[row * 8 + col] = (byte)(16 + row * 40 + col * 31);
+        for (var row = 0; row < 3; row++)
+            for (var col = 0; col < 5; col++) bytes[row * 8 + col] = (byte)(16 + row * 40 + col * 31);
         new byte[] { 128, 128, 90, 240, 240, 110 }.CopyTo(bytes, 24);
         new byte[] { 54, 34, 128, 128, 192, 192 }.CopyTo(bytes, 32);
         return new DecodedVideoFrame(bytes, 40, 5, 3, 8, 0);

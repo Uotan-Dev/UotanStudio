@@ -97,7 +97,7 @@ public class DecodedVideoFrame : IDisposable
 
         if (pixelFormat == VideoPixelFormat.Nv12 && buffer.Length > 0)
         {
-            int required = VideoFrameLimits.Nv12Length(width, height, stride);
+            var required = VideoFrameLimits.Nv12Length(width, height, stride);
             if (length < required)
             {
                 throw new ArgumentException("The buffer does not contain complete NV12 planes.", nameof(length));
@@ -141,7 +141,7 @@ public class DecodedVideoFrame : IDisposable
             throw new ArgumentOutOfRangeException(nameof(length));
         }
 
-        int required = VideoFrameLimits.Nv12Length(width, height, stride);
+        var required = VideoFrameLimits.Nv12Length(width, height, stride);
         if (length < required)
         {
             throw new ArgumentException("The buffer does not contain complete NV12 planes.", nameof(length));

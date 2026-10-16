@@ -7,12 +7,12 @@ public sealed class Nv12ConversionTableTests
 {
     private static (int Red, int GreenU, int GreenV, int Blue) Derive(double kr, double kb, bool full)
     {
-        double kt = 1 - kr - kb;
-        double chromaScale = full ? 1.0 : 255.0 / 224.0;
-        int red = (int)Math.Round(2 * (1 - kr) * chromaScale * 256);
-        int greenU = (int)Math.Round(-2 * kb * (1 - kb) / kt * chromaScale * 256);
-        int greenV = (int)Math.Round(-2 * kr * (1 - kr) / kt * chromaScale * 256);
-        int blue = (int)Math.Round(2 * (1 - kb) * chromaScale * 256);
+        var kt = 1 - kr - kb;
+        var chromaScale = full ? 1.0 : 255.0 / 224.0;
+        var red = (int)Math.Round(2 * (1 - kr) * chromaScale * 256);
+        var greenU = (int)Math.Round(-2 * kb * (1 - kb) / kt * chromaScale * 256);
+        var greenV = (int)Math.Round(-2 * kr * (1 - kr) / kt * chromaScale * 256);
+        var blue = (int)Math.Round(2 * (1 - kb) * chromaScale * 256);
         return (red, greenU, greenV, blue);
     }
 
@@ -60,9 +60,9 @@ public sealed class Nv12ConversionTableTests
     public void CpuConverter_AppliesBt2020TableDifferentlyFromBt601(VideoColorMatrix matrix, VideoColorRange range)
     {
         const int width = 8, height = 4, stride = 8;
-        byte[] source = new byte[stride * (height + height / 2)];
+        var source = new byte[stride * (height + height / 2)];
         source.AsSpan(0, stride * height).Fill(180);
-        for (int i = stride * height; i < source.Length; i += 2)
+        for (var i = stride * height; i < source.Length; i += 2)
         {
             source[i] = 90;
             source[i + 1] = 200;

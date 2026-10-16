@@ -46,7 +46,7 @@ public class ScrcpyAudioFrameTests
     [Fact]
     public void DataPacket_HighBitsDoNotLeakIntoTimestamp()
     {
-        ulong raw = ScrcpyConstants.PacketFlagConfig | 1_000_000UL;
+        var raw = ScrcpyConstants.PacketFlagConfig | 1_000_000UL;
         var frame = new ScrcpyAudioFrame(unchecked((long)raw), [0]);
         Assert.True(frame.IsCodecConfig);
     }

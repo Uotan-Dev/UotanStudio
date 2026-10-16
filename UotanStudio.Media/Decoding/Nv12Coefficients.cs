@@ -71,7 +71,7 @@ public static class Nv12ConversionTable
     /// </returns>
     public static Nv12Coefficients For(VideoColorMatrix matrix, VideoColorRange range)
     {
-        bool full = range == VideoColorRange.Full;
+        var full = range == VideoColorRange.Full;
         return matrix switch
         {
             VideoColorMatrix.Bt709 when full => new Nv12Coefficients(0, 256, 403, -48, -120, 475),

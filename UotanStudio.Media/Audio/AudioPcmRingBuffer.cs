@@ -33,23 +33,23 @@ internal sealed class AudioPcmRingBuffer
     /// </summary>
     internal void Write(ReadOnlySpan<byte> pcm, float volume)
     {
-        int inputAlign = _channels * sizeof(short);
+        var inputAlign = _channels * sizeof(short);
         if (pcm.Length % inputAlign != 0) throw new ArgumentException("PCM length is not frame aligned.", nameof(pcm));
-        int frames = Math.Min(pcm.Length / inputAlign, _capacityFrames);
+        var frames = Math.Min(pcm.Length / inputAlign, _capacityFrames);
         pcm = pcm[^checked(frames * inputAlign)..];
-        for (int sample = 0; sample < frames * _channels; sample++)
+        for (var sample = 0; sample < frames * _channels; sample++)
         {
-            float value = BinaryPrimitives.ReadInt16LittleEndian(pcm[(sample * 2)..]) / 32768f * volume;
+            var value = BinaryPrimitives.ReadInt16LittleEndian(pcm[(sample * 2)..]) / 32768f * volume;
             BinaryPrimitives.WriteSingleLittleEndian(_conversion.AsSpan(sample * 4), value);
         }
-        int align = _channels * sizeof(float);
+        var align = _channels * sizeof(float);
         lock (_gate)
         {
-            int drop = Math.Max(0, _count + frames - _capacityFrames);
+            var drop = Math.Max(0, _count + frames - _capacityFrames);
             _readFrame = (_readFrame + drop) % _capacityFrames;
             _count -= drop;
-            int writeFrame = (_readFrame + _count) % _capacityFrames;
-            int first = Math.Min(frames, _capacityFrames - writeFrame);
+            var writeFrame = (_readFrame + _count) % _capacityFrames;
+            var first = Math.Min(frames, _capacityFrames - writeFrame);
             _conversion.AsSpan(0, first * align).CopyTo(_ring.AsSpan(writeFrame * align));
             _conversion.AsSpan(first * align, (frames - first) * align).CopyTo(_ring);
             _count += frames;
@@ -59,12 +59,12 @@ internal sealed class AudioPcmRingBuffer
     /// <summary>Consumes staged frames, filling underruns with silence. <para>消费暂存帧，欠载部分填充静音。</para></summary>
     internal void Read(Span<byte> destination)
     {
-        int align = _channels * sizeof(float);
+        var align = _channels * sizeof(float);
         if (destination.Length % align != 0) throw new ArgumentException("Output length is not frame aligned.", nameof(destination));
         lock (_gate)
         {
-            int frames = Math.Min(destination.Length / align, _count);
-            int first = Math.Min(frames, _capacityFrames - _readFrame);
+            var frames = Math.Min(destination.Length / align, _count);
+            var first = Math.Min(frames, _capacityFrames - _readFrame);
             _ring.AsSpan(_readFrame * align, first * align).CopyTo(destination);
             _ring.AsSpan(0, (frames - first) * align).CopyTo(destination[(first * align)..]);
             _readFrame = (_readFrame + frames) % _capacityFrames;

@@ -225,7 +225,7 @@ public sealed class VaApiDmabufExportTests
 
         public int Receive(out VaFrameInfo info)
         {
-            if (ReceiveStatuses.TryDequeue(out int status))
+            if (ReceiveStatuses.TryDequeue(out var status))
             {
                 info = Frame();
                 return status;

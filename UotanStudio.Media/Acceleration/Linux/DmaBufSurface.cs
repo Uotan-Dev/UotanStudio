@@ -92,7 +92,7 @@ public sealed class DmaBufSurface : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        for (int i = 0; i < Math.Min(Descriptor.ObjectCount, 4); i++)
+        for (var i = 0; i < Math.Min(Descriptor.ObjectCount, 4); i++)
             if (Descriptor.Objects[i].Fd >= 0) _ = VaNative.close(Descriptor.Objects[i].Fd);
     }
 }
@@ -164,19 +164,19 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
         ArgumentNullException.ThrowIfNull(surface);
         surface.CheckAlive();
         if (eglDisplay == 0) throw new ArgumentException("An initialized EGLDisplay is required.", nameof(eglDisplay));
-        string extensions = Marshal.PtrToStringUTF8(eglQueryString(eglDisplay, 0x3055)) ?? "";
-        string[] names = extensions.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var extensions = Marshal.PtrToStringUTF8(eglQueryString(eglDisplay, 0x3055)) ?? "";
+        var names = extensions.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (!names.Contains("EGL_EXT_image_dma_buf_import")) throw new NotSupportedException("EGL DMA-BUF import is unavailable.");
-        bool modifiers = names.Contains("EGL_EXT_image_dma_buf_import_modifiers");
+        var modifiers = names.Contains("EGL_EXT_image_dma_buf_import_modifiers");
         var descriptor = surface.Descriptor;
         if (descriptor.LayerCount is < 1 or > 4) throw new NotSupportedException("The descriptor exposes no importable DRM layer.");
         if ((uint)layerIndex >= descriptor.LayerCount) throw new ArgumentOutOfRangeException(nameof(layerIndex));
         DmaBufLayer layer = descriptor.Layers[layerIndex];
         if (layer.Planes is < 1 or > 3) throw new NotSupportedException("EGL import supports one to three planes.");
         List<int> attributes = [0x3057, checked((int)descriptor.Width), 0x3056, checked((int)descriptor.Height), 0x3271, unchecked((int)layer.Format)];
-        for (int i = 0; i < layer.Planes; i++)
+        for (var i = 0; i < layer.Planes; i++)
         {
-            uint objectIndex = layer.ObjectIndices[i];
+            var objectIndex = layer.ObjectIndices[i];
             if (objectIndex >= descriptor.ObjectCount) throw new InvalidDataException("DRM object index is out of range.");
             DmaBufObject obj = descriptor.Objects[(int)objectIndex];
             if (obj.Fd < 0 || layer.Pitches[i] == 0 || layer.Offsets[i] >= obj.Size) throw new InvalidDataException("Invalid DRM plane.");
@@ -193,7 +193,7 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
         int[] array = [.. attributes];
         fixed (int* p = array)
         {
-            nint image = create(eglDisplay, 0, 0x3270, 0, p);
+            var image = create(eglDisplay, 0, 0x3270, 0, p);
             if (image == 0) throw new InvalidOperationException($"EGL DMA-BUF import failed: 0x{eglGetError():X}.");
             return new(eglDisplay, image, destroy);
         }
@@ -218,7 +218,7 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     /// <para>EGL 不支持 DMA-BUF 导入。</para></exception>
     public static EglDmaBufImage Import(DmaBufSurface surface, int layerIndex = 0)
     {
-        nint display = eglGetCurrentDisplay();
+        var display = eglGetCurrentDisplay();
         if (display == 0) throw new InvalidOperationException("No current EGL display is available on this thread.");
         return Import(display, surface, layerIndex);
     }
@@ -251,9 +251,9 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     public (uint TextureId, uint Target) CreateBoundTexture(bool externalOes, uint glFormat)
     {
         CheckThread();
-        string extension = externalOes ? "GL_OES_EGL_image_external" : "GL_OES_EGL_image";
+        var extension = externalOes ? "GL_OES_EGL_image_external" : "GL_OES_EGL_image";
         var getString = (delegate* unmanaged<uint, nint>)eglGetProcAddress("glGetString");
-        string extensions = getString == null ? "" : Marshal.PtrToStringUTF8(getString(0x1F03)) ?? "";
+        var extensions = getString == null ? "" : Marshal.PtrToStringUTF8(getString(0x1F03)) ?? "";
         if (!extensions.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(extension))
             throw new NotSupportedException($"A current context with {extension} is required.");
         var bind = (delegate* unmanaged<uint, nint, void>)eglGetProcAddress("glEGLImageTargetTexture2DOES");
@@ -262,7 +262,7 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
         var parameter = (delegate* unmanaged<uint, uint, int, void>)eglGetProcAddress("glTexParameteri");
         if (bind == null || generate == null || bindTexture == null || parameter == null)
             throw new NotSupportedException("EGL image texture entrypoints are unavailable.");
-        uint target = externalOes ? 0x8D65u : 0x0DE1u;
+        var target = externalOes ? 0x8D65u : 0x0DE1u;
         uint texture = 0;
         generate(1, &texture);
         if (texture == 0) throw new InvalidOperationException("GL texture generation failed.");

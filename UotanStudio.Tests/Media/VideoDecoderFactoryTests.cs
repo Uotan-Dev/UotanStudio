@@ -13,7 +13,7 @@ public class VideoDecoderFactoryTests
     {
         if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS() && !OperatingSystem.IsLinux())
         {
-            Assert.Throws<NotSupportedException>(() => VideoDecoderFactory.Create());
+            Assert.Throws<NotSupportedException>(VideoDecoderFactory.Create);
             return;
         }
         using var decoder = VideoDecoderFactory.Create();

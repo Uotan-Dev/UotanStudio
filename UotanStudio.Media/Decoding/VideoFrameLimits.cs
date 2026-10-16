@@ -17,7 +17,7 @@ internal static class VideoFrameLimits
     {
         ValidateDimensions(width, height);
         if (stride < checked((width + 1) & ~1)) throw new ArgumentOutOfRangeException(nameof(stride));
-        long length = (long)stride * (height + (height + 1) / 2);
+        var length = (long)stride * (height + (height + 1) / 2);
         if (length > MaximumFrameBytes) throw new ArgumentOutOfRangeException(nameof(stride));
         return checked((int)length);
     }

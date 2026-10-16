@@ -50,9 +50,9 @@ internal static unsafe partial class VtNative
     internal static nint PixelAttributes() => PixelAttributes(Nv12, gpuCompatible: false);
     internal static nint PixelAttributes(uint pixelFormat, bool gpuCompatible)
     {
-        nint dictionary = Dictionary();
-        int format = unchecked((int)pixelFormat);
-        nint number = CFNumberCreate(0, 3, &format);
+        var dictionary = Dictionary();
+        var format = unchecked((int)pixelFormat);
+        var number = CFNumberCreate(0, 3, &format);
         try
         {
             CFDictionarySetValue(dictionary, Symbol(Cv, "kCVPixelBufferPixelFormatTypeKey"), number);
