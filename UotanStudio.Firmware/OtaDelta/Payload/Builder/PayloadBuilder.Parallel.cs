@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Google.Protobuf;
 using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.Core.Streams;
@@ -36,11 +37,24 @@ public sealed partial class PayloadBuilder
         return this;
     }
 
+    /// <summary>
+    /// Streams one partition into REPLACE operations through a two-stage software pipeline: while the previous
+    /// batch is being compressed, the next batch is read and hashed, so the sequential read stage and the parallel
+    /// compression stage overlap instead of alternating on one thread.
+    /// <para>经两级软件流水线把单个分区写成 REPLACE 操作：上一批正在压缩时同时读取并哈希下一批，使串行的读取阶段与
+    /// 并行的压缩阶段重叠，而不是在同一线程上交替进行。</para>
+    /// </summary>
+    /// <remarks>
+    /// The emitted operations are byte-for-byte the same as a strictly sequential build, and they are appended in
+    /// ascending block order: compression runs on every batch in parallel, but batches are still consumed in the
+    /// order they were read. The caller keeps ownership of the input stream and the data blob.
+    /// <para>写出的操作与严格串行构建逐字节一致，并按块升序追加：每批压缩并行进行，但各批仍按读取顺序被消费。
+    /// 调用方保有输入流与数据块的属主。</para>
+    /// </remarks>
     private ulong WritePartitionOperations(Stream input, long? declaredLength, FileStream data,
         PartitionBuildInfo partition, PartitionUpdate update, DigestAccumulator partitionHash,
         int chunkSize, ref int operationCount, int compressionWorkers, CancellationToken cancellationToken)
     {
-        const int maximumOperations = 65536;
         var workers = compressionWorkers;
         if (declaredLength is { } size)
             workers = (int)Math.Min(workers, Math.Max(1, size / chunkSize + (size % chunkSize == 0 ? 0 : 1)));
@@ -48,81 +62,239 @@ public sealed partial class PayloadBuilder
             bytesPerWorker: checked(chunkSize * 3L + 65536),
             budgetBytes: Core.FirmwareParallelism.WorkerMemoryBudgetBytes,
             requestedWorkers: workers);
-        var slots = Enumerable.Range(0, workers).Select(_ => new CompressionSlot(chunkSize)).ToArray();
-        var parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = workers, CancellationToken = cancellationToken };
-        ulong position = 0;
+
+        var pipeline = new PartitionPipeline(chunkSize, workers, BlockSize);
         try
         {
-            while (true)
+            pipeline.Prefetch(input, declaredLength, cancellationToken);
+            var position = pipeline.Read(input, declaredLength, ref operationCount, partitionHash, cancellationToken);
+            while (pipeline.HasBatch)
             {
-                var count = 0;
-                for (; count < slots.Length; count++)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var slot = slots[count];
-                    if (declaredLength is { } length)
-                    {
-                        var remaining = checked(length - (long)position);
-                        if (remaining == 0) break;
-                        slot.InputLength = (int)Math.Min(chunkSize, remaining);
-                        input.ReadExactly(slot.Input.AsSpan(0, slot.InputLength));
-                    }
-                    else
-                    {
-                        slot.InputLength = input.ReadAtLeast(slot.Input, chunkSize, throwOnEndOfStream: false);
-                        if (slot.InputLength == 0) break;
-                    }
-                    if (slot.InputLength % BlockSize != 0)
-                        throw new PayloadGenerationException("Partition size must be block-aligned.");
-                    if (++operationCount > maximumOperations)
-                        throw new PayloadGenerationException("Payload exceeds the supported 65536 operations.");
-                    partitionHash.Append(slot.Input.AsSpan(0, slot.InputLength));
-                    slot.StartBlock = position / BlockSize;
-                    position = checked(position + (ulong)slot.InputLength);
-                }
-                if (count == 0) break;
-
-                if (count == 1)
-                    slots[0].Compress(partition.CompressionType, partition.ZstdDictionary, cancellationToken);
-                else
-                {
-                    try
-                    {
-                        Parallel.For(0, count, parallelOptions,
-                            i => slots[i].Compress(partition.CompressionType, partition.ZstdDictionary, cancellationToken));
-                    }
-                    catch (AggregateException) when (cancellationToken.IsCancellationRequested)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        throw;
-                    }
-                }
-                for (var i = 0; i < count; i++)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var slot = slots[i];
-                    var operation = new InstallOperation
-                    {
-                        Type = partition.OperationType,
-                        DataOffset = (ulong)data.Position,
-                        DataLength = (ulong)slot.OutputLength,
-                        DataSha256Hash = ByteString.CopyFrom(slot.Hash),
-                        DstLength = (ulong)slot.InputLength
-                    };
-                    operation.DstExtents.Add(new Extent { StartBlock = slot.StartBlock, NumBlocks = (ulong)slot.InputLength / BlockSize });
-                    data.Write(slot.Output.AsSpan(0, slot.OutputLength));
-                    update.Operations.Add(operation);
-                }
+                cancellationToken.ThrowIfCancellationRequested();
+                pipeline.Prefetch(input, declaredLength, cancellationToken);
+                pipeline.CompressBatch(partition.CompressionType, partition.ZstdDictionary, cancellationToken);
+                pipeline.EmitBatch(data, partition.OperationType, update, BlockSize);
+                position = pipeline.Read(input, declaredLength, ref operationCount, partitionHash, cancellationToken);
             }
+            return position;
         }
         finally
         {
-            foreach (var slot in slots)
+            pipeline.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Two-stage software pipeline over the chunks of one partition: a dedicated reader fills the next batch while
+    /// the consumer compresses and emits the current one, so the serial read/hash stage no longer idles the
+    /// compression workers and vice versa.
+    /// <para>作用于单个分区各块的两级软件流水线：专用读取方在消费方压缩并写出当前批时填充下一批，
+    /// 使串行的读取/哈希阶段不再让压缩工作者空转，反之亦然。</para>
+    /// </summary>
+    /// <remarks>
+    /// Two batches of slots are allocated and swapped, so the pipeline costs one extra batch of buffers on top of
+    /// the compression buffers the build already needed. Reading happens on a task the pipeline owns; the input
+    /// digest is folded on that reader, and compression runs on the consumer thread's parallel loop, which keeps
+    /// every emitted chunk in the exact order the previous barrier-based loop produced.
+    /// <para>分配并轮换两批槽位，因此流水线在构建本就需要压缩缓冲之上多付出一批缓冲。读取发生在流水线自有的任务上，
+    /// 输入摘要由该读取方折算；压缩运行在消费线程的并行循环中，从而让每个写出的块与原先基于屏障的循环顺序完全一致。</para>
+    /// </remarks>
+    private sealed class PartitionPipeline : IDisposable
+    {
+        private readonly int _chunkSize;
+        private readonly uint _blockSize;
+        private readonly CompressionSlot[][] _batches;
+        private readonly ParallelOptions _parallelOptions;
+        private Task<ReadOutcome>? _pending;
+        private int _pendingBatch;
+        private int _currentBatch;
+        private bool _exhausted;
+        private ulong _position;
+
+        internal PartitionPipeline(int chunkSize, int workers, uint blockSize)
+        {
+            _chunkSize = chunkSize;
+            _blockSize = blockSize;
+            _batches =
+            [
+                Enumerable.Range(0, workers).Select(_ => new CompressionSlot(chunkSize)).ToArray(),
+                Enumerable.Range(0, workers).Select(_ => new CompressionSlot(chunkSize)).ToArray()
+            ];
+            _parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = workers };
+        }
+
+        /// <summary>Whether the batch the consumer currently owns holds at least one filled slot.
+        /// <para>消费方当前持有的批次是否至少包含一个已填充的槽位。</para></summary>
+        internal bool HasBatch => _count > 0;
+
+        /// <summary>The number of filled slots in the batch the consumer currently owns.
+        /// <para>消费方当前持有的批次中已填充槽位的数量。</para></summary>
+        private int _count;
+
+        internal ulong Read(Stream input, long? declaredLength, ref int operationCount, DigestAccumulator partitionHash,
+            CancellationToken cancellationToken)
+        {
+            var completed = RetirePending(cancellationToken);
+            _currentBatch = _pendingBatch;
+            var slots = _batches[_currentBatch];
+            for (var i = 0; i < completed.Count; i++)
             {
-                slot.Dispose();
+                var slot = slots[i];
+                if (++operationCount > 65536)
+                    throw new PayloadGenerationException("Payload exceeds the supported 65536 operations.");
+                partitionHash.Append(slot.Input.AsSpan(0, slot.InputLength));
+            }
+
+            _count = completed.Count;
+            _position = completed.Position;
+            _exhausted = completed.Exhausted;
+            return _position;
+        }
+
+        /// <summary>
+        /// Starts reading the next batch into the buffer pair the consumer has just vacated, so the read overlaps the
+        /// compression of the batch handed over by <see cref="Read"/>.
+        /// <para>把下一批读入消费方刚刚腾空的缓冲对，使读取与 <see cref="Read"/> 交付那一批的压缩重叠。</para>
+        /// </summary>
+        internal void Prefetch(Stream input, long? declaredLength, CancellationToken cancellationToken)
+        {
+            if (_exhausted)
+            {
+                return;
+            }
+
+            _pendingBatch = _currentBatch ^ 1;
+            var target = _batches[_pendingBatch];
+            var start = _position;
+            _pending = Task.Run(() => ReadBatch(input, declaredLength, target, start, cancellationToken), cancellationToken);
+        }
+
+        /// <summary>The result of one batch read: the position reached and whether the stream ended inside it.
+        /// <para>单批读取的结果：到达的位置以及流是否在该批内结束。</para></summary>
+        private readonly record struct ReadOutcome(ulong Position, int Count, bool Exhausted);
+
+        private ReadOutcome RetirePending(CancellationToken cancellationToken)
+        {
+            if (_pending is null)
+            {
+                return new ReadOutcome(0, 0, false);
+            }
+
+            var pending = _pending;
+            _pending = null;
+            try
+            {
+                return pending.GetAwaiter().GetResult();
+            }
+            catch (AggregateException ex) when (cancellationToken.IsCancellationRequested)
+            {
+                ExceptionDispatchInfo.Capture(ex.Flatten().InnerExceptions[0]).Throw();
+                throw;
             }
         }
-        return position;
+
+        private ReadOutcome ReadBatch(Stream input, long? declaredLength, CompressionSlot[] slots, ulong start,
+            CancellationToken cancellationToken)
+        {
+            var count = 0;
+            var position = start;
+            for (; count < slots.Length; count++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var slot = slots[count];
+                if (declaredLength is { } length)
+                {
+                    var remaining = checked(length - (long)position);
+                    if (remaining == 0) break;
+                    slot.InputLength = (int)Math.Min(_chunkSize, remaining);
+                    input.ReadExactly(slot.Input.AsSpan(0, slot.InputLength));
+                }
+                else
+                {
+                    slot.InputLength = input.ReadAtLeast(slot.Input, _chunkSize, throwOnEndOfStream: false);
+                    if (slot.InputLength == 0) break;
+                }
+                if (slot.InputLength % _blockSize != 0)
+                    throw new PayloadGenerationException("Partition size must be block-aligned.");
+                slot.StartBlock = position / _blockSize;
+                position = checked(position + (ulong)slot.InputLength);
+            }
+
+            return new ReadOutcome(position, count, count < slots.Length);
+        }
+
+        /// <summary>Compresses every filled slot of the batch the consumer owns, in parallel when more than one is filled.
+        /// <para>压缩消费方所持批次中每个已填充的槽位；填充数量多于一小时并行执行。</para></summary>
+        internal void CompressBatch(CompressionType compression, byte[]? dictionary, CancellationToken cancellationToken)
+        {
+            var slots = _batches[_currentBatch];
+            var count = _count;
+            if (count == 1)
+            {
+                slots[0].Compress(compression, dictionary, cancellationToken);
+                return;
+            }
+
+            _parallelOptions.CancellationToken = cancellationToken;
+            try
+            {
+                Parallel.For(0, count, _parallelOptions, i => slots[i].Compress(compression, dictionary, cancellationToken));
+            }
+            catch (AggregateException) when (cancellationToken.IsCancellationRequested)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Appends the compressed batch to the data blob in block order and records one operation per slot.
+        /// <para>按块顺序把已压缩批次追加到数据块，并为每个槽位记录一条操作。</para>
+        /// </summary>
+        internal void EmitBatch(FileStream data, InstallOperation.Types.Type operationType, PartitionUpdate update, uint blockSize)
+        {
+            var slots = _batches[_currentBatch];
+            for (var i = 0; i < _count; i++)
+            {
+                var slot = slots[i];
+                var operation = new InstallOperation
+                {
+                    Type = operationType,
+                    DataOffset = (ulong)data.Position,
+                    DataLength = (ulong)slot.OutputLength,
+                    DataSha256Hash = ByteString.CopyFrom(slot.Hash),
+                    DstLength = (ulong)slot.InputLength
+                };
+                operation.DstExtents.Add(new Extent { StartBlock = slot.StartBlock, NumBlocks = (ulong)slot.InputLength / blockSize });
+                data.Write(slot.Output.AsSpan(0, slot.OutputLength));
+                update.Operations.Add(operation);
+            }
+
+            _count = 0;
+        }
+
+        /// <summary>Waits for any in-flight read and releases every slot of both batches.
+        /// <para>等待任何在途读取结束，并释放两批中的所有槽位。</para></summary>
+        public void Dispose()
+        {
+            try
+            {
+                RetirePending(CancellationToken.None);
+            }
+            catch (PayloadGenerationException)
+            {
+            }
+            finally
+            {
+                foreach (var batch in _batches)
+                {
+                    foreach (var slot in batch)
+                    {
+                        slot.Dispose();
+                    }
+                }
+            }
+        }
     }
 
     private sealed class CompressionSlot(int chunkSize) : IDisposable

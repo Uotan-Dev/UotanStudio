@@ -64,7 +64,7 @@ internal static class OperationProcessor
         if (!sourceAlreadyVerified)
         {
             using var sourceHash = new VerifyingReadStream(oldData, op.SrcSha256Hash.ToByteArray());
-            UotanStudio.Firmware.OtaDelta.Diff.BinaryDeltaPatch.CopyExactly(sourceHash, Stream.Null, oldData.Length, ct);
+            BinaryDeltaPatch.CopyExactly(sourceHash, Stream.Null, oldData.Length, ct);
             sourceHash.Complete();
             oldData.Position = 0;
         }
@@ -72,87 +72,139 @@ internal static class OperationProcessor
         using var output = new ExtentWriteStream(target, op.DstExtents, blockSize, requireExactLength: true, byteProgress: byteProgress);
         if (op.Type is InstallOperation.Types.Type.SourceCopy or InstallOperation.Types.Type.Move)
         {
-            UotanStudio.Firmware.OtaDelta.Diff.BinaryDeltaPatch.CopyExactly(oldData, output, oldData.Length, ct);
+            BinaryDeltaPatch.CopyExactly(oldData, output, oldData.Length, ct);
             output.Complete();
             return;
         }
         using var patch = new BoundedReadStream(payload, checked((long)checked(baseOffset + op.DataOffset)), checked((long)op.DataLength), leaveOpen: true);
-        using (var hash = new VerifyingReadStream(patch, op.DataSha256Hash.ToByteArray()))
-        {
-            UotanStudio.Firmware.OtaDelta.Diff.BinaryDeltaPatch.CopyExactly(hash, Stream.Null, patch.Length, ct);
-            hash.Complete();
-        }
-        patch.Position = 0;
         if (op.Type is InstallOperation.Types.Type.SourceBsdiff or InstallOperation.Types.Type.Bsdiff or InstallOperation.Types.Type.BrotliBsdiff)
-            UotanStudio.Firmware.OtaDelta.Diff.BinaryDeltaPatch.Apply(oldData, patch, output, output.Length, ct);
+            ApplyBinaryDelta(op, oldData, patch, output, ct);
         else
         {
             const int maximumOperationBytes = 256 * 1024 * 1024;
             if (oldData.Length > maximumOperationBytes || patch.Length > maximumOperationBytes || output.Length > maximumOperationBytes)
                 throw new InvalidDataException("This delta codec exceeds the supported 256 MiB operation limit.");
-            if (op.Type == InstallOperation.Types.Type.Puffdiff)
+            var patchBytes = ArrayPool<byte>.Shared.Rent(checked((int)patch.Length));
+            try
             {
-                var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
-                var patchBytes = ArrayPool<byte>.Shared.Rent(checked((int)patch.Length));
-                try
+                using (var hash = new VerifyingReadStream(patch, op.DataSha256Hash.ToByteArray()))
                 {
-                    oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
-                    patch.ReadExactly(patchBytes.AsSpan(0, (int)patch.Length));
-                    output.Write(PuffDiffApplier.Apply(
-                        patchBytes.AsSpan(0, (int)patch.Length),
-                        oldBytes.AsSpan(0, (int)oldData.Length)));
+                    hash.ReadExactly(patchBytes.AsSpan(0, (int)patch.Length));
+                    hash.Complete();
                 }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(oldBytes);
-                    ArrayPool<byte>.Shared.Return(patchBytes);
-                }
+                ApplyBufferedDelta(op, oldData, patchBytes, (int)patch.Length, output, maximumOperationBytes, ct);
             }
-            else if (op.Type == InstallOperation.Types.Type.Zucchini)
+            finally
             {
-                var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
-                var result = ArrayPool<byte>.Shared.Rent(checked((int)output.Length));
-                try
-                {
-                    oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
-                    using var decoded = new MemoryStream();
-                    using (var decoder = new UotanStudio.Firmware.OtaDelta.Diff.StrictBrotliReadStream(patch))
-                    using (var bounded = new CountingWriteStream(decoded, maximumOperationBytes, leaveOpen: true, cancellationToken: ct))
-                        decoder.CopyTo(bounded);
-                    ZucchiniPatchApplier.Apply(
-                        oldBytes.AsSpan(0, (int)oldData.Length),
-                        decoded.GetBuffer().AsSpan(0, checked((int)decoded.Length)),
-                        result.AsSpan(0, (int)output.Length));
-                    output.Write(result.AsSpan(0, (int)output.Length));
-                }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(oldBytes);
-                    ArrayPool<byte>.Shared.Return(result);
-                }
+                ArrayPool<byte>.Shared.Return(patchBytes);
             }
-            else if (op.Type is InstallOperation.Types.Type.Lz4diffBsdiff or InstallOperation.Types.Type.Lz4diffPuffdiff)
-            {
-                var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
-                var patchBytes = ArrayPool<byte>.Shared.Rent(checked((int)patch.Length));
-                try
-                {
-                    oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
-                    patch.ReadExactly(patchBytes.AsSpan(0, (int)patch.Length));
-                    output.Write(Lz4DiffApplier.Apply(
-                        oldBytes.AsSpan(0, (int)oldData.Length),
-                        patchBytes.AsSpan(0, (int)patch.Length),
-                        checked((int)output.Length)));
-                }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(oldBytes);
-                    ArrayPool<byte>.Shared.Return(patchBytes);
-                }
-            }
-            else throw new PayloadUnsupportedOperationException("Unsupported delta operation.", op.Type.ToString());
         }
         output.Complete();
+    }
+
+    /// <summary>
+    /// Applies a binary delta after proving the patch blob with a single sequential read.
+    /// <para>用单次顺序读取证明补丁数据块后应用二进制差分。</para>
+    /// </summary>
+    /// <remarks>
+    /// Patches within the 256 MiB buffer ceiling are read once through a verifying wrapper into pooled
+    /// memory and applied from that buffer; larger patches keep the streaming verify-then-rewind path
+    /// because the binary delta control, diff and extra sections interleave seeks on the patch stream.
+    /// <para>不超过 256 MiB 缓冲上限的补丁经校验包装器一次读入池化内存并从缓冲应用；更大的补丁保留流式
+    /// "先校验再回退"路径，因为二进制差分的 control、diff 与 extra 三段会在补丁流上交错 seek。</para>
+    /// </remarks>
+    private static void ApplyBinaryDelta(InstallOperation op, Stream source, Stream patch, ExtentWriteStream output, CancellationToken ct)
+    {
+        const int maximumPatchBytes = 256 * 1024 * 1024;
+        if (patch.Length <= maximumPatchBytes)
+        {
+            var patchBytes = ArrayPool<byte>.Shared.Rent(checked((int)patch.Length));
+            try
+            {
+                using (var hash = new VerifyingReadStream(patch, op.DataSha256Hash.ToByteArray()))
+                {
+                    hash.ReadExactly(patchBytes.AsSpan(0, (int)patch.Length));
+                    hash.Complete();
+                }
+                using var buffered = new MemoryStream(patchBytes, 0, (int)patch.Length, writable: false);
+                BinaryDeltaPatch.Apply(source, buffered, output, output.Length, ct);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(patchBytes);
+            }
+        }
+        else
+        {
+            using var hash = new VerifyingReadStream(patch, op.DataSha256Hash.ToByteArray());
+            BinaryDeltaPatch.CopyExactly(hash, Stream.Null, patch.Length, ct);
+            hash.Complete();
+            patch.Position = 0;
+            BinaryDeltaPatch.Apply(source, patch, output, output.Length, ct);
+        }
+    }
+
+    /// <summary>
+    /// Applies a bounded delta codec over an already verified patch buffer.
+    /// <para>在已通过校验的补丁缓冲上应用有界差分编解码器。</para>
+    /// </summary>
+    private static void ApplyBufferedDelta(InstallOperation op, Stream oldData, byte[] patchBytes, int patchLength, ExtentWriteStream output, int maximumOperationBytes, CancellationToken ct)
+    {
+        if (op.Type == InstallOperation.Types.Type.Puffdiff)
+        {
+            var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
+            try
+            {
+                oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
+                output.Write(PuffDiffApplier.Apply(
+                    patchBytes.AsSpan(0, patchLength),
+                    oldBytes.AsSpan(0, (int)oldData.Length)));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(oldBytes);
+            }
+        }
+        else if (op.Type == InstallOperation.Types.Type.Zucchini)
+        {
+            var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
+            var result = ArrayPool<byte>.Shared.Rent(checked((int)output.Length));
+            try
+            {
+                oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
+                using var decoded = new MemoryStream();
+                using (var decoder = new StrictBrotliReadStream(new MemoryStream(patchBytes, 0, patchLength, writable: false)))
+                using (var bounded = new CountingWriteStream(decoded, maximumOperationBytes, leaveOpen: true, cancellationToken: ct))
+                    decoder.CopyTo(bounded);
+                ZucchiniPatchApplier.Apply(
+                    oldBytes.AsSpan(0, (int)oldData.Length),
+                    decoded.GetBuffer().AsSpan(0, checked((int)decoded.Length)),
+                    result.AsSpan(0, (int)output.Length));
+                output.Write(result.AsSpan(0, (int)output.Length));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(oldBytes);
+                ArrayPool<byte>.Shared.Return(result);
+            }
+        }
+        else if (op.Type is InstallOperation.Types.Type.Lz4diffBsdiff or InstallOperation.Types.Type.Lz4diffPuffdiff)
+        {
+            var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
+            try
+            {
+                oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
+                output.Write(Lz4DiffApplier.Apply(
+                    oldBytes.AsSpan(0, (int)oldData.Length),
+                    patchBytes.AsSpan(0, patchLength),
+                    checked((int)output.Length)));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(oldBytes);
+            }
+        }
+        else throw new PayloadUnsupportedOperationException("Unsupported delta operation.", op.Type.ToString());
     }
     /// <summary>
     /// Processes a parallelizable install operation by reading data from the payload stream and writing the result to the output file.

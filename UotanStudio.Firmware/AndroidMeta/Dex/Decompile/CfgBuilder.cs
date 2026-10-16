@@ -135,7 +135,7 @@ internal static class CfgBuilder
             var terminator = block.Instructions[^1];
             var next = i + 1 < cfg.Blocks.Count ? cfg.Blocks[i + 1] : null;
 
-            if (terminator.Mnemonic.StartsWith("if-", System.StringComparison.Ordinal))
+            if (terminator.Mnemonic.StartsWith("if-", StringComparison.Ordinal))
             {
                 block.Kind = BlockKind.Conditional;
                 block.BranchTarget = FindBranchTarget(block, terminator, blockByStart);
@@ -143,13 +143,13 @@ internal static class CfgBuilder
                 AddSuccessor(block, block.BranchTarget);
                 AddSuccessor(block, next);
             }
-            else if (terminator.Mnemonic.StartsWith("goto", System.StringComparison.Ordinal))
+            else if (terminator.Mnemonic.StartsWith("goto", StringComparison.Ordinal))
             {
                 block.Kind = BlockKind.UnconditionalGoto;
                 block.GotoTarget = FindBranchTarget(block, terminator, blockByStart);
                 AddSuccessor(block, block.GotoTarget);
             }
-            else if (terminator.Mnemonic.StartsWith("return", System.StringComparison.Ordinal))
+            else if (terminator.Mnemonic.StartsWith("return", StringComparison.Ordinal))
             {
                 block.Kind = BlockKind.Return;
             }
@@ -180,9 +180,9 @@ internal static class CfgBuilder
     /// Determines whether a mnemonic terminates a block.
     /// <para>判断助记符是否为块终止指令。</para>
     /// </summary>
-    private static bool IsTerminator(string mnemonic) => mnemonic.StartsWith("if-", System.StringComparison.Ordinal)
-        || mnemonic.StartsWith("goto", System.StringComparison.Ordinal)
-        || mnemonic.StartsWith("return", System.StringComparison.Ordinal)
+    private static bool IsTerminator(string mnemonic) => mnemonic.StartsWith("if-", StringComparison.Ordinal)
+        || mnemonic.StartsWith("goto", StringComparison.Ordinal)
+        || mnemonic.StartsWith("return", StringComparison.Ordinal)
         || mnemonic == "throw"
         || mnemonic is "packed-switch" or "sparse-switch";
 

@@ -53,11 +53,11 @@ internal sealed class Magic5Parser
 
         using var sr = new StringReader(text);
         string? line;
-        int lineNo = 0;
+        var lineNo = 0;
         while ((line = sr.ReadLine()) is not null)
         {
             lineNo++;
-            string trimmed = line.TrimStart('\t', ' ');
+            var trimmed = line.TrimStart('\t', ' ');
             if (trimmed.Length == 0 || trimmed[0] == '#')
             {
                 continue;
@@ -115,15 +115,15 @@ internal sealed class Magic5Parser
             return;
         }
 
-        int i = 2;
-        int j = i;
+        var i = 2;
+        var j = i;
         while (j < trimmed.Length && trimmed[j] != '\t' && trimmed[j] != ' ')
         {
             j++;
         }
 
-        string key = trimmed[i..j];
-        string value = j < trimmed.Length ? trimmed[(j + 1)..].Trim() : string.Empty;
+        var key = trimmed[i..j];
+        var value = j < trimmed.Length ? trimmed[(j + 1)..].Trim() : string.Empty;
 
         switch (key)
         {
@@ -151,7 +151,7 @@ internal sealed class Magic5Parser
 
                 break;
             case "strength":
-                if (TryParseLong(value, out long s))
+                if (TryParseLong(value, out var s))
                 {
                     target.Strength = (int)Math.Clamp(s, 0, 200);
                 }
@@ -181,8 +181,8 @@ internal sealed class Magic5Parser
 
     private RuleAst? ParseLine(string line, ref RuleAst? lastEmitted)
     {
-        int level = 0;
-        int i = 0;
+        var level = 0;
+        var i = 0;
         while (i < line.Length && line[i] == '>')
         {
             level++;
@@ -194,16 +194,16 @@ internal sealed class Magic5Parser
             i++;
         }
 
-        string rest = line[i..];
-        var fields = SplitFields(rest, out string description);
+        var rest = line[i..];
+        var fields = SplitFields(rest, out var description);
         if (fields.Count == 0)
         {
             return null;
         }
 
-        string offsetTok = fields.Count > 0 ? fields[0] : string.Empty;
-        string typeTok = fields.Count > 1 ? fields[1] : string.Empty;
-        string valueTok = fields.Count > 2 ? fields[2] : string.Empty;
+        var offsetTok = fields.Count > 0 ? fields[0] : string.Empty;
+        var typeTok = fields.Count > 1 ? fields[1] : string.Empty;
+        var valueTok = fields.Count > 2 ? fields[2] : string.Empty;
 
         var rule = new RuleAst { Indent = level };
 
@@ -319,7 +319,7 @@ internal sealed class Magic5Parser
             tok = tok[1..];
         }
 
-        if (TryParseLong(tok, out long off))
+        if (TryParseLong(tok, out var off))
         {
             rule.Offset = off;
         }
@@ -327,30 +327,30 @@ internal sealed class Magic5Parser
 
     private static void ParseIndirectOffset(RuleAst rule, string inner)
     {
-        int dot = inner.IndexOf('.');
+        var dot = inner.IndexOf('.');
         if (dot < 0)
         {
             rule.IndirectBaseOffset = 0;
             return;
         }
 
-        if (TryParseLong(inner[..dot], out long baseOff))
+        if (TryParseLong(inner[..dot], out var baseOff))
         {
             rule.IndirectBaseOffset = baseOff;
         }
 
-        string remainder = inner[(dot + 1)..];
-        bool invert = remainder.EndsWith("~", StringComparison.Ordinal);
+        var remainder = inner[(dot + 1)..];
+        var invert = remainder.EndsWith("~", StringComparison.Ordinal);
         if (invert)
         {
             rule.IndirectMaskInvert = true;
             remainder = remainder[..^1];
         }
 
-        int plus = remainder.IndexOf('+', StringComparison.Ordinal);
+        var plus = remainder.IndexOf('+', StringComparison.Ordinal);
         if (plus >= 0)
         {
-            if (TryParseLong(remainder[(plus + 1)..], out long add))
+            if (TryParseLong(remainder[(plus + 1)..], out var add))
             {
                 rule.IndirectAddend = (int)add;
             }
@@ -359,12 +359,12 @@ internal sealed class Magic5Parser
         }
         else
         {
-            int amp = remainder.IndexOf('&', StringComparison.Ordinal);
+            var amp = remainder.IndexOf('&', StringComparison.Ordinal);
             if (amp >= 0)
             {
                 rule.HasIndirectMask = true;
                 rule.IndirectMaskOp = MagicMaskOp.And;
-                if (TryParseLong(remainder[(amp + 1)..], out long m))
+                if (TryParseLong(remainder[(amp + 1)..], out var m))
                 {
                     rule.IndirectMask = m;
                 }
@@ -381,10 +381,10 @@ internal sealed class Magic5Parser
 
     private bool ParseTypeAndValue(RuleAst rule, string typeTok, string valueTok, string description)
     {
-        string baseType = typeTok;
-        string modifiers = string.Empty;
-        int slash = typeTok.IndexOf('/', StringComparison.Ordinal);
-        bool stringFamily = typeTok.StartsWith("string", StringComparison.Ordinal)
+        var baseType = typeTok;
+        var modifiers = string.Empty;
+        var slash = typeTok.IndexOf('/', StringComparison.Ordinal);
+        var stringFamily = typeTok.StartsWith("string", StringComparison.Ordinal)
             || typeTok.StartsWith("ustring", StringComparison.Ordinal)
             || typeTok.StartsWith("search", StringComparison.Ordinal)
             || typeTok.StartsWith("pstring", StringComparison.Ordinal)
@@ -469,7 +469,7 @@ internal sealed class Magic5Parser
                 }
 
                 _stats.SkippedUnknownType++;
-                _stats.UnknownTypes.TryGetValue(baseType, out int c);
+                _stats.UnknownTypes.TryGetValue(baseType, out var c);
                 _stats.UnknownTypes[baseType] = c + 1;
                 return false;
         }
@@ -477,8 +477,8 @@ internal sealed class Magic5Parser
 
     private static void ExtractTypeMask(RuleAst rule, string baseType)
     {
-        int idx = -1;
-        for (int k = 0; k < baseType.Length; k++)
+        var idx = -1;
+        for (var k = 0; k < baseType.Length; k++)
         {
             if (baseType[k] is '&' or '|' or '^' or '+' or '*' or '%' or '-')
             {
@@ -493,9 +493,9 @@ internal sealed class Magic5Parser
             return;
         }
 
-        char op = baseType[idx];
-        string maskStr = baseType[(idx + 1)..];
-        bool invert = maskStr.StartsWith("~", StringComparison.Ordinal);
+        var op = baseType[idx];
+        var maskStr = baseType[(idx + 1)..];
+        var invert = maskStr.StartsWith("~", StringComparison.Ordinal);
         if (invert)
         {
             maskStr = maskStr[1..];
@@ -514,7 +514,7 @@ internal sealed class Magic5Parser
             _ => MagicMaskOp.Subtract,
         };
 
-        if (TryParseLong(maskStr, out long m))
+        if (TryParseLong(maskStr, out var m))
         {
             rule.Mask = m;
         }
@@ -557,9 +557,9 @@ internal sealed class Magic5Parser
             return false;
         }
 
-        byte[] raw = ParseStringPattern(valueTok);
+        var raw = ParseStringPattern(valueTok);
         var b = new List<byte>(raw.Length * 2);
-        foreach (byte x in raw)
+        foreach (var x in raw)
         {
             if (bigEndian)
             {
@@ -601,10 +601,10 @@ internal sealed class Magic5Parser
 
     private static bool ParseNumericValue(RuleAst rule, string valueTok)
     {
-        string v = valueTok;
+        var v = valueTok;
         if (v.Length > 0)
         {
-            char first = v[0];
+            var first = v[0];
             if (first == '!')
             {
                 rule.Relation = MagicRelation.NotEqual;
@@ -651,7 +651,7 @@ internal sealed class Magic5Parser
 
         if (v.Length >= 3 && v[0] == '\'' && v[^1] == '\'')
         {
-            if (TryCharLiteral(v[1..^1], out long code))
+            if (TryCharLiteral(v[1..^1], out var code))
             {
                 rule.Value = code;
                 return true;
@@ -660,7 +660,7 @@ internal sealed class Magic5Parser
             return false;
         }
 
-        if (TryParseLong(v, out long n))
+        if (TryParseLong(v, out var n))
         {
             rule.Value = n;
             return true;
@@ -680,7 +680,7 @@ internal sealed class Magic5Parser
 
         if (inner.Length >= 2 && inner[0] == '\\')
         {
-            char e = inner[1];
+            var e = inner[1];
             value = e switch
             {
                 '0' => 0,
@@ -701,7 +701,7 @@ internal sealed class Magic5Parser
 
     private static string DescriptionOf(RuleAst rule, string description)
     {
-        string d = description;
+        var d = description;
         if (d.StartsWith("\\b", StringComparison.Ordinal))
         {
             rule.Flags |= MagicFlags.NoSpace;
@@ -713,7 +713,7 @@ internal sealed class Magic5Parser
 
     private static void ParseStringModifiers(RuleAst rule, string modifiers)
     {
-        foreach (char c in modifiers)
+        foreach (var c in modifiers)
         {
             switch (c)
             {
@@ -740,7 +740,7 @@ internal sealed class Magic5Parser
     {
         rule.PStringLengthBytes = 1;
         rule.PStringBigEndian = false;
-        foreach (char c in modifiers)
+        foreach (var c in modifiers)
         {
             switch (c)
             {
@@ -770,7 +770,7 @@ internal sealed class Magic5Parser
 
     private static void ParseRegexModifiers(RuleAst rule, string modifiers)
     {
-        foreach (char c in modifiers)
+        foreach (var c in modifiers)
         {
             switch (c)
             {
@@ -793,7 +793,7 @@ internal sealed class Magic5Parser
     private static int ExtractDigits(string s)
     {
         var sb = new StringBuilder();
-        foreach (char c in s)
+        foreach (var c in s)
         {
             if (char.IsAsciiDigit(c))
             {
@@ -806,17 +806,17 @@ internal sealed class Magic5Parser
 
     private static byte[]? ParseGuid(string value)
     {
-        string clean = value.Trim('{', '}').Replace("-", string.Empty, StringComparison.Ordinal);
+        var clean = value.Trim('{', '}').Replace("-", string.Empty, StringComparison.Ordinal);
         if (clean.Length != 32)
         {
             return null;
         }
 
         var bytes = new byte[16];
-        for (int k = 0; k < 16; k++)
+        for (var k = 0; k < 16; k++)
         {
-            char hi = clean[k * 2];
-            char lo = clean[(k * 2) + 1];
+            var hi = clean[k * 2];
+            var lo = clean[(k * 2) + 1];
             bytes[k] = (hi == 'x' || hi == 'X' || lo == 'x' || lo == 'X')
                 ? (byte)0xFF
                 : (byte)((HexVal(hi) << 4) | HexVal(lo));
@@ -833,7 +833,7 @@ internal sealed class Magic5Parser
         }
 
         var sb = new StringBuilder(v.Length);
-        for (int i = 0; i < v.Length; i++)
+        for (var i = 0; i < v.Length; i++)
         {
             if (v[i] == '\\' && i + 1 < v.Length && v[i + 1] == 'x' && i + 3 < v.Length)
             {
@@ -854,14 +854,14 @@ internal sealed class Magic5Parser
     {
         var tokens = new List<string>();
         var sb = new StringBuilder();
-        int i = 0;
-        int fieldsWanted = 3;
-        int consumed = 0;
-        int descStart = rest.Length;
+        var i = 0;
+        var fieldsWanted = 3;
+        var consumed = 0;
+        var descStart = rest.Length;
 
         while (i < rest.Length)
         {
-            char c = rest[i];
+            var c = rest[i];
             if (c == '\\' && i + 1 < rest.Length)
             {
                 sb.Append('\\');
@@ -879,7 +879,7 @@ internal sealed class Magic5Parser
                     consumed++;
                     if (consumed == fieldsWanted)
                     {
-                        int k = i;
+                        var k = i;
                         while (k < rest.Length && (rest[k] == ' ' || rest[k] == '\t'))
                         {
                             k++;
@@ -911,18 +911,18 @@ internal sealed class Magic5Parser
     private static byte[] ParseStringPattern(string token)
     {
         var bytes = new List<byte>(token.Length);
-        int i = 0;
+        var i = 0;
         while (i < token.Length)
         {
-            char c = token[i];
+            var c = token[i];
             if (c == '\\' && i + 1 < token.Length)
             {
-                char next = token[i + 1];
+                var next = token[i + 1];
                 if (next is >= '0' and <= '7')
                 {
-                    int value = 0;
-                    int digits = 0;
-                    int k = i + 1;
+                    var value = 0;
+                    var digits = 0;
+                    var k = i + 1;
                     while (k < token.Length && digits < 3 && token[k] is >= '0' and <= '7')
                     {
                         value = (value << 3) | (token[k] - '0');
@@ -973,13 +973,13 @@ internal sealed class Magic5Parser
 
         if (token.Length > 1 && (char.IsDigit(token[^1]) is false && (token[^1] is 'l' or 'L' or 'u' or 'U')))
         {
-            int end = token.Length;
+            var end = token.Length;
             while (end > 0 && (token[end - 1] is 'l' or 'L' or 'u' or 'U'))
             {
                 end--;
             }
 
-            int minLen = token.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? 3 : 1;
+            var minLen = token.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? 3 : 1;
             if (end >= minLen)
             {
                 token = token[..end];

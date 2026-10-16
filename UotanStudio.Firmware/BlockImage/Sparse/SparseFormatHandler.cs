@@ -8,7 +8,7 @@ namespace UotanStudio.Firmware.BlockImage.Sparse;
 /// Format handler for the Android sparse image (simg) container: recognizes the sparse header magic, reports chunk and block geometry, unpacks either the inner filesystem or the full raw image, and converts raw images back to sparse. Sparse structures from untrusted files are validated by the reader; operation errors surface as failure results.
 /// <para>Android 稀疏镜像（simg）容器格式处理器：识别稀疏头魔数、上报分块与块几何，解包内部文件系统或完整原始镜像，并把原始镜像转回稀疏。来自不可信文件的稀疏结构由读取器校验；操作错误以失败结果返回。</para>
 /// </summary>
-public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataProvider, Core.Bridges.ISparseContainerBridge
+public sealed class SparseFormatHandler : IFormatHandler, IRepackMetadataProvider, Core.Bridges.ISparseContainerBridge
 {
     /// <summary>
     /// Opens the logical view of a sparse container file for another bounded context, transferring ownership of the
@@ -73,11 +73,11 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
     void Core.Bridges.ISparseContainerBridge.ConvertRawToSparseValidated(Stream input, Stream output, uint blockSize, long length, CancellationToken cancellationToken, Stream? validationOutput)
         => SparseImageConverter.ConvertRawToSparseValidated(input, output, blockSize, length, cancellationToken, validationOutput);
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
-        => UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemRepackMetadata.Configure(metadata, sourcePath, outputDirectory, sparse: true);
+        => FileSystem.Rebuilding.FileSystemRepackMetadata.Configure(metadata, sourcePath, outputDirectory, sparse: true);
 
     Task IRepackMetadataProvider.CaptureRepackMetadataAsync(RepackMetadata metadata, string sourcePath, string outputDirectory,
         string metadataDirectory, CancellationToken cancellationToken)
-        => UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemRepackMetadata.CaptureAsync(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken, sparse: true);
+        => FileSystem.Rebuilding.FileSystemRepackMetadata.CaptureAsync(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken, sparse: true);
 
     /// <summary>Display name published with every operation result of this handler.
     /// <para>本处理器每次操作结果随附的显示名称。</para></summary>
@@ -123,7 +123,7 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
     /// <returns>Success result summarizing chunk/block geometry with the corresponding metadata entries, or a failure result describing the header read error.
     /// <para>汇总 chunk/块几何信息的成功结果及对应元数据条目；头部读取错误以失败结果返回。</para></returns>
     /// <exception cref="OperationCanceledException">Cancellation was requested at entry. <para>入口处请求了取消。</para></exception>
-    public Task<Core.FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
+    public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -131,7 +131,7 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
             var header = SparseReader.PeekHeader(filePath);
             var fileSize = (long)header.TotalBlocks * header.BlockSize;
             var summary = $"Sparse image: {header.TotalChunks} chunks, {header.TotalBlocks} blocks x {header.BlockSize}B = {fileSize} bytes";
-            return Task.FromResult(Core.FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
+            return Task.FromResult(FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
             {
                 ["BlockSize"] = header.BlockSize.ToString(),
                 ["TotalBlocks"] = header.TotalBlocks.ToString(),
@@ -150,7 +150,7 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
         }
         catch (Exception ex)
         {
-            return Task.FromResult(Core.FirmwareOpResult.Fail(ex.Message));
+            return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
         }
     }
 
@@ -170,11 +170,11 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
     /// <para>带提取条目路径与内部格式元数据的成功结果；不可读或畸形镜像返回失败结果。</para></returns>
     /// <exception cref="OperationCanceledException">Cancellation was requested during the source freeze or the metadata write.
     /// <para>源冻结或元数据写入期间请求了取消。</para></exception>
-    public Task<Core.FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, Core.UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
+    public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+        => FileSystem.Rebuilding.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
 
-    private async Task<Core.FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, Core.UnpackOptions? options = null, CancellationToken cancellationToken = default)
+    private async Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -190,21 +190,21 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
             using var output = File.Create(outputPath);
             sparseFile.WriteRawToStream(output);
             var size = new FileInfo(outputPath).Length;
-            return Core.FirmwareOpResult.Ok($"Extracted {size} bytes to {outputPath}", entries: [outputPath]);
+            return FirmwareOpResult.Ok($"Extracted {size} bytes to {outputPath}", entries: [outputPath]);
         }
         catch (Exception ex)
         {
-            return Core.FirmwareOpResult.Fail(ex.Message);
+            return FirmwareOpResult.Fail(ex.Message);
         }
     }
 
     /// <summary>
     /// Cascade-unpacks the inner filesystem of a sparse image by handing its logical stream to the registered
-    /// format handlers that publish the <see cref="Core.IStreamUnpackableFormatHandler"/> capability and
+    /// format handlers that publish the <see cref="IStreamUnpackableFormatHandler"/> capability and
     /// selecting the first one that recognises the stream. The sparse context never names a concrete filesystem
     /// parser; an unopened, unreadable or unclaimed stream yields <see langword="null"/> so the caller falls back
     /// to raw-image handling, while extraction errors propagate to the caller's failure channel.
-    /// <para>把稀疏镜像的逻辑流交给注册了 <see cref="Core.IStreamUnpackableFormatHandler"/> 能力的
+    /// <para>把稀疏镜像的逻辑流交给注册了 <see cref="IStreamUnpackableFormatHandler"/> 能力的
     /// 格式处理器，并选取首个识别该流的处理器来级联解包内部文件系统。稀疏上下文绝不指名具体文件系统解析器；
     /// 无法打开、无法读取或无人认领的逻辑流返回 <see langword="null"/>，调用方据此回退到 raw 镜像处理；
     /// 提取错误则向上传播到调用方的失败通道。</para>
@@ -225,15 +225,15 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
     /// <see langword="null"/> when no handler claims the logical stream.
     /// <para>组合后的成功结果：条目与元数据来自内部处理器，摘要指名稀疏镜像路径；内部处理器上报的失败结果
     /// 原样转发；没有处理器认领该逻辑流时返回 <see langword="null"/>。</para></returns>
-    private static async Task<Core.FirmwareOpResult?> TryUnpackFilesystemAsync(string filePath, string outputDirectory, bool overwrite, IProgress<Core.FileSystemByteProgress>? byteProgress, CancellationToken cancellationToken)
+    private static async Task<FirmwareOpResult?> TryUnpackFilesystemAsync(string filePath, string outputDirectory, bool overwrite, IProgress<FileSystemByteProgress>? byteProgress, CancellationToken cancellationToken)
     {
         SparseReadStream logicalStream;
-        Core.IStreamUnpackableFormatHandler? innerHandler;
+        IStreamUnpackableFormatHandler? innerHandler;
         try
         {
             logicalStream = new SparseReadStream(SparseReader.FromImageFile(filePath));
-            innerHandler = Core.FormatDetector.RegisteredHandlers
-                .OfType<Core.IStreamUnpackableFormatHandler>()
+            innerHandler = FormatDetector.RegisteredHandlers
+                .OfType<IStreamUnpackableFormatHandler>()
                 .FirstOrDefault(handler => handler.CanHandleLogicalStream(logicalStream));
         }
         catch
@@ -254,7 +254,7 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
                 return inner;
             }
 
-            return Core.FirmwareOpResult.Ok(
+            return FirmwareOpResult.Ok(
                 $"Extracted {inner.Entries.Count} entries from '{filePath}' to '{outputDirectory}'.",
                 inner.Entries,
                 metadata: inner.Metadata);
@@ -273,7 +273,7 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
     /// <para>在恢复保留属性元数据时会被观察；raw 到稀疏的转换本身同步执行且不轮询该标记。</para></param>
     /// <returns>Success result naming the produced file, or a failure result for an empty input directory or a conversion error.
     /// <para>指明生成文件的成功结果；空输入目录或转换错误返回失败结果。</para></returns>
-    public Task<Core.FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -281,7 +281,7 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
         }
         catch (Exception ex)
         {
-            return Task.FromResult(Core.FirmwareOpResult.Fail(ex.Message));
+            return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
         }
     }
 
@@ -308,7 +308,7 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
     /// <paramref name="options"/> is <see langword="null"/>.
     /// <para><paramref name="options"/> 为 <see langword="null"/>。</para>
     /// </exception>
-    public Task<Core.FirmwareOpResult> PackAsync(string inputPath, string outputPath,
+    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath,
         SparseWriteOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -319,27 +319,27 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
         }
         catch (Exception ex)
         {
-            return Task.FromResult(Core.FirmwareOpResult.Fail(ex.Message));
+            return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
         }
     }
 
-    private Core.FirmwareOpResult PackCore(string inputPath, string outputPath, SparseWriteOptions? options, CancellationToken cancellationToken)
+    private FirmwareOpResult PackCore(string inputPath, string outputPath, SparseWriteOptions? options, CancellationToken cancellationToken)
     {
         IReadOnlyDictionary<string, string>? rebuildReport = null;
-        if (Directory.Exists(inputPath) && UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken,
+        if (Directory.Exists(inputPath) && FileSystem.Rebuilding.FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken,
             report => rebuildReport = report))
         {
-            return Core.FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes.",
+            return FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes.",
                 metadata: rebuildReport);
         }
         var rawFile = inputPath;
         if (Directory.Exists(inputPath))
         {
             rawFile = Directory.EnumerateFiles(inputPath)
-                .FirstOrDefault(path => !UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile(path));
+                .FirstOrDefault(path => !RepackMetadata.IsMetadataFile(path));
             if (rawFile == null)
             {
-                return Core.FirmwareOpResult.Fail("Input directory is empty.");
+                return FirmwareOpResult.Fail("Input directory is empty.");
             }
         }
 
@@ -351,6 +351,6 @@ public sealed class SparseFormatHandler : Core.IFormatHandler, IRepackMetadataPr
         {
             SparseImageConverter.ConvertRawToSparseAtomic(rawFile, outputPath, options.BlockSize, options, cancellationToken);
         }
-        return Core.FirmwareOpResult.Ok($"Packed {rawFile} -> {outputPath}");
+        return FirmwareOpResult.Ok($"Packed {rawFile} -> {outputPath}");
     }
 }

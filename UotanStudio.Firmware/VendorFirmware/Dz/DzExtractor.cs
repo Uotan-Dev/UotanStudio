@@ -84,7 +84,7 @@ internal static class DzExtractor
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 output.Position = checked(((long)chunk.Header.TargetAddr - layout.StartSector) * layout.LogicalBlockSize);
-                DecompressChunk(source, chunk, output, cancellationToken);
+                DecompressChunk(source, chunk, output, null, cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
         });
@@ -173,35 +173,111 @@ internal static class DzExtractor
         ArgumentException.ThrowIfNullOrEmpty(outDir);
         cancellationToken.ThrowIfCancellationRequested();
 
-        using var fs = new FileStream(dzPath, FileMode.Open, FileAccess.Read);
+        using var fs = new FileStream(dzPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         var (_, chunks) = Parse(fs, cancellationToken);
-        var count = 0;
+
+        var selected = new List<(DzChunk Chunk, string Name, string OutPath)>();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var chunk in chunks)
+        for (var index = 0; index < chunks.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var chunk = chunks[index];
             var name = chunk.Name;
-            if (nameFilter is null || nameFilter(name))
+            if (nameFilter is not null && !nameFilter(name))
             {
-                var outPath = FileExtraction.ResolvePath(outDir, name);
-                if (!names.Add(outPath))
-                    throw new InvalidDataException($"Duplicate DZ chunk output name '{name}'.");
-                FileExtraction.WriteAtomic(outPath, output =>
-                {
-                    DecompressChunk(fs, chunk, output, cancellationToken);
-                    cancellationToken.ThrowIfCancellationRequested();
-                }, overwrite);
-                count++;
+                continue;
             }
+
+            var outPath = FileExtraction.ResolvePath(outDir, name);
+            if (!names.Add(outPath))
+                throw new InvalidDataException($"Duplicate DZ chunk output name '{name}'.");
+            selected.Add((chunk, name, outPath));
         }
 
-        return count;
+        if (selected.Count == 0)
+        {
+            return 0;
+        }
+
+        var workers = FirmwareParallelism.Workers;
+        if (selected.Count == 1)
+        {
+            workers = 1;
+        }
+
+        if (workers <= 1)
+        {
+            foreach (var item in selected)
+            {
+                ExtractChunkToFile(fs, item, overwrite, cancellationToken);
+            }
+
+            return selected.Count;
+        }
+
+        ExtractChunksInParallel(fs, selected, workers, overwrite, cancellationToken);
+        return selected.Count;
+    }
+
+    /// <summary>
+    /// Extracts the selected chunks with bounded parallelism, committing each one only after it decoded and
+    /// verified so a later failure cannot leave a partially decompressed chunk at its final path.
+    /// <para>以有界并行度提取选中的块，每块在解压并校验通过后才提交，因此后续失败不会在最终路径留下半解压的块。</para>
+    /// </summary>
+    /// <param name="fs">The shared source stream; every chunk read positions it through one lock, so the
+    /// decompression itself still runs on the worker threads.
+    /// <para>共享的来源流；每块的读取都在同一把锁下重新定位，因此解压本身仍可运行在工作线程上。</para></param>
+    /// <param name="selected">Chunks to extract, in archive order. <para>待提取的块，按归档顺序排列。</para></param>
+    /// <param name="workers">Resolved worker count taken from <see cref="FirmwareParallelism.Workers"/>.
+    /// <para>取自 <see cref="FirmwareParallelism.Workers"/> 的已解析工作者数量。</para></param>
+    /// <param name="overwrite">Whether to replace existing files. <para>是否替换已有文件。</para></param>
+    /// <param name="cancellationToken">The cancellation token. <para>取消令牌。</para></param>
+    /// <exception cref="InvalidDataException">The chunk decompressed to an unexpected size, its MD5 or CRC32
+    /// mismatched, or its compression header is unsupported.
+    /// <para>块解压大小与声明不符、MD5 或 CRC32 不匹配，或其压缩头不受支持。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌已取消。</para></exception>
+    private static void ExtractChunksInParallel(
+        FileStream fs,
+        List<(DzChunk Chunk, string Name, string OutPath)> selected,
+        int workers,
+        bool overwrite,
+        CancellationToken cancellationToken)
+    {
+        var readGate = new object();
+        Parallel.For(
+            0, selected.Count,
+            new ParallelOptions { MaxDegreeOfParallelism = workers, CancellationToken = cancellationToken },
+            slot =>
+            {
+                var (chunk, _, outPath) = selected[slot];
+                cancellationToken.ThrowIfCancellationRequested();
+                FileExtraction.WriteAtomic(outPath, output =>
+                {
+                    DecompressChunk(fs, chunk, output, readGate, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                }, overwrite, cancellationToken);
+            });
+    }
+
+    private static void ExtractChunkToFile(
+        FileStream fs,
+        (DzChunk Chunk, string Name, string OutPath) item,
+        bool overwrite,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        FileExtraction.WriteAtomic(item.OutPath, output =>
+        {
+            DecompressChunk(fs, item.Chunk, output, null, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+        }, overwrite, cancellationToken);
     }
 
     internal static void DecompressChunk(Stream source, DzChunk chunk, FileStream output,
-        CancellationToken cancellationToken = default)
+        object? readGate = null, CancellationToken cancellationToken = default)
     {
-        using var data = new BoundedReadStream(source, chunk.DataOffset, chunk.Header.DataSize, leaveOpen: true);
+        using var data = new BoundedReadStream(source, chunk.DataOffset, chunk.Header.DataSize, leaveOpen: true, syncRoot: readGate);
         Span<byte> magic = stackalloc byte[4];
         data.ReadExactly(magic);
         data.Position = 0;

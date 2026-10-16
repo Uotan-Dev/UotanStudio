@@ -350,7 +350,6 @@ public sealed class MyPartitionRebaseTests : IDisposable
             source.FsConfig[""] = new FsConfigEntry(0, 0, 0x41ED);
             source.FsConfig["build.prop"] = new FsConfigEntry(1000, 1001, 0x81A4);
             source.FileContexts["build.prop"] = "u:object_r:my_product_file:s0";
-            source.Projection["build.prop"] = "file:abc";
         });
         await WritePreservationManifestAsync(systemMetadata, "system_a", system =>
         {
@@ -377,7 +376,6 @@ public sealed class MyPartitionRebaseTests : IDisposable
             && entry.SymlinkTarget == "toybox");
         Assert.Equal(new FsConfigEntry(1000, 1001, 0x81A4), system.FsConfig["system/my_product/build.prop"]);
         Assert.Equal("u:object_r:my_product_file:s0", system.FileContexts["system/my_product/build.prop"]);
-        Assert.Equal("file:abc", system.Projection["system/my_product/build.prop"]);
         var reloaded = RepackMetadata.ReadFromAbsolute(Path.Combine(systemMetadata, RepackMetadata.FileName));
         Assert.NotNull(reloaded);
         Assert.Equal(reloaded!.FileSystemPreservation!["configurationHash"]!.GetValue<string>(),
@@ -392,7 +390,6 @@ public sealed class MyPartitionRebaseTests : IDisposable
             Format = "EXT4",
             Partition = partition,
             SourceLength = 1,
-            SourceHash = "00",
         };
         configure(payload);
         var metadata = new RepackMetadata

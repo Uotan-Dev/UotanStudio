@@ -139,7 +139,7 @@ internal sealed class CompressFormatHandler : IFormatHandler
     /// 格式无法识别、输出已存在且禁止覆盖、已有元数据文件不可识别或解压出错时返回失败结果。</para>
     /// </returns>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
@@ -180,7 +180,8 @@ internal sealed class CompressFormatHandler : IFormatHandler
                 FileExtraction.WriteAtomic(outputPath, output =>
                 {
                     using var input = File.OpenRead(filePath);
-                    CompressionService.Decompress(input, output, format, maximumOutputBytes, cancellationToken);
+                    CompressionService.DecompressWithOptions(input, output, format, maximumOutputBytes,
+                        new CompressionOptions { MaxDegreeOfParallelism = FirmwareParallelism.Workers }, cancellationToken);
                     cancellationToken.ThrowIfCancellationRequested();
                 }, options?.Overwrite ?? true);
 
@@ -241,7 +242,8 @@ internal sealed class CompressFormatHandler : IFormatHandler
                     return FirmwareOpResult.Fail($"Compression is not supported for format '{info?.Name ?? format.ToString()}'.");
                 }
 
-                CompressionFile.CompressFile(inputPath, outputPath, format);
+                CompressionFile.CompressFile(inputPath, outputPath, format,
+                    new CompressionOptions { MaxDegreeOfParallelism = FirmwareParallelism.Workers });
 
                 return FirmwareOpResult.Ok(
                     $"Compressed '{inputPath}' into '{outputPath}' ({info.Name}).",

@@ -459,7 +459,7 @@ public sealed class F2fsParser : IDisposable
 
         var entries = ListFiles();
         var totalCount = entries.Count;
-        var hostPaths = new UotanStudio.Firmware.FileSystem.Extraction.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path));
+        var hostPaths = new Extraction.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path));
         var totalBytes = entries.Where(e => e.Kind != F2fsEntryKind.Directory
                 && (e.Kind == F2fsEntryKind.Symlink || overwrite || !File.Exists(hostPaths.Resolve(e.Path))))
             .Sum(e => e.Kind == F2fsEntryKind.Symlink ? Encoding.UTF8.GetByteCount(e.SymlinkTarget ?? string.Empty)
@@ -588,7 +588,7 @@ public sealed class F2fsParser : IDisposable
     {
         using var ms = new MemoryStream();
         WriteFileData(nid, inode, ms);
-        return System.Text.Encoding.UTF8.GetString(ms.GetBuffer().AsSpan(0, (int)ms.Length));
+        return Encoding.UTF8.GetString(ms.GetBuffer().AsSpan(0, (int)ms.Length));
     }
 
     private List<F2fsDirectoryEntry> ReadDirectory(uint ino, F2fsInode inode)
@@ -951,7 +951,12 @@ public sealed class F2fsParser : IDisposable
 
     /// <summary>
     /// Compressed-file read path: reads cluster by cluster (cluster = 1 &lt;&lt; (log_cluster_size + 12) bytes).
-    /// <para>压缩文件读路径：按压缩簇（1 &lt;&lt; (log_cluster_size + 12) 字节）逐簇读取。</para>
+    /// Clusters are independent, so their decompression is pipelined across the workers selected by
+    /// <see cref="Core.FirmwareParallelism.Workers"/> while the bytes are still written in cluster order,
+    /// which keeps the extracted content bit-identical to the sequential run.
+    /// <para>压缩文件读路径：按压缩簇（1 &lt;&lt; (log_cluster_size + 12) 字节）逐簇读取。各簇相互独立，
+    /// 因此其解压按 <see cref="Core.FirmwareParallelism.Workers"/> 选定的工作者数量流水线化，而字节仍按簇顺序写出，
+    /// 从而保证解出的内容与串行执行逐位一致。</para>
     /// </summary>
     private void WriteCompressedFileData(F2fsInode inode, Stream output)
     {
@@ -975,99 +980,239 @@ public sealed class F2fsParser : IDisposable
         var blockCount = (uint)((remaining + blockSize - 1) / blockSize);
         var algorithm = MapCompressAlgorithm(inode.CompressAlgorithm);
 
-        for (var logical = 0u; logical < blockCount; logical += (uint)clusterPages)
+        var clusterCount = (int)((blockCount + (uint)clusterPages - 1) / (uint)clusterPages);
+        var workers = Core.FirmwareParallelism.BudgetedWorkers(
+            bytesPerWorker: ResolveCompressedClusterWorkerBytes(clusterSize, blockSize),
+            budgetBytes: Core.FirmwareParallelism.WorkerMemoryBudgetBytes,
+            requestedWorkers: Core.FirmwareParallelism.Workers);
+        if (workers > clusterCount)
         {
-            var clusterBlocks = (int)Math.Min(clusterPages, blockCount - logical);
-            var writeLength = (int)Math.Min(clusterSize, remaining);
-            if (clusterBlocks <= 0 || writeLength <= 0)
+            workers = clusterCount;
+        }
+
+        if (workers <= 1)
+        {
+            for (var index = 0; index < clusterCount; index++)
+            {
+                var pending = GatherCompressedCluster(
+                    inode, index, clusterPages, clusterSize, blockSize, blockCount, remaining);
+                if (pending is null)
+                {
+                    break;
+                }
+
+                var item = pending.Value;
+                var decoded = item.IsCompressed
+                    ? DecompressGatheredCluster(item, algorithm, clusterSize)
+                    : item.Payload;
+                output.Write(decoded, 0, item.WriteLength);
+                remaining -= item.WriteLength;
+            }
+
+            return;
+        }
+
+        var slots = new GatheredCluster?[workers];
+        for (var cluster = 0; cluster < clusterCount; cluster += workers)
+        {
+            var batch = Math.Min(workers, clusterCount - cluster);
+            var gathered = 0;
+            for (var slot = 0; slot < batch; slot++)
+            {
+                var pending = GatherCompressedCluster(
+                    inode, cluster + slot, clusterPages, clusterSize, blockSize, blockCount, remaining);
+                if (pending is null)
+                {
+                    break;
+                }
+
+                slots[slot] = pending;
+                gathered++;
+                remaining -= pending.Value.WriteLength;
+            }
+
+            if (gathered == 0)
             {
                 break;
             }
 
-            var physical = MapBlock(inode, logical);
-            if (physical == uint.MaxValue - 1)
+            var degrees = Math.Min(gathered, workers);
+            if (degrees > 1)
             {
-                var firstAddress = MapBlock(inode, logical + 1);
-                if (firstAddress is null or <= 0 or >= uint.MaxValue - 1)
-                    throw new FileSystemCorruptedException("F2FS compressed cluster has no payload block.");
-                var firstBlock = ReadBlockChecked((ulong)firstAddress, "Compressed cluster header");
-                var header = F2fsCompressedCluster.FromBytes(firstBlock);
-                var compressedBytes = header.CompressedSize;
-                if (compressedBytes <= 0 || compressedBytes > (clusterPages - 1) * blockSize - F2fsCompressedCluster.HeaderSize)
-                    throw new FileSystemCorruptedException("F2FS compressed cluster length exceeds its reserved blocks.");
-                var compressed = new byte[compressedBytes];
-                var copied = 0;
-                var blocksToRead = (F2fsCompressedCluster.HeaderSize + compressedBytes + blockSize - 1) / blockSize;
-                for (var b = 0; b < blocksToRead && copied < compressedBytes; b++)
+                var pending = slots;
+                Parallel.For(0, gathered, new ParallelOptions { MaxDegreeOfParallelism = degrees }, slot =>
                 {
-                    byte[] blockData;
-                    if (b == 0)
+                    var item = pending[slot]!.Value;
+                    pending[slot] = item with
                     {
-                        blockData = firstBlock;
-                    }
-                    else
-                    {
-                        var blkAddr = MapBlock(inode, logical + 1 + (uint)b);
-                        if (blkAddr is null or <= 0 or >= uint.MaxValue - 1)
-                            throw new FileSystemCorruptedException("F2FS compressed payload block is missing.");
-
-                        blockData = ReadBlockChecked((ulong)blkAddr, $"Compressed cluster block {b} (logical {logical + (uint)b})");
-                    }
-
-                    var srcOffset = b == 0 ? F2fsCompressedCluster.HeaderSize : 0;
-                    var available = blockData.Length - srcOffset;
-                    if (available <= 0)
-                    {
-                        break;
-                    }
-
-                    var toCopy = Math.Min(available, compressedBytes - copied);
-                    blockData.AsSpan(srcOffset, toCopy).CopyTo(compressed.AsSpan(copied));
-                    copied += toCopy;
-                }
-
-                if (copied < compressedBytes)
-                {
-                    throw new FileSystemCorruptedException(
-                        $"F2FS compressed cluster at logical block {logical} was truncated ({copied}/{compressedBytes} bytes).");
-                }
-
-                if ((inode.CompressFlags & 1) != 0 && ComputeCrc32(F2fsSuperblock.Magic, compressed) != header.Checksum)
-                    throw new FileSystemCorruptedException("F2FS compressed cluster checksum mismatch.");
-                var decompressed = F2fsCompression.DecompressCluster(
-                    compressed,
-                    algorithm,
-                    clusterSize,
-                    clusterSize);
-
-                if (decompressed.Length != clusterSize)
-                    throw new FileSystemCorruptedException("F2FS compressed cluster has an incorrect decompressed length.");
-                output.Write(decompressed, 0, writeLength);
-
-                remaining -= writeLength;
+                        Payload = item.IsCompressed
+                            ? DecompressGatheredCluster(item, algorithm, clusterSize)
+                            : item.Payload,
+                    };
+                });
             }
-            else
+
+            for (var slot = 0; slot < gathered; slot++)
             {
+                var item = slots[slot]!.Value;
+                output.Write(item.Payload, 0, item.WriteLength);
+            }
 
-                var clusterBuffer = new byte[clusterSize];
-                for (var b = 0; b < clusterBlocks; b++)
-                {
-                    var blkAddr = MapBlock(inode, logical + (uint)b);
-                    if (blkAddr is null or 0 or uint.MaxValue)
-                    {
-                        continue;
-                    }
-
-                    var blockData = ReadBlockChecked((ulong)blkAddr, $"Uncompressed cluster block {b} (logical {logical + (uint)b})");
-                    blockData.AsSpan(0, Math.Min(blockSize, clusterBuffer.Length - b * blockSize))
-                        .CopyTo(clusterBuffer.AsSpan(b * blockSize));
-                }
-
-                output.Write(clusterBuffer, 0, writeLength);
-                remaining -= writeLength;
+            if (gathered < batch)
+            {
+                break;
             }
         }
     }
+
+    /// <summary>
+    /// Reads the payload blocks of one cluster without decompressing it, returning the staged payload so
+    /// the CPU-bound decode can later run on a worker while every image read stays on the calling thread.
+    /// <para>读取一个簇的载荷块而不解压，返回暂存的载荷，使后续 CPU 密集的解码可在工作者线程上执行，
+    /// 而所有镜像读取仍留在调用线程。</para>
+    /// </summary>
+    /// <param name="inode">Inode describing the compressed file. <para>描述该压缩文件的 inode。</para></param>
+    /// <param name="index">Zero-based cluster index within the file. <para>文件内的零基簇索引。</para></param>
+    /// <param name="clusterPages">Pages spanning one cluster. <para>一个簇跨越的页数。</para></param>
+    /// <param name="clusterSize">Uncompressed cluster size in bytes. <para>未压缩簇的字节大小。</para></param>
+    /// <param name="blockSize">Filesystem block size in bytes. <para>文件系统块大小（字节）。</para></param>
+    /// <param name="blockCount">Total logical blocks in the file. <para>文件逻辑块总数。</para></param>
+    /// <param name="remaining">Uncompressed bytes still owed to the file before this cluster.
+    /// <para>本簇之前文件尚欠的未压缩字节数。</para></param>
+    /// <returns>The staged cluster, or <see langword="null"/> when the file is already complete.
+    /// <para>暂存的簇；文件已完整时返回 <see langword="null"/>。</para></returns>
+    private GatheredCluster? GatherCompressedCluster(F2fsInode inode, int index, int clusterPages, int clusterSize,
+        int blockSize, uint blockCount, long remaining)
+    {
+        var logical = (uint)(index * clusterPages);
+        var clusterBlocks = (int)Math.Min(clusterPages, blockCount - logical);
+        var writeLength = (int)Math.Min(clusterSize, remaining);
+        if (clusterBlocks <= 0 || writeLength <= 0)
+        {
+            return null;
+        }
+
+        var physical = MapBlock(inode, logical);
+        if (physical != uint.MaxValue - 1)
+        {
+            var clusterBuffer = new byte[clusterSize];
+            for (var b = 0; b < clusterBlocks; b++)
+            {
+                var blkAddr = MapBlock(inode, logical + (uint)b);
+                if (blkAddr is null or 0 or uint.MaxValue)
+                {
+                    continue;
+                }
+
+                var blockData = ReadBlockChecked((ulong)blkAddr, $"Uncompressed cluster block {b} (logical {logical + (uint)b})");
+                blockData.AsSpan(0, Math.Min(blockSize, clusterBuffer.Length - b * blockSize))
+                    .CopyTo(clusterBuffer.AsSpan(b * blockSize));
+            }
+
+            return new GatheredCluster(clusterBuffer, logical, writeLength, false, Header: null);
+        }
+
+        var firstAddress = MapBlock(inode, logical + 1);
+        if (firstAddress is null or <= 0 or >= uint.MaxValue - 1)
+            throw new FileSystemCorruptedException("F2FS compressed cluster has no payload block.");
+        var firstBlock = ReadBlockChecked((ulong)firstAddress, "Compressed cluster header");
+        var header = F2fsCompressedCluster.FromBytes(firstBlock);
+        var compressedBytes = header.CompressedSize;
+        if (compressedBytes <= 0 || compressedBytes > (clusterPages - 1) * blockSize - F2fsCompressedCluster.HeaderSize)
+            throw new FileSystemCorruptedException("F2FS compressed cluster length exceeds its reserved blocks.");
+        var compressed = new byte[compressedBytes];
+        var copied = 0;
+        var blocksToRead = (F2fsCompressedCluster.HeaderSize + compressedBytes + blockSize - 1) / blockSize;
+        for (var b = 0; b < blocksToRead && copied < compressedBytes; b++)
+        {
+            byte[] blockData;
+            if (b == 0)
+            {
+                blockData = firstBlock;
+            }
+            else
+            {
+                var blkAddr = MapBlock(inode, logical + 1 + (uint)b);
+                if (blkAddr is null or <= 0 or >= uint.MaxValue - 1)
+                    throw new FileSystemCorruptedException("F2FS compressed payload block is missing.");
+
+                blockData = ReadBlockChecked((ulong)blkAddr, $"Compressed cluster block {b} (logical {logical + (uint)b})");
+            }
+
+            var srcOffset = b == 0 ? F2fsCompressedCluster.HeaderSize : 0;
+            var available = blockData.Length - srcOffset;
+            if (available <= 0)
+            {
+                break;
+            }
+
+            var toCopy = Math.Min(available, compressedBytes - copied);
+            blockData.AsSpan(srcOffset, toCopy).CopyTo(compressed.AsSpan(copied));
+            copied += toCopy;
+        }
+
+        if (copied < compressedBytes)
+        {
+            throw new FileSystemCorruptedException(
+                $"F2FS compressed cluster at logical block {logical} was truncated ({copied}/{compressedBytes} bytes).");
+        }
+
+        return new GatheredCluster(compressed, logical, writeLength, true, header);
+    }
+
+    /// <summary>
+    /// Decompresses one gathered cluster. This is the only part of the cluster path that runs on a
+    /// worker thread: the image reads already happened on the calling thread, so no shared parser state
+    /// is touched here and no lock is needed.
+    /// <para>解压一个已收集的簇。这是簇路径中唯一在工作线程上执行的部分：镜像读取已发生在调用线程上，
+    /// 因此此处不触碰任何共享解析器状态，也无需加锁。</para>
+    /// </summary>
+    /// <param name="gathered">Cluster staged by <see cref="GatherCompressedCluster"/>.
+    /// <para>由 <see cref="GatherCompressedCluster"/> 暂存的簇。</para></param>
+    /// <param name="algorithm">Cluster codec selected by the inode. <para>inode 选定的簇编解码器。</para></param>
+    /// <param name="clusterSize">Uncompressed cluster size in bytes. <para>未压缩簇的字节大小。</para></param>
+    /// <returns>The decoded cluster bytes. <para>解码后的簇字节。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The cluster expands to an unexpected length.
+    /// <para>该簇展开为意外长度时抛出。</para></exception>
+    private static byte[] DecompressGatheredCluster(GatheredCluster gathered, CompressionAlgorithm algorithm, int clusterSize)
+    {
+        var decompressed = F2fsCompression.DecompressCluster(gathered.Payload, algorithm, clusterSize, clusterSize);
+        if (decompressed.Length != clusterSize)
+        {
+            throw new FileSystemCorruptedException("F2FS compressed cluster has an incorrect decompressed length.");
+        }
+
+        return decompressed;
+    }
+
+    /// <summary>
+    /// A cluster whose payload blocks have already been read, together with the length the ordered writer
+    /// needs. <para>载荷块已读取完毕的簇，连同顺序写出所需的长度。</para>
+    /// </summary>
+    /// <param name="Payload">Bytes read for this cluster; a stored cluster carries its final content,
+    /// while a compressed cluster carries the still-encoded payload replaced after decoding.
+    /// <para>为该簇读取的字节；存储型簇承载最终内容，压缩型簇承载解码后将被替换的尚未解码载荷。</para></param>
+    /// <param name="Logical">Logical block where the cluster starts. <para>簇起始的逻辑块。</para></param>
+    /// <param name="WriteLength">Payload bytes this cluster contributes to the file.
+    /// <para>本簇对文件贡献的载荷字节数。</para></param>
+    /// <param name="IsCompressed">Whether <paramref name="Payload"/> still needs decompression.
+    /// <para><paramref name="Payload"/> 是否仍需解压。</para></param>
+    /// <param name="Header">Parsed cluster header for a compressed cluster; <see langword="null"/> for a
+    /// stored one. <para>压缩簇已解析的簇头；存储型簇为 <see langword="null"/>。</para></param>
+    private readonly record struct GatheredCluster(byte[] Payload, uint Logical, int WriteLength,
+        bool IsCompressed, F2fsCompressedCluster? Header);
+
+    /// <summary>
+    /// Estimates the worst-case bytes one worker holds while decoding a compressed cluster, used to cap
+    /// the worker count against a single aggregate memory budget.
+    /// <para>估算单个工作者解码一个压缩簇时最坏情况下占用的字节数，用于按单一内存预算限制工作者数量。</para>
+    /// </summary>
+    /// <param name="clusterSize">Uncompressed cluster size in bytes. <para>未压缩簇的字节大小。</para></param>
+    /// <param name="blockSize">Filesystem block size in bytes. <para>文件系统块大小（字节）。</para></param>
+    /// <returns>The per-worker byte estimate covering the compressed staging buffer, the staging block
+    /// and the decoded cluster. <para>每工作者的字节估算值，覆盖压缩暂存缓冲、暂存块与解压后的簇。</para></returns>
+    private static long ResolveCompressedClusterWorkerBytes(int clusterSize, int blockSize)
+        => checked(clusterSize * 2L + blockSize * 2L);
 
     /// <summary>
     /// Maps the algorithm id stored in the inode extra attributes: 0=LZO, 1=LZ4, 2=ZSTD, 3=LZORLE.

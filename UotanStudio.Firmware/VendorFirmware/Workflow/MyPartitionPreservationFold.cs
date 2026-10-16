@@ -12,7 +12,7 @@ namespace UotanStudio.Firmware.VendorFirmware.Workflow;
 /// root to its merged location, so a preserved rebuild of the merged system tree keeps the original ownership,
 /// permissions, SELinux labels and symbolic links instead of falling back to donor inheritance. The system
 /// manifest's configuration digest is re-sealed after the fold.
-/// <para>把解包 my 分区的保留负载折叠进 system 保留清单：每条记录的 inode、投影条目、镜像路径别名、fs_config
+/// <para>把解包 my 分区的保留负载折叠进 system 保留清单：每条记录的 inode、镜像路径别名、fs_config
 /// 规则与 SELinux 标签都从分区根改键到合并后的位置，使合并后 system 树的受保留重建保住原有属主、权限、
 /// SELinux 标签与符号链接，而不是退回 donor 继承。折叠后重封 system 清单的配置摘要。</para>
 /// </summary>
@@ -100,11 +100,10 @@ internal static class MyPartitionPreservationFold
         kept.AddRange(rekeyedEntries.Values);
         system.ParsedEntries = kept;
 
-        FoldTable(source.Projection, system.Projection, Rekey, Skip);
         FoldTable(source.ImagePaths, system.ImagePaths, Rekey, Skip);
         FoldTable(source.FsConfig, system.FsConfig, Rekey, Skip);
         FoldTable(source.FileContexts, system.FileContexts, Rekey, Skip);
-        if (system.Projection.Count > MaximumEntries || system.ParsedEntries.Count > MaximumEntries)
+        if (system.ParsedEntries.Count > MaximumEntries)
         {
             throw new FileSystemCorruptedException("Folded preservation manifest exceeds the entry limit.");
         }

@@ -212,12 +212,7 @@ public sealed partial class PayloadBuilder
             newHash.Append(targetBuffer.AsSpan(0, count));
 
             var blocks = count / blockBytes;
-            for (var i = 0; i < blocks; i++)
-            {
-                var preferred = i > 0 && matches[i - 1] >= 0
-                    ? matches[i - 1] + 1 : checked((long)block + i);
-                matches[i] = sourceIndex.Find(targetBuffer.AsSpan(i * blockBytes, blockBytes), preferred, cancellationToken);
-            }
+            sourceIndex.MatchChunk(targetBuffer, count, blockBytes, block, matches, cancellationToken);
             var index = 0;
             while (index < blocks)
             {

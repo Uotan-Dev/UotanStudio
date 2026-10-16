@@ -84,6 +84,7 @@ public sealed class CpioExtractor
         var includePatterns = ResolveIncludePatterns(opts);
 
         var inodeMap = new Dictionary<(ulong Inode, uint DevMajor, uint DevMinor), string>();
+        var inMemory = new List<PlannedEntry>();
         foreach (var entry in entries)
         {
             opts.CancellationToken.ThrowIfCancellationRequested();
@@ -97,41 +98,218 @@ public sealed class CpioExtractor
             EnsureNoLinkAncestors(destinationRoot, targetPath);
             EnsureParentDirectory(targetPath, opts.MakeDirectories);
             EnsureNoLinkAncestors(destinationRoot, targetPath);
+            var item = new PlannedEntry(transformedEntry, targetPath);
 
-            switch (transformedEntry.Metadata.FileType)
+            // A payload reached through DataStream or DataStreamFactory is a view over the reader's own
+            // source stream, which the reader advances as it enumerates, so it has to be consumed right
+            // here while the stream still sits on this entry. Only entries whose bytes are already in
+            // memory can be deferred to the parallel pass.
+            if (IsMaterializedInMemory(item.Entry))
             {
-                case CpioFileType.Directory:
-                    Directory.CreateDirectory(targetPath);
-                    break;
-                case CpioFileType.SymbolicLink:
-                    ExtractSymbolicLink(transformedEntry, targetPath, opts);
-                    break;
-                case CpioFileType.HardLink:
-                    ExtractHardLink(transformedEntry, destinationRoot, targetPath, inodeMap, opts);
-                    break;
-                case CpioFileType.Fifo:
-                case CpioFileType.CharacterDevice:
-                case CpioFileType.BlockDevice:
-                    ExtractSpecialFile(targetPath, opts);
-                    break;
-                case CpioFileType.Unknown:
-                case CpioFileType.Regular:
-                case CpioFileType.Socket:
-                default:
-                    ExtractRegularLikeFile(transformedEntry, targetPath, opts);
-                    RegisterInodeMapping(transformedEntry, targetPath, inodeMap, opts.DeviceIndependentHardlinks);
-                    break;
+                if (item.Entry.Metadata.FileType is CpioFileType.Directory or CpioFileType.HardLink)
+                {
+                    ApplyOrderedEntry(item, destinationRoot, inodeMap, opts);
+                }
+                else
+                {
+                    inMemory.Add(item);
+                }
+
+                continue;
             }
 
-            if (opts.RestoreModificationTime && transformedEntry.Metadata.FileType != CpioFileType.SymbolicLink)
+            if (item.Entry.Metadata.FileType is CpioFileType.Directory or CpioFileType.HardLink)
             {
-
-                TryRestoreMtime(targetPath, transformedEntry.Metadata.ModificationTimeUnixSeconds);
+                ApplyOrderedEntry(item, destinationRoot, inodeMap, opts);
+                continue;
             }
 
-            ApplyMetadataBestEffort(targetPath, transformedEntry, opts);
+            WriteIndependentEntry(item, opts);
+            RegisterPlannedInode(item, inodeMap, opts.DeviceIndependentHardlinks);
         }
-        opts.CancellationToken.ThrowIfCancellationRequested();
+
+        if (inMemory.Count == 0)
+        {
+            return;
+        }
+
+        // Deferred entries may live beneath a directory entry that is itself deferred, so every
+        // deferred entry makes sure its own parent exists before the parallel pass writes anything.
+        foreach (var item in inMemory)
+        {
+            opts.CancellationToken.ThrowIfCancellationRequested();
+            EnsureParentDirectory(item.TargetPath, opts.MakeDirectories);
+        }
+
+        var workers = FirmwareParallelism.Workers;
+        if (workers > 1 && inMemory.Count > 1)
+        {
+            ExtractInMemoryEntriesInParallel(inMemory, opts, workers);
+            foreach (var item in inMemory)
+            {
+                RegisterPlannedInode(item, inodeMap, opts.DeviceIndependentHardlinks);
+            }
+
+            return;
+        }
+
+        foreach (var item in inMemory)
+        {
+            opts.CancellationToken.ThrowIfCancellationRequested();
+            WriteIndependentEntry(item, opts);
+            RegisterPlannedInode(item, inodeMap, opts.DeviceIndependentHardlinks);
+        }
+    }
+
+    /// <summary>
+    /// Reports whether an entry already carries its payload bytes, so writing it needs no source access.
+    /// <para>报告条目是否已携带其负载字节，从而写出时无需再访问来源。</para>
+    /// </summary>
+    /// <param name="entry">The archive entry to classify. <para>待分类的归档条目。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when neither <see cref="ArchiveEntry.DataStream"/> nor
+    /// <see cref="ArchiveEntry.DataStreamFactory"/> is set, which means <see cref="ArchiveEntry.Data"/> holds the
+    /// bytes and no source stream has to be re-read; otherwise <see langword="false"/>.
+    /// <para>当 <see cref="ArchiveEntry.DataStream"/> 与 <see cref="ArchiveEntry.DataStreamFactory"/> 均未设置时为
+    /// <see langword="true"/>，此时 <see cref="ArchiveEntry.Data"/> 即负载字节、无需重读来源流；否则为
+    /// <see langword="false"/>。</para>
+    /// </returns>
+    private static bool IsMaterializedInMemory(ArchiveEntry entry)
+        => entry.DataStream is null && entry.DataStreamFactory is null;
+
+    /// <summary>
+    /// Writes one entry whose payload is already in memory, with bounded parallelism, and registers its
+    /// inode afterwards in archive order so the hardlink mapping stays deterministic.
+    /// <para>以有界并行度写出负载已在内存中的条目，并在之后按归档顺序登记其 inode，使硬链接映射保持确定性。</para>
+    /// </summary>
+    /// <param name="planned">Entries whose bytes are already in memory, in archive order.
+    /// <para>负载字节已在内存中的条目，按归档顺序排列。</para></param>
+    /// <param name="opts">The resolved extraction options. <para>已解析的提取选项。</para></param>
+    /// <param name="workers">Resolved worker count taken from
+    /// <see cref="FirmwareParallelism.Workers"/>.
+    /// <para>取自 <see cref="FirmwareParallelism.Workers"/> 的已解析工作者数量。</para></param>
+    private static void ExtractInMemoryEntriesInParallel(List<PlannedEntry> planned, ExtractOptions opts, int workers)
+    {
+        Parallel.For(
+            0, planned.Count,
+            new ParallelOptions { MaxDegreeOfParallelism = workers, CancellationToken = opts.CancellationToken },
+            slot =>
+            {
+                opts.CancellationToken.ThrowIfCancellationRequested();
+                WriteIndependentEntry(planned[slot], opts);
+            });
+    }
+
+    /// <summary>
+    /// Writes one entry whose payload is already in memory to its validated path, applying the same
+    /// mtime and metadata restoration the serial extractor performs.
+    /// <para>把负载已在内存中的单个条目写出到已校验的目标路径，并施加与串行解包器相同的 mtime 与元数据还原。</para>
+    /// </summary>
+    /// <param name="item">The planned entry. <para>已规划的条目。</para></param>
+    /// <param name="opts">The resolved extraction options. <para>已解析的提取选项。</para></param>
+    private static void WriteIndependentEntry(PlannedEntry item, ExtractOptions opts)
+    {
+        var entry = item.Entry;
+        switch (entry.Metadata.FileType)
+        {
+            case CpioFileType.SymbolicLink:
+                ExtractSymbolicLink(entry, item.TargetPath, opts);
+                break;
+            case CpioFileType.Fifo:
+            case CpioFileType.CharacterDevice:
+            case CpioFileType.BlockDevice:
+                ExtractSpecialFile(item.TargetPath, opts);
+                break;
+            default:
+                ExtractRegularLikeFile(entry, item.TargetPath, opts);
+                break;
+        }
+
+        if (opts.RestoreModificationTime && entry.Metadata.FileType != CpioFileType.SymbolicLink)
+        {
+            TryRestoreMtime(item.TargetPath, entry.Metadata.ModificationTimeUnixSeconds);
+        }
+
+        ApplyMetadataBestEffort(item.TargetPath, entry, opts);
+    }
+
+    /// <summary>
+    /// Writes a directory or hard link in archive order, because the order is part of the archive's meaning.
+    /// <para>按归档顺序写出目录或硬链接，因为其顺序本身属于归档语义的一部分。</para>
+    /// </summary>
+    /// <param name="item">The planned entry. <para>已规划的条目。</para></param>
+    /// <param name="destinationRoot">Resolved destination root used for hardlink target resolution.
+    /// <para>已解析的用于硬链接目标解析的目标根目录。</para></param>
+    /// <param name="inodeMap">Inode registry filled in archive order.
+    /// <para>按归档顺序填充的 inode 登记表。</para></param>
+    /// <param name="opts">The resolved extraction options. <para>已解析的提取选项。</para></param>
+    private static void ApplyOrderedEntry(
+        PlannedEntry item,
+        string destinationRoot,
+        Dictionary<(ulong Inode, uint DevMajor, uint DevMinor), string> inodeMap,
+        ExtractOptions opts)
+    {
+        var entry = item.Entry;
+        switch (entry.Metadata.FileType)
+        {
+            case CpioFileType.Directory:
+                Directory.CreateDirectory(item.TargetPath);
+                break;
+            case CpioFileType.HardLink:
+                ExtractHardLink(entry, destinationRoot, item.TargetPath, inodeMap, opts);
+                break;
+            default:
+                throw new InvalidOperationException("Only directories and hard links are order dependent.");
+        }
+
+        if (opts.RestoreModificationTime && entry.Metadata.FileType != CpioFileType.SymbolicLink)
+        {
+            TryRestoreMtime(item.TargetPath, entry.Metadata.ModificationTimeUnixSeconds);
+        }
+
+        ApplyMetadataBestEffort(item.TargetPath, entry, opts);
+    }
+
+    /// <summary>
+    /// Records the inode of a written entry so a later hard link can copy from it.
+    /// <para>登记已写出条目的 inode，使后续硬链接可以从中复制。</para>
+    /// </summary>
+    /// <param name="item">The planned entry that was written. <para>已写出的已规划条目。</para></param>
+    /// <param name="inodeMap">Inode registry to fill. <para>待填充的 inode 登记表。</para></param>
+    /// <param name="deviceIndependent">Whether the device number is part of the inode key.
+    /// <para>设备号是否属于 inode 键的一部分。</para></param>
+    private static void RegisterPlannedInode(
+        PlannedEntry item,
+        Dictionary<(ulong Inode, uint DevMajor, uint DevMinor), string> inodeMap,
+        bool deviceIndependent)
+    {
+        var entry = item.Entry;
+        if (entry.Metadata.Inode == 0)
+        {
+            return;
+        }
+
+        var key = deviceIndependent
+            ? (entry.Metadata.Inode, 0, 0)
+            : (entry.Metadata.Inode, entry.Metadata.DeviceMajor, entry.Metadata.DeviceMinor);
+        inodeMap[key] = item.TargetPath;
+    }
+
+    /// <summary>
+    /// One planned archive entry together with the already validated destination path computed for it.
+    /// <para>单个已规划的归档条目，连同为其计算并校验过的目标路径。</para>
+    /// </summary>
+    private sealed class PlannedEntry
+    {
+        internal PlannedEntry(ArchiveEntry entry, string targetPath)
+        {
+            Entry = entry;
+            TargetPath = targetPath;
+        }
+
+        internal ArchiveEntry Entry { get; }
+
+        internal string TargetPath { get; }
     }
 
     private static void ExtractRegularLikeFile(ArchiveEntry entry, string targetPath, ExtractOptions options)

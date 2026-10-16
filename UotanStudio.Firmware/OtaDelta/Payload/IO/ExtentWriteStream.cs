@@ -1,3 +1,4 @@
+using Microsoft.Win32.SafeHandles;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.IO;
@@ -8,6 +9,7 @@ internal sealed class ExtentWriteStream : Stream
     private readonly (long Offset, long Length)[] _extents;
     private readonly bool _requireExactLength;
     private readonly object _syncRoot;
+    private readonly SafeFileHandle? _file;
     private readonly long _length;
     private readonly PartitionByteProgress? _byteProgress;
     private int _extentIndex;
@@ -31,6 +33,7 @@ internal sealed class ExtentWriteStream : Stream
         _requireExactLength = requireExactLength;
         _syncRoot = syncRoot ?? new object();
         _byteProgress = byteProgress;
+        if (output.GetType() == typeof(FileStream)) _file = ((FileStream)output).SafeFileHandle;
         try
         {
             _extents = [.. extents.Select(extent =>
@@ -131,10 +134,18 @@ internal sealed class ExtentWriteStream : Stream
             SkipEmptyExtents();
             var extent = _extents[_extentIndex];
             var count = (int)Math.Min(buffer.Length, extent.Length - _extentPosition);
-            lock (_syncRoot)
+            var target = checked(extent.Offset + _extentPosition);
+            if (_file is not null)
             {
-                _output.Seek(checked(extent.Offset + _extentPosition), SeekOrigin.Begin);
-                _output.Write(buffer[..count]);
+                RandomAccess.Write(_file, buffer[..count], target);
+            }
+            else
+            {
+                lock (_syncRoot)
+                {
+                    _output.Seek(target, SeekOrigin.Begin);
+                    _output.Write(buffer[..count]);
+                }
             }
             _byteProgress?.Add(count);
             buffer = buffer[count..];

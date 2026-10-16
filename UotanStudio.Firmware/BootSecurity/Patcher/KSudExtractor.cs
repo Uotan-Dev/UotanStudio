@@ -149,43 +149,43 @@ public static partial class Extractor
     /// PT_LOAD segment. <para>按扫描顺序去重、且换算结果能落回 PT_LOAD 段的最终地址。</para></returns>
     public static List<ulong> ScanAarch64Refs(ElfFile elf, ulong fnVa, int window = 0x1000)
     {
-        byte[] data = elf.Data;
-        long? fnOff = elf.VaToOff(fnVa);
+        var data = elf.Data;
+        var fnOff = elf.VaToOff(fnVa);
         if (fnOff is null)
             return [];
         var refs = new List<ulong>();
-        long end = Math.Min(data.Length - 3, fnOff.Value + window);
-        long i = fnOff.Value;
+        var end = Math.Min(data.Length - 3, fnOff.Value + window);
+        var i = fnOff.Value;
         while (i + 4 <= end)
         {
-            uint insn = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan((int)i));
+            var insn = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan((int)i));
             if ((insn & 0x9F000000) == 0x90000000)
             {
-                uint rd = insn & 0x1F;
-                uint immlo = (insn >> 29) & 0x3;
-                uint immhi = (insn >> 5) & 0x7FFFF;
-                long imm21 = ((long)immhi << 2) | immlo;
+                var rd = insn & 0x1F;
+                var immlo = (insn >> 29) & 0x3;
+                var immhi = (insn >> 5) & 0x7FFFF;
+                var imm21 = ((long)immhi << 2) | immlo;
                 if ((imm21 & (1L << 20)) != 0)
                     imm21 -= 1L << 21;
-                ulong pcVa = elf.OffToVa(i) ?? fnVa;
-                long page = checked((long)(pcVa & ~0xFFFUL));
-                long targetPage = checked(page + (imm21 << 12));
+                var pcVa = elf.OffToVa(i) ?? fnVa;
+                var page = checked((long)(pcVa & ~0xFFFUL));
+                var targetPage = checked(page + (imm21 << 12));
                 if (targetPage < 0)
                     continue;
-                ulong target = (ulong)targetPage;
-                for (long j = i + 4; j <= Math.Min(end, i + 12); j += 4)
+                var target = (ulong)targetPage;
+                for (var j = i + 4; j <= Math.Min(end, i + 12); j += 4)
                 {
-                    uint a = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan((int)j));
+                    var a = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan((int)j));
                     if ((a & 0xFF800000) == 0x91000000)
                     {
-                        uint rn = (a >> 5) & 0x1F;
+                        var rn = (a >> 5) & 0x1F;
                         if (rn == rd)
                         {
-                            uint imm12 = (a >> 10) & 0xFFF;
-                            uint shift = (a >> 22) & 1;
-                            ulong final = (target + ((ulong)imm12 << (shift == 1 ? 12 : 0))) & 0xFFFFFFFFFFFFFFFFUL;
-                            long? ro = elf.ResolveRef(final);
-                            ulong? rva = ro is not null ? elf.OffToVa(ro.Value) : null;
+                            var imm12 = (a >> 10) & 0xFFF;
+                            var shift = (a >> 22) & 1;
+                            var final = (target + ((ulong)imm12 << (shift == 1 ? 12 : 0))) & 0xFFFFFFFFFFFFFFFFUL;
+                            var ro = elf.ResolveRef(final);
+                            var rva = ro is not null ? elf.OffToVa(ro.Value) : null;
                             if (rva is not null)
                                 refs.Add(final);
                             break;
@@ -205,7 +205,7 @@ public static partial class Extractor
         }
         var seen = new HashSet<ulong>();
         var outRefs = new List<ulong>(refs.Count);
-        foreach (ulong r in refs)
+        foreach (var r in refs)
             if (seen.Add(r))
                 outRefs.Add(r);
         return outRefs;
@@ -225,25 +225,25 @@ public static partial class Extractor
     /// PT_LOAD segment. <para>按扫描顺序去重、且换算结果能落回 PT_LOAD 段的目标地址。</para></returns>
     public static List<ulong> ScanX86_64Refs(ElfFile elf, ulong fnVa, int window = 0x1000)
     {
-        byte[] data = elf.Data;
-        long? fnOff = elf.VaToOff(fnVa);
+        var data = elf.Data;
+        var fnOff = elf.VaToOff(fnVa);
         if (fnOff is null)
             return [];
         var refs = new List<ulong>();
-        long end = Math.Min(data.Length - 7, fnOff.Value + window);
-        long i = fnOff.Value;
+        var end = Math.Min(data.Length - 7, fnOff.Value + window);
+        var i = fnOff.Value;
         while (i + 7 <= end)
         {
             if (data[i] is 0x48 or 0x4C && data[i + 1] is 0x8D or 0x8B)
             {
-                byte modrm = data[i + 2];
+                var modrm = data[i + 2];
                 if ((modrm & 0xC7) == 0x05)
                 {
-                    int disp = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan((int)i + 3));
-                    ulong nextVa = elf.OffToVa(i + 7) ?? (fnVa + (ulong)(i + 7 - (elf.VaToOff(fnVa) ?? 0)));
-                    ulong target = (nextVa + (ulong)disp) & 0xFFFFFFFFFFFFFFFFUL;
-                    long? ro = elf.ResolveRef(target);
-                    ulong? rva = ro is not null ? elf.OffToVa(ro.Value) : null;
+                    var disp = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan((int)i + 3));
+                    var nextVa = elf.OffToVa(i + 7) ?? (fnVa + (ulong)(i + 7 - (elf.VaToOff(fnVa) ?? 0)));
+                    var target = (nextVa + (ulong)disp) & 0xFFFFFFFFFFFFFFFFUL;
+                    var ro = elf.ResolveRef(target);
+                    var rva = ro is not null ? elf.OffToVa(ro.Value) : null;
                     if (rva is not null)
                         refs.Add(target);
                     i += 7;
@@ -254,7 +254,7 @@ public static partial class Extractor
         }
         var seen = new HashSet<ulong>();
         var outRefs = new List<ulong>(refs.Count);
-        foreach (ulong r in refs)
+        foreach (var r in refs)
             if (seen.Add(r))
                 outRefs.Add(r);
         return outRefs;
@@ -305,13 +305,13 @@ public static partial class Extractor
         var hits = new List<(long P, string Name, ulong Fn)>();
         for (long p = 0; p <= view.Length - 24; p += 8)
         {
-            ulong v1 = BinaryPrimitives.ReadUInt64LittleEndian(view.AsSpan((int)p));
-            ulong v2 = BinaryPrimitives.ReadUInt64LittleEndian(view.AsSpan((int)p + 8));
-            ulong v3 = BinaryPrimitives.ReadUInt64LittleEndian(view.AsSpan((int)p + 16));
-            long? noff = elf.VaToOff(v1);
+            var v1 = BinaryPrimitives.ReadUInt64LittleEndian(view.AsSpan((int)p));
+            var v2 = BinaryPrimitives.ReadUInt64LittleEndian(view.AsSpan((int)p + 8));
+            var v3 = BinaryPrimitives.ReadUInt64LittleEndian(view.AsSpan((int)p + 16));
+            var noff = elf.VaToOff(v1);
             if (noff is null || elf.IsWritableVa(v1))
                 continue;
-            byte nb = view[noff.Value];
+            var nb = view[noff.Value];
             if (nb < 0x20 || nb > 0x7E)
                 continue;
             if (v2 < 1 || v2 > (ulong)maxNameLen)
@@ -320,10 +320,10 @@ public static partial class Extractor
                 continue;
             if (noff.Value + (long)v2 > view.Length)
                 continue;
-            bool printable = true;
-            for (long k = noff.Value; k < noff.Value + (long)v2; k++)
+            var printable = true;
+            for (var k = noff.Value; k < noff.Value + (long)v2; k++)
             {
-                byte b = view[k];
+                var b = view[k];
                 if (b < 0x20 || b > 0x7E) { printable = false; break; }
             }
             if (!printable)
@@ -380,14 +380,14 @@ public static partial class Extractor
     /// not removed. <para>按扫描顺序返回的候选地址；每个命中的字只记录一次，不去重。</para></returns>
     public static List<ulong> FindStaticFns(byte[] view, ElfFile elf, ulong staticVa, int scanBytes = 0x40)
     {
-        long? off = elf.VaToOff(staticVa);
+        var off = elf.VaToOff(staticVa);
         if (off is null)
             return [];
-        long end = Math.Min(view.Length - 8, off.Value + scanBytes);
+        var end = Math.Min(view.Length - 8, off.Value + scanBytes);
         var fns = new List<ulong>();
-        for (long q = off.Value; q <= end; q += 8)
+        for (var q = off.Value; q <= end; q += 8)
         {
-            ulong v = BinaryPrimitives.ReadUInt64LittleEndian(view.AsSpan((int)q));
+            var v = BinaryPrimitives.ReadUInt64LittleEndian(view.AsSpan((int)q));
             if (elf.IsExecVa(v))
                 fns.Add(v);
         }
@@ -398,10 +398,10 @@ public static partial class Extractor
     {
         using var outMs = new MemoryStream();
         var buf = new byte[8192];
-        int total = 0;
+        var total = 0;
         while (total <= maxLen)
         {
-            int n = s.Read(buf, 0, buf.Length);
+            var n = s.Read(buf, 0, buf.Length);
             if (n <= 0)
                 break;
             total += n;
@@ -433,7 +433,7 @@ public static partial class Extractor
         int lo = 0, hi = chunkLen;
         while (lo < hi)
         {
-            int mid = (lo + hi) / 2;
+            var mid = (lo + hi) / 2;
             if (ProduceLength(data, off, mid, capOut) >= outputLen)
                 hi = mid;
             else
@@ -464,7 +464,7 @@ public static partial class Extractor
     /// 或 <see cref="ZlibException"/>，两者都说明该区域没有可用的 deflate 流。</para></returns>
     public static (int Consumed, byte[] Output)? TryDeflate(byte[] data, int off, int cap = 32 * 1024 * 1024)
     {
-        int chunkLen = Math.Min(cap, data.Length - off);
+        var chunkLen = Math.Min(cap, data.Length - off);
         if (chunkLen <= 0)
             return null;
         byte[] output;
@@ -482,7 +482,7 @@ public static partial class Extractor
         }
         if (output.Length == 0)
             return null;
-        int consumed = FindConsumed(data, off, chunkLen, output.Length, cap + 1);
+        var consumed = FindConsumed(data, off, chunkLen, output.Length, cap + 1);
         if (consumed <= 0)
             return null;
         return (consumed, output);
@@ -526,37 +526,37 @@ public static partial class Extractor
         return InvalidCharsRegex().Replace(name, "_");
     }
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"[^A-Za-z0-9._+@%\-]")]
-    private static partial System.Text.RegularExpressions.Regex InvalidCharsRegex();
+    [GeneratedRegex(@"[^A-Za-z0-9._+@%\-]")]
+    private static partial Regex InvalidCharsRegex();
 
     private static string Sha256Hex(byte[] data) =>
-        UotanStudio.Hash.Digests.Sha256.ComputeHexLower(data);
+        Hash.Digests.Sha256.ComputeHexLower(data);
 
     private static IEnumerable<byte[]> EnumerateX86InlineHashes(ElfFile elf, ulong fnVa, int window)
     {
-        long? start = elf.VaToOff(fnVa);
+        var start = elf.VaToOff(fnVa);
         if (start is null)
             yield break;
         var blocks = new List<byte[]>(2);
-        long end = Math.Min(elf.Data.Length - 7L, start.Value + Math.Max(window, 0x80));
-        for (long offset = start.Value; offset <= end; offset++)
+        var end = Math.Min(elf.Data.Length - 7L, start.Value + Math.Max(window, 0x80));
+        for (var offset = start.Value; offset <= end; offset++)
         {
-            byte op0 = elf.Data[offset];
-            byte op1 = elf.Data[offset + 1];
+            var op0 = elf.Data[offset];
+            var op1 = elf.Data[offset + 1];
             if (op0 != 0x0F || (op1 != 0x28 && op1 != 0x10) || elf.Data[offset + 2] != 0x05)
                 continue;
-            int displacement = BinaryPrimitives.ReadInt32LittleEndian(elf.Data.AsSpan((int)offset + 3));
-            ulong nextVa = elf.OffToVa(offset + 7) ?? 0;
+            var displacement = BinaryPrimitives.ReadInt32LittleEndian(elf.Data.AsSpan((int)offset + 3));
+            var nextVa = elf.OffToVa(offset + 7) ?? 0;
             if (nextVa == 0)
                 continue;
-            ulong target = unchecked(nextVa + (ulong)displacement);
-            long? targetOffset = elf.ResolveRef(target);
+            var target = unchecked(nextVa + (ulong)displacement);
+            var targetOffset = elf.ResolveRef(target);
             if (targetOffset is null || targetOffset.Value < 0 || targetOffset.Value + 16 > elf.Data.Length)
                 continue;
             blocks.Add(elf.Data.AsSpan((int)targetOffset.Value, 16).ToArray());
             if (blocks.Count == 2)
             {
-                byte[] digest = new byte[32];
+                var digest = new byte[32];
                 blocks[0].CopyTo(digest, 0);
                 blocks[1].CopyTo(digest, 16);
                 yield return digest;
@@ -569,27 +569,27 @@ public static partial class Extractor
     {
         if (elf.Machine != 183)
             yield break;
-        long? start = elf.VaToOff(fnVa);
+        var start = elf.VaToOff(fnVa);
         if (start is null)
             yield break;
 
         ulong x8 = 0, x9 = 0;
         int mask8 = 0, mask9 = 0;
         ulong? firstHashWord8 = null, firstHashWord9 = null;
-        long end = Math.Min(elf.Data.Length - 4L, start.Value + Math.Max(window, 0x80));
-        for (long offset = start.Value; offset <= end; offset += 4)
+        var end = Math.Min(elf.Data.Length - 4L, start.Value + Math.Max(window, 0x80));
+        for (var offset = start.Value; offset <= end; offset += 4)
         {
-            uint instruction = BinaryPrimitives.ReadUInt32LittleEndian(elf.Data.AsSpan((int)offset));
-            uint opcode = instruction & 0xFF800000u;
+            var instruction = BinaryPrimitives.ReadUInt32LittleEndian(elf.Data.AsSpan((int)offset));
+            var opcode = instruction & 0xFF800000u;
             if (opcode is 0xD2800000u or 0xF2800000u or 0x52800000u or 0x72800000u)
             {
-                int registerIndex = (int)(instruction & 0x1Fu);
+                var registerIndex = (int)(instruction & 0x1Fu);
                 if (registerIndex is 8 or 9)
                 {
-                    int halfword = (int)((instruction >> 21) & 0x3u);
-                    ulong value = (ulong)((instruction >> 5) & 0xFFFFu) << (halfword * 16);
-                    int bit = 1 << halfword;
-                    bool moveWide = opcode is 0xD2800000u or 0x52800000u;
+                    var halfword = (int)((instruction >> 21) & 0x3u);
+                    var value = (ulong)((instruction >> 5) & 0xFFFFu) << (halfword * 16);
+                    var bit = 1 << halfword;
+                    var moveWide = opcode is 0xD2800000u or 0x52800000u;
                     if (registerIndex == 8)
                     {
                         if (moveWide) x8 = value; else x8 = (x8 & ~((ulong)0xFFFF << (halfword * 16))) | value;
@@ -607,9 +607,9 @@ public static partial class Extractor
                 (instruction & 0x1Fu) == 8u && ((instruction >> 10) & 0x1Fu) == 9u &&
                 ((instruction >> 5) & 0x1Fu) == 19u)
             {
-                int scaled = (int)((instruction >> 15) & 0x7Fu);
+                var scaled = (int)((instruction >> 15) & 0x7Fu);
                 if ((scaled & 0x40) != 0) scaled -= 0x80;
-                int byteOffset = scaled * 8;
+                var byteOffset = scaled * 8;
                 if (byteOffset == 0x20 && mask8 == 0xF && mask9 == 0xF)
                 {
                     firstHashWord8 = x8;
@@ -621,7 +621,7 @@ public static partial class Extractor
                 firstHashWord8 is not null && firstHashWord9 is not null &&
                 mask8 == 0xF && mask9 == 0xF && (x8 != firstHashWord8 || x9 != firstHashWord9))
             {
-                byte[] digest = new byte[32];
+                var digest = new byte[32];
                 BinaryPrimitives.WriteUInt64LittleEndian(digest.AsSpan(0, 8), firstHashWord8.Value);
                 BinaryPrimitives.WriteUInt64LittleEndian(digest.AsSpan(8, 8), firstHashWord9.Value);
                 BinaryPrimitives.WriteUInt64LittleEndian(digest.AsSpan(16, 8), x8);
@@ -654,8 +654,8 @@ public static partial class Extractor
     public static (List<Asset> Assets, List<string> Log) ExtractAssets(
         ElfFile elf, bool verbose = false)
     {
-        byte[] view = elf.PatchView() ?? elf.Data;
-        byte[] data = view;
+        var view = elf.PatchView() ?? elf.Data;
+        var data = view;
         var log = new List<string>();
         var entries = FindEntries(view, elf);
         if (verbose)
@@ -665,10 +665,10 @@ public static partial class Extractor
         var entryFns = entries.Select(e => e.FnVa).OrderBy(f => f).ToList();
         foreach (var (name, fnVa, tableOff) in entries)
         {
-            ulong nxt = entryFns.FirstOrDefault(f => f > fnVa);
+            var nxt = entryFns.FirstOrDefault(f => f > fnVa);
             if (nxt == 0)
                 nxt = fnVa + 0x200;
-            int extWindow = (int)Math.Min(0x400UL, nxt - fnVa);
+            var extWindow = (int)Math.Min(0x400UL, nxt - fnVa);
             var refs = ScanRefs(elf, fnVa, extWindow);
             var hashRefs = refs.Where(r => !elf.IsWritableVa(r)).ToList();
             var dataRefs = refs.Where(elf.IsWritableVa).ToList();
@@ -681,7 +681,7 @@ public static partial class Extractor
                 {
                     foreach (var r2 in ScanRefs(elf, thunk, 0x40))
                     {
-                        long? off2 = elf.ResolveRef(r2);
+                        var off2 = elf.ResolveRef(r2);
                         if (off2 is null)
                             continue;
                         var got = TryDeflate(data, (int)off2.Value);
@@ -706,7 +706,7 @@ public static partial class Extractor
             {
                 foreach (var r in refs)
                 {
-                    long? off = elf.ResolveRef(r);
+                    var off = elf.ResolveRef(r);
                     if (off is null)
                         continue;
                     var got = TryDeflate(data, (int)off.Value);
@@ -726,7 +726,7 @@ public static partial class Extractor
                 ulong? hashHit = null;
                 foreach (var hr in hashRefs)
                 {
-                    long? hoff = elf.ResolveRef(hr);
+                    var hoff = elf.ResolveRef(hr);
                     if (hoff is not null && hoff + 32 <= data.Length &&
                         Convert.ToHexStringLower(data.AsSpan((int)hoff.Value, 32)) == result.Sha256)
                     {
@@ -735,12 +735,12 @@ public static partial class Extractor
                     }
                 }
                 result.HashRefVa = hashHit;
-                bool inlineHash = !string.IsNullOrEmpty(result.Sha256) &&
+                var inlineHash = !string.IsNullOrEmpty(result.Sha256) &&
                     (EnumerateInlineHashes(elf, fnVa, extWindow)
                         .Concat(elf.Machine == 62 ? EnumerateX86InlineHashes(elf, fnVa, extWindow) : [])
                         .Any(candidate => Convert.ToHexStringLower(candidate) == result.Sha256));
                 result.HashInBinary = hashHit is not null || inlineHash;
-                byte[] outBytes = GetOutBytes(data, result);
+                var outBytes = GetOutBytes(data, result);
                 result.Verified =
                     result.HashInBinary &&
                     outBytes.Length >= 4 &&

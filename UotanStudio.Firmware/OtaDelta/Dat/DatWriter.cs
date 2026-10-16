@@ -1,4 +1,5 @@
 using System.Text;
+using UotanStudio.Compress;
 using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.OtaDelta.Diff;
 
@@ -178,7 +179,7 @@ public static class DatWriter
 
         if (options.CompressWithBrotli)
         {
-            CompressDatWithBrotli(outputDatPath);
+            CompressDatWithBrotli(outputDatPath, options.BrotliLevel);
         }
 
         if (options.SelfVerifyIncremental)
@@ -497,7 +498,7 @@ public static class DatWriter
         return buffer;
     }
 
-    private static string Sha1(byte[] data) => Convert.ToHexString(UotanStudio.Hash.Digests.Sha1.ComputeHash(data));
+    private static string Sha1(byte[] data) => Convert.ToHexString(Hash.Digests.Sha1.ComputeHash(data));
 
     /// <summary>
     /// Writes the new command lines, splitting the merged ranges into multiple commands when maxBlocksPerCommand is greater than zero.
@@ -546,16 +547,35 @@ public static class DatWriter
     }
 
     /// <summary>
-    /// Brotli-compresses the .new.dat file into .new.dat.br (streaming, with the compressor's default options) and deletes the uncompressed file.
-    /// <para>将 .new.dat 文件流式 Brotli 压缩为 .new.dat.br（使用压缩器默认选项）并删除未压缩 的文件。</para>
+    /// Brotli-compresses the .new.dat file into .new.dat.br and deletes the uncompressed file.
+    /// <para>将 .new.dat 文件 Brotli 压缩为 .new.dat.br 并删除未压缩文件。</para>
     /// </summary>
-    private static void CompressDatWithBrotli(string datPath)
+    /// <param name="datPath">
+    /// Uncompressed data file that is read in full and removed once the compressed sibling is published; the file must exist.
+    /// <para>被完整读取并在压缩产物发布后删除的未压缩数据文件；文件必须存在。</para>
+    /// </param>
+    /// <param name="level">
+    /// Unified compression level mapped to the Brotli quality by the shared mapper; <see langword="null"/> keeps the
+    /// historical quality 4 and is the only setting that reproduces the pre-existing bytes.
+    /// <para>由共享映射器换算为 Brotli 质量的统一压缩等级；<see langword="null"/> 保持历史质量 4，是唯一能复现既有字节的取值。</para>
+    /// </param>
+    /// <remarks>
+    /// The produced file is a single Brotli stream, which is what every reader of this artifact requires:
+    /// <c>StrictBrotliReadStream</c> rejects trailing bytes after the first stream ends, so a chunked
+    /// multi-stream layout would break <c>openData</c> on the apply side and the writer's own self-verification.
+    /// The compression itself therefore stays on one codec, and the copy overlaps reads and writes through a
+    /// large buffer instead.
+    /// <para>产物为单个 Brotli 流，这是该文件所有读取方的前提：<c>StrictBrotliReadStream</c> 会拒绝首个流结束后的
+    /// 尾随字节，因此分块多流布局会破坏 apply 端的 <c>openData</c> 以及写手自身的自校验。压缩因此仍由单个编解码器
+    /// 完成，改为用大缓冲让读写与压缩重叠。</para>
+    /// </remarks>
+    private static void CompressDatWithBrotli(string datPath, int? level)
     {
         var brPath = datPath + ".br";
         using (var input = new FileStream(datPath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.SequentialScan))
         using (var output = new FileStream(brPath, FileMode.Create, FileAccess.Write, FileShare.None, StreamBufferSize))
         {
-            BrotliCompressor.Compress(input, output);
+            BrotliCompressor.Compress(input, output, new CompressionOptions { Level = level });
         }
 
         File.Delete(datPath);

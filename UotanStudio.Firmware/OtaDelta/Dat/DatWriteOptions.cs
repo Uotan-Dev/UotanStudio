@@ -44,6 +44,19 @@ public sealed class DatWriteOptions
     /// </value>
     public bool CompressWithBrotli { get; set; }
 
+    /// <summary>Unified compression level (0-9) applied to the Brotli data file when
+    /// <see cref="CompressWithBrotli"/> is set. <para>设置 <see cref="CompressWithBrotli"/> 时应用于 Brotli 数据文件的统一压缩等级（0-9）。</para></summary>
+    /// <value>
+    /// Mapped to a Brotli quality by the shared level mapper: <see langword="null"/> keeps quality 4, the historical
+    /// default; 0 and below map to quality 0, 1 through 3 to 1, 4 through 8 to 5, and 9 and above to 11. A value other
+    /// than <see langword="null"/> changes the produced <c>.new.dat.br</c> bytes even when the quality is unchanged,
+    /// so <see langword="null"/> is the only setting that reproduces the pre-existing output byte for byte.
+    /// <para>由共享等级映射器换算为 Brotli 质量：<see langword="null"/> 保持历史默认质量 4；0 及以下映射为质量 0，
+    /// 1 至 3 映射为 1，4 至 8 映射为 5，9 及以上映射为 11。非 <see langword="null"/> 的取值即便映射到相同质量也会改变
+    /// 产出的 <c>.new.dat.br</c> 字节，因此只有 <see langword="null"/> 能逐字节复现既有输出。</para>
+    /// </value>
+    public int? BrotliLevel { get; set; }
+
     /// <summary>Upper bound on the number of blocks one <c>new</c> command may list.
     /// <para>单条 <c>new</c> 命令可列出的块数上限。</para></summary>
     /// <value>

@@ -28,12 +28,12 @@ public class RepackMetadataContextTests : IDisposable
     private static void WriteMetadata(string directory)
     {
         Directory.CreateDirectory(directory);
-        File.WriteAllText(System.IO.Path.Combine(directory, RepackMetadata.FileName), ValidMetadataJson);
+        File.WriteAllText(Path.Combine(directory, RepackMetadata.FileName), ValidMetadataJson);
     }
 
     private static string WriteSourceFile(string directory, string fileName)
     {
-        var path = System.IO.Path.Combine(directory, fileName);
+        var path = Path.Combine(directory, fileName);
         File.WriteAllText(path, "stub source image");
         return path;
     }
@@ -42,14 +42,14 @@ public class RepackMetadataContextTests : IDisposable
     public void Read_ExplicitProjectRoot_FindsPartitionKeyedMetadata()
     {
         using var temp = new TempDirectory();
-        var root = System.IO.Path.Combine(temp.Path, "metadata");
-        var extraction = System.IO.Path.Combine(temp.Path, "system.img");
+        var root = Path.Combine(temp.Path, "metadata");
+        var extraction = Path.Combine(temp.Path, "system.img");
         Directory.CreateDirectory(extraction);
-        WriteMetadata(System.IO.Path.Combine(root, "system"));
+        WriteMetadata(Path.Combine(root, "system"));
 
         var context = RepackMetadataContext.FromProjectRoot(root);
         Assert.NotNull(RepackMetadata.Read(extraction, context));
-        Assert.Equal(System.IO.Path.Combine(root, "system", RepackMetadata.FileName),
+        Assert.Equal(Path.Combine(root, "system", RepackMetadata.FileName),
             RepackMetadata.ResolveActualMetadataPath(extraction, context));
     }
 
@@ -57,8 +57,8 @@ public class RepackMetadataContextTests : IDisposable
     public void Read_ExplicitProjectRoot_MissingRootDoesNotFallbackToLocal()
     {
         using var temp = new TempDirectory();
-        var root = System.IO.Path.Combine(temp.Path, "missing-metadata-root");
-        var extraction = System.IO.Path.Combine(temp.Path, "system.img");
+        var root = Path.Combine(temp.Path, "missing-metadata-root");
+        var extraction = Path.Combine(temp.Path, "system.img");
         Directory.CreateDirectory(extraction);
         WriteMetadata(extraction);
 
@@ -71,8 +71,8 @@ public class RepackMetadataContextTests : IDisposable
     public void Read_ExplicitLocalDirectory_IgnoresAmbientRoot()
     {
         using var temp = new TempDirectory();
-        var ambientRoot = System.IO.Path.Combine(temp.Path, "ambient");
-        var extraction = System.IO.Path.Combine(temp.Path, "system.img");
+        var ambientRoot = Path.Combine(temp.Path, "ambient");
+        var extraction = Path.Combine(temp.Path, "system.img");
         Directory.CreateDirectory(extraction);
         WriteMetadata(extraction);
 
@@ -81,7 +81,7 @@ public class RepackMetadataContextTests : IDisposable
         {
             var context = RepackMetadataContext.LocalDirectory;
             Assert.NotNull(RepackMetadata.Read(extraction, context));
-            Assert.Equal(System.IO.Path.Combine(extraction, RepackMetadata.FileName),
+            Assert.Equal(Path.Combine(extraction, RepackMetadata.FileName),
                 RepackMetadata.ResolveActualMetadataPath(extraction, context));
         }
         finally
@@ -94,16 +94,16 @@ public class RepackMetadataContextTests : IDisposable
     public void Read_UnspecifiedContext_MatchesLegacyBehavior()
     {
         using var temp = new TempDirectory();
-        var ambientRoot = System.IO.Path.Combine(temp.Path, "ambient");
-        var extraction = System.IO.Path.Combine(temp.Path, "system.img");
+        var ambientRoot = Path.Combine(temp.Path, "ambient");
+        var extraction = Path.Combine(temp.Path, "system.img");
         Directory.CreateDirectory(extraction);
-        WriteMetadata(System.IO.Path.Combine(ambientRoot, "system"));
+        WriteMetadata(Path.Combine(ambientRoot, "system"));
 
         RepackMetadata.DefaultMetadataRoot = ambientRoot;
         try
         {
             Assert.NotNull(RepackMetadata.Read(extraction));
-            Assert.Equal(System.IO.Path.Combine(ambientRoot, "system", RepackMetadata.FileName),
+            Assert.Equal(Path.Combine(ambientRoot, "system", RepackMetadata.FileName),
                 RepackMetadata.ResolveActualMetadataPath(extraction));
         }
         finally
@@ -119,9 +119,9 @@ public class RepackMetadataContextTests : IDisposable
     public async Task WriteAsync_ExplicitContext_IsFixedAtCallTime()
     {
         using var temp = new TempDirectory();
-        var rootA = System.IO.Path.Combine(temp.Path, "root-a");
-        var rootB = System.IO.Path.Combine(temp.Path, "root-b");
-        var extraction = System.IO.Path.Combine(temp.Path, "system.img");
+        var rootA = Path.Combine(temp.Path, "root-a");
+        var rootB = Path.Combine(temp.Path, "root-b");
+        var extraction = Path.Combine(temp.Path, "system.img");
         Directory.CreateDirectory(extraction);
         var source = WriteSourceFile(extraction, "system.img");
         var handler = new StubHandler();
@@ -140,10 +140,10 @@ public class RepackMetadataContextTests : IDisposable
         {
             release.SetResult();
             await write;
-            Assert.True(File.Exists(System.IO.Path.Combine(rootA, "system", RepackMetadata.FileName)),
+            Assert.True(File.Exists(Path.Combine(rootA, "system", RepackMetadata.FileName)),
                 "The explicit project root must receive the metadata.");
             Assert.False(Directory.Exists(rootB), "The context must not follow the ambient root switched mid-operation.");
-            Assert.False(File.Exists(System.IO.Path.Combine(extraction, RepackMetadata.FileName)),
+            Assert.False(File.Exists(Path.Combine(extraction, RepackMetadata.FileName)),
                 "Explicit project-root mode must not write beside the extraction directory.");
         }
         finally
@@ -156,8 +156,8 @@ public class RepackMetadataContextTests : IDisposable
     public async Task WriteAsync_ExplicitLocal_WritesBesideExtractionDespiteAmbientRoot()
     {
         using var temp = new TempDirectory();
-        var ambientRoot = System.IO.Path.Combine(temp.Path, "ambient");
-        var extraction = System.IO.Path.Combine(temp.Path, "system.img");
+        var ambientRoot = Path.Combine(temp.Path, "ambient");
+        var extraction = Path.Combine(temp.Path, "system.img");
         Directory.CreateDirectory(extraction);
         var source = WriteSourceFile(extraction, "system.img");
 
@@ -166,7 +166,7 @@ public class RepackMetadataContextTests : IDisposable
         {
             await RepackMetadata.WriteAsync(new StubHandler(), source, extraction, RepackMetadataContext.LocalDirectory,
                 TestContext.Current.CancellationToken);
-            Assert.True(File.Exists(System.IO.Path.Combine(extraction, RepackMetadata.FileName)));
+            Assert.True(File.Exists(Path.Combine(extraction, RepackMetadata.FileName)));
             Assert.False(Directory.Exists(ambientRoot), "Explicit local mode must not touch the ambient root.");
         }
         finally
@@ -179,10 +179,10 @@ public class RepackMetadataContextTests : IDisposable
     public async Task WriteAsync_ConcurrentExplicitRoots_DoNotCrossWrite()
     {
         using var temp = new TempDirectory();
-        var rootA = System.IO.Path.Combine(temp.Path, "root-a");
-        var rootB = System.IO.Path.Combine(temp.Path, "root-b");
-        var extractionA = System.IO.Path.Combine(temp.Path, "a", "system.img");
-        var extractionB = System.IO.Path.Combine(temp.Path, "b", "system.img");
+        var rootA = Path.Combine(temp.Path, "root-a");
+        var rootB = Path.Combine(temp.Path, "root-b");
+        var extractionA = Path.Combine(temp.Path, "a", "system.img");
+        var extractionB = Path.Combine(temp.Path, "b", "system.img");
         Directory.CreateDirectory(extractionA);
         Directory.CreateDirectory(extractionB);
         var sourceA = WriteSourceFile(extractionA, "system.img");
@@ -193,18 +193,18 @@ public class RepackMetadataContextTests : IDisposable
             RepackMetadata.WriteAsync(handler, sourceA, extractionA, RepackMetadataContext.FromProjectRoot(rootA), TestContext.Current.CancellationToken),
             RepackMetadata.WriteAsync(handler, sourceB, extractionB, RepackMetadataContext.FromProjectRoot(rootB), TestContext.Current.CancellationToken));
 
-        Assert.True(File.Exists(System.IO.Path.Combine(rootA, "system", RepackMetadata.FileName)));
-        Assert.True(File.Exists(System.IO.Path.Combine(rootB, "system", RepackMetadata.FileName)));
-        Assert.False(File.Exists(System.IO.Path.Combine(extractionA, RepackMetadata.FileName)));
-        Assert.False(File.Exists(System.IO.Path.Combine(extractionB, RepackMetadata.FileName)));
+        Assert.True(File.Exists(Path.Combine(rootA, "system", RepackMetadata.FileName)));
+        Assert.True(File.Exists(Path.Combine(rootB, "system", RepackMetadata.FileName)));
+        Assert.False(File.Exists(Path.Combine(extractionA, RepackMetadata.FileName)));
+        Assert.False(File.Exists(Path.Combine(extractionB, RepackMetadata.FileName)));
     }
 
     [Fact]
     public async Task WriteAsync_Cancelled_LeavesNoPartialJsonOrTempFiles()
     {
         using var temp = new TempDirectory();
-        var root = System.IO.Path.Combine(temp.Path, "root");
-        var extraction = System.IO.Path.Combine(temp.Path, "system.img");
+        var root = Path.Combine(temp.Path, "root");
+        var extraction = Path.Combine(temp.Path, "system.img");
         Directory.CreateDirectory(extraction);
         var source = WriteSourceFile(extraction, "system.img");
         using var cancellation = new CancellationTokenSource();

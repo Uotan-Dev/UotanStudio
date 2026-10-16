@@ -616,18 +616,16 @@ internal class PayloadExtractor
         byteProgress?.Report((0, totalBytes));
 
         var workers = Core.FirmwareParallelism.Workers;
-        var partitionWorkers = Math.Max(1, Math.Min(workers, selected.Length));
-        var operationWorkers = Math.Max(1, workers / partitionWorkers);
+        var (partitionConcurrency, operationWorkers) = AllocateOperationWorkers(selected, workers);
         try
         {
-            Parallel.ForEach(
-                selected,
-                new ParallelOptions { MaxDegreeOfParallelism = partitionWorkers },
-                partition =>
+            Parallel.For(0, selected.Length,
+                new ParallelOptions { MaxDegreeOfParallelism = partitionConcurrency },
+                i =>
                 {
-                    var outFilename = GetSafeOutputPath(outputDir, partition.PartitionName);
+                    var outFilename = GetSafeOutputPath(outputDir, selected[i].PartitionName);
                     IProgress<(long Processed, long Total)>? sink = crossProgress is null ? null : new PartitionDeltaForwarder(crossProgress);
-                    ExtractPartition(partition, outFilename, stream, baseOffset, manifest.BlockSize, CancellationToken.None, sourceImages, sink, openPayloadStream, operationWorkers);
+                    ExtractPartition(selected[i], outFilename, stream, baseOffset, manifest.BlockSize, CancellationToken.None, sourceImages, sink, openPayloadStream, operationWorkers[i]);
                 });
         }
         catch (AggregateException ex)
@@ -641,9 +639,9 @@ internal class PayloadExtractor
 
     /// <summary>
     /// Asynchronously extracts all matching partitions from the manifest to the output directory.
-    /// Partitions are processed with bounded parallelism (<see cref="UotanStudio.Firmware.Core.FirmwareParallelism.Workers"/>);
+    /// Partitions are processed with bounded parallelism (<see cref="Core.FirmwareParallelism.Workers"/>);
     /// byte-level progress is aggregated across all partitions via a thread-safe accumulator.
-    /// <para>异步从清单中提取所有匹配的分区到输出目录。分区按有界并行度（<see cref="UotanStudio.Firmware.Core.FirmwareParallelism.Workers"/>）
+    /// <para>异步从清单中提取所有匹配的分区到输出目录。分区按有界并行度（<see cref="Core.FirmwareParallelism.Workers"/>）
     /// 处理；字节级进度通过线程安全累计器跨分区聚合。</para>
     /// </summary>
     /// <param name="manifest">Parsed payload manifest whose partition list is filtered and whose block size bounds every extraction; <see langword="null"/> is rejected.
@@ -693,19 +691,18 @@ internal class PayloadExtractor
         byteProgress?.Report((0, totalBytes));
 
         var workers = Core.FirmwareParallelism.Workers;
-        var partitionWorkers = Math.Max(1, Math.Min(workers, selected.Length));
-        var operationWorkers = Math.Max(1, workers / partitionWorkers);
+        var (partitionConcurrency, operationWorkers) = AllocateOperationWorkers(selected, workers);
         try
         {
             await Parallel.ForEachAsync(
-                selected,
-                new ParallelOptions { MaxDegreeOfParallelism = partitionWorkers, CancellationToken = cancellationToken },
-                async (partition, token) =>
+                Enumerable.Range(0, selected.Length),
+                new ParallelOptions { MaxDegreeOfParallelism = partitionConcurrency, CancellationToken = cancellationToken },
+                async (index, token) =>
                 {
-                    var outFilename = GetSafeOutputPath(outputDir, partition.PartitionName);
+                    var outFilename = GetSafeOutputPath(outputDir, selected[index].PartitionName);
                     IProgress<(long Processed, long Total)>? sink = crossProgress is null ? null : new PartitionDeltaForwarder(crossProgress);
-                    await Task.Run(() => ExtractPartition(partition, outFilename, stream, baseOffset, manifest.BlockSize,
-                        token, sourceImages, sink, openPayloadStream, operationWorkers), token).ConfigureAwait(false);
+                    await Task.Run(() => ExtractPartition(selected[index], outFilename, stream, baseOffset, manifest.BlockSize,
+                        token, sourceImages, sink, openPayloadStream, operationWorkers[index]), token).ConfigureAwait(false);
                 }).ConfigureAwait(false);
         }
         catch (AggregateException ex)
@@ -722,6 +719,63 @@ internal class PayloadExtractor
         ? checked((long)info.Size)
         : partition.Operations.SelectMany(op => op.DstExtents)
             .Select(e => checked((long)checked(checked(e.StartBlock + e.NumBlocks) * blockSize))).DefaultIfEmpty(0).Max();
+
+    /// <summary>
+    /// Distributes the worker budget across partitions proportionally to each partition's parallelizable
+    /// operation count, so REPLACE-heavy partitions get most decode workers while sequential-only ones keep one.
+    /// <para>按各分区可并行操作数量成比例地分配 worker 预算，使 REPLACE 为主的大分区获得多数解码 worker，
+    /// 纯串行分区保留一个。</para>
+    /// </summary>
+    /// <returns>
+    /// The partition-level concurrency (how many partitions may run at once) and the per-partition
+    /// operation-worker allocation summing to at most <paramref name="workers"/>.
+    /// <para>分区级并发度（同时运行的分区数）与各分区的操作级 worker 分配，总和不超过
+    /// <paramref name="workers"/>。</para>
+    /// </returns>
+    private static (int PartitionConcurrency, int[] OperationWorkers) AllocateOperationWorkers(PartitionUpdate[] selected, int workers)
+    {
+        var count = selected.Length;
+        if (count == 0) return (0, []);
+        if (count > workers)
+        {
+            return (workers, Enumerable.Repeat(1, count).ToArray());
+        }
+
+        var weights = new long[count];
+        long sum = 0;
+        for (var i = 0; i < count; i++)
+        {
+            weights[i] = 1 + selected[i].Operations.Count(op => ParallelizableTypes.Contains(op.Type));
+            sum += weights[i];
+        }
+
+        var allocation = new int[count];
+        long allocated = 0;
+        for (var i = 0; i < count; i++)
+        {
+            allocation[i] = (int)(workers * weights[i] / sum);
+            allocated += allocation[i];
+        }
+
+        while (allocated < workers)
+        {
+            var best = 0;
+            var bestRatio = -1d;
+            for (var i = 0; i < count; i++)
+            {
+                var ratio = (double)weights[i] / allocation[i];
+                if (ratio > bestRatio)
+                {
+                    bestRatio = ratio;
+                    best = i;
+                }
+            }
+            allocation[best]++;
+            allocated++;
+        }
+
+        return (count, allocation);
+    }
 
     /// <summary>
     /// Thread-safe byte progress accumulator shared by all concurrently extracted partitions.
@@ -832,24 +886,59 @@ internal class PayloadExtractor
             if (info.Hash.Length != 32) throw new PartitionExtractionException("Invalid partition SHA-256 length.", name);
             image.Position = 0;
             using var hash = Sha256.CreateAccumulator();
-            var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
+            const int chunkSize = 1024 * 1024;
+            var front = ArrayPool<byte>.Shared.Rent(chunkSize);
+            var back = ArrayPool<byte>.Shared.Rent(chunkSize);
             try
             {
-                int read;
-                while ((read = image.Read(buffer, 0, buffer.Length)) > 0)
+                var pending = ReadChunkAsync(image, front, ct);
+                try
                 {
-                    ct.ThrowIfCancellationRequested();
-                    hash.Append(buffer.AsSpan(0, read));
+                    var current = front;
+                    var next = back;
+                    while (true)
+                    {
+                        var read = pending.GetAwaiter().GetResult();
+                        if (read == 0) break;
+                        pending = ReadChunkAsync(image, next, ct);
+                        ct.ThrowIfCancellationRequested();
+                        hash.Append(current.AsSpan(0, read));
+                        (current, next) = (next, current);
+                    }
+                }
+                finally
+                {
+                    try
+                    {
+                        pending.GetAwaiter().GetResult();
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
                 }
             }
             finally
             {
-                ArrayPool<byte>.Shared.Return(buffer);
+                ArrayPool<byte>.Shared.Return(front);
+                ArrayPool<byte>.Shared.Return(back);
             }
             if (!CryptographicOperations.FixedTimeEquals(hash.GetHashAndReset(), info.Hash.Span))
                 throw new PartitionExtractionException("Partition SHA-256 does not match its manifest.", name);
         }
         image.Position = 0;
+    }
+
+    private static async Task<int> ReadChunkAsync(Stream image, byte[] buffer, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var total = 0;
+        while (total < buffer.Length)
+        {
+            var read = await image.ReadAsync(buffer.AsMemory(total), ct).ConfigureAwait(false);
+            if (read == 0) break;
+            total += read;
+        }
+        return total;
     }
 
     private static string GetSafeOutputPath(string outputDir, string name)

@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
+using System.Runtime.ExceptionServices;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Extraction;
 
 namespace UotanStudio.Firmware.FileSystem.Squashfs;
@@ -25,7 +27,18 @@ internal sealed class SquashfsParser
     private readonly SquashfsMetadataStream _inodeTable;
     private readonly SquashfsMetadataStream _directoryTable;
     private readonly CancellationToken _cancellationToken;
+    private readonly object _readGate = new();
     private int _entryBudget = MaximumEntryCount;
+
+    /// <summary>
+    /// Creates one independent read cursor over the image. A plain file source is read through positional
+    /// I/O so workers never contend; any other seekable stream serializes each individual read behind the
+    /// shared gate while each cursor keeps its own position.
+    /// <para>在镜像上创建一个独立的读取游标。普通文件源使用定位读取，工作者之间不争用；其他可定位流
+    /// 的每一次读取都在共享门内串行，而每个游标保持自己的位置。</para>
+    /// </summary>
+    /// <returns>A non-owning cursor positioned at zero. <para>定位在起点的非拥有游标。</para></returns>
+    private IndependentReadStream CreateReader() => new(_input, _readGate);
 
     /// <summary>Parses the superblock and the referenced tables. <para>解析超级块与其引用的表。</para></summary>
     /// <param name="input">Seekable image stream; not closed by this class. <para>可定位的镜像流；本类不将其关闭。</para></param>
@@ -55,8 +68,8 @@ internal sealed class SquashfsParser
         _ids = ReadIdTable(cancellationToken);
         _fragments = ReadFragmentTable(cancellationToken);
         ReadXattrHeader(cancellationToken);
-        _inodeTable = new SquashfsMetadataStream(input, (long)_superblock.InodeTableStart, (long)_superblock.BytesUsed, _superblock.BigEndian, _superblock.Compression, cancellationToken);
-        _directoryTable = new SquashfsMetadataStream(input, (long)_superblock.DirectoryTableStart, (long)_superblock.BytesUsed, _superblock.BigEndian, _superblock.Compression, cancellationToken);
+        _inodeTable = new SquashfsMetadataStream(input, (long)_superblock.InodeTableStart, (long)_superblock.BytesUsed, _superblock.BigEndian, _superblock.Compression, cancellationToken, _readGate);
+        _directoryTable = new SquashfsMetadataStream(input, (long)_superblock.DirectoryTableStart, (long)_superblock.BytesUsed, _superblock.BigEndian, _superblock.Compression, cancellationToken, _readGate);
         Root = ReadInode((long)(_superblock.RootInodeAddress >> 16), (int)(_superblock.RootInodeAddress & 0xFFFF));
         if (Root.Kind != SquashfsEntryKind.Directory)
         {
@@ -203,55 +216,30 @@ internal sealed class SquashfsParser
         var blockSize = _superblock.BlockSize;
         var address = (long)inode.DataStart;
         var position = 0L;
-        for (var i = 0; i < inode.BlockSizes.Length; i++)
+        var degree = ResolveBlocksInFlight(inode.BlockSizes.Length);
+        if (degree <= 1)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var expected = Math.Min((long)blockSize, inode.Size - position);
-            var word = inode.BlockSizes[i];
-            if (word == 0)
+            for (var i = 0; i < inode.BlockSizes.Length; i++)
             {
-                ZeroFill(destination, expected, cancellationToken);
-                position += expected;
-                continue;
-            }
-
-            var stored = (word & NonCompressionBit) != 0;
-            var length = word & (NonCompressionBit - 1);
-            if (length == 0 || length > (uint)blockSize || word >> 25 != 0)
-            {
-                throw new FileSystemCorruptedException($"SquashFS block word 0x{word:X8} declares an impossible length.");
-            }
-
-            FileExtraction.ValidateRange(address, length, (long)_superblock.BytesUsed, "SquashFS data block");
-            var payload = new byte[length];
-            _input.Position = address;
-            _input.ReadExactly(payload);
-            address = checked(address + length);
-
-            byte[] decoded;
-            if (stored)
-            {
-                if (length != expected)
+                cancellationToken.ThrowIfCancellationRequested();
+                var expected = Math.Min((long)blockSize, inode.Size - position);
+                var word = inode.BlockSizes[i];
+                if (word == 0)
                 {
-                    throw new FileSystemCorruptedException(
-                        $"A stored SquashFS data block holds {length} bytes but {expected} were expected.");
+                    ZeroFill(destination, expected, cancellationToken);
+                    position += expected;
+                    continue;
                 }
 
-                decoded = payload;
+                var decoded = DecodeDataBlock(word, ref address, expected, blockSize, cancellationToken);
+                var take = (int)Math.Min(decoded.LongLength, expected);
+                destination.Write(decoded.AsSpan(0, take));
+                position += take;
             }
-            else
-            {
-                decoded = SquashfsDecompression.Decompress(_superblock.Compression, payload, blockSize, exactOutput: false);
-                if (decoded.LongLength != blockSize && decoded.LongLength != expected)
-                {
-                    throw new FileSystemCorruptedException(
-                        $"A SquashFS data block decoded to {decoded.LongLength} bytes; expected {blockSize} or {expected}.");
-                }
-            }
-
-            var take = (int)Math.Min(decoded.LongLength, expected);
-            destination.Write(decoded.AsSpan(0, take));
-            position += take;
+        }
+        else
+        {
+            position = WriteBlocksInOrder(inode, destination, blockSize, degree, cancellationToken);
         }
 
         if (inode.FragmentIndex >= 0)
@@ -266,6 +254,251 @@ internal sealed class SquashfsParser
                 $"The SquashFS inode {inode.InodeNumber} produced {position} bytes but declares {inode.Size}.");
         }
     }
+
+    /// <summary>
+    /// Resolves how many independent data blocks may be decoded at once, capping the batch by the block
+    /// count and by the configured worker limit captured before the batch starts.
+    /// <para>解析可同时解码的独立数据块数量，用块数量与批次开始前捕获的配置并发上限共同限制该批次。</para>
+    /// </summary>
+    /// <param name="blockCount">Number of data blocks the inode carries. <para>该 inode 携带的数据块数量。</para></param>
+    /// <returns>At least one; one whenever parallelism is disabled or fewer than two blocks exist.
+    /// <para>至少为 1；禁用并行或块数量少于两个时为 1。</para></returns>
+    private static int ResolveBlocksInFlight(int blockCount)
+    {
+        if (blockCount < 2)
+        {
+            return 1;
+        }
+
+        return Math.Min(blockCount, FirmwareParallelism.Workers);
+    }
+
+    /// <summary>
+    /// Decodes the inode's data blocks in bounded parallel batches while writing them in strict block
+    /// order, returning the advanced byte position. Block addresses are computed sequentially because each
+    /// block's start follows the previous block's stored length; the payload reads and decompression run
+    /// concurrently, and only the ordered write pass touches the destination.
+    /// <para>按有界并行批次解码该 inode 的数据块，并严格按块顺序写出，返回推进后的字节位置。由于每个块的
+    /// 起始地址取决于前一个块的存储长度，块地址仍顺序推导；只有载荷读取与解压并发执行，且仅有序写出阶段
+    /// 接触目标流。</para>
+    /// </summary>
+    /// <param name="inode">Regular file inode whose blocks are written. <para>要写出数据块的常规文件 inode。</para></param>
+    /// <param name="destination">Writable destination receiving blocks in order. <para>按顺序接收块的可写目标。</para></param>
+    /// <param name="blockSize">Filesystem block size used as the decode capacity. <para>作为解码容量的文件系统块大小。</para></param>
+    /// <param name="degree">Maximum blocks decoded concurrently. <para>并发解码的最大块数量。</para></param>
+    /// <param name="cancellationToken">Token checked per batch. <para>每批次检查的令牌。</para></param>
+    /// <returns>The total number of bytes written. <para>已写出的字节总数。</para></returns>
+    private long WriteBlocksInOrder(
+        SquashfsInode inode,
+        Stream destination,
+        int blockSize,
+        int degree,
+        CancellationToken cancellationToken)
+    {
+        var blockSizes = inode.BlockSizes;
+        var position = 0L;
+        var batch = new DataBlock[degree];
+        var decoded = new byte[degree][];
+
+        for (var start = 0; start < blockSizes.Length; start += degree)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var count = Math.Min(degree, blockSizes.Length - start);
+
+            var address = start == 0
+                ? (long)inode.DataStart
+                : BatchAddress(blockSizes, start, inode.DataStart);
+            var expectedTotal = position;
+            var usable = 0;
+            for (var slot = 0; slot < count; slot++)
+            {
+                var expected = Math.Min((long)blockSize, inode.Size - expectedTotal);
+                var word = blockSizes[start + slot];
+                if (word == 0)
+                {
+                    batch[slot] = default;
+                    expectedTotal += expected;
+                    continue;
+                }
+
+                batch[slot] = new DataBlock(word, address, expected);
+                var length = word & (NonCompressionBit - 1);
+                address = checked(address + length);
+                expectedTotal += expected;
+                usable = slot + 1;
+            }
+
+            if (usable > 0)
+            {
+                ReadAndDecodeBatch(batch, decoded, usable, blockSize, cancellationToken);
+            }
+
+            for (var slot = 0; slot < count; slot++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var expected = Math.Min((long)blockSize, inode.Size - position);
+                if (batch[slot].Word == 0)
+                {
+                    ZeroFill(destination, expected, cancellationToken);
+                    position += expected;
+                    continue;
+                }
+
+                var take = (int)Math.Min(decoded[slot].LongLength, expected);
+                destination.Write(decoded[slot].AsSpan(0, take));
+                decoded[slot] = [];
+                position += take;
+            }
+        }
+
+        return position;
+    }
+
+    /// <summary>
+    /// Recomputes the absolute start of the block at an index by walking the stored lengths of all
+    /// preceding blocks, mirroring the sequential address advance.
+    /// <para>通过累加全部前序块的存储长度重新计算指定下标块的绝对起始，与顺序地址推进保持一致。</para>
+    /// </summary>
+    /// <param name="blockSizes">Per-block block words in image order. <para>按镜像顺序排列的逐块块字。</para></param>
+    /// <param name="index">Block index whose start address is needed. <para>需要起始地址的块下标。</para></param>
+    /// <param name="dataStart">Absolute start of the inode's first data block. <para>inode 首个数据块的绝对起始。</para></param>
+    /// <returns>The absolute offset of the indexed block. <para>指定下标块的绝对偏移。</para></returns>
+    private static long BatchAddress(uint[] blockSizes, int index, ulong dataStart)
+    {
+        var address = (long)dataStart;
+        for (var i = 0; i < index; i++)
+        {
+            var word = blockSizes[i];
+            if (word == 0)
+            {
+                continue;
+            }
+
+            address = checked(address + (word & (NonCompressionBit - 1)));
+        }
+
+        return address;
+    }
+
+    /// <summary>
+    /// Reads and decompresses one batch of data blocks into per-slot result arrays, with the payload reads
+    /// and codec work running concurrently across the batch.
+    /// <para>把一个批次的数据块读取并解压到各槽位结果数组中，批次内的载荷读取与编解码并发执行。</para>
+    /// </summary>
+    /// <param name="batch">Block descriptors; zero words mark holes and are skipped.
+    /// <para>块描述符；为零的块字表示空洞并被跳过。</para></param>
+    /// <param name="decoded">Per-slot result arrays filled by block index. <para>按块下标填充的各槽位结果数组。</para></param>
+    /// <param name="count">Number of leading slots to process. <para>需要处理的前导槽位数量。</para></param>
+    /// <param name="blockSize">Filesystem block size used as the decode capacity. <para>作为解码容量的文件系统块大小。</para></param>
+    /// <param name="cancellationToken">Token checked before each block. <para>每个块之前检查的令牌。</para></param>
+    private void ReadAndDecodeBatch(
+        DataBlock[] batch,
+        byte[][] decoded,
+        int count,
+        int blockSize,
+        CancellationToken cancellationToken)
+    {
+        if (count == 1)
+        {
+            decoded[0] = ReadAndDecodeBlock(batch[0], blockSize, cancellationToken);
+            return;
+        }
+
+        try
+        {
+            Parallel.For(0, count, new ParallelOptions { MaxDegreeOfParallelism = count }, slot =>
+            {
+                if (batch[slot].Word == 0)
+                {
+                    return;
+                }
+
+                decoded[slot] = ReadAndDecodeBlock(batch[slot], blockSize, cancellationToken);
+            });
+        }
+        catch (AggregateException ex)
+        {
+            ExceptionDispatchInfo.Capture(ex.Flatten().InnerExceptions[0]).Throw();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Reads one data block's stored payload through an independent cursor and decodes it, applying the
+    /// same stored-versus-compressed branch, range validation and exception messages as the sequential path.
+    /// <para>通过独立游标读取单个数据块的存储载荷并解码，应用与顺序路径完全相同的存储/压缩分支、范围
+    /// 校验与异常消息。</para>
+    /// </summary>
+    /// <param name="block">Block descriptor with word, absolute address and expected size.
+    /// <para>含块字、绝对地址与预期大小的块描述符。</para></param>
+    /// <param name="blockSize">Filesystem block size used as the decode capacity. <para>作为解码容量的文件系统块大小。</para></param>
+    /// <param name="cancellationToken">Token checked before the read. <para>读取前检查的令牌。</para></param>
+    /// <returns>The decoded block bytes. <para>解码后的块字节。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The block word, stored length or decoded length is invalid.
+    /// <para>块字、存储长度或解码长度非法时抛出。</para></exception>
+    private byte[] ReadAndDecodeBlock(DataBlock block, int blockSize, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var stored = (block.Word & NonCompressionBit) != 0;
+        var length = block.Word & (NonCompressionBit - 1);
+        if (length == 0 || length > (uint)blockSize || block.Word >> 25 != 0)
+        {
+            throw new FileSystemCorruptedException($"SquashFS block word 0x{block.Word:X8} declares an impossible length.");
+        }
+
+        FileExtraction.ValidateRange(block.Address, length, (long)_superblock.BytesUsed, "SquashFS data block");
+        var payload = new byte[length];
+        using (var reader = CreateReader())
+        {
+            reader.Position = block.Address;
+            reader.ReadExactly(payload);
+        }
+
+        if (stored)
+        {
+            if (length != block.Expected)
+            {
+                throw new FileSystemCorruptedException(
+                    $"A stored SquashFS data block holds {length} bytes but {block.Expected} were expected.");
+            }
+
+            return payload;
+        }
+
+        var decoded = SquashfsDecompression.Decompress(_superblock.Compression, payload, blockSize, exactOutput: false);
+        if (decoded.LongLength != blockSize && decoded.LongLength != block.Expected)
+        {
+            throw new FileSystemCorruptedException(
+                $"A SquashFS data block decoded to {decoded.LongLength} bytes; expected {blockSize} or {block.Expected}.");
+        }
+
+        return decoded;
+    }
+
+    /// <summary>
+    /// Decodes the data block described by a block word, advancing the running address. Retained for the
+    /// sequential path so its validation and ordering match the original implementation exactly.
+    /// <para>解码由块字描述的数据块并推进运行地址。保留该实现供顺序路径使用，使其校验与顺序与原实现完全一致。</para>
+    /// </summary>
+    /// <param name="word">Block word carrying the stored flag and length. <para>携带存储标志与长度的块字。</para></param>
+    /// <param name="address">Running absolute address, advanced past this block.
+    /// <para>推进到该块之后的运行绝对地址。</para></param>
+    /// <param name="expected">Expected uncompressed bytes for this block. <para>该块预期的未压缩字节数。</para></param>
+    /// <param name="blockSize">Filesystem block size used as the decode capacity. <para>作为解码容量的文件系统块大小。</para></param>
+    /// <param name="cancellationToken">Token checked before the read. <para>读取前检查的令牌。</para></param>
+    /// <returns>The decoded block bytes. <para>解码后的块字节。</para></returns>
+    private byte[] DecodeDataBlock(uint word, ref long address, long expected, int blockSize, CancellationToken cancellationToken)
+    {
+        var decoded = ReadAndDecodeBlock(new DataBlock(word, address, expected), blockSize, cancellationToken);
+        address = checked(address + (word & (NonCompressionBit - 1)));
+        return decoded;
+    }
+
+    /// <summary>
+    /// One data block's decode inputs: its block word, absolute image address and expected uncompressed
+    /// length. <para>单个数据块的解码输入：块字、镜像绝对地址与预期未压缩长度。</para>
+    /// </summary>
+    private readonly record struct DataBlock(uint Word, long Address, long Expected);
 
     /// <summary>Appends the fragment-backed tail of one inode and returns the advanced byte position.
     /// <para>追加单个 inode 由 fragment 承载的尾部字节，并返回推进后的字节位置。</para></summary>
@@ -299,8 +532,12 @@ internal sealed class SquashfsParser
 
         FileExtraction.ValidateRange((long)fragment.Start, length, (long)_superblock.BytesUsed, "SquashFS fragment block");
         var payload = new byte[length];
-        _input.Position = (long)fragment.Start;
-        _input.ReadExactly(payload);
+        using (var reader = CreateReader())
+        {
+            reader.Position = (long)fragment.Start;
+            reader.ReadExactly(payload);
+        }
+
         var decoded = stored
             ? payload
             : SquashfsDecompression.Decompress(_superblock.Compression, payload, _superblock.BlockSize, exactOutput: false);
@@ -467,7 +704,7 @@ internal sealed class SquashfsParser
         long size;
         uint fragment;
         int fragmentOffset;
-        bool sparse = false;
+        var sparse = false;
         long xattr = -1;
         if (!extended)
         {
@@ -630,20 +867,29 @@ internal sealed class SquashfsParser
     {
         var indexEntries = (uncompressedBytes + SquashfsSuperblock.MetadataWindowSize - 1) / SquashfsSuperblock.MetadataWindowSize;
         using var table = new MemoryStream((int)Math.Clamp(uncompressedBytes, 0, 1L << 25));
-        Span<byte> raw = stackalloc byte[8];
-        for (var i = 0; i < indexEntries; i++)
+        var addresses = new long[indexEntries];
+        using (var reader = CreateReader())
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var addressOffset = checked((long)tableStart + i * 8);
-            FileExtraction.ValidateRange(addressOffset, 8, (long)_superblock.BytesUsed, "SquashFS table index");
-            _input.Position = addressOffset;
-            _input.ReadExactly(raw);
-            var blockAddress = _superblock.BigEndian
-                ? BinaryPrimitives.ReadUInt64BigEndian(raw)
-                : BinaryPrimitives.ReadUInt64LittleEndian(raw);
-            FileExtraction.ValidateRange((long)blockAddress, 2, (long)_superblock.BytesUsed, "SquashFS indexed metadata block");
-            var decoded = DecodeBlockAt((long)blockAddress);
-            table.Write(decoded, 0, decoded.Length);
+            Span<byte> raw = stackalloc byte[8];
+            for (var i = 0; i < indexEntries; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var addressOffset = checked((long)tableStart + i * 8);
+                FileExtraction.ValidateRange(addressOffset, 8, (long)_superblock.BytesUsed, "SquashFS table index");
+                reader.Position = addressOffset;
+                reader.ReadExactly(raw);
+                var blockAddress = _superblock.BigEndian
+                    ? BinaryPrimitives.ReadUInt64BigEndian(raw)
+                    : BinaryPrimitives.ReadUInt64LittleEndian(raw);
+                FileExtraction.ValidateRange((long)blockAddress, 2, (long)_superblock.BytesUsed, "SquashFS indexed metadata block");
+                addresses[i] = (long)blockAddress;
+            }
+        }
+
+        var decoded = FirmwareParallelism.SelectArray(addresses, (address, _) => DecodeBlockAt(address));
+        for (var i = 0; i < decoded.Length; i++)
+        {
+            table.Write(decoded[i], 0, decoded[i].Length);
         }
 
         if (table.Length < uncompressedBytes)
@@ -658,8 +904,9 @@ internal sealed class SquashfsParser
     private byte[] DecodeBlockAt(long absolute)
     {
         Span<byte> header = stackalloc byte[2];
-        _input.Position = absolute;
-        _input.ReadExactly(header);
+        using var reader = CreateReader();
+        reader.Position = absolute;
+        reader.ReadExactly(header);
         var raw = _superblock.BigEndian
             ? BinaryPrimitives.ReadUInt16BigEndian(header)
             : BinaryPrimitives.ReadUInt16LittleEndian(header);
@@ -671,7 +918,7 @@ internal sealed class SquashfsParser
         }
 
         var payload = new byte[size];
-        _input.ReadExactly(payload);
+        reader.ReadExactly(payload);
         return stored
             ? payload
             : SquashfsDecompression.Decompress(_superblock.Compression, payload, SquashfsSuperblock.MetadataWindowSize, exactOutput: false);

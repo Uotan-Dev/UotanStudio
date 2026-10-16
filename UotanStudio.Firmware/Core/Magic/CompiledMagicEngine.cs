@@ -59,7 +59,7 @@ public static class CompiledMagicEngine
 
             using var ms = new MemoryStream(CompiledMagicData.Rules, writable: false);
             using var br = new BinaryReader(ms, Encoding.UTF8, leaveOpen: false);
-            uint count = br.ReadUInt32();
+            var count = br.ReadUInt32();
             for (uint i = 0; i < count; i++)
             {
                 TopLevel.Add(ReadRule(br));
@@ -123,14 +123,14 @@ public static class CompiledMagicEngine
             RegexPattern = NullIfEmpty(br.ReadString()),
         };
 
-        int plen = br.ReadInt32();
+        var plen = br.ReadInt32();
         if (plen > 0)
         {
             r.Pattern = br.ReadBytes(plen);
         }
 
-        int childCount = br.ReadInt32();
-        for (int c = 0; c < childCount; c++)
+        var childCount = br.ReadInt32();
+        for (var c = 0; c < childCount; c++)
         {
             r.Children.Add(ReadRule(br));
         }
@@ -169,8 +169,8 @@ public static class CompiledMagicEngine
             return null;
         }
 
-        int len = data.Length;
-        byte[] file = ArrayPool<byte>.Shared.Rent(len);
+        var len = data.Length;
+        var file = ArrayPool<byte>.Shared.Rent(len);
         try
         {
             data.CopyTo(file);
@@ -201,16 +201,16 @@ public static class CompiledMagicEngine
                     continue;
                 }
 
-                string desc = string.Concat(ctx.Parts);
+                var desc = string.Concat(ctx.Parts);
                 if (string.IsNullOrEmpty(desc.Trim()))
                 {
                     continue;
                 }
 
-                int strength = ctx.Strength;
+                var strength = ctx.Strength;
                 if (best is null || strength > best.Strength)
                 {
-                    string resolvedDesc = ResolveConditionals(desc)!;
+                    var resolvedDesc = ResolveConditionals(desc)!;
                     best = new MagicInfo
                     {
                         Description = Sanitize(resolvedDesc),
@@ -260,10 +260,10 @@ public static class CompiledMagicEngine
         }
 
         var sb = new StringBuilder(s.Length);
-        int i = 0;
+        var i = 0;
         while (i < s.Length)
         {
-            int start = s.IndexOf("${", i, StringComparison.Ordinal);
+            var start = s.IndexOf("${", i, StringComparison.Ordinal);
             if (start < 0)
             {
                 sb.Append(s, i, s.Length - i);
@@ -271,16 +271,16 @@ public static class CompiledMagicEngine
             }
 
             sb.Append(s, i, start - i);
-            int end = s.IndexOf('}', start + 2);
+            var end = s.IndexOf('}', start + 2);
             if (end < 0)
             {
                 sb.Append(s, start, s.Length - start);
                 break;
             }
 
-            string inner = s[(start + 2)..end];
-            int q = inner.IndexOf('?');
-            int colon = q < 0 ? -1 : inner.IndexOf(':', q);
+            var inner = s[(start + 2)..end];
+            var q = inner.IndexOf('?');
+            var colon = q < 0 ? -1 : inner.IndexOf(':', q);
             if (q < 0 || colon < 0)
             {
                 sb.Append(s, start, end - start + 1);
@@ -299,7 +299,7 @@ public static class CompiledMagicEngine
     private static string Sanitize(string s)
     {
         var sb = new StringBuilder(s.Length);
-        foreach (char c in s)
+        foreach (var c in s)
         {
             if (c == '\0')
             {
@@ -341,8 +341,8 @@ public static class CompiledMagicEngine
 
             try
             {
-                int baseStart = rule.Indent > 0 ? parentStart + (int)rule.Offset : (int)rule.Offset;
-                int baseEnd = (rule.Flags & MagicFlags.RelativeToEnd) != 0 ? parentEnd + (int)rule.Offset : baseStart;
+                var baseStart = rule.Indent > 0 ? parentStart + (int)rule.Offset : (int)rule.Offset;
+                var baseEnd = (rule.Flags & MagicFlags.RelativeToEnd) != 0 ? parentEnd + (int)rule.Offset : baseStart;
                 return EvaluateOrdered(named.Children, ctx, baseStart, baseEnd, depth + 1);
             }
             finally
@@ -351,7 +351,7 @@ public static class CompiledMagicEngine
             }
         }
 
-        if (!ResolveOffset(rule, ctx, parentStart, parentEnd, out int offset, out int indirectReadSize))
+        if (!ResolveOffset(rule, ctx, parentStart, parentEnd, out var offset, out var indirectReadSize))
         {
             return false;
         }
@@ -374,11 +374,11 @@ public static class CompiledMagicEngine
         if (rule.Name is not null)
         {
             ctx.LastLevelMatched = true;
-            bool any = EvaluateChildren(rule, ctx, parentStart, parentEnd, depth);
+            var any = EvaluateChildren(rule, ctx, parentStart, parentEnd, depth);
             return any || rule.Children.Count == 0;
         }
 
-        if (!TryValueMatch(rule, ctx.File, offset, ctx.Length, out string? strValue, out long? intValue, out int matchEnd))
+        if (!TryValueMatch(rule, ctx.File, offset, ctx.Length, out var strValue, out var intValue, out var matchEnd))
         {
             ctx.LastLevelMatched = false;
             return false;
@@ -409,7 +409,7 @@ public static class CompiledMagicEngine
     private static bool EvaluateOrdered(List<CompiledRule> children, MatchContext ctx, int parentStart, int parentEnd, int depth)
     {
         HashSet<long>? matchedConcreteOffsets = null;
-        bool any = false;
+        var any = false;
 
         foreach (var child in children)
         {
@@ -453,7 +453,7 @@ public static class CompiledMagicEngine
             return;
         }
 
-        string desc = defaultFormat && string.IsNullOrEmpty(rule.Description)
+        var desc = defaultFormat && string.IsNullOrEmpty(rule.Description)
             ? (intValue is not null ? FormatValue(rule, intValue.Value) : strValue ?? string.Empty)
             : FormatDescription(rule, ctx.File, offset, ctx.Length, intValue, strValue);
 
@@ -486,7 +486,7 @@ public static class CompiledMagicEngine
     private static bool ResolveOffset(CompiledRule rule, MatchContext ctx, int parentStart, int parentEnd, out int offset, out int indirectReadSize)
     {
         indirectReadSize = 0;
-        byte[] f = ctx.File;
+        var f = ctx.File;
 
         if ((rule.Flags & MagicFlags.Indirect) != 0)
         {
@@ -507,7 +507,7 @@ public static class CompiledMagicEngine
                 raw = ~raw;
             }
 
-            long target = raw + rule.IndirectAddend + rule.Value;
+            var target = raw + rule.IndirectAddend + rule.Value;
             if (rule.Indent > 0)
             {
                 target += (rule.Flags & MagicFlags.RelativeToEnd) != 0 ? parentEnd : parentStart;
@@ -525,7 +525,7 @@ public static class CompiledMagicEngine
 
         if ((rule.Flags & MagicFlags.FromEnd) != 0)
         {
-            long o = ctx.Length + rule.Offset;
+            var o = ctx.Length + rule.Offset;
             offset = (int)o;
             return o >= 0 && o <= ctx.Length;
         }
@@ -533,7 +533,7 @@ public static class CompiledMagicEngine
         if (rule.Indent > 0)
         {
             long baseOff = (rule.Flags & MagicFlags.RelativeToEnd) != 0 ? parentEnd : parentStart;
-            long o = baseOff + rule.Offset;
+            var o = baseOff + rule.Offset;
             offset = (int)o;
             return o >= 0 && o <= ctx.Length;
         }
@@ -552,7 +552,7 @@ public static class CompiledMagicEngine
         {
             if (rule.Kind == MagicKind.Number)
             {
-                if (!TryReadNumber(f, offset, rule.NumberType, len, out long anyVal))
+                if (!TryReadNumber(f, offset, rule.NumberType, len, out var anyVal))
                 {
                     return false;
                 }
@@ -572,7 +572,7 @@ public static class CompiledMagicEngine
                 return true;
             }
 
-            int cap = offset;
+            var cap = offset;
             while (cap < len && f[cap] != 0 && f[cap] != (byte)'\n')
             {
                 cap++;
@@ -587,7 +587,7 @@ public static class CompiledMagicEngine
         {
             case MagicKind.Number:
                 {
-                    if (!TryReadNumber(f, offset, rule.NumberType, len, out long actual))
+                    if (!TryReadNumber(f, offset, rule.NumberType, len, out var actual))
                     {
                         return false;
                     }
@@ -609,8 +609,8 @@ public static class CompiledMagicEngine
                         return true;
                     }
 
-                    long expected = rule.Value;
-                    bool ok = CompareNumeric(rule, actual, expected);
+                    var expected = rule.Value;
+                    var ok = CompareNumeric(rule, actual, expected);
                     return ok;
                 }
 
@@ -641,25 +641,25 @@ public static class CompiledMagicEngine
 
     private static bool CompareNumeric(CompiledRule rule, long actual, long expected)
     {
-        int width = WidthOf(rule.NumberType);
+        var width = WidthOf(rule.NumberType);
         if (width is <= 0 or > 8)
         {
             width = 8;
         }
 
-        ulong mask = width >= 8 ? ulong.MaxValue : (1UL << (width * 8)) - 1UL;
-        bool unsigned = IsUnsignedType(rule.NumberType);
-        ulong ua = (ulong)actual & mask;
-        ulong ue = (ulong)expected & mask;
+        var mask = width >= 8 ? ulong.MaxValue : (1UL << (width * 8)) - 1UL;
+        var unsigned = IsUnsignedType(rule.NumberType);
+        var ua = (ulong)actual & mask;
+        var ue = (ulong)expected & mask;
 
         static long SignExtend(ulong v, int width)
         {
-            int shift = 64 - (width * 8);
+            var shift = 64 - (width * 8);
             return shift <= 0 ? (long)v : ((long)v << shift) >> shift;
         }
 
-        long sa = unsigned ? (long)ua : SignExtend(ua, width);
-        long se = unsigned ? (long)ue : SignExtend(ue, width);
+        var sa = unsigned ? (long)ua : SignExtend(ua, width);
+        var se = unsigned ? (long)ue : SignExtend(ue, width);
 
         return rule.Relation switch
         {
@@ -677,13 +677,13 @@ public static class CompiledMagicEngine
     {
         strValue = null;
         matchEnd = offset;
-        byte[] p = rule.Pattern ?? [];
+        var p = rule.Pattern ?? [];
         int i = 0, j = 0;
-        bool ic = (rule.StringFlags & MagicStringFlags.IgnoreCase) != 0;
+        var ic = (rule.StringFlags & MagicStringFlags.IgnoreCase) != 0;
 
         while (i < p.Length)
         {
-            byte b = p[i];
+            var b = p[i];
 
             if ((rule.StringFlags & MagicStringFlags.CompactWhitespace) != 0 && IsSpace(b))
             {
@@ -717,7 +717,7 @@ public static class CompiledMagicEngine
                 return false;
             }
 
-            byte d = f[offset + j];
+            var d = f[offset + j];
             if (ic)
             {
                 b = ToLower(b);
@@ -752,19 +752,19 @@ public static class CompiledMagicEngine
     {
         strValue = null;
         matchEnd = offset;
-        byte[] p = rule.Pattern ?? [];
+        var p = rule.Pattern ?? [];
         if (p.Length == 0)
         {
             return false;
         }
 
-        int range = rule.SearchRange > 0 ? rule.SearchRange : 100;
-        int limit = Math.Min(len, offset + range);
-        bool ic = (rule.StringFlags & MagicStringFlags.IgnoreCase) != 0;
-        for (int s = offset; s + p.Length <= limit; s++)
+        var range = rule.SearchRange > 0 ? rule.SearchRange : 100;
+        var limit = Math.Min(len, offset + range);
+        var ic = (rule.StringFlags & MagicStringFlags.IgnoreCase) != 0;
+        for (var s = offset; s + p.Length <= limit; s++)
         {
-            bool ok = true;
-            for (int k = 0; k < p.Length; k++)
+            var ok = true;
+            for (var k = 0; k < p.Length; k++)
             {
                 byte a = p[k], b = f[s + k];
                 if (a == 0xFF)
@@ -800,7 +800,7 @@ public static class CompiledMagicEngine
     {
         strValue = null;
         matchEnd = offset;
-        int lb = rule.PStringLengthBytes is (1 or 2 or 4) ? rule.PStringLengthBytes : 1;
+        var lb = rule.PStringLengthBytes is (1 or 2 or 4) ? rule.PStringLengthBytes : 1;
         if (offset + lb > len)
         {
             return false;
@@ -813,23 +813,23 @@ public static class CompiledMagicEngine
             _ => rule.PStringBigEndian ? BinaryPrimitives.ReadUInt32BigEndian(f.AsSpan(offset, 4)) : BinaryPrimitives.ReadUInt32LittleEndian(f.AsSpan(offset, 4)),
         };
 
-        int start = offset + lb;
+        var start = offset + lb;
         if (slen < 0 || start + slen > len)
         {
             return false;
         }
 
-        byte[] p = rule.Pattern ?? [];
-        int n = (int)slen;
+        var p = rule.Pattern ?? [];
+        var n = (int)slen;
         if (p.Length > n)
         {
         }
 
-        bool ic = (rule.StringFlags & MagicStringFlags.IgnoreCase) != 0;
-        for (int k = 0; k < p.Length; k++)
+        var ic = (rule.StringFlags & MagicStringFlags.IgnoreCase) != 0;
+        for (var k = 0; k < p.Length; k++)
         {
-            byte a = p[k];
-            byte b = k < n ? f[start + k] : (byte)0;
+            var a = p[k];
+            var b = k < n ? f[start + k] : (byte)0;
             if (ic)
             {
                 a = ToLower(a);
@@ -851,19 +851,19 @@ public static class CompiledMagicEngine
     {
         strValue = null;
         matchEnd = offset;
-        byte[] p = rule.Pattern ?? [];
-        int units = p.Length / 2;
-        bool be = rule.Kind == MagicKind.String16Be;
-        for (int u = 0; u < units; u++)
+        var p = rule.Pattern ?? [];
+        var units = p.Length / 2;
+        var be = rule.Kind == MagicKind.String16Be;
+        for (var u = 0; u < units; u++)
         {
-            int src = offset + u * 2;
+            var src = offset + u * 2;
             if (src + 2 > len || src + u * 0 >= len)
             {
                 return false;
             }
 
-            ushort got = be ? BinaryPrimitives.ReadUInt16BigEndian(f.AsSpan(src, 2)) : BinaryPrimitives.ReadUInt16LittleEndian(f.AsSpan(src, 2));
-            ushort want = be ? (ushort)((p[u * 2] << 8) | p[u * 2 + 1]) : (ushort)(p[u * 2] | (p[u * 2 + 1] << 8));
+            var got = be ? BinaryPrimitives.ReadUInt16BigEndian(f.AsSpan(src, 2)) : BinaryPrimitives.ReadUInt16LittleEndian(f.AsSpan(src, 2));
+            var want = be ? (ushort)((p[u * 2] << 8) | p[u * 2 + 1]) : (ushort)(p[u * 2] | (p[u * 2 + 1] << 8));
             if (got != want)
             {
                 return false;
@@ -885,7 +885,7 @@ public static class CompiledMagicEngine
         }
 
         Regex rx = rule.CompiledRegex ??= CompileRegex(rule);
-        string region = Encoding.Latin1.GetString(f, offset, len - offset);
+        var region = Encoding.Latin1.GetString(f, offset, len - offset);
         var m = rx.Match(region);
         if (!m.Success)
         {
@@ -939,7 +939,7 @@ public static class CompiledMagicEngine
             return true;
         }
 
-        for (int k = 0; k < 16; k++)
+        for (var k = 0; k < 16; k++)
         {
             if (want[k] != 0xFF && want[k] != f[offset + k])
             {
@@ -955,37 +955,37 @@ public static class CompiledMagicEngine
     private static bool TryReadNumber(byte[] f, int offset, MagicNumberType t, int len, out long value)
     {
         value = 0;
-        int w = WidthOf(t);
+        var w = WidthOf(t);
         if (offset < 0 || offset + w > len)
         {
             return false;
         }
 
         var span = f.AsSpan(offset, w);
-        bool be = IsBigEndian(t);
+        var be = IsBigEndian(t);
         switch (w)
         {
             case 1:
                 {
-                    byte b = f[offset];
+                    var b = f[offset];
                     value = SignedByte(t) ? (sbyte)b : b;
                     return true;
                 }
             case 2:
                 {
-                    ushort u = be ? BinaryPrimitives.ReadUInt16BigEndian(span) : BinaryPrimitives.ReadUInt16LittleEndian(span);
+                    var u = be ? BinaryPrimitives.ReadUInt16BigEndian(span) : BinaryPrimitives.ReadUInt16LittleEndian(span);
                     value = SignedShort(t) ? (short)u : u;
                     return true;
                 }
             case 4:
                 {
-                    uint u = be ? BinaryPrimitives.ReadUInt32BigEndian(span) : BinaryPrimitives.ReadUInt32LittleEndian(span);
+                    var u = be ? BinaryPrimitives.ReadUInt32BigEndian(span) : BinaryPrimitives.ReadUInt32LittleEndian(span);
                     value = SignedLong(t) ? (int)u : u;
                     return true;
                 }
             case 8:
                 {
-                    ulong u = be ? BinaryPrimitives.ReadUInt64BigEndian(span) : BinaryPrimitives.ReadUInt64LittleEndian(span);
+                    var u = be ? BinaryPrimitives.ReadUInt64BigEndian(span) : BinaryPrimitives.ReadUInt64LittleEndian(span);
                     value = SignedQuad(t) ? (long)u : (long)u;
                     return true;
                 }
@@ -1049,7 +1049,7 @@ public static class CompiledMagicEngine
 
     private static string DecodeString(CompiledRule rule, byte[] f, int offset, int count)
     {
-        int n = count;
+        var n = count;
         while (n > 0 && f[offset + n - 1] == 0)
         {
             n--;
@@ -1080,7 +1080,7 @@ public static class CompiledMagicEngine
 
     private static string FormatUnsigned(long value, int width)
     {
-        ulong mask = width >= 8 ? ulong.MaxValue : (1UL << (width * 8)) - 1UL;
+        var mask = width >= 8 ? ulong.MaxValue : (1UL << (width * 8)) - 1UL;
         return ((ulong)value & mask).ToString(CultureInfo.InvariantCulture);
     }
 
@@ -1115,10 +1115,10 @@ public static class CompiledMagicEngine
         }
 
         var sb = new StringBuilder(template.Length + 16);
-        int i = 0;
+        var i = 0;
         while (i < template.Length)
         {
-            char c = template[i];
+            var c = template[i];
             if (c != '%')
             {
                 sb.Append(c);
@@ -1126,10 +1126,10 @@ public static class CompiledMagicEngine
                 continue;
             }
 
-            int j = i + 1;
-            int width = 0;
-            bool left = false;
-            bool alternate = false;
+            var j = i + 1;
+            var width = 0;
+            var left = false;
+            var alternate = false;
             while (j < template.Length && (template[j] == '-' || template[j] == '#' || char.IsDigit(template[j])))
             {
                 if (template[j] == '-')
@@ -1160,7 +1160,7 @@ public static class CompiledMagicEngine
                 continue;
             }
 
-            char spec = template[j];
+            var spec = template[j];
             string seg;
             if (isDate && spec is 's' or 'd')
             {

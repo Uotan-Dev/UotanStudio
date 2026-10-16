@@ -1,4 +1,7 @@
 #nullable enable
+const UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultLegacyCompatibility = true -> bool
+static UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility.get -> bool
+static UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility.set -> void
 UotanStudio.Firmware.AndroidMeta.AXml.AXmlAttribute
 UotanStudio.Firmware.AndroidMeta.AXml.AXmlAttribute.AXmlAttribute() -> void
 UotanStudio.Firmware.AndroidMeta.AXml.AXmlAttribute.FormatRawData() -> string!
@@ -3435,6 +3438,8 @@ UotanStudio.Firmware.OtaDelta.Dat.DatSplitSet.TotalInputBytes.init -> void
 UotanStudio.Firmware.OtaDelta.Dat.DatWriteOptions
 UotanStudio.Firmware.OtaDelta.Dat.DatWriteOptions.AllowRawNewCommands.get -> bool
 UotanStudio.Firmware.OtaDelta.Dat.DatWriteOptions.AllowRawNewCommands.set -> void
+UotanStudio.Firmware.OtaDelta.Dat.DatWriteOptions.BrotliLevel.get -> int?
+UotanStudio.Firmware.OtaDelta.Dat.DatWriteOptions.BrotliLevel.set -> void
 UotanStudio.Firmware.OtaDelta.Dat.DatWriteOptions.CompressWithBrotli.get -> bool
 UotanStudio.Firmware.OtaDelta.Dat.DatWriteOptions.CompressWithBrotli.set -> void
 UotanStudio.Firmware.OtaDelta.Dat.DatWriteOptions.DatWriteOptions() -> void
@@ -5395,7 +5400,6 @@ const UotanStudio.Firmware.DeviceTree.Dt.FdtConstants.MemoryReservationAlignment
 const UotanStudio.Firmware.DeviceTree.Dt.FdtConstants.MemoryReservationEntrySize = 16 -> int
 const UotanStudio.Firmware.DeviceTree.Dt.FdtConstants.PropertyHeaderSize = 8 -> int
 const UotanStudio.Firmware.DeviceTree.Dt.FdtConstants.TokenSize = 4 -> int
-const UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultLegacyCompatibility = true -> bool
 const UotanStudio.Firmware.FileSystem.Erofs.ErofsAlgorithmSelectors.Deflate = "deflate" -> string!
 const UotanStudio.Firmware.FileSystem.Erofs.ErofsAlgorithmSelectors.Lz4 = "lz4" -> string!
 const UotanStudio.Firmware.FileSystem.Erofs.ErofsAlgorithmSelectors.Lz4HighCompression = "lz4hc" -> string!
@@ -6195,8 +6199,6 @@ static UotanStudio.Firmware.Executable.Qualcomm.QualcommSigningMetadata.operator
 static UotanStudio.Firmware.Executable.Qualcomm.QualcommSigningMetadata.operator ==(UotanStudio.Firmware.Executable.Qualcomm.QualcommSigningMetadata? left, UotanStudio.Firmware.Executable.Qualcomm.QualcommSigningMetadata? right) -> bool
 static UotanStudio.Firmware.Executable.Qualcomm.QualcommVersionEvidence.operator !=(UotanStudio.Firmware.Executable.Qualcomm.QualcommVersionEvidence? left, UotanStudio.Firmware.Executable.Qualcomm.QualcommVersionEvidence? right) -> bool
 static UotanStudio.Firmware.Executable.Qualcomm.QualcommVersionEvidence.operator ==(UotanStudio.Firmware.Executable.Qualcomm.QualcommVersionEvidence? left, UotanStudio.Firmware.Executable.Qualcomm.QualcommVersionEvidence? right) -> bool
-static UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility.get -> bool
-static UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility.set -> void
 static UotanStudio.Firmware.FileSystem.Erofs.ErofsAlgorithmSelectors.Normalize(string? selector) -> string!
 static UotanStudio.Firmware.FileSystem.Erofs.ErofsAlgorithmSelectors.Ordered.get -> System.Collections.Generic.IReadOnlyList<string!>!
 static UotanStudio.Firmware.FileSystem.Erofs.ErofsAlgorithmSelectors.Parse(string? selector) -> (UotanStudio.Firmware.FileSystem.Erofs.ErofsCompressionAlgorithm Algorithm, bool Lz4HighCompression)

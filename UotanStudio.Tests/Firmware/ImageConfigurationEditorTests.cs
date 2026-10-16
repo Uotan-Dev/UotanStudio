@@ -221,7 +221,6 @@ public sealed class ImageConfigurationEditorTests : IDisposable
             Dictionary<string, string> projection = new() { ["build.prop"] = "file:original" };
             var manifest = new FileSystemPreservationData
             {
-                Projection = projection,
                 ParsedEntries = [new() { Path = ".", Mode = 0x41ED, Inode = 2 },
                     new() { Path = "build.prop", Mode = 0x81A4, Inode = 12, Xattrs = attributes }]
             };

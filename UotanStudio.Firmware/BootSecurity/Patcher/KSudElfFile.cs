@@ -52,19 +52,19 @@ public sealed class ElfFile
             throw new InvalidDataException("Only little-endian ELF is supported.");
         Data = data;
         Machine = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(18));
-        ulong phoff = BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(32));
-        ushort phentsize = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(54));
-        ushort phnum = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(56));
-        for (int i = 0; i < phnum; i++)
+        var phoff = BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(32));
+        var phentsize = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(54));
+        var phnum = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(56));
+        for (var i = 0; i < phnum; i++)
         {
-            long off = (long)phoff + i * phentsize;
+            var off = (long)phoff + i * phentsize;
             if (off + 40 > data.Length)
                 break;
-            uint pType = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan((int)off));
-            uint pFlags = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan((int)off + 4));
-            ulong pOffset = BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan((int)off + 8));
-            ulong pVaddr = BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan((int)off + 16));
-            ulong pFilesz = BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan((int)off + 32));
+            var pType = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan((int)off));
+            var pFlags = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan((int)off + 4));
+            var pOffset = BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan((int)off + 8));
+            var pVaddr = BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan((int)off + 16));
+            var pFilesz = BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan((int)off + 32));
             if (pType == PtLoad && pFilesz > 0)
                 _segs.Add((pVaddr, pOffset, pFilesz, pFlags));
         }
@@ -139,10 +139,10 @@ public sealed class ElfFile
     /// <para>文件偏移；当该地址及其减去基址的形式都不落在任何 PT_LOAD 段内时返回 <see langword="null"/>。</para></returns>
     public long? ResolveRef(ulong reference)
     {
-        long? off = VaToOff(reference);
+        var off = VaToOff(reference);
         if (off is not null)
             return off;
-        foreach (ulong bias in new ulong[] { 0x100000000UL, 0x40000000UL, 0x20000000UL })
+        foreach (var bias in new ulong[] { 0x100000000UL, 0x40000000UL, 0x20000000UL })
         {
             if (reference >= bias)
             {
@@ -189,37 +189,37 @@ public sealed class ElfFile
     /// 超出文件末尾的条目会被忽略。</para></returns>
     public List<Section> SectionTable()
     {
-        ulong shoff = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan(40));
-        ushort shentsize = BinaryPrimitives.ReadUInt16LittleEndian(Data.AsSpan(58));
-        ushort shnum = BinaryPrimitives.ReadUInt16LittleEndian(Data.AsSpan(60));
-        ushort shstrndx = BinaryPrimitives.ReadUInt16LittleEndian(Data.AsSpan(62));
+        var shoff = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan(40));
+        var shentsize = BinaryPrimitives.ReadUInt16LittleEndian(Data.AsSpan(58));
+        var shnum = BinaryPrimitives.ReadUInt16LittleEndian(Data.AsSpan(60));
+        var shstrndx = BinaryPrimitives.ReadUInt16LittleEndian(Data.AsSpan(62));
         if (shoff == 0 || shnum == 0)
             return [];
         var secs = new List<(uint NameOff, uint Type, ulong Flags, ulong Addr, ulong Offset, ulong Size)>();
-        for (int i = 0; i < shnum; i++)
+        for (var i = 0; i < shnum; i++)
         {
-            long off = (long)shoff + i * shentsize;
+            var off = (long)shoff + i * shentsize;
             if (off + 40 > Data.Length)
                 break;
-            uint nameOff = BinaryPrimitives.ReadUInt32LittleEndian(Data.AsSpan((int)off));
-            uint typ = BinaryPrimitives.ReadUInt32LittleEndian(Data.AsSpan((int)off + 4));
-            ulong flags = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)off + 8));
-            ulong addr = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)off + 16));
-            ulong offset = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)off + 24));
-            ulong size = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)off + 32));
+            var nameOff = BinaryPrimitives.ReadUInt32LittleEndian(Data.AsSpan((int)off));
+            var typ = BinaryPrimitives.ReadUInt32LittleEndian(Data.AsSpan((int)off + 4));
+            var flags = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)off + 8));
+            var addr = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)off + 16));
+            var offset = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)off + 24));
+            var size = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)off + 32));
             secs.Add((nameOff, typ, flags, addr, offset, size));
         }
         if (shstrndx >= secs.Count)
             return [];
-        ulong shstrOff = secs[shstrndx].Offset;
+        var shstrOff = secs[shstrndx].Offset;
         var outSections = new List<Section>(secs.Count);
         foreach (var (nameOff, typ, flags, addr, offset, size) in secs)
         {
-            int p = (int)(shstrOff + nameOff);
-            int end = p;
+            var p = (int)(shstrOff + nameOff);
+            var end = p;
             while (end < Data.Length && Data[end] != 0)
                 end++;
-            string name = EncodingLatin1.GetString(Data, p, end - p);
+            var name = EncodingLatin1.GetString(Data, p, end - p);
             outSections.Add(new Section(name, typ, addr, offset, size));
         }
         return outSections;
@@ -242,14 +242,14 @@ public sealed class ElfFile
         {
             if (sec.Type == 4)
             {
-                long? o = VaToOff(sec.Addr);
+                var o = VaToOff(sec.Addr);
                 if (o is not null)
                     rela.Add(((long)o, sec.Size));
             }
             else if (sec.Type == 11)
             {
                 var vals = new List<ulong>();
-                for (ulong p = sec.Offset; p + 24 <= sec.Offset + sec.Size && p + 24 <= (ulong)Data.Length; p += 24)
+                for (var p = sec.Offset; p + 24 <= sec.Offset + sec.Size && p + 24 <= (ulong)Data.Length; p += 24)
                     vals.Add(BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)p + 8)));
                 dynsymValues = vals;
             }
@@ -257,24 +257,24 @@ public sealed class ElfFile
         if (rela.Count == 0)
             return null;
 
-        uint rel = Machine == 183 ? 1027u : 8u;
-        uint absType = Machine == 183 ? 1026u : 1u;
-        uint glob = Machine == 183 ? 1029u : 6u;
-        uint jump = Machine == 183 ? 1030u : 7u;
+        var rel = Machine == 183 ? 1027u : 8u;
+        var absType = Machine == 183 ? 1026u : 1u;
+        var glob = Machine == 183 ? 1029u : 6u;
+        var jump = Machine == 183 ? 1030u : 7u;
 
         var view = (byte[])Data.Clone();
-        int patched = 0;
+        var patched = 0;
         foreach (var (rOff, rSize) in rela)
         {
-            long end = Math.Min((long)rOff + (long)rSize, Data.Length - 24);
-            for (long p = rOff; p <= end; p += 24)
+            var end = Math.Min((long)rOff + (long)rSize, Data.Length - 24);
+            for (var p = rOff; p <= end; p += 24)
             {
-                ulong loc = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)p));
-                ulong info = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)p + 8));
-                long add = BinaryPrimitives.ReadInt64LittleEndian(Data.AsSpan((int)p + 16));
-                uint rtype = (uint)(info & 0xFFFFFFFF);
-                ulong rsym = info >> 32;
-                long? lo = VaToOff(loc);
+                var loc = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)p));
+                var info = BinaryPrimitives.ReadUInt64LittleEndian(Data.AsSpan((int)p + 8));
+                var add = BinaryPrimitives.ReadInt64LittleEndian(Data.AsSpan((int)p + 16));
+                var rtype = (uint)(info & 0xFFFFFFFF);
+                var rsym = info >> 32;
+                var lo = VaToOff(loc);
                 if (lo is null || lo + 8 > view.Length)
                     continue;
                 ulong val;
@@ -284,7 +284,7 @@ public sealed class ElfFile
                 }
                 else if (rtype == absType)
                 {
-                    ulong symval = (dynsymValues != null && rsym < (ulong)dynsymValues.Count) ? dynsymValues[(int)rsym] : 0;
+                    var symval = (dynsymValues != null && rsym < (ulong)dynsymValues.Count) ? dynsymValues[(int)rsym] : 0;
                     val = symval + (ulong)add;
                 }
                 else if (rtype == glob || rtype == jump)

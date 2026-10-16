@@ -154,7 +154,7 @@ internal sealed class JournalSuperblock
         {
 
 
-            var crc = Crc32c(data.AsSpan(0, 0x204), UotanStudio.Hash.Crc32c.Crc32c.InitialSeed);
+            var crc = Crc32c(data.AsSpan(0, 0x204), Hash.Crc32c.Crc32c.InitialSeed);
             BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(0x204, 4), crc);
         }
 
@@ -165,7 +165,7 @@ internal sealed class JournalSuperblock
     /// Computes CRC32c from the given register seed (crc32c_le convention: no final XOR).
     /// <para>以指定寄存器 seed 计算 CRC32c（crc32c_le 约定：无最终异或）。</para>
     /// </summary>
-    private static uint Crc32c(ReadOnlySpan<byte> data, uint seed) => UotanStudio.Hash.Crc32c.Crc32c.Compute(data, seed);
+    private static uint Crc32c(ReadOnlySpan<byte> data, uint seed) => Hash.Crc32c.Crc32c.Compute(data, seed);
 
     /// <summary>
     /// Parses a JBD2 journal superblock from raw bytes (big-endian).

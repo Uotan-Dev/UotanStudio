@@ -289,36 +289,81 @@ public sealed class Nb0Processor
         }
 
         var total = metadata.Entries.Count;
-        var completed = 0;
-        for (var i = 0; i < metadata.Entries.Count; i++)
+        var workers = Core.FirmwareParallelism.Workers;
+        var digests = new byte[]?[total];
+        var missingRecord = ResolveMissingRecords(metadata);
+        var buffers = GatherEntryBuffers(stream, metadata, missingRecord);
+
+        Core.FirmwareParallelism.ForEach(metadata.Entries, (_, i) =>
         {
-            var entry = metadata.Entries[i];
-            var record = Nb0Md5Helper.FindMd5Record(entry, i, metadata);
-            if (record is null)
+            if (buffers[i] is null)
             {
-                result.Errors.Add($"No MD5 record found for entry '{entry.Name}'.");
+                return;
+            }
+
+            digests[i] = Nb0Md5Helper.ComputeMd5(buffers[i]!);
+        }, workers);
+
+        for (var i = 0; i < total; i++)
+        {
+            if (missingRecord[i])
+            {
+                result.Errors.Add($"No MD5 record found for entry '{metadata.Entries[i].Name}'.");
                 result.IsValid = false;
             }
             else
             {
-                var data = new Nb0Extractor().ExtractEntryToBuffer(stream, entry);
-                var computed = Nb0Md5Helper.ComputeMd5(data);
-                if (Nb0Md5Helper.Md5Equals(computed, record.Md5Checksum))
+                var record = Nb0Md5Helper.FindMd5Record(metadata.Entries[i], i, metadata)!;
+                if (Nb0Md5Helper.Md5Equals(digests[i]!, record.Md5Checksum))
                 {
                     result.VerifiedCount++;
                 }
                 else
                 {
-                    result.Errors.Add($"MD5 mismatch for entry '{entry.Name}'.");
+                    result.Errors.Add($"MD5 mismatch for entry '{metadata.Entries[i].Name}'.");
                     result.IsValid = false;
                 }
             }
 
-            completed++;
-            progress?.Report(new Nb0CheckProgress { TotalEntries = total, CompletedEntries = completed, CurrentEntryName = entry.Name });
+            progress?.Report(new Nb0CheckProgress { TotalEntries = total, CompletedEntries = i + 1, CurrentEntryName = metadata.Entries[i].Name });
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Marks the entries whose MD5 record is absent while leaving the rest to the hashing stage.
+    /// <para>标记缺少 MD5 记录的条目，其余交由摘要阶段处理。</para>
+    /// </summary>
+    private static IReadOnlyList<bool> ResolveMissingRecords(Nb0Metadata metadata)
+    {
+        var missing = new bool[metadata.Entries.Count];
+        for (var i = 0; i < metadata.Entries.Count; i++)
+        {
+            missing[i] = Nb0Md5Helper.FindMd5Record(metadata.Entries[i], i, metadata) is null;
+        }
+
+        return missing;
+    }
+
+    /// <summary>
+    /// Reads every outstanding entry on the calling thread into a per-index slot, so the shared stream is only
+    /// ever repositioned by one thread at a time and the hashing stage can then run concurrently.
+    /// <para>在调用线程上把每个待处理条目读入各自的索引槽位，从而共享流同一时刻只由一个线程重新定位，
+    /// 之后摘要阶段即可并发执行。</para>
+    /// </summary>
+    private static byte[]?[] GatherEntryBuffers(Stream stream, Nb0Metadata metadata, IReadOnlyList<bool> missingRecord)
+    {
+        var buffers = new byte[]?[metadata.Entries.Count];
+        for (var i = 0; i < metadata.Entries.Count; i++)
+        {
+            if (!missingRecord[i])
+            {
+                buffers[i] = new Nb0Extractor().ExtractEntryToBuffer(stream, metadata.Entries[i]);
+            }
+        }
+
+        return buffers;
     }
 
     /// <summary>

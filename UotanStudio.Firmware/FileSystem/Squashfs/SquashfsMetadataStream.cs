@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.FileSystem.Squashfs;
 
@@ -18,6 +19,7 @@ internal sealed class SquashfsMetadataStream
     private readonly bool _bigEndian;
     private readonly int _compression;
     private readonly CancellationToken _cancellationToken;
+    private readonly object _readGate;
     private readonly Dictionary<long, byte[]> _windows = [];
     private readonly List<long> _chainOrder = [];
     private long _nextBlockRelative;
@@ -33,19 +35,24 @@ internal sealed class SquashfsMetadataStream
     /// <param name="bigEndian">Header endianness taken from the superblock magic. <para>由超级块魔数决定的头字节序。</para></param>
     /// <param name="compression">Superblock compressor id used for encoded windows. <para>编码窗口所用的超级块压缩器标识。</para></param>
     /// <param name="cancellationToken">Token checked before every block read. <para>每次块读取前检查的令牌。</para></param>
+    /// <param name="readGate">Gate shared by every cursor over the same image; a plain file source reads
+    /// through positional I/O and never contends on it.
+    /// <para>同一镜像上所有游标共享的门；普通文件源通过定位读取，不会在其上争用。</para></param>
     internal SquashfsMetadataStream(
         Stream input,
         long tableStart,
         long bytesUsed,
         bool bigEndian,
         int compression,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        object readGate)
     {
         _input = input;
         _bytesUsed = bytesUsed;
         _bigEndian = bigEndian;
         _compression = compression;
         _cancellationToken = cancellationToken;
+        _readGate = readGate;
         TableStart = tableStart;
     }
 
@@ -145,8 +152,9 @@ internal sealed class SquashfsMetadataStream
         }
 
         Span<byte> header = stackalloc byte[2];
-        _input.Position = absolute;
-        _input.ReadExactly(header);
+        using var reader = new IndependentReadStream(_input, _readGate);
+        reader.Position = absolute;
+        reader.ReadExactly(header);
         var raw = _bigEndian
             ? BinaryPrimitives.ReadUInt16BigEndian(header)
             : BinaryPrimitives.ReadUInt16LittleEndian(header);
@@ -158,7 +166,7 @@ internal sealed class SquashfsMetadataStream
         }
 
         var payload = new byte[size];
-        _input.ReadExactly(payload);
+        reader.ReadExactly(payload);
         var decoded = stored
             ? payload
             : SquashfsDecompression.Decompress(_compression, payload, SquashfsSuperblock.MetadataWindowSize, exactOutput: false);

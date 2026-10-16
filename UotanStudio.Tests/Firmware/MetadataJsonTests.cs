@@ -43,8 +43,6 @@ public sealed class MetadataJsonTests : IDisposable
         Assert.Equal("EXT4", document!.Rebuild?.Format);
         Assert.NotNull(document.Rebuild?.BlockSize);
         Assert.Equal("system", document.Partition);
-        Assert.NotEmpty(document.Projection);
-        Assert.Equal(64, document.SourceHash.Length);
         Assert.Equal(64, document.ConfigurationHash.Length);
         Assert.True(File.Exists(Path.Combine(extracted, "system_fs_config")));
         Assert.True(File.Exists(Path.Combine(extracted, "system_file_contexts")));
@@ -197,7 +195,7 @@ public sealed class MetadataJsonTests : IDisposable
         Assert.True(erofs.ContainsKey("droppedIncompatBits"));
 
         var profile = FileSystemMetadataOverrides.TryLoadDocument(RepackMetadata.Read(extracted)!)!.Rebuild!.Erofs!;
-        uint? replayedIncompat = profile.FeatureIncompat;
+        var replayedIncompat = profile.FeatureIncompat;
         Assert.Equal(sourceSuperblock.FeatureIncompat, replayedIncompat);
         Assert.Equal(ErofsTriStateFeature.Disabled, ErofsRebuildMetadata.Restore(profile).DotOmitted);
 

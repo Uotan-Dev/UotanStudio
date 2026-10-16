@@ -322,22 +322,22 @@ internal static class RegisterAnalyzer
             return ProcessMove(insn, ctx, state, item);
         }
 
-        if (mnemonic.StartsWith("iget", System.StringComparison.Ordinal) || mnemonic.StartsWith("sget", System.StringComparison.Ordinal))
+        if (mnemonic.StartsWith("iget", StringComparison.Ordinal) || mnemonic.StartsWith("sget", StringComparison.Ordinal))
         {
             return ProcessFieldGet(insn, ctx, state, options, item);
         }
 
-        if (mnemonic.StartsWith("iput", System.StringComparison.Ordinal) || mnemonic.StartsWith("sput", System.StringComparison.Ordinal))
+        if (mnemonic.StartsWith("iput", StringComparison.Ordinal) || mnemonic.StartsWith("sput", StringComparison.Ordinal))
         {
             return ProcessFieldPut(insn, ctx, state, item);
         }
 
-        if (mnemonic.StartsWith("aget", System.StringComparison.Ordinal))
+        if (mnemonic.StartsWith("aget", StringComparison.Ordinal))
         {
             return ProcessArrayGet(insn, ctx, state, options, item);
         }
 
-        if (mnemonic.StartsWith("aput", System.StringComparison.Ordinal))
+        if (mnemonic.StartsWith("aput", StringComparison.Ordinal))
         {
             return ProcessArrayPut(insn, ctx, state, item);
         }
@@ -367,10 +367,10 @@ internal static class RegisterAnalyzer
             return ProcessFillArrayData(insn, item);
         }
 
-        if (mnemonic.StartsWith("invoke-", System.StringComparison.Ordinal)
-            && !mnemonic.Contains("polymorphic", System.StringComparison.Ordinal)
-            && !mnemonic.Contains("custom", System.StringComparison.Ordinal)
-            && !mnemonic.Contains("object-init", System.StringComparison.Ordinal))
+        if (mnemonic.StartsWith("invoke-", StringComparison.Ordinal)
+            && !mnemonic.Contains("polymorphic", StringComparison.Ordinal)
+            && !mnemonic.Contains("custom", StringComparison.Ordinal)
+            && !mnemonic.Contains("object-init", StringComparison.Ordinal))
         {
             return ProcessInvoke(insn, ctx, state, resolver, item);
         }
@@ -390,7 +390,7 @@ internal static class RegisterAnalyzer
             return ProcessThrow(insn, ctx, state, item);
         }
 
-        if (mnemonic.StartsWith("if-", System.StringComparison.Ordinal))
+        if (mnemonic.StartsWith("if-", StringComparison.Ordinal))
         {
             return ProcessIf(insn, ctx, state, item);
         }
@@ -416,7 +416,7 @@ internal static class RegisterAnalyzer
             return ProcessUnary(insn, ctx, state, options, item);
         }
 
-        if (mnemonic.Contains("-to-", System.StringComparison.Ordinal))
+        if (mnemonic.Contains("-to-", StringComparison.Ordinal))
         {
             return ProcessNumericCast(insn, ctx, state, options, item);
         }
@@ -537,7 +537,7 @@ internal static class RegisterAnalyzer
         {
             var value = RegValue(state, ctx, sourceRegister);
             SetReg(state, targetRegister, value);
-            if (insn.Mnemonic.StartsWith("move-wide", System.StringComparison.Ordinal))
+            if (insn.Mnemonic.StartsWith("move-wide", StringComparison.Ordinal))
             {
                 state.Regs.Remove(targetRegister + 1);
             }
@@ -554,7 +554,7 @@ internal static class RegisterAnalyzer
     {
         var mnemonic = insn.Mnemonic;
         var operands = insn.Operands;
-        var isStatic = mnemonic.StartsWith("sget", System.StringComparison.Ordinal);
+        var isStatic = mnemonic.StartsWith("sget", StringComparison.Ordinal);
         var fieldRef = FieldRefAt(operands, isStatic ? 1 : 2);
         if (fieldRef is null)
         {
@@ -580,7 +580,7 @@ internal static class RegisterAnalyzer
     {
         var mnemonic = insn.Mnemonic;
         var operands = insn.Operands;
-        var isStatic = mnemonic.StartsWith("sput", System.StringComparison.Ordinal);
+        var isStatic = mnemonic.StartsWith("sput", StringComparison.Ordinal);
         var fieldRef = FieldRefAt(operands, isStatic ? 1 : 2);
         if (fieldRef is null)
         {
@@ -695,7 +695,7 @@ internal static class RegisterAnalyzer
         if (registers is not null && typeRef is not null)
         {
             var formatted = DexFile.FormatDescriptor(typeRef.Descriptor);
-            var elementType = formatted.EndsWith("[]", System.StringComparison.Ordinal) ? formatted[..^2] : formatted;
+            var elementType = formatted.EndsWith("[]", StringComparison.Ordinal) ? formatted[..^2] : formatted;
             var created = new NewArrayExpr(elementType, size: null);
             foreach (var register in registers)
             {
@@ -731,8 +731,8 @@ internal static class RegisterAnalyzer
         }
 
         var mnemonic = insn.Mnemonic;
-        var isStatic = mnemonic.Contains("static", System.StringComparison.Ordinal);
-        var isSuper = mnemonic.Contains("super", System.StringComparison.Ordinal);
+        var isStatic = mnemonic.Contains("static", StringComparison.Ordinal);
+        var isSuper = mnemonic.Contains("super", StringComparison.Ordinal);
         var isInit = methodRef.Name == "<init>";
         var receiver = argRegisters.Length > 0 ? RegValue(state, ctx, argRegisters[0]) : null;
         var argStart = isStatic ? 0 : 1;
@@ -809,7 +809,7 @@ internal static class RegisterAnalyzer
     {
         var mnemonic = insn.Mnemonic;
         var operands = insn.Operands;
-        if (mnemonic.EndsWith("z", System.StringComparison.Ordinal))
+        if (mnemonic.EndsWith("z", StringComparison.Ordinal))
         {
             var test = IntAt(operands, 0);
             if (test is int testRegister)
@@ -853,13 +853,13 @@ internal static class RegisterAnalyzer
         var first = IntAt(operands, 1);
         JavaExpr left;
         JavaExpr right;
-        if (mnemonic.Contains("/lit8", System.StringComparison.Ordinal) || mnemonic.Contains("/lit16", System.StringComparison.Ordinal))
+        if (mnemonic.Contains("/lit8", StringComparison.Ordinal) || mnemonic.Contains("/lit16", StringComparison.Ordinal))
         {
             var literal = LiteralAt(operands, 2);
             left = first is int sourceRegister ? RegValue(state, ctx, sourceRegister) : new UnknownExpr("?");
             right = literal is not null ? new LiteralExpr(literal.Value) : new UnknownExpr("?");
         }
-        else if (mnemonic.Contains("/2addr", System.StringComparison.Ordinal))
+        else if (mnemonic.Contains("/2addr", StringComparison.Ordinal))
         {
             left = dest is int leftRegister ? RegValue(state, ctx, leftRegister) : new UnknownExpr("?");
             right = first is int sourceRegister ? RegValue(state, ctx, sourceRegister) : new UnknownExpr("?");
@@ -906,7 +906,7 @@ internal static class RegisterAnalyzer
         var source = IntAt(operands, 1);
         if (dest is int targetRegister && source is int sourceRegister)
         {
-            var operatorSymbol = insn.Mnemonic.StartsWith("not", System.StringComparison.Ordinal) ? "~" : "-";
+            var operatorSymbol = insn.Mnemonic.StartsWith("not", StringComparison.Ordinal) ? "~" : "-";
             SetReg(state, targetRegister, new UnaryExpr(operatorSymbol, RegValue(state, ctx, sourceRegister)));
         }
 
@@ -924,7 +924,7 @@ internal static class RegisterAnalyzer
         var source = IntAt(operands, 1);
         if (dest is int targetRegister && source is int sourceRegister)
         {
-            var targetType = mnemonic[(mnemonic.IndexOf("-to-", System.StringComparison.Ordinal) + 4)..];
+            var targetType = mnemonic[(mnemonic.IndexOf("-to-", StringComparison.Ordinal) + 4)..];
             SetReg(state, targetRegister, new CastExpr(targetType, RegValue(state, ctx, sourceRegister)));
         }
 
@@ -943,8 +943,8 @@ internal static class RegisterAnalyzer
         var second = IntAt(operands, 2);
         if (dest is int targetRegister && first is int firstRegister && second is int secondRegister)
         {
-            var owner = mnemonic.Contains("long", System.StringComparison.Ordinal) ? "java.lang.Long"
-                : mnemonic.Contains("float", System.StringComparison.Ordinal) ? "java.lang.Float"
+            var owner = mnemonic.Contains("long", StringComparison.Ordinal) ? "java.lang.Long"
+                : mnemonic.Contains("float", StringComparison.Ordinal) ? "java.lang.Float"
                 : "java.lang.Double";
             var compare = new MethodCallExpr(null, owner, "compare", "int",
                 [RegValue(state, ctx, firstRegister), RegValue(state, ctx, secondRegister)], isStatic: true);
@@ -1095,7 +1095,7 @@ internal static class RegisterAnalyzer
 
     private static string? ArithOp(string m)
     {
-        var baseName = m.Contains('/', System.StringComparison.Ordinal) ? m[..m.IndexOf('/')] : m;
+        var baseName = m.Contains('/', StringComparison.Ordinal) ? m[..m.IndexOf('/')] : m;
         var dash = baseName.IndexOf('-');
         if (dash <= 0) return null;
         var name = baseName[..dash];
@@ -1213,7 +1213,7 @@ internal static class RegisterAnalyzer
                 sb.Append('"').Append(value).Append('"');
                 break;
             default:
-                sb.Append(System.Convert.ToString(operand, System.Globalization.CultureInfo.InvariantCulture) ?? "?");
+                sb.Append(Convert.ToString(operand, System.Globalization.CultureInfo.InvariantCulture) ?? "?");
                 break;
         }
     }
