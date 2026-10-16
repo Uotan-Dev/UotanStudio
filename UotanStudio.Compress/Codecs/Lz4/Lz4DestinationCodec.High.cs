@@ -10,14 +10,14 @@ internal static unsafe partial class Lz4DestinationCodec
     private static uint LZ4HC_countPattern(byte* ip, byte* iEnd, uint pattern32)
     {
         const int ARCH = sizeof(reg_t);
-        byte* iStart = ip;
+        var iStart = ip;
         reg_t pattern = pattern32;
 
         pattern |= pattern << 32;
 
         while ((ip < iEnd - (ARCH - 1)))
         {
-            reg_t diff = Mem.PeekW(ip) ^ pattern;
+            var diff = Mem.PeekW(ip) ^ pattern;
             if (diff == 0)
             {
                 ip += ARCH;
@@ -28,7 +28,7 @@ internal static unsafe partial class Lz4DestinationCodec
             return (uint)(ip - iStart);
         }
 
-        reg_t patternByte = pattern;
+        var patternByte = pattern;
         while ((ip < iEnd) && (*ip == (byte)patternByte))
         {
             ip++;
@@ -54,20 +54,20 @@ internal static unsafe partial class Lz4DestinationCodec
             dictCtx_directive dict,
             HCfavor_e favorDecSpeed)
     {
-        ushort* chainTable = hc4->chainTable;
-        uint* HashTable = hc4->hashTable;
+        var chainTable = hc4->chainTable;
+        var HashTable = hc4->hashTable;
         LZ4_streamHC_t* dictCtx = hc4->dictCtx;
-        byte* @base = hc4->@base;
-        uint dictLimit = hc4->dictLimit;
-        byte* lowPrefixPtr = @base + dictLimit;
-        uint ipIndex = (uint)(ip - @base);
-        uint lowestMatchIndex = (hc4->lowLimit + (LZ4_DISTANCE_MAX + 1) > ipIndex)
+        var @base = hc4->@base;
+        var dictLimit = hc4->dictLimit;
+        var lowPrefixPtr = @base + dictLimit;
+        var ipIndex = (uint)(ip - @base);
+        var lowestMatchIndex = (hc4->lowLimit + (LZ4_DISTANCE_MAX + 1) > ipIndex)
             ? hc4->lowLimit : ipIndex - LZ4_DISTANCE_MAX;
-        byte* dictBase = hc4->dictBase;
-        int lookBackLength = (int)(ip - iLowLimit);
-        int nbAttempts = maxNbAttempts;
+        var dictBase = hc4->dictBase;
+        var lookBackLength = (int)(ip - iLowLimit);
+        var nbAttempts = maxNbAttempts;
         uint matchChainPos = 0;
-        uint pattern = Mem.Peek4(ip);
+        var pattern = Mem.Peek4(ip);
         uint matchIndex;
         repeat_state_e repeat = repeat_state_e.rep_untested;
         size_t srcPatternLength = 0;
@@ -77,7 +77,7 @@ internal static unsafe partial class Lz4DestinationCodec
 
         while ((matchIndex >= lowestMatchIndex) && (nbAttempts != 0))
         {
-            int matchLength = 0;
+            var matchLength = 0;
             nbAttempts--;
             Assert(matchIndex < ipIndex);
             if (favorDecSpeed != 0 && (ipIndex - matchIndex < 8))
@@ -85,7 +85,7 @@ internal static unsafe partial class Lz4DestinationCodec
             }
             else if (matchIndex >= dictLimit)
             {
-                byte* matchPtr = @base + matchIndex;
+                var matchPtr = @base + matchIndex;
                 Assert(matchPtr >= lowPrefixPtr);
                 Assert(matchPtr < ip);
                 Assert(longest >= 1);
@@ -94,7 +94,7 @@ internal static unsafe partial class Lz4DestinationCodec
                 {
                     if (Mem.Peek4(matchPtr) == pattern)
                     {
-                        int back = lookBackLength != 0 ? LZ4HC_countBack(
+                        var back = lookBackLength != 0 ? LZ4HC_countBack(
                             ip, matchPtr, iLowLimit, lowPrefixPtr) : 0;
                         matchLength = MINMATCH + (int)LZ4_count(
                             ip + MINMATCH, matchPtr + MINMATCH, iHighLimit);
@@ -110,12 +110,12 @@ internal static unsafe partial class Lz4DestinationCodec
             }
             else
             {
-                byte* matchPtr = dictBase + matchIndex;
+                var matchPtr = dictBase + matchIndex;
                 if (Mem.Peek4(matchPtr) == pattern)
                 {
-                    byte* dictStart = dictBase + hc4->lowLimit;
-                    int back = 0;
-                    byte* vLimit = ip + (dictLimit - matchIndex);
+                    var dictStart = dictBase + hc4->lowLimit;
+                    var back = 0;
+                    var vLimit = ip + (dictLimit - matchIndex);
                     if (vLimit > iHighLimit) vLimit = iHighLimit;
                     matchLength = (int)LZ4_count(ip + MINMATCH, matchPtr + MINMATCH, vLimit)
                         + MINMATCH;
@@ -141,11 +141,11 @@ internal static unsafe partial class Lz4DestinationCodec
                 Assert(lookBackLength == 0);
                 if (matchIndex + (uint)longest <= ipIndex)
                 {
-                    int kTrigger = 4;
+                    var kTrigger = 4;
                     uint distanceToNextMatch = 1;
-                    int end = longest - MINMATCH + 1;
-                    int step = 1;
-                    int accel = 1 << kTrigger;
+                    var end = longest - MINMATCH + 1;
+                    var step = 1;
+                    var accel = 1 << kTrigger;
                     int pos;
                     for (pos = 0; pos < end; pos += step)
                     {
@@ -173,7 +173,7 @@ internal static unsafe partial class Lz4DestinationCodec
                 uint distNextMatch = DELTANEXTU16(chainTable, matchIndex);
                 if (patternAnalysis && distNextMatch == 1 && matchChainPos == 0)
                 {
-                    uint matchCandidateIdx = matchIndex - 1;
+                    var matchCandidateIdx = matchIndex - 1;
                     if (repeat == repeat_state_e.rep_untested)
                     {
                         if (((pattern & 0xFFFF) == (pattern >> 16))
@@ -193,31 +193,31 @@ internal static unsafe partial class Lz4DestinationCodec
                         && (matchCandidateIdx >= lowestMatchIndex)
                         && LZ4HC_protectDictEnd(dictLimit, matchCandidateIdx))
                     {
-                        bool extDict = matchCandidateIdx < dictLimit;
-                        byte* matchPtr = (extDict ? dictBase : @base) + matchCandidateIdx;
+                        var extDict = matchCandidateIdx < dictLimit;
+                        var matchPtr = (extDict ? dictBase : @base) + matchCandidateIdx;
                         if (Mem.Peek4(matchPtr) == pattern)
                         {
-                            byte* dictStart = dictBase + hc4->lowLimit;
-                            byte* iLimit = extDict ? dictBase + dictLimit : iHighLimit;
-                            size_t forwardPatternLength = LZ4HC_countPattern(
+                            var dictStart = dictBase + hc4->lowLimit;
+                            var iLimit = extDict ? dictBase + dictLimit : iHighLimit;
+                            var forwardPatternLength = LZ4HC_countPattern(
                                 matchPtr + sizeof(uint), iLimit, pattern) + sizeof(uint);
                             if (extDict && matchPtr + forwardPatternLength == iLimit)
                             {
-                                uint rotatedPattern = LZ4HC_rotatePattern(
+                                var rotatedPattern = LZ4HC_rotatePattern(
                                     forwardPatternLength, pattern);
                                 forwardPatternLength += LZ4HC_countPattern(
                                     lowPrefixPtr, iHighLimit, rotatedPattern);
                             }
 
                             {
-                                byte* lowestMatchPtr = extDict ? dictStart : lowPrefixPtr;
-                                size_t backLength = LZ4HC_reverseCountPattern(
+                                var lowestMatchPtr = extDict ? dictStart : lowPrefixPtr;
+                                var backLength = LZ4HC_reverseCountPattern(
                                     matchPtr, lowestMatchPtr, pattern);
                                 size_t currentSegmentLength;
                                 if (!extDict && matchPtr - backLength == lowPrefixPtr
                                     && hc4->lowLimit < dictLimit)
                                 {
-                                    uint rotatedPattern = LZ4HC_rotatePattern(
+                                    var rotatedPattern = LZ4HC_rotatePattern(
                                         (uint)(-(int)backLength), pattern);
                                     backLength += LZ4HC_reverseCountPattern(
                                         dictBase + dictLimit, dictStart, rotatedPattern);
@@ -231,7 +231,7 @@ internal static unsafe partial class Lz4DestinationCodec
                                 if ((currentSegmentLength >= srcPatternLength)
                                     && (forwardPatternLength <= srcPatternLength))
                                 {
-                                    uint newMatchIndex = matchCandidateIdx
+                                    var newMatchIndex = matchCandidateIdx
                                         + (uint)forwardPatternLength
                                         - (uint)srcPatternLength;
                                     if (LZ4HC_protectDictEnd(dictLimit, newMatchIndex))
@@ -246,7 +246,7 @@ internal static unsafe partial class Lz4DestinationCodec
                                 }
                                 else
                                 {
-                                    uint newMatchIndex =
+                                    var newMatchIndex =
                                         matchCandidateIdx
                                         - (uint)backLength;
                                     if (!LZ4HC_protectDictEnd(dictLimit, newMatchIndex))
@@ -261,7 +261,7 @@ internal static unsafe partial class Lz4DestinationCodec
                                         matchIndex = newMatchIndex;
                                         if (lookBackLength == 0)
                                         {
-                                            size_t maxML = MIN(
+                                            var maxML = MIN(
                                                 currentSegmentLength, srcPatternLength);
                                             if ((size_t)longest < maxML)
                                             {
@@ -302,19 +302,19 @@ internal static unsafe partial class Lz4DestinationCodec
             && nbAttempts != 0
             && ipIndex - lowestMatchIndex < LZ4_DISTANCE_MAX)
         {
-            size_t dictEndOffset = (size_t)(dictCtx->end - dictCtx->@base);
-            uint dictMatchIndex = dictCtx->hashTable[LZ4HC_hashPtr(ip)];
+            var dictEndOffset = (size_t)(dictCtx->end - dictCtx->@base);
+            var dictMatchIndex = dictCtx->hashTable[LZ4HC_hashPtr(ip)];
             Assert(dictEndOffset <= 1 * GB);
             matchIndex = dictMatchIndex + lowestMatchIndex - (uint)dictEndOffset;
             while (ipIndex - matchIndex <= LZ4_DISTANCE_MAX && nbAttempts-- != 0)
             {
-                byte* matchPtr = dictCtx->@base + dictMatchIndex;
+                var matchPtr = dictCtx->@base + dictMatchIndex;
 
                 if (Mem.Peek4(matchPtr) == pattern)
                 {
                     int mlt;
-                    int back = 0;
-                    byte* vLimit = ip + (dictEndOffset - dictMatchIndex);
+                    var back = 0;
+                    var vLimit = ip + (dictEndOffset - dictMatchIndex);
                     if (vLimit > iHighLimit) vLimit = iHighLimit;
                     mlt = (int)LZ4_count(ip + MINMATCH, matchPtr + MINMATCH, vLimit)
                         + MINMATCH;
@@ -349,7 +349,7 @@ internal static unsafe partial class Lz4DestinationCodec
         bool patternAnalysis,
         dictCtx_directive dict)
     {
-        byte* uselessPtr = ip;
+        var uselessPtr = ip;
         return LZ4HC_InsertAndGetWiderMatch(
             hc4, ip, ip, iLimit, MINMATCH - 1, matchpos, &uselessPtr, maxNbAttempts,
             patternAnalysis, false, dict, HCfavor_e.favorCompressionRatio);
@@ -367,7 +367,7 @@ internal static unsafe partial class Lz4DestinationCodec
         match.len = 0;
         match.off = 0;
         byte* matchPtr = null;
-        int matchLength = LZ4HC_InsertAndGetWiderMatch(
+        var matchLength = LZ4HC_InsertAndGetWiderMatch(
             ctx, ip, ip, iHighLimit, minLen, &matchPtr, &ip, nbSearches,
             true,
             true, dict, favorDecSpeed);
@@ -395,7 +395,7 @@ internal static unsafe partial class Lz4DestinationCodec
         byte* oend)
     {
         size_t length;
-        byte* token = (*op)++;
+        var token = (*op)++;
 
         length = (size_t)(*ip - *anchor);
         if ((limit != 0) && ((*op + (length / 255) + length + (2 + 1 + LASTLITERALS)) > oend))
@@ -403,7 +403,7 @@ internal static unsafe partial class Lz4DestinationCodec
 
         if (length >= RUN_MASK)
         {
-            size_t len = length - RUN_MASK;
+            var len = length - RUN_MASK;
             *token = (byte)(RUN_MASK << ML_BITS);
             for (; len >= 255; len -= 255) *(*op)++ = 255;
             *(*op)++ = (byte)len;
@@ -467,18 +467,18 @@ internal static unsafe partial class Lz4DestinationCodec
         limitedOutput_directive limit,
         dictCtx_directive dict)
     {
-        int inputSize = *srcSizePtr;
-        bool patternAnalysis = (maxNbAttempts > 128);
+        var inputSize = *srcSizePtr;
+        var patternAnalysis = (maxNbAttempts > 128);
 
-        byte* ip = (byte*)source;
-        byte* anchor = ip;
-        byte* iend = ip + inputSize;
-        byte* mflimit = iend - MFLIMIT;
-        byte* matchlimit = (iend - LASTLITERALS);
+        var ip = (byte*)source;
+        var anchor = ip;
+        var iend = ip + inputSize;
+        var mflimit = iend - MFLIMIT;
+        var matchlimit = (iend - LASTLITERALS);
 
-        byte* optr = (byte*)dest;
-        byte* op = (byte*)dest;
-        byte* oend = op + maxOutputSize;
+        var optr = (byte*)dest;
+        var op = (byte*)dest;
+        var oend = op + maxOutputSize;
 
         int ml0, ml, ml2, ml3;
         byte* start0;
@@ -554,7 +554,7 @@ internal static unsafe partial class Lz4DestinationCodec
             if ((start2 - ip) < OPTIMAL_ML)
             {
                 int correction;
-                int new_ml = ml;
+                var new_ml = ml;
                 if (new_ml > OPTIMAL_ML) new_ml = OPTIMAL_ML;
                 if (ip + new_ml > start2 + ml2 - MINMATCH)
                     new_ml = (int)(start2 - ip) + ml2 - MINMATCH;
@@ -605,7 +605,7 @@ internal static unsafe partial class Lz4DestinationCodec
                 {
                     if (start2 < ip + ml)
                     {
-                        int correction = (int)(ip + ml - start2);
+                        var correction = (int)(ip + ml - start2);
                         start2 += correction;
                         ref2 += correction;
                         ml2 -= correction;
@@ -676,9 +676,9 @@ internal static unsafe partial class Lz4DestinationCodec
 
     _last_literals:
         {
-            size_t lastRunSize = (size_t)(iend - anchor);
-            size_t litLength = (lastRunSize + 255 - RUN_MASK) / 255;
-            size_t totalSize = 1 + litLength + lastRunSize;
+            var lastRunSize = (size_t)(iend - anchor);
+            var litLength = (lastRunSize + 255 - RUN_MASK) / 255;
+            var totalSize = 1 + litLength + lastRunSize;
             if (limit == limitedOutput_directive.fillOutput)
                 oend += LASTLITERALS;
             if (limit != 0 && (op + totalSize > oend))
@@ -695,7 +695,7 @@ internal static unsafe partial class Lz4DestinationCodec
 
             if (lastRunSize >= RUN_MASK)
             {
-                size_t accumulator = lastRunSize - RUN_MASK;
+                var accumulator = lastRunSize - RUN_MASK;
                 *op++ = (byte)(RUN_MASK << ML_BITS);
                 for (; accumulator >= 255; accumulator -= 255) *op++ = 255;
                 *op++ = (byte)accumulator;
@@ -740,15 +740,15 @@ internal static unsafe partial class Lz4DestinationCodec
         const int TRAILING_LITERALS = 3;
         LZ4HC_optimal_t* opt = stackalloc LZ4HC_optimal_t[LZ4_OPT_NUM + TRAILING_LITERALS];
 
-        byte* ip = (byte*)source;
-        byte* anchor = ip;
-        byte* iend = ip + *srcSizePtr;
-        byte* mflimit = iend - MFLIMIT;
-        byte* matchlimit = iend - LASTLITERALS;
-        byte* op = (byte*)dst;
-        byte* opSaved = (byte*)dst;
-        byte* oend = op + dstCapacity;
-        int overflowMatchLength = MINMATCH;
+        var ip = (byte*)source;
+        var anchor = ip;
+        var iend = ip + *srcSizePtr;
+        var mflimit = iend - MFLIMIT;
+        var matchlimit = iend - LASTLITERALS;
+        var op = (byte*)dst;
+        var opSaved = (byte*)dst;
+        var oend = op + dstCapacity;
+        var overflowMatchLength = MINMATCH;
         byte* overflowReference = null;
 
         *srcSizePtr = 0;
@@ -759,7 +759,7 @@ internal static unsafe partial class Lz4DestinationCodec
         Assert(ip - anchor < LZ4_MAX_INPUT_SIZE);
         while (ip <= mflimit)
         {
-            int llen = (int)(ip - anchor);
+            var llen = (int)(ip - anchor);
             int best_mlen, best_off;
             int cur, last_match_pos = 0;
 
@@ -773,8 +773,8 @@ internal static unsafe partial class Lz4DestinationCodec
 
             if ((size_t)firstMatch.len > sufficient_len)
             {
-                int firstML = firstMatch.len;
-                byte* matchPos = ip - firstMatch.off;
+                var firstML = firstMatch.len;
+                var matchPos = ip - firstMatch.off;
                 opSaved = op;
                 if (LZ4HC_encodeSequence(&ip, &op, &anchor, firstML, matchPos, limit, oend) != 0
                 )
@@ -791,7 +791,7 @@ internal static unsafe partial class Lz4DestinationCodec
                 int rPos;
                 for (rPos = 0; rPos < MINMATCH; rPos++)
                 {
-                    int cost = LZ4HC_literalsPrice(llen + rPos);
+                    var cost = LZ4HC_literalsPrice(llen + rPos);
                     opt[rPos].mlen = 1;
                     opt[rPos].off = 0;
                     opt[rPos].litlen = llen + rPos;
@@ -799,13 +799,13 @@ internal static unsafe partial class Lz4DestinationCodec
                 }
             }
             {
-                int mlen = MINMATCH;
-                int matchML = firstMatch.len;
-                int offset = firstMatch.off;
+                var mlen = MINMATCH;
+                var matchML = firstMatch.len;
+                var offset = firstMatch.off;
                 Assert(matchML < LZ4_OPT_NUM);
                 for (; mlen <= matchML; mlen++)
                 {
-                    int cost = LZ4HC_sequencePrice(llen, mlen);
+                    var cost = LZ4HC_sequencePrice(llen, mlen);
                     opt[mlen].mlen = mlen;
                     opt[mlen].off = offset;
                     opt[mlen].litlen = llen;
@@ -827,7 +827,7 @@ internal static unsafe partial class Lz4DestinationCodec
 
             for (cur = 1; cur < last_match_pos; cur++)
             {
-                byte* curPtr = ip + cur;
+                var curPtr = ip + cur;
                 LZ4HC_match_t newMatch;
 
                 if (curPtr > mflimit) break;
@@ -862,13 +862,13 @@ internal static unsafe partial class Lz4DestinationCodec
                 }
 
                 {
-                    int baseLitlen = opt[cur].litlen;
+                    var baseLitlen = opt[cur].litlen;
                     int litlen;
                     for (litlen = 1; litlen < MINMATCH; litlen++)
                     {
-                        int price = opt[cur].price - LZ4HC_literalsPrice(baseLitlen)
+                        var price = opt[cur].price - LZ4HC_literalsPrice(baseLitlen)
                             + LZ4HC_literalsPrice(baseLitlen + litlen);
-                        int pos = cur + litlen;
+                        var pos = cur + litlen;
                         if (price < opt[pos].price)
                         {
                             opt[pos].mlen = 1;
@@ -880,14 +880,14 @@ internal static unsafe partial class Lz4DestinationCodec
                 }
 
                 {
-                    int matchML = newMatch.len;
-                    int ml = MINMATCH;
+                    var matchML = newMatch.len;
+                    var ml = MINMATCH;
 
                     Assert(cur + newMatch.len < LZ4_OPT_NUM);
                     for (; ml <= matchML; ml++)
                     {
-                        int pos = cur + ml;
-                        int offset = newMatch.off;
+                        var pos = cur + ml;
+                        var offset = newMatch.off;
                         int price;
                         int ll;
                         if (opt[cur].mlen == 1)
@@ -939,14 +939,14 @@ internal static unsafe partial class Lz4DestinationCodec
             Assert(cur < LZ4_OPT_NUM);
             Assert(last_match_pos >= 1);
             {
-                int candidate_pos = cur;
-                int selected_matchLength = best_mlen;
-                int selected_offset = best_off;
+                var candidate_pos = cur;
+                var selected_matchLength = best_mlen;
+                var selected_offset = best_off;
                 while (true)
                 {
-                    int next_matchLength =
+                    var next_matchLength =
                         opt[candidate_pos].mlen;
-                    int next_offset = opt[candidate_pos].off;
+                    var next_offset = opt[candidate_pos].off;
                     opt[candidate_pos].mlen = selected_matchLength;
                     opt[candidate_pos].off = selected_offset;
                     selected_matchLength = next_matchLength;
@@ -960,11 +960,11 @@ internal static unsafe partial class Lz4DestinationCodec
             }
 
             {
-                int rPos = 0;
+                var rPos = 0;
                 while (rPos < last_match_pos)
                 {
-                    int ml = opt[rPos].mlen;
-                    int offset = opt[rPos].off;
+                    var ml = opt[rPos].mlen;
+                    var offset = opt[rPos].off;
                     if (ml == 1)
                     {
                         ip++;
@@ -989,9 +989,9 @@ internal static unsafe partial class Lz4DestinationCodec
 
     _last_literals:
         {
-            size_t lastRunSize = (size_t)(iend - anchor);
-            size_t litLength = (lastRunSize + 255 - RUN_MASK) / 255;
-            size_t totalSize = 1 + litLength + lastRunSize;
+            var lastRunSize = (size_t)(iend - anchor);
+            var litLength = (lastRunSize + 255 - RUN_MASK) / 255;
+            var totalSize = 1 + litLength + lastRunSize;
             if (limit == limitedOutput_directive.fillOutput)
                 oend += LASTLITERALS;
             if (limit != 0 && (op + totalSize > oend))
@@ -1008,7 +1008,7 @@ internal static unsafe partial class Lz4DestinationCodec
 
             if (lastRunSize >= RUN_MASK)
             {
-                size_t accumulator = lastRunSize - RUN_MASK;
+                var accumulator = lastRunSize - RUN_MASK;
                 *op++ = (byte)(RUN_MASK << ML_BITS);
                 for (; accumulator >= 255; accumulator -= 255) *op++ = 255;
                 *op++ = (byte)accumulator;

@@ -72,14 +72,75 @@ internal static class ZstdBlockCodec
             return 0;
         }
 
+        var clamped = Math.Clamp(level, MinimumLevel, MaximumLevel);
+        var lease = CompressorCache.Rent(clamped);
         try
         {
-            using var compressor = new Compressor(Math.Clamp(level, MinimumLevel, MaximumLevel));
-            return compressor.Wrap(source, destination);
+            return lease.Wrap(source, destination);
         }
         catch (ZstdException ex)
         {
             throw new CompressionException("ZSTD block compression failed. ZSTD 块压缩失败。", ex);
+        }
+        finally
+        {
+            CompressorCache.Return(clamped, lease);
+        }
+    }
+
+    /// <summary>
+    /// Caches one zstd compression context per level so a per-cluster loop reuses the context instead of
+    /// rebuilding it for every block.
+    /// <para>按级别各缓存一个 zstd 压缩上下文，使逐 cluster 的循环复用上下文而不必每块重建。</para>
+    /// </summary>
+    /// <remarks>
+    /// A zstd context carries the level's window state, so constructing one per block repeats that setup for every
+    /// cluster of an image. The cache hands out an exclusive owner per call and stores it back on return; a second
+    /// caller arriving while one is checked out constructs its own, so no caller ever waits on another. A context is
+    /// never shared concurrently and is therefore never observed in a half-consumed state.
+    /// <para>zstd 上下文承载该级别的窗口状态，每块新建就会让镜像的每个 cluster 重复一次搭建。该缓存每次借出
+    /// 独占所有者并在归还时存回；借用期间来的第二个调用方自行新建，因此不会有调用方等待他人。上下文从不并发共享，
+    /// 也就不会出现处于半消费状态被观测到的情况。</para>
+    /// </remarks>
+    private static class CompressorCache
+    {
+        private static readonly Lock Gate = new();
+        private static readonly Dictionary<int, Holder> Idle = [];
+
+        internal static Compressor Rent(int level)
+        {
+            lock (Gate)
+            {
+                return Idle.TryGetValue(level, out var holder) && holder.TryTake()
+                    ? holder.Value
+                    : new Compressor(level);
+            }
+        }
+
+        internal static void Return(int level, Compressor compressor)
+        {
+            lock (Gate)
+            {
+                Idle[level] = new Holder(compressor);
+            }
+        }
+
+        private sealed class Holder(Compressor value)
+        {
+            private Compressor? _value = value;
+
+            internal Compressor Value { get; } = value;
+
+            internal bool TryTake()
+            {
+                if (_value is null)
+                {
+                    return false;
+                }
+
+                _value = null;
+                return true;
+            }
         }
     }
 }

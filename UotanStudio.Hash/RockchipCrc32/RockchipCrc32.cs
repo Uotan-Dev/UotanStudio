@@ -47,7 +47,7 @@ public static class RockchipCrc32
         var table = new uint[256];
         for (var value = 0; value < 256; value++)
         {
-            uint entry = (uint)value << 24;
+            var entry = (uint)value << 24;
             for (var bit = 0; bit < 8; bit++)
             {
                 entry = (entry & 0x80000000) != 0 ? (entry << 1) ^ 0x04C10DB7u : entry << 1;

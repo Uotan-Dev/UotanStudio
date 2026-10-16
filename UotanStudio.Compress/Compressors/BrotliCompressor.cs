@@ -269,5 +269,5 @@ public static class BrotliCompressor
     /// <para>统一压缩选项；仅读取 <see cref="CompressionOptions.Level"/>。</para></param>
     /// <returns>Options whose quality is the mapped value. <para>质量为映射结果的选项。</para></returns>
     private static BrotliCompressionOptions EncoderOptions(CompressionOptions? options)
-        => new() { Quality = Internal.CompressionLevelMapper.ToBrotliQuality(options?.Level) };
+        => new() { Quality = CompressionLevelMapper.ToBrotliQuality(options?.Level) };
 }

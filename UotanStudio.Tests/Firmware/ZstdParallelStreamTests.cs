@@ -1,5 +1,6 @@
 using UotanStudio.Compress;
 using UotanStudio.Compress.Compressors;
+using UotanStudio.Compress.Files;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -7,9 +8,10 @@ namespace UotanStudio.Tests.Firmware;
 /// <summary>
 /// Guards the chunked zstd stream path: a pooled encoder context per parallel slot must reproduce the
 /// fresh-context reference bytes, the degree must not change the container, and a non-seekable source must
-/// keep falling back to the single streaming frame.
+/// still reach the parallel path so the outcome cannot depend on whether the caller wrapped the source for
+/// progress reporting.
 /// <para>守护分块 zstd 流式路径：每个并行槽复用编码器上下文时必须复现新建上下文的参照字节，并行度不得改变容器，
-/// 不可寻址源必须继续回退到单帧流式路径。</para>
+/// 不可寻址源必须同样进入并行路径，使结果不再取决于调用方是否为上报进度而包装过源流。</para>
 /// </summary>
 public class ZstdParallelStreamTests
 {
@@ -43,22 +45,30 @@ public class ZstdParallelStreamTests
     }
 
     [Fact]
-    public void Compress_UnseekableStream_MatchesSequentialSingleFrameResult()
+    public void Compress_UnseekableStream_ParallelizesAndRoundTrips()
     {
         var payload = BuildPayload(4 * ChunkSize);
         using var sequential = new MemoryStream();
         ZstdCompressor.Compress(new MemoryStream(payload), sequential,
+            new CompressionOptions { Level = Level });
+
+        using var seekableChunked = new MemoryStream();
+        ZstdCompressor.Compress(new MemoryStream(payload), seekableChunked,
             new CompressionOptions { Level = Level, MaxDegreeOfParallelism = 8 });
 
         using var chunked = new MemoryStream();
         ZstdCompressor.Compress(new NonSeekableStream(payload), chunked,
             new CompressionOptions { Level = Level, MaxDegreeOfParallelism = 8 });
 
-        using var single = new MemoryStream();
-        ZstdCompressor.Compress(new MemoryStream(payload), single, new CompressionOptions { Level = Level });
+        var chunkedBytes = chunked.ToArray();
+        Assert.Equal(seekableChunked.ToArray(), chunkedBytes);
+        Assert.NotEqual(sequential.ToArray(), chunkedBytes);
+        Assert.True(CountFrames(chunkedBytes) >= 2,
+            $"A non-seekable source with workers must emit several frames, saw {CountFrames(chunkedBytes)}.");
 
-        Assert.NotEqual(sequential.ToArray(), chunked.ToArray());
-        Assert.Equal(single.ToArray(), chunked.ToArray());
+        using var decoded = new MemoryStream();
+        ZstdCompressor.Decompress(new MemoryStream(chunkedBytes), decoded);
+        Assert.Equal(payload, decoded.ToArray());
     }
 
     [Fact]
@@ -104,6 +114,45 @@ public class ZstdParallelStreamTests
         ZstdCompressor.Decompress(source, restored);
         Assert.Equal(payload, restored.ToArray());
         Assert.Equal(expected, compressed);
+    }
+
+    [Fact]
+    public void CompressFile_ProgressCallback_KeepsZstdParallelFrames()
+    {
+        var payload = BuildPayload(4 * ChunkSize);
+        var source = Path.Combine(Path.GetTempPath(), $"uotan-zstd-progress-{Guid.NewGuid():N}.bin");
+        var withProgress = source + ".with-progress.zst";
+        var withoutProgress = source + ".without-progress.zst";
+        try
+        {
+            File.WriteAllBytes(source, payload);
+            var options = new CompressionOptions { Level = Level, MaxDegreeOfParallelism = 8 };
+
+            CompressionFile.CompressFile(source, withoutProgress, CompressionFormat.Zstd, options,
+                cancellationToken: TestContext.Current.CancellationToken);
+            CompressionFile.CompressFile(source, withProgress, CompressionFormat.Zstd, options,
+                new InlineProgress(), TestContext.Current.CancellationToken);
+
+            var withBytes = File.ReadAllBytes(withProgress);
+            var withoutBytes = File.ReadAllBytes(withoutProgress);
+            Assert.Equal(withoutBytes, withBytes);
+            Assert.True(CountFrames(withBytes) >= 2,
+                $"Progress reporting must not collapse the parallel frames, saw {CountFrames(withBytes)}.");
+        }
+        finally
+        {
+            foreach (var path in new[] { source, withProgress, withoutProgress })
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+        }
+    }
+
+    private sealed class InlineProgress : IProgress<(long Processed, long Total)>
+    {
+        public void Report((long Processed, long Total) value)
+        {
+        }
     }
 
     private static byte[] CompressStream(byte[] payload, CompressionOptions options)

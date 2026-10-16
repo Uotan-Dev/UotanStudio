@@ -21,36 +21,36 @@ internal static unsafe partial class Lz4DestinationCodec
         int acceleration)
     {
         int result;
-        byte* ip = (byte*)source;
+        var ip = (byte*)source;
 
-        uint startIndex = cctx->currentOffset;
-        byte* @base = (byte*)source - startIndex;
+        var startIndex = cctx->currentOffset;
+        var @base = (byte*)source - startIndex;
         byte* lowLimit;
 
         LZ4_stream_t* dictCtx = (LZ4_stream_t*)cctx->dictCtx;
-        byte* dictionary =
+        var dictionary =
             dictDirective == dict_directive.usingDictCtx ? dictCtx->dictionary
                 : cctx->dictionary;
-        uint dictSize =
+        var dictSize =
             dictDirective == dict_directive.usingDictCtx ? dictCtx->dictSize : cctx->dictSize;
-        uint dictDelta = (dictDirective == dict_directive.usingDictCtx)
+        var dictDelta = (dictDirective == dict_directive.usingDictCtx)
             ? startIndex - dictCtx->currentOffset : 0;
 
-        bool maybe_extMem = (dictDirective == dict_directive.usingExtDict)
+        var maybe_extMem = (dictDirective == dict_directive.usingExtDict)
             || (dictDirective == dict_directive.usingDictCtx);
-        uint prefixIdxLimit = startIndex - dictSize;
-        byte* dictEnd = dictionary + dictSize;
-        byte* anchor = (byte*)source;
-        byte* iend = ip + inputSize;
-        byte* mflimitPlusOne = iend - MFLIMIT + 1;
-        byte* matchlimit = iend - LASTLITERALS;
+        var prefixIdxLimit = startIndex - dictSize;
+        var dictEnd = dictionary + dictSize;
+        var anchor = (byte*)source;
+        var iend = ip + inputSize;
+        var mflimitPlusOne = iend - MFLIMIT + 1;
+        var matchlimit = iend - LASTLITERALS;
 
-        byte* dictBase = (dictDirective == dict_directive.usingDictCtx) ?
+        var dictBase = (dictDirective == dict_directive.usingDictCtx) ?
             dictionary + dictSize - dictCtx->currentOffset :
             dictionary + dictSize - startIndex;
 
-        byte* op = (byte*)dest;
-        byte* olimit = op + maxOutputSize;
+        var op = (byte*)dest;
+        var olimit = op + maxOutputSize;
 
         uint offset = 0;
         uint forwardH;
@@ -98,12 +98,12 @@ internal static unsafe partial class Lz4DestinationCodec
 
             if (tableType == tableType_t.byPtr)
             {
-                byte* forwardIp = ip;
-                int step = 1;
-                int searchMatchNb = acceleration << LZ4_skipTrigger;
+                var forwardIp = ip;
+                var step = 1;
+                var searchMatchNb = acceleration << LZ4_skipTrigger;
                 do
                 {
-                    uint h = forwardH;
+                    var h = forwardH;
                     ip = forwardIp;
                     forwardIp += step;
                     step = (searchMatchNb++ >> LZ4_skipTrigger);
@@ -121,14 +121,14 @@ internal static unsafe partial class Lz4DestinationCodec
             else
             {
 
-                byte* forwardIp = ip;
-                int step = 1;
-                int searchMatchNb = acceleration << LZ4_skipTrigger;
+                var forwardIp = ip;
+                var step = 1;
+                var searchMatchNb = acceleration << LZ4_skipTrigger;
                 do
                 {
-                    uint h = forwardH;
-                    uint current = (uint)(forwardIp - @base);
-                    uint matchIndex = LZ4_getIndexOnHash(h, cctx->hashTable, tableType);
+                    var h = forwardH;
+                    var current = (uint)(forwardIp - @base);
+                    var matchIndex = LZ4_getIndexOnHash(h, cctx->hashTable, tableType);
                     Assert(matchIndex <= current);
                     Assert(forwardIp - @base < (2 * GB - 1));
                     ip = forwardIp;
@@ -226,7 +226,7 @@ internal static unsafe partial class Lz4DestinationCodec
 
                 if (litLength >= RUN_MASK)
                 {
-                    int len = (int)(litLength - RUN_MASK);
+                    var len = (int)(litLength - RUN_MASK);
                     *token = (byte)(RUN_MASK << ML_BITS);
                     for (; len >= 255; len -= 255) *op++ = 255;
                     *op++ = (byte)len;
@@ -266,14 +266,14 @@ internal static unsafe partial class Lz4DestinationCodec
                         || dictDirective == dict_directive.usingDictCtx)
                     && (lowLimit == dictionary))
                 {
-                    byte* limit = ip + (dictEnd - match);
+                    var limit = ip + (dictEnd - match);
                     Assert(dictEnd > match);
                     if (limit > matchlimit) limit = matchlimit;
                     matchCode = LZ4_count(ip + MINMATCH, match + MINMATCH, limit);
                     ip += (uint)matchCode + MINMATCH;
                     if (ip == limit)
                     {
-                        uint more = LZ4_count(limit, (byte*)source, matchlimit);
+                        var more = LZ4_count(limit, (byte*)source, matchlimit);
                         matchCode += more;
                         ip += more;
                     }
@@ -289,7 +289,7 @@ internal static unsafe partial class Lz4DestinationCodec
                 {
                     if (outputDirective == limitedOutput_directive.fillOutput)
                     {
-                        uint newMatchCode =
+                        var newMatchCode =
                             15 - 1 + ((uint)(olimit - op) - 1 - LASTLITERALS) * 255;
                         ip -= matchCode - newMatchCode;
                         Assert(newMatchCode < matchCode);
@@ -299,7 +299,7 @@ internal static unsafe partial class Lz4DestinationCodec
                             byte* ptr;
                             for (ptr = ip; ptr <= filledIp; ++ptr)
                             {
-                                uint h = LZ4_hashPosition(ptr, tableType);
+                                var h = LZ4_hashPosition(ptr, tableType);
                                 LZ4_clearHash(h, cctx->hashTable, tableType);
                             }
                         }
@@ -353,9 +353,9 @@ internal static unsafe partial class Lz4DestinationCodec
             else
             {
 
-                uint h = LZ4_hashPosition(ip, tableType);
-                uint current = (uint)(ip - @base);
-                uint matchIndex = LZ4_getIndexOnHash(h, cctx->hashTable, tableType);
+                var h = LZ4_hashPosition(ip, tableType);
+                var current = (uint)(ip - @base);
+                var matchIndex = LZ4_getIndexOnHash(h, cctx->hashTable, tableType);
                 Assert(matchIndex < current);
                 if (dictDirective == dict_directive.usingDictCtx)
                 {

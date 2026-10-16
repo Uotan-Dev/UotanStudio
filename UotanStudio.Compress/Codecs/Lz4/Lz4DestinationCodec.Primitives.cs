@@ -233,16 +233,16 @@ internal static unsafe partial class Lz4DestinationCodec
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void LZ4HC_Insert(LZ4_streamHC_t* hc4, byte* ip)
     {
-        ushort* chainTable = hc4->chainTable;
-        uint* hashTable = hc4->hashTable;
-        byte* @base = hc4->@base;
-        uint target = (uint)(ip - @base);
-        uint idx = hc4->nextToUpdate;
+        var chainTable = hc4->chainTable;
+        var hashTable = hc4->hashTable;
+        var @base = hc4->@base;
+        var target = (uint)(ip - @base);
+        var idx = hc4->nextToUpdate;
 
         while (idx < target)
         {
-            uint h = LZ4HC_hashPtr(@base + idx);
-            uint delta = idx - hashTable[h];
+            var h = LZ4HC_hashPtr(@base + idx);
+            var delta = idx - hashTable[h];
             if (delta > LZ4_DISTANCE_MAX) delta = LZ4_DISTANCE_MAX;
             DELTANEXTU16(chainTable, idx) = (ushort)delta;
             hashTable[h] = idx;
@@ -296,12 +296,12 @@ internal static unsafe partial class Lz4DestinationCodec
         LZ4_streamHC_t* LZ4_streamHCPtr, byte* safeBuffer, int dictSize)
     {
         LZ4_streamHC_t* streamPtr = LZ4_streamHCPtr;
-        int prefixSize = (int)(streamPtr->end - (streamPtr->@base + streamPtr->dictLimit));
+        var prefixSize = (int)(streamPtr->end - (streamPtr->@base + streamPtr->dictLimit));
         if (dictSize > 64 * KB) dictSize = 64 * KB;
         if (dictSize < 4) dictSize = 0;
         if (dictSize > prefixSize) dictSize = prefixSize;
         Mem.Move(safeBuffer, streamPtr->end - dictSize, dictSize);
-        uint endIndex = (uint)(streamPtr->end - streamPtr->@base);
+        var endIndex = (uint)(streamPtr->end - streamPtr->@base);
         streamPtr->end = (byte*)safeBuffer + dictSize;
         streamPtr->@base = streamPtr->end - endIndex;
         streamPtr->dictLimit = endIndex - (uint)dictSize;
@@ -342,8 +342,8 @@ internal static unsafe partial class Lz4DestinationCodec
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int LZ4HC_countBack(byte* ip, byte* match, byte* iMin, byte* mMin)
     {
-        int back = 0;
-        int min = (int)MAX(iMin - ip, mMin - match);
+        var back = 0;
+        var min = (int)MAX(iMin - ip, mMin - match);
         Assert(min <= 0);
         Assert(ip >= iMin);
         Assert((size_t)(ip - iMin) < (1U << 31));
@@ -358,7 +358,7 @@ internal static unsafe partial class Lz4DestinationCodec
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static uint LZ4HC_reverseCountPattern(byte* ip, byte* iLow, uint pattern)
     {
-        byte* iStart = ip;
+        var iStart = ip;
 
         while ((ip >= iLow + 4))
         {
@@ -368,7 +368,7 @@ internal static unsafe partial class Lz4DestinationCodec
         }
 
         {
-            byte* bytePtr = (byte*)(&pattern) + 3;
+            var bytePtr = (byte*)(&pattern) + 3;
             while ((ip > iLow))
             {
                 if (ip[-1] != *bytePtr) break;
@@ -383,7 +383,7 @@ internal static unsafe partial class Lz4DestinationCodec
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static uint LZ4HC_rotatePattern(size_t rotate, uint pattern)
     {
-        size_t bitsToRotate = (rotate & (sizeof(uint) - 1)) << 3;
+        var bitsToRotate = (rotate & (sizeof(uint) - 1)) << 3;
         if (bitsToRotate == 0)
             return pattern;
         return LZ4HC_rotl32(pattern, (int)bitsToRotate);
@@ -392,7 +392,7 @@ internal static unsafe partial class Lz4DestinationCodec
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int LZ4HC_literalsPrice(int litlen)
     {
-        int price = litlen;
+        var price = litlen;
         Assert(litlen >= 0);
         if (litlen >= (int)RUN_MASK)
             price += 1 + ((litlen - (int)RUN_MASK) / 255);
@@ -402,7 +402,7 @@ internal static unsafe partial class Lz4DestinationCodec
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int LZ4HC_sequencePrice(int litlen, int mlen)
     {
-        int price = 1 + 2;
+        var price = 1 + 2;
         Assert(litlen >= 0);
         Assert(mlen >= MINMATCH);
 

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using UotanStudio.Compress.Codecs.Lzo;
+using UotanStudio.Compress.Internal;
 
 namespace UotanStudio.Compress.Compressors;
 
@@ -110,6 +111,31 @@ internal static class LzopCompressor
     /// <exception cref="CompressionException">The magic is wrong, the version is below 0x0900, a header field is truncated, the header checksum does not match, an LZO filter is declared, a block size is above 64 MiB or larger than its uncompressed size, a per-block Adler-32 or CRC-32 declared by the header flags mismatches, a block does not decode to its declared size, the output limit is reached, or the stream ends early.
     /// <para>魔数错误、版本低于 0x0900、头部字段被截断、头部校验和不匹配、声明了 LZO 过滤器、块大小超过 64 MiB 或大于其未压缩大小、头部标志声明的块级 Adler-32 或 CRC-32 不匹配、块解码结果与声明大小不符、达到输出上限，或流提前结束。</para></exception>
     public static void Decompress(Stream input, Stream output, long maximumOutputBytes)
+        => Decompress(input, output, maximumOutputBytes, maxDegreeOfParallelism: null);
+
+    /// <summary>
+    /// Streams LZOP blocks to the output with an optional per-block parallelism degree.
+    /// <para>逐块流式解压 LZOP 数据，并可指定逐块并行度。</para>
+    /// </summary>
+    /// <param name="input">
+    /// Readable payload positioned at its magic; blocks are read in ascending order and only the bytes up to the terminating zero block are consumed. The stream is not closed.
+    /// <para>定位在魔数处的可读数据；块按升序读取，只消费到终止零块为止的字节，不会关闭该流。</para></param>
+    /// <param name="output">
+    /// Writable destination receiving blocks strictly in block order, so a later failure leaves the earlier blocks written; it is not closed.
+    /// <para>严格按块顺序接收块的写入目标，因此后续失败时前面的块已写出；不会被本调用关闭。</para></param>
+    /// <param name="maximumOutputBytes">
+    /// Inclusive cap on the decoded total; the declared block size is checked against the remaining budget as each block is read, so a payload needing more than the budget is refused before its bytes are decoded.
+    /// <para>解压总量的含上限；读取每个块时即用剩余预算检查其声明大小，超出预算的数据在解码前即被拒绝。</para></param>
+    /// <param name="maxDegreeOfParallelism">
+    /// <see langword="null"/> or 1 and below decodes blocks sequentially; above 1 decodes that many blocks concurrently, capped by the number of blocks staged in one batch, while the bytes written and therefore the output remain identical to the sequential run.
+    /// <para>为 <see langword="null"/> 或小于等于 1 时串行解码各块；大于 1 时并发解码相应数量的块（不超过单个批次内的块数），写出的字节及其顺序与串行结果完全一致。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumOutputBytes"/> is negative.
+    /// <para><paramref name="maximumOutputBytes"/> 为负数。</para></exception>
+    /// <exception cref="CompressionException">The magic is wrong, the version is below 0x0900, a header field is truncated, the header checksum does not match, an LZO filter is declared, a block size is above 64 MiB or larger than its uncompressed size, a per-block Adler-32 or CRC-32 declared by the header flags mismatches, a block does not decode to its declared size, the output limit is reached, or the stream ends early.
+    /// <para>魔数错误、版本低于 0x0900、头部字段被截断、头部校验和不匹配、声明了 LZO 过滤器、块大小超过 64 MiB 或大于其未压缩大小、头部标志声明的块级 Adler-32 或 CRC-32 不匹配、块解码结果与声明大小不符、达到输出上限，或流提前结束。</para></exception>
+    public static void Decompress(Stream input, Stream output, long maximumOutputBytes, int? maxDegreeOfParallelism)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(output);
@@ -173,50 +199,74 @@ internal static class LzopCompressor
             var hasUncompressedCrc32 = (flags & FCrc32U) != 0;
             var hasCompressedAdler32 = (flags & FAdler32C) != 0;
             var hasCompressedCrc32 = (flags & FCrc32C) != 0;
+            var checks = new BlockChecks
+            {
+                HasUncompressedAdler32 = hasUncompressedAdler32,
+                HasUncompressedCrc32 = hasUncompressedCrc32,
+                HasCompressedAdler32 = hasCompressedAdler32,
+                HasCompressedCrc32 = hasCompressedCrc32,
+            };
+
             long totalOutput = 0;
+            var degree = Parallelism.Resolve(maxDegreeOfParallelism, int.MaxValue);
+            var staged = new List<DecompressedBlock>(degree);
             while (true)
             {
-                var uncompressedSize = ReadUInt32(input, "block size");
-                if (uncompressedSize == 0) return;
-                var compressedSize = ReadUInt32(input, "compressed block size");
-
-                if (compressedSize > uncompressedSize || compressedSize > MaximumBlockSize || uncompressedSize > MaximumBlockSize)
-                    throw new CompressionException($"Invalid LZOP block size (supported maximum {MaximumBlockSize} bytes) 无效的 LZOP 块大小。");
-                var remainingOutputBytes = maximumOutputBytes - totalOutput;
-                if (compressedSize > remainingOutputBytes || uncompressedSize > remainingOutputBytes)
-                    throw new CompressionException($"LZOP block exceeds the output limit of {maximumOutputBytes} bytes.");
-
-                var uncompressedAdler32 = hasUncompressedAdler32 ? ReadUInt32(input, "uncompressed Adler-32") : 0;
-                var uncompressedCrc32 = hasUncompressedCrc32 ? ReadUInt32(input, "uncompressed CRC-32") : 0;
-                var compressedAdler32 = hasCompressedAdler32 && compressedSize < uncompressedSize
-                    ? ReadUInt32(input, "compressed Adler-32") : uncompressedAdler32;
-                var compressedCrc32 = hasCompressedCrc32 && compressedSize < uncompressedSize
-                    ? ReadUInt32(input, "compressed CRC-32") : uncompressedCrc32;
-                var block = ReadBytes(input, (int)compressedSize, "block data");
-                if (hasCompressedAdler32 && Adler32(block, 0, block.Length) != compressedAdler32)
-                    throw new CompressionException("Invalid LZOP data: compressed Adler-32 mismatch.");
-                if (hasCompressedCrc32 && Crc32Hash(block, 0, block.Length) != compressedCrc32)
-                    throw new CompressionException("Invalid LZOP data: compressed CRC-32 mismatch.");
-
-                byte[] decoded;
-                if (compressedSize == uncompressedSize)
+                staged.Clear();
+                var ended = false;
+                while (staged.Count < degree)
                 {
-                    decoded = block;
-                }
-                else
-                {
-                    decoded = new byte[(int)uncompressedSize];
-                    var count = Lzo1xDecompressSafe(block, 0, block.Length, decoded);
-                    if (count != decoded.Length)
-                        throw new CompressionException($"Invalid LZOP data: block decompressed to {count} bytes, expected {uncompressedSize}.");
+                    var uncompressedSize = ReadUInt32(input, "block size");
+                    if (uncompressedSize == 0)
+                    {
+                        ended = true;
+                        break;
+                    }
+
+                    var compressedSize = ReadUInt32(input, "compressed block size");
+
+                    if (compressedSize > uncompressedSize || compressedSize > MaximumBlockSize || uncompressedSize > MaximumBlockSize)
+                        throw new CompressionException($"Invalid LZOP block size (supported maximum {MaximumBlockSize} bytes) 无效的 LZOP 块大小。");
+                    var remainingOutputBytes = maximumOutputBytes - totalOutput;
+                    if (compressedSize > remainingOutputBytes || uncompressedSize > remainingOutputBytes)
+                        throw new CompressionException($"LZOP block exceeds the output limit of {maximumOutputBytes} bytes.");
+
+                    var uncompressedAdler32 = hasUncompressedAdler32 ? ReadUInt32(input, "uncompressed Adler-32") : 0;
+                    var uncompressedCrc32 = hasUncompressedCrc32 ? ReadUInt32(input, "uncompressed CRC-32") : 0;
+                    var compressedAdler32 = hasCompressedAdler32 && compressedSize < uncompressedSize
+                        ? ReadUInt32(input, "compressed Adler-32") : uncompressedAdler32;
+                    var compressedCrc32 = hasCompressedCrc32 && compressedSize < uncompressedSize
+                        ? ReadUInt32(input, "compressed CRC-32") : uncompressedCrc32;
+                    var block = ReadBytes(input, (int)compressedSize, "block data");
+
+                    totalOutput = checked(totalOutput + uncompressedSize);
+                    staged.Add(new DecompressedBlock(block, (int)uncompressedSize, uncompressedAdler32, uncompressedCrc32, compressedAdler32, compressedCrc32));
                 }
 
-                if (hasUncompressedAdler32 && Adler32(decoded, 0, decoded.Length) != uncompressedAdler32)
-                    throw new CompressionException("Invalid LZOP data: uncompressed Adler-32 mismatch.");
-                if (hasUncompressedCrc32 && Crc32Hash(decoded, 0, decoded.Length) != uncompressedCrc32)
-                    throw new CompressionException("Invalid LZOP data: uncompressed CRC-32 mismatch.");
-                output.Write(decoded);
-                totalOutput = checked(totalOutput + decoded.Length);
+                if (staged.Count > 1)
+                {
+                    var slots = staged;
+                    var plan = checks;
+                    Parallel.For(
+                        0, slots.Count,
+                        new ParallelOptions { MaxDegreeOfParallelism = Math.Min(degree, slots.Count) },
+                        i => slots[i].Decode(plan));
+                }
+                else if (staged.Count == 1)
+                {
+                    staged[0].Decode(checks);
+                }
+
+                foreach (var slot in staged)
+                {
+                    slot.ThrowIfFailed();
+                    output.Write(slot.Decoded, 0, slot.Decoded.Length);
+                }
+
+                if (ended)
+                {
+                    return;
+                }
             }
         }
         catch (CompressionException) { throw; }
@@ -268,6 +318,26 @@ internal static class LzopCompressor
     /// <exception cref="CompressionException">Reading, writing or an arithmetic overflow while sizing the output failed.
     /// <para>读取、写入失败，或计算输出大小时发生算术溢出。</para></exception>
     public static void Compress(Stream input, Stream output)
+        => Compress(input, output, maxDegreeOfParallelism: null);
+
+    /// <summary>
+    /// Compresses the input stream into the LZOP (lzop) format in 256 KiB blocks with an optional parallelism degree.
+    /// <para>将输入流按 256 KiB 块压缩为 LZOP（lzop）格式，并可指定并行度。</para>
+    /// </summary>
+    /// <param name="input">
+    /// Readable source drained block by block until end of stream, so the plaintext is never held in memory as a whole beyond the staged batch; ownership stays with the caller.
+    /// <para>逐块读取直至流末尾的可读源流，除已暂存的批次外明文不会整体驻留内存；所有权归调用方。</para></param>
+    /// <param name="output">
+    /// Writable destination appended from its current position and left open; blocks are emitted strictly in input order, so the container bytes are identical for every degree.
+    /// <para>从当前位置追加并保持打开的写入目标；块严格按输入顺序写出，因此任何并行度下容器字节都完全一致。</para></param>
+    /// <param name="maxDegreeOfParallelism">
+    /// <see langword="null"/> or 1 and below encodes blocks sequentially; above 1 encodes that many blocks concurrently, capped by the number of blocks staged in one batch, while each block is still written in input order and the container bytes stay identical to the sequential result.
+    /// <para>为 <see langword="null"/> 或小于等于 1 时串行编码各块；大于 1 时并发编码相应数量的块（不超过单个批次内的块数），各块仍按输入顺序写出，容器字节与串行结果完全一致。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="CompressionException">Reading, writing or an arithmetic overflow while sizing the output failed.
+    /// <para>读取、写入失败，或计算输出大小时发生算术溢出。</para></exception>
+    public static void Compress(Stream input, Stream output, int? maxDegreeOfParallelism)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(output);
@@ -275,16 +345,59 @@ internal static class LzopCompressor
         try
         {
             WriteHeader(output);
-            var buffer = new byte[CompressBlockSize];
+            var degree = Parallelism.Resolve(maxDegreeOfParallelism, int.MaxValue);
+            var buffers = new byte[degree][];
+            for (var slot = 0; slot < degree; slot++)
+            {
+                buffers[slot] = new byte[CompressBlockSize];
+            }
+
+            var encoded = degree == 1 ? null : new EncodedBlock[degree];
             while (true)
             {
-                var blockLength = ReadChunk(input, buffer);
-                if (blockLength == 0)
+                var pending = 0;
+                while (pending < degree)
+                {
+                    var blockLength = ReadChunk(input, buffers[pending]);
+                    if (blockLength == 0)
+                    {
+                        break;
+                    }
+
+                    if (degree == 1)
+                    {
+                        WriteBlock(output, buffers[0], blockLength);
+                    }
+                    else
+                    {
+                        encoded![pending] = new EncodedBlock(buffers[pending], blockLength);
+                    }
+
+                    pending++;
+                }
+
+                if (degree > 1 && pending > 0)
+                {
+                    var blocks = encoded!;
+                    var count = pending;
+                    Parallel.For(
+                        0, count,
+                        new ParallelOptions { MaxDegreeOfParallelism = Math.Min(degree, count) },
+                        i => blocks[i].Encode());
+
+                    for (var i = 0; i < count; i++)
+                    {
+                        var block = blocks[i];
+                        block.ThrowIfFailed();
+                        WriteBlock(output, block.Payload, block.PayloadLength, block.UncompressedLength, block.UncompressedAdler32);
+                        blocks[i] = null!;
+                    }
+                }
+
+                if (pending < degree)
                 {
                     break;
                 }
-
-                WriteBlock(output, buffer, blockLength);
             }
 
             WriteUInt32BigEndian(output, 0);
@@ -314,7 +427,7 @@ internal static class LzopCompressor
         header[position++] = 0;
 
         output.Write(header);
-        WriteUInt32BigEndian(output, UotanStudio.Hash.Adler32.Adler32.Compute(header));
+        WriteUInt32BigEndian(output, Hash.Adler32.Adler32.Compute(header));
     }
 
     private static void WriteBlock(Stream output, byte[] uncompressed, int uncompressedLength)
@@ -336,9 +449,28 @@ internal static class LzopCompressor
 
         }
 
+        WriteBlock(output, block, blockLength, uncompressedLength, Adler32(uncompressed, 0, uncompressedLength));
+    }
+
+    /// <summary>
+    /// Writes one LZOP block from an already chosen payload, emitting both sizes and the checksums the header flags require.
+    /// <para>依据已选定的载荷写出一个 LZOP 块，输出两个大小以及头部标志要求的校验和。</para>
+    /// </summary>
+    /// <param name="output">Destination appended in place; it is not closed.
+    /// <para>就地追加的写入目标，不会被本调用关闭。</para></param>
+    /// <param name="block">Stored bytes, either the LZO1X-1 candidate or the original plaintext when it was not smaller.
+    /// <para>实际存储的字节，即 LZO1X-1 候选结果，或其未更小时的原明文。</para></param>
+    /// <param name="blockLength">Number of bytes stored from <paramref name="block"/>.
+    /// <para><paramref name="block"/> 中实际存储的字节数。</para></param>
+    /// <param name="uncompressedLength">Original plaintext length recorded in the block header.
+    /// <para>写入块头的原始明文长度。</para></param>
+    /// <param name="uncompressedAdler32">Adler-32 of the original plaintext, which is stored whether or not the block was compressed.
+    /// <para>原始明文的 Adler-32；无论该块是否被压缩都会写入。</para></param>
+    private static void WriteBlock(Stream output, byte[] block, int blockLength, int uncompressedLength, uint uncompressedAdler32)
+    {
         WriteUInt32BigEndian(output, (uint)uncompressedLength);
         WriteUInt32BigEndian(output, (uint)blockLength);
-        WriteUInt32BigEndian(output, Adler32(uncompressed, 0, uncompressedLength));
+        WriteUInt32BigEndian(output, uncompressedAdler32);
         if (blockLength < uncompressedLength)
         {
             WriteUInt32BigEndian(output, Adler32(block, 0, blockLength));
@@ -661,8 +793,182 @@ internal static class LzopCompressor
     }
 
     private static uint Adler32(byte[] data, int offset, int length)
-        => UotanStudio.Hash.Adler32.Adler32.Compute(data, offset, length);
+        => Hash.Adler32.Adler32.Compute(data, offset, length);
 
     private static uint Crc32Hash(byte[] data, int offset, int length)
-        => UotanStudio.Hash.Crc32Ieee.Crc32Ieee.Compute(data.AsSpan(offset, length));
+        => Hash.Crc32Ieee.Crc32Ieee.Compute(data.AsSpan(offset, length));
+
+    /// <summary>
+    /// The per-block checksum declarations read from the LZOP header flags, shared by every block of one payload.
+    /// <para>从 LZOP 头部标志解析出的逐块校验声明，为同一份数据的所有块共享。</para>
+    /// </summary>
+    private readonly record struct BlockChecks
+    {
+        /// <summary>Whether an Adler-32 over the decoded bytes is stored. <para>是否存储了解码字节的 Adler-32。</para></summary>
+        public bool HasUncompressedAdler32 { get; init; }
+
+        /// <summary>Whether a CRC-32 over the decoded bytes is stored. <para>是否存储了解码字节的 CRC-32。</para></summary>
+        public bool HasUncompressedCrc32 { get; init; }
+
+        /// <summary>Whether an Adler-32 over the stored bytes of a compressed block is present. <para>压缩块是否附有存储字节的 Adler-32。</para></summary>
+        public bool HasCompressedAdler32 { get; init; }
+
+        /// <summary>Whether a CRC-32 over the stored bytes of a compressed block is present. <para>压缩块是否附有存储字节的 CRC-32。</para></summary>
+        public bool HasCompressedCrc32 { get; init; }
+    }
+
+    /// <summary>
+    /// One staged LZOP input block: its raw bytes, declared sizes and checksums. Decoding and verification run on a
+    /// worker thread and store their outcome for the ordered writer to rethrow, so whichever slot fails, the
+    /// exception reaching the caller keeps its original type and message.
+    /// <para>一个已暂存的 LZOP 输入块：原始字节、声明的大小与校验和。解码与校验在工作线程上执行并把结果留给有序
+    /// 写出方重新抛出，因此无论哪个槽位失败，抵达调用方的异常都保持原有类型与消息。</para>
+    /// </summary>
+    private sealed class DecompressedBlock(byte[] block, int uncompressedSize, uint uncompressedAdler32, uint uncompressedCrc32, uint compressedAdler32, uint compressedCrc32)
+    {
+        private CompressionException? _failure;
+
+        /// <summary>The decoded bytes, valid once <see cref="Decode"/> finished without storing a failure.
+        /// <para>解码后的字节；<see cref="Decode"/> 未记录失败而完成时有效。</para></summary>
+        public byte[] Decoded { get; private set; } = [];
+
+        /// <summary>
+        /// Verifies the stored-block checksums, decodes the block when it is compressed, and verifies the decoded checksums.
+        /// <para>校验存储块的校验和，在块被压缩时解码，并校验解码后的校验和。</para>
+        /// </summary>
+        /// <param name="checks">Header-level declarations deciding which checksums apply.
+        /// <para>头部级声明，决定应用哪些校验和。</para></param>
+        public void Decode(BlockChecks checks)
+        {
+            try
+            {
+                if (checks.HasCompressedAdler32 && Adler32(block, 0, block.Length) != compressedAdler32)
+                    throw new CompressionException("Invalid LZOP data: compressed Adler-32 mismatch.");
+                if (checks.HasCompressedCrc32 && Crc32Hash(block, 0, block.Length) != compressedCrc32)
+                    throw new CompressionException("Invalid LZOP data: compressed CRC-32 mismatch.");
+
+                byte[] decoded;
+                if (block.Length == uncompressedSize)
+                {
+                    decoded = block;
+                }
+                else
+                {
+                    decoded = new byte[uncompressedSize];
+                    var count = Lzo1xDecompressSafe(block, 0, block.Length, decoded);
+                    if (count != decoded.Length)
+                        throw new CompressionException($"Invalid LZOP data: block decompressed to {count} bytes, expected {uncompressedSize}.");
+                }
+
+                if (checks.HasUncompressedAdler32 && Adler32(decoded, 0, decoded.Length) != uncompressedAdler32)
+                    throw new CompressionException("Invalid LZOP data: uncompressed Adler-32 mismatch.");
+                if (checks.HasUncompressedCrc32 && Crc32Hash(decoded, 0, decoded.Length) != uncompressedCrc32)
+                    throw new CompressionException("Invalid LZOP data: uncompressed CRC-32 mismatch.");
+                Decoded = decoded;
+            }
+            catch (CompressionException ex)
+            {
+                _failure = ex;
+            }
+        }
+
+        /// <summary>
+        /// Rethrows the decode failure recorded for this block, if any, so the ordered writer surfaces it.
+        /// <para>重新抛出该块记录的解码失败（若有），以便有序写出方上报。</para>
+        /// </summary>
+        /// <exception cref="CompressionException">The block failed verification or decoding.
+        /// <para>该块校验或解码失败。</para></exception>
+        public void ThrowIfFailed()
+        {
+            if (_failure is not null)
+            {
+                throw _failure;
+            }
+        }
+    }
+
+    /// <summary>
+    /// One staged LZOP output block: the plaintext buffer holding a 256 KiB chunk together with the payload chosen
+    /// by the encoder. The encoder runs on a worker thread and records its outcome for the ordered writer to
+    /// rethrow, so whichever slot fails, the exception reaching the caller keeps its original type and message.
+    /// <para>一个已暂存的 LZOP 输出块：持有 256 KiB 块的明文缓冲区，以及编码器选定的载荷。编码在工作线程上执行
+    /// 并把结果留给有序写出方重新抛出，因此无论哪个槽位失败，抵达调用方的异常都保持原有类型与消息。</para>
+    /// </summary>
+    private sealed class EncodedBlock
+    {
+        private readonly byte[] _plaintext;
+        private CompressionException? _failure;
+
+        /// <summary>
+        /// Captures the plaintext buffer holding one chunk together with the number of bytes read into it.
+        /// <para>记录承载单个块的明文缓冲区以及读入其中的字节数。</para>
+        /// </summary>
+        /// <param name="plaintext">Buffer holding the chunk, also the fallback payload when compression does not shrink it.
+        /// <para>承载该块的缓冲区，同时也是压缩未使其变小时的回退载荷。</para></param>
+        /// <param name="uncompressedLength">Number of plaintext bytes read into <paramref name="plaintext"/>.
+        /// <para>读入 <paramref name="plaintext"/> 的明文字节数。</para></param>
+        public EncodedBlock(byte[] plaintext, int uncompressedLength)
+        {
+            _plaintext = plaintext;
+            Payload = plaintext;
+            PayloadLength = uncompressedLength;
+            UncompressedLength = uncompressedLength;
+        }
+
+        /// <summary>The bytes to store, equal to the plaintext when the encoder failed or did not shrink the chunk.
+        /// <para>实际存储的字节；编码失败或未能压缩该块时等于明文。</para></summary>
+        public byte[] Payload { get; private set; }
+
+        /// <summary>The stored byte count. <para>实际存储的字节数。</para></summary>
+        public int PayloadLength { get; private set; }
+
+        /// <summary>The plaintext byte count of this chunk. <para>该块的明文字节数。</para></summary>
+        public int UncompressedLength { get; }
+
+        /// <summary>The plaintext Adler-32, computed once because it is stored whether or not the block was compressed.
+        /// <para>明文的 Adler-32；无论该块是否被压缩都会写入，因此只计算一次。</para></summary>
+        public uint UncompressedAdler32 { get; private set; }
+
+        /// <summary>
+        /// Runs the LZO1X-1 encoder over the chunk, keeping the plaintext when the candidate is not smaller, and
+        /// records a compression failure instead of letting it escape the worker thread.
+        /// <para>对该块运行 LZO1X-1 编码器；候选结果未更小时保留明文，并把压缩失败记录下来而不是让它逃出工作线程。</para>
+        /// </summary>
+        public void Encode()
+        {
+            try
+            {
+                UncompressedAdler32 = Adler32(_plaintext, 0, UncompressedLength);
+                var candidate = Lzo1x.Compress(_plaintext.AsSpan(0, UncompressedLength));
+                if (candidate.Length < UncompressedLength)
+                {
+                    Payload = candidate;
+                    PayloadLength = candidate.Length;
+                }
+            }
+            catch (CompressionException ex)
+            {
+                _failure = ex;
+            }
+            catch (Exception)
+            {
+                Payload = _plaintext;
+                PayloadLength = UncompressedLength;
+            }
+        }
+
+        /// <summary>
+        /// Rethrows the encoder failure recorded for this block, if any, so the ordered writer surfaces it.
+        /// <para>重新抛出该块记录的编码失败（若有），以便有序写出方上报。</para>
+        /// </summary>
+        /// <exception cref="CompressionException">The block encoder failed with a compression error.
+        /// <para>块编码器以压缩错误失败。</para></exception>
+        public void ThrowIfFailed()
+        {
+            if (_failure is not null)
+            {
+                throw _failure;
+            }
+        }
+    }
 }

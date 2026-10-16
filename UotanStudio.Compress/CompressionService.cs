@@ -146,7 +146,7 @@ public static class CompressionService
                 Lz4Compressor.CompressLegacy(input, output, options);
                 return;
             case CompressionFormat.Lzop:
-                LzopCompressor.Compress(input, output);
+                LzopCompressor.Compress(input, output, options?.MaxDegreeOfParallelism);
                 return;
             case CompressionFormat.None:
                 break;
@@ -225,6 +225,43 @@ public static class CompressionService
     /// <exception cref="CompressionException">The payload is malformed for <paramref name="format"/> or the format has no streaming decoder.
     /// <para>数据相对于 <paramref name="format"/> 损坏，或该格式没有流式解码器。</para></exception>
     public static void Decompress(Stream input, Stream output, CompressionFormat format, long maximumOutputBytes, CancellationToken cancellationToken = default)
+        => DecompressWithOptions(input, output, format, maximumOutputBytes, null, cancellationToken);
+
+    /// <summary>
+    /// Decompresses a stream with a unified output limit, cancellation support and optional tuning.
+    /// <para>使用统一输出上限、取消支持与可选调优进行流式解压。</para>
+    /// </summary>
+    /// <param name="input">
+    /// Readable compressed payload positioned at its first byte; the caller keeps ownership and must close it.
+    /// <para>定位在压缩数据起始处的可读流；所有权属于调用方，需由调用方关闭。</para></param>
+    /// <param name="output">
+    /// Writable destination wrapped internally in a counting stream, so writes are checked before they reach it; it is left open.
+    /// <para>写入目标在内部被计数流包装，写入先校验再落地；该流保持打开。</para></param>
+    /// <param name="format">
+    /// Container the payload is decoded with.
+    /// <para>用于解码的容器格式。</para></param>
+    /// <param name="maximumOutputBytes">
+    /// Inclusive cap on total decoded bytes, checked before each write so the limit is never overshot.
+    /// <para>解压输出总字节数的含上限，在每次写入前检查，因此不会超出限制。</para></param>
+    /// <param name="options">
+    /// Optional tuning; <see langword="null"/> keeps every codec default. Only <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is read on this path, by the block-oriented LZOP decoder that can decode independent blocks concurrently while still emitting them in block order.
+    /// <para>可选调优参数；为 <see langword="null"/> 时全部采用编解码器默认值。本路径只读取 <see cref="CompressionOptions.MaxDegreeOfParallelism"/>，供按块组织的 LZOP 解码器并发解码相互独立的块，同时仍按块顺序写出。</para></param>
+    /// <param name="cancellationToken">
+    /// Token observed before the first byte is read and on every write through the counting wrapper.
+    /// <para>在读取首字节前以及每次通过计数包装写入时检查。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumOutputBytes"/> is negative.
+    /// <para><paramref name="maximumOutputBytes"/> 为负数。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is already signalled, or becomes signalled during a write.
+    /// <para><paramref name="cancellationToken"/> 在调用前已触发，或在写入过程中触发。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="format"/> is unknown or cannot decompress.
+    /// <para><paramref name="format"/> 未知或不支持解压。</para></exception>
+    /// <exception cref="IOException"><paramref name="maximumOutputBytes"/> would be exceeded, or the underlying write failed.
+    /// <para>即将超过 <paramref name="maximumOutputBytes"/>，或底层写入失败。</para></exception>
+    /// <exception cref="CompressionException">The payload is malformed for <paramref name="format"/> or the format has no streaming decoder.
+    /// <para>数据相对于 <paramref name="format"/> 损坏，或该格式没有流式解码器。</para></exception>
+    public static void DecompressWithOptions(Stream input, Stream output, CompressionFormat format, long maximumOutputBytes, CompressionOptions? options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(output);
@@ -293,7 +330,7 @@ public static class CompressionService
 
         if (format == CompressionFormat.Lzop)
         {
-            LzopCompressor.Decompress(input, output, maximumOutputBytes);
+            LzopCompressor.Decompress(input, output, maximumOutputBytes, options?.MaxDegreeOfParallelism);
             return;
         }
 

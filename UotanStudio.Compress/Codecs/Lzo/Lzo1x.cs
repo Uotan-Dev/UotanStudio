@@ -66,15 +66,22 @@ internal static class Lzo1x
         bytesWritten = 0;
 
 
-        var inArr = input.ToArray();
-        var outArr = new byte[output.Length];
-        var (status, written) = TryDecompressCore(inArr, outArr);
-        if (status == LzoStatus.Ok)
+        // The contract leaves the destination untouched when the decode fails, while the core reports how far
+        // it got. Snapshot the caller's bytes first so a rejected stream can be restored exactly, and let a
+        // successful decode land straight in the caller's buffer without an intermediate copy.
+        var preserved = output.Length == 0 ? Span<byte>.Empty : new byte[output.Length];
+        if (!preserved.IsEmpty)
         {
-            outArr.AsSpan(0, written).CopyTo(output);
+            output.CopyTo(preserved);
         }
 
+        var (status, written) = TryDecompressCore(input, output);
         bytesWritten = written;
+        if (status != LzoStatus.Ok)
+        {
+            preserved.CopyTo(output);
+        }
+
         return status;
     }
 
@@ -83,7 +90,7 @@ internal static class Lzo1x
     /// (<c>ip</c>, <c>op</c>, <c>state</c>, <c>t</c>, <c>mPos</c>); do not rename them when editing the control flow.
     /// <para>带完整边界检查地解压单个 LZO1X 位流；游标名（<c>ip</c>、<c>op</c>、<c>state</c>、<c>t</c>、<c>mPos</c>）固定，修改控制流时不要改名。</para>
     /// </summary>
-    private static (LzoStatus, int) TryDecompressCore(byte[] input, byte[] output)
+    private static (LzoStatus, int) TryDecompressCore(ReadOnlySpan<byte> input, Span<byte> output)
     {
         var inLen = input.Length;
         if (inLen < 3)
@@ -107,65 +114,64 @@ internal static class Lzo1x
         }
 
 
-        LzoStatus CopyLiteralRun(uint t)
+        LzoStatus CopyLiteralRun(ReadOnlySpan<byte> src, Span<byte> dst, uint t, ref int ipCur, ref int opCur, ref uint stateCur)
         {
-            if (t > (uint)(opEnd - op))
+            if (t > (uint)(opEnd - opCur))
             {
                 return LzoStatus.OutputOverrun;
             }
 
-            if (t + 3 > (uint)(ipEnd - ip))
+            if (t + 3 > (uint)(ipEnd - ipCur))
             {
                 return LzoStatus.InputOverrun;
             }
 
-            Array.Copy(input, ip, output, op, t);
-            ip += (int)t;
-            op += (int)t;
-            state = 4;
+            src.Slice(ipCur, (int)t).CopyTo(dst.Slice(opCur, (int)t));
+            ipCur += (int)t;
+            opCur += (int)t;
+            stateCur = 4;
             return LzoStatus.Ok;
         }
 
 
-        LzoStatus MatchNext()
+        LzoStatus MatchNext(ReadOnlySpan<byte> src, Span<byte> dst, uint t, ref int ipCur, ref int opCur)
         {
-            var t = state;
-            if (t + 3 > (uint)(ipEnd - ip))
+            if (t + 3 > (uint)(ipEnd - ipCur))
             {
                 return LzoStatus.InputOverrun;
             }
 
-            if (t > (uint)(opEnd - op))
+            if (t > (uint)(opEnd - opCur))
             {
                 return LzoStatus.OutputOverrun;
             }
 
-            Array.Copy(input, ip, output, op, t);
-            ip += (int)t;
-            op += (int)t;
+            src.Slice(ipCur, (int)t).CopyTo(dst.Slice(opCur, (int)t));
+            ipCur += (int)t;
+            opCur += (int)t;
             return LzoStatus.Ok;
         }
 
 
-        LzoStatus CopyMatch(int mPos, uint t)
+        LzoStatus CopyMatch(Span<byte> dst, int mPos, uint t, ref int opCur)
         {
             if (mPos < 0)
             {
                 return LzoStatus.LookbehindOverrun;
             }
 
-            if (t > (uint)(opEnd - op))
+            if (t > (uint)(opEnd - opCur))
             {
                 return LzoStatus.OutputOverrun;
             }
 
-            var end = op + (int)t;
-            output[op++] = output[mPos];
-            output[op++] = output[mPos + 1];
+            var end = opCur + (int)t;
+            dst[opCur++] = dst[mPos];
+            dst[opCur++] = dst[mPos + 1];
             mPos += 2;
-            while (op < end)
+            while (opCur < end)
             {
-                output[op++] = output[mPos++];
+                dst[opCur++] = dst[mPos++];
             }
 
             return LzoStatus.Ok;
@@ -184,7 +190,7 @@ internal static class Lzo1x
                     if (entryT < 4)
                     {
                         state = entryT;
-                        var entryMatch = MatchNext();
+                        var entryMatch = MatchNext(input, output, state, ref ip, ref op);
                         if (entryMatch != LzoStatus.Ok)
                         {
                             return (entryMatch, op);
@@ -193,7 +199,7 @@ internal static class Lzo1x
                         continue;
                     }
 
-                    var entryLiteral = CopyLiteralRun(entryT);
+                    var entryLiteral = CopyLiteralRun(input, output, entryT, ref ip, ref op, ref state);
                     if (entryLiteral != LzoStatus.Ok)
                     {
                         return (entryLiteral, op);
@@ -238,7 +244,7 @@ internal static class Lzo1x
                     }
 
                     t += 3;
-                    var literal = CopyLiteralRun(t);
+                    var literal = CopyLiteralRun(input, output, t, ref ip, ref op, ref state);
                     if (literal != LzoStatus.Ok)
                     {
                         return (literal, op);
@@ -264,7 +270,7 @@ internal static class Lzo1x
                     output[op++] = output[mPos];
                     output[op++] = output[mPos + 1];
                     state = next;
-                    var matchNext = MatchNext();
+                    var matchNext = MatchNext(input, output, state, ref ip, ref op);
                     if (matchNext != LzoStatus.Ok)
                     {
                         return (matchNext, op);
@@ -287,14 +293,14 @@ internal static class Lzo1x
                 next = t & 3;
                 var mPosM3 = op - 1 - (int)((t >> 2) & 7) - (input[ip++] << 3);
                 t = (t >> 5) - 1 + 2;
-                var m3Match = CopyMatch(mPosM3, t);
+                var m3Match = CopyMatch(output, mPosM3, t, ref op);
                 if (m3Match != LzoStatus.Ok)
                 {
                     return (m3Match, op);
                 }
 
                 state = next;
-                var m3Next = MatchNext();
+                var m3Next = MatchNext(input, output, state, ref ip, ref op);
                 if (m3Next != LzoStatus.Ok)
                 {
                     return (m3Next, op);
@@ -338,18 +344,18 @@ internal static class Lzo1x
                 }
 
                 var mPosM3Long = op - 1;
-                next = BinaryPrimitives.ReadUInt16LittleEndian(input.AsSpan(ip, 2));
+                next = BinaryPrimitives.ReadUInt16LittleEndian(input.Slice(ip, 2));
                 ip += 2;
                 mPosM3Long -= (int)(next >> 2);
                 next &= 3;
-                var m3LongMatch = CopyMatch(mPosM3Long, t);
+                var m3LongMatch = CopyMatch(output, mPosM3Long, t, ref op);
                 if (m3LongMatch != LzoStatus.Ok)
                 {
                     return (m3LongMatch, op);
                 }
 
                 state = next;
-                var m3LongNext = MatchNext();
+                var m3LongNext = MatchNext(input, output, state, ref ip, ref op);
                 if (m3LongNext != LzoStatus.Ok)
                 {
                     return (m3LongNext, op);
@@ -364,7 +370,7 @@ internal static class Lzo1x
                     return (LzoStatus.InputOverrun, op);
                 }
 
-                next = BinaryPrimitives.ReadUInt16LittleEndian(input.AsSpan(ip, 2));
+                next = BinaryPrimitives.ReadUInt16LittleEndian(input.Slice(ip, 2));
                 if ((next & 0xfffc) == 0xfffc && (t & 0xf8) == 0x18 && bitstreamVersion != 0)
                 {
 
@@ -382,12 +388,12 @@ internal static class Lzo1x
                         return (LzoStatus.OutputOverrun, op);
                     }
 
-                    Array.Clear(output, op, (int)t);
+                    output.Slice(op, (int)t).Clear();
                     op += (int)t;
                     next &= 3;
                     ip += 3;
                     state = next;
-                    var zeroNext = MatchNext();
+                    var zeroNext = MatchNext(input, output, state, ref ip, ref op);
                     if (zeroNext != LzoStatus.Ok)
                     {
                         return (zeroNext, op);
@@ -424,7 +430,7 @@ internal static class Lzo1x
                         return (LzoStatus.InputOverrun, op);
                     }
 
-                    next = BinaryPrimitives.ReadUInt16LittleEndian(input.AsSpan(ip, 2));
+                    next = BinaryPrimitives.ReadUInt16LittleEndian(input.Slice(ip, 2));
                 }
 
                 ip += 2;
@@ -443,14 +449,14 @@ internal static class Lzo1x
                 }
 
                 mPosM4 -= 0x4000;
-                var m4Match = CopyMatch(mPosM4, t);
+                var m4Match = CopyMatch(output, mPosM4, t, ref op);
                 if (m4Match != LzoStatus.Ok)
                 {
                     return (m4Match, op);
                 }
 
                 state = next;
-                var m4Next = MatchNext();
+                var m4Next = MatchNext(input, output, state, ref ip, ref op);
                 if (m4Next != LzoStatus.Ok)
                 {
                     return (m4Next, op);
@@ -460,14 +466,14 @@ internal static class Lzo1x
             }
 
 
-            var m2Match = CopyMatch(mPosShared, t);
+            var m2Match = CopyMatch(output, mPosShared, t, ref op);
             if (m2Match != LzoStatus.Ok)
             {
                 return (m2Match, op);
             }
 
             state = next;
-            var m2Next = MatchNext();
+            var m2Next = MatchNext(input, output, state, ref ip, ref op);
             if (m2Next != LzoStatus.Ok)
             {
                 return (m2Next, op);

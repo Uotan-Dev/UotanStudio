@@ -15,6 +15,7 @@ namespace UotanStudio.Hash.Crc16Arc;
 public static class Crc16Arc
 {
     private const ushort Polynomial = 0xA001;
+    private static readonly ushort[] Table = BuildTable();
 
     /// <summary>
     /// Computes the CRC-16 register value of the data starting from <paramref name="seed"/>.
@@ -34,18 +35,42 @@ public static class Crc16Arc
     /// The 16-bit register after processing every byte with the low-bit-first shift.
     /// <para>以低位优先移位处理完所有字节后的 16 位寄存器值。</para>
     /// </returns>
+    /// <remarks>
+    /// The table form folds one byte per iteration and returns exactly what the equivalent eight-shift loop returns:
+    /// <c>(byte)crc ^ value</c> is the same partial register that applying the low-bit-first shift eight times reaches
+    /// from <c>(crc ^ value)</c>, and a caller-supplied seed still enters through the low byte as before.
+    /// <para>查表形式每次迭代折叠一个字节，结果与等价的八次移位循环完全一致：<c>(byte)crc ^ value</c> 就是
+    /// 从 <c>(crc ^ value)</c> 起做八次低位优先移位后到达的部分寄存器；调用方给定的 seed 仍照旧从低字节进入。</para>
+    /// </remarks>
     public static ushort Compute(ReadOnlySpan<byte> data, ushort seed)
     {
         var crc = seed;
-        foreach (var b in data)
+        foreach (var value in data)
         {
-            crc ^= b;
-            for (var i = 0; i < 8; i++)
-            {
-                crc = (crc & 1) != 0 ? (ushort)((crc >> 1) ^ Polynomial) : (ushort)(crc >> 1);
-            }
+            crc = (ushort)((crc >> 8) ^ Table[(byte)crc ^ value]);
         }
 
         return crc;
+    }
+
+    /// <summary>
+    /// Builds the reflected byte-at-a-time table, keeping the polynomial in exactly one place.
+    /// <para>构造逐字节反射查表，保证多项式只写在一处。</para>
+    /// </summary>
+    private static ushort[] BuildTable()
+    {
+        var table = new ushort[256];
+        for (var index = 0; index < 256; index++)
+        {
+            var entry = (ushort)index;
+            for (var bit = 0; bit < 8; bit++)
+            {
+                entry = (entry & 1) != 0 ? (ushort)((entry >> 1) ^ Polynomial) : (ushort)(entry >> 1);
+            }
+
+            table[index] = entry;
+        }
+
+        return table;
     }
 }

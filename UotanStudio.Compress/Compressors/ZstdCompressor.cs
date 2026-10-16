@@ -86,11 +86,11 @@ public static class ZstdCompressor
     }
 
     /// <summary>
-    /// Compresses a stream with zstd, using parallel frames when the options and a seekable input allow it.
-    /// <para>流式执行 zstd 压缩；选项与可寻址输入允许时改用并行独立帧。</para>
+    /// Compresses a stream with zstd, using parallel frames when the options allow it and at least two chunks are present.
+    /// <para>流式执行 zstd 压缩；选项允许且至少存在两个块时改用并行独立帧。</para>
     /// </summary>
-    /// <param name="input">Readable source stream, consumed to its end and left open.
-    /// <para>可读源流，读取到末尾并保持打开。</para></param>
+    /// <param name="input">Readable source stream, consumed to its end and left open; it does not have to be seekable, because chunks are read through a bounded look-ahead.
+    /// <para>可读源流，读取到末尾并保持打开；通过有界预读分块，因此不需要可寻址。</para></param>
     /// <param name="output">Writable target stream; frames are flushed on completion but the stream is not
     /// closed. <para>可写目标流；完成时刷新帧但不关闭流。</para></param>
     /// <param name="options">Optional compression level; <see langword="null"/> uses level <c>3</c>.
@@ -139,27 +139,92 @@ public static class ZstdCompressor
         => new CompressionStream(new NonDisposingStream(output), options?.Level ?? 3);
 
     /// <summary>
-    /// Compresses a seekable stream through parallel per-chunk frames when parallelism is requested and at least two
-    /// chunks exist; otherwise returns <see langword="false"/> and the caller keeps its single-frame sequential path.
-    /// <para>在请求并行且至少存在两个块时，把可寻址流按块并发压缩为独立帧；否则返回 <see langword="false"/>，
+    /// Compresses a stream through parallel per-chunk frames when parallelism is requested and at least two chunks
+    /// are available; otherwise returns <see langword="false"/> and the caller keeps its single-frame sequential path.
+    /// <para>在请求并行且至少存在两个块时，把流按块并发压缩为独立帧；否则返回 <see langword="false"/>，
     /// 调用方保持单帧串行路径。</para>
     /// </summary>
+    /// <remarks>
+    /// A seekable source still decides up front from its remaining length, so an input below two chunks keeps the
+    /// caller's single-frame output byte for byte. A non-seekable source cannot be measured, so chunks are read
+    /// through a bounded look-ahead ring instead; that is what stops the outcome from depending on whether the
+    /// caller wrapped the source for progress reporting. Frames are concatenated in input order, which zstd decodes
+    /// as one plaintext, so the byte stream differs from the single-frame sequential output only by carrying one
+    /// frame header per chunk.
+    /// <para>可寻址来源仍先按剩余长度判定，因此不足两个块的输入逐字节保持调用方的单帧输出。不可寻址来源无法
+    /// 预量，改用有界预读环读取；这正是结果不再取决于调用方是否为上报进度而包装源流的原因。各帧按输入顺序
+    /// 串联，zstd 会将其解码为同一份明文，因此与单帧串行输出的字节差异仅为每块各带一个帧头。</para>
+    /// </remarks>
     private static bool TryCompressParallel(Stream input, Stream output, CompressionOptions? options)
     {
-        if (!input.CanSeek || options?.MaxDegreeOfParallelism is null or <= 1)
-        {
-            return false;
-        }
-        var remaining = input.Length - input.Position;
-        var chunkSize = ParallelCompression.DefaultChunkSize;
-        var chunkCount = (int)Math.Min(int.MaxValue, (remaining + chunkSize - 1) / chunkSize);
-        var degree = Parallelism.Resolve(options.MaxDegreeOfParallelism, chunkCount);
-        if (degree <= 1 || chunkCount < 2)
+        if (options?.MaxDegreeOfParallelism is null or <= 1)
         {
             return false;
         }
 
+        var requestedDegree = options.MaxDegreeOfParallelism.Value;
         var level = options.Level ?? 3;
+        var chunkSize = ParallelCompression.DefaultChunkSize;
+
+        if (input.CanSeek && TryGetRemainingLength(input, out var remaining))
+        {
+            var chunkCount = (int)Math.Min(int.MaxValue, (remaining + chunkSize - 1) / chunkSize);
+            if (Parallelism.Resolve(requestedDegree, Math.Max(chunkCount, 1)) <= 1)
+            {
+                return false;
+            }
+        }
+
+        return CompressParallelChunks(input, output, level, chunkSize, requestedDegree);
+    }
+
+    /// <summary>
+    /// Reads the number of bytes still available from the current position of a seekable stream.
+    /// <para>读取可寻址流自当前位置起仍可用的字节数。</para>
+    /// </summary>
+    /// <param name="input">Seekable source stream. <para>可寻址来源流。</para></param>
+    /// <param name="remaining">Receives the byte count, or zero when the length cannot be read.
+    /// <para>接收字节数；长度不可读时为 0。</para></param>
+    /// <returns><see langword="true"/> when a non-negative remaining length was obtained.
+    /// <para>取得非负的剩余长度时返回 <see langword="true"/>。</para></returns>
+    private static bool TryGetRemainingLength(Stream input, out long remaining)
+    {
+        remaining = 0;
+        try
+        {
+            remaining = input.Length - input.Position;
+            return remaining >= 0;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Reads chunks into a bounded ring of pooled buffers, compresses each batch with <c>Parallel.For</c>
+    /// and writes the resulting frames in input order until the source is drained.
+    /// <para>把块读入有界池化缓冲环，用 <c>Parallel.For</c> 压缩每个批次，并按输入顺序写出所得帧，
+    /// 直到来源流读尽。</para>
+    /// </summary>
+    /// <param name="input">Readable source drained to its end and left open.
+    /// <para>可读来源流，读取到末尾并保持打开。</para></param>
+    /// <param name="output">Writable target receiving the concatenated frames in input order.
+    /// <para>可写目标流，按输入顺序接收串联的各帧。</para></param>
+    /// <param name="level">zstd compression level applied to every chunk.
+    /// <para>作用于每个块的 zstd 压缩级别。</para></param>
+    /// <param name="chunkSize">Maximum uncompressed bytes per frame; the final frame may be shorter.
+    /// <para>每帧最大的未压缩字节数；最后一帧可以更短。</para></param>
+    /// <param name="degree">Number of chunk slots compressed concurrently, always at least one.
+    /// <para>并发压缩的块槽数量，始终至少为 1。</para></param>
+    /// <returns><see langword="true"/> once every read chunk was emitted as its own frame.
+    /// <para>每个已读块都作为独立帧写出后返回 <see langword="true"/>。</para></returns>
+    private static bool CompressParallelChunks(Stream input, Stream output, int level, int chunkSize, int degree)
+    {
         var frameBound = chunkSize + (chunkSize >> 3) + 65536 + 128;
         var buffers = new byte[degree][];
         var frames = new byte[degree][];
@@ -172,17 +237,18 @@ public static class ZstdCompressor
             frames[slot] = ArrayPool<byte>.Shared.Rent(frameBound);
             contexts[slot] = new Compressor(level);
         }
+
         try
         {
-            for (var chunk = 0; chunk < chunkCount; chunk += degree)
+            var framesWritten = 0;
+            while (true)
             {
-                var batch = Math.Min(degree, chunkCount - chunk);
-                for (var slot = 0; slot < batch; slot++)
+                var batch = ReadBatch(input, buffers, inputLengths, degree);
+                if (batch == 0)
                 {
-                    var start = (chunk + slot) * (long)chunkSize;
-                    inputLengths[slot] = (int)Math.Min(chunkSize, remaining - start);
-                    input.ReadExactly(buffers[slot], 0, inputLengths[slot]);
+                    break;
                 }
+
                 Parallel.For(0, batch, new ParallelOptions { MaxDegreeOfParallelism = batch }, slot =>
                 {
                     var written = contexts[slot].Wrap(buffers[slot].AsSpan(0, inputLengths[slot]), frames[slot]);
@@ -193,8 +259,15 @@ public static class ZstdCompressor
                 {
                     output.Write(frames[slot], 0, frameLengths[slot]);
                 }
+
+                framesWritten += batch;
+                if (batch < degree)
+                {
+                    break;
+                }
             }
-            return true;
+
+            return framesWritten > 0;
         }
         finally
         {
@@ -205,6 +278,72 @@ public static class ZstdCompressor
                 ArrayPool<byte>.Shared.Return(frames[slot]);
             }
         }
+    }
+
+    /// <summary>
+    /// Fills consecutive slots with the next chunk of each, stopping at end of stream; slots that reached end of
+    /// stream are left with a zero length so the helper can tell "empty chunk" from "no chunk read".
+    /// <para>从流中依次填充后续若干槽位，遇到流末尾即停止；读到末尾的槽位保持长度为零，使调用方能区分
+    /// "空块"与"未读到块"。</para>
+    /// </summary>
+    /// <param name="input">Readable source positioned at the next unread byte.
+    /// <para>可读来源流，定位于下一个未读字节。</para></param>
+    /// <param name="buffers">Pooled buffers indexed by slot, each at least <c>chunkSize</c> long.
+    /// <para>按槽位索引的池化缓冲，每个长度不小于 <c>chunkSize</c>。</para></param>
+    /// <param name="inputLengths">Receives each slot's chunk length; slots after end of stream receive zero.
+    /// <para>接收各槽位的块长度；流末尾之后的槽位接收 0。</para></param>
+    /// <param name="degree">Number of slots to fill at most. <para>最多填充的槽位数量。</para></param>
+    /// <returns>The number of slots that received at least one byte, which is zero once the stream is drained.
+    /// <para>至少收到一个字节的槽位数量；流读尽后为 0。</para></returns>
+    private static int ReadBatch(Stream input, byte[][] buffers, int[] inputLengths, int degree)
+    {
+        var batch = 0;
+        for (var slot = 0; slot < degree; slot++)
+        {
+            inputLengths[slot] = 0;
+        }
+
+        for (var slot = 0; slot < degree; slot++)
+        {
+            var read = ReadChunk(input, buffers[slot], buffers[slot].Length);
+            if (read == 0)
+            {
+                break;
+            }
+
+            inputLengths[slot] = read;
+            batch++;
+        }
+
+        return batch;
+    }
+
+    /// <summary>
+    /// Reads one chunk of at most <paramref name="chunkSize"/> bytes, retrying short reads until the buffer is full
+    /// or the stream ends.
+    /// <para>读取至多 <paramref name="chunkSize"/> 字节的一个块，缓冲填满或流结束前重试短读。</para>
+    /// </summary>
+    /// <param name="input">Readable source positioned at the next unread byte.
+    /// <para>可读来源流，定位于下一个未读字节。</para></param>
+    /// <param name="buffer">Destination buffer. <para>目标缓冲。</para></param>
+    /// <param name="chunkSize">Maximum number of bytes to read. <para>最多读取的字节数。</para></param>
+    /// <returns>The bytes read, which is zero only at end of stream.
+    /// <para>实际读到的字节数；仅在流末尾时为 0。</para></returns>
+    private static int ReadChunk(Stream input, byte[] buffer, int chunkSize)
+    {
+        var total = 0;
+        while (total < chunkSize)
+        {
+            var read = input.Read(buffer, total, chunkSize - total);
+            if (read <= 0)
+            {
+                break;
+            }
+
+            total += read;
+        }
+
+        return total;
     }
 
     /// <summary>
