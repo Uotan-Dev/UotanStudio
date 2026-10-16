@@ -35,6 +35,8 @@ internal sealed class FileSystemPreservationData
     public string Partition { get; set; } = "";
     /// <summary>Gets the source image length in bytes.<para>获取源镜像字节长度。</para></summary>
     public long SourceLength { get; set; }
+    /// <summary>Gets the source image digest recorded at capture.<para>获取采集时记录的源镜像摘要。</para></summary>
+    public string SourceHash { get; set; } = "";
     /// <summary>Gets the digest of the metadata document excluding this payload; a mismatch means the
     /// surrounding metadata was edited outside the supported edit paths.
     /// <para>获取不含本负载的元数据文档摘要；不一致表示上层元数据被受支持编辑路径之外的改动修改过。</para></summary>
@@ -42,6 +44,8 @@ internal sealed class FileSystemPreservationData
     /// <summary>Gets the serialized metadata document captured before this payload was attached.
     /// <para>获取附加本负载之前采集的元数据文档序列化结果。</para></summary>
     public string ConfigurationJson { get; set; } = "";
+    /// <summary>Gets the extracted host projection keyed by relative path.<para>获取以相对路径为键的解包宿主投影。</para></summary>
+    public Dictionary<string, string> Projection { get; set; } = [];
     /// <summary>Gets the aliased host path per image path for names the host cannot express directly.
     /// <para>获取宿主无法直接表达的名称所对应的镜像路径到宿主路径映射。</para></summary>
     public Dictionary<string, string> ImagePaths { get; set; } = [];

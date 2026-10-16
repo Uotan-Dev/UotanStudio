@@ -229,7 +229,7 @@ public sealed partial class CpioFormatHandler
             ["compression"] = compression.ToString(),
             ["entries"] = entries,
         };
-        FileSystemPreservation.CaptureArchivePayload(sourcePath, metadata,
+        FileSystemPreservation.CaptureArchivePayload(sourcePath, outputDirectory, metadataDirectory, metadata,
             [.. preserved.Values], cancellationToken);
         if (compression == CompressionFormat.Gzip)
         {

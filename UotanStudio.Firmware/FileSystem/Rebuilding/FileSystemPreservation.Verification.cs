@@ -168,6 +168,50 @@ public static partial class FileSystemPreservation
         }
     }
 
+    internal static string ProjectionIdentity(string value)
+    {
+        var mode = value.IndexOf(":mode=", StringComparison.Ordinal);
+        return mode < 0 ? value : value[..mode];
+    }
+
+    private static void VerifyCapturedContents(string source, FileSystemPreservationData manifest, CancellationToken token)
+    {
+        using var input = File.OpenRead(source);
+        if (manifest.Format == "Android Sparse Image (simg)")
+        {
+            using var sparse = SparseContainerAccess.Resolve().OpenLogicalView(input);
+            VerifyCapturedFilesystem(sparse.Logical, manifest, token);
+        }
+        else
+        {
+            VerifyCapturedFilesystem(input, manifest, token);
+        }
+    }
+
+    private static void VerifyCapturedFilesystem(Stream image, FileSystemPreservationData manifest, CancellationToken token)
+    {
+        WithContentReader(image, DetectFilesystem(image), read =>
+        {
+            foreach (var entry in manifest.ParsedEntries.Where(entry => (entry.Mode & 0xF000) == 0x8000))
+            {
+                token.ThrowIfCancellationRequested();
+                var host = manifest.ImagePaths.GetValueOrDefault(entry.Path, entry.Path);
+                if (!manifest.Projection.TryGetValue(host, out var projection))
+                {
+                    throw new FileSystemCorruptedException($"Extracted file is missing from the snapshot: '{entry.Path}'.");
+                }
+                using var hash = new HashingWriteStream(Stream.Null, leaveOpen: true);
+                using var bounded = new CountingWriteStream(hash, entry.Size,
+                    leaveOpen: true, cancellationToken: token);
+                read(entry.Path, bounded);
+                if (!string.Equals("file:" + hash.GetHashHex(), ProjectionIdentity(projection), StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new FileSystemCorruptedException($"Extracted content does not match the source image: '{entry.Path}'.");
+                }
+            }
+        }, token);
+    }
+
     private static void VerifyInodeMetadata(FileSystemInodeMetadata? expected, FileSystemInodeMetadata? actual, string path)
     {
         if (expected is null)

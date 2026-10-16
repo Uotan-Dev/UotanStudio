@@ -53,6 +53,9 @@ internal sealed class FileSystemEditPlan
             if (originals.TryGetValue(image, out var original) && ((original.Mode & 0xF000) == 0x4000) == directory)
             {
                 selected = Copy(original, image, original.Mode);
+                if ((original.Mode & 0xF000) is not (0x4000 or 0x8000)
+                    && (!manifest.Projection.TryGetValue(host, out var before) || before != pair.Value))
+                    throw new FileSystemUnsupportedFeatureException($"Only regular files and directories can be edited: {image}");
             }
             else
             {
@@ -100,7 +103,7 @@ internal sealed class FileSystemEditPlan
         foreach (var group in entries.Values.Where(e => e.Inode != 0 && (e.Mode & 0xF000) == 0x8000).GroupBy(e => e.Inode).Where(g => g.Count() > 1))
         {
             var paths = group.Select(e => imageHosts[e.Path]).ToArray();
-            var changed = paths.Where(p => projection.TryGetValue(p, out _)).ToArray();
+            var changed = paths.Where(p => !manifest.Projection.TryGetValue(p, out var before) || projection[p] != before).ToArray();
             if (changed.Select(p => projection[p]).Distinct(StringComparer.Ordinal).Skip(1).Any())
                 throw new InvalidDataException($"Conflicting edits to hard-linked files: {string.Join(", ", paths)}");
             var canonical = changed.FirstOrDefault() ?? paths[0];
