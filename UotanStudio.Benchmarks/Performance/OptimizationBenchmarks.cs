@@ -85,11 +85,11 @@ public class AdbPushBenchmarks
     }
 
     [Benchmark]
-    public int PushStream()
+    public async Task<int> PushStream()
     {
         _transport.WrtePayloads.Clear();
         using var source = new MemoryStream(_data, writable: false);
-        _sync.PushStream(source, "/simulation/perf.bin", mtime: 1);
+        await _sync.PushStreamAsync(source, "/simulation/perf.bin", mtime: 1);
         return _transport.WrtePayloads.Count;
     }
 }
