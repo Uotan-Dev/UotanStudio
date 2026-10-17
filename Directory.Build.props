@@ -11,4 +11,14 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(MSBuildProjectName)' != 'UotanStudio.Tests' AND '$(MSBuildProjectName)' != 'UotanStudio.Benchmarks' AND '$(MSBuildProjectName)' != 'UotanStudio.ErofsBench' AND '$(MSBuildProjectName)' != 'erofs-producer'">
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+    <EnableAotAnalyzerOnBuild Condition="'$(EnableAotAnalyzerOnBuild)' == ''">true</EnableAotAnalyzerOnBuild>
+    <EnableTrimAnalyzerOnBuild Condition="'$(EnableTrimAnalyzerOnBuild)' == ''">true</EnableTrimAnalyzerOnBuild>
+  </PropertyGroup>
+
 </Project>
