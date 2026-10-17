@@ -94,7 +94,7 @@ public sealed class ErofsBuildGoldenHashTests
         source.Write("dir/sub/inner.txt", "inner\n");
         source.WriteBytes("dir/one-block.bin", Deterministic(BlockSize));
         source.Write("tiny/one.txt", "t\n");
-        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(source.Path, "emptydir"));
+        Directory.CreateDirectory(Path.Combine(source.Path, "emptydir"));
 
         if (fixture != "links")
         {
@@ -102,11 +102,11 @@ public sealed class ErofsBuildGoldenHashTests
         }
 
         File.CreateSymbolicLink(
-            System.IO.Path.Combine(source.Path, "link.txt"),
-            System.IO.Path.Combine("text", "readme.txt"));
+            Path.Combine(source.Path, "link.txt"),
+            Path.Combine("text", "readme.txt"));
         var linked = CreateHardLink(
-            System.IO.Path.Combine(source.Path, "hard-block.bin"),
-            System.IO.Path.Combine(source.Path, "data", "block.bin"),
+            Path.Combine(source.Path, "hard-block.bin"),
+            Path.Combine(source.Path, "data", "block.bin"),
             IntPtr.Zero);
         Assert.True(linked, $"CreateHardLink failed with error {Marshal.GetLastWin32Error()}.");
     }

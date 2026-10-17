@@ -189,6 +189,30 @@ public sealed class ErofsOptions
     /// <para>记录的块号；源把元数据留在镜像头部之后时为零。</para></value>
     internal uint SourceMetaBlkAddr { get; set; }
     /// <summary>
+    /// Slot count of the source image's extended superblock area, as recorded in <c>s_sb_extslots</c>. The
+    /// compression configuration records do not follow the fixed 128-byte superblock; they follow that many
+    /// extra 16-byte slots, so a rebuild that replays the records has to replay the slot count or every reader
+    /// looks for them at the wrong offset.
+    /// <para>源镜像扩展超级块区的槽数，取自 <c>s_sb_extslots</c>。压缩配置记录并不紧跟固定的 128 字节超级块，
+    /// 而是跟在同样数量的额外 16 字节槽位之后，因此重放这些记录的重建必须一并重放槽数，否则每个读取方都会
+    /// 到错误偏移处查找它们。</para>
+    /// </summary>
+    /// <value>The captured slot count, or <see langword="null"/> when the options carry no captured source
+    /// geometry and the writer keeps its own default.
+    /// <para>已采集的槽数；选项未携带已采集的源几何时为 <see langword="null"/>，此时写入方保持自身默认值。</para></value>
+    internal byte? SourceSbExtSlots { get; set; }
+    /// <summary>
+    /// Directory block size shift of the source image, as recorded in <c>dirblkbits</c>. A nonzero value means
+    /// the source packed directory data in units larger than one filesystem block, so a rebuild that emitted one
+    /// filesystem block per directory block would change the geometry readers derive from this field.
+    /// <para>源镜像的目录块大小位移，取自 <c>dirblkbits</c>。非零表示源以大于一个文件系统块的单位打包目录数据，
+    /// 因此仍按每目录块一个文件系统块重建会改变读取方由该字段推导出的几何。</para>
+    /// </summary>
+    /// <value>The captured shift, or <see langword="null"/> when the options carry no captured source geometry
+    /// and the writer keeps its own default.
+    /// <para>已采集的位移；选项未携带已采集的源几何时为 <see langword="null"/>，此时写入方保持自身默认值。</para></value>
+    internal byte? SourceDirBlkBits { get; set; }
+    /// <summary>
     /// Long-prefix records the preserved source image carried, replayed so xattr names that needed them
     /// encode against the same table instead of registering new records. Null or empty when the source
     /// defined no long prefixes.
@@ -342,14 +366,14 @@ public sealed class ErofsOptions
     /// <summary>Whether compressed inodes store their index as the variable-size <c>z_erofs_extent</c> array
     /// that <c>Z_EROFS_ADVISE_EXTENTS</c> licenses.
     /// <para>压缩 inode 是否把索引存成 <c>Z_EROFS_ADVISE_EXTENTS</c> 许可的可变长度 <c>z_erofs_extent</c> 数组。</para></summary>
-    /// <value><see cref="Models.ErofsTriStateFeature.Auto"/> follows a preserved source inode's recorded
+    /// <value><see cref="ErofsTriStateFeature.Auto"/> follows a preserved source inode's recorded
     /// shape, <c>Enabled</c> forces the extent form, and <c>Disabled</c> forbids it. Upstream only writes it
     /// when the image declares <c>48bit</c> and the inode has no inline data, so an enabled request without
     /// that declaration fails instead of degrading silently.
-    /// <para><see cref="Models.ErofsTriStateFeature.Auto"/> 跟随保留源 inode 记录的形态，<c>Enabled</c> 强制
+    /// <para><see cref="ErofsTriStateFeature.Auto"/> 跟随保留源 inode 记录的形态，<c>Enabled</c> 强制
     /// extent 形态，<c>Disabled</c> 禁止。extent 形态只在镜像声明 <c>48bit</c> 且 inode 无 inline data 时
     /// 写出，因此启用请求若缺该声明会直接报错而不是静默降级。</para></value>
-    public Models.ErofsTriStateFeature UseExtentIndexes { get; set; }
+    public ErofsTriStateFeature UseExtentIndexes { get; set; }
 
     /// <summary>Chunk size in bytes for chunk-based output.
     /// <para>chunk-based 输出的 chunk 大小（字节）。</para></summary>
@@ -761,7 +785,7 @@ public sealed class ErofsOptions
     public string? FileContextsPath { get; set; }
 
     /// <summary>Preloaded override tables; when set they take precedence over the path-based sources above.</summary>
-    internal IReadOnlyDictionary<string, UotanStudio.Firmware.FileSystem.Metadata.FsConfigEntry>? FsConfig { get; set; }
+    internal IReadOnlyDictionary<string, Metadata.FsConfigEntry>? FsConfig { get; set; }
     internal IReadOnlyDictionary<string, string>? FileContexts { get; set; }
 
     /// <summary>
@@ -834,7 +858,7 @@ public sealed class ErofsOptions
             throw new NotSupportedException(
                 "EROFS compacted 2-byte indexes require logical clusters no larger than 4096 bytes.");
 
-        if (string.IsNullOrEmpty(VolumeName) && UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Current is null)
+        if (string.IsNullOrEmpty(VolumeName) && Rebuilding.FileSystemEditPlan.Current is null)
         {
             VolumeName = "erofs";
         }
@@ -853,9 +877,10 @@ public sealed class ErofsOptions
             for (var i = 0; i < ExtraDeviceImages.Count; i++)
             {
                 var spec = ExtraDeviceImages[i];
-                if (string.IsNullOrEmpty(spec.Tag) || System.Text.Encoding.UTF8.GetByteCount(spec.Tag) >= ErofsDeviceSlot.TagSize)
+                if (!HasWritableDeviceTag(spec))
                     throw new ArgumentOutOfRangeException(nameof(ExtraDeviceImages),
-                        $"Extra device {i} needs a non-empty tag shorter than {ErofsDeviceSlot.TagSize} bytes.");
+                        $"Extra device {i} needs a non-empty tag the {ErofsDeviceSlot.TagSize}-byte slot can hold: "
+                        + "raw bytes of at most that width, or UTF-8 text shorter than it.");
                 if (spec.SizeBytes <= 0 || spec.SizeBytes % BlockSize != 0)
                     throw new ArgumentOutOfRangeException(nameof(ExtraDeviceImages),
                         $"Extra device {i} size must be a positive, block-aligned byte count.");
@@ -891,6 +916,30 @@ public sealed class ErofsOptions
         }
 
         ResolveFeatureDeclaration();
+    }
+
+    /// <summary>
+    /// Checks that a device descriptor carries a tag the 64-byte slot can hold. Raw bytes decide it when the
+    /// descriptor has them, because those are what the writer emits and the field may hold a digest that has no
+    /// text form at all; the UTF-8 text decides it otherwise, and has to stay below the field width so the slot
+    /// keeps its NUL terminator.
+    /// <para>检查设备描述符是否携带 64 字节槽位能容纳的 tag。描述符携带原始字节时以原始字节判定，因为写入方
+    /// 输出的就是它们，且该字段可能存放根本没有文本形式的摘要；否则以 UTF-8 文本判定，其长度必须小于字段宽度，
+    /// 使槽位保留 NUL 终止符。</para>
+    /// </summary>
+    /// <param name="spec">Descriptor whose tag is checked.
+    /// <para>待检查 tag 的描述符。</para></param>
+    /// <returns><see langword="true"/> when the writer can fill the tag slot from the descriptor.
+    /// <para>写入方能从该描述符填满 tag 槽位时为 <see langword="true"/>。</para></returns>
+    private static bool HasWritableDeviceTag(ErofsDeviceSpec spec)
+    {
+        if (spec.TagBytes is { Length: > 0 } rawBytes)
+        {
+            return rawBytes.Length <= ErofsDeviceSlot.TagSize;
+        }
+
+        return !string.IsNullOrEmpty(spec.Tag)
+            && System.Text.Encoding.UTF8.GetByteCount(spec.Tag) < ErofsDeviceSlot.TagSize;
     }
 
     /// <summary>
@@ -1112,19 +1161,35 @@ internal enum ErofsFragmentShape
 }
 
 /// <summary>
-/// Declares one extra device for the EROFS device table: a NUL-safe tag and the device size in bytes
-/// (block-aligned). The device table records the tag and the block count derived from <paramref name="SizeBytes"/>.
-/// <para>声明设备表中的一个额外设备：以 NUL 结尾的 tag 与以字节表示、块对齐的设备大小。
+/// Declares one extra device for the EROFS device table: a tag, given either as text or as the raw slot bytes,
+/// and the device size in bytes (block-aligned). The device table records the tag and the block count derived
+/// from <paramref name="SizeBytes"/>.
+/// <para>声明设备表中的一个额外设备：以文本或原始槽位字节给出的 tag，以及以字节表示、块对齐的设备大小。
 /// 设备表记录该 tag 以及由 <paramref name="SizeBytes"/> 推导出的块数。</para>
 /// </summary>
 /// <param name="Tag">
-/// Device tag text; validation requires it non-empty with UTF-8 length below the on-disk tag field.
-/// <para>设备 tag 文本；校验要求非空且 UTF-8 字节数小于磁盘 tag 字段宽度。</para>
+/// Device tag text; validation requires it non-empty with a UTF-8 length below the on-disk tag field, unless
+/// <see cref="TagBytes"/> carries the raw bytes the writer emits instead.
+/// <para>设备 tag 文本；除非由 <see cref="TagBytes"/> 携带写入方实际输出的原始字节，否则校验要求非空且 UTF-8
+/// 字节数小于磁盘 tag 字段宽度。</para>
 /// </param>
 /// <param name="SizeBytes">
 /// Device size in bytes; validation requires a positive, block-aligned count.
 /// <para>设备大小（字节）；校验要求为正数且按块对齐。</para>
 /// </param>
-public sealed record ErofsDeviceSpec(string Tag, long SizeBytes);
+public sealed record ErofsDeviceSpec(string Tag, long SizeBytes)
+{
+    /// <summary>
+    /// Raw tag bytes the device slot holds; authoritative over <see cref="Tag"/> when present. The on-disk tag
+    /// field is a fixed 64-byte array that upstream fills with a digest for blob-backed devices, so those bytes
+    /// cannot always be represented as text and are carried verbatim instead.
+    /// <para>设备槽携带的原始 tag 字节；存在时优先于 <see cref="Tag"/>。磁盘 tag 字段是固定 64 字节数组，上游
+    /// 会为 blob 支撑的设备填入摘要，因此这些字节并不总能表示为文本，改为按原样携带。</para>
+    /// </summary>
+    /// <value>The authoritative raw bytes, or <see langword="null"/> when the descriptor was authored from text
+    /// only and the writer has to fall back to <see cref="Tag"/>.
+    /// <para>权威原始字节；描述符仅由文本构造时为 <see langword="null"/>，此时写入方回退到 <see cref="Tag"/>。</para></value>
+    internal byte[]? TagBytes { get; init; }
+}
 
 internal sealed record ErofsSourceDevice(byte[] Tag, ulong Blocks, ulong UniAddr);

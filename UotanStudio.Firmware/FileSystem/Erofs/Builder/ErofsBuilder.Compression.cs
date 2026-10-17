@@ -86,20 +86,167 @@ public sealed partial class ErofsBuilder
     /// 更长的跨度，其编码以被接受帧的字节开头却不会在同样的位置收尾，若把这段前缀写入暂存文件，索引会记给
     /// 该帧 <c>acceptedLen</c> 字节，而盘上帧却解码成另一个跨度，合规读取方会报
     /// <c>failed to full decompress</c>。</para>
+    /// <para>Reads also credit each accepted frame with the cluster that carries its end: 5.10's
+    /// <c>z_erofs_map_blocks_iter</c> keeps <c>end = (lcn + 1) &lt;&lt; lclusterbits</c> for the cluster a lookup
+    /// starts in and <c>z_erofs_extent_lookback</c> only rewinds the start, so <c>zdata.c</c> folds that rounded
+    /// length into <c>pcl-&gt;length</c> and <c>z_erofs_lz4_decompress</c> returns <c>-EIO</c> whenever
+    /// <c>ret != rq-&gt;outputsize</c>. A frame for a file whose data ends inside its final logical cluster
+    /// therefore has to encode that whole cluster, so the candidate that reaches the end of file with a partial
+    /// tail is compressed from a zero-filled input up to the cluster boundary. erofs-utils meets the same
+    /// contract differently — it leaves the residual end offset in <c>ctx-&gt;clusterofs</c> and
+    /// <c>z_erofs_fini_full_indexes</c> closes the index with a trailing row — which is only available while the
+    /// row after the head stays free for a block count; padding the input keeps the emitted rows unchanged and
+    /// keeps a sub-block tail inside its own frame instead of spending a whole block on it.</para>
+    /// <para>读取方还会把每个被接受的帧记到承载其末端的那个簇上：5.10 的 <c>z_erofs_map_blocks_iter</c> 对查找起点的簇
+    /// 保持 <c>end = (lcn + 1) &lt;&lt; lclusterbits</c>，而 <c>z_erofs_extent_lookback</c> 只回退起点，因此
+    /// <c>zdata.c</c> 把取整后的长度折进 <c>pcl-&gt;length</c>，而 <c>z_erofs_lz4_decompress</c> 只要
+    /// <c>ret != rq-&gt;outputsize</c> 就返回 <c>-EIO</c>。因此数据在末尾逻辑簇内结束的文件，其帧必须编码整个簇，
+    /// 所以触及文件末尾且带不满簇尾巴的候选会从补零到簇边界的输入压缩。erofs-utils 以另一种方式满足同一契约——把
+    /// 剩余结束偏移留在 <c>ctx-&gt;clusterofs</c> 而由 <c>z_erofs_fini_full_indexes</c> 以尾行收尾——但那只在头行之后
+    /// 的那一行仍可用于块数时可行；补零输入保持已发出的行不变，并让不足一块的尾巴留在自己的帧里，而不必为它花掉
+    /// 整整一个块。</para>
     /// </summary>
+    /// <summary>
+    /// Reports whether a frame accepted for <paramref name="candidateLength"/> bytes at
+    /// <paramref name="position"/> can be closed by the index row a reader expects when a file's data ends
+    /// inside its final logical cluster. A reader credits such a frame with the cluster that carries its end
+    /// (5.10's <c>z_erofs_map_blocks_iter</c> keeps <c>end = (lcn + 1) &lt;&lt; lclusterbits</c> and
+    /// <c>z_erofs_extent_lookback</c> only rewinds the start, so <c>zdata.c</c> demands that rounded size and
+    /// <c>z_erofs_lz4_decompress</c> returns <c>-EIO</c> when the stream produces less). The row that closes the
+    /// extent — the trailing row erofs-utils emits from <c>z_erofs_fini_full_indexes</c>, a plain row whose
+    /// cluster offset is the residual end offset — keeps the demand equal to the bytes the frame encodes, and it
+    /// is written for the last cluster of the last pcluster. It can only stand in for a non-head row of a
+    /// multi-cluster pcluster, and it takes the place of the block count row a multi-block frame needs, so a
+    /// two-cluster frame above one block cannot use it: such a candidate is refused here and the planner falls
+    /// back to a shorter span plus a plain pcluster for the residual, which every reader copies instead of
+    /// decompressing.
+    /// <para>判断在 <paramref name="position"/> 处为 <paramref name="candidateLength"/> 字节接受的帧，能否由读取方在
+    /// 文件数据结束于末尾逻辑簇内时所期待的索引行收尾。读取方会把这样的帧记到承载其末端的簇上（5.10 的
+    /// <c>z_erofs_map_blocks_iter</c> 保持 <c>end = (lcn + 1) &lt;&lt; lclusterbits</c>，而
+    /// <c>z_erofs_extent_lookback</c> 只回退起点，因此 <c>zdata.c</c> 要求的正是取整后的长度，而
+    /// <c>z_erofs_lz4_decompress</c> 在流产出不足时返回 <c>-EIO</c>）。收尾该 extent 的行——erofs-utils 由
+    /// <c>z_erofs_fini_full_indexes</c> 发出的尾行，即簇偏移等于剩余结束偏移的 plain 行——会让要求量等于帧实际编码的
+    /// 字节数，且它为最后一个 pcluster 的最后一个簇而写。它只能替代多簇 pcluster 的非头行，并且会占掉多块帧所需的块数行，
+    /// 因此跨两簇且超过一块的帧不能使用它：此类候选在此被拒绝，规划器退化为更短的跨度加一个承载剩余字节的原样
+    /// pcluster，任何读取方都逐字节拷贝而不解压。</para>
+    /// </summary>
+    /// <param name="position">Byte offset the candidate starts at. <para>候选的起始字节偏移。</para></param>
+    /// <param name="candidateLength">Candidate length in bytes. <para>候选的字节长度。</para></param>
+    /// <param name="encodedLength">Compressed length of the accepted frame. <para>已接受帧的压缩长度。</para></param>
+    /// <param name="clusterSize">Logical cluster size in bytes. <para>逻辑簇大小（字节）。</para></param>
+    /// <param name="size">File size in bytes. <para>文件大小（字节）。</para></param>
+    /// <param name="blockSize">Filesystem block size in bytes. <para>文件系统块大小（字节）。</para></param>
+    /// <returns><see langword="true"/> when no closing row is due or the due row can carry the extent.
+    /// <para>无需收尾行，或应付的收尾行能够承载该 extent 时为 <see langword="true"/>。</para></returns>
+    private static bool AcceptsClosingIndexRow(long position, int candidateLength, int encodedLength,
+        int clusterSize, long size, int blockSize)
+    {
+        if (size % clusterSize == 0 || position + candidateLength != size)
+        {
+            return true;
+        }
+
+        var clusters = CeilDiv(position + candidateLength, clusterSize) - position / clusterSize;
+        if (clusters < 2)
+        {
+            return false;
+        }
+
+        return clusters >= 3 || CeilDiv(encodedLength, blockSize) == 1;
+    }
+
+    /// <summary>
+    /// Reports whether every extent of a finished plan can be closed the way a reader needs at end of file.
+    /// The dense planner accepts byte-granular spans, so a file whose data ends inside its final logical
+    /// cluster can come back with a frame that is refused by <see cref="AcceptsClosingIndexRow"/>; such a plan
+    /// is dropped in favour of the cluster-restarting planner, which enforces that rule while it searches.
+    /// <para>判断一份已完成规划中的每个 extent 都能按读取方在文件末尾所需的方式收尾。dense 规划器接受字节粒度的
+    /// 跨度，因此数据结束于末尾逻辑簇内的文件可能返回被 <see cref="AcceptsClosingIndexRow"/> 拒绝的帧；此类规划会被
+    /// 舍弃，改用边搜索边执行该规则的逐簇重启规划器。</para>
+    /// </summary>
+    /// <param name="node">Node the plan belongs to. <para>该规划所属的节点。</para></param>
+    /// <param name="plans">Plans produced by the dense planner. <para>dense 规划器产出的规划。</para></param>
+    /// <param name="blockSize">Filesystem block size in bytes. <para>文件系统块大小（字节）。</para></param>
+    /// <returns><see langword="true"/> when no closing row is refused. <para>没有被拒绝的收尾行时为
+    /// <see langword="true"/>。</para></returns>
+    private static bool ClosesSafely(ErofsInode node, ErofsPclusterPlan[] plans, int blockSize)
+    {
+        if (plans.Length == 0)
+        {
+            return true;
+        }
+
+        var clusterSize = node.LogicalClusterSize;
+        for (var index = 0; index < plans.Length; index++)
+        {
+            var plan = plans[index];
+            if (plan.Plain || clusterSize <= 0)
+            {
+                continue;
+            }
+
+            if (!AcceptsClosingIndexRow(plan.SourceOffset, plan.SourceLength, plan.CompressedLength,
+                clusterSize, (long)node.Size, blockSize))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Reports whether the row at <paramref name="clusterIndex"/> is the closing row of the file's last
+    /// compressed pcluster, i.e. the trailing plain row erofs-utils writes from
+    /// <c>z_erofs_fini_full_indexes</c> whose cluster offset is the residual end offset. A reader only reaches
+    /// that offset at end of file, so the row never resolves to a physical address; it exists so the extent
+    /// before it is credited with the bytes it really encodes instead of a whole final cluster.
+    /// <para>判断 <paramref name="clusterIndex"/> 处的行是否为文件最后一个压缩 pcluster 的收尾行，即 erofs-utils 由
+    /// <c>z_erofs_fini_full_indexes</c> 写出、簇偏移等于剩余结束偏移的尾部 plain 行。读取方只会在文件末尾到达该偏移，
+    /// 因此该行永远不会解析出物理地址；它的存在只是让之前的 extent 被记为它真正编码的字节数，而不是整个末尾簇。</para>
+    /// </summary>
+    /// <param name="node">Node being written. <para>正在写出的节点。</para></param>
+    /// <param name="pclusters">Planned pclusters of the node. <para>该节点已规划的 pcluster。</para></param>
+    /// <param name="pclusterIndex">Plan the row belongs to. <para>该行所属的规划项。</para></param>
+    /// <param name="clusterIndex">Logical cluster the row describes. <para>该行描述的逻辑簇。</para></param>
+    /// <returns><see langword="true"/> when the row closes the extent. <para>该行收尾该 extent 时为
+    /// <see langword="true"/>。</para></returns>
+    private static bool IsClosingIndexRow(ErofsInode node, ErofsPclusterPlan[] pclusters, int pclusterIndex, long clusterIndex)
+    {
+        if (pclusterIndex + 1 != pclusters.Length || (long)node.Size % node.LogicalClusterSize == 0)
+        {
+            return false;
+        }
+
+        if (clusterIndex != (long)node.Size / node.LogicalClusterSize)
+        {
+            return false;
+        }
+
+        var headCluster = pclusters[pclusterIndex].SourceOffset / node.LogicalClusterSize;
+        return PlanEndCluster(node, pclusterIndex) - headCluster >= 2;
+    }
+
     private static ErofsPclusterPlan[]? TryPlanCompressed(ErofsInode node, int blockSize, ErofsOptions options,
         Core.CompressionPayloadStaging staging)
     {
         if (options.OptimizeCompression && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
-            return TryPlanDenseCompressed(node, blockSize, options, staging);
+        {
+            var dense = TryPlanDenseCompressed(node, blockSize, options, staging);
+            if (dense is null || ClosesSafely(node, dense, blockSize))
+            {
+                return dense;
+            }
+        }
+
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         var clusterSize = node.LogicalClusterSize;
         if (options.Algorithm == ErofsCompressionAlgorithm.Lz4 && options.Lz4MaxDistance != 0
             && options.Lz4MaxDistance < clusterSize) return null;
         var bigPcluster = DeclaredBigPcluster(options);
-        var frameLimit = bigPcluster
-            ? Math.Min(options.MaxPclusterSize, ErofsCompression.MaxPclusterSize) - 8
-            : blockSize;
+        var frameLimit = bigPcluster ? Math.Min(options.MaxPclusterSize, ErofsCompression.MaxPclusterSize) : blockSize;
+        var fillDestination = bigPcluster && options.Algorithm == ErofsCompressionAlgorithm.Lz4
+            && !options.InterlacedPlainPclusters;
         var totalClusters = CeilDiv((long)node.Size, clusterSize);
         var raw = new byte[clusterSize * 64];
         var compressed = new byte[ErofsCompression.MaximumOutputSize((ErofsAlgorithm)options.Algorithm, raw.Length)];
@@ -107,7 +254,7 @@ public sealed partial class ErofsBuilder
         var plans = new List<ErofsPclusterPlan>();
         var pos = 0L;
         var clusterIndex = 0L;
-        while (clusterIndex < totalClusters)
+        while (pos < (long)node.Size)
         {
             options.CancellationToken.ThrowIfCancellationRequested();
 
@@ -119,19 +266,16 @@ public sealed partial class ErofsBuilder
                 && options.Lz4MaxDistance is > 0 and < ErofsCompression.Lz4DistanceMax)
                 maxTake = (int)Math.Max(1, Math.Min(maxTake, options.Lz4MaxDistance / clusterSize));
 
-            bool TryTake(int take, out int candidateLen, out int outLen)
+            var inputCap = (int)Math.Min((long)node.Size - pos, (long)maxTake * clusterSize);
+
+            bool TrySpan(int candidateLen, out int outLen)
             {
-                candidateLen = (int)Math.Min((long)node.Size - pos, (long)take * clusterSize);
-                if (!bigPcluster)
+                outLen = 0;
+                if (candidateLen <= 0 || candidateLen > raw.Length)
                 {
-                    var tail = candidateLen % clusterSize;
-                    if (tail != 0) candidateLen -= tail;
-                }
-                if (candidateLen <= 0)
-                {
-                    outLen = 0;
                     return false;
                 }
+
                 if (candidateLen > buffered)
                 {
                     fs.Position = pos + buffered;
@@ -151,8 +295,39 @@ public sealed partial class ErofsBuilder
                     return false;
                 }
 
+                if (pos % clusterSize != 0 && pos % clusterSize + candidateLen <= clusterSize)
+                {
+                    return false;
+                }
+
+                if (!AcceptsClosingIndexRow(pos, candidateLen, outLen, clusterSize, (long)node.Size, blockSize))
+                {
+                    return false;
+                }
+
                 compressed.AsSpan(0, outLen).CopyTo(accepted);
                 return true;
+            }
+
+            int ClusterLength(int take)
+            {
+                var candidateLen = (int)Math.Min((long)node.Size - pos, (long)take * clusterSize);
+                if (!bigPcluster)
+                {
+                    var tail = candidateLen % clusterSize;
+                    if (tail != 0)
+                    {
+                        candidateLen -= tail;
+                    }
+                }
+
+                return candidateLen;
+            }
+
+            bool TryTake(int take, out int candidateLen, out int outLen)
+            {
+                candidateLen = ClusterLength(take);
+                return TrySpan(candidateLen, out outLen);
             }
 
             var lo = 0;
@@ -193,13 +368,63 @@ public sealed partial class ErofsBuilder
                 }
             }
 
+            if (fillDestination)
+            {
+                // lib/compress.c:602-614 hands the encoder a destination budget of one pcluster and takes
+                // whatever input it consumed (`erofs_compress_destsize`, lib/compressor_lz4.c:15-26), so the span
+                // a pcluster covers is neither a whole number of logical clusters nor bounded by the pcluster
+                // size. The cluster search above can therefore only bracket the span: it stops at the first
+                // whole-cluster multiple whose encoding no longer fits. Searching the bracket by byte recovers
+                // the span the destination-filling encoder would have consumed, which is what lets a pcluster
+                // whose compression ratio is below one but whose encoding rounds up to the same block count as
+                // its input still hold more logical bytes than physical ones.
+                // <para>lib/compress.c:602-614 把一整个 pcluster 的输出预算交给编码器，并采纳它消耗掉的输入
+                // （<c>erofs_compress_destsize</c>，lib/compressor_lz4.c:15-26），因此 pcluster 覆盖的跨度既不是
+                // 整数个逻辑簇，也不受 pcluster 大小约束。上面的逐簇搜索只能给出跨度的区间：它在第一个编码放不下的
+                // 整簇倍数处停下。按字节在该区间内搜索即可还原「填满输出」的编码器会消耗掉的跨度，这正是压缩比
+                // 小于一、但编码长度向上取整后与输入同块数的 pcluster 仍能装进比物理块数更多逻辑字节的原因。</para>
+                var high = (int)Math.Min(inputCap, (long)hi * clusterSize);
+                var low = acceptedLen;
+                while (high - low > 1)
+                {
+                    var mid = low + (high - low) / 2;
+                    if (TrySpan(mid, out var midOut))
+                    {
+                        low = mid;
+                        acceptedLen = mid;
+                        acceptedOut = midOut;
+                    }
+                    else
+                    {
+                        high = mid;
+                    }
+                }
+            }
+
+            // lib/compress.c:616-628 rounds an encoded length up to a whole block and keeps the compressed frame
+            // only when that rounded length is strictly smaller than the bytes the frame encodes; otherwise the
+            // span is stored raw one block at a time. The test has to run on the candidate the search settled on:
+            // moving it into the probe would make the very first whole-cluster probe fail on any span whose
+            // encoding rounds up to its own length, and the escalating probe leaves the search at that first
+            // failure, so the file would fall back to raw storage as a whole instead of one block at a time.
+            // <para>lib/compress.c:616-628 把编码长度向上取整到整块，且仅当取整后的长度严格小于该帧编码的
+            // 字节数时才保留压缩帧；否则该跨度按一块一段原样存放。该判定必须作用于搜索最终选定的候选：若把它
+            // 移进探测内部，任何编码长度向上取整后等于自身长度的跨度都会让第一个整簇探测失败，而递增式探测正
+            // 停在这次失败处，于是整份文件会退回整文件原样存放，而不是一块一段地原样存放。</para>
+            if (acceptedLen > 0 && acceptedOut > 0
+                && CeilDiv(acceptedOut, blockSize) * blockSize >= acceptedLen)
+            {
+                acceptedLen = 0;
+                acceptedOut = 0;
+            }
+
             if (acceptedLen <= 0 || acceptedOut <= 0)
             {
                 if (clusterSize != blockSize) return null;
                 var length = (int)Math.Min((long)node.Size - pos, clusterSize);
                 plans.Add(new ErofsPclusterPlan { SourceOffset = pos, SourceLength = length, CompressedLength = length, Plain = true });
                 pos += length;
-                clusterIndex++;
+                clusterIndex = CeilDiv(pos, clusterSize);
                 continue;
             }
 
@@ -211,10 +436,11 @@ public sealed partial class ErofsBuilder
                 StagedOffset = staging.Append(accepted.AsSpan(0, acceptedOut))
             });
             pos += acceptedLen;
-            clusterIndex += CeilDiv(acceptedLen, clusterSize);
+            clusterIndex = CeilDiv(pos, clusterSize);
         }
 
-        if (plans.Sum(p => CeilDiv(p.CompressedLength, blockSize)) >= totalClusters)
+        if (plans.Count > 0 && node.SourceInode is not { SourceCompressed: true }
+            && plans.Sum(p => CeilDiv(p.CompressedLength, blockSize)) >= totalClusters)
         {
             return null;
         }
@@ -528,9 +754,10 @@ public sealed partial class ErofsBuilder
         WriteAt(output, indexOffset, header, header.Length);
 
         var cursor = ZErofsMapHeader.ExtentAreaBase(indexOffset, recordSize);
-        var physical = checked((long)pclusters[0].BlockAddress * blockSize);
+        var chained = recordSize <= 4;
+        var physical = chained ? checked((long)pclusters[0].BlockAddress * blockSize) : 0L;
         var logical = 0L;
-        if (recordSize <= 4)
+        if (chained)
         {
             var initial = new byte[ZErofsMapHeader.ExtentPrefixBytes];
             BinaryPrimitives.WriteUInt64LittleEndian(initial, (ulong)physical);
@@ -550,12 +777,18 @@ public sealed partial class ErofsBuilder
             BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(recordOffset), encoded);
             if (recordSize >= 8)
             {
-                BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(recordOffset + 4), (uint)physical);
+                var extentPhysical = chained
+                    ? physical
+                    : checked((long)plan.BlockAddress * blockSize);
+                BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(recordOffset + 4), (uint)extentPhysical);
             }
 
             if (recordSize >= 16)
             {
-                BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(recordOffset + 8), (uint)(physical >> 32));
+                var extentPhysical = chained
+                    ? physical
+                    : checked((long)plan.BlockAddress * blockSize);
+                BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(recordOffset + 8), (uint)(extentPhysical >> 32));
                 BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(recordOffset + 12), (uint)logical);
             }
 
@@ -566,7 +799,10 @@ public sealed partial class ErofsBuilder
 
             pending++;
             logical += plan.SourceLength;
-            physical += encoded & ZErofsMapHeader.ExtentPlenMask;
+            if (chained)
+            {
+                physical += encoded & ZErofsMapHeader.ExtentPlenMask;
+            }
 
             if (pending * recordSize == entries.Length)
             {
@@ -665,31 +901,41 @@ public sealed partial class ErofsBuilder
             }
             else
             {
-                var d0 = c - headCluster;
-
-                var d1 = (ushort)Math.Min(headCluster + coveredClusters - c, (long)(ZErofsLclusterIndex.LiD0CblkCnt - 1));
-                BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart), ZErofsLclusterIndex.LclusterTypeNonHead);
-                BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart + 2), 0);
-                if (bigPcluster && d0 == 1 && !plan.Fragment)
+                if (IsClosingIndexRow(node, pclusters, pclusterIndex, c))
                 {
-
-                    var compressedBlocks = CeilDiv(plan.CompressedLength, blockSize);
-                    if (compressedBlocks >= ZErofsLclusterIndex.LiD0CblkCnt)
-                    {
-                        throw new FileSystemCorruptedException(
-                            $"Pcluster block count {compressedBlocks} exceeds the CBLKCNT limit for '{node.FullPath}'.");
-                    }
-
-                    BinaryPrimitives.WriteUInt16LittleEndian(
-                        entries.AsSpan(entryStart + 4), (ushort)((uint)compressedBlocks | ZErofsLclusterIndex.LiD0CblkCnt));
+                    BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart), ZErofsLclusterIndex.LclusterTypePlain);
+                    BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart + 2),
+                        (ushort)((long)node.Size % node.LogicalClusterSize));
+                    BinaryPrimitives.WriteUInt32LittleEndian(entries.AsSpan(entryStart + 4), 0);
                 }
                 else
                 {
-                    BinaryPrimitives.WriteUInt16LittleEndian(
-                        entries.AsSpan(entryStart + 4), (ushort)Math.Min(d0, (long)(ZErofsLclusterIndex.LiD0CblkCnt - 1)));
-                }
+                    var d0 = c - headCluster;
 
-                BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart + 6), d1);
+                    var d1 = (ushort)Math.Min(headCluster + coveredClusters - c, (long)(ZErofsLclusterIndex.LiD0CblkCnt - 1));
+                    BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart), ZErofsLclusterIndex.LclusterTypeNonHead);
+                    BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart + 2), 0);
+                    if (bigPcluster && d0 == 1 && !plan.Fragment)
+                    {
+
+                        var compressedBlocks = CeilDiv(plan.CompressedLength, blockSize);
+                        if (compressedBlocks >= ZErofsLclusterIndex.LiD0CblkCnt)
+                        {
+                            throw new FileSystemCorruptedException(
+                                $"Pcluster block count {compressedBlocks} exceeds the CBLKCNT limit for '{node.FullPath}'.");
+                        }
+
+                        BinaryPrimitives.WriteUInt16LittleEndian(
+                            entries.AsSpan(entryStart + 4), (ushort)((uint)compressedBlocks | ZErofsLclusterIndex.LiD0CblkCnt));
+                    }
+                    else
+                    {
+                        BinaryPrimitives.WriteUInt16LittleEndian(
+                            entries.AsSpan(entryStart + 4), (ushort)Math.Min(d0, (long)(ZErofsLclusterIndex.LiD0CblkCnt - 1)));
+                    }
+
+                    BinaryPrimitives.WriteUInt16LittleEndian(entries.AsSpan(entryStart + 6), d1);
+                }
             }
 
             pending++;
@@ -710,9 +956,29 @@ public sealed partial class ErofsBuilder
     /// <summary>
     /// Writes compact EROFS indexes: 4-byte entries in 8-byte packs, and, when the inode declares
     /// <c>Z_EROFS_ADVISE_COMPACTED_2B</c>, a middle section of 2-byte entries in 32-byte packs between a
-    /// 4-byte head and a 4-byte tail.
+    /// 4-byte head and a 4-byte tail. Every pack's trailing four bytes carry the block address a reader adds
+    /// the block count it recovers by walking that pack's entries backwards, and the value follows
+    /// <c>write_compacted_indexes</c> in <c>lib/compress.c</c> literally: the base is the running block
+    /// address at the pack start, raised by one exactly once per pack when the pack's first non-NONHEAD row
+    /// (a head, a plain row, or a trailing hole row) observes <c>dummy_head</c> set, because the reader's
+    /// big-pcluster walk counts from zero there. A pack whose first row is a NONHEAD row is deliberately not
+    /// raised: when that row is the CBLKCNT row of the pcluster the previous pack ended inside, the reader
+    /// recovers that pcluster's block count from it instead, and the same row clears <c>dummy_head</c>, so
+    /// the head following it never sees the flag and is never raised either. The raise is consumed by the
+    /// first non-NONHEAD row whether or not it observed the flag, which is what upstream's
+    /// <c>update_blkaddr</c> latch does. The zero filler slots that pad the final pack's tail are not
+    /// non-NONHEAD rows here: they can only follow every real row of that pack, so a pack that carries a head
+    /// consumes the latch on a real row first and the base it records is unaffected.
     /// <para>写出紧凑 EROFS 索引：每条 4 字节、按 8 字节打包；当 inode 声明
-    /// <c>Z_EROFS_ADVISE_COMPACTED_2B</c> 时，在 4 字节头部与 4 字节尾部之间插入按 32 字节打包的 2 字节中段。</para>
+    /// <c>Z_EROFS_ADVISE_COMPACTED_2B</c> 时，在 4 字节头部与 4 字节尾部之间插入按 32 字节打包的 2 字节中段。
+    /// 每个包末尾四字节存放读取方在包内反向遍历时叠加块数的基准，其取值逐条对应 <c>lib/compress.c</c> 的
+    /// <c>write_compacted_indexes</c>：基准等于包起点处的运行块地址，且每包最多抬高一次——当且仅当本包首个非
+    /// 非头行（head、plain 行或尾部洞行）观察到 <c>dummy_head</c> 置起时抬高，因为读取方的 big-pcluster 遍历在
+    /// 该处从零起算。首行为非头行的包刻意不抬高：若该行是上一包结束处所在 pcluster 的 CBLKCNT 行，读取方改为
+    /// 从该行取回该 pcluster 的块数，而同一行会把 <c>dummy_head</c> 置为假，因此紧随其后的 head 观察不到该标志，
+    /// 同样不会被抬高。抬高只被本包首个非头行消费一次，无论该行是否观察到标志，这正是上游
+    /// <c>update_blkaddr</c> 闩锁的语义。补齐末包尾部的全零槽位在此不算非头行：它们只能位于该包所有真实行
+    /// 之后，因此承载 head 的包必先在某真实行上消费掉该闩锁，其记录的基准不受这些槽位影响。</para>
     /// </summary>
     private static void WriteCompactedIndexes4B(Stream output, long tableOffset, ErofsInode node, int blockSize)
     {
@@ -786,7 +1052,8 @@ public sealed partial class ErofsBuilder
             var encodebits = (packSize * 8 - 32) / vcnt;
             var pack = new byte[packSize];
 
-            var packStartBlkaddr = blkaddr + (bigPcluster && dummyHead ? 1 : 0);
+            var packStartBlkaddr = blkaddr;
+            var updatePackBlkaddr = bigPcluster;
             var bits = 0;
             for (var i = 0; i < vcnt; i++)
             {
@@ -801,8 +1068,17 @@ public sealed partial class ErofsBuilder
                     {
                         type = 0;
                         offset = (uint)((long)node.Size % node.LogicalClusterSize);
-                        if (dummyHead) blkaddr++;
+                        if (dummyHead)
+                        {
+                            blkaddr++;
+                            if (updatePackBlkaddr)
+                            {
+                                packStartBlkaddr = blkaddr;
+                            }
+                        }
+
                         dummyHead = true;
+                        updatePackBlkaddr = false;
                     }
                     else if (entryIndex == headCluster)
                     {
@@ -812,6 +1088,11 @@ public sealed partial class ErofsBuilder
                         if (dummyHead)
                         {
                             blkaddr++;
+                            if (updatePackBlkaddr)
+                            {
+                                packStartBlkaddr = blkaddr;
+                            }
+
                             if (!plan.Fragment && blkaddr != plan.BlockAddress)
                             {
                                 throw new FileSystemCorruptedException(
@@ -820,12 +1101,18 @@ public sealed partial class ErofsBuilder
                         }
 
                         dummyHead = true;
+                        updatePackBlkaddr = false;
                     }
                     else
                     {
                         type = 2;
                         var d0 = entryIndex - headCluster;
-                        if (bigPcluster && d0 == 1 && !plan.Fragment)
+                        if (IsClosingIndexRow(node, pclusters, pclusterIndex, entryIndex))
+                        {
+                            type = 0;
+                            offset = (uint)((long)node.Size % node.LogicalClusterSize);
+                        }
+                        else if (bigPcluster && d0 == 1 && !plan.Fragment)
                         {
 
                             var compressedBlocks = CeilDiv(plan.CompressedLength, blockSize);
@@ -963,8 +1250,15 @@ public sealed partial class ErofsBuilder
 
     private static void WriteZeroes(Stream output, long offset, long count)
     {
-        output.Position = offset;
-        var zeroes = new byte[Math.Min(count, 1 << 16)];
+        // Mirrors WriteAt: a plain cluster writes its padding immediately after its payload, so the
+        // cursor already sits at the padding start and re-seeking is a wasted syscall.
+        // <para>与 WriteAt 一致：原样簇在负载之后紧接着写补齐，因此游标已停在补齐起点，重复定位是浪费的系统调用。</para>
+        if (output.Position != offset)
+        {
+            output.Position = offset;
+        }
+
+        var zeroes = ZeroBuffer;
         var written = 0L;
         while (written < count)
         {
@@ -973,6 +1267,15 @@ public sealed partial class ErofsBuilder
             written += n;
         }
     }
+
+    /// <summary>
+    /// Shared zero buffer reused by every padding write. Padding runs once per pcluster and once per plain
+    /// cluster, so a per-call array would turn one image into tens of thousands of short-lived buffers.
+    /// The buffer is only ever read, so sharing it between writes needs no synchronization.
+    /// <para>由所有补齐写共享的零缓冲。补齐在每个 pcluster 与每个原样簇上各发生一次，因此按调用分配数组会让
+    /// 一次镜像构建产生数万个短命缓冲。该缓冲只被读取，因此在写之间共享无需同步。</para>
+    /// </summary>
+    private static readonly byte[] ZeroBuffer = new byte[1 << 16];
 
     /// <summary>
     /// Writes the packed inode's fragment data area: each fragment slot's source bytes are streamed to its offset inside the packed region (unwritten gaps stay zeroed by the image's preallocation).
@@ -1242,7 +1545,18 @@ public sealed partial class ErofsBuilder
 
     private static void WriteAt(Stream output, long offset, byte[] data, int count)
     {
-        output.Position = offset;
+        // Pcluster writes are right-aligned inside a block-rounded region, so a padded frame performs a
+        // padding write immediately followed by a frame write at the offset that write just reached.
+        // Re-issuing the seek in that case costs a syscall per pcluster for a position the stream already
+        // reports, so the seek is skipped when the cursor is already where the write belongs.
+        // <para>pcluster 写在按块取整的区间内右对齐，因此带填充的帧会在补齐写之后紧接着把帧写到该写刚到达的
+        // 偏移上。此时重复发定位会为每个 pcluster 白付一次系统调用，而流自身已经报告了该位置，因此在游标
+        // 已就位时跳过定位。</para>
+        if (output.Position != offset)
+        {
+            output.Position = offset;
+        }
+
         output.Write(data, 0, count);
     }
 }

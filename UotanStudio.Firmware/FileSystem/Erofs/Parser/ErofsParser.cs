@@ -588,11 +588,37 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>不存在与该路径逐字匹配的文件。</para></exception>
     /// <exception cref="FileSystemCorruptedException">The file's metadata or data blocks are malformed.
     /// <para>文件的元数据或数据块非法。</para></exception>
+    /// <remarks>
+    /// The buffer is sized from the inode instead of growing, so decoding writes the payload once rather than
+    /// leaving a second full copy behind from <c>MemoryStream.ToArray</c>. A malformed inode whose declared size
+    /// disagrees with what the decoder produces still throws <see cref="FileSystemCorruptedException"/>, because
+    /// the length check runs after the write completes and this method still allocates from that same length.
+    /// <para>缓冲区按 inode 大小一次分配，解码只写一份负载，不再由 <c>MemoryStream.ToArray</c> 留下第二份完整拷贝。
+    /// 声明大小与解码结果不一致的非法 inode 仍会抛出 <see cref="FileSystemCorruptedException"/>：长度校验在写完之后
+    /// 执行，而本方法仍然按同一长度分配。</para>
+    /// </remarks>
     public byte[] ReadFileBytes(string path)
     {
-        using var buffer = new MemoryStream();
-        ReadFile(path, buffer);
-        return buffer.ToArray();
+        ArgumentNullException.ThrowIfNull(path);
+
+        var nid = FindFile(path);
+        var inode = ReadInode(nid);
+        var length = checked((int)inode.Size);
+        if (length == 0)
+        {
+            return [];
+        }
+
+        var result = new byte[length];
+        using var buffer = new MemoryStream(result, 0, length, writable: true);
+        WriteFileData(nid, inode, buffer);
+        if (buffer.Position != length)
+        {
+            throw new FileSystemCorruptedException(
+                $"EROFS file '{path}' declared size {length} but produced {buffer.Position} bytes.");
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -669,7 +695,7 @@ public sealed partial class ErofsParser : IDisposable
         var entries = EnumerateFiles();
         var firstNids = new Dictionary<string, ulong>(StringComparer.Ordinal);
         foreach (var entry in entries) firstNids.TryAdd(entry.Path, entry.Nid);
-        var hostPaths = new UotanStudio.Firmware.FileSystem.Extraction.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path).Concat(_directoryPaths));
+        var hostPaths = new Extraction.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path).Concat(_directoryPaths));
         foreach (var directory in _directoryPaths)
             Directory.CreateDirectory(hostPaths.Resolve(directory));
         var firstSizes = entries.GroupBy(e => e.Path, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Size, StringComparer.Ordinal);

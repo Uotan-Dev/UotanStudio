@@ -116,7 +116,7 @@ internal sealed class ErofsDirectoryEntry
                 NameOff = nameOff,
                 FileType = block[position + 10],
                 Reserved = block[position + 11],
-                Name = UotanStudio.Firmware.FileSystem.Extraction.PortableExtractionPaths.NameEncoding.GetString(block.Slice(nameOff, nameLength)),
+                Name = Extraction.PortableExtractionPaths.NameEncoding.GetString(block.Slice(nameOff, nameLength)),
             });
 
             expectedNameOff = nameOff + nameLength;

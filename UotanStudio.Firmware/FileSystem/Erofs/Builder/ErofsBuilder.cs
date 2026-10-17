@@ -220,7 +220,7 @@ public sealed partial class ErofsBuilder
         ErofsOptions? options,
         params string[] excludedPaths)
     {
-        UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemPreservation.RejectLossyDirectoryRebuild(directoryPath);
+        Rebuilding.FileSystemPreservation.RejectLossyDirectoryRebuild(directoryPath);
         ArgumentNullException.ThrowIfNull(directoryPath);
         if (!Directory.Exists(directoryPath))
         {
@@ -371,12 +371,12 @@ public sealed partial class ErofsBuilder
     /// <summary>
     /// Collects one host path into the node tree. Generated repack metadata is never payload: a
     /// <c>metadata.json</c> the extraction wrote into the tree root, or one whose shape
-    /// <see cref="UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile"/> validates, is skipped
+    /// <see cref="Core.Repacking.RepackMetadata.IsMetadataFile"/> validates, is skipped
     /// under an active edit plan too, where the plan membership test alone would have collected it. The
     /// plan test is still applied, so a file the plan does not project stays out as well.
     /// <para>把一个宿主路径收集为节点树。生成的打包元数据绝不是负载：解包写进目录树根部的
     /// <c>metadata.json</c>，或经
-    /// <see cref="UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile"/> 校验过的同形态文件，
+    /// <see cref="Core.Repacking.RepackMetadata.IsMetadataFile"/> 校验过的同形态文件，
     /// 在编辑计划生效时同样跳过，否则仅凭计划成员判定会把它收集进来。计划判定仍然生效，因此计划未投影的
     /// 文件同样不会进入。</para>
     /// </summary>
@@ -401,7 +401,7 @@ public sealed partial class ErofsBuilder
 
         if ((attributes & FileAttributes.ReparsePoint) != 0)
         {
-            string target = string.Empty;
+            var target = string.Empty;
             try { target = new FileInfo(fullPath).LinkTarget ?? string.Empty; } catch { }
             return new ErofsInode
             {
@@ -460,8 +460,8 @@ public sealed partial class ErofsBuilder
             };
             foreach (var childPath in Directory.EnumerateFileSystemEntries(fullPath))
             {
-                if (UotanStudio.Firmware.Core.Repacking.RepackMetadata.IsMetadataFile(childPath)
-                    || (UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Current is { } plan
+                if (Core.Repacking.RepackMetadata.IsMetadataFile(childPath)
+                    || (Rebuilding.FileSystemEditPlan.Current is { } plan
                         && !plan.Includes(childPath)))
                 {
                     continue;

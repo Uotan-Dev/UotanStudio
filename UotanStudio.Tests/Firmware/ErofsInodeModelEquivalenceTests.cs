@@ -256,7 +256,7 @@ public class ErofsInodeModelEquivalenceTests
             }
             catch (Exception ex) when (ex is FormatException or FileSystemException or NotSupportedException)
             {
-                skipped.Add($"{System.IO.Path.GetFileName(path)}: {ex.GetType().Name} {ex.Message}");
+                skipped.Add($"{Path.GetFileName(path)}: {ex.GetType().Name} {ex.Message}");
                 continue;
             }
 
@@ -270,7 +270,7 @@ public class ErofsInodeModelEquivalenceTests
                 }
                 catch (Exception ex) when (ex is FormatException or FileSystemException or NotSupportedException or InvalidOperationException)
                 {
-                    skipped.Add($"{System.IO.Path.GetFileName(path)}: {ex.GetType().Name} {ex.Message}");
+                    skipped.Add($"{Path.GetFileName(path)}: {ex.GetType().Name} {ex.Message}");
                     continue;
                 }
 
@@ -333,7 +333,7 @@ public class ErofsInodeModelEquivalenceTests
                 }
                 else
                 {
-                    skipped.Add($"{System.IO.Path.GetFileName(path)}: {entries.Count} entries, none comparable");
+                    skipped.Add($"{Path.GetFileName(path)}: {entries.Count} entries, none comparable");
                 }
             }
         }

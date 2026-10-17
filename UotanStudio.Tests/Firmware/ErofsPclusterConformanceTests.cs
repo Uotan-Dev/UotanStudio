@@ -129,6 +129,45 @@ public sealed class ErofsPclusterConformanceTests
         AssertFrames(image, payload, extents);
     }
 
+    /// <summary>Guards the row a conformant reader needs when a file's data ends inside its final logical
+    /// cluster. 5.10's <c>z_erofs_map_blocks_iter</c> keeps <c>end = (lcn + 1) &lt;&lt; lclusterbits</c> for the
+    /// cluster a lookup starts in and <c>z_erofs_extent_lookback</c> only rewinds the start, so a non-head row
+    /// left at that cluster would demand the whole cluster from the frame and
+    /// <c>z_erofs_lz4_decompress</c> answers <c>-EIO</c> whenever the stream produces less. erofs-utils closes
+    /// the index with the trailing plain row of <c>z_erofs_fini_full_indexes</c>, whose cluster offset is the
+    /// residual end offset, so the extent is credited exactly the bytes it encodes.
+    /// <para>守护文件数据结束于末尾逻辑簇内时合规读取方所需的那一行。5.10 的 <c>z_erofs_map_blocks_iter</c> 对查找起点的
+    /// 簇保持 <c>end = (lcn + 1) &lt;&lt; lclusterbits</c>，而 <c>z_erofs_extent_lookback</c> 只回退起点，因此若该簇上留着
+    /// 非头行，它就会要求帧产出整个簇，而 <c>z_erofs_lz4_decompress</c> 在流产出不足时返回 <c>-EIO</c>。erofs-utils 用
+    /// <c>z_erofs_fini_full_indexes</c> 的尾部 plain 行收尾索引，其簇偏移等于剩余结束偏移，使该 extent 被记为正
+    /// 它编码的字节数。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Build_PartialTailCluster_IsClosedByARowAtTheResidualOffset(bool compacted)
+    {
+        var payload = TextLikePayload(BlockSize + 46);
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", payload);
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            BlockSize = BlockSize,
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            Compress = true,
+            MaxPclusterSize = 4 * BlockSize,
+            UseCompactedIndexes = compacted,
+        });
+
+        using var parser = new ErofsParser(image);
+        Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
+        var rows = parser.DumpIndexClusters("data.bin");
+        var closing = rows[^1];
+        Assert.Equal((long)payload.Length / BlockSize, closing.Lcn);
+        Assert.NotEqual(NonHeadType, closing.Type);
+        Assert.Equal((int)(payload.Length % BlockSize), closing.ClusterOfs);
+    }
+
     [Fact]
     public void Build_UndeclaredBigPcluster_CreditedSpanDecodesFromTheOneNamedBlock()
     {
@@ -190,6 +229,100 @@ public sealed class ErofsPclusterConformanceTests
             Assert.True(expected.SequenceEqual(decoded.AsSpan(0, Math.Max(written, 0))),
                 $"the frame at block {extent.BlockAddress} decodes bytes that are not the payload credited at {extent.Start}.");
         }
+    }
+
+    /// <summary>
+    /// Guards the two rules that keep a planned pcluster from ever occupying more physical blocks than the
+    /// logical bytes it credits, both taken from <c>lib/compress.c</c>. Line 602-614 hands the encoder a whole
+    /// pcluster of output and takes whatever input it consumed, so the accepted span is byte-granular and is
+    /// not bounded by the logical cluster size; line 616-628 keeps a frame only when its block-rounded length
+    /// is strictly smaller than that span, so a span whose encoding rounds up to its own length is stored raw
+    /// one block at a time instead of being padded into a larger pcluster.
+    /// <para>守护两条规则：它们使已规划的 pcluster 绝不占用比它所记逻辑字节更多的物理块，两条都取自
+    /// <c>lib/compress.c</c>。第 602-614 行把一整个 pcluster 的输出交给编码器并采纳它消耗的输入，因此被接受的
+    /// 跨度是字节粒度的、不受逻辑簇大小约束；第 616-628 行只在取整后长度严格小于该跨度时保留压缩帧，因此编码长度
+    /// 向上取整后等于自身长度的跨度会按一块一段原样存放，而不会被超配进更大的 pcluster。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Build_BigPclusterFillDestinationTake_NeverStoresMoreBlocksThanTheSpanItCredits(bool compacted)
+    {
+        var payload = TextLikePayload(1024 * 1024 + 1237);
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", payload);
+        var extents = Plan(source.Path, payload, new ErofsOptions
+        {
+            BlockSize = BlockSize,
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            MaxPclusterSize = 16 * BlockSize,
+            UseCompactedIndexes = compacted,
+        }, out var image);
+
+        Assert.True(extents.Any(extent => !extent.Plain && extent.LogicalLength % BlockSize != 0),
+            $"every accepted span landed on a logical cluster boundary, so the take is still cluster-granular: {Describe(extents)}.");
+        foreach (var extent in extents)
+        {
+            if (extent.Plain)
+            {
+                continue;
+            }
+
+            var named = ReaderNamedBlocks(extent, image, payload, 16);
+            Assert.True(named > 0,
+                $"no block count a reader can name decodes the {extent.LogicalLength} bytes credited at {extent.Start}.");
+            Assert.True((long)named * BlockSize < extent.LogicalLength,
+                $"the frame at block {extent.BlockAddress} occupies {named} block(s) for the {extent.LogicalLength} bytes "
+                + "credited at its start, so the pcluster stores more physical bytes than the span it covers.");
+        }
+
+        AssertCoverage(extents, payload.LongLength);
+        AssertFrames(image, payload, extents);
+    }
+
+    /// <summary>
+    /// Guards the closing row under the byte-granular planner. A file whose data ends inside its final logical
+    /// cluster is closed by the trailing plain row of <c>z_erofs_fini_full_indexes</c>
+    /// (<c>lib/compress.c</c>:144-158): its cluster offset is the residual end offset and its block address is
+    /// zero, which is what makes the extent before it be credited exactly the bytes it encodes instead of a
+    /// whole final cluster.
+    /// <para>守护字节粒度规划器下的收尾行。数据结束于末尾逻辑簇内的文件由 <c>z_erofs_fini_full_indexes</c>
+    /// 的尾部 plain 行收尾（<c>lib/compress.c</c>:144-158）：其簇偏移是剩余结束偏移、块地址为零，这正是让前一个
+    /// extent 被记为正它编码的字节数而不是整个末尾簇的原因。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Build_ByteGranularTail_ClosingRowCreditsOnlyTheBytesTheFrameEncodes(bool compacted)
+    {
+        var payload = TextLikePayload(8 * BlockSize + 1301);
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", payload);
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            BlockSize = BlockSize,
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            MaxPclusterSize = 16 * BlockSize,
+            UseCompactedIndexes = compacted,
+        });
+
+        using var parser = new ErofsParser(image);
+        Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
+        var rows = parser.DumpIndexClusters("data.bin");
+        var closing = rows[^1];
+        Assert.Equal((long)payload.Length / BlockSize, closing.Lcn);
+        Assert.Equal(PlainType, closing.Type);
+        Assert.Equal((int)(payload.Length % BlockSize), closing.ClusterOfs);
+        if (!compacted)
+        {
+            Assert.Equal(0, closing.Pblk);
+        }
+
+        var extents = Extents(parser, "data.bin", payload.LongLength, BlockSize);
+        Assert.True(extents.Count == 1 && !extents[0].Plain && extents[0].LogicalLength == payload.Length,
+            $"the payload was not planned as one compressed extent closed by that row: {Describe(extents)}");
+        AssertCoverage(extents, payload.LongLength);
+        AssertFrames(image, payload, extents);
     }
 
     private static List<Extent> Plan(string tree, byte[] payload, ErofsOptions options, out byte[] image)

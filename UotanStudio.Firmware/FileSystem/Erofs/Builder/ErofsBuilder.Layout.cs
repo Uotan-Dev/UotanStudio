@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Text;
@@ -10,17 +11,17 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
 
 /// <summary>
 /// EROFS builder part that orchestrates the image layout phases extracted from
-/// <see cref="ErofsBuilder.BuildImage"/>: layout origin computation, edit plan binding,
+/// <see cref="BuildImage"/>: layout origin computation, edit plan binding,
 /// hardlink merging, payload planning, inode/data offset assignment, and the final write-out.
-/// <para>EROFS 构建器的组成部分，承载从 <see cref="ErofsBuilder.BuildImage"/> 拆出的镜像布局阶段：
+/// <para>EROFS 构建器的组成部分，承载从 <see cref="BuildImage"/> 拆出的镜像布局阶段：
 /// 布局起点计算、编辑计划绑定、硬链接合并、负载规划、inode 与数据偏移分配以及最终写出。</para>
 /// </summary>
 public sealed partial class ErofsBuilder
 {
     /// <summary>
     /// Shared mutable context threaded through the image build phases; it carries the values that
-    /// were locals of the former monolithic <see cref="ErofsBuilder.BuildImage"/> body.
-    /// <para>贯穿镜像构建各阶段共享的上下文；承载原先单体 <see cref="ErofsBuilder.BuildImage"/> 方法体
+    /// were locals of the former monolithic <see cref="BuildImage"/> body.
+    /// <para>贯穿镜像构建各阶段共享的上下文；承载原先单体 <see cref="BuildImage"/> 方法体
     /// 中的局部状态。</para>
     /// </summary>
     private sealed class ImageBuildContext(ErofsInode root, ErofsOptions options)
@@ -255,7 +256,8 @@ public sealed partial class ErofsBuilder
 
             var extraDevices = options.ExtraDeviceCount;
             var compressionConfiguration = BuildCompressionConfiguration(options);
-            var compressionConfigurationOffset = InodeTableStart + (options.Metabox ? ErofsSuperblock.ExtSlotSize : 0);
+            var compressionConfigurationOffset = InodeTableStart
+                + ResolveExtendedSlotCount(options, options.Metabox) * ErofsSuperblock.ExtSlotSize;
             long inodeTableStart;
             long devtOffset;
             ushort devtSlotOff;
@@ -288,6 +290,70 @@ public sealed partial class ErofsBuilder
         }
 
         /// <summary>
+        /// Resolves how many 16-byte extended superblock slots the emitted superblock carries
+        /// (<c>s_sb_extslots</c>). The recorded source count is the authority, because the compression
+        /// configuration area starts right behind that many slots; a recorded count is never silently lowered,
+        /// and one slot is kept whenever the build carries a metabox container, which is exactly when it
+        /// declares the metabox feature and therefore needs <c>s_metabox_nid</c> to live inside the first
+        /// extended slot. The layout origin is computed before any container exists, so it passes the options'
+        /// metabox request instead; without a recorded count both callers reproduce the repository's existing
+        /// default of one slot for a metabox build and none otherwise.
+        /// <para>解析写出的超级块携带多少 16 字节扩展槽位（<c>s_sb_extslots</c>）。记录下来的源计数是权威，
+        /// 因为压缩配置区紧跟在同样多的槽位之后；记录的计数绝不会被静默降低，而当构建携带 metabox 容器时至少保留
+        /// 一个槽位，因为这正是它声明 metabox 特性、从而需要让 <c>s_metabox_nid</c> 位于第一个扩展槽内的时刻。
+        /// 布局起点在任何容器存在之前就已算出，因此那里传入选项的 metabox 请求；未记录计数时两个调用点都复现仓库
+        /// 既有默认：metabox 构建一个槽位，其余零个。</para>
+        /// </summary>
+        /// <param name="options">Validated build options carrying the recorded count.
+        /// <para>携带已记录计数的经校验构建选项。</para></param>
+        /// <param name="metaboxDeclared">Whether this build carries the metabox container at the call site, or
+        /// requests the metabox feature while the layout origin is computed.
+        /// <para>该调用点上本次构建是否携带 metabox 容器，或在计算布局起点时是否请求 metabox 特性。</para></param>
+        /// <returns>The slot count to publish and to reserve in front of the compression configuration.
+        /// <para>要发布的槽位数量，同时也是压缩配置之前预留的长度。</para></returns>
+        private static byte ResolveExtendedSlotCount(ErofsOptions options, bool metaboxDeclared)
+        {
+            var recorded = options.SourceSbExtSlots ?? (byte)0;
+            var required = metaboxDeclared ? (byte)1 : (byte)0;
+            return Math.Max(recorded, required);
+        }
+
+        /// <summary>
+        /// Resolves the emitted <c>s_dirblkbits</c> from the recorded source value. The value is the log2 of the
+        /// directory block size, and this writer packs directory payloads into filesystem blocks, so only a
+        /// recorded geometry equal to the filesystem block size can be honoured; any other recorded geometry is
+        /// refused loudly instead of being replaced by a default, because publishing the recorded value would
+        /// describe blocks the payload does not follow and publishing zero would silently change the geometry.
+        /// <para>由已记录的源取值解析写出的 <c>s_dirblkbits</c>。该值是目录块大小的 log2，而本写入方把目录负载
+        /// 打包进文件系统块，因此只有与文件系统块大小相等的已记录几何才能兑现；其它任何已记录几何都会显式拒绝，
+        /// 而不是替换为默认值，因为发布记录值会描述负载并未遵循的块，而发布零会静默改变几何。</para>
+        /// </summary>
+        /// <returns>The recorded log2 when it names the filesystem block size, otherwise zero for a source that
+        /// recorded none. <para>已记录值指名文件系统块大小时返回该值，源未记录时返回零。</para></returns>
+        /// <exception cref="FileSystemUnsupportedFeatureException">The recorded directory block size differs from
+        /// the filesystem block size this build lays directories out with.
+        /// <para>已记录的目录块大小与本构建布局目录所用的文件系统块大小不同。</para></exception>
+        private byte ResolveDirBlkBits()
+        {
+            if (Options.SourceDirBlkBits is not { } recorded || recorded == 0)
+            {
+                return 0;
+            }
+
+            var recordedBlockSize = recorded < 31 ? 1L << recorded : 0L;
+            if (recordedBlockSize != BlockSize)
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"EROFS preserved rebuild: the source recorded s_dirblkbits={recorded} "
+                    + $"({recordedBlockSize}-byte directory blocks), but directory payloads are packed into "
+                    + $"{BlockSize}-byte filesystem blocks, so the recorded directory geometry cannot be "
+                    + "reproduced; clear the recorded value to rebuild at the filesystem block size.");
+            }
+
+            return recorded;
+        }
+
+        /// <summary>
         /// Collects the pre-order node list, binds xattrs, and then binds either the edit plan entries
         /// or the source-inode records by path, and finally flags nodes needing extended mtimes.
         /// <para>收集先序节点列表、绑定 xattr，然后按编辑计划条目或按路径绑定源 inode 记录，
@@ -297,7 +363,7 @@ public sealed partial class ErofsBuilder
         {
             CollectPreOrder(Root, Ordered);
             BindXattrs(Ordered, Options);
-            if (UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Current is { } editPlan)
+            if (Rebuilding.FileSystemEditPlan.Current is { } editPlan)
             {
                 BindEditPlan(editPlan);
             }
@@ -322,7 +388,7 @@ public sealed partial class ErofsBuilder
         /// </summary>
         /// <param name="editPlan">The active edit plan snapshot.
         /// <para>当前生效的编辑计划快照。</para></param>
-        private void BindEditPlan(UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan editPlan)
+        private void BindEditPlan(Rebuilding.FileSystemEditPlan editPlan)
         {
             foreach (var node in Ordered)
             {
@@ -353,7 +419,7 @@ public sealed partial class ErofsBuilder
                     node.Size = ToInodeSize(new FileInfo(node.FullPath).Length);
                 }
 
-                node.Name = UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Name(entry.Path);
+                node.Name = Rebuilding.FileSystemEditPlan.Name(entry.Path);
                 node.Uid = entry.Uid;
                 node.Gid = entry.Gid;
                 node.ModeOverride = entry.Mode;
@@ -460,8 +526,22 @@ public sealed partial class ErofsBuilder
         }
 
         /// <summary>
-        /// Binds source inode records by image-relative path for nodes without an already bound record.
-        /// <para>对尚无源 inode 记录的节点，按镜像相对路径绑定源 inode 记录。</para>
+        /// Path a captured document publishes for the image root. It is the key a mounted filesystem and the
+        /// source parser's entry enumeration use, while <see cref="BuildImagePath"/> names the root with the
+        /// empty string, so the two have to be read as one key.
+        /// <para>采集文档为镜像根发布的路径。它是挂载后的文件系统与源解析器条目枚举所用的键，而
+        /// <see cref="BuildImagePath"/> 以空字符串命名根，因此两者必须按同一个键读取。</para>
+        /// </summary>
+        private const string CapturedRootPath = ".";
+
+        /// <summary>
+        /// Binds source inode records by image-relative path for nodes without an already bound record. The
+        /// root is also matched through <see cref="CapturedRootPath"/>, because that is the key its record is
+        /// published under; without the alias the root record never binds and every dimension it carries,
+        /// including <c>i_ino</c>, keeps the writer's default instead of the source's value.
+        /// <para>对尚无源 inode 记录的节点，按镜像相对路径绑定源 inode 记录。根也经
+        /// <see cref="CapturedRootPath"/> 匹配，因为其记录就发布在该键之下；缺少该别名时根记录永远绑定不上，
+        /// 它携带的每个维度（含 <c>i_ino</c>）都会保留写入方默认值而非源镜像的取值。</para>
         /// </summary>
         private void BindSourceInodesByPath()
         {
@@ -478,7 +558,12 @@ public sealed partial class ErofsBuilder
                 }
 
                 var imagePath = BuildImagePath(node);
-                if (byPath.TryGetValue(imagePath, out var record))
+                if (!byPath.TryGetValue(imagePath, out var record) && imagePath.Length == 0)
+                {
+                    byPath.TryGetValue(CapturedRootPath, out record);
+                }
+
+                if (record is not null)
                 {
                     node.SourceInode = record;
                     node.SecondaryAlgorithm = record.SecondaryAlgorithm;
@@ -656,17 +741,21 @@ public sealed partial class ErofsBuilder
         /// <summary>
         /// Plans the chunk-based layout (<c>EROFS_INODE_CHUNK_BASED</c>) for a regular file whose source
         /// inode recorded a chunk size, or for a fresh file when the build requested one through
-        /// <see cref="ErofsOptions.ChunkSize"/>. The chunk geometry comes from the source inode first and
-        /// from the option otherwise. A payload that stays on the primary image occupies ordinary
-        /// contiguous blocks; what changes is the addressing record, so the plan reserves one chunk index
-        /// entry per chunk and lets the inode's <c>u</c> field carry the chunk size instead of a block or
+        /// <see cref="ErofsOptions.ChunkSize"/>. The chunk geometry and the two high bits of the recorded chunk
+        /// format word (<c>EROFS_CHUNK_FORMAT_INDEXES</c> and <c>EROFS_CHUNK_FORMAT_48BIT</c>) come from the
+        /// source inode first and from the address range or the option otherwise, so a recorded 8-byte index
+        /// form is replayed instead of being re-derived. A payload that stays on the primary image occupies
+        /// ordinary contiguous blocks; what changes is the addressing record, so the plan reserves one chunk
+        /// index entry per chunk and lets the inode's <c>u</c> field carry the chunk size instead of a block or
         /// cluster count. A payload assigned to an external device keeps the source's device-relative start
         /// blocks and reserves no primary-image blocks at all.
         /// <para>为源 inode 记录了 chunk 大小的常规文件规划 chunk-based 布局
         /// （<c>EROFS_INODE_CHUNK_BASED</c>），构建通过 <see cref="ErofsOptions.ChunkSize"/> 请求时也用于全新
-        /// 文件。chunk 几何优先取自源 inode，否则取自该选项。留在主镜像上的负载占用普通连续块，改变的是寻址
-        /// 记录：为每个 chunk 预留一条索引表项，并让 inode 的 <c>u</c> 字段携带 chunk 大小而非块数或簇数。
-        /// 分配到外部设备的负载保持源记录的设备内相对首块，且完全不在主镜像上预留块。</para>
+        /// 文件。chunk 几何与记录下来的 chunk 格式字的两个高位（<c>EROFS_CHUNK_FORMAT_INDEXES</c> 与
+        /// <c>EROFS_CHUNK_FORMAT_48BIT</c>）优先取自源 inode，否则由地址范围或该选项推导，因此记录了 8 字节索引
+        /// 形态的源会被重放而不是重新推导。留在主镜像上的负载占用普通连续块，改变的是寻址记录：为每个 chunk 预留
+        /// 一条索引表项，并让 inode 的 <c>u</c> 字段携带 chunk 大小而非块数或簇数。分配到外部设备的负载保持源
+        /// 记录的设备内相对首块，且完全不在主镜像上预留块。</para>
         /// </summary>
         /// <param name="node">File node to plan; never a directory.
         /// <para>待规划的文件节点；绝不可能是目录。</para></param>
@@ -684,6 +773,7 @@ public sealed partial class ErofsBuilder
         {
             var chunkBased = node.DataLayout == ErofsDataLayout.ChunkBased
                 || node.SourceInode?.DataLayout == ErofsDataLayout.ChunkBased;
+            var recordedFormat = node.SourceInode?.ChunkFormat ?? (ushort)0;
             var chunkBits = chunkBased ? node.ChunkFormatBlkBits : 0;
             if (chunkBased && node.SourceInode is { } chunkSource)
             {
@@ -717,7 +807,7 @@ public sealed partial class ErofsBuilder
             {
                 ErofsChunkIndexKind.Indexes => true,
                 ErofsChunkIndexKind.BlockMap => false,
-                _ => wideFormNeeded,
+                _ => wideFormNeeded || (recordedFormat & ErofsInode.ChunkFormatIndexes) != 0,
             };
             if (Options.ChunkIndexKind == ErofsChunkIndexKind.BlockMap && wideFormNeeded)
             {
@@ -751,7 +841,9 @@ public sealed partial class ErofsBuilder
             }
 
             var chunkIdata = (ErofsChunkIdata)node.Idata;
-            chunkIdata.ChunkFormat = (ushort)(chunkBits | (usesIndexes ? ErofsInode.ChunkFormatIndexes : 0));
+            chunkIdata.ChunkFormat = (ushort)(chunkBits
+                | (usesIndexes ? ErofsInode.ChunkFormatIndexes : 0)
+                | (recordedFormat & ErofsInode.ChunkFormat48Bit));
             chunkIdata.DeviceId = deviceId;
             HasChunkBasedLayout = true;
             return true;
@@ -840,10 +932,10 @@ public sealed partial class ErofsBuilder
 
         /// <summary>
         /// Lays out one non-directory node: inline symlink target, chunk-based addressing, compressed
-        /// cluster counts and tail packing, fragment packing, inline/flat tails, and flat dedup source
-        /// binding.
-        /// <para>布局单个非目录节点：符号链接 inline 目标、chunk-based 寻址、压缩簇计数与尾部打包、
-        /// fragment 打包、inline/平坦尾部以及平坦去重来源绑定。</para>
+        /// cluster counts, the recorded compacted 2-byte index form and tail packing, fragment packing,
+        /// inline/flat tails, and flat dedup source binding.
+        /// <para>布局单个非目录节点：符号链接 inline 目标、chunk-based 寻址、压缩簇计数、已记录的紧凑 2 字节
+        /// 索引形态与尾部打包、fragment 打包、inline/平坦尾部以及平坦去重来源绑定。</para>
         /// </summary>
         /// <param name="node">File node to lay out; never a directory.
         /// <para>待布局的文件节点；绝不可能是目录。</para></param>
@@ -892,7 +984,8 @@ public sealed partial class ErofsBuilder
                     node.CompactedIndexes = node.SourceInode is { } compactSource
                         ? compactSource.DataLayout == ErofsDataLayout.CompactIndexes
                         : Options.UseCompactedIndexes;
-                    if (Options.UseCompacted2BIndexes && node.CompactedIndexes)
+                    var recorded2B = node.SourceInode?.Compacted2B ?? false;
+                    if (node.CompactedIndexes && (recorded2B || Options.UseCompacted2BIndexes))
                     {
                         if (node.LogicalClusterSize > 4096)
                         {
@@ -1694,6 +1787,16 @@ public sealed partial class ErofsBuilder
         /// 集合共同决定，这正是 <see cref="ErofsOptions.MetaboxContainerCompressed"/> 所解析的内容。因此源容器被
         /// 编码过的镜像只在本次构建同样编码它时才被接受，否则继续保持显式失败，而不是在已记录特性下发布明文
         /// 容器。</para>
+        /// <para>Four recorded dimensions are reported instead of refused, because the rebuild stays valid without
+        /// them and the caller decides what to do with the deviation: a dot-omitted directory, a nlink-one advise
+        /// bit on a record that cannot carry it, an interlaced pcluster layout no planned frame reproduced, and a
+        /// chunk index whose hole entries were replaced by contiguous chunks. Each becomes one build warning naming
+        /// the count and a bounded path sample through <see cref="ErofsOptions.AddBuildWarning"/>, so the
+        /// deviation is recorded rather than silent.</para>
+        /// <para>有四个已记录维度不是被拒绝而是被上报，因为缺少它们重建仍然有效，偏离的处置交给调用方：省略点项的
+        /// 目录、无法承载该位的记录上的 nlink-one advise 位、没有任何已规划帧复现的交错 pcluster 布局，以及其空洞
+        /// 表项被连续 chunk 取代的 chunk 索引。每一项都经 <see cref="ErofsOptions.AddBuildWarning"/> 生成一条
+        /// 构建告警，给出数量与有界的路径样本，使该偏离被记录而非静默发生。</para>
         /// </summary>
         /// <exception cref="FileSystemUnsupportedFeatureException">A preserved inode's planned storage
         /// strategy differs from its recorded source strategy, the source recorded a structure the planned
@@ -1715,6 +1818,11 @@ public sealed partial class ErofsBuilder
                     + "silently change the metabox payload form; the compressed container layout is "
                     + "not modelled for this codec.");
             }
+
+            List<string> dotOmittedDirectories = [];
+            List<string> nlinkAdviceNotReproduced = [];
+            List<string> interlacedNotReproduced = [];
+            List<string> chunkHolesRegenerated = [];
 
             foreach (var node in Ordered)
             {
@@ -1814,6 +1922,32 @@ public sealed partial class ErofsBuilder
                         + "would silently change its index form.");
                 }
 
+                if (source.SourceIFormatRecorded
+                    && (source.IFormat & ErofsInode.AdviseBitNlinkOneOrDotOmitted) != 0)
+                {
+                    if (node.IsDirectory)
+                    {
+                        dotOmittedDirectories.Add(path);
+                    }
+                    else if (node.Nlink != 1 || GetInodeHeaderSize(node) == ErofsInode.ExtendedSize)
+                    {
+                        nlinkAdviceNotReproduced.Add(path);
+                    }
+                }
+
+                if ((source.ZAdvise & ZErofsMapHeader.AdviseInterlacedPcluster) != 0
+                    && node.Pclusters?.Any(pcluster => pcluster.InterlacedOffset > 0) != true)
+                {
+                    interlacedNotReproduced.Add(path);
+                }
+
+                if (sourceChunkBased && node.DeviceId == 0 && node.ChunkIndex is not null
+                    && source.ChunkIndex is { } recordedIndex
+                    && recordedIndex.Contains(ChunkIndexHoleAddress(source.Chunk48Bit)))
+                {
+                    chunkHolesRegenerated.Add(path);
+                }
+
                 if (!plannedCompressed)
                 {
                     continue;
@@ -1846,7 +1980,57 @@ public sealed partial class ErofsBuilder
                         + "use one, so the rebuild would silently change its index form.");
                 }
             }
+
+            ReportUnreproducedDimension(dotOmittedDirectories,
+                "recorded the dot-omitted directory form, but every directory payload this writer emits carries "
+                + "its '.' and '..' entries");
+            ReportUnreproducedDimension(nlinkAdviceNotReproduced,
+                "recorded the nlink-one inode advice bit on a record that cannot carry it (a link count other than "
+                + "one or an extended inode record)");
+            ReportUnreproducedDimension(interlacedNotReproduced,
+                "recorded the interlaced pcluster layout, but no planned plain frame of theirs could be stored "
+                + "with the byte rotation");
+            ReportUnreproducedDimension(chunkHolesRegenerated,
+                "recorded hole entries in their chunk index table, but a payload on the primary image is laid out "
+                + "as contiguous chunks");
         }
+
+        /// <summary>
+        /// Records one dimension the rebuild cannot reproduce as a build warning naming the inode count and a
+        /// bounded sample of paths. The warning is the degradation record the preserved rebuild owes for a shape
+        /// it had to deviate from, so a caller never has to infer the deviation from the emitted bytes.
+        /// <para>把重建无法复现的某个维度记录为构建告警，给出 inode 数量与有界的路径样本。该告警正是保留式重建
+        /// 为其不得不偏离的形态所欠下的降级记录，调用方无需从写出的字节反推该偏离。</para>
+        /// </summary>
+        /// <param name="paths">Image paths whose recorded dimension could not be reproduced.
+        /// <para>已记录维度无法复现的镜像路径。</para></param>
+        /// <param name="explanation">Clause naming the recorded dimension and why it is unavailable.
+        /// <para>说明已记录维度及其不可复现原因的从句。</para></param>
+        private void ReportUnreproducedDimension(List<string> paths, string explanation)
+        {
+            if (paths.Count == 0)
+            {
+                return;
+            }
+
+            var sample = string.Join(", ", paths.Take(3).Select(path => $"'{path}'"));
+            Options.AddBuildWarning(
+                $"EROFS preserved rebuild: {paths.Count} inode(s) {explanation}, so the recorded shape is not "
+                + $"reproduced (first: {sample}).");
+        }
+
+        /// <summary>
+        /// Returns the chunk index entry value that stores a hole for an inode of the given addressing width, so
+        /// a recorded index can be searched for entries the contiguous rebuild cannot keep.
+        /// <para>返回给定寻址宽度的 inode 用作空洞标记的 chunk 索引表项取值，使重建能在已记录索引中查找连续布局
+        /// 无法保留的表项。</para>
+        /// </summary>
+        /// <param name="wide48Bit">Whether the recorded chunk format uses 48-bit start blocks.
+        /// <para>已记录的 chunk 格式是否使用 48 位首块。</para></param>
+        /// <returns><c>0xFFFFFFFF</c> for the 32-bit form, <c>0xFFFFFFFFFFFF</c> for the 48-bit form.
+        /// <para>32 位形态为 <c>0xFFFFFFFF</c>，48 位形态为 <c>0xFFFFFFFFFFFF</c>。</para></returns>
+        private static ulong ChunkIndexHoleAddress(bool wide48Bit)
+            => wide48Bit ? (1UL << 48) - 1 : uint.MaxValue;
 
         /// <summary>
         /// Assigns data block addresses to directories, pcluster plans, and flat nodes; validates the
@@ -1946,6 +2130,10 @@ public sealed partial class ErofsBuilder
                 }
                 else if (node.ChunkIndex is not null && node.DeviceId != 0)
                 {
+                    if (node.Chunk48Bit || ChunkIndexExceeds32Bit(node.ChunkIndex!))
+                    {
+                        ChunkIndexRequires48Bit = true;
+                    }
                 }
                 else if (node.FlatBlocks > 0)
                 {
@@ -1974,13 +2162,9 @@ public sealed partial class ErofsBuilder
                         var lastChunkBlocks = Math.Min(chunkBlocks, CeilDiv(lastChunkBytes, BlockSize));
                         dataBlock = node.FlatBlockAddr + consumedChunks * chunkBlocks + lastChunkBlocks;
 
-                        foreach (var startBlock in node.ChunkIndex)
+                        if (node.Chunk48Bit || ChunkIndexExceeds32Bit(node.ChunkIndex!))
                         {
-                            if (startBlock > uint.MaxValue)
-                            {
-                                ChunkIndexRequires48Bit = true;
-                                break;
-                            }
+                            ChunkIndexRequires48Bit = true;
                         }
                     }
                 }
@@ -2019,6 +2203,31 @@ public sealed partial class ErofsBuilder
                 ErofsSuperblock.ValidateRootNidField(Root.Nid, has48Bit);
             }
             return totalBlocks;
+        }
+
+        /// <summary>
+        /// Reports whether any entry of a planned chunk index table needs the 48-bit addressing form. A recorded
+        /// <c>EROFS_CHUNK_FORMAT_48BIT</c> word and a start block past the 32-bit block-map window are the two
+        /// reasons the same superblock bit has to be advertised, and a device-resident index is inspected too
+        /// because its entries are replayed verbatim from the source layout.
+        /// <para>判断已规划的 chunk 索引表中是否有任何表项需要 48 位寻址形态。记录的
+        /// <c>EROFS_CHUNK_FORMAT_48BIT</c> 字与超出 32 位块映射窗口的首块，是必须声明同一超级块位的两个原因；
+        /// 位于外部设备的索引同样会被检查，因为其表项按源布局逐字重放。</para>
+        /// </summary>
+        /// <param name="index">Planned index entries. <para>已规划索引表项。</para></param>
+        /// <returns><see langword="true"/> when any entry widens the address.
+        /// <para>任一表项加宽地址时为 <see langword="true"/>。</para></returns>
+        private static bool ChunkIndexExceeds32Bit(ulong[] index)
+        {
+            foreach (var startBlock in index)
+            {
+                if (startBlock > uint.MaxValue)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -2079,9 +2288,16 @@ public sealed partial class ErofsBuilder
                 return null;
             }
 
-            var frame = new byte[pcluster.CompressedLength];
-            staging.Read(pcluster.StagedOffset, frame);
-            return Convert.ToHexString(Sha256.ComputeHash(frame));
+            var frame = ArrayPool<byte>.Shared.Rent(pcluster.CompressedLength);
+            try
+            {
+                staging.Read(pcluster.StagedOffset, frame.AsSpan(0, pcluster.CompressedLength));
+                return Convert.ToHexString(Sha256.ComputeHash(frame.AsSpan(0, pcluster.CompressedLength)));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(frame);
+            }
         }
 
         /// <summary>
@@ -2421,10 +2637,14 @@ public sealed partial class ErofsBuilder
         /// Fills the superblock structure from the planned layout and options. The compat word is the
         /// derived one constrained by an authoritative declaration, and every derived bit the declaration
         /// omits is recorded in <see cref="ErofsOptions.DroppedCompatBits"/> so the writer never advertises
-        /// a compat feature the source lacked.
+        /// a compat feature the source lacked. The incidental geometry fields follow the recorded source
+        /// dimensions instead of fixed defaults: <c>s_sb_extslots</c> is the recorded extended-slot count raised
+        /// to whatever the metabox container needs, and <c>s_dirblkbits</c> is the recorded directory geometry
+        /// when this writer lays directories out with it.
         /// <para>根据规划完成的布局与选项填充超级块结构。compat 字为受权威声明约束的推导字，声明缺失的每个推导位
         /// 都会记录到 <see cref="ErofsOptions.DroppedCompatBits"/>，使写入方不会 advertise 源镜像缺失的 compat
-        /// 特性。</para>
+        /// 特性。incidental 几何字段跟随已记录的源维度而不是固定默认值：<c>s_sb_extslots</c> 为已记录的扩展槽数量
+        /// 并按 metabox 容器的需要抬高，<c>s_dirblkbits</c> 在本写入方按该几何布局目录时取已记录的目录几何。</para>
         /// </summary>
         /// <param name="totalBlocks">Total image block count.
         /// <para>镜像总块数。</para></param>
@@ -2432,6 +2652,10 @@ public sealed partial class ErofsBuilder
         /// <para>要声明的 incompat 特性掩码。</para></param>
         /// <returns>The fully populated superblock.
         /// <para>填充完成的超级块。</para></returns>
+        /// <exception cref="FileSystemUnsupportedFeatureException">The recorded directory block size differs from
+        /// the filesystem block size this build lays directories out with, or the recorded slot count cannot be
+        /// honoured. <para>已记录的目录块大小与本构建布局目录所用的文件系统块大小不同，或已记录的槽位数量无法
+        /// 兑现。</para></exception>
         internal ErofsSuperblock BuildSuperblock(long totalBlocks, uint featureIncompat)
         {
             var featureCompat = (Options.SuperblockChecksum ? ErofsSuperblock.CompatSbChecksum : 0u)
@@ -2487,13 +2711,13 @@ public sealed partial class ErofsBuilder
                 ExtraDevices = (ushort)ExtraDevices,
                 DevtSlotoff = DeviceTableSlotOffset,
                 PackedNid = PackedNode?.Nid ?? 0,
-                SbExtSlots = MetaboxNode is not null ? (byte)1 : (byte)0,
+                SbExtSlots = ResolveExtendedSlotCount(Options, MetaboxNode is not null),
                 MetaBoxNid = MetaboxNode?.Nid ?? 0,
                 Uuid = Options.Uuid is { Length: 16 } ? Options.Uuid : Guid.NewGuid().ToByteArray(),
                 VolumeName = Options.VolumeName,
                 VolumeNameBytes = Options.SourceVolumeNameBytes ?? [],
 
-                DirBlkBits = 0,
+                DirBlkBits = ResolveDirBlkBits(),
                 XattrPrefixCount = XattrPrefixTable is { Length: > 0 } ? (byte)XattrPrefixRecords.Count : (byte)0,
                 XattrPrefixStart = XattrPrefixByteOffset >= 0 ? (uint)(XattrPrefixByteOffset >> 2) : 0u,
                 IshareXattrPrefixId = isharePrefixIndex,
@@ -2507,8 +2731,12 @@ public sealed partial class ErofsBuilder
 
         /// <summary>
         /// Writes the superblock buffer, the trailing compression configuration, and the extra device
-        /// table when extra devices are present.
-        /// <para>写出超级块缓冲、其后的压缩配置，以及存在额外设备时的设备表。</para>
+        /// table when extra devices are present. The superblock buffer spans the published extended slots so the
+        /// compression configuration starts exactly where a reader looks for it, and every device slot carries
+        /// its recorded tag bytes verbatim and the unified start block the recorded chain licenses.
+        /// <para>写出超级块缓冲、其后的压缩配置，以及存在额外设备时的设备表。超级块缓冲覆盖已发布的扩展槽，
+        /// 使压缩配置恰好起于读取方查找它的位置；每个设备槽逐字携带其已记录 tag 字节，以及已记录链所许可的
+        /// 统一首块。</para>
         /// </summary>
         /// <param name="output">Destination stream in image coordinates.
         /// <para>镜像坐标下的目标流。</para></param>
@@ -2516,11 +2744,13 @@ public sealed partial class ErofsBuilder
         /// <para>待序列化的已填充超级块。</para></param>
         /// <param name="totalBlocks">Total image block count used as the unified device address base.
         /// <para>镜像总块数，作为设备统一地址的基数。</para></param>
+        /// <exception cref="FileSystemCorruptedException">A recorded device tag is wider than its slot.
+        /// <para>已记录的设备 tag 宽于其槽位。</para></exception>
         internal void WriteSuperblockAndDevices(Stream output, ErofsSuperblock superblock, long totalBlocks)
         {
-            var superblockBuffer = new byte[MetaboxNode is not null
-                ? ErofsSuperblock.SuperblockSize + ErofsSuperblock.ExtSlotSize
-                : ErofsSuperblock.SuperblockSize];
+            var superblockBuffer = new byte[ErofsSuperblock.SuperblockSize
+                + ResolveExtendedSlotCount(Options, MetaboxNode is not null)
+                    * ErofsSuperblock.ExtSlotSize];
             superblock.WriteTo(superblockBuffer);
 
             WriteAt(output, ErofsSuperblock.SuperblockOffset, superblockBuffer, superblockBuffer.Length);
@@ -2550,19 +2780,114 @@ public sealed partial class ErofsBuilder
                 var descriptors = Options.ExtraDeviceImages
                     ?? throw new NotSupportedException("EROFS multi-device output requires ExtraDeviceImages descriptors.");
                 var slotBuffer = new byte[ErofsDeviceSlot.Size];
-                var uniAddr = (ulong)totalBlocks;
+                var uniAddresses = ResolveDeviceUniAddresses(totalBlocks, descriptors);
                 for (var i = 0; i < ExtraDevices; i++)
                 {
                     var descriptor = descriptors[i];
                     var blocks = (ulong)(descriptor.SizeBytes / BlockSize);
-                    var tag = new byte[ErofsDeviceSlot.TagSize];
-                    System.Text.Encoding.UTF8.GetBytes(descriptor.Tag, tag);
-                    var slot = new ErofsDeviceSlot { Tag = tag, Blocks = blocks, UniAddr = uniAddr };
+                    var slot = new ErofsDeviceSlot
+                    {
+                        Tag = DeviceSlotTagBytes(descriptor, i),
+                        Blocks = blocks,
+                        UniAddr = uniAddresses[i],
+                    };
                     slot.WriteTo(slotBuffer);
                     WriteAt(output, DeviceTableOffset + i * ErofsDeviceSlot.Size, slotBuffer, slotBuffer.Length);
-                    uniAddr += blocks;
                 }
             }
+        }
+
+        /// <summary>
+        /// Returns the 64-byte tag written into one extra device slot. Recorded raw bytes are replayed verbatim
+        /// and only padded with the zeros the slot already reserves, because the field is defined to carry a
+        /// digest or another binary identity rather than text; a descriptor without recorded bytes keeps the
+        /// repository's UTF-8 text path so a profile that predates the raw-byte dimension stays rebuildable.
+        /// <para>返回写入单个额外设备槽的 64 字节 tag。已记录的原始字节按原样重放，只用槽位本就预留的零填充，
+        /// 因为该字段定义为承载摘要或其它二进制身份而不是文本；未记录原始字节的描述符保持仓库既有的 UTF-8 文本
+        /// 路径，使早于该原始字节维度的档案仍可重建。</para>
+        /// </summary>
+        /// <param name="descriptor">Validated descriptor of one extra device.
+        /// <para>单个额外设备的经校验描述符。</para></param>
+        /// <param name="deviceIndex">Zero-based index used to name the slot in an error.
+        /// <para>用于在错误中指名槽位的零基下标。</para></param>
+        /// <returns>The zero-padded slot contents. <para>补零后的槽位内容。</para></returns>
+        /// <exception cref="FileSystemCorruptedException">The recorded bytes are wider than the slot, which a
+        /// silent truncation would turn into a different identity.
+        /// <para>记录的字节宽于该槽位，静默截断会把它变成另一个身份。</para></exception>
+        private static byte[] DeviceSlotTagBytes(ErofsDeviceSpec descriptor, int deviceIndex)
+        {
+            var tag = new byte[ErofsDeviceSlot.TagSize];
+            if (descriptor.TagBytes is not { } recorded)
+            {
+                Encoding.UTF8.GetBytes(descriptor.Tag, tag);
+                return tag;
+            }
+
+            if (recorded.Length > ErofsDeviceSlot.TagSize)
+            {
+                throw new FileSystemCorruptedException(
+                    $"EROFS extra device slot {deviceIndex + 1} records {recorded.Length} tag bytes, above the "
+                    + $"{ErofsDeviceSlot.TagSize}-byte tag field.");
+            }
+
+            recorded.AsSpan().CopyTo(tag);
+            return tag;
+        }
+
+        /// <summary>
+        /// Resolves the unified starting block written into every extra device slot. A recorded device chain is
+        /// replayed as it was captured while it stays addressable in the regenerated image, so a tool that
+        /// resolves a device window from the published addresses keeps working; a chain the new layout cannot
+        /// reproduce is re-based onto the regenerated address space and the deviation is recorded as a build
+        /// warning, so a device is never renumbered silently.
+        /// <para>解析写入每个额外设备槽的统一首块。记录下来的设备链只要在重建镜像中仍可寻址就按捕获值重放，
+        /// 因此依据已发布地址解析设备窗口的工具仍然可用；新布局无法复现的链会重新落到重建出的地址空间上，并把该
+        /// 偏离记录为构建告警，因此设备绝不会被静默重新编号。</para>
+        /// </summary>
+        /// <param name="totalBlocks">Block count of the primary image the device windows follow.
+        /// <para>设备窗口紧随其后的主镜像块数。</para></param>
+        /// <param name="descriptors">One descriptor per declared extra device, in slot order.
+        /// <para>按槽位顺序的每个已声明额外设备一个描述符。</para></param>
+        /// <returns>The unified starting block of every slot, either the recorded or the re-based value.
+        /// <para>每个槽位的统一首块，取记录值或重落值。</para></returns>
+        private ulong[] ResolveDeviceUniAddresses(long totalBlocks, IReadOnlyList<ErofsDeviceSpec> descriptors)
+        {
+            var resolved = new ulong[ExtraDevices];
+            var derived = (ulong)totalBlocks;
+            for (var i = 0; i < ExtraDevices; i++)
+            {
+                resolved[i] = derived;
+                derived += (ulong)(descriptors[i].SizeBytes / BlockSize);
+            }
+
+            if (Options.SourceDeviceTable is not { } recorded || recorded.Count < ExtraDevices)
+            {
+                return resolved;
+            }
+
+            const ulong AddressLimit = 1UL << 48;
+            var reproducible = recorded[0].UniAddr >= (ulong)totalBlocks && recorded[0].UniAddr < AddressLimit;
+            for (var i = 1; reproducible && i < ExtraDevices; i++)
+            {
+                var expected = recorded[i - 1].UniAddr + (ulong)(descriptors[i - 1].SizeBytes / BlockSize);
+                reproducible = expected < AddressLimit && recorded[i].UniAddr == expected;
+            }
+
+            if (reproducible)
+            {
+                for (var i = 0; i < ExtraDevices; i++)
+                {
+                    resolved[i] = recorded[i].UniAddr;
+                }
+
+                return resolved;
+            }
+
+            Options.AddBuildWarning(
+                $"EROFS preserved rebuild: the recorded unified start block of device 1 ({recorded[0].UniAddr}) "
+                + $"cannot be replayed because the regenerated primary image occupies {totalBlocks} blocks and the "
+                + $"device chain has to stay contiguous; the device addresses were re-based to block {resolved[0]}.");
+            return resolved;
         }
 
         /// <summary>
@@ -2624,51 +2949,73 @@ public sealed partial class ErofsBuilder
         /// <para>镜像坐标下的目标流。</para></param>
         internal void WriteInodes(Stream output)
         {
-            foreach (var node in Ordered)
+            var rented = ArrayPool<byte>.Shared.Rent(BlockSize);
+            try
             {
-                Options.CancellationToken.ThrowIfCancellationRequested();
-                if (node.IsMetaboxResident)
+                foreach (var node in Ordered)
                 {
-                    continue;
-                }
-
-                BuildInode(node, BlockSize, Now, Options);
-                var inodeBuffer = new byte[node.OnDiskSize];
-                node.WriteTo(inodeBuffer);
-                WriteAt(output, node.MetaOffset, inodeBuffer, inodeBuffer.Length);
-
-                if (node.XattrIbody.Length > 0)
-                {
-                    WriteAt(output, node.MetaOffset + node.OnDiskSize, node.XattrIbody, node.XattrIbody.Length);
-                }
-
-                var cursor = node.MetaOffset + node.OnDiskSize + node.XattrISize;
-
-                if (node.IsDirectory)
-                {
-                    if (node.DirectoryInline)
+                    Options.CancellationToken.ThrowIfCancellationRequested();
+                    if (node.IsMetaboxResident)
                     {
-                        WriteAt(output, cursor, BuildDirPayload(node), (int)EstimateDirPayloadLength(node));
+                        continue;
+                    }
+
+                    BuildInode(node, BlockSize, Now, Options);
+                    var inodeBuffer = AcquireInodeBuffer(rented, node.OnDiskSize);
+                    node.WriteTo(inodeBuffer);
+                    WriteAt(output, node.MetaOffset, inodeBuffer, node.OnDiskSize);
+
+                    if (node.XattrIbody.Length > 0)
+                    {
+                        WriteAt(output, node.MetaOffset + node.OnDiskSize, node.XattrIbody, node.XattrIbody.Length);
+                    }
+
+                    var cursor = node.MetaOffset + node.OnDiskSize + node.XattrISize;
+
+                    if (node.IsDirectory)
+                    {
+                        if (node.DirectoryInline)
+                        {
+                            WriteAt(output, cursor, BuildDirPayload(node), (int)EstimateDirPayloadLength(node));
+                        }
+                    }
+                    else if (node.IsFragment)
+                    {
+                        WriteFragmentHeader(output, node);
+                    }
+                    else if (node.ChunkIndex is not null)
+                    {
+                        WriteChunkIndexTable(output, node);
+                    }
+                    else if (node.Pclusters is not null)
+                    {
+                        WriteCompressedIndexes(output, AlignUp(cursor, 8), node, BlockSize, node.CompressionOptions!);
+                    }
+                    else if (node.InlineData.Length > 0)
+                    {
+                        WriteAt(output, cursor, node.InlineData, node.InlineData.Length);
                     }
                 }
-                else if (node.IsFragment)
-                {
-                    WriteFragmentHeader(output, node);
-                }
-                else if (node.ChunkIndex is not null)
-                {
-                    WriteChunkIndexTable(output, node);
-                }
-                else if (node.Pclusters is not null)
-                {
-                    WriteCompressedIndexes(output, AlignUp(cursor, 8), node, BlockSize, node.CompressionOptions!);
-                }
-                else if (node.InlineData.Length > 0)
-                {
-                    WriteAt(output, cursor, node.InlineData, node.InlineData.Length);
-                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
             }
         }
+
+        /// <summary>
+        /// Returns the inode record destination, reusing one pooled buffer across the walk and falling back to a
+        /// right-sized allocation only for a record that outgrows it.
+        /// <para>返回 inode 记录的写入目标：整个遍历复用一个池化缓冲，仅在记录超出该缓冲时才退化为按尺寸精确分配。</para>
+        /// </summary>
+        /// <param name="rented">Buffer obtained from <see cref="ArrayPool{T}.Shared"/> sized at least <c>BlockSize</c>.
+        /// <para>从 <see cref="ArrayPool{T}.Shared"/> 取得、至少为 <c>BlockSize</c> 的缓冲。</para></param>
+        /// <param name="required">Bytes the inode record occupies.
+        /// <para>该 inode 记录占用的字节数。</para></param>
+        /// <returns>The buffer to write the record into, whose usable prefix is <paramref name="required"/> bytes.
+        /// <para>用于写入该记录的缓冲，其可用前缀为 <paramref name="required"/> 字节。</para></returns>
+        private static byte[] AcquireInodeBuffer(byte[] rented, int required)
+            => required <= rented.Length ? rented : new byte[required];
 
         /// <summary>
         /// Writes the CRC32c superblock checksum into the captured superblock window region when

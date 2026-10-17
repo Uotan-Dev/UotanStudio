@@ -87,7 +87,7 @@ public class ErofsFormatConformanceTests
         });
 
         var names = ReadRootDirectoryNames(image);
-        var decoded = names.Select(name => Encoding.UTF8.GetString(name)).ToArray();
+        var decoded = names.Select(Encoding.UTF8.GetString).ToArray();
         Assert.Equal(new[] { "!a.txt", "$c.txt", "-b.txt", ".", "..", "z.txt" }, decoded);
         AssertDirentNameOrder(names);
     }
@@ -233,7 +233,7 @@ public class ErofsFormatConformanceTests
 
     private static void AssertDirentNameOrder(IReadOnlyList<byte[]> names)
         => Assert.True(IsDirentNameOrder(names),
-            string.Join(" ", names.Select(name => Encoding.UTF8.GetString(name))));
+            string.Join(" ", names.Select(Encoding.UTF8.GetString)));
 
     private static bool IsDirentNameOrder(IReadOnlyList<byte[]> names)
     {

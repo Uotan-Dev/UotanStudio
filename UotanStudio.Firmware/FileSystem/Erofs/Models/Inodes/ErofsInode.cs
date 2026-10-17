@@ -596,6 +596,23 @@ internal sealed class ErofsInode
     /// <see cref="ErofsFragmentShape.None"/> 表示负载完全位于文件自身的块或 pcluster 中。</para></value>
     internal ErofsFragmentShape SourceFragmentShape { get; set; }
 
+    /// <summary>
+    /// Whether <see cref="IFormat"/> holds the source inode's recorded format bits rather than a format the
+    /// reader or the metadata restore synthesised from the record width. A preserved rebuild mirrors the
+    /// per-inode advise bit only while this statement is set, so a profile that predates the recorded format
+    /// keeps the image-level advice dimension and rebuilds byte-identically, while a profile that recorded it
+    /// is replayed per inode instead of being resolved once for the whole image.
+    /// <para>标记 <see cref="IFormat"/> 承载的是源 inode 记录的格式位，而不是读取方或元数据还原按记录宽度合成的
+    /// 格式。保留式重建只在该陈述置起时逐 inode 镜像 advise 位，因此早于该记录的档案保持镜像级 advise 维度并
+    /// 逐字节重建，而记录了该维度的档案按逐 inode 重放，而不是为整幅镜像解析一次。</para>
+    /// </summary>
+    /// <value>Only meaningful on a node whose <see cref="Layer"/> is
+    /// <see cref="ErofsInodeLayer.Source"/>; a decoded source node keeps it set because the format was read from
+    /// the image, and a restored node keeps it clear unless the profile recorded the format word.
+    /// <para>仅在 <see cref="Layer"/> 为 <see cref="ErofsInodeLayer.Source"/> 的节点上有义；解码得到的源节点保持
+    /// 置起（格式确实读自镜像），还原得到的节点则仅在档案记录了格式字时置起。</para></value>
+    internal bool SourceIFormatRecorded { get; set; }
+
     /// <summary>Secondary algorithm the node's HEAD2 index rows name, or <see langword="null"/>.
     /// <para>该节点 HEAD2 索引行指名的第二算法，或 <see langword="null"/>。</para></summary>
     internal ErofsCompressionAlgorithm? SecondaryAlgorithm { get; set; }
@@ -1024,6 +1041,7 @@ internal sealed class ErofsInode
         }
 
         inode.XattrISize = inode.XattrICount == 0 ? 0 : 12 + 4 * (inode.XattrICount - 1);
+        inode.SourceIFormatRecorded = true;
         inode.DotOmitted = (inode.Mode & ModeTypeMask) == ModeDirectory
             && (format & AdviseBitNlinkOneOrDotOmitted) != 0;
         inode.Idata = CreateIdataForLayout(inode.DataLayout, rawAddressField, inode.Size, blockSizeBits);

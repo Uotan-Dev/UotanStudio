@@ -192,11 +192,6 @@ public sealed class ErofsExclusionTests
                 ["kept.txt"] = "kept.txt",
                 ["projected-and-excluded.txt"] = "projected-and-excluded.txt",
             },
-            Projection = new()
-            {
-                ["kept.txt"] = "file:kept",
-                ["projected-and-excluded.txt"] = "file:excluded",
-            },
         };
         var projection = new Dictionary<string, string>(StringComparer.Ordinal)
         {

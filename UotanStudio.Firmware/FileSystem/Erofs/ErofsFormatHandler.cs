@@ -190,7 +190,7 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
             try
             {
                 using var input = File.OpenRead(filePath);
-                using var parser = UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemPreservation
+                using var parser = FileSystemPreservation
                     .OpenErofsParser(input, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 var sb = parser.Superblock;
@@ -256,7 +256,7 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
+        => FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
@@ -267,7 +267,7 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
             try
             {
                 using var input = File.OpenRead(filePath);
-                using var parser = UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemPreservation
+                using var parser = FileSystemPreservation
                     .OpenErofsParser(input, cancellationToken);
                 parser.ExtractToDirectory(outputDirectory, overwrite: options?.Overwrite ?? true, byteProgress: FileSystemByteProgress.ForStage(options?.FileSystemProgress, FileSystemWorkStage.Extracting), cancellationToken: cancellationToken);
                 var files = parser.EnumerateFiles();
@@ -354,9 +354,6 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
                     options.TryGetValue("ErofsAlgorithm", out var selector) ? selector : null);
                 var compressionLevel = FileSystemPackingOptions.IntegerOption(options, "ErofsCompressionLevel",
                     9);
-                var legacyCompatibility = algorithm == ErofsCompressionAlgorithm.Lz4
-                    && !lz4HighCompression
-                    && UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility;
                 var progressSink = progress is null ? null : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
                 var erofsOptions = new ErofsOptions
                 {
@@ -365,7 +362,6 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
                     Algorithm = algorithm,
                     Lz4HighCompression = lz4HighCompression,
                     CompressionLevel = compressionLevel,
-                    LegacyCompatibility = legacyCompatibility,
                     CancellationToken = cancellationToken,
                 };
                 if (FileSystemPackingOptions.TryReadPreservedTables(inputPath) is { } preservedTables)

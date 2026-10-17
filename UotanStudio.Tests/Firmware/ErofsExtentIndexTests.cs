@@ -486,11 +486,10 @@ public sealed class ErofsExtentIndexTests
 
     private static byte[] FallbackPayload()
     {
-        var payload = new byte[(12 + 40 + 12) * 1024];
+        var payload = new byte[(256 + 16) * 1024];
         var random = new Random(20261014);
-        Array.Fill(payload, (byte)0x5A, 0, 12 * 1024);
-        random.NextBytes(payload.AsSpan(12 * 1024, 40 * 1024));
-        Array.Fill(payload, (byte)0xA5, 52 * 1024, 12 * 1024);
+        random.NextBytes(payload.AsSpan(0, 256 * 1024));
+        Array.Fill(payload, (byte)0x5A, 256 * 1024, 16 * 1024);
         return payload;
     }
 

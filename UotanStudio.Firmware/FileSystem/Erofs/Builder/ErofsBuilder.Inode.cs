@@ -413,14 +413,30 @@ public sealed partial class ErofsBuilder
     /// by <c>EROFS_I_NLINK_1</c> and dot-omitted directories follows the resolved declaration and is emitted
     /// only for a target that defines the bit, so a compact inode never carries a bit the declared feature set
     /// forbids nor one the target's advise mask would reject, while the superblock word and the
-    /// per-node layout stay in agreement.
+    /// per-node layout stay in agreement. A source inode whose recorded format bits are known is mirrored one
+    /// inode at a time instead of taking the image-level answer, so a source that raised the bit on only part of
+    /// its inodes is not flattened back to a single whole-image decision. A recorded source inode number is
+    /// replayed so the rebuilt inode publishes the same 32-bit <c>stat</c> identity as the source, while a node
+    /// the source recorded no number for keeps the number the writer assigned it.
     /// <para>在序列化之前填充单个节点的磁盘字段与寻址状态。<c>EROFS_I_NLINK_1</c> 与省略点项目录共用的
     /// advise 位跟随已解析的声明，并且只为定义该位的目标写出，因此紧凑 inode 不会携带声明特性集禁止的位，
-    /// 也不会携带目标 advise 掩码会拒绝的位，超级块字与逐节点布局也始终一致。</para>
+    /// 也不会携带目标 advise 掩码会拒绝的位，超级块字与逐节点布局也始终一致。已知记录了源格式位的 inode 按
+    /// 逐 inode 镜像，而不是套用镜像级结论，因此源只在部分 inode 上置起该位时不会被抹平为整幅镜像的单一决定。
+    /// 已记录的源 inode 编号会被重放，使重建 inode 发布与源相同的 32 位 <c>stat</c> 身份；源未记录编号的
+    /// 节点保持写入方分配给它的编号。</para>
     /// </summary>
     private static void BuildInode(ErofsInode node, int blockSize, ulong now, ErofsOptions options)
     {
-        node.AllowNlinkOneBit = DeclaredNlinkOneAdvice(options) && KernelDefinesNlinkOneAdvice(options);
+        if (node.SourceInode is { Ino: > 0 } recordedIno)
+        {
+            node.Ino = recordedIno.Ino;
+        }
+
+        var advertiseNlinkOneAdvice = DeclaredNlinkOneAdvice(options) && KernelDefinesNlinkOneAdvice(options);
+        node.AllowNlinkOneBit = node.SourceInode is { SourceIFormatRecorded: true } recordedFormat
+            ? advertiseNlinkOneAdvice
+                && (recordedFormat.IFormat & ErofsInode.AdviseBitNlinkOneOrDotOmitted) != 0
+            : advertiseNlinkOneAdvice;
         node.IFormat = GetInodeHeaderSize(node) == ErofsInode.ExtendedSize ? ErofsInode.FlagExtended : (ushort)0;
 
         var effectiveTime = node.SourceInode?.CTime ?? (node.CTime is > 0 and <= long.MaxValue ? node.CTime : now);
@@ -491,6 +507,7 @@ public sealed partial class ErofsBuilder
                 chunkFormat = chunkSource.ChunkFormatBlkBits;
             }
 
+            var recordedChunkFormat = node.SourceInode?.ChunkFormat ?? (ushort)0;
             var needs48Bit = false;
             foreach (var startBlock in node.ChunkIndex!)
             {
@@ -513,12 +530,13 @@ public sealed partial class ErofsBuilder
                     + ".");
             }
 
-            if (options.ChunkIndexKind == ErofsChunkIndexKind.Indexes || wideFormNeeded)
+            if (options.ChunkIndexKind == ErofsChunkIndexKind.Indexes || wideFormNeeded
+                || (recordedChunkFormat & ErofsInode.ChunkFormatIndexes) != 0)
             {
                 chunkFormat |= ErofsInode.ChunkFormatIndexes;
             }
 
-            if (needs48Bit)
+            if (needs48Bit || (recordedChunkFormat & ErofsInode.ChunkFormat48Bit) != 0)
             {
                 chunkFormat |= ErofsInode.ChunkFormat48Bit;
             }

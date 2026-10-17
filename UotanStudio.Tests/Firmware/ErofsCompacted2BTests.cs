@@ -23,6 +23,16 @@ public sealed class ErofsCompacted2BTests
 
     private const int Clusters = 1500;
 
+    private const int BigPclusterBlockSize = 4096;
+
+    private const int BigPclusterClusters = 64;
+
+    private const int SmallPclusterLimit = 8192;
+
+    private const int MixedBlockSize = 4096;
+
+    private const int MixedBlockCount = 96;
+
     [Fact]
     public void Build_Compacted2B_ShrinksIndexAreaAndRoundTrips()
     {
@@ -81,6 +91,42 @@ public sealed class ErofsCompacted2BTests
     }
 
     [Fact]
+    public void Build_Compacted2BWithMultiBlockPclusters_RoundTrips()
+    {
+        var payload = RedundantPayload(BigPclusterClusters * BigPclusterBlockSize);
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", payload);
+
+        var image = BuildBigPcluster(source.Path);
+
+        using var parser = new ErofsParser(image);
+        var header = ZErofsMapHeader.FromBytes(
+            image.AsSpan((int)parser.CompressedMapHeaderOffset("data.bin"), ZErofsMapHeader.Size));
+
+        Assert.True(header.HasCompacted2B);
+        Assert.True(header.HasBigPcluster1);
+        Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
+    }
+
+    [Fact]
+    public void Build_Compacted2BWithSingleClusterPclusterAfterPackBoundary_RoundTrips()
+    {
+        var payload = MixedPayload(MixedBlockCount, MixedBlockSize);
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", payload);
+
+        var image = BuildSmallPclusterLimit(source.Path);
+
+        using var parser = new ErofsParser(image);
+        var header = ZErofsMapHeader.FromBytes(
+            image.AsSpan((int)parser.CompressedMapHeaderOffset("data.bin"), ZErofsMapHeader.Size));
+
+        Assert.True(header.HasCompacted2B);
+        Assert.True(header.HasBigPcluster1);
+        Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
+    }
+
+    [Fact]
     public void Build_Compacted2BAndFullIndexes_IsRejected()
     {
         var options = new ErofsOptions
@@ -92,7 +138,7 @@ public sealed class ErofsCompacted2BTests
             UseCompacted2BIndexes = true,
         };
 
-        Assert.Throws<NotSupportedException>(() => options.Validate());
+        Assert.Throws<NotSupportedException>(options.Validate);
     }
 
     [Fact]
@@ -107,7 +153,7 @@ public sealed class ErofsCompacted2BTests
             UseCompacted2BIndexes = true,
         };
 
-        Assert.Throws<NotSupportedException>(() => options.Validate());
+        Assert.Throws<NotSupportedException>(options.Validate);
     }
 
     private static byte[] Build(string sourcePath, bool useCompacted2B, bool useCompactedIndexes = true)
@@ -119,6 +165,75 @@ public sealed class ErofsCompacted2BTests
             UseCompactedIndexes = useCompactedIndexes,
             UseCompacted2BIndexes = useCompacted2B,
         });
+
+    private static byte[] BuildBigPcluster(string sourcePath)
+        => new ErofsBuilder().Build(sourcePath, new ErofsOptions
+        {
+            BlockSize = BigPclusterBlockSize,
+            Compress = true,
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            UseCompactedIndexes = true,
+            UseCompacted2BIndexes = true,
+            MaxPclusterSize = 16384,
+        });
+
+    private static byte[] BuildSmallPclusterLimit(string sourcePath)
+        => new ErofsBuilder().Build(sourcePath, new ErofsOptions
+        {
+            BlockSize = MixedBlockSize,
+            Compress = true,
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            UseCompactedIndexes = true,
+            UseCompacted2BIndexes = true,
+            MaxPclusterSize = SmallPclusterLimit,
+        });
+
+    private static byte[] MixedPayload(int blockCount, int blockSize)
+    {
+        var payload = new byte[blockCount * blockSize];
+        var state = 0x9E3779B9u;
+        for (var i = 0; i < payload.Length; i++)
+        {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            payload[i] = (byte)(state >> 24);
+        }
+
+        const int period = 7;
+        const int incompressiblePerPeriod = 2;
+        for (var i = 0; i < payload.Length; i++)
+        {
+            if (i / blockSize % period < period - incompressiblePerPeriod)
+            {
+                payload[i] = (byte)((i * 31 + i / 7) & 0x3F);
+            }
+        }
+
+        return payload;
+    }
+
+    private static byte[] RedundantPayload(int length)
+    {
+        var payload = new byte[length];
+        var state = 0x12345678u;
+        for (var i = 0; i < payload.Length; i++)
+        {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            payload[i] = (byte)(state >> 24);
+        }
+
+        const int byteLength = 1024;
+        for (var offset = 0; offset + BigPclusterBlockSize <= payload.Length; offset += BigPclusterBlockSize)
+        {
+            var start = offset + BigPclusterBlockSize - byteLength;
+            Array.Copy(payload, start - byteLength, payload, start, byteLength);
+        }
+
+        return payload;
+    }
 
     private static byte[] CompressiblePayload(int length)
     {

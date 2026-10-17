@@ -150,7 +150,7 @@ public sealed class ErofsLclusterAdviseTests
         image[(int)headerOffset + 7] = (byte)((image[(int)headerOffset + 7] & 0x80) | 1);
 
         using var parser = new ErofsParser(image);
-        var exception = Assert.Throws<NotSupportedException>(() => parser.ReadRebuildOptions());
+        var exception = Assert.Throws<NotSupportedException>(parser.ReadRebuildOptions);
         Assert.Contains("compacted", exception.Message, StringComparison.Ordinal);
     }
 

@@ -13,7 +13,7 @@ public class ErofsSharedXattrReadTests
     [Fact]
     public void SharedAttribute_CrossingBlockBoundary_IsReadWithoutWholeAreaAllocation()
     {
-        byte[] image = BuildImage(false);
+        var image = BuildImage(false);
         using var source = new CountingSource(image);
         using var parser = new ErofsParser(source);
         var files = parser.EnumerateFiles();
@@ -33,7 +33,7 @@ public class ErofsSharedXattrReadTests
     [InlineData(2093055u)]
     public void InvalidSharedId_LeavesFileDataReadable(uint id)
     {
-        byte[] image = BuildImage(false);
+        var image = BuildImage(false);
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(4096 + 32 + 32 + 12), id);
         image[^4] = 255;
         image[^3] = 6;
@@ -61,7 +61,7 @@ public class ErofsSharedXattrReadTests
     private static byte[] BuildImage(bool duplicatePath)
     {
         const int block = 4096;
-        byte[] image = new byte[8 * 1024 * 1024];
+        var image = new byte[8 * 1024 * 1024];
         new ErofsSuperblock
         {
             MagicValue = ErofsSuperblock.Magic,
@@ -79,9 +79,9 @@ public class ErofsSharedXattrReadTests
             Idata = new ErofsFlatIdata { BlockAddress = 6 },
             Nlink = 2
         }.WriteTo(image.AsSpan(block, 32));
-        for (int i = 0; i < 2; i++)
+        for (var i = 0; i < 2; i++)
         {
-            int inodeOffset = block + 32 + i * 64;
+            var inodeOffset = block + 32 + i * 64;
             new ErofsInode
             {
                 Mode = ErofsInode.ModeRegularFile,
@@ -93,7 +93,7 @@ public class ErofsSharedXattrReadTests
                 .WriteTo(image.AsSpan(inodeOffset, 32));
             image[inodeOffset + 32 + 4] = 1;
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(inodeOffset + 32 + 12), (block - 8) / 4);
-            int dirent = 6 * block + i * 12;
+            var dirent = 6 * block + i * 12;
             BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(dirent), (ulong)(1 + i * 2));
             BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(dirent + 8), (ushort)(24 + i));
             image[dirent + 10] = ErofsInode.FileTypeRegularFile;
@@ -101,10 +101,10 @@ public class ErofsSharedXattrReadTests
         }
         "first"u8.CopyTo(image.AsSpan(2 * block));
         "other"u8.CopyTo(image.AsSpan(3 * block));
-        int shared = 5 * block - 8;
+        var shared = 5 * block - 8;
         image[shared] = 7;
         image[shared + 1] = 6;
-        byte[] value = "u:object_r:system_file:s0"u8.ToArray();
+        var value = "u:object_r:system_file:s0"u8.ToArray();
         BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(shared + 2), (ushort)value.Length);
         "selinux"u8.CopyTo(image.AsSpan(shared + 4));
         value.CopyTo(image, shared + 11);
@@ -118,14 +118,14 @@ public class ErofsSharedXattrReadTests
         public override int Read(byte[] buffer, int offset, int count)
         {
             LargestRead = Math.Max(LargestRead, count);
-            int read = base.Read(buffer, offset, count);
+            var read = base.Read(buffer, offset, count);
             TotalRead += read;
             return read;
         }
         public override int Read(Span<byte> buffer)
         {
             LargestRead = Math.Max(LargestRead, buffer.Length);
-            int read = base.Read(buffer);
+            var read = base.Read(buffer);
             TotalRead += read;
             return read;
         }

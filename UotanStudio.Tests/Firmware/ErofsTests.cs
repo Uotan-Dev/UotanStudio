@@ -25,9 +25,9 @@ public class ErofsTests
     /// </summary>
     private static void WriteText(TempDirectory temp, string relativePath, string content)
     {
-        var full = System.IO.Path.Combine(temp.Path, relativePath);
-        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(full)!);
-        System.IO.File.WriteAllText(full, content, new UTF8Encoding(false));
+        var full = Path.Combine(temp.Path, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, content, new UTF8Encoding(false));
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public class ErofsTests
     {
         using var temp = new TempDirectory();
         WriteText(temp, "x.txt", "payload");
-        var imagePath = System.IO.Path.Combine(temp.Path, "image.erofs");
+        var imagePath = Path.Combine(temp.Path, "image.erofs");
         File.WriteAllBytes(imagePath, new ErofsBuilder().Build(temp.Path, new ErofsOptions()));
 
         var handler = new ErofsFormatHandler();
@@ -213,9 +213,9 @@ public class ErofsTests
         using var temp = new TempDirectory();
         WriteText(temp, "packed/file1.txt", "one");
         temp.WriteBytes("packed/sub/file2.bin", [1, 2, 3, 4, 5]);
-        var sourceDir = System.IO.Path.Combine(temp.Path, "packed");
-        var imagePath = System.IO.Path.Combine(temp.Path, "out.erofs");
-        var unpackDir = System.IO.Path.Combine(temp.Path, "unpacked");
+        var sourceDir = Path.Combine(temp.Path, "packed");
+        var imagePath = Path.Combine(temp.Path, "out.erofs");
+        var unpackDir = Path.Combine(temp.Path, "unpacked");
 
         var handler = new ErofsFormatHandler();
         var pack = await handler.PackAsync(sourceDir, imagePath, TestContext.Current.CancellationToken);
@@ -224,8 +224,8 @@ public class ErofsTests
 
         var unpack = await handler.UnpackAsync(imagePath, unpackDir, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(unpack.Success);
-        Assert.Equal("one", File.ReadAllText(System.IO.Path.Combine(unpackDir, "file1.txt")));
-        Assert.Equal(new byte[] { 1, 2, 3, 4, 5 }, File.ReadAllBytes(System.IO.Path.Combine(unpackDir, "sub", "file2.bin")));
+        Assert.Equal("one", File.ReadAllText(Path.Combine(unpackDir, "file1.txt")));
+        Assert.Equal(new byte[] { 1, 2, 3, 4, 5 }, File.ReadAllBytes(Path.Combine(unpackDir, "sub", "file2.bin")));
     }
 
     [Fact]
@@ -235,7 +235,7 @@ public class ErofsTests
         WriteText(temp, "file.txt", "stream payload");
         temp.WriteBytes("dir/data.bin", [1, 2, 3]);
         var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = true });
-        var imagePath = System.IO.Path.Combine(temp.Path, "image.erofs");
+        var imagePath = Path.Combine(temp.Path, "image.erofs");
         File.WriteAllBytes(imagePath, image);
 
         using var parser = new ErofsParser(imagePath);
@@ -248,10 +248,10 @@ public class ErofsTests
         Assert.Equal(new byte[] { 1, 2, 3 }, parser.ReadFileBytes("dir/data.bin"));
         Assert.Equal(image.Length, parser.ImageSize);
 
-        var outDir = System.IO.Path.Combine(temp.Path, "out");
+        var outDir = Path.Combine(temp.Path, "out");
         parser.ExtractToDirectory(outDir);
-        Assert.Equal("stream payload", File.ReadAllText(System.IO.Path.Combine(outDir, "file.txt")));
-        Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(System.IO.Path.Combine(outDir, "dir", "data.bin")));
+        Assert.Equal("stream payload", File.ReadAllText(Path.Combine(outDir, "file.txt")));
+        Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(Path.Combine(outDir, "dir", "data.bin")));
     }
 
     [Fact]
@@ -260,7 +260,7 @@ public class ErofsTests
         using var temp = new TempDirectory();
         WriteText(temp, "file.txt", "stream payload");
         var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
-        var imagePath = System.IO.Path.Combine(temp.Path, "image.erofs");
+        var imagePath = Path.Combine(temp.Path, "image.erofs");
         File.WriteAllBytes(imagePath, image);
 
         using var fs = File.OpenRead(imagePath);
@@ -307,9 +307,9 @@ public class ErofsTests
         WriteText(temp, "large.txt", payload);
         var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
         var truncated = image[..Math.Max(1, image.Length - 20_000)].ToArray();
-        var imagePath = System.IO.Path.Combine(temp.Path, "truncated.erofs");
+        var imagePath = Path.Combine(temp.Path, "truncated.erofs");
         File.WriteAllBytes(imagePath, truncated);
-        var outDir = System.IO.Path.Combine(temp.Path, "out");
+        var outDir = Path.Combine(temp.Path, "out");
 
         using var parser = new ErofsParser(imagePath);
         Assert.Throws<FileSystemCorruptedException>(() => parser.ExtractToDirectory(outDir));
@@ -479,7 +479,7 @@ public class ErofsTests
         WriteText(temp, "file.txt", "payload");
         var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions());
         var truncated = image.Take(ErofsSuperblock.SuperblockOffset + ErofsSuperblock.SuperblockSize + 8).ToArray();
-        var imagePath = System.IO.Path.Combine(temp.Path, "truncated.erofs");
+        var imagePath = Path.Combine(temp.Path, "truncated.erofs");
         File.WriteAllBytes(imagePath, truncated);
 
         var handler = new ErofsFormatHandler();

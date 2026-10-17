@@ -204,7 +204,6 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         {
             ParsedEntries = [.. parsedEntries],
             ImagePaths = parsedEntries.ToDictionary(entry => entry.Path, entry => entry.Path, StringComparer.Ordinal),
-            Projection = projection,
         };
 
         byte[] rebuilt;
@@ -272,7 +271,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
 
         using var corruptedParser = new ErofsParser(corrupted);
         var error = Assert.Throws<FileSystemCorruptedException>(
-            () => corruptedParser.ReadRebuildOptions());
+            corruptedParser.ReadRebuildOptions);
         Assert.Contains("chunk format", error.Message, StringComparison.Ordinal);
         Assert.Contains("data.bin", error.Message, StringComparison.Ordinal);
     }
@@ -348,7 +347,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
     }
 
     private static ErofsRebuildParameters SimulateDocumentRoundTrip(ErofsRebuildParameters parameters)
-        => JsonSerializer.Deserialize<ErofsRebuildParameters>(
+        => JsonSerializer.Deserialize(
             JsonSerializer.Serialize(parameters, FileSystemPreservationJsonContext.Default.ErofsRebuildParameters),
             FileSystemPreservationJsonContext.Default.ErofsRebuildParameters)!;
 }

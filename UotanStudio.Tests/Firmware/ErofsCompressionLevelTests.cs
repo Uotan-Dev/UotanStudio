@@ -60,7 +60,7 @@ public class ErofsCompressionLevelTests
     [Fact]
     public void Build_HighCompressionLevels_ReachTheImageInsteadOfBeingClamped()
     {
-        using var temp = new UotanStudio.Tests.Comm.TestDoubles.TempDirectory();
+        using var temp = new Comm.TestDoubles.TempDirectory();
         temp.WriteBytes("payload.bin", [.. Enumerable.Repeat((byte)0x5A, 64 * 1024)]);
 
         var options = new ErofsOptions
