@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace UotanStudio.Hash.Sums;
 
 /// <summary>
@@ -10,9 +12,11 @@ namespace UotanStudio.Hash.Sums;
 /// <remarks>
 /// Field-layout rules stay with the caller: ADB reserves <c>0</c> to mean "no checksum present", and TAR sums the
 /// header block only after the eight checksum bytes have been replaced with spaces. An empty input yields <c>0</c>,
-/// which is why the zero sentinel and this checksum cannot be distinguished.
+/// which is why the zero sentinel and this checksum cannot be distinguished. Spans wide enough for a hardware vector
+/// widen their bytes into 32-bit lanes, whose wrapping addition is the same modulo-2^32 sum as the scalar accumulator.
 /// <para>字段布局规则留在调用方：ADB 用 <c>0</c> 表示“无校验和”，TAR 必须先把 8 个校验字节替换为空格再求和。
-/// 空输入得到 <c>0</c>，因此零哨兵与该校验和无法区分。</para>
+/// 空输入得到 <c>0</c>，因此零哨兵与该校验和无法区分。宽度足够容纳硬件向量的区间把字节扩宽到 32 位分道累加，
+/// 其回卷加法与标量累加器得到相同的 mod 2^32 和。</para>
 /// </remarks>
 public static class ByteSum32
 {
@@ -29,9 +33,30 @@ public static class ByteSum32
     public static uint Compute(ReadOnlySpan<byte> data)
     {
         uint sum = 0;
-        foreach (var value in data)
+        var index = 0;
+        if (Vector.IsHardwareAccelerated && data.Length >= Vector<byte>.Count)
         {
-            sum += value;
+            var accumulator = Vector<uint>.Zero;
+            var limit = data.Length - Vector<byte>.Count;
+            while (index <= limit)
+            {
+                var bytes = new Vector<byte>(data[index..]);
+                Vector.Widen(bytes, out Vector<ushort> lower, out Vector<ushort> upper);
+                Vector.Widen(lower, out Vector<uint> lowerLow, out Vector<uint> lowerHigh);
+                Vector.Widen(upper, out Vector<uint> upperLow, out Vector<uint> upperHigh);
+                accumulator += lowerLow + lowerHigh + upperLow + upperHigh;
+                index += Vector<byte>.Count;
+            }
+
+            for (var lane = 0; lane < Vector<uint>.Count; lane++)
+            {
+                sum += accumulator[lane];
+            }
+        }
+
+        for (; index < data.Length; index++)
+        {
+            sum += data[index];
         }
 
         return sum;

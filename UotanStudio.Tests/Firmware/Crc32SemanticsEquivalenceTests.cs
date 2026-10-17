@@ -124,6 +124,35 @@ public class Crc32SemanticsEquivalenceTests
         Assert.Equal(BclCrc32.HashToUInt32(Payload.AsSpan(120_000, 50_000)), accumulator.GetCurrentHashAsUInt32());
     }
 
+    [Theory]
+    [InlineData(511)]
+    [InlineData(512)]
+    [InlineData(513)]
+    [InlineData(4096)]
+    [InlineData(131_072)]
+    [InlineData(299_999)]
+    public void Compute_AllOnesSeedAtFastPathBoundary_MatchesIeeeComplement(int length)
+    {
+        var data = Payload.AsSpan(0, length);
+
+        Assert.Equal(~RegisterCrc32.Compute(data, RegisterInitialValue), BclCrc32.HashToUInt32(data));
+    }
+
+    [Theory]
+    [InlineData(512)]
+    [InlineData(4096)]
+    [InlineData(131_072)]
+    public void Compute_AllOnesSeededStreamingChunks_FastPathComposesWithSliceFallback(int chunkLength)
+    {
+        var register = RegisterInitialValue;
+        for (var offset = 0; offset < Payload.Length; offset += chunkLength)
+        {
+            register = RegisterCrc32.Compute(Payload.AsSpan(offset, Math.Min(chunkLength, Payload.Length - offset)), register);
+        }
+
+        Assert.Equal(~register, BclCrc32.HashToUInt32(Payload));
+    }
+
     [Fact]
     public void Compute_FormatSpecificSeed_IsNotExpressibleByStandardFormSoBothFamiliesStay()
     {

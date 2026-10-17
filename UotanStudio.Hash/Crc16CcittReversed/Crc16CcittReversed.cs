@@ -8,9 +8,21 @@ namespace UotanStudio.Hash.Crc16CcittReversed;
 /// 报文与展讯 UpdateApp 条目校验都要求这种参数。对 ASCII 字节 <c>123456789</c> 的校验值为 <c>0x906E</c>，空数据的结果为
 /// <c>0x0000</c>。</para>
 /// </summary>
+/// <remarks>
+/// Spans of at least eight bytes fold eight bytes per iteration through eight 256-entry tables (slice-by-8); shorter
+/// frames keep the byte-at-a-time table, and both forms apply the same initial value and final XOR.
+/// <para>不少于 8 字节的区间借助 8 张 256 项表每轮折叠 8 字节（slice-by-8）；更短的帧保留逐字节查表，
+/// 两种形式套用相同的初值与最终异或。</para>
+/// </remarks>
 public static class Crc16CcittReversed
 {
-    private static readonly ushort[] Table = BuildTable();
+    private const ushort Polynomial = 0x8408;
+    private const ushort InitialValue = 0xFFFF;
+    private const int SliceSize = 8;
+    private const int TableEntries = 256;
+    private const int SliceTableEntries = TableEntries * SliceSize;
+
+    private static readonly ushort[] SliceTable = BuildSliceTable();
 
     /// <summary>
     /// Computes the reflected CRC-16 of the given data with the register seeded to <c>0xFFFF</c> and inverted at the end.
@@ -26,27 +38,52 @@ public static class Crc16CcittReversed
     /// </returns>
     public static ushort Compute(ReadOnlySpan<byte> data)
     {
-        var crc = (ushort)0xFFFF;
+        var crc = InitialValue;
+        var table = SliceTable;
+        while (data.Length >= SliceSize)
+        {
+            crc = (ushort)(table[0x700 + ((crc ^ data[0]) & 0xFF)]
+                ^ table[0x600 + (((crc >> 8) ^ data[1]) & 0xFF)]
+                ^ table[0x500 + data[2]]
+                ^ table[0x400 + data[3]]
+                ^ table[0x300 + data[4]]
+                ^ table[0x200 + data[5]]
+                ^ table[0x100 + data[6]]
+                ^ table[data[7]]);
+            data = data[SliceSize..];
+        }
+
         foreach (var value in data)
         {
-            crc = (ushort)((crc >> 8) ^ Table[(crc ^ value) & 0xFF]);
+            crc = (ushort)((crc >> 8) ^ table[(crc ^ value) & 0xFF]);
         }
 
         return (ushort)(crc ^ 0xFFFF);
     }
 
-    private static ushort[] BuildTable()
+    private static ushort[] BuildSliceTable()
     {
-        var table = new ushort[256];
-        for (var value = 0; value < 256; value++)
+        var table = new ushort[SliceTableEntries];
+        for (var value = 0; value < TableEntries; value++)
         {
             var entry = (ushort)value;
             for (var bit = 0; bit < 8; bit++)
             {
-                entry = (entry & 1) != 0 ? (ushort)((entry >> 1) ^ 0x8408) : (ushort)(entry >> 1);
+                entry = (entry & 1) != 0 ? (ushort)((entry >> 1) ^ Polynomial) : (ushort)(entry >> 1);
             }
 
             table[value] = entry;
+        }
+
+        for (var step = 1; step < SliceSize; step++)
+        {
+            var previous = (step - 1) * TableEntries;
+            var current = step * TableEntries;
+            for (var index = 0; index < TableEntries; index++)
+            {
+                var carry = table[previous + index];
+                table[current + index] = (ushort)((carry >> 8) ^ table[carry & 0xFF]);
+            }
         }
 
         return table;

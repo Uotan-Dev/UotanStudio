@@ -15,7 +15,11 @@ namespace UotanStudio.Hash.Crc16Arc;
 public static class Crc16Arc
 {
     private const ushort Polynomial = 0xA001;
-    private static readonly ushort[] Table = BuildTable();
+    private const int SliceSize = 8;
+    private const int TableEntries = 256;
+    private const int SliceTableEntries = TableEntries * SliceSize;
+
+    private static readonly ushort[] SliceTable = BuildSliceTable();
 
     /// <summary>
     /// Computes the CRC-16 register value of the data starting from <paramref name="seed"/>.
@@ -36,31 +40,48 @@ public static class Crc16Arc
     /// <para>以低位优先移位处理完所有字节后的 16 位寄存器值。</para>
     /// </returns>
     /// <remarks>
-    /// The table form folds one byte per iteration and returns exactly what the equivalent eight-shift loop returns:
-    /// <c>(byte)crc ^ value</c> is the same partial register that applying the low-bit-first shift eight times reaches
-    /// from <c>(crc ^ value)</c>, and a caller-supplied seed still enters through the low byte as before.
-    /// <para>查表形式每次迭代折叠一个字节，结果与等价的八次移位循环完全一致：<c>(byte)crc ^ value</c> 就是
-    /// 从 <c>(crc ^ value)</c> 起做八次低位优先移位后到达的部分寄存器；调用方给定的 seed 仍照旧从低字节进入。</para>
+    /// Spans of at least eight bytes fold eight bytes per iteration through eight 256-entry tables (slice-by-8), while
+    /// shorter frames keep the byte-at-a-time table. Both forms return exactly what the equivalent eight-shift loop
+    /// returns: <c>(byte)crc ^ value</c> is the same partial register that applying the low-bit-first shift eight times
+    /// reaches from <c>(crc ^ value)</c>, and a caller-supplied seed still enters through the low byte as before.
+    /// <para>不少于 8 字节的区间借助 8 张 256 项表每轮折叠 8 字节（slice-by-8），更短的帧保留逐字节查表。
+    /// 两种形式的结果都与等价的八次移位循环完全一致：<c>(byte)crc ^ value</c> 就是从 <c>(crc ^ value)</c>
+    /// 起做八次低位优先移位后到达的部分寄存器；调用方给定的 seed 仍照旧从低字节进入。</para>
     /// </remarks>
     public static ushort Compute(ReadOnlySpan<byte> data, ushort seed)
     {
         var crc = seed;
+        var table = SliceTable;
+        while (data.Length >= SliceSize)
+        {
+            crc = (ushort)(table[0x700 + ((crc ^ data[0]) & 0xFF)]
+                ^ table[0x600 + (((crc >> 8) ^ data[1]) & 0xFF)]
+                ^ table[0x500 + data[2]]
+                ^ table[0x400 + data[3]]
+                ^ table[0x300 + data[4]]
+                ^ table[0x200 + data[5]]
+                ^ table[0x100 + data[6]]
+                ^ table[data[7]]);
+            data = data[SliceSize..];
+        }
+
         foreach (var value in data)
         {
-            crc = (ushort)((crc >> 8) ^ Table[(byte)crc ^ value]);
+            crc = (ushort)((crc >> 8) ^ table[(byte)crc ^ value]);
         }
 
         return crc;
     }
 
     /// <summary>
-    /// Builds the reflected byte-at-a-time table, keeping the polynomial in exactly one place.
-    /// <para>构造逐字节反射查表，保证多项式只写在一处。</para>
+    /// Builds the reflected byte-at-a-time table and derives the seven additional slice tables from it, keeping the
+    /// polynomial in exactly one place.
+    /// <para>构造逐字节反射查表并由它派生另外 7 张 slice 表，保证多项式只写在一处。</para>
     /// </summary>
-    private static ushort[] BuildTable()
+    private static ushort[] BuildSliceTable()
     {
-        var table = new ushort[256];
-        for (var index = 0; index < 256; index++)
+        var table = new ushort[SliceTableEntries];
+        for (var index = 0; index < TableEntries; index++)
         {
             var entry = (ushort)index;
             for (var bit = 0; bit < 8; bit++)
@@ -69,6 +90,17 @@ public static class Crc16Arc
             }
 
             table[index] = entry;
+        }
+
+        for (var step = 1; step < SliceSize; step++)
+        {
+            var previous = (step - 1) * TableEntries;
+            var current = step * TableEntries;
+            for (var index = 0; index < TableEntries; index++)
+            {
+                var carry = table[previous + index];
+                table[current + index] = (ushort)((carry >> 8) ^ table[carry & 0xFF]);
+            }
         }
 
         return table;

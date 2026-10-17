@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace UotanStudio.Hash.Sums;
 
 /// <summary>
@@ -7,8 +9,10 @@ namespace UotanStudio.Hash.Sums;
 /// </summary>
 /// <remarks>
 /// HDC reserves <c>0</c> for "checksum absent" and an all-zero payload also sums to <c>0</c>, so a caller must apply
-/// the sentinel rule before comparing.
-/// <para>HDC 用 <c>0</c> 表示“无校验和”，而全零负载的累加和同样是 <c>0</c>，因此调用方必须先套用哨兵规则再比较。</para>
+/// the sentinel rule before comparing. Spans wide enough for a hardware vector accumulate in byte lanes, where every
+/// lane wraps modulo 256 just like the scalar accumulator, so the result is the same modulo-256 sum.
+/// <para>HDC 用 <c>0</c> 表示“无校验和”，而全零负载的累加和同样是 <c>0</c>，因此调用方必须先套用哨兵规则再比较。
+/// 宽度足够容纳硬件向量的区间按字节分道累加，每个通道与标量累加器一样按 mod 256 回卷，因此得到相同的 mod 256 和。</para>
 /// </remarks>
 public static class ByteSum8
 {
@@ -25,9 +29,26 @@ public static class ByteSum8
     public static byte Compute(ReadOnlySpan<byte> data)
     {
         byte sum = 0;
-        foreach (var value in data)
+        var index = 0;
+        if (Vector.IsHardwareAccelerated && data.Length >= Vector<byte>.Count)
         {
-            sum += value;
+            var accumulator = Vector<byte>.Zero;
+            var limit = data.Length - Vector<byte>.Count;
+            while (index <= limit)
+            {
+                accumulator += new Vector<byte>(data[index..]);
+                index += Vector<byte>.Count;
+            }
+
+            for (var lane = 0; lane < Vector<byte>.Count; lane++)
+            {
+                sum += accumulator[lane];
+            }
+        }
+
+        for (; index < data.Length; index++)
+        {
+            sum += data[index];
         }
 
         return sum;

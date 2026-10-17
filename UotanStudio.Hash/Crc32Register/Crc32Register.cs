@@ -12,14 +12,19 @@ namespace UotanStudio.Hash.Crc32Register;
 /// <c>Crc32Ieee.Compute(data) == ~Compute(data, 0xFFFF_FFFF)</c>。</para>
 /// </summary>
 /// <remarks>
-/// The hot loop consumes eight bytes per iteration through eight 256-entry tables (slice-by-8) and falls back to
-/// the byte-at-a-time table for the trailing remainder, so the register semantics stay identical for every length.
-/// <para>热循环借助 8 张 256 项表每轮消费 8 字节（slice-by-8），尾部余数字节回退到逐字节查表，
-/// 因此任意长度下的寄存器语义完全一致。</para>
+/// A span of at least 512 bytes seeded with <c>0xFFFF_FFFF</c> is complemented and forwarded to the hardware-accelerated
+/// <c>System.IO.Hashing.Crc32</c>; every other seed keeps the eight-table loop that consumes eight bytes per iteration
+/// (slice-by-8) and falls back to the byte-at-a-time table for the trailing remainder, so the register semantics stay
+/// identical for every length and seed.
+/// <para>初值为 <c>0xFFFF_FFFF</c> 且长度不少于 512 字节的区间会先取反再转发给硬件加速的
+/// <c>System.IO.Hashing.Crc32</c>；其余初值仍走 8 张 256 项表的热循环（每轮消费 8 字节，slice-by-8），
+/// 尾部余数字节回退到逐字节查表，因此任意长度与初值下的寄存器语义完全一致。</para>
 /// </remarks>
 public static class Crc32Register
 {
     private const uint Polynomial = 0xEDB88320;
+    private const uint AllOnesSeed = 0xFFFF_FFFF;
+    private const int HardwareFastPathMinimumLength = 512;
     private const int SliceSize = 8;
     private const int TableEntries = 256;
     private const int SliceTableEntries = TableEntries * SliceSize;
@@ -45,6 +50,11 @@ public static class Crc32Register
     /// </returns>
     public static uint Compute(ReadOnlySpan<byte> data, uint seed)
     {
+        if (seed == AllOnesSeed && data.Length >= HardwareFastPathMinimumLength)
+        {
+            return ~System.IO.Hashing.Crc32.HashToUInt32(data);
+        }
+
         var crc = seed;
         var slice = SliceTable;
         while (data.Length >= SliceSize)

@@ -26,10 +26,27 @@ public class Crc16CcittReversedTests
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
+    [InlineData(15)]
+    [InlineData(16)]
+    [InlineData(17)]
+    [InlineData(23)]
+    [InlineData(24)]
+    [InlineData(25)]
+    [InlineData(31)]
+    [InlineData(32)]
+    [InlineData(33)]
     [InlineData(63)]
     [InlineData(64)]
+    [InlineData(65)]
+    [InlineData(127)]
+    [InlineData(128)]
+    [InlineData(129)]
     [InlineData(255)]
     [InlineData(256)]
+    [InlineData(257)]
     [InlineData(1000)]
     [InlineData(4096)]
     public void Compute_TableWalk_MatchesBitByBitReferenceOverEveryPrefixLength(int length)
@@ -37,6 +54,24 @@ public class Crc16CcittReversedTests
         var data = LongPayload.AsSpan(0, length);
 
         Assert.Equal(ReferenceCrc16(data), Crc16CcittReversed.Compute(data));
+    }
+
+    [Fact]
+    public void Compute_RandomPayloads_MatchesBitByBitReference()
+    {
+        var random = new Random(0x5EED8408);
+        int[] lengths =
+        [
+            8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 255, 256, 257, 1023, 1024, 1025, 4096,
+        ];
+
+        foreach (var length in lengths)
+        {
+            var data = new byte[length];
+            random.NextBytes(data);
+
+            Assert.Equal(ReferenceCrc16(data), Crc16CcittReversed.Compute(data));
+        }
     }
 
     [Theory]
