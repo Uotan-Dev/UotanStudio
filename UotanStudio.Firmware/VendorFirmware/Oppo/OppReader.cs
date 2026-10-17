@@ -303,21 +303,9 @@ public sealed partial class OppReader
     {
         Guard.ThrowIfNull(stream);
 
-        var metadata = ReadMetadataFromStream(stream);
+        using var session = OpenArchiveSession(stream, CancellationToken.None);
 
-
-        if (metadata.IsZipWrapped)
-        {
-            return _zipWrappedOfpPackage.ParseZipWrappedArchive(stream, metadata);
-        }
-
-        var entries = ParseEntriesFromStream(stream, metadata);
-
-        return new OppArchive
-        {
-            Metadata = metadata,
-            Entries = entries
-        };
+        return session.Archive;
     }
 
     /// <summary>
@@ -525,8 +513,9 @@ public sealed partial class OppReader
         Guard.ThrowIfNull(stream);
         Guard.ThrowIfNullOrWhiteSpace(outputDir);
 
-        var archive = ParseFromStream(stream);
-        return ExtractCore(stream, archive, outputDir, options, progress);
+        using var session = OpenArchiveSession(stream, CancellationToken.None);
+
+        return ExtractCore(session.EntryStream, session.Archive, outputDir, options, progress);
     }
 
     /// <summary>
@@ -584,18 +573,83 @@ public sealed partial class OppReader
         Guard.ThrowIfNullOrWhiteSpace(outputDir);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var archive = ParseFromStream(stream);
-        var result = ExtractCore(stream, archive, outputDir, options, progress, cancellationToken);
+        using var session = OpenArchiveSession(stream, cancellationToken);
+        var result = ExtractCore(session.EntryStream, session.Archive, outputDir, options, progress, cancellationToken);
         return Task.FromResult(result);
     }
 
-    private IReadOnlyList<OppEntry> ParseEntriesFromStream(Stream stream, OppMetadata metadata)
+    /// <summary>
+    /// Parses a package and extracts it in one operation, so a ZIP-wrapped OFP is unwrapped only once.
+    /// <para>在一次操作中解析并解包固件包，使 ZIP 包裹的 OFP 只解压一次。</para>
+    /// </summary>
+    /// <param name="filePath">Path to the package file; opened once for reading and closed before completion.
+    /// <para>包文件路径；仅打开一次用于读取，并在完成前关闭。</para></param>
+    /// <param name="outputDir">Destination directory; created when missing.
+    /// <para>目标目录；不存在时创建。</para></param>
+    /// <param name="options">Extraction options; <see langword="null"/> uses defaults.
+    /// <para>提取选项；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <param name="progress">Receives progress snapshots; <see langword="null"/> reports nothing.
+    /// <para>接收进度快照；为 <see langword="null"/> 时不上报。</para></param>
+    /// <param name="cancellationToken">Checked before work and around every entry write.
+    /// <para>在工作前及每个条目写入前后检查的取消令牌。</para></param>
+    /// <returns>The parsed archive together with the extraction summary.
+    /// <para>已解析归档及其提取摘要。</para></returns>
+    internal Task<(OppArchive Archive, OppExtractResult Result)> ParseAndExtractAsync(
+        string filePath,
+        string outputDir,
+        OppExtractOptions? options = null,
+        IProgress<OppExtractProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
-        var format = metadata.Format;
+        Guard.ThrowIfNullOrWhiteSpace(filePath);
+        Guard.ThrowIfNullOrWhiteSpace(outputDir);
+
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var stream = OpenPackageStream(filePath, async: false);
+            using var session = OpenArchiveSession(stream, cancellationToken);
+            var result = ExtractCore(session.EntryStream, session.Archive, outputDir, options, progress, cancellationToken);
+            return (session.Archive, result);
+        }, cancellationToken);
+    }
+
+    private ArchiveSession OpenArchiveSession(Stream stream, CancellationToken cancellationToken)
+    {
+        var format = OppFormatDetector.DetectFormatFromStream(stream);
         var fileSize = stream.Length;
 
+        if (format == OppFormat.OfpQc && ZipWrappedOfpPackage.IsZipFile(stream))
+        {
+            var unwrapped = _zipWrappedOfpPackage.Unwrap(stream, cancellationToken);
+            try
+            {
+                var archive = _zipWrappedOfpPackage.ReadInnerArchive(unwrapped.InnerStream, fileSize);
+                return new ArchiveSession(archive, unwrapped.InnerStream, unwrapped);
+            }
+            catch
+            {
+                unwrapped.Dispose();
+                throw;
+            }
+        }
+
         var parser = ParserRegistry.GetParser(format);
-        return parser.ParseEntries(stream, fileSize, metadata, _cryptoProvider);
+        var metadata = parser.ParseMetadata(stream, fileSize, _cryptoProvider);
+        var entries = parser.ParseEntries(stream, fileSize, metadata, _cryptoProvider);
+        return new ArchiveSession(
+            new OppArchive { Metadata = metadata, Entries = entries },
+            stream,
+            lease: null);
+    }
+
+    private sealed class ArchiveSession(OppArchive archive, Stream entryStream, IDisposable? lease) : IDisposable
+    {
+        internal OppArchive Archive { get; } = archive;
+
+        internal Stream EntryStream { get; } = entryStream;
+
+        public void Dispose() => lease?.Dispose();
     }
 
     private OppExtractResult ExtractCore(
@@ -629,34 +683,7 @@ public sealed partial class OppReader
         }
 
 
-        return archive.Metadata.IsZipWrapped
-            ? ExtractZipWrappedCore(stream, archive, outputDir, overwrite, keyId, selected, progress, cancellationToken)
-            : ExtractEntriesCore(stream, archive, outputDir, overwrite, keyId, selected, progress, cancellationToken);
-    }
-
-    private OppExtractResult ExtractZipWrappedCore(
-        Stream stream,
-        OppArchive archive,
-        string outputDir,
-        bool overwrite,
-        string? keyId,
-        HashSet<string>? selected,
-        IProgress<OppExtractProgress>? progress, CancellationToken cancellationToken)
-    {
-        var tempDir = ZipWrappedOfpPackage.CreateTemporaryDirectory();
-
-        try
-        {
-            ZipWrappedOfpPackage.ExtractZipToDirectory(stream, tempDir, cancellationToken);
-
-            using var innerStream = ZipWrappedOfpPackage.OpenInnerOfpStream(tempDir);
-
-            return ExtractEntriesCore(innerStream, archive, outputDir, overwrite, keyId, selected, progress, cancellationToken);
-        }
-        finally
-        {
-            ZipWrappedOfpPackage.DeleteTemporaryDirectory(tempDir);
-        }
+        return ExtractEntriesCore(stream, archive, outputDir, overwrite, keyId, selected, progress, cancellationToken);
     }
 
     private OppExtractResult ExtractEntriesCore(

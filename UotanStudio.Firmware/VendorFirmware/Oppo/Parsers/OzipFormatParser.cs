@@ -35,21 +35,23 @@ internal sealed class OzipFormatParser : IOppFormatParser
         Guard.ThrowIfNull(stream);
 
         var originalPosition = stream.Position;
-        _ = OzipHeader.ReadFrom(stream);
+        var header = OzipHeader.ReadFrom(stream);
 
         try
         {
-            using var decrypted = OzipDecryptor.OpenDecryptedStream(stream, out var detectedKey, leaveOpen: true);
+            using var decrypted = OzipDecryptor.OpenDecryptedStream(stream, header, out var detectedKey, leaveOpen: true);
             var entries = ReadZipEntriesWithFallback(decrypted);
+            var finalEntries = entries.Count > 0 ? entries : FallbackSingleEntry(header);
 
             return new OppMetadata
             {
                 FormatName = "OZip",
                 Format = OppFormat.Ozip,
                 FileSize = fileSize,
-                EntryCount = entries.Count > 0 ? entries.Count : 1,
+                EntryCount = finalEntries.Count,
                 KeyId = detectedKey.Description ?? detectedKey.KeyHex,
-                IsZipWrapped = false
+                IsZipWrapped = false,
+                ParsedEntries = finalEntries
             };
         }
         catch (OppDecryptionException)
@@ -61,7 +63,8 @@ internal sealed class OzipFormatParser : IOppFormatParser
                 FileSize = fileSize,
                 EntryCount = 1,
                 KeyId = null,
-                IsZipWrapped = false
+                IsZipWrapped = false,
+                ParsedEntries = FallbackSingleEntry(header)
             };
         }
         catch (InvalidDataException)
@@ -73,7 +76,8 @@ internal sealed class OzipFormatParser : IOppFormatParser
                 FileSize = fileSize,
                 EntryCount = 1,
                 KeyId = null,
-                IsZipWrapped = false
+                IsZipWrapped = false,
+                ParsedEntries = FallbackSingleEntry(header)
             };
         }
         finally
@@ -100,13 +104,19 @@ internal sealed class OzipFormatParser : IOppFormatParser
     public IReadOnlyList<OppEntry> ParseEntries(Stream stream, long fileSize, OppMetadata metadata, IOppCryptoProvider? cryptoProvider)
     {
         Guard.ThrowIfNull(stream);
+        Guard.ThrowIfNull(metadata);
+
+        if (metadata.ParsedEntries is { } cached)
+        {
+            return cached;
+        }
 
         var originalPosition = stream.Position;
         var header = OzipHeader.ReadFrom(stream);
 
         try
         {
-            using var decrypted = OzipDecryptor.OpenDecryptedStream(stream, out _, leaveOpen: true);
+            using var decrypted = OzipDecryptor.OpenDecryptedStream(stream, header, out _, leaveOpen: true);
             var entries = ReadZipEntriesWithFallback(decrypted);
             return entries.Count > 0 ? entries : FallbackSingleEntry(header);
         }

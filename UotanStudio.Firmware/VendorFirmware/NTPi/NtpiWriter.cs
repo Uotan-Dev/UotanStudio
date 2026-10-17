@@ -81,9 +81,9 @@ internal sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compresso
     /// <para>写入头部的补丁版本。默认 <c>0</c>。</para>
     /// </param>
     /// <param name="progress">
-    /// Sink notified per file during measurement and during region6 writing, and once per layout phase; <see langword="null"/>
-    /// reports nothing.
-    /// <para>测量阶段与 region6 写入阶段按文件通知，并在每个布局阶段各通知一次；传 <see langword="null"/> 表示不上报。</para>
+    /// Sink notified per file while it is encoded and again per file while the encoded spools are copied into Region6,
+    /// and once per layout phase; <see langword="null"/> reports nothing.
+    /// <para>在每个文件编码时与把编码暂存复制进 Region6 时按文件通知，并在每个布局阶段各通知一次；传 <see langword="null"/> 表示不上报。</para>
     /// </param>
     /// <param name="customRegionPayloads">
     /// Payloads that replace the built-in <see cref="RegionType.Metadata"/>, <see cref="RegionType.Patch"/> and
@@ -107,8 +107,8 @@ internal sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compresso
     /// <para>请求的版本没有已注册的密钥集，或该密钥集缺少 1 到 5 号区域密钥中的某一个。</para>
     /// </exception>
     /// <exception cref="IOException">
-    /// A source file changes size between the measuring and the writing pass, or the destination cannot be published.
-    /// <para>源文件在测量遍与写入遍之间大小发生变化，或目标文件无法发布。</para>
+    /// A source file changes size while it is being encoded, or the destination cannot be published.
+    /// <para>源文件在编码期间大小发生变化，或目标文件无法发布。</para>
     /// </exception>
     /// <exception cref="OverflowException">
     /// The accumulated region6 layout exceeds the range of <see cref="long"/>.
@@ -191,9 +191,9 @@ internal sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compresso
     /// <para>写入头部的补丁版本。默认 <c>0</c>。</para>
     /// </param>
     /// <param name="progress">
-    /// Sink notified per entry during measurement and during region6 writing, and once per layout phase; <see langword="null"/>
-    /// reports nothing.
-    /// <para>测量与 region6 写入阶段按条目通知，并在每个布局阶段各通知一次；传 <see langword="null"/> 表示不上报。</para>
+    /// Sink notified per entry while it is encoded and again per entry while the encoded spools are copied into Region6,
+    /// and once per layout phase; <see langword="null"/> reports nothing.
+    /// <para>在每个条目编码时与把编码暂存复制进 Region6 时按条目通知，并在每个布局阶段各通知一次；传 <see langword="null"/> 表示不上报。</para>
     /// </param>
     /// <param name="customRegionPayloads">
     /// Payloads replacing the built-in <see cref="RegionType.Metadata"/>, <see cref="RegionType.Patch"/> and
@@ -257,11 +257,11 @@ internal sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compresso
     }
 
     /// <summary>
-    /// Core two-pass packing: the measuring pass computes each file's hash and compressed length in parallel and a
-    /// serial prefix sum then assigns the region6 offsets, while the writing pass encodes every non-empty file into its
-    /// own temporary spool in parallel and copies the spools into region6 in ascending offset order.
-    /// <para>两遍扫描的核心打包流程：测量遍并行计算各文件的哈希与压缩后长度，再由串行前缀和分配 region6 偏移；
-    /// 写入遍并行地把每个非空文件编码到各自的临时暂存文件，然后按偏移升序把暂存内容复制进 region6。</para>
+    /// Core single-pass packing: every non-empty file is encoded into its own temporary spool in parallel — compression,
+    /// encryption, plaintext hashing and the compressed length all happen during the same read — a serial prefix sum
+    /// then assigns the region6 offsets, and the spools are copied into region6 in ascending offset order.
+    /// <para>单遍扫描的核心打包流程：并行地把每个非空文件编码到各自的临时暂存文件，压缩、加密、明文哈希与压缩长度都在同一次读取中完成；
+    /// 随后由串行前缀和分配 region6 偏移，并按偏移升序把暂存内容复制进 region6。</para>
     /// </summary>
     /// <remarks>
     /// Parallelism is bounded by <see cref="FirmwareParallelism.Workers"/> and falls back to the sequential order when
@@ -298,209 +298,182 @@ internal sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compresso
         var keyMapProvider = new KeyMapKeyProvider(keyMap);
         var zeroIv = KeyMapKeyProvider.GetZeroIv();
 
-
         var workers = FirmwareParallelism.Workers;
         var measureGate = new object();
         var measured = 0;
-        var plans = FirmwareParallelism.SelectArray(entryList, (entry, i) =>
-        {
-            using var source = openSource(entry);
-            var plan = _fileProcessor.MeasureFile(entry, source, source.Length, i);
-            if (progress is not null)
-            {
-                int completed;
-                lock (measureGate)
-                {
-                    completed = ++measured;
-                }
-
-                progress.Report(new NtpiPackProgress
-                {
-                    TotalFiles = fileCount,
-                    CompletedFiles = completed,
-                    CurrentFileName = entry.Name,
-                    Phase = NtpiPackPhase.ProcessingFiles
-                });
-            }
-
-            return plan;
-        }, workers);
-
-        var offset = 0L;
-        for (var i = 0; i < fileCount; i++)
-        {
-            var plan = plans[i];
-            plan.Offset = offset;
-            if (plan.OriginalLength != 0)
-            {
-                offset = checked(offset + NtEncodeHeaderSize + plan.EncryptedLength);
-            }
-        }
-
-        var region6Length = offset;
-
-        var fileEntries = new List<FileEntry>(fileCount);
-        foreach (var plan in plans)
-        {
-            fileEntries.Add(new FileEntry
-            {
-                Name = plan.Entry.Name,
-                OriginalLength = plan.OriginalLength,
-                Length = plan.OriginalLength == 0 ? 0 : NtEncodeHeaderSize + plan.EncryptedLength,
-                FileSha256Hash = plan.Sha256Hash,
-                KeyIndex = plan.KeyIndex,
-                Offset = plan.Offset
-            });
-        }
-
-        var buildResult = _regionBuilder.BuildRegions(fileEntries, region6Length, keyMap, versionKeys, major, minor, patch, customRegionPayloads);
-
-        var outputDir = Path.GetDirectoryName(outputFile);
+        var finalOutputPath = Path.GetFullPath(outputFile);
+        var outputDir = Path.GetDirectoryName(finalOutputPath);
         if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
         {
             Directory.CreateDirectory(outputDir);
         }
 
-        var finalOutputPath = Path.GetFullPath(outputFile);
-        var tempOutputPath = Path.Combine(
-            Path.GetDirectoryName(finalOutputPath) ?? Directory.GetCurrentDirectory(),
-            $".{Path.GetFileName(finalOutputPath)}.{Guid.NewGuid():N}.tmp");
+        var spoolPaths = new string?[fileCount];
         try
         {
-            using (var outputStream = new FileStream(tempOutputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, DefaultBufferSize, FileOptions.SequentialScan))
+            var plans = FirmwareParallelism.SelectArray(entryList, (entry, i) =>
             {
-
-                progress?.Report(new NtpiPackProgress
+                using var source = openSource(entry);
+                var spoolPath = Path.Combine(
+                    Path.GetDirectoryName(finalOutputPath) ?? Directory.GetCurrentDirectory(),
+                    $".ntpi-region6-{Guid.NewGuid():N}.part");
+                spoolPaths[i] = spoolPath;
+                FilePlan plan;
+                using (var spool = new FileStream(spoolPath, FileMode.CreateNew, FileAccess.ReadWrite,
+                           FileShare.None, DefaultBufferSize, FileOptions.SequentialScan))
                 {
-                    TotalFiles = fileCount,
-                    CompletedFiles = fileCount,
-                    CurrentFileName = string.Empty,
-                    Phase = NtpiPackPhase.WritingRegions
-                });
-
-                var ntpiHeaderBytes = new byte[NtpiHeaderSize];
-                StructHelper.WriteNtpiHeader(buildResult.Header, ntpiHeaderBytes);
-                outputStream.Write(ntpiHeaderBytes, 0, NtpiHeaderSize);
-
-                foreach (var encryptedRegion in buildResult.EncryptedRegions)
-                {
-                    outputStream.Write(encryptedRegion, 0, encryptedRegion.Length);
+                    plan = _fileProcessor.EncodeToSpool(entry, source, source.Length, spool, keyMapProvider, zeroIv, i);
                 }
 
-
-                progress?.Report(new NtpiPackProgress
+                if (progress is not null)
                 {
-                    TotalFiles = fileCount,
-                    CompletedFiles = 0,
-                    CurrentFileName = string.Empty,
-                    Phase = NtpiPackPhase.WritingRegion6
-                });
+                    int completed;
+                    lock (measureGate)
+                    {
+                        completed = ++measured;
+                    }
 
-                var region6Plans = new List<int>(fileCount);
-                for (var i = 0; i < fileCount; i++)
-                {
-                    if (plans[i].OriginalLength == 0)
+                    progress.Report(new NtpiPackProgress
                     {
-                        using var emptySource = openSource(plans[i].Entry);
-                        _fileProcessor.EncodeFile(plans[i], emptySource, outputStream, keyMapProvider, zeroIv);
-                    }
-                    else
-                    {
-                        region6Plans.Add(i);
-                    }
+                        TotalFiles = fileCount,
+                        CompletedFiles = completed,
+                        CurrentFileName = entry.Name,
+                        Phase = NtpiPackPhase.ProcessingFiles
+                    });
                 }
 
-                if (region6Plans.Count == 0)
+                return plan;
+            }, workers);
+
+            var offset = 0L;
+            for (var i = 0; i < fileCount; i++)
+            {
+                var plan = plans[i];
+                plan.Offset = offset;
+                if (plan.OriginalLength != 0)
                 {
-                    outputStream.Flush(flushToDisk: true);
-                }
-                else
-                {
-                    var spoolPaths = new string[region6Plans.Count];
-                    try
-                    {
-                        var writeGate = new object();
-                        var encoded = 0;
-                        FirmwareParallelism.ForEach(region6Plans, (planIndex, slot) =>
-                        {
-                            var plan = plans[planIndex];
-                            spoolPaths[slot] = Path.Combine(
-                                Path.GetDirectoryName(tempOutputPath) ?? Directory.GetCurrentDirectory(),
-                                $".ntpi-region6-{Guid.NewGuid():N}.part");
-                            using (var spool = new FileStream(spoolPaths[slot], FileMode.CreateNew, FileAccess.Write,
-                                       FileShare.None, DefaultBufferSize, FileOptions.SequentialScan))
-                            {
-                                using var source = openSource(plan.Entry);
-                                _fileProcessor.EncodeFile(plan, source, spool, keyMapProvider, zeroIv);
-                                spool.Flush();
-                            }
-
-                            if (progress is not null)
-                            {
-                                int completed;
-                                lock (writeGate)
-                                {
-                                    completed = ++encoded;
-                                }
-
-                                progress.Report(new NtpiPackProgress
-                                {
-                                    TotalFiles = fileCount,
-                                    CompletedFiles = completed,
-                                    CurrentFileName = plan.Entry.Name,
-                                    Phase = NtpiPackPhase.WritingRegion6
-                                });
-                            }
-                        }, workers);
-
-                        for (var slot = 0; slot < region6Plans.Count; slot++)
-                        {
-                            using var spool = new FileStream(spoolPaths[slot], FileMode.Open, FileAccess.Read,
-                                FileShare.Read, DefaultBufferSize, FileOptions.SequentialScan);
-                            spool.CopyTo(outputStream);
-                        }
-
-                        outputStream.Flush(flushToDisk: true);
-                    }
-                    finally
-                    {
-                        foreach (var spoolPath in spoolPaths)
-                        {
-                            if (spoolPath is null)
-                            {
-                                continue;
-                            }
-
-                            try
-                            {
-                                File.Delete(spoolPath);
-                            }
-                            catch (IOException)
-                            {
-
-                            }
-                            catch (UnauthorizedAccessException)
-                            {
-
-                            }
-                        }
-                    }
+                    offset = checked(offset + NtEncodeHeaderSize + plan.EncryptedLength);
                 }
             }
 
-            AtomicPublish.Publish(tempOutputPath, finalOutputPath);
-        }
-        catch
-        {
+            var region6Length = offset;
+
+            var fileEntries = new List<FileEntry>(fileCount);
+            foreach (var plan in plans)
+            {
+                fileEntries.Add(new FileEntry
+                {
+                    Name = plan.Entry.Name,
+                    OriginalLength = plan.OriginalLength,
+                    Length = plan.OriginalLength == 0 ? 0 : NtEncodeHeaderSize + plan.EncryptedLength,
+                    FileSha256Hash = plan.Sha256Hash,
+                    KeyIndex = plan.KeyIndex,
+                    Offset = plan.Offset
+                });
+            }
+
+            var buildResult = _regionBuilder.BuildRegions(fileEntries, region6Length, keyMap, versionKeys, major, minor, patch, customRegionPayloads);
+
+            var tempOutputPath = Path.Combine(
+                Path.GetDirectoryName(finalOutputPath) ?? Directory.GetCurrentDirectory(),
+                $".{Path.GetFileName(finalOutputPath)}.{Guid.NewGuid():N}.tmp");
             try
             {
-                File.Delete(tempOutputPath);
+                using (var outputStream = new FileStream(tempOutputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, DefaultBufferSize, FileOptions.SequentialScan))
+                {
+
+                    progress?.Report(new NtpiPackProgress
+                    {
+                        TotalFiles = fileCount,
+                        CompletedFiles = fileCount,
+                        CurrentFileName = string.Empty,
+                        Phase = NtpiPackPhase.WritingRegions
+                    });
+
+                    var ntpiHeaderBytes = new byte[NtpiHeaderSize];
+                    StructHelper.WriteNtpiHeader(buildResult.Header, ntpiHeaderBytes);
+                    outputStream.Write(ntpiHeaderBytes, 0, NtpiHeaderSize);
+
+                    foreach (var encryptedRegion in buildResult.EncryptedRegions)
+                    {
+                        outputStream.Write(encryptedRegion, 0, encryptedRegion.Length);
+                    }
+
+
+                    progress?.Report(new NtpiPackProgress
+                    {
+                        TotalFiles = fileCount,
+                        CompletedFiles = 0,
+                        CurrentFileName = string.Empty,
+                        Phase = NtpiPackPhase.WritingRegion6
+                    });
+
+                    var copied = 0;
+                    for (var i = 0; i < fileCount; i++)
+                    {
+                        var plan = plans[i];
+                        if (plan.OriginalLength == 0)
+                        {
+                            continue;
+                        }
+
+                        using var spool = new FileStream(spoolPaths[i]!, FileMode.Open, FileAccess.Read,
+                            FileShare.Read, DefaultBufferSize, FileOptions.SequentialScan);
+                        spool.CopyTo(outputStream);
+                        copied++;
+                        progress?.Report(new NtpiPackProgress
+                        {
+                            TotalFiles = fileCount,
+                            CompletedFiles = copied,
+                            CurrentFileName = plan.Entry.Name,
+                            Phase = NtpiPackPhase.WritingRegion6
+                        });
+                    }
+
+                    outputStream.Flush(flushToDisk: true);
+                }
+
+                AtomicPublish.Publish(tempOutputPath, finalOutputPath);
             }
             catch
             {
+                try
+                {
+                    File.Delete(tempOutputPath);
+                }
+                catch (IOException)
+                {
 
+                }
+                catch (UnauthorizedAccessException)
+                {
+
+                }
+                throw;
             }
-            throw;
+        }
+        finally
+        {
+            foreach (var spoolPath in spoolPaths)
+            {
+                if (spoolPath is null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    File.Delete(spoolPath);
+                }
+                catch (IOException)
+                {
+
+                }
+                catch (UnauthorizedAccessException)
+                {
+
+                }
+            }
         }
 
         progress?.Report(new NtpiPackProgress

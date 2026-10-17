@@ -547,6 +547,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
         }
 
         var imageLength = position;
+        var crcState = new Crc32State();
         await FileExtraction.WriteAtomicAsync(outputPath, async output =>
         {
             output.SetLength(imageLength);
@@ -558,24 +559,40 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
             BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(24), checked((uint)itemCount));
             output.Position = 0;
             await output.WriteAsync(header, cancellationToken).ConfigureAwait(false);
+            crcState.Append(header.AsSpan(checked((int)options.Alignment)));
 
             for (var index = 0; index < planned.Count; index++)
             {
                 var record = CreateItemRecord(options.Version, planned[index], index);
                 await output.WriteAsync(record, cancellationToken).ConfigureAwait(false);
+                crcState.Append(record);
             }
 
+            var cursor = checked((long)headerSize + (long)planned.Count * recordSize);
             var hashes = new Dictionary<string, byte[]>(StringComparer.Ordinal);
             foreach (var item in planned)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 output.Position = item.Offset;
+                if (item.Offset > cursor)
+                {
+                    crcState.AppendZeros(item.Offset - cursor);
+                    cursor = item.Offset;
+                }
+
                 if (item.IsVerify)
                 {
                     var digest = hashes[item.Source.SubType];
                     var text = Encoding.ASCII.GetBytes($"sha1sum {Convert.ToHexStringLower(digest)}");
                     await output.WriteAsync(text, cancellationToken).ConfigureAwait(false);
-                    await output.WriteAsync(new byte[VerifyDataSize - text.Length], cancellationToken).ConfigureAwait(false);
+                    crcState.Append(text);
+                    var padding = VerifyDataSize - text.Length;
+                    if (padding > 0)
+                    {
+                        await output.WriteAsync(ZeroChunk.AsMemory(0, padding), cancellationToken).ConfigureAwait(false);
+                        crcState.Append(ZeroChunk.AsSpan(0, padding));
+                    }
+                    cursor = checked(cursor + VerifyDataSize);
                     continue;
                 }
 
@@ -583,18 +600,23 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
                     128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
                 input.Position = item.Source.SourceOffset;
                 using var sha1 = item.Source.Verify ? Sha1.CreateAccumulator() : null;
-                await CopyExactlyAsync(input, output, item.Size, sha1, cancellationToken).ConfigureAwait(false);
+                await CopyExactlyAsync(input, output, item.Size, sha1, cancellationToken, crcState).ConfigureAwait(false);
+                cursor = checked(cursor + item.Size);
                 if (sha1 is not null)
                 {
                     hashes[item.Source.SubType] = sha1.GetHashAndReset();
                 }
             }
 
+            if (cursor != imageLength)
+            {
+                throw new InvalidDataException("AMLogic image layout does not account for the full image length.");
+            }
+
             await output.FlushAsync(cancellationToken).ConfigureAwait(false);
-            var crc = await ComputeCrcAsync(output, options.Alignment, cancellationToken).ConfigureAwait(false);
             output.Position = 0;
             var crcBytes = new byte[4];
-            BinaryPrimitives.WriteUInt32LittleEndian(crcBytes, crc);
+            BinaryPrimitives.WriteUInt32LittleEndian(crcBytes, crcState.Value);
             await output.WriteAsync(crcBytes, cancellationToken).ConfigureAwait(false);
         }, overwrite: true, cancellationToken).ConfigureAwait(false);
     }
@@ -698,12 +720,15 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
         return crc;
     }
 
+    private static readonly byte[] ZeroChunk = new byte[128 * 1024];
+
     private static async Task CopyExactlyAsync(
         Stream input,
         Stream output,
         long length,
         DigestAccumulator? hash,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Crc32State? crcState = null)
     {
         var buffer = new byte[128 * 1024];
         while (length > 0)
@@ -715,8 +740,26 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
                 throw new EndOfStreamException("AMLogic item data is truncated.");
             }
             hash?.Append(buffer.AsSpan(0, read));
+            crcState?.Append(buffer.AsSpan(0, read));
             await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             length -= read;
+        }
+    }
+
+    private sealed class Crc32State
+    {
+        public uint Value { get; private set; } = uint.MaxValue;
+
+        public void Append(ReadOnlySpan<byte> data) => Value = Crc32Register.Compute(data, Value);
+
+        public void AppendZeros(long count)
+        {
+            while (count > 0)
+            {
+                var length = (int)Math.Min(ZeroChunk.Length, count);
+                Value = Crc32Register.Compute(ZeroChunk.AsSpan(0, length), Value);
+                count -= length;
+            }
         }
     }
 

@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using UotanStudio.Firmware.BootSecurity.Workflow;
 using UotanStudio.Firmware.VendorFirmware.Amlogic;
 using UotanStudio.Firmware.VendorFirmware.SonySin;
+using UotanStudio.Hash.Crc32Register;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -56,6 +57,31 @@ public sealed class VendorFormatBoundaryTests : IDisposable
         var result = await handler.UnpackAsync(path, output, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Summary);
         Assert.Equal([1, 2, 3, 4, 5], await File.ReadAllBytesAsync(Path.Combine(output, "DDR.USB"), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Amlogic_PackMultipleItemsWithGaps_StoresCrcOfAlignedImage()
+    {
+        var source = Path.Combine(_root, "src-gaps");
+        Directory.CreateDirectory(source);
+        await File.WriteAllBytesAsync(Path.Combine(source, "A.USB"), [1], TestContext.Current.CancellationToken);
+        await File.WriteAllBytesAsync(Path.Combine(source, "BB.USB"), [1, 2, 3, 4, 5, 6, 7],
+            TestContext.Current.CancellationToken);
+        await File.WriteAllBytesAsync(Path.Combine(source, "CCC.USB"), Enumerable.Range(0, 100).Select(value => (byte)value).ToArray(),
+            TestContext.Current.CancellationToken);
+        var image = Path.Combine(_root, "gaps.img");
+        var handler = new AmlogicFormatHandler();
+        var packed = await handler.PackAsync(source, image, new AmlogicPackOptions
+        {
+            Alignment = 8,
+            VerifiedEntries = ["A.USB", "CCC.USB"]
+        }, TestContext.Current.CancellationToken);
+        Assert.True(packed.Success, packed.Summary);
+
+        var bytes = await File.ReadAllBytesAsync(image, TestContext.Current.CancellationToken);
+        var recomputed = Crc32Register.Compute(bytes.AsSpan(8), uint.MaxValue);
+        Assert.Equal(recomputed, BinaryPrimitives.ReadUInt32LittleEndian(bytes));
+        Assert.True((await handler.VerifyAsync(image, TestContext.Current.CancellationToken)).Success);
     }
 
     [Fact]
@@ -185,6 +211,62 @@ public sealed class VendorFormatBoundaryTests : IDisposable
         Assert.Equal(
             [.. "hello hello"u8.ToArray(), 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xDE, 0xAD, 0xBE, 0xEF],
             await File.ReadAllBytesAsync(Path.Combine(output, "system.img"), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task SonySin_Lz4OverlappingMatch_ReassemblesExactBytes()
+    {
+        byte[] compressed = [0x14, (byte)'A', 0x01, 0x00];
+        var path = Path.Combine(_root, "overlap-match.sin");
+        await File.WriteAllBytesAsync(path, CreateSonySinWithLz4(compressed, 9), TestContext.Current.CancellationToken);
+        var output = Path.Combine(_root, "overlap-match-output");
+
+        var result = await new SonySinFormatHandler().UnpackAsync(
+            path, output, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Summary);
+        Assert.Equal("AAAAAAAAA"u8.ToArray(),
+            await File.ReadAllBytesAsync(Path.Combine(output, "overlap-match.img"), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task SonySin_Lz4LargeLiteralRunAndRepeatedMatch_ReassemblesExactBytes()
+    {
+        const int literalCount = 136_072;
+        var literals = new byte[literalCount];
+        for (var index = 0; index < literals.Length; index++)
+        {
+            literals[index] = unchecked((byte)(index * 31 + index / 251));
+        }
+
+        var compressed = new List<byte> { 0xFF };
+        var extension = literalCount - 15;
+        while (extension >= 255)
+        {
+            compressed.Add(255);
+            extension -= 255;
+        }
+        compressed.Add((byte)extension);
+        compressed.AddRange(literals);
+        compressed.AddRange([4, 0, 1]);
+        var expected = new byte[literalCount + 20];
+        literals.CopyTo(expected, 0);
+        for (var index = 0; index < 20; index++)
+        {
+            expected[literalCount + index] = literals[literalCount - 4 + index % 4];
+        }
+
+        var path = Path.Combine(_root, "large-literal.sin");
+        await File.WriteAllBytesAsync(path, CreateSonySinWithLz4([.. compressed], expected.Length),
+            TestContext.Current.CancellationToken);
+        var output = Path.Combine(_root, "large-literal-output");
+
+        var result = await new SonySinFormatHandler().UnpackAsync(
+            path, output, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Summary);
+        Assert.Equal(expected,
+            await File.ReadAllBytesAsync(Path.Combine(output, "large-literal.img"), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -371,6 +453,37 @@ public sealed class VendorFormatBoundaryTests : IDisposable
 
         compressed.CopyTo(sin, dataBase);
         raw.CopyTo(sin, dataBase + compressed.Length);
+        return sin;
+    }
+
+    private static byte[] CreateSonySinWithLz4(byte[] compressed, long outputSize)
+    {
+        const int headerSize = 32;
+        const int gptpLength = 64;
+        const int dataBase = headerSize + 8 + gptpLength;
+        var sin = new byte[dataBase + compressed.Length];
+
+        sin[0] = 3;
+        sin[1] = (byte)'S';
+        sin[2] = (byte)'I';
+        sin[3] = (byte)'N';
+        BinaryPrimitives.WriteUInt32BigEndian(sin.AsSpan(4), headerSize);
+        BinaryPrimitives.WriteUInt32BigEndian(sin.AsSpan(0x18), checked((uint)(sin.Length - headerSize)));
+
+        "MMCF"u8.CopyTo(sin.AsSpan(headerSize));
+        BinaryPrimitives.WriteUInt32BigEndian(sin.AsSpan(headerSize + 4), gptpLength);
+        "GPTP"u8.CopyTo(sin.AsSpan(headerSize + 8));
+        BinaryPrimitives.WriteUInt32BigEndian(sin.AsSpan(headerSize + 12), gptpLength);
+
+        const int record = headerSize + 8 + 24;
+        "LZ4A"u8.CopyTo(sin.AsSpan(record));
+        BinaryPrimitives.WriteUInt32BigEndian(sin.AsSpan(record + 4), 40);
+        BinaryPrimitives.WriteUInt64BigEndian(sin.AsSpan(record + 8), 0);
+        BinaryPrimitives.WriteUInt64BigEndian(sin.AsSpan(record + 16), checked((ulong)outputSize));
+        BinaryPrimitives.WriteUInt64BigEndian(sin.AsSpan(record + 24), checked((ulong)compressed.Length));
+        BinaryPrimitives.WriteUInt64BigEndian(sin.AsSpan(record + 32), 0);
+
+        compressed.CopyTo(sin, dataBase);
         return sin;
     }
 

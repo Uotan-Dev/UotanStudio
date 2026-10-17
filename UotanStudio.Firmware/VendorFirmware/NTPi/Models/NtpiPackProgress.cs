@@ -31,13 +31,13 @@ public class NtpiPackProgress
 /// </summary>
 public enum NtpiPackPhase
 {
-    /// <summary>Measuring each file and computing hashes and layout. <para>正在逐个度量文件并计算哈希与布局。</para></summary>
+    /// <summary>Encodes each file — compression, encryption, hashing and length measurement in one read — into its spool. <para>正在逐个编码文件——在同一次读取中完成压缩、加密、哈希与长度度量——并写入其暂存。</para></summary>
     ProcessingFiles = 0,
 
     /// <summary>Writing the package header and the encrypted regions to the temporary output. <para>正在向临时输出写入包头部与加密区域。</para></summary>
     WritingRegions = 1,
 
-    /// <summary>Encoding each file and appending it as Region6 payload data. <para>正在逐个编码文件并作为 Region6 载荷追加。</para></summary>
+    /// <summary>Copying the already encoded file spools into Region6 in layout order. <para>正在按布局顺序把已编码的文件暂存复制进 Region6。</para></summary>
     WritingRegion6 = 2,
 
     /// <summary>The output was flushed to disk and the temporary file moved into the final path. <para>输出已刷盘，临时文件已移动到最终路径。</para></summary>

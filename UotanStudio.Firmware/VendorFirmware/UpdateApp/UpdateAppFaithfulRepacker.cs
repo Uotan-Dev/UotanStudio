@@ -241,8 +241,8 @@ public static class UpdateAppFaithfulRepacker
             ArgumentOutOfRangeException.ThrowIfNegative(gap);
             layoutBytes = checked(layoutBytes + gap);
             totalLength = checked(totalLength + header.LongLength + fileSize + gap);
-            VerifyPayload(header, payloadPath, inline, cancellationToken);
-            plans.Add(new Plan(header, payloadPath, inline, gap));
+            var (blockSize, blockCount) = ValidatePayloadMetadata(header);
+            plans.Add(new Plan(header, payloadPath, inline, gap, fileSize, blockSize, blockCount));
         }
 
         if (totalLength != sourceLength || layoutBytes != declaredLayout)
@@ -285,11 +285,14 @@ public static class UpdateAppFaithfulRepacker
                 {
                     using var payload = new FileStream(plan.PayloadPath, FileMode.Open, FileAccess.Read,
                         FileShare.Read, CopyBufferSize, FileOptions.SequentialScan);
-                    CopyStream(payload, output, payload.Length, cancellationToken);
+                    if (payload.Length != plan.FileSize)
+                        throw new InvalidDataException("UPDATE.APP payload file changed size; run the canonical rebuild instead.");
+                    CopyPayload(payload, output, plan, cancellationToken);
                 }
                 else if (plan.Inline is not null)
                 {
-                    output.Write(plan.Inline);
+                    using var payload = new MemoryStream(plan.Inline, writable: false);
+                    CopyPayload(payload, output, plan, cancellationToken);
                 }
 
                 CopyStream(artifact, output, plan.GapAfter, cancellationToken);
@@ -418,15 +421,15 @@ public static class UpdateAppFaithfulRepacker
         return header;
     }
 
-    private static void VerifyPayload(byte[] header, string? payloadPath, byte[]? inline, CancellationToken cancellationToken)
+    private static (ushort BlockSize, int BlockCount) ValidatePayloadMetadata(byte[] header)
     {
-        var fileSize = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(24));
         if (header.Length < CanonicalHeaderSize)
-            return;
+            return (0, 0);
         var blockSize = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(BlockSizeOffset));
         if (blockSize == 0)
-            return;
+            return (0, 0);
 
+        var fileSize = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(24));
         var tableBytes = checked(header.Length - CanonicalHeaderSize);
         if ((tableBytes & 1) != 0)
             throw new InvalidDataException("UPDATE.APP checksum table has an odd byte length.");
@@ -440,30 +443,37 @@ public static class UpdateAppFaithfulRepacker
         if (Crc16CcittReversed.Compute(scratch) != expectedHeaderCrc)
             throw new InvalidDataException("UPDATE.APP header CRC mismatch in captured metadata.");
 
-        using var stream = payloadPath is not null
-            ? (Stream)new FileStream(payloadPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferSize, FileOptions.SequentialScan)
-            : new MemoryStream(inline ?? new byte[(int)fileSize]);
-        if (stream.Length != fileSize)
-            throw new InvalidDataException("UPDATE.APP payload file changed size; run the canonical rebuild instead.");
-        var buffer = new byte[Math.Min(blockSize, CopyBufferSize)];
-        for (var block = 0; block < blockCount; block++)
+        return (blockSize, blockCount);
+    }
+
+    private static void CopyPayload(Stream payload, Stream output, Plan plan, CancellationToken cancellationToken)
+    {
+        if (plan.BlockCount == 0)
+        {
+            CopyStream(payload, output, plan.FileSize, cancellationToken);
+            return;
+        }
+
+        var buffer = new byte[Math.Min(plan.BlockSize, CopyBufferSize)];
+        for (var block = 0; block < plan.BlockCount; block++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var count = (int)Math.Min(buffer.Length, (long)fileSize - (long)block * blockSize);
-            stream.Position = (long)block * blockSize;
+            var count = (int)Math.Min(buffer.Length, (long)plan.FileSize - (long)block * plan.BlockSize);
             var read = 0;
             while (read < count)
             {
-                var step = stream.Read(buffer, read, count - read);
+                var step = payload.Read(buffer, read, count - read);
                 if (step == 0)
                     throw new InvalidDataException("UPDATE.APP payload ended unexpectedly.");
                 read += step;
             }
 
-            var expected = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(CanonicalHeaderSize + block * 2));
+            var expected = BinaryPrimitives.ReadUInt16LittleEndian(
+                plan.Header.AsSpan(CanonicalHeaderSize + block * 2));
             if (Crc16CcittReversed.Compute(buffer.AsSpan(0, count)) != expected)
                 throw new InvalidDataException($"UPDATE.APP payload CRC mismatch for block {block}; " +
                     "the stored bytes no longer match the captured checksum table.");
+            output.Write(buffer, 0, count);
         }
     }
 
@@ -484,5 +494,12 @@ public static class UpdateAppFaithfulRepacker
         }
     }
 
-    private readonly record struct Plan(byte[] Header, string? PayloadPath, byte[]? Inline, long GapAfter);
+    private readonly record struct Plan(
+        byte[] Header,
+        string? PayloadPath,
+        byte[]? Inline,
+        long GapAfter,
+        uint FileSize,
+        ushort BlockSize,
+        int BlockCount);
 }

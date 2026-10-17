@@ -35,7 +35,9 @@ internal sealed class OzipBlockDecryptStream : Stream
 
     private readonly byte[] _encBuf = new byte[EncryptedSize];
     private readonly byte[] _decBuf = new byte[EncryptedSize];
+    private readonly byte[] _unitBuf = new byte[EncryptionUnitSize];
     private long _cachedUnitIndex = -1;
+    private long _innerPosition = -1;
 
     /// <summary>
     /// Initializes a new instance of OzipBlockDecryptStream.
@@ -197,12 +199,70 @@ internal sealed class OzipBlockDecryptStream : Stream
         if (buffer.Length - offset < count)
             throw new ArgumentException("Offset and count exceed the buffer length.");
 
-        if (count == 0 || _position >= _dataLength)
+        return ReadCore(buffer.AsSpan(offset, count));
+    }
+
+    /// <summary>
+    /// Reads decrypted bytes into a span and advances the position.
+    /// <para>向区间读取解密字节并前移位置。</para>
+    /// </summary>
+    /// <param name="buffer">Destination span; an empty span returns <c>0</c>.
+    /// <para>目标区间；空区间返回 <c>0</c>。</para></param>
+    /// <returns>The number of bytes written, <c>0</c> at the region end.
+    /// <para>写入的字节数；到达数据区末尾时为 <c>0</c>。</para></returns>
+    /// <exception cref="InvalidOppFormatException">The inner stream ends before the requested data, or a unit prefix is incomplete.
+    /// <para>内部流在所需数据之前结束，或单元前缀不完整。</para></exception>
+    public override int Read(Span<byte> buffer) => ReadCore(buffer);
+
+    /// <summary>
+    /// Reads decrypted bytes asynchronously; unit prefixes are decrypted synchronously while plaintext
+    /// runs are read with the inner stream's asynchronous path.
+    /// <para>异步读取解密字节；单元前缀同步解密，明文段使用内部流的异步读取。</para>
+    /// </summary>
+    /// <param name="buffer">Destination memory; an empty memory returns <c>0</c>.
+    /// <para>目标内存区；空内存区返回 <c>0</c>。</para></param>
+    /// <param name="cancellationToken">Checked before reading starts and forwarded to the inner read.
+    /// <para>在读取开始前检查并转发给内部读取的取消令牌。</para></param>
+    /// <returns>A task carrying the number of bytes written.
+    /// <para>携带写入字节数的任务。</para></returns>
+    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ReadAsyncCore(buffer, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads decrypted bytes asynchronously into an array segment.
+    /// <para>异步向数组区间读取解密字节。</para>
+    /// </summary>
+    /// <param name="buffer">Destination array. <para>目标数组。</para></param>
+    /// <param name="offset">Index in <paramref name="buffer"/> where writing starts.
+    /// <para><paramref name="buffer"/> 中开始写入位置的从零开始序号。</para></param>
+    /// <param name="count">Maximum number of bytes requested. <para>请求的最大字节数。</para></param>
+    /// <param name="cancellationToken">Checked before reading starts and forwarded to the inner read.
+    /// <para>在读取开始前检查并转发给内部读取的取消令牌。</para></param>
+    /// <returns>A task carrying the number of bytes written.
+    /// <para>携带写入字节数的任务。</para></returns>
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(buffer);
+        ArgumentOutOfRangeException.ThrowIfNegative(offset);
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        if (buffer.Length - offset < count)
+            throw new ArgumentException("Offset and count exceed the buffer length.");
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return ReadAsyncCore(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+    }
+
+    private async ValueTask<int> ReadAsyncCore(Memory<byte> destination, CancellationToken cancellationToken)
+    {
+        if (destination.Length == 0 || _position >= _dataLength)
             return 0;
 
         var totalRead = 0;
 
-        while (totalRead < count && _position < _dataLength)
+        while (totalRead < destination.Length && _position < _dataLength)
         {
             var unitIndex = _position / EncryptionUnitSize;
             var offsetInUnit = (int)(_position % EncryptionUnitSize);
@@ -211,9 +271,9 @@ internal sealed class OzipBlockDecryptStream : Stream
             {
                 EnsurePrefixDecrypted(unitIndex);
 
-                var toCopy = Math.Min(EncryptedSize - offsetInUnit, count - totalRead);
+                var toCopy = Math.Min(EncryptedSize - offsetInUnit, destination.Length - totalRead);
                 toCopy = (int)Math.Min(toCopy, _dataLength - _position);
-                Array.Copy(_decBuf, offsetInUnit, buffer, offset + totalRead, toCopy);
+                _decBuf.AsSpan(offsetInUnit, toCopy).CopyTo(destination.Span[totalRead..]);
                 totalRead += toCopy;
                 _position += toCopy;
                 continue;
@@ -221,9 +281,98 @@ internal sealed class OzipBlockDecryptStream : Stream
 
             var remainingInUnit = EncryptionUnitSize - offsetInUnit;
             var remainingInData = _dataLength - _position;
-            var toRead = (int)Math.Min(Math.Min(remainingInUnit, count - totalRead), remainingInData);
-            _inner.Position = OzipHeader.DataOffset + _position;
-            var bytesRead = _inner.Read(buffer, offset + totalRead, toRead);
+            var toRead = (int)Math.Min(Math.Min(remainingInUnit, destination.Length - totalRead), remainingInData);
+            SeekInner(OzipHeader.DataOffset + _position);
+            var bytesRead = await _inner.ReadAsync(destination.Slice(totalRead, toRead), cancellationToken)
+                .ConfigureAwait(false);
+            if (bytesRead == 0)
+            {
+                throw new InvalidOppFormatException("Unexpected end of the OZip encrypted data region.");
+            }
+
+            _innerPosition += bytesRead;
+            totalRead += bytesRead;
+            _position += bytesRead;
+        }
+
+        return totalRead;
+    }
+
+    private int ReadCore(Span<byte> destination)
+    {
+        if (destination.Length == 0 || _position >= _dataLength)
+            return 0;
+
+        var totalRead = 0;
+
+        while (totalRead < destination.Length && _position < _dataLength)
+        {
+            var unitIndex = _position / EncryptionUnitSize;
+            var offsetInUnit = (int)(_position % EncryptionUnitSize);
+
+            if (offsetInUnit < EncryptedSize)
+            {
+                var unitRemaining = EncryptionUnitSize - EncryptedSize;
+                var requestedAfterPrefix = destination.Length - totalRead - EncryptedSize;
+                if (offsetInUnit == 0
+                    && requestedAfterPrefix > 0
+                    && _cachedUnitIndex != unitIndex
+                    && _dataLength - _position - EncryptedSize > 0)
+                {
+                    var plaintextWanted = (int)Math.Min(
+                        Math.Min(unitRemaining, requestedAfterPrefix),
+                        _dataLength - _position - EncryptedSize);
+                    var wanted = EncryptedSize + plaintextWanted;
+
+                    SeekInner(OzipHeader.DataOffset + _position);
+                    var read = _inner.Read(_unitBuf.AsSpan(0, wanted));
+                    if (read > 0)
+                    {
+                        _innerPosition += read;
+                    }
+
+                    if (read < EncryptedSize)
+                    {
+                        ReadExactlyInner(_unitBuf, read, EncryptedSize);
+                        read = EncryptedSize;
+                    }
+
+                    DecryptPrefix(_unitBuf, unitIndex);
+                    _decBuf.AsSpan(0, EncryptedSize).CopyTo(destination[(totalRead)..]);
+                    totalRead += EncryptedSize;
+                    _position += EncryptedSize;
+
+                    var plaintextRead = read - EncryptedSize;
+                    if (plaintextRead == 0)
+                    {
+                        plaintextRead = ReadInner(_unitBuf.AsSpan(EncryptedSize, plaintextWanted));
+                        if (plaintextRead == 0)
+                        {
+                            throw new InvalidOppFormatException("Unexpected end of the OZip encrypted data region.");
+                        }
+                    }
+
+                    _unitBuf.AsSpan(EncryptedSize, plaintextRead).CopyTo(destination[totalRead..]);
+                    totalRead += plaintextRead;
+                    _position += plaintextRead;
+                    continue;
+                }
+
+                EnsurePrefixDecrypted(unitIndex);
+
+                var toCopy = Math.Min(EncryptedSize - offsetInUnit, destination.Length - totalRead);
+                toCopy = (int)Math.Min(toCopy, _dataLength - _position);
+                _decBuf.AsSpan(offsetInUnit, toCopy).CopyTo(destination[totalRead..]);
+                totalRead += toCopy;
+                _position += toCopy;
+                continue;
+            }
+
+            var remainingInUnit = EncryptionUnitSize - offsetInUnit;
+            var remainingInData = _dataLength - _position;
+            var toRead = (int)Math.Min(Math.Min(remainingInUnit, destination.Length - totalRead), remainingInData);
+            SeekInner(OzipHeader.DataOffset + _position);
+            var bytesRead = ReadInner(destination.Slice(totalRead, toRead));
             if (bytesRead == 0)
             {
                 throw new InvalidOppFormatException("Unexpected end of the OZip encrypted data region.");
@@ -249,24 +398,49 @@ internal sealed class OzipBlockDecryptStream : Stream
         if (_dataLength - unitIndex * EncryptionUnitSize < EncryptedSize)
             throw new InvalidOppFormatException("The OZip data ends with an incomplete encrypted prefix.");
 
-        _inner.Position = unitFileOffset;
-        ReadExactly(_inner, _encBuf);
+        SeekInner(unitFileOffset);
+        ReadExactlyInner(_encBuf, 0, EncryptedSize);
+        DecryptPrefix(_encBuf, unitIndex);
+    }
 
-        if (_decryptor.TransformBlock(_encBuf, 0, EncryptedSize, _decBuf, 0) != EncryptedSize)
+    private void DecryptPrefix(byte[] source, long unitIndex)
+    {
+        if (_decryptor.TransformBlock(source, 0, EncryptedSize, _decBuf, 0) != EncryptedSize)
             throw new CryptographicException("AES did not decrypt a complete OZip block prefix.");
 
         _cachedUnitIndex = unitIndex;
     }
 
-    private static void ReadExactly(Stream stream, byte[] buffer)
+    private void SeekInner(long position)
+    {
+        if (_innerPosition == position)
+            return;
+
+        _inner.Position = position;
+        _innerPosition = position;
+    }
+
+    private int ReadInner(Span<byte> destination)
+    {
+        var read = _inner.Read(destination);
+        if (read > 0)
+        {
+            _innerPosition += read;
+        }
+
+        return read;
+    }
+
+    private void ReadExactlyInner(byte[] buffer, int offset, int count)
     {
         var totalRead = 0;
-        while (totalRead < buffer.Length)
+        while (totalRead < count)
         {
-            var bytesRead = stream.Read(buffer, totalRead, buffer.Length - totalRead);
+            var bytesRead = _inner.Read(buffer, offset + totalRead, count - totalRead);
             if (bytesRead == 0)
                 throw new InvalidOppFormatException("Unexpected end of the OZip encrypted data region.");
             totalRead += bytesRead;
+            _innerPosition += bytesRead;
         }
     }
 

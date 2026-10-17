@@ -148,6 +148,82 @@ internal static class AesCfb128
     internal static void Decrypt(Stream input, Stream output, byte[] key, byte[] iv, CancellationToken cancellationToken = default) => ProcessStream(input, output, key, iv, encrypt: false, cancellationToken);
 
     /// <summary>
+    /// Searches the decrypted prefix of a ciphertext for a byte pattern without decrypting the whole buffer.
+    /// <para>在不解密整个缓冲区的前提下，在密文的解密前缀中查找字节模式。</para>
+    /// </summary>
+    /// <param name="ciphertext">Ciphertext read from its first byte; only bytes below <paramref name="maximumBytes"/> are processed.
+    /// <para>从首字节开始的密文；仅处理 <paramref name="maximumBytes"/> 之前的字节。</para></param>
+    /// <param name="key">AES-128 key used in ECB mode for the keystream.
+    /// <para>以 ECB 模式生成密钥流的 AES-128 密钥。</para></param>
+    /// <param name="iv">Initial 16-byte feedback vector.
+    /// <para>初始 16 字节反馈向量。</para></param>
+    /// <param name="pattern">Non-empty byte pattern to find in the decrypted bytes.
+    /// <para>在解密字节中查找的非空字节模式。</para></param>
+    /// <param name="maximumBytes">Upper bound of ciphertext bytes to decrypt; values at or below zero search nothing.
+    /// <para>需要解密的密文字节上限；小于等于零时不查找。</para></param>
+    /// <returns>The zero-based offset of the first occurrence in the decrypted stream, or <c>-1</c> when it is absent.
+    /// <para>该模式在解密流中首次出现的从零开始偏移；不存在时为 <c>-1</c>。</para></returns>
+    internal static int IndexOfDecrypted(ReadOnlySpan<byte> ciphertext, byte[] key, byte[] iv, ReadOnlySpan<byte> pattern, int maximumBytes)
+    {
+        ValidateKeyIv(key, iv);
+        if (pattern.Length == 0 || maximumBytes <= 0 || ciphertext.Length == 0)
+        {
+            return -1;
+        }
+
+        var limit = Math.Min(maximumBytes, ciphertext.Length);
+        var retained = pattern.Length - 1;
+        var scan = new byte[retained + BlockSize];
+        var encrypted = new byte[BlockSize];
+        var feedback = new byte[BlockSize];
+        iv.AsSpan().CopyTo(feedback);
+
+        using var aes = Aes.Create();
+        aes.Key = key;
+        aes.Mode = CipherMode.ECB;
+        aes.Padding = PaddingMode.None;
+        using var encryptor = aes.CreateEncryptor();
+
+        var held = 0;
+        var offset = 0;
+        while (offset < limit)
+        {
+            var blockSize = Math.Min(BlockSize, limit - offset);
+            ciphertext.Slice(offset, blockSize).CopyTo(scan.AsSpan(held));
+
+            if (encryptor.TransformBlock(feedback, 0, BlockSize, encrypted, 0) != BlockSize)
+            {
+                throw new CryptographicException("AES did not produce a complete CFB keystream block.");
+            }
+
+            if (blockSize == BlockSize)
+            {
+                ciphertext.Slice(offset, BlockSize).CopyTo(feedback);
+            }
+
+            var decrypted = scan.AsSpan(held, blockSize);
+            for (var i = 0; i < decrypted.Length; i++)
+            {
+                decrypted[i] ^= encrypted[i];
+            }
+
+            var searchLength = held + blockSize;
+            var found = scan.AsSpan(0, searchLength).IndexOf(pattern);
+            if (found >= 0)
+            {
+                return offset - held + found;
+            }
+
+            var keep = Math.Min(retained, searchLength);
+            scan.AsSpan(searchLength - keep, keep).CopyTo(scan);
+            held = keep;
+            offset += blockSize;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
     /// Encrypts stream data using AES-128-CFB with 128-bit segment size.
     /// <para>使用 AES-128-CFB（128 位段大小）加密流数据。</para>
     /// </summary>

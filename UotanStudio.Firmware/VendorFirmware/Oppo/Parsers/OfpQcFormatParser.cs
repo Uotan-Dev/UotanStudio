@@ -64,7 +64,8 @@ internal sealed class OfpQcFormatParser : IOppFormatParser
                 FileSize = fileSize,
                 EntryCount = entries.Count,
                 KeyId = keyId,
-                IsZipWrapped = false
+                IsZipWrapped = false,
+                ParsedEntries = entries
             };
         }
         finally
@@ -80,6 +81,12 @@ internal sealed class OfpQcFormatParser : IOppFormatParser
     public IReadOnlyList<OppEntry> ParseEntries(Stream stream, long fileSize, OppMetadata metadata, IOppCryptoProvider? cryptoProvider)
     {
         Guard.ThrowIfNull(stream);
+        Guard.ThrowIfNull(metadata);
+
+        if (metadata.ParsedEntries is { } cached)
+        {
+            return cached;
+        }
 
         var originalPosition = stream.Position;
         try

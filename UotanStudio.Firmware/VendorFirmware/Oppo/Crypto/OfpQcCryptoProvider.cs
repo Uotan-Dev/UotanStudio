@@ -7,6 +7,10 @@ namespace UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 
 internal sealed class OfpQcCryptoProvider(IOppLogger? logger = null) : IOppFormatCryptoProvider, IDisposable
 {
+    private const int ProbeWindowBytes = 64 * 1024;
+
+    private static ReadOnlySpan<byte> XmlDeclaration => "<?xml"u8;
+
     private readonly IOppLogger _logger = logger ?? NullOppLogger.Instance;
     private readonly KeyDerivationCache _keyCache = new();
     private readonly List<QcKeyEntry> _customQcKeys = [];
@@ -153,18 +157,32 @@ internal sealed class OfpQcCryptoProvider(IOppLogger? logger = null) : IOppForma
     {
         Guard.ThrowIfNull(encryptedXml);
 
-        foreach (var entry in QcKeyDatabase.Entries)
+        var probeLength = Math.Min(encryptedXml.Length, ProbeWindowBytes);
+        if (TryProbeKey(encryptedXml, probeLength, QcKeyDatabase.Entries, out var builtIn)
+            || TryProbeKey(encryptedXml, probeLength, _customQcKeys, out builtIn))
+        {
+            return DecryptMatched(encryptedXml, builtIn!);
+        }
+
+
+        return FullScanForKey(encryptedXml);
+    }
+
+    private bool TryProbeKey(
+        byte[] encryptedXml,
+        int probeLength,
+        IReadOnlyList<QcKeyEntry> entries,
+        out QcKeyEntry? matched)
+    {
+        foreach (var entry in entries)
         {
             try
             {
                 var (aesKey, aesIv) = _keyCache.GetOrDeriveQcKey(entry);
-                var decrypted = AesCfb128.Decrypt(encryptedXml, aesKey, aesIv);
-                var text = Encoding.UTF8.GetString(decrypted);
-
-                if (ContainsXmlDeclaration(text))
+                if (AesCfb128.IndexOfDecrypted(encryptedXml, aesKey, aesIv, XmlDeclaration, probeLength) >= 0)
                 {
-                    _logger.Debug($"AutoDecryptQcXml: matched key '{entry.KeyId}'.");
-                    return (TruncateXmlAtLastCloseTag(text), entry.KeyId);
+                    matched = entry;
+                    return true;
                 }
             }
             catch (Exception ex) when (ex is FormatException or ArgumentException)
@@ -173,28 +191,64 @@ internal sealed class OfpQcCryptoProvider(IOppLogger? logger = null) : IOppForma
             }
         }
 
+        matched = null;
+        return false;
+    }
+
+    private (string Xml, string KeyId) DecryptMatched(byte[] encryptedXml, QcKeyEntry entry)
+    {
+        var (aesKey, aesIv) = _keyCache.GetOrDeriveQcKey(entry);
+        var decrypted = AesCfb128.Decrypt(encryptedXml, aesKey, aesIv);
+        var text = Encoding.UTF8.GetString(decrypted);
+        _logger.Debug($"AutoDecryptQcXml: matched key '{entry.KeyId}'.");
+        return (TruncateXmlAtLastCloseTag(text), entry.KeyId);
+    }
+
+    private (string Xml, string KeyId)? FullScanForKey(byte[] encryptedXml)
+    {
+        var buffer = new byte[encryptedXml.Length];
+        foreach (var entry in QcKeyDatabase.Entries)
+        {
+            if (TryFullScan(encryptedXml, buffer, entry, out var result))
+            {
+                _logger.Debug($"AutoDecryptQcXml: matched key '{entry.KeyId}'.");
+                return result;
+            }
+        }
 
         foreach (var entry in _customQcKeys)
         {
-            try
+            if (TryFullScan(encryptedXml, buffer, entry, out var result))
             {
-                var (aesKey, aesIv) = _keyCache.GetOrDeriveQcKey(entry);
-                var decrypted = AesCfb128.Decrypt(encryptedXml, aesKey, aesIv);
-                var text = Encoding.UTF8.GetString(decrypted);
-
-                if (ContainsXmlDeclaration(text))
-                {
-                    _logger.Debug($"AutoDecryptQcXml: matched user key '{entry.KeyId}'.");
-                    return (TruncateXmlAtLastCloseTag(text), entry.KeyId);
-                }
-            }
-            catch (Exception ex) when (ex is FormatException or ArgumentException)
-            {
-                _logger.Warning($"AutoDecryptQcXml: user key '{entry.KeyId}' failed.", ex);
+                _logger.Debug($"AutoDecryptQcXml: matched user key '{entry.KeyId}'.");
+                return result;
             }
         }
 
         return null;
+    }
+
+    private bool TryFullScan(byte[] encryptedXml, byte[] buffer, QcKeyEntry entry, out (string Xml, string KeyId) result)
+    {
+        try
+        {
+            encryptedXml.CopyTo(buffer, 0);
+            var (aesKey, aesIv) = _keyCache.GetOrDeriveQcKey(entry);
+            AesCfb128.DecryptInPlace(buffer, aesKey, aesIv);
+            var text = Encoding.UTF8.GetString(buffer);
+            if (ContainsXmlDeclaration(text))
+            {
+                result = (TruncateXmlAtLastCloseTag(text), entry.KeyId);
+                return true;
+            }
+        }
+        catch (Exception ex) when (ex is FormatException or ArgumentException)
+        {
+            _logger.Warning($"AutoDecryptQcXml: key '{entry.KeyId}' failed.", ex);
+        }
+
+        result = default;
+        return false;
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.VendorFirmware.Oppo;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Models;
@@ -91,6 +92,132 @@ public sealed class OfpStreamingConformanceTests
         Assert.Throws<InvalidDataException>(() => parser.ExtractEntry(input, output,
             new OppEntry { Name = "partition", Size = 33 }, new OppMetadata(), null, null));
         Assert.Equal(0, output.Length);
+    }
+
+    [Fact]
+    public void AutoDecryptQcXml_DeclarationAfterFirstBlocks_SelectsSameKey()
+    {
+        using var provider = new OfpQcCryptoProvider();
+        var xml = Encoding.UTF8.GetBytes(new string('x', 4096) +
+            "<?xml version=\"1.0\"?><root><Firmware><file Path=\"entry.bin\" FileOffsetInSrc=\"1\" SizeInByteInSrc=\"16\"/></Firmware></root>");
+        var encrypted = provider.Encrypt(xml, "V1.4.17");
+
+        var result = provider.AutoDecryptQcXml(encrypted);
+
+        Assert.NotNull(result);
+        Assert.Equal("V1.4.17", result.Value.KeyId);
+        Assert.Contains("<?xml", result.Value.Xml);
+        Assert.EndsWith("</root>", result.Value.Xml);
+    }
+
+    [Fact]
+    public void QcParseEntries_AfterParseMetadata_DoesNotReadTheStreamAgain()
+    {
+        var xml = Encoding.UTF8.GetBytes("<?xml version=\"1.0\"?><root><Firmware><file Path=\"entry.bin\" FileOffsetInSrc=\"1\" SizeInByteInSrc=\"16\"/></Firmware></root>".PadRight(256));
+        var data = new byte[1024];
+        xml.CopyTo(data, 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(512 + 0x10), 0x7cef);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(512 + 0x18), (uint)xml.Length);
+        using var source = new CountingReadStream(data);
+        using var crypto = new OfpQcCryptoProvider();
+        var parser = new OfpQcFormatParser(crypto);
+        var metadata = parser.ParseMetadata(source, source.Length, null);
+        var bytesRead = source.BytesRead;
+
+        var entries = parser.ParseEntries(source, source.Length, metadata, null);
+
+        Assert.Equal(bytesRead, source.BytesRead);
+        Assert.Single(entries);
+    }
+
+    [Fact]
+    public void ZipWrappedOfp_ExtractionReadsWrapperOnce()
+    {
+        var payload = new byte[256 * 1024];
+        new Random(7).NextBytes(payload);
+        using var zipBytes = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(zipBytes, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            using var entry = archive.CreateEntry("inner.ofp", System.IO.Compression.CompressionLevel.NoCompression).Open();
+            entry.Write(PlainMtkOfp(payload));
+        }
+
+        var zip = zipBytes.ToArray();
+        var output = Path.Combine(Path.GetTempPath(), "uotan-zip-once-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var source = new CountingReadStream(zip);
+            var result = new OppReader().ExtractFromStream(source, output);
+
+            Assert.Equal(1, result.ExtractedFileCount);
+            Assert.Equal(payload, File.ReadAllBytes(Path.Combine(output, "entry.bin")));
+            Assert.True(source.BytesRead < zip.Length * 2,
+                $"ZIP wrapper was read {source.BytesRead} bytes for a {zip.Length}-byte archive.");
+        }
+        finally
+        {
+            if (Directory.Exists(output))
+            {
+                Directory.Delete(output, recursive: true);
+            }
+        }
+    }
+
+    private static byte[] PlainMtkOfp() => PlainMtkOfp(Enumerable.Repeat((byte)0x52, 16).ToArray());
+
+    private static byte[] PlainMtkOfp(byte[] payload)
+    {
+        var result = new byte[payload.Length + 0x60 + 0x6c];
+        payload.CopyTo(result, 0);
+        var entry = result.AsSpan(payload.Length, 0x60);
+        "entry.bin"u8.CopyTo(entry);
+        BinaryPrimitives.WriteInt64LittleEndian(entry[40..], payload.Length);
+        var header = result.AsSpan(payload.Length + 0x60);
+        "REVIEW"u8.CopyTo(header);
+        BinaryPrimitives.WriteUInt16LittleEndian(header[72..], 1);
+        ObfuscateMtkHeader(entry);
+        ObfuscateMtkHeader(header);
+        return result;
+    }
+
+    private static void ObfuscateMtkHeader(Span<byte> data)
+    {
+        ReadOnlySpan<byte> key = "geyixue"u8;
+        for (var i = 0; i < data.Length; i++)
+        {
+            var value = data[i] ^ key[i % key.Length];
+            data[i] = (byte)((value >> 4) | (value << 4));
+        }
+    }
+
+    private sealed class CountingReadStream(byte[] data) : MemoryStream(data, writable: false)
+    {
+        public long BytesRead { get; private set; }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var read = base.Read(buffer, offset, count);
+            BytesRead += read;
+            return read;
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            var read = base.Read(buffer);
+            BytesRead += read;
+            return read;
+        }
+
+        public override int ReadByte()
+        {
+            var value = base.ReadByte();
+            if (value >= 0)
+            {
+                BytesRead++;
+            }
+
+            return value;
+        }
     }
 
     private sealed class ShortReadStream(byte[] data) : MemoryStream(data, writable: false)

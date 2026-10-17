@@ -5,12 +5,11 @@ namespace UotanStudio.Firmware.VendorFirmware.OnePlusOps;
 
 /// <summary>
 /// Reads and decrypts entries of a OnePlus OPS package from a stream. Header and entry-table
-/// parsing consume bytes sequentially from the current position, while <see cref="ReadEntryData"/>
-/// seeks to absolute offsets. Decryption covers the SBox-based stream cipher and AES-ECB. The
-/// stream stays open and owned by the caller for the lifetime of this instance.
-/// <para>从流中读取并解密 OnePlus OPS 包的条目。头部与条目表解析从当前位置顺序消费字节，
-/// <see cref="ReadEntryData"/> 则按绝对偏移定位。解密路径覆盖基于 SBox 的流密码与 AES-ECB。
-/// 流在整个实例生命周期内保持打开，所有权归调用方。</para>
+/// parsing consume bytes sequentially from the current position. Decryption covers the SBox-based
+/// stream cipher and AES-ECB. The stream stays open and owned by the caller for the lifetime of
+/// this instance.
+/// <para>从流中读取并解密 OnePlus OPS 包的条目。头部与条目表解析从当前位置顺序消费字节。
+/// 解密路径覆盖基于 SBox 的流密码与 AES-ECB。流在整个实例生命周期内保持打开，所有权归调用方。</para>
 /// </summary>
 /// <param name="stream">OPS package stream positioned where the header starts.
 /// <para>定位到头部起始处的 OPS 数据流。</para></param>
@@ -81,37 +80,11 @@ internal class OpsDecryptor(Stream stream, IOnePlusLogger? logger = null)
     }
 
     /// <summary>
-    /// Reads an entry's raw data from the stream at the given absolute offset
-    /// <para>从流的指定绝对偏移读取条目的原始数据</para>
-    /// </summary>
-    /// <param name="offset">Absolute offset from the start of the stream where the entry data begins.
-    /// <para>条目数据起始位置相对流开头的绝对偏移。</para></param>
-    /// <param name="size">Exact number of bytes to read; 0 returns an empty array without seeking.
-    /// <para>需要精确读取的字节数；为 0 时不移动流位置并直接返回空数组。</para></param>
-    /// <returns>The raw, still encrypted entry bytes. <para>原始（仍加密）的条目字节。</para></returns>
-    /// <exception cref="IOException">The stream does not support seeking or a read failed.
-    /// <para>流不支持寻址或读取失败。</para></exception>
-    /// <exception cref="EndOfStreamException">Fewer than <paramref name="size"/> bytes remain after seeking.
-    /// <para>定位后剩余字节少于 <paramref name="size"/>。</para></exception>
-    public byte[] ReadEntryData(uint offset, uint size)
-    {
-        if (size == 0)
-        {
-            return [];
-        }
-
-        _stream.Seek(offset, SeekOrigin.Begin);
-        var data = new byte[size];
-        ReadExact(_stream, data, 0, data.Length);
-        return data;
-    }
-
-    /// <summary>
     /// Decrypts data using the SBox-based stream cipher with a default key
     /// <para>使用基于SBox的流密码和默认密钥解密数据</para>
     /// </summary>
-    /// <param name="encryptedData">Raw entry bytes, e.g. from <see cref="ReadEntryData(uint, uint)"/>.
-    /// <para>原始条目字节，例如来自 <see cref="ReadEntryData(uint, uint)"/>。</para></param>
+    /// <param name="encryptedData">Raw entry bytes read from the package stream.
+    /// <para>从包流读取的原始条目字节。</para></param>
     /// <param name="variant">Key-derivation variant; 0 uses the built-in 16-byte default key as-is,
     /// and each step above 0 prepends one derived byte before the key material is truncated to
     /// 32 bytes. A negative value behaves like 0.

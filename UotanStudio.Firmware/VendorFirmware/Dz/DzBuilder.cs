@@ -142,31 +142,34 @@ public static class DzBuilder
                 {
                     throw new InvalidDataException("DZ input changed beyond its capacity.");
                 }
-                var checksums = HashContent(input, token);
-                input.Position = 0;
+                byte[] sha256;
+                byte[] md5;
+                uint crc32;
                 var chunkHeader = source.Header.ToArray();
                 var recordOffset = output.Position;
                 output.Write(chunkHeader);
-                using (var hashing = new HashingReadStream(input, leaveOpen: true))
-                using (var counted = new CountingReadStream(hashing, leaveOpen: true, cancellationToken: token))
+                using (var digesting = new DzContentDigestStream(input, leaveOpen: true))
+                using (var counted = new CountingReadStream(digesting, leaveOpen: true, cancellationToken: token))
                 using (var encoded = new CountingWriteStream(output, uint.MaxValue, leaveOpen: true, cancellationToken: token))
                 {
                     CompressionService.Compress(counted, encoded, source.Compression);
-                    if (counted.BytesRead != input.Length || !hashing.GetHashAndReset().AsSpan().SequenceEqual(checksums.Sha256))
+                    if (counted.BytesRead != input.Length)
                     {
                         throw new InvalidDataException("DZ input changed during compression.");
                     }
+
+                    (sha256, md5, crc32) = digesting.GetHashesAndReset();
                     BinaryPrimitives.WriteUInt32LittleEndian(chunkHeader.AsSpan(104), checked((uint)encoded.BytesWritten));
                 }
                 BinaryPrimitives.WriteUInt32LittleEndian(chunkHeader.AsSpan(100), checked((uint)input.Length));
-                checksums.Md5.CopyTo(chunkHeader, 108);
-                BinaryPrimitives.WriteUInt32LittleEndian(chunkHeader.AsSpan(136), checksums.Crc32);
+                md5.CopyTo(chunkHeader, 108);
+                BinaryPrimitives.WriteUInt32LittleEndian(chunkHeader.AsSpan(136), crc32);
                 var end = output.Position;
                 output.Position = recordOffset;
                 output.Write(chunkHeader);
                 output.Position = end;
                 headerDigest.Append(chunkHeader);
-                expected.Add(checksums.Sha256);
+                expected.Add(sha256);
             }
             BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(192), (uint)chunks.Length);
             headerDigest.GetHashAndReset().CopyTo(header, 196);

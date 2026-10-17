@@ -53,4 +53,8 @@ public sealed class OppMetadata
     /// <summary>Identifier of the decryption key associated with the archive, or <see langword="null"/> when none is recorded. <para>与归档关联的解密密钥标识符；无记录时为 <see langword="null"/>。</para></summary>
     /// <value>The key identifier, or <see langword="null"/>. <para>密钥标识符，或 <see langword="null"/>。</para></value>
     public string? KeyId { get; init; }
+
+    /// <summary>Entry list produced while parsing this metadata, letting a later entry read reuse the same XML or central-directory pass. <para>解析本元数据时已生成的条目列表，使后续条目读取复用同一次 XML 或中央目录解析。</para></summary>
+    /// <value>The complete entry list, or <see langword="null"/> when the producer kept no entries. <para>完整条目列表；生产方未保留条目时为 <see langword="null"/>。</para></value>
+    internal IReadOnlyList<OppEntry>? ParsedEntries { get; init; }
 }

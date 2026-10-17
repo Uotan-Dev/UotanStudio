@@ -20,6 +20,8 @@ public static class RockchipPacker
     private const int RkafAlignment = 2048;
     private const int MaximumPackageFileBytes = 4 * 1024 * 1024;
 
+    private static readonly byte[] ZeroChunk = new byte[64 * 1024];
+
     /// <summary>
     /// Packs the source directory into an RKAF or RKFW container using default options.
     /// <para>使用默认选项将源目录打包为 RKAF 或 RKFW 容器。</para>
@@ -579,11 +581,10 @@ public static class RockchipPacker
         {
             throw new InvalidDataException("Negative Rockchip padding.");
         }
-        var zeros = new byte[64 * 1024];
         while (count > 0)
         {
-            var length = (int)Math.Min(zeros.Length, count);
-            var memory = zeros.AsMemory(0, length);
+            var length = (int)Math.Min(ZeroChunk.Length, count);
+            var memory = ZeroChunk.AsMemory(0, length);
             crc.Append(memory.Span);
             await output.WriteAsync(memory, cancellationToken).ConfigureAwait(false);
             count -= length;

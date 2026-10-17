@@ -407,7 +407,7 @@ internal sealed class SonySinFormatHandler : IReadonlyFormatHandler
     {
         private const int HistorySize = 65_536;
 
-        public static async Task DecodeAsync(
+        public static Task DecodeAsync(
             Stream input,
             long packedLength,
             Stream output,
@@ -418,42 +418,45 @@ internal sealed class SonySinFormatHandler : IReadonlyFormatHandler
             var writer = new HistoryWriter(output);
             while (reader.Remaining > 0)
             {
-                var token = await reader.ReadByteAsync(cancellationToken).ConfigureAwait(false);
-                var literalLength = await ReadLengthAsync(reader, token >> 4, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                var token = reader.ReadByte(cancellationToken);
+                var literalLength = ReadLength(reader, token >> 4, cancellationToken);
                 if (literalLength > expectedLength - writer.Written)
                 {
                     throw new InvalidDataException("Sony SIN LZ4 literal length exceeds the declared output size.");
                 }
-                await writer.CopyLiteralsAsync(reader, literalLength, cancellationToken).ConfigureAwait(false);
+                writer.CopyLiterals(reader, literalLength, cancellationToken);
                 if (reader.Remaining == 0)
                 {
                     break;
                 }
 
-                var offsetLow = await reader.ReadByteAsync(cancellationToken).ConfigureAwait(false);
-                var offsetHigh = await reader.ReadByteAsync(cancellationToken).ConfigureAwait(false);
+                var offsetLow = reader.ReadByte(cancellationToken);
+                var offsetHigh = reader.ReadByte(cancellationToken);
                 var offset = offsetLow | offsetHigh << 8;
                 if (offset == 0 || offset > writer.Written || offset > HistorySize - 1)
                 {
                     throw new InvalidDataException("Sony SIN LZ4 match offset is invalid.");
                 }
-                var matchLength = checked(await ReadLengthAsync(reader, token & 0x0F, cancellationToken).ConfigureAwait(false) + 4);
+                var matchLength = checked(ReadLength(reader, token & 0x0F, cancellationToken) + 4);
                 if (matchLength > expectedLength - writer.Written)
                 {
                     throw new InvalidDataException("Sony SIN LZ4 match length exceeds the declared output size.");
                 }
-                await writer.CopyMatchAsync(offset, matchLength, cancellationToken).ConfigureAwait(false);
+                writer.CopyMatch(offset, matchLength, cancellationToken);
             }
 
-            await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+            writer.Flush(cancellationToken);
             if (reader.Remaining != 0 || writer.Written != expectedLength)
             {
                 throw new InvalidDataException(
                     $"Sony SIN LZ4 decoded {writer.Written} bytes; expected {expectedLength} bytes.");
             }
+
+            return Task.CompletedTask;
         }
 
-        private static async Task<long> ReadLengthAsync(
+        private static long ReadLength(
             BoundedByteReader reader,
             int initial,
             CancellationToken cancellationToken)
@@ -466,7 +469,7 @@ internal sealed class SonySinFormatHandler : IReadonlyFormatHandler
             byte extension;
             do
             {
-                extension = await reader.ReadByteAsync(cancellationToken).ConfigureAwait(false);
+                extension = reader.ReadByte(cancellationToken);
                 length = checked(length + extension);
             }
             while (extension == byte.MaxValue);
@@ -480,7 +483,11 @@ internal sealed class SonySinFormatHandler : IReadonlyFormatHandler
             private int _count;
             public long Remaining { get; private set; } = remaining;
 
-            public async ValueTask<byte> ReadByteAsync(CancellationToken cancellationToken)
+            public int Buffered => _count - _offset;
+
+            public ReadOnlySpan<byte> BufferedSpan => _buffer.AsSpan(_offset, _count - _offset);
+
+            public byte ReadByte(CancellationToken cancellationToken)
             {
                 if (Remaining == 0)
                 {
@@ -488,16 +495,30 @@ internal sealed class SonySinFormatHandler : IReadonlyFormatHandler
                 }
                 if (_offset == _count)
                 {
-                    _count = await input.ReadAsync(_buffer.AsMemory(0, (int)Math.Min(_buffer.Length, Remaining)), cancellationToken)
-                        .ConfigureAwait(false);
-                    _offset = 0;
-                    if (_count == 0)
-                    {
-                        throw new EndOfStreamException("Sony SIN LZ4 block is truncated.");
-                    }
+                    Fill(cancellationToken);
                 }
                 Remaining--;
                 return _buffer[_offset++];
+            }
+
+            public void Fill(CancellationToken cancellationToken)
+            {
+                if (Remaining == 0)
+                {
+                    throw new InvalidDataException("Sony SIN LZ4 block is truncated.");
+                }
+                _count = input.Read(_buffer, 0, (int)Math.Min(_buffer.Length, Remaining));
+                _offset = 0;
+                if (_count == 0)
+                {
+                    throw new EndOfStreamException("Sony SIN LZ4 block is truncated.");
+                }
+            }
+
+            public void Advance(int count)
+            {
+                _offset += count;
+                Remaining -= count;
             }
         }
 
@@ -509,43 +530,78 @@ internal sealed class SonySinFormatHandler : IReadonlyFormatHandler
             private int _bufferCount;
             public long Written { get; private set; }
 
-            public async Task CopyLiteralsAsync(BoundedByteReader reader, long length, CancellationToken cancellationToken)
+            public void CopyLiterals(BoundedByteReader reader, long length, CancellationToken cancellationToken)
             {
-                while (length-- > 0)
+                while (length > 0)
                 {
-                    await WriteByteAsync(await reader.ReadByteAsync(cancellationToken).ConfigureAwait(false), cancellationToken)
-                        .ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (reader.Buffered == 0)
+                    {
+                        reader.Fill(cancellationToken);
+                    }
+                    var count = (int)Math.Min(length, reader.Buffered);
+                    Write(reader.BufferedSpan[..count], cancellationToken);
+                    reader.Advance(count);
+                    length -= count;
                 }
             }
 
-            public async Task CopyMatchAsync(int offset, long length, CancellationToken cancellationToken)
+            public void CopyMatch(int offset, long length, CancellationToken cancellationToken)
             {
-                while (length-- > 0)
+                while (length > 0)
                 {
-                    var value = _history[(_historyPosition - offset) & (HistorySize - 1)];
-                    await WriteByteAsync(value, cancellationToken).ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var source = (_historyPosition - offset) & (HistorySize - 1);
+                    var run = Math.Min(Math.Min(HistorySize - source, HistorySize - _historyPosition), offset);
+                    var count = (int)Math.Min(length, Math.Min(run, _outputBuffer.Length - _bufferCount));
+                    _history.AsSpan(source, count).CopyTo(_outputBuffer.AsSpan(_bufferCount, count));
+                    _outputBuffer.AsSpan(_bufferCount, count).CopyTo(_history.AsSpan(_historyPosition, count));
+                    _historyPosition = (_historyPosition + count) & (HistorySize - 1);
+                    _bufferCount += count;
+                    Written += count;
+                    length -= count;
+                    if (_bufferCount == _outputBuffer.Length)
+                    {
+                        Flush(cancellationToken);
+                    }
                 }
             }
 
-            public async Task FlushAsync(CancellationToken cancellationToken)
+            public void Flush(CancellationToken cancellationToken)
             {
                 if (_bufferCount > 0)
                 {
-                    await output.WriteAsync(_outputBuffer.AsMemory(0, _bufferCount), cancellationToken).ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    output.Write(_outputBuffer, 0, _bufferCount);
                     _bufferCount = 0;
                 }
             }
 
-            private async ValueTask WriteByteAsync(byte value, CancellationToken cancellationToken)
+            private void Write(ReadOnlySpan<byte> data, CancellationToken cancellationToken)
             {
-                _history[_historyPosition] = value;
-                _historyPosition = (_historyPosition + 1) & (HistorySize - 1);
-                _outputBuffer[_bufferCount++] = value;
-                Written++;
-                if (_bufferCount == _outputBuffer.Length)
+                while (!data.IsEmpty)
                 {
-                    await output.WriteAsync(_outputBuffer, cancellationToken).ConfigureAwait(false);
-                    _bufferCount = 0;
+                    var count = Math.Min(data.Length, _outputBuffer.Length - _bufferCount);
+                    data[..count].CopyTo(_outputBuffer.AsSpan(_bufferCount, count));
+                    AppendHistory(data[..count]);
+                    _bufferCount += count;
+                    Written += count;
+                    data = data[count..];
+                    if (_bufferCount == _outputBuffer.Length)
+                    {
+                        Flush(cancellationToken);
+                    }
+                }
+            }
+
+            private void AppendHistory(ReadOnlySpan<byte> data)
+            {
+                while (!data.IsEmpty)
+                {
+                    var count = Math.Min(data.Length, HistorySize - _historyPosition);
+                    data[..count].CopyTo(_history.AsSpan(_historyPosition, count));
+                    _historyPosition = (_historyPosition + count) & (HistorySize - 1);
+                    data = data[count..];
                 }
             }
         }

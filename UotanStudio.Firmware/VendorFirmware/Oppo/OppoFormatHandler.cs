@@ -10,6 +10,8 @@ namespace UotanStudio.Firmware.VendorFirmware.Oppo;
 public sealed class OppoFormatHandler : IReadonlyFormatHandler
 {
     private readonly OppReader _reader = new();
+    private readonly Lock _archiveCacheLock = new();
+    private CachedArchive? _recentArchive;
 
     /// <summary>Display name shown for the Oppo firmware family. <para>Oppo 固件系列显示的标签名称。</para></summary>
     /// <value>A constant label; never empty. <para>固定标签；绝不为空。</para></value>
@@ -110,60 +112,15 @@ public sealed class OppoFormatHandler : IReadonlyFormatHandler
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
+                var archive = TryGetCachedArchive(filePath);
+                if (archive is null)
+                {
+                    archive = await _reader.ParseAsync(filePath, cancellationToken).ConfigureAwait(false);
+                    RememberArchive(filePath, archive);
+                }
 
-
-                var archive = await _reader.ParseAsync(filePath, cancellationToken).ConfigureAwait(false);
-                var metadata = archive.Metadata;
                 cancellationToken.ThrowIfCancellationRequested();
-
-                var meta = new Dictionary<string, string>
-                {
-                    ["Format"] = metadata.FormatName,
-                    ["FormatCode"] = metadata.Format.ToString(),
-                    ["FileSize"] = metadata.FileSize.ToString(),
-                    ["EntryCount"] = metadata.EntryCount.ToString(),
-                };
-
-                if (metadata.ProjectName is not null)
-                {
-                    meta["ProjectName"] = metadata.ProjectName;
-                }
-
-                if (metadata.CpuModel is not null)
-                {
-                    meta["CpuModel"] = metadata.CpuModel;
-                }
-
-                if (metadata.FlashType is not null)
-                {
-                    meta["FlashType"] = metadata.FlashType;
-                }
-
-                if (metadata.FirmwareName is not null)
-                {
-                    meta["FirmwareName"] = metadata.FirmwareName;
-                }
-
-                if (metadata.ProjectId is not null)
-                {
-                    meta["ProjectId"] = metadata.ProjectId;
-                }
-
-                if (metadata.KeyId is not null)
-                {
-                    meta["KeyId"] = metadata.KeyId;
-                }
-
-
-                var components = archive.Entries
-                    .Where(e => IsFirmwareComponent(e.Name))
-                    .Select(e => FirmwareComponent.Of(e.Name, e.Size))
-                    .ToList();
-
-                return FirmwareOpResult.Ok(
-                    $"Read {metadata.EntryCount} entries from '{filePath}' as {metadata.FormatName}.",
-                    components: components,
-                    metadata: meta);
+                return BuildMetadataResult(filePath, archive);
             }
             catch (OperationCanceledException)
             {
@@ -175,6 +132,100 @@ public sealed class OppoFormatHandler : IReadonlyFormatHandler
             }
         }, cancellationToken);
     }
+
+    private static FirmwareOpResult BuildMetadataResult(string filePath, OppArchive archive)
+    {
+        var metadata = archive.Metadata;
+        var meta = new Dictionary<string, string>
+        {
+            ["Format"] = metadata.FormatName,
+            ["FormatCode"] = metadata.Format.ToString(),
+            ["FileSize"] = metadata.FileSize.ToString(),
+            ["EntryCount"] = metadata.EntryCount.ToString(),
+        };
+
+        if (metadata.ProjectName is not null)
+        {
+            meta["ProjectName"] = metadata.ProjectName;
+        }
+
+        if (metadata.CpuModel is not null)
+        {
+            meta["CpuModel"] = metadata.CpuModel;
+        }
+
+        if (metadata.FlashType is not null)
+        {
+            meta["FlashType"] = metadata.FlashType;
+        }
+
+        if (metadata.FirmwareName is not null)
+        {
+            meta["FirmwareName"] = metadata.FirmwareName;
+        }
+
+        if (metadata.ProjectId is not null)
+        {
+            meta["ProjectId"] = metadata.ProjectId;
+        }
+
+        if (metadata.KeyId is not null)
+        {
+            meta["KeyId"] = metadata.KeyId;
+        }
+
+
+        var components = archive.Entries
+            .Where(e => IsFirmwareComponent(e.Name))
+            .Select(e => FirmwareComponent.Of(e.Name, e.Size))
+            .ToList();
+
+        return FirmwareOpResult.Ok(
+            $"Read {metadata.EntryCount} entries from '{filePath}' as {metadata.FormatName}.",
+            components: components,
+            metadata: meta);
+    }
+
+    private void RememberArchive(string filePath, OppArchive archive)
+    {
+        var info = new FileInfo(filePath);
+        if (!info.Exists)
+        {
+            return;
+        }
+
+        lock (_archiveCacheLock)
+        {
+            _recentArchive = new CachedArchive(Path.GetFullPath(filePath), info.Length, info.LastWriteTimeUtc, archive);
+        }
+    }
+
+    private OppArchive? TryGetCachedArchive(string filePath)
+    {
+        CachedArchive? cached;
+        lock (_archiveCacheLock)
+        {
+            cached = _recentArchive;
+        }
+
+        if (cached is null)
+        {
+            return null;
+        }
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!string.Equals(cached.FullPath, Path.GetFullPath(filePath), comparison))
+        {
+            return null;
+        }
+
+        var info = new FileInfo(cached.FullPath);
+        return info.Exists && info.Length == cached.Length && info.LastWriteTimeUtc == cached.LastWriteTimeUtc
+            ? cached.Archive
+            : null;
+    }
+
+    private sealed record CachedArchive(string FullPath, long Length, DateTime LastWriteTimeUtc, OppArchive Archive);
 
     /// <summary>
     /// Unpacks the firmware file to the output directory.
@@ -213,23 +264,21 @@ public sealed class OppoFormatHandler : IReadonlyFormatHandler
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                options?.Progress?.Report(5, "Reading Oppo firmware metadata...");
-                var archive = await _reader.ParseAsync(filePath, cancellationToken).ConfigureAwait(false);
-                var metadata = archive.Metadata;
-                var names = archive.Entries.Select(e => e.Name).ToList();
-
-                options?.Progress?.Report(10, "Extracting entries...");
+                options?.Progress?.Report(5, "Reading and extracting Oppo firmware...");
                 var extractOptions = new OppExtractOptions
                 {
                     Overwrite = options?.Overwrite ?? true,
                 };
 
-                var result = await _reader.ExtractAsync(
+                var (archive, result) = await _reader.ParseAndExtractAsync(
                     filePath,
                     outputDirectory,
                     extractOptions,
                     cancellationToken: cancellationToken).ConfigureAwait(false);
+                RememberArchive(filePath, archive);
 
+                var metadata = archive.Metadata;
+                var names = archive.Entries.Select(e => e.Name).ToList();
                 options?.Progress?.Report(100, "Extraction complete.");
 
                 var meta = new Dictionary<string, string>

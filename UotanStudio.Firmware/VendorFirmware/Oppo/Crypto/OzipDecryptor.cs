@@ -126,8 +126,7 @@ internal static class OzipDecryptor
         var remaining = encryptedDataSize;
         var encryptedBuffer = new byte[EncryptedSize];
         var decryptedBuffer = new byte[EncryptedSize];
-        var plaintextBuffer = new byte[PlaintextBlockSize];
-        var aggregate = new byte[EncryptedSize + PlaintextBlockSize];
+        var unitBuffer = new byte[EncryptionUnitSize];
 
         while (remaining > 0)
         {
@@ -137,23 +136,22 @@ internal static class OzipDecryptor
                     $"The OZip data ends with an incomplete {EncryptedSize}-byte encrypted prefix.");
             }
 
-            ReadExactly(input, encryptedBuffer, EncryptedSize);
+            ReadExactly(input, encryptedBuffer, 0, EncryptedSize);
             if (decryptor.TransformBlock(encryptedBuffer, 0, EncryptedSize, decryptedBuffer, 0) != EncryptedSize)
             {
                 throw new CryptographicException("AES did not decrypt a complete OZip block prefix.");
             }
-            Buffer.BlockCopy(decryptedBuffer, 0, aggregate, 0, EncryptedSize);
+            Array.Copy(decryptedBuffer, 0, unitBuffer, 0, EncryptedSize);
             remaining -= EncryptedSize;
 
             var plaintextToRead = (int)Math.Min(PlaintextBlockSize, remaining);
             if (plaintextToRead > 0)
             {
-                ReadExactly(input, plaintextBuffer, plaintextToRead);
-                Buffer.BlockCopy(plaintextBuffer, 0, aggregate, EncryptedSize, plaintextToRead);
+                ReadExactly(input, unitBuffer, EncryptedSize, plaintextToRead);
                 remaining -= plaintextToRead;
             }
 
-            output.Write(aggregate, 0, EncryptedSize + plaintextToRead);
+            output.Write(unitBuffer, 0, EncryptedSize + plaintextToRead);
         }
     }
 
@@ -229,7 +227,36 @@ internal static class OzipDecryptor
     {
         Guard.ThrowIfNull(input);
 
-        var header = OzipHeader.ReadFrom(input);
+        return OpenDecryptedStream(input, OzipHeader.ReadFrom(input), out keyEntry, leaveOpen);
+    }
+
+    /// <summary>
+    /// Opens a seekable, on-demand decrypted view over an OZip stream whose header was already read.
+    /// <para>在已读取头部的 OZip 流上打开可定位的按需解密视图。</para>
+    /// </summary>
+    /// <param name="input">Readable, seekable OZip stream owned by the caller.
+    /// <para>调用方持有的可读、可寻址 OZip 流。</para></param>
+    /// <param name="header">Header parsed from the same stream; its declared size bounds the view.
+    /// <para>从同一流解析出的头部；其声明大小约束视图范围。</para></param>
+    /// <param name="keyEntry">Receives the key detected from the first encrypted block.
+    /// <para>接收从首个密文块探测到的密钥。</para></param>
+    /// <param name="leaveOpen">Whether the view keeps <paramref name="input"/> open when disposed.
+    /// <para>视图释放时是否保持 <paramref name="input"/> 打开。</para></param>
+    /// <returns>The decrypted view over the encrypted region.
+    /// <para>加密区域上的解密视图。</para></returns>
+    /// <exception cref="InvalidOppFormatException">The declared size is smaller than one prefix block or exceeds the stream.
+    /// <para>声明大小小于一个前缀块或超出流长度。</para></exception>
+    /// <exception cref="OppDecryptionException">No built-in key decrypts the first prefix block to a known magic.
+    /// <para>没有内置密钥能将第一个前缀块解密为已知魔数。</para></exception>
+    internal static OzipBlockDecryptStream OpenDecryptedStream(
+        Stream input,
+        OzipHeader header,
+        out OzipKeyEntry keyEntry,
+        bool leaveOpen)
+    {
+        Guard.ThrowIfNull(input);
+        Guard.ThrowIfNull(header);
+
         if (header.EncryptedDataSize < EncryptedSize
             || header.EncryptedDataSize > input.Length - DataOffset)
         {
@@ -239,7 +266,7 @@ internal static class OzipDecryptor
 
         input.Position = DataOffset;
         var firstEncrypted = new byte[EncryptedSize];
-        ReadExactly(input, firstEncrypted, EncryptedSize);
+        ReadExactly(input, firstEncrypted, 0, EncryptedSize);
         keyEntry = DetectKey(firstEncrypted) ?? throw new OppDecryptionException(
             "Unable to automatically detect the decryption key. No known key produces valid plaintext.");
 
@@ -276,12 +303,12 @@ internal static class OzipDecryptor
             data[2] == AndrMagic[2] && data[3] == AndrMagic[3];
     }
 
-    private static void ReadExactly(Stream stream, byte[] buffer, int count)
+    private static void ReadExactly(Stream stream, byte[] buffer, int offset, int count)
     {
         var totalRead = 0;
         while (totalRead < count)
         {
-            var bytesRead = stream.Read(buffer, totalRead, count - totalRead);
+            var bytesRead = stream.Read(buffer, offset + totalRead, count - totalRead);
             if (bytesRead == 0)
             {
                 throw new InvalidOppFormatException(

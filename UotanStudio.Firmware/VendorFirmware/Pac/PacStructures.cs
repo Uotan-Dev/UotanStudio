@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 
 namespace UotanStudio.Firmware.VendorFirmware.Pac;
@@ -96,9 +97,10 @@ internal sealed class SprdHead
     /// Reads exactly <see cref="Size"/> bytes from the current position as little-endian words in the documented field order.
     /// <para>从当前位置按文档字段顺序以小端字读取恰好 <see cref="Size"/> 字节。</para>
     /// </summary>
-    /// <param name="reader">
-    /// Binary reader positioned at the first byte of the header; it is advanced past the header and left open.
-    /// <para>定位在头部第一个字节的二进制读取器；调用后其位置越过头部，读取器本身保持打开。</para>
+    /// <param name="stream">
+    /// Stream positioned at the first header byte; it is advanced past the header and left open. The whole header is read
+    /// with one exact read and decoded in memory.
+    /// <para>定位在头部第一个字节的流；调用后其位置越过头部，流本身保持打开。整个头部以一次精确读取完成，随后在内存中解码。</para>
     /// </param>
     /// <returns>
     /// A header whose array fields have the fixed lengths declared by this type.
@@ -108,50 +110,24 @@ internal sealed class SprdHead
     /// Fewer than <see cref="Size"/> bytes remain at the current position.
     /// <para>当前位置剩余字节少于 <see cref="Size"/>。</para>
     /// </exception>
-    public static SprdHead Read(BinaryReader reader)
+    public static SprdHead Read(Stream stream)
     {
+        Span<byte> raw = stackalloc byte[Size];
+        stream.ReadExactly(raw);
         var head = new SprdHead();
-        for (var i = 0; i < 24; i++)
-        {
-            head.PacVersion[i] = reader.ReadUInt16();
-        }
-
-        head.PacSize = reader.ReadUInt32();
-        for (var i = 0; i < 256; i++)
-        {
-            head.FwName[i] = reader.ReadUInt16();
-        }
-
-        for (var i = 0; i < 256; i++)
-        {
-            head.FwVersion[i] = reader.ReadUInt16();
-        }
-
-        head.FileCount = reader.ReadUInt32();
-        head.DirOffset = reader.ReadUInt32();
-        for (var i = 0; i < 5; i++)
-        {
-            head.Unknown1[i] = reader.ReadUInt32();
-        }
-
-        for (var i = 0; i < 100; i++)
-        {
-            head.FwAlias[i] = reader.ReadUInt16();
-        }
-
-        for (var i = 0; i < 3; i++)
-        {
-            head.Unknown2[i] = reader.ReadUInt32();
-        }
-
-        for (var i = 0; i < 200; i++)
-        {
-            head.Unknown[i] = reader.ReadUInt32();
-        }
-
-        head.PacMagic = reader.ReadUInt32();
-        head.HeadCrc = reader.ReadUInt16();
-        head.DataCrc = reader.ReadUInt16();
+        PacFieldCodec.ReadUInt16Array(raw, 0, head.PacVersion);
+        head.PacSize = BinaryPrimitives.ReadUInt32LittleEndian(raw[48..]);
+        PacFieldCodec.ReadUInt16Array(raw, 52, head.FwName);
+        PacFieldCodec.ReadUInt16Array(raw, 564, head.FwVersion);
+        head.FileCount = BinaryPrimitives.ReadUInt32LittleEndian(raw[1076..]);
+        head.DirOffset = BinaryPrimitives.ReadUInt32LittleEndian(raw[1080..]);
+        PacFieldCodec.ReadUInt32Array(raw, 1084, head.Unknown1);
+        PacFieldCodec.ReadUInt16Array(raw, 1104, head.FwAlias);
+        PacFieldCodec.ReadUInt32Array(raw, 1304, head.Unknown2);
+        PacFieldCodec.ReadUInt32Array(raw, 1316, head.Unknown);
+        head.PacMagic = BinaryPrimitives.ReadUInt32LittleEndian(raw[2116..]);
+        head.HeadCrc = BinaryPrimitives.ReadUInt16LittleEndian(raw[2120..]);
+        head.DataCrc = BinaryPrimitives.ReadUInt16LittleEndian(raw[2122..]);
         return head;
     }
 
@@ -165,50 +141,21 @@ internal sealed class SprdHead
     /// </returns>
     public byte[] ToBytes()
     {
-        using var ms = new MemoryStream();
-        using var writer = new BinaryWriter(ms);
-        for (var i = 0; i < 24; i++)
-        {
-            writer.Write(PacVersion[i]);
-        }
-
-        writer.Write(PacSize);
-        for (var i = 0; i < 256; i++)
-        {
-            writer.Write(FwName[i]);
-        }
-
-        for (var i = 0; i < 256; i++)
-        {
-            writer.Write(FwVersion[i]);
-        }
-
-        writer.Write(FileCount);
-        writer.Write(DirOffset);
-        for (var i = 0; i < 5; i++)
-        {
-            writer.Write(Unknown1[i]);
-        }
-
-        for (var i = 0; i < 100; i++)
-        {
-            writer.Write(FwAlias[i]);
-        }
-
-        for (var i = 0; i < 3; i++)
-        {
-            writer.Write(Unknown2[i]);
-        }
-
-        for (var i = 0; i < 200; i++)
-        {
-            writer.Write(Unknown[i]);
-        }
-
-        writer.Write(PacMagic);
-        writer.Write(HeadCrc);
-        writer.Write(DataCrc);
-        return ms.ToArray();
+        var bytes = new byte[Size];
+        PacFieldCodec.WriteUInt16Array(bytes, 0, PacVersion);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(48), PacSize);
+        PacFieldCodec.WriteUInt16Array(bytes, 52, FwName);
+        PacFieldCodec.WriteUInt16Array(bytes, 564, FwVersion);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1076), FileCount);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1080), DirOffset);
+        PacFieldCodec.WriteUInt32Array(bytes, 1084, Unknown1);
+        PacFieldCodec.WriteUInt16Array(bytes, 1104, FwAlias);
+        PacFieldCodec.WriteUInt32Array(bytes, 1304, Unknown2);
+        PacFieldCodec.WriteUInt32Array(bytes, 1316, Unknown);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(2116), PacMagic);
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(2120), HeadCrc);
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(2122), DataCrc);
+        return bytes;
     }
 
     /// <summary>
@@ -345,9 +292,10 @@ internal sealed class SprdFile
     /// Reads exactly <see cref="StructFixedSize"/> bytes from the current position as little-endian words in the documented field order.
     /// <para>从当前位置按文档字段顺序以小端字读取恰好 <see cref="StructFixedSize"/> 字节。</para>
     /// </summary>
-    /// <param name="reader">
-    /// Binary reader positioned at the first byte of the entry; it is advanced past the entry and left open.
-    /// <para>定位在条目第一个字节的二进制读取器；调用后其位置越过条目，读取器本身保持打开。</para>
+    /// <param name="stream">
+    /// Stream positioned at the first byte of the entry; it is advanced past the entry and left open. The whole entry is
+    /// read with one exact read and decoded in memory.
+    /// <para>定位在条目第一个字节的流；调用后其位置越过条目，流本身保持打开。整个条目以一次精确读取完成，随后在内存中解码。</para>
     /// </param>
     /// <returns>
     /// An entry whose array fields have the fixed lengths declared by this type.
@@ -358,43 +306,25 @@ internal sealed class SprdFile
     /// Fewer than <see cref="StructFixedSize"/> bytes remain at the current position.
     /// <para>当前位置剩余字节少于 <see cref="StructFixedSize"/>。</para>
     /// </exception>
-    public static SprdFile Read(BinaryReader reader)
+    public static SprdFile Read(Stream stream)
     {
+        Span<byte> raw = stackalloc byte[StructFixedSize];
+        stream.ReadExactly(raw);
         var file = new SprdFile
         {
-            StructSize = reader.ReadUInt32()
+            StructSize = BinaryPrimitives.ReadUInt32LittleEndian(raw)
         };
-        for (var i = 0; i < 256; i++)
-        {
-            file.Id[i] = reader.ReadUInt16();
-        }
-
-        for (var i = 0; i < 256; i++)
-        {
-            file.Name[i] = reader.ReadUInt16();
-        }
-
-        for (var i = 0; i < 256; i++)
-        {
-            file.Unknown1[i] = reader.ReadUInt16();
-        }
-
-        file.Size = reader.ReadUInt32();
-        file.Type = reader.ReadUInt32();
-        file.FlashUse = reader.ReadUInt32();
-        file.PacOffset = reader.ReadUInt32();
-        file.OmitFlag = reader.ReadUInt32();
-        file.AddrNum = reader.ReadUInt32();
-        for (var i = 0; i < 5; i++)
-        {
-            file.Addr[i] = reader.ReadUInt32();
-        }
-
-        for (var i = 0; i < 249; i++)
-        {
-            file.Unknown2[i] = reader.ReadUInt32();
-        }
-
+        PacFieldCodec.ReadUInt16Array(raw, 4, file.Id);
+        PacFieldCodec.ReadUInt16Array(raw, 516, file.Name);
+        PacFieldCodec.ReadUInt16Array(raw, 1028, file.Unknown1);
+        file.Size = BinaryPrimitives.ReadUInt32LittleEndian(raw[1540..]);
+        file.Type = BinaryPrimitives.ReadUInt32LittleEndian(raw[1544..]);
+        file.FlashUse = BinaryPrimitives.ReadUInt32LittleEndian(raw[1548..]);
+        file.PacOffset = BinaryPrimitives.ReadUInt32LittleEndian(raw[1552..]);
+        file.OmitFlag = BinaryPrimitives.ReadUInt32LittleEndian(raw[1556..]);
+        file.AddrNum = BinaryPrimitives.ReadUInt32LittleEndian(raw[1560..]);
+        PacFieldCodec.ReadUInt32Array(raw, 1564, file.Addr);
+        PacFieldCodec.ReadUInt32Array(raw, 1584, file.Unknown2);
         return file;
     }
 
@@ -405,26 +335,20 @@ internal sealed class SprdFile
     /// <returns>The 2,580-byte little-endian entry representation. <para>2,580 字节的小端条目表示。</para></returns>
     public byte[] ToBytes()
     {
-        using var ms = new MemoryStream();
-        using var writer = new BinaryWriter(ms);
-        writer.Write(StructSize);
-        foreach (var value in Id)
-            writer.Write(value);
-        foreach (var value in Name)
-            writer.Write(value);
-        foreach (var value in Unknown1)
-            writer.Write(value);
-        writer.Write(Size);
-        writer.Write(Type);
-        writer.Write(FlashUse);
-        writer.Write(PacOffset);
-        writer.Write(OmitFlag);
-        writer.Write(AddrNum);
-        foreach (var value in Addr)
-            writer.Write(value);
-        foreach (var value in Unknown2)
-            writer.Write(value);
-        return ms.ToArray();
+        var bytes = new byte[StructFixedSize];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes, StructSize);
+        PacFieldCodec.WriteUInt16Array(bytes, 4, Id);
+        PacFieldCodec.WriteUInt16Array(bytes, 516, Name);
+        PacFieldCodec.WriteUInt16Array(bytes, 1028, Unknown1);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1540), Size);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1544), Type);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1548), FlashUse);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1552), PacOffset);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1556), OmitFlag);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1560), AddrNum);
+        PacFieldCodec.WriteUInt32Array(bytes, 1564, Addr);
+        PacFieldCodec.WriteUInt32Array(bytes, 1584, Unknown2);
+        return bytes;
     }
 
     /// <summary>
@@ -470,4 +394,58 @@ public enum PacFileType : uint
 
     /// <summary>Signing certificate payload (code <c>3</c>). <para>签名证书数据（编码 <c>3</c>）。</para></summary>
     Certificate = 3
+}
+/// <summary>
+/// Copies little-endian PAC word arrays between raw structure bytes and the strongly typed fields.
+/// <para>在原始结构字节与强类型字段之间复制小端 PAC 字数组。</para>
+/// </summary>
+internal static class PacFieldCodec
+{
+    /// <summary>
+    /// Decodes a run of little-endian 16-bit words into a destination array.
+    /// <para>把一段小端 16 位字解码到目标数组。</para>
+    /// </summary>
+    internal static void ReadUInt16Array(ReadOnlySpan<byte> source, int offset, ushort[] destination)
+    {
+        for (var i = 0; i < destination.Length; i++)
+        {
+            destination[i] = BinaryPrimitives.ReadUInt16LittleEndian(source[(offset + i * 2)..]);
+        }
+    }
+
+    /// <summary>
+    /// Decodes a run of little-endian 32-bit words into a destination array.
+    /// <para>把一段小端 32 位字解码到目标数组。</para>
+    /// </summary>
+    internal static void ReadUInt32Array(ReadOnlySpan<byte> source, int offset, uint[] destination)
+    {
+        for (var i = 0; i < destination.Length; i++)
+        {
+            destination[i] = BinaryPrimitives.ReadUInt32LittleEndian(source[(offset + i * 4)..]);
+        }
+    }
+
+    /// <summary>
+    /// Encodes a 16-bit word array as little-endian bytes at the given offset.
+    /// <para>把 16 位字数组按小端编码到给定偏移处。</para>
+    /// </summary>
+    internal static void WriteUInt16Array(Span<byte> destination, int offset, ReadOnlySpan<ushort> source)
+    {
+        for (var i = 0; i < source.Length; i++)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(destination[(offset + i * 2)..], source[i]);
+        }
+    }
+
+    /// <summary>
+    /// Encodes a 32-bit word array as little-endian bytes at the given offset.
+    /// <para>把 32 位字数组按小端编码到给定偏移处。</para>
+    /// </summary>
+    internal static void WriteUInt32Array(Span<byte> destination, int offset, ReadOnlySpan<uint> source)
+    {
+        for (var i = 0; i < source.Length; i++)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(destination[(offset + i * 4)..], source[i]);
+        }
+    }
 }

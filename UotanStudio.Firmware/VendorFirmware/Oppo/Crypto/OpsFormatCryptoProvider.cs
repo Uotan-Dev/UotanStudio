@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Text;
@@ -18,6 +19,12 @@ namespace UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 /// </summary>
 public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
 {
+    private const int DefaultBufferSize = 81920;
+
+    private const int ProbeWindowBytes = 64 * 1024;
+
+    private static ReadOnlySpan<byte> XmlDeclaration => "<?xml"u8;
+
     private readonly ConcurrentDictionary<string, uint[]> _opsRkeyCache = new();
     private readonly ConcurrentDictionary<string, OpsKeyEntry> _customKeys = new();
 
@@ -110,9 +117,9 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
     }
 
     /// <summary>
-    /// Reads the whole input stream into memory, decrypts it with the named OPS key, and appends the
-    /// result to <paramref name="output"/>. Neither stream is repositioned or closed.
-    /// <para>将整个输入流读入内存，使用指定的 OPS 密钥解密，并把结果追加写入 <paramref name="output"/>。两个流都不会被重定位或关闭。</para>
+    /// Decrypts the input stream block by block with the named OPS key and appends the result to
+    /// <paramref name="output"/>. Neither stream is repositioned or closed.
+    /// <para>使用指定的 OPS 密钥逐块解密输入流，并把结果追加写入 <paramref name="output"/>。两个流都不会被重定位或关闭。</para>
     /// </summary>
     /// <param name="input">
     /// Readable stream positioned at the start of the ciphertext; consumed to its end.
@@ -127,9 +134,8 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
     /// <para>OPS 密钥标识符（例如 <c>mbox5</c>）。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// Reserved for the streaming signature; this implementation reads the input to the end and never
-    /// polls the token.
-    /// <para>为流式签名保留；本实现会把输入读到末尾，不检查该取消令牌。</para>
+    /// Checked between block transfers; a signalled token stops before the next write.
+    /// <para>在各块传输之间检查；令牌已触发时在下一次写入前停止。</para>
     /// </param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -145,20 +151,14 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
         var entry = FindKey(keyId)
             ?? throw new OppDecryptionException($"OPS key '{keyId}' not found in the key database.");
 
-
-        using var tempStream = new MemoryStream();
-        input.CopyTo(tempStream);
-        var data = tempStream.ToArray();
-
         var rkey = GetOrInitOpsRkey(entry);
-        OppOpsCipher.Decrypt(data, rkey, OpsKeyDatabase.ExpandedSBox, entry.MBox);
-        output.Write(data, 0, data.Length);
+        ProcessStream(input, output, rkey, entry, encrypt: false, cancellationToken);
     }
 
     /// <summary>
-    /// Reads the whole input stream into memory, encrypts it with the named OPS key, and appends the
-    /// result to <paramref name="output"/>. Neither stream is repositioned or closed.
-    /// <para>将整个输入流读入内存，使用指定的 OPS 密钥加密，并把结果追加写入 <paramref name="output"/>。两个流都不会被重定位或关闭。</para>
+    /// Encrypts the input stream block by block with the named OPS key and appends the result to
+    /// <paramref name="output"/>. Neither stream is repositioned or closed.
+    /// <para>使用指定的 OPS 密钥逐块加密输入流，并把结果追加写入 <paramref name="output"/>。两个流都不会被重定位或关闭。</para>
     /// </summary>
     /// <param name="input">
     /// Readable stream positioned at the start of the plaintext; consumed to its end.
@@ -173,9 +173,8 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
     /// <para>OPS 密钥标识符（例如 <c>mbox5</c>）。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// Reserved for the streaming signature; this implementation reads the input to the end and never
-    /// polls the token.
-    /// <para>为流式签名保留；本实现会把输入读到末尾，不检查该取消令牌。</para>
+    /// Checked between block transfers; a signalled token stops before the next write.
+    /// <para>在各块传输之间检查；令牌已触发时在下一次写入前停止。</para>
     /// </param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -191,14 +190,61 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
         var entry = FindKey(keyId)
             ?? throw new OppDecryptionException($"OPS key '{keyId}' not found in the key database.");
 
-
-        using var tempStream = new MemoryStream();
-        input.CopyTo(tempStream);
-        var data = tempStream.ToArray();
-
         var rkey = GetOrInitOpsRkey(entry);
-        OppOpsCipher.Encrypt(data, rkey, OpsKeyDatabase.ExpandedSBox, entry.MBox);
-        output.Write(data, 0, data.Length);
+        ProcessStream(input, output, rkey, entry, encrypt: true, cancellationToken);
+    }
+
+    private static void ProcessStream(
+        Stream input,
+        Stream output,
+        uint[] rkey,
+        OpsKeyEntry entry,
+        bool encrypt,
+        CancellationToken cancellationToken)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(DefaultBufferSize);
+        try
+        {
+            var carried = 0;
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = input.Read(buffer, carried, buffer.Length - carried);
+                var total = carried + read;
+                if (total == 0)
+                {
+                    break;
+                }
+
+
+                var process = read == 0 ? total : total / 16 * 16;
+                if (process > 0)
+                {
+                    var span = buffer.AsSpan(0, process);
+                    if (encrypt)
+                    {
+                        OppOpsCipher.Encrypt(span, rkey, OpsKeyDatabase.ExpandedSBox, entry.MBox);
+                    }
+                    else
+                    {
+                        OppOpsCipher.Decrypt(span, rkey, OpsKeyDatabase.ExpandedSBox, entry.MBox);
+                    }
+
+                    output.Write(buffer, 0, process);
+                }
+
+                carried = total - process;
+                if (carried > 0)
+                {
+                    Array.Copy(buffer, process, buffer, 0, carried);
+                }
+            }
+        }
+        finally
+        {
+            Array.Clear(buffer, 0, buffer.Length);
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     /// <summary>
@@ -280,38 +326,83 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
     {
         Guard.ThrowIfNull(encryptedXml);
 
-
-        var buffer = new byte[encryptedXml.Length];
-
-        foreach (var entry in OpsKeyDatabase.Entries)
+        var probeLength = Math.Min(encryptedXml.Length, ProbeWindowBytes) / 16 * 16;
+        if (probeLength >= 16)
         {
-            try
+            var probe = new byte[probeLength];
+            foreach (var entry in OpsKeyDatabase.Entries)
             {
-                encryptedXml.AsSpan().CopyTo(buffer);
-
-
-                var rkey = GetOrInitOpsRkey(entry);
-
-                OppOpsCipher.Decrypt(buffer, rkey, OpsKeyDatabase.ExpandedSBox, entry.MBox);
-
-                var text = Encoding.UTF8.GetString(buffer);
-
-
-                var xmlDeclIndex = text.IndexOf("<?xml", StringComparison.Ordinal);
-                if (xmlDeclIndex >= 0)
+                try
+                {
+                    encryptedXml.AsSpan(0, probeLength).CopyTo(probe);
+                    var rkey = GetOrInitOpsRkey(entry);
+                    OppOpsCipher.Decrypt(probe, rkey, OpsKeyDatabase.ExpandedSBox, entry.MBox);
+                    if (probe.AsSpan().IndexOf(XmlDeclaration) >= 0)
+                    {
+                        return DecryptMatched(encryptedXml, entry);
+                    }
+                }
+                catch (Exception ex) when (ex is FormatException or ArgumentException)
                 {
 
-                    var cleaned = xmlDeclIndex > 0 ? text[xmlDeclIndex..] : text;
-                    return (TruncateXmlAtLastCloseTag(cleaned), entry.KeyId);
                 }
             }
-            catch (Exception ex) when (ex is FormatException or ArgumentException)
-            {
+        }
 
+
+        var buffer = new byte[encryptedXml.Length];
+        foreach (var entry in OpsKeyDatabase.Entries)
+        {
+            if (TryFullScan(encryptedXml, buffer, entry, out var result))
+            {
+                return result;
             }
         }
 
         return null;
+    }
+
+    private (string Xml, string KeyId) DecryptMatched(byte[] encryptedXml, OpsKeyEntry entry)
+    {
+        var buffer = new byte[encryptedXml.Length];
+        encryptedXml.CopyTo(buffer, 0);
+        var rkey = GetOrInitOpsRkey(entry);
+        OppOpsCipher.Decrypt(buffer, rkey, OpsKeyDatabase.ExpandedSBox, entry.MBox);
+
+        var text = Encoding.UTF8.GetString(buffer);
+        var xmlDeclIndex = text.IndexOf("<?xml", StringComparison.Ordinal);
+        var cleaned = xmlDeclIndex > 0 ? text[xmlDeclIndex..] : text;
+        return (TruncateXmlAtLastCloseTag(cleaned), entry.KeyId);
+    }
+
+    private static bool TryFullScan(
+        byte[] encryptedXml,
+        byte[] buffer,
+        OpsKeyEntry entry,
+        out (string Xml, string KeyId) result)
+    {
+        try
+        {
+            encryptedXml.CopyTo(buffer, 0);
+            var rkey = InitOpsRkey();
+            OppOpsCipher.Decrypt(buffer, rkey, OpsKeyDatabase.ExpandedSBox, entry.MBox);
+
+            var text = Encoding.UTF8.GetString(buffer);
+            var xmlDeclIndex = text.IndexOf("<?xml", StringComparison.Ordinal);
+            if (xmlDeclIndex >= 0)
+            {
+                var cleaned = xmlDeclIndex > 0 ? text[xmlDeclIndex..] : text;
+                result = (TruncateXmlAtLastCloseTag(cleaned), entry.KeyId);
+                return true;
+            }
+        }
+        catch (Exception ex) when (ex is FormatException or ArgumentException)
+        {
+
+        }
+
+        result = default;
+        return false;
     }
 
     /// <summary>

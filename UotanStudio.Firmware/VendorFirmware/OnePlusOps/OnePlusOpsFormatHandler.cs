@@ -220,15 +220,25 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
                         continue;
                     }
 
-                    var raw = decryptor.ReadEntryData(entry.Offset, entry.Size);
-                    File.WriteAllBytes(outPath, raw);
+                    FileExtraction.WriteAtomic(outPath, output =>
+                    {
+                        using var bounded = new BoundedReadStream(fs, entry.Offset, entry.Size, leaveOpen: true);
+                        StreamCopy.CopyExactly(bounded, output, entry.Size, cancellationToken);
+                    }, overwrite: true, cancellationToken: cancellationToken);
                     written.Add(outPath);
 
-                    var dec = TryDecrypt(raw);
-                    if (dec != null)
+                    var decryption = OpsEntryStreamCipher.Detect(fs, entry.Offset, entry.Size, cancellationToken);
+                    if (decryption.Kind != OpsEntryCipherKind.None)
                     {
                         var decPath = Path.Combine(outputDirectory, name + ".decrypted");
-                        File.WriteAllBytes(decPath, dec);
+                        FileExtraction.WriteAtomic(decPath, output => OpsEntryStreamCipher.WriteDecrypted(
+                            fs,
+                            entry.Offset,
+                            entry.Size,
+                            decryption.Kind,
+                            decryption.AesKey,
+                            output,
+                            cancellationToken), overwrite: true, cancellationToken: cancellationToken);
                         written.Add(decPath);
                         decrypted.Add(name);
                     }
@@ -706,7 +716,7 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
     /// Builds the default SBox table shared by the static decrypt paths.
     /// <para>构建静态解密路径共用的默认 SBox 表。</para>
     /// </summary>
-    private static byte[] SBoxTable()
+    internal static byte[] SBoxTable()
     {
         var key = Encoding.UTF8.GetBytes("OnePlus#@!$^&*()_+");
         var sbox = new byte[256];

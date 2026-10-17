@@ -27,6 +27,18 @@ public sealed class NtpiReader : IDisposable
     private const int DefaultBufferSize = 81920;
 
     /// <summary>
+    /// Largest Region6 range the in-memory <see cref="Parse"/> path materializes; larger packages must be unpacked to disk.
+    /// <para>内存型 <see cref="Parse"/> 路径可物化的最大 Region6 范围；更大的包必须解包到磁盘。</para>
+    /// </summary>
+    internal const long MaximumInMemoryRegion6Bytes = 256L * 1024 * 1024;
+
+    /// <summary>
+    /// Largest cumulative decoded file payload the in-memory <see cref="Parse"/> path holds alongside Region6.
+    /// <para>内存型 <see cref="Parse"/> 路径与 Region6 同时持有的累计解码文件载荷上限。</para>
+    /// </summary>
+    internal const long MaximumInMemoryExtractedBytes = 512L * 1024 * 1024;
+
+    /// <summary>
     /// Initializes a new instance of NtpiReader with the specified crypto provider and compressor.
     /// <para>使用指定的加密提供者和压缩器初始化 NtpiReader 的新实例。</para>
     /// </summary>
@@ -299,9 +311,11 @@ public sealed class NtpiReader : IDisposable
     /// <para>将 NTPI 固件包解析到内存中,返回头部、区域数据与提取的文件。</para>
     /// </summary>
     /// <param name="filePath">
-    /// Package to parse; the whole Region6 and every decrypted file are held in memory at once, and no output limit from
-    /// <see cref="NtpiUnpackOptions"/> applies to this path.
-    /// <para>待解析的包；整个 Region6 与每个解密后的文件会同时驻留内存，此路径不受 <see cref="NtpiUnpackOptions"/> 的输出限制约束。</para>
+    /// Package to parse; the whole Region6 and every decrypted file are held in memory at once. Region6 is capped at
+    /// 256 MiB and the decoded files at 512 MiB cumulatively, so larger packages must be unpacked with
+    /// <see cref="Unpack"/>; no <see cref="NtpiUnpackOptions"/> output limit applies to this path.
+    /// <para>待解析的包；整个 Region6 与每个解密后的文件会同时驻留内存。Region6 上限为 256 MiB，解码文件累计上限为
+    /// 512 MiB，因此更大的包必须改用 <see cref="Unpack"/> 解包；此路径不受 <see cref="NtpiUnpackOptions"/> 的输出限制约束。</para>
     /// </param>
     /// <param name="cancellationToken">
     /// Token observed between regions and extracted files; the default (none) token cannot cancel.
@@ -324,8 +338,9 @@ public sealed class NtpiReader : IDisposable
     /// <paramref name="filePath"/> does not exist. <para><paramref name="filePath"/> 不存在。</para>
     /// </exception>
     /// <exception cref="InvalidFormatException">
-    /// The package structure is invalid, or file entries exist while Region6 or the KeyMap region is missing.
-    /// <para>包结构无效，或存在文件条目却缺少 Region6 或 KeyMap 区域。</para>
+    /// The package structure is invalid, file entries exist while Region6 or the KeyMap region is missing, or the
+    /// declared Region6/decoded sizes exceed the in-memory parse limits.
+    /// <para>包结构无效，存在文件条目却缺少 Region6 或 KeyMap 区域，或声明的 Region6/解码大小超出内存解析上限。</para>
     /// </exception>
     /// <exception cref="IntegrityVerificationException">
     /// The SHA-256 recorded for a file does not match the decrypted bytes.
@@ -383,6 +398,12 @@ public sealed class NtpiReader : IDisposable
     {
         var layout = WalkLayout(stream, cancellationToken);
 
+        if (layout.HasRegion6 && layout.Region6Length > MaximumInMemoryRegion6Bytes)
+        {
+            throw new InvalidFormatException(
+                $"Region6 is {layout.Region6Length} bytes, exceeding the {MaximumInMemoryRegion6Bytes}-byte in-memory parse limit; unpack the package to disk instead.");
+        }
+
         var result = new NtpiParsedFile { Header = layout.Header };
         foreach (var (type, payload) in layout.Regions)
         {
@@ -411,9 +432,24 @@ public sealed class NtpiReader : IDisposable
             }
             var keyMapProvider = layout.KeyMapProvider;
 
+            long extractedBytes = 0;
             foreach (var entry in layout.FileEntries)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    extractedBytes = checked(extractedBytes + entry.OriginalLength);
+                }
+                catch (OverflowException ex)
+                {
+                    throw new InvalidFormatException("The declared NTPI total output length overflows Int64.", ex);
+                }
+                if (extractedBytes > MaximumInMemoryExtractedBytes)
+                {
+                    throw new InvalidFormatException(
+                        $"Decoded NTPI files exceed the {MaximumInMemoryExtractedBytes}-byte in-memory parse limit; unpack the package to disk instead.");
+                }
+
                 var data = _fileExtractor.ExtractFileToMemory(stream, layout.Region6Offset, layout.Region6Length, keyMapProvider, entry, cancellationToken);
                 result.ExtractedFiles[entry.Name] = data;
             }

@@ -1,6 +1,7 @@
 using System.Buffers;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.VendorFirmware.Nb0.Models;
 using UotanStudio.Hash.Digests;
 
@@ -670,6 +671,37 @@ public sealed class Nb0Extractor(int bufferSize = Nb0Extractor.DefaultBufferSize
         var data = new byte[entry.Size];
         await stream.ReadExactlyAsync(data, cancellationToken).ConfigureAwait(false);
         return data;
+    }
+
+    /// <summary>
+    /// Streams one entry through MD5 without materializing it, so verification memory stays bounded by the digest buffer.
+    /// <para>在不物化条目的情况下对其流式计算 MD5，使校验内存仅受摘要缓冲区约束。</para>
+    /// </summary>
+    /// <param name="stream">
+    /// Seekable NB0 data source; its position is moved to the entry start and then advanced through the entry bytes.
+    /// <para>可寻址的 NB0 数据源；位置先移到条目起点，随后随条目字节推进。</para>
+    /// </param>
+    /// <param name="entry">
+    /// Entry whose declared range is validated against the stream length before any byte is read.
+    /// <para>在读取任何字节前按流长度校验其声明范围的条目。</para>
+    /// </param>
+    /// <returns>The 16-byte MD5 of exactly <c>entry.Size</c> bytes. <para>恰好覆盖 <c>entry.Size</c> 字节的 16 字节 MD5。</para></returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="stream"/> or <paramref name="entry"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 或 <paramref name="entry"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="entry"/> carries a negative offset or size. <para><paramref name="entry"/> 的偏移或大小为负数。</para>
+    /// </exception>
+    /// <exception cref="Nb0CorruptedException">
+    /// The entry range overflows <see cref="long"/> or extends past the end of the stream.
+    /// <para>条目范围使 <see cref="long"/> 溢出，或越过流末尾。</para>
+    /// </exception>
+    internal static byte[] ComputeEntryMd5(Stream stream, Nb0FileEntry entry)
+    {
+        var start = ValidateEntryRange(stream, entry);
+        using var bounded = new BoundedReadStream(stream, start, entry.Size, leaveOpen: true);
+        return Md5.ComputeHash(bounded);
     }
 
     private static string SanitizeEntryName(string name)

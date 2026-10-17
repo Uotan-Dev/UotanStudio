@@ -12,6 +12,9 @@ internal static class OppOpsParser
 {
     private const int OpsSectorSize = 0x200;
 
+    /// <summary>Maximum encrypted XML region read from an OPS tail page. <para>从 OPS 尾页读取的加密 XML 区域上限。</para></summary>
+    internal const int MaximumXmlBytes = 16 * 1024 * 1024;
+
     /// <summary>
     /// Parses metadata from a stream containing an OPS format firmware file.
     /// <para>从指定流中解析 OPS 格式固件文件的元信息。</para>
@@ -41,7 +44,8 @@ internal static class OppOpsParser
                     ProjectName = tailPage.ProjectId,
                     ProjectId = tailPage.ProjectId,
                     FirmwareName = tailPage.FirmwareName,
-                    IsZipWrapped = false
+                    IsZipWrapped = false,
+                    ParsedEntries = entries
                 };
             }
 
@@ -55,7 +59,8 @@ internal static class OppOpsParser
                 ProjectName = tailPage.ProjectId,
                 ProjectId = tailPage.ProjectId,
                 FirmwareName = tailPage.FirmwareName,
-                IsZipWrapped = false
+                IsZipWrapped = false,
+                ParsedEntries = []
             };
         }
         finally
@@ -99,7 +104,7 @@ internal static class OppOpsParser
         try
         {
             var xmlOffset = (long)tailPage.ConfigSectorPos * OpsTailPage.Size;
-            if (tailPage.XmlLength > int.MaxValue)
+            if (tailPage.XmlLength == 0 || tailPage.XmlLength > MaximumXmlBytes)
             {
                 return null;
             }
@@ -108,16 +113,21 @@ internal static class OppOpsParser
 
 
             const int opsBlockSize = 16;
-            var alignedLength = (xmlLength + opsBlockSize - 1) / opsBlockSize * opsBlockSize;
+            var alignedLength = (int)(((long)xmlLength + opsBlockSize - 1) / opsBlockSize * opsBlockSize);
 
 
-            var maxAvailable = (int)(stream.Length - xmlOffset);
-            if (alignedLength > maxAvailable)
+            var maxAvailable = stream.Length - xmlOffset;
+            if (xmlOffset < 0 || maxAvailable <= 0)
             {
-                alignedLength = maxAvailable;
+                return null;
             }
 
-            if (xmlOffset < 0 || xmlLength <= 0 || xmlOffset + alignedLength > stream.Length)
+            if (alignedLength > maxAvailable)
+            {
+                alignedLength = (int)maxAvailable;
+            }
+
+            if (alignedLength <= 0)
             {
                 return null;
             }

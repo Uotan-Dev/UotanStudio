@@ -29,7 +29,7 @@ public enum ExtractionMode
 /// </remarks>
 internal static class PacExtractor
 {
-    private const int ChunkSize = 0x1000;
+    private const int ChunkSize = 1024 * 1024;
     private const uint ExpectedMagic = 0xFFFAFFFA;
 
     /// <summary>
@@ -55,16 +55,14 @@ internal static class PacExtractor
         ArgumentException.ThrowIfNullOrEmpty(imagePath);
 
         using var fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
-        using var reader = new BinaryReader(fs);
 
-        var head = SprdHead.Read(reader);
+        var head = SprdHead.Read(fs);
         ValidateHeader(head);
 
         var result = new List<(string, uint, uint, uint, uint, uint[])>();
         for (var i = 0; i < head.FileCount; i++)
         {
-            fs.Seek(SprdHead.Size + (i * SprdFile.StructFixedSize), SeekOrigin.Begin);
-            var file = SprdFile.Read(reader);
+            var file = SprdFile.Read(fs);
             if (file.StructSize != SprdFile.StructFixedSize)
             {
                 throw new InvalidDataException("unexpected struct size");
@@ -126,23 +124,27 @@ internal static class PacExtractor
             : outputRoot + Path.DirectorySeparatorChar;
 
         using var fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
-        using var reader = new BinaryReader(fs);
 
-        var head = SprdHead.Read(reader);
+        var head = SprdHead.Read(fs);
         ValidateHeader(head);
 
-        var count = 0;
+        var entries = new List<SprdFile>((int)head.FileCount);
         for (var i = 0; i < head.FileCount; i++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            fs.Seek(SprdHead.Size + (i * SprdFile.StructFixedSize), SeekOrigin.Begin);
-            var file = SprdFile.Read(reader);
-
+            var file = SprdFile.Read(fs);
             if (file.StructSize != SprdFile.StructFixedSize)
             {
                 throw new InvalidDataException("unexpected struct size");
             }
 
+            entries.Add(file);
+        }
+
+        var count = 0;
+        var buffer = new byte[ChunkSize];
+        foreach (var file in entries)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             if (file.Name[0] == 0 || file.PacOffset == 0 || file.Size == 0)
             {
                 continue;
@@ -178,7 +180,6 @@ internal static class PacExtractor
                 using (var fo = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
                     long remaining = file.Size;
-                    var buffer = new byte[ChunkSize];
                     while (remaining > 0)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
@@ -236,9 +237,8 @@ internal static class PacExtractor
         cancellationToken.ThrowIfCancellationRequested();
 
         using var fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
-        using var reader = new BinaryReader(fs);
 
-        var head = SprdHead.Read(reader);
+        var head = SprdHead.Read(fs);
         ValidateHeader(head);
 
         var headBytes = head.ToBytes();
@@ -267,7 +267,7 @@ internal static class PacExtractor
             {
                 throw new EndOfStreamException("PAC data ended before the declared package size.");
             }
-            calculatedDataCrc = Crc16Arc.Compute(read == buffer.Length ? buffer : buffer.AsSpan(0, read).ToArray(), calculatedDataCrc);
+            calculatedDataCrc = Crc16Arc.Compute(buffer.AsSpan(0, read), calculatedDataCrc);
             totalRead += read;
         }
 

@@ -49,6 +49,12 @@ internal sealed class OpsFormatParser : IOppFormatParser
     public IReadOnlyList<OppEntry> ParseEntries(Stream stream, long fileSize, OppMetadata metadata, IOppCryptoProvider? cryptoProvider)
     {
         Guard.ThrowIfNull(stream);
+        Guard.ThrowIfNull(metadata);
+
+        if (metadata.ParsedEntries is { } cached)
+        {
+            return cached;
+        }
 
         var tailPage = OppOpsParser.ReadTailPage(stream, fileSize);
         var decryptResult = OppOpsParser.TryDecryptXml(stream, tailPage);

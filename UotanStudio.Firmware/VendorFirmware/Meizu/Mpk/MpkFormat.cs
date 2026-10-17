@@ -129,10 +129,10 @@ internal static class MpkFormat
 
             var entries = new List<MpkEntry>(count);
             var record = new byte[EntryRecordSize];
+            input.Position = HeaderSize;
             for (var index = 0; index < count; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                input.Position = HeaderSize + (long)index * EntryRecordSize;
                 input.ReadExactly(record, 0, EntryRecordSize);
                 if (!record.AsSpan(0, 2).SequenceEqual(EntryMagic))
                 {

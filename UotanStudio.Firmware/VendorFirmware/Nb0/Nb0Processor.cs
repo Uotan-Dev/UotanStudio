@@ -1,5 +1,4 @@
 using UotanStudio.Firmware.VendorFirmware.Nb0.Models;
-using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.VendorFirmware.Nb0;
 
@@ -30,12 +29,6 @@ internal static class Nb0Md5Helper
 
         return entryIndex < metadata.Md5Records.Count ? metadata.Md5Records[entryIndex] : null;
     }
-
-    /// <summary>
-    /// Computes the MD5 digest of the data.
-    /// <para>计算数据的 MD5 摘要。</para>
-    /// </summary>
-    internal static byte[] ComputeMd5(byte[] data) => Md5.ComputeHash(data);
 
     /// <summary>
     /// Compares whether two MD5 digests are equal.
@@ -213,8 +206,10 @@ public sealed class Nb0Processor
     /// </exception>
     public CheckResult Check(string filePath, IProgress<Nb0CheckProgress>? progress = null)
     {
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
         using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.SequentialScan);
-        return CheckFromStream(stream, progress);
+        var metadata = Nb0Parser.ParseFromStream(stream);
+        return CheckWithDigests(metadata, ComputeDigestsFromFile(filePath, metadata), progress);
     }
 
     /// <summary>
@@ -248,7 +243,8 @@ public sealed class Nb0Processor
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
-        var result = CheckFromStream(stream, progress);
+        var metadata = Nb0Parser.ParseFromStream(stream);
+        var result = CheckWithDigests(metadata, ComputeDigestsFromFile(filePath, metadata), progress);
         return await Task.FromResult(result).ConfigureAwait(false);
     }
 
@@ -257,9 +253,9 @@ public sealed class Nb0Processor
     /// <para>从流校验 NB0 固件数据中各条目的 MD5 校验和。</para>
     /// </summary>
     /// <param name="stream">
-    /// Readable, seekable NB0 data; the stream stays open and its position may move arbitrarily.
-    /// Each verified entry is read fully into memory.
-    /// <para>可读、可寻址的 NB0 数据流；流保持打开且位置会任意移动。每个被校验的条目会完整读入内存。</para>
+    /// Readable, seekable NB0 data; the stream stays open and its position may move arbitrarily. Entries are hashed one
+    /// at a time through a bounded range stream, so no entry is ever materialized in memory.
+    /// <para>可读、可寻址的 NB0 数据流；流保持打开且位置会任意移动。各条目经由有界区间流逐个计算摘要，任何条目都不会被整体物化到内存。</para>
     /// </param>
     /// <param name="progress">
     /// Receives a report after each entry; <see langword="null"/> disables reporting.
@@ -277,8 +273,70 @@ public sealed class Nb0Processor
     /// </exception>
     public CheckResult CheckFromStream(Stream stream, IProgress<Nb0CheckProgress>? progress = null)
     {
-        var result = new CheckResult { IsValid = true };
         var metadata = Nb0Parser.ParseFromStream(stream);
+        var missingRecord = ResolveMissingRecords(metadata);
+        var digests = new byte[]?[metadata.Entries.Count];
+        for (var i = 0; i < metadata.Entries.Count; i++)
+        {
+            if (!missingRecord[i])
+            {
+                digests[i] = Nb0Extractor.ComputeEntryMd5(stream, metadata.Entries[i]);
+            }
+        }
+
+        return CheckWithDigests(metadata, digests, progress);
+    }
+
+    /// <summary>
+    /// Computes every outstanding entry digest from the file path, with each worker owning its own read handle so the
+    /// entries are hashed concurrently without materializing them or moving a shared stream.
+    /// <para>从文件路径计算每个待校验条目的摘要；每个工作者持有自己的读取句柄，从而在不物化条目、不移动共享流的情况下并发计算。</para>
+    /// </summary>
+    private static byte[]?[] ComputeDigestsFromFile(string filePath, Nb0Metadata metadata)
+    {
+        var total = metadata.Entries.Count;
+        var digests = new byte[]?[total];
+        var missingRecord = ResolveMissingRecords(metadata);
+        var workers = Math.Min(Core.FirmwareParallelism.Workers, total);
+        if (workers <= 1)
+        {
+            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.SequentialScan);
+            for (var i = 0; i < total; i++)
+            {
+                if (!missingRecord[i])
+                {
+                    digests[i] = Nb0Extractor.ComputeEntryMd5(stream, metadata.Entries[i]);
+                }
+            }
+
+            return digests;
+        }
+
+        var slots = new int[workers];
+        for (var i = 0; i < workers; i++)
+        {
+            slots[i] = i;
+        }
+
+        Core.FirmwareParallelism.ForEach(slots, worker =>
+        {
+            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.SequentialScan);
+            for (var i = worker; i < total; i += workers)
+            {
+                if (!missingRecord[i])
+                {
+                    digests[i] = Nb0Extractor.ComputeEntryMd5(stream, metadata.Entries[i]);
+                }
+            }
+        }, workers);
+
+        return digests;
+    }
+
+    private static CheckResult CheckWithDigests(Nb0Metadata metadata, byte[]?[] digests,
+        IProgress<Nb0CheckProgress>? progress)
+    {
+        var result = new CheckResult { IsValid = true };
         result.Warnings.AddRange(metadata.Warnings);
 
         if (!metadata.HasMd5Records)
@@ -289,24 +347,9 @@ public sealed class Nb0Processor
         }
 
         var total = metadata.Entries.Count;
-        var workers = Core.FirmwareParallelism.Workers;
-        var digests = new byte[]?[total];
-        var missingRecord = ResolveMissingRecords(metadata);
-        var buffers = GatherEntryBuffers(stream, metadata, missingRecord);
-
-        Core.FirmwareParallelism.ForEach(metadata.Entries, (_, i) =>
-        {
-            if (buffers[i] is null)
-            {
-                return;
-            }
-
-            digests[i] = Nb0Md5Helper.ComputeMd5(buffers[i]!);
-        }, workers);
-
         for (var i = 0; i < total; i++)
         {
-            if (missingRecord[i])
+            if (digests[i] is null)
             {
                 result.Errors.Add($"No MD5 record found for entry '{metadata.Entries[i].Name}'.");
                 result.IsValid = false;
@@ -344,26 +387,6 @@ public sealed class Nb0Processor
         }
 
         return missing;
-    }
-
-    /// <summary>
-    /// Reads every outstanding entry on the calling thread into a per-index slot, so the shared stream is only
-    /// ever repositioned by one thread at a time and the hashing stage can then run concurrently.
-    /// <para>在调用线程上把每个待处理条目读入各自的索引槽位，从而共享流同一时刻只由一个线程重新定位，
-    /// 之后摘要阶段即可并发执行。</para>
-    /// </summary>
-    private static byte[]?[] GatherEntryBuffers(Stream stream, Nb0Metadata metadata, IReadOnlyList<bool> missingRecord)
-    {
-        var buffers = new byte[]?[metadata.Entries.Count];
-        for (var i = 0; i < metadata.Entries.Count; i++)
-        {
-            if (!missingRecord[i])
-            {
-                buffers[i] = new Nb0Extractor().ExtractEntryToBuffer(stream, metadata.Entries[i]);
-            }
-        }
-
-        return buffers;
     }
 
     /// <summary>

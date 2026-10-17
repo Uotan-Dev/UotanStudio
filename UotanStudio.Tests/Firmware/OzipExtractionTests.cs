@@ -4,6 +4,7 @@ using System.Text;
 using UotanStudio.Firmware.VendorFirmware.Oppo;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Models;
+using UotanStudio.Firmware.VendorFirmware.Oppo.Parsers;
 using UotanStudio.Services.Flash;
 using Xunit;
 
@@ -48,6 +49,43 @@ public sealed class OzipExtractionTests
             decryptedView.ReadExactly(actual);
             Assert.Equal(plaintext.AsSpan((int)position, actual.Length).ToArray(), actual);
         }
+    }
+
+    [Fact]
+    public void ParseEntries_AfterParseMetadata_DoesNotReReadTheStream()
+    {
+        var image = CreatePattern(4096);
+        var encrypted = EncryptMode1(CreateInnerZip(image));
+        var ozipBytes = CreateOzipBytes(encrypted);
+        using var source = new CountingReadStream(ozipBytes);
+        var parser = new OzipFormatParser();
+        var metadata = parser.ParseMetadata(source, source.Length, null);
+        var bytesRead = source.BytesRead;
+
+        var entries = parser.ParseEntries(source, source.Length, metadata, null);
+
+        Assert.Equal(bytesRead, source.BytesRead);
+        Assert.Contains(entries, entry => entry.Name == "firmware-update/boot.img");
+    }
+
+    [Fact]
+    public async Task BlockDecryptStream_AsyncReads_ReturnSamePlaintext()
+    {
+        var plaintext = CreatePattern((EncryptionUnitSize * 2) + 300);
+        Encoding.ASCII.GetBytes("PK\x03\x04").CopyTo(plaintext, 0);
+        var encrypted = EncryptMode1(plaintext);
+        using var ozip = CreateOzipStream(encrypted);
+        using var decrypted = new OzipBlockDecryptStream(ozip, TestKey, encrypted.Length, leaveOpen: true);
+        var actual = new byte[plaintext.Length];
+        var total = 0;
+        while (total < actual.Length)
+        {
+            var read = await decrypted.ReadAsync(actual.AsMemory(total), TestContext.Current.CancellationToken);
+            Assert.True(read > 0);
+            total += read;
+        }
+
+        Assert.Equal(plaintext, actual);
     }
 
     [Fact]
@@ -175,5 +213,24 @@ public sealed class OzipExtractionTests
         Encoding.ASCII.GetBytes(encryptedData.Length.ToString()).CopyTo(result, 0x10);
         encryptedData.CopyTo(result, OzipHeader.DataOffset);
         return result;
+    }
+
+    private sealed class CountingReadStream(byte[] data) : MemoryStream(data, writable: false)
+    {
+        public long BytesRead { get; private set; }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var read = base.Read(buffer, offset, count);
+            BytesRead += read;
+            return read;
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            var read = base.Read(buffer);
+            BytesRead += read;
+            return read;
+        }
     }
 }

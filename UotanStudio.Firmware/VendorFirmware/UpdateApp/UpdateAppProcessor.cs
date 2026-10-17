@@ -322,10 +322,13 @@ internal static class UpdateAppProcessor
             fs.Seek(entry.DataOffset, SeekOrigin.Begin);
             FileExtraction.WriteAtomic(outPath, output =>
             {
-                using var hashingStream = new HashingWriteStream(output, leaveOpen: true);
+                using var hashingStream = entry.Sha256Hash is null
+                    ? null
+                    : new HashingWriteStream(output, leaveOpen: true);
+                Stream target = (Stream?)hashingStream ?? output;
                 if (entry.ChecksumTable.Length == 0)
                 {
-                    StreamCopy.CopyExactly(fs, hashingStream, entry.FileSize,
+                    StreamCopy.CopyExactly(fs, target, entry.FileSize,
                         cancellationToken: cancellationToken);
                 }
                 else
@@ -349,13 +352,13 @@ internal static class UpdateAppProcessor
                         var actual = Crc16CcittReversed.Compute(buffer.AsSpan(0, count));
                         if (actual != entry.ChecksumTable[block])
                             throw new InvalidDataException($"UPDATE.APP payload CRC mismatch for '{entry.Name}' block {block}.");
-                        hashingStream.Write(buffer, 0, count);
+                        target.Write(buffer, 0, count);
                     }
                 }
 
                 if (entry.Sha256Hash is not null)
                 {
-                    var computed = hashingStream.GetHashAndReset();
+                    var computed = hashingStream!.GetHashAndReset();
                     if (!computed.AsSpan().SequenceEqual(entry.Sha256Hash))
                     {
                         throw new InvalidDataException(
