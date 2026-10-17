@@ -177,8 +177,8 @@ public sealed class FirmwareService
         {
             await using var fs = File.OpenRead(archivePath);
             var archive = new CpioArchive();
-            var entries = archive.ReadAll(fs);
-            var names = entries.Select(e => e.Name ?? string.Empty).Where(n => n.Length > 0).ToList();
+            var entries = archive.ListEntries(fs);
+            var names = entries.Select(e => e.Name).Where(n => n.Length > 0).ToList();
             return new FirmwareOpResult { Success = true, Summary = $"{names.Count} entries", Entries = names };
         }
         catch (Exception ex)
