@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk.Signing;
 
@@ -50,6 +51,93 @@ internal static class ApkV1Signer
         }
 
         return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// Builds MANIFEST.MF and the matching .SF signature file in one pass over the entry digests:
+    /// each manifest section is hashed once as it is produced instead of being split and rehashed
+    /// from the finished manifest.
+    /// <para>对条目摘要只遍历一次即生成 MANIFEST.MF 与配套的 .SF 签名文件：每个清单段在产出时即完成一次
+    /// 哈希，不再从成品清单切分后重算。</para>
+    /// </summary>
+    /// <param name="entries">Entry names and their SHA-256 content digests.
+    /// <para>条目名与对应的 SHA-256 内容摘要。</para></param>
+    /// <param name="protectedSchemeIds">APK signature scheme IDs to protect (e.g. 2 and 3).
+    /// <para>要保护的 APK 签名方案 ID（如 2 和 3）。</para></param>
+    /// <returns>The manifest bytes and the signature file bytes, byte-identical to
+    /// <see cref="BuildManifest"/> followed by <see cref="BuildSignatureFile"/> for the same input.
+    /// <para>清单字节与签名文件字节，与对同一输入分别调用 <see cref="BuildManifest"/> 和
+    /// <see cref="BuildSignatureFile"/> 的结果逐字节一致。</para></returns>
+    internal static (byte[] Manifest, byte[] SignatureFile) BuildManifestAndSignatureFile(
+        IReadOnlyList<(string Name, byte[] Sha256Digest)> entries,
+        IReadOnlyList<int> protectedSchemeIds)
+    {
+        using var manifestBuffer = new MemoryStream();
+        using var manifestHash = Hash.Digests.Sha256.CreateAccumulator();
+        WriteHashed(manifestBuffer, manifestHash,
+            BuildSectionBytes(
+                [
+                    ("Manifest-Version", "1.0"),
+                    ("Created-By", "1.0 (UotanStudio)"),
+                ],
+                individualSections: null));
+
+        var sections = new List<(string Name, byte[] Digest)>(entries.Count);
+        foreach (var (name, digest) in entries)
+        {
+            var section = BuildSectionBytes(null,
+            [
+                ("Name", name),
+                ("SHA-256-Digest", Convert.ToBase64String(digest)),
+            ]);
+            sections.Add((ExtractSectionName(section), Hash.Digests.Sha256.ComputeHash(section)));
+            WriteHashed(manifestBuffer, manifestHash, section);
+        }
+
+        var manifestBytes = manifestBuffer.ToArray();
+        using var signatureBuffer = new MemoryStream();
+        var main = new List<(string Name, string Value)>
+        {
+            ("Signature-Version", "1.0"),
+            ("Created-By", "1.0 (UotanStudio)"),
+        };
+        if (protectedSchemeIds.Count > 0)
+        {
+            main.Add(("X-Android-APK-Signed", string.Join(", ", protectedSchemeIds)));
+        }
+
+        main.Add(("SHA-256-Digest-Manifest", Convert.ToBase64String(manifestHash.GetCurrentHash())));
+        WriteSection(signatureBuffer, main, individualSections: null);
+        foreach (var (name, digest) in sections)
+        {
+            WriteSection(signatureBuffer, null, [("Name", name), ("SHA-256-Digest", Convert.ToBase64String(digest))]);
+        }
+
+        return (manifestBytes, signatureBuffer.ToArray());
+    }
+
+    private static byte[] BuildSectionBytes(
+        IReadOnlyList<(string, string)>? mainAttributes,
+        IReadOnlyList<(string, string)>? individualSections)
+    {
+        using var buffer = new MemoryStream();
+        WriteSection(buffer, mainAttributes, individualSections);
+        return buffer.ToArray();
+    }
+
+    private static void WriteHashed(Stream output, DigestAccumulator hash, byte[] bytes)
+    {
+        output.Write(bytes);
+        hash.Append(bytes);
+    }
+
+    private static string ExtractSectionName(byte[] section)
+    {
+        var unfolded = System.Text.Encoding.UTF8.GetString(section).Replace("\r\n ", "", StringComparison.Ordinal);
+        var nameEnd = unfolded.IndexOf("\r\n", StringComparison.Ordinal);
+        if (!unfolded.StartsWith("Name: ", StringComparison.Ordinal) || nameEnd < 6)
+            throw new InvalidDataException("Missing JAR section name. JAR 清单段缺少名称。");
+        return unfolded[6..nameEnd];
     }
 
     /// <summary>

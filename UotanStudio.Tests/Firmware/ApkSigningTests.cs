@@ -322,6 +322,122 @@ public class ApkSigningTests : IDisposable
         return path;
     }
 
+    [Fact]
+    public void Sign_SameInputAndKey_ProducesByteIdenticalArtifacts()
+    {
+        var input = CreateMinimalApk("deterministic-input.apk", out _);
+        var first = Path.Combine(_root, "deterministic-first.apk");
+        var second = Path.Combine(_root, "deterministic-second.apk");
+
+        ApkSigner.Sign(input, first, KeyMaterial, new ApkSigningOptions(), TestContext.Current.CancellationToken);
+        ApkSigner.Sign(input, second, KeyMaterial, new ApkSigningOptions(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(File.ReadAllBytes(first), File.ReadAllBytes(second));
+    }
+
+    [Fact]
+    public void Sign_ReSigningOwnOutput_ReproducesTheSameBytes()
+    {
+        var input = CreateMinimalApk("resign-identical-input.apk", out _);
+        var first = Path.Combine(_root, "resign-identical-first.apk");
+        var second = Path.Combine(_root, "resign-identical-second.apk");
+
+        ApkSigner.Sign(input, first, KeyMaterial, new ApkSigningOptions(), TestContext.Current.CancellationToken);
+        ApkSigner.Sign(first, second, KeyMaterial, new ApkSigningOptions(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(File.ReadAllBytes(first), File.ReadAllBytes(second));
+    }
+
+    [Fact]
+    public void Sign_V2BlockDigest_MatchesDigestRecomputedFromSignedFile()
+    {
+        var input = CreateMinimalApk("block-digest-input.apk", out _);
+        var output = Path.Combine(_root, "block-digest-signed.apk");
+        ApkSigner.Sign(input, output, KeyMaterial,
+            new ApkSigningOptions { EnableV1 = false, EnableV2 = true, EnableV3 = true },
+            TestContext.Current.CancellationToken);
+
+        using var stream = new FileStream(output, FileMode.Open, FileAccess.Read);
+        var sections = ApkZipSections.Locate(stream);
+        var found = ApkSigningBlock.Find(stream, sections);
+        Assert.NotNull(found);
+        var v2 = ApkSigningBlock.ParsePairs(found!.Value.Contents)
+            .Single(pair => pair.Id == ApkSignatureConstants.V2BlockId).Value;
+        var algorithm = (ApkSignatureConstants.SignatureAlgorithm)BinaryPrimitives.ReadUInt32LittleEndian(v2.AsSpan(20, 4));
+        var digestLength = (int)BinaryPrimitives.ReadUInt32LittleEndian(v2.AsSpan(24, 4));
+        var embedded = v2.AsSpan(28, digestLength).ToArray();
+
+        var eocd = ReadRange(stream, sections.EocdOffset, sections.EocdSize);
+        var blockOffset = found.Value.Offset;
+        var recomputed = ApkContentDigest.ComputeApkDigest(
+            stream, blockOffset, sections.CentralDirectoryOffset, blockOffset,
+            sections.CentralDirectorySize, eocd, ApkSignatureConstants.HashNameFor(algorithm),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(recomputed, embedded);
+    }
+
+    [Fact]
+    public void ContentDigestBuilder_SectionAppends_MatchComputeApkDigest()
+    {
+        var directory = Path.Combine(_root, "builder-content");
+        Directory.CreateDirectory(directory);
+        var content = new byte[2 * 1024 * 1024 + 123];
+        RandomNumberGenerator.Fill(content);
+        File.WriteAllBytes(Path.Combine(directory, "large.bin"), content);
+        var apk = Path.Combine(_root, "builder.apk");
+        ApkRepacker.Repack(directory, apk, cancellationToken: TestContext.Current.CancellationToken);
+
+        using var stream = new FileStream(apk, FileMode.Open, FileAccess.Read);
+        var sections = ApkZipSections.Locate(stream);
+        var eocd = ReadRange(stream, sections.EocdOffset, sections.EocdSize);
+        var expected = ApkContentDigest.ComputeApkDigest(
+            stream, sections.CentralDirectoryOffset, sections.CentralDirectoryOffset,
+            sections.CentralDirectoryOffset, sections.CentralDirectorySize, eocd, "SHA256",
+            TestContext.Current.CancellationToken);
+
+        using var builder = new ApkContentDigestBuilder("SHA256");
+        AppendRange(stream, builder, 0, sections.CentralDirectoryOffset);
+        builder.BeginSection();
+        AppendRange(stream, builder, sections.CentralDirectoryOffset, sections.CentralDirectorySize);
+        builder.BeginSection();
+        builder.Append(eocd);
+
+        Assert.Equal(expected, builder.Complete());
+    }
+
+    [Fact]
+    public void V1ManifestAndSignatureFile_SinglePass_MatchesTwoStepBuild()
+    {
+        var digests = new List<(string Name, byte[] Sha256Digest)>
+        {
+            ("AndroidManifest.xml", SHA256.HashData([1, 2, 3])),
+            ("assets/data.txt", SHA256.HashData([4, 5, 6])),
+            (new string('n', 96) + ".bin", SHA256.HashData([7, 8, 9])),
+        };
+
+        var manifest = ApkV1Signer.BuildManifest(digests);
+        var signatureFile = ApkV1Signer.BuildSignatureFile(manifest, [2, 3]);
+        var combined = ApkV1Signer.BuildManifestAndSignatureFile(digests, [2, 3]);
+
+        Assert.Equal(manifest, combined.Manifest);
+        Assert.Equal(signatureFile, combined.SignatureFile);
+    }
+
+    private static void AppendRange(Stream stream, ApkContentDigestBuilder builder, long offset, long length)
+    {
+        var buffer = new byte[65536];
+        stream.Seek(offset, SeekOrigin.Begin);
+        var remaining = length;
+        while (remaining > 0)
+        {
+            var read = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+            Assert.NotEqual(0, read);
+            builder.Append(buffer.AsSpan(0, read));
+            remaining -= read;
+        }
+    }
+
     private static byte[] ReadRange(Stream stream, long offset, long length)
     {
         var buffer = new byte[length];

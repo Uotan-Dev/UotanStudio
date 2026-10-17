@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.AndroidMeta.Apk;
+using UotanStudio.Firmware.AndroidMeta.Apk.Signing;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -209,6 +210,59 @@ public class ApkEntryStripperTests
         Assert.Equal(native, ReadArchiveContent(output)["lib/arm64-v8a/libnative.so"]);
         Assert.Equal(0, DataOffsetOf(output, "lib/arm64-v8a/libnative.so") % 4);
         Assert.Equal(0, DataOffsetOf(input, "lib/arm64-v8a/libnative.so") % 4);
+    }
+
+    [Fact]
+    public void RewriteWithSigningBlock_MatchesRewriteThenManualBlockInsertion()
+    {
+        var entries = new[]
+        {
+            ("classes.dex", Encoding.UTF8.GetBytes("dex-bytes")),
+            ("META-INF/MANIFEST.MF", Encoding.UTF8.GetBytes("Manifest-Version: 1.0\r\n\r\n")),
+            ("lib/arm64-v8a/libnative.so", new byte[4096])
+        };
+        using var temp = new TempDirectory();
+        var input = WriteApk(temp, "input.apk", entries);
+        var request = new ApkEntryStripper.RewriteRequest
+        {
+            StripV1SignatureEntries = true,
+            EntriesToAppend = [("META-INF/UOTAN.SF", "new-signature"u8.ToArray())],
+        };
+        var stripped = Path.Combine(temp.Path, "stripped.apk");
+        ApkEntryStripper.Rewrite(input, stripped, request, TestContext.Current.CancellationToken);
+
+        byte[]? digest = null;
+        var signed = Path.Combine(temp.Path, "signed.apk");
+        ApkEntryStripper.RewriteWithSigningBlock(input, signed, request, "SHA256", contentDigest =>
+        {
+            digest = contentDigest;
+            return ApkSigningBlock.Build([(0x12345678u, contentDigest)]);
+        }, TestContext.Current.CancellationToken);
+
+        using var stream = File.OpenRead(stripped);
+        var sections = ApkZipSections.Locate(stream);
+        var eocd = new byte[sections.EocdSize];
+        stream.Seek(sections.EocdOffset, SeekOrigin.Begin);
+        stream.ReadExactly(eocd);
+        var expectedDigest = ApkContentDigest.ComputeApkDigest(
+            stream, sections.CentralDirectoryOffset, sections.CentralDirectoryOffset,
+            sections.CentralDirectoryOffset, sections.CentralDirectorySize, eocd, "SHA256",
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(digest);
+        Assert.Equal(expectedDigest, digest);
+
+        var block = ApkSigningBlock.Build([(0x12345678u, expectedDigest)]);
+        var patchedEocd = (byte[])eocd.Clone();
+        BinaryPrimitives.WriteUInt32LittleEndian(patchedEocd.AsSpan(16, 4),
+            (uint)(sections.CentralDirectoryOffset + block.Length));
+        var strippedBytes = File.ReadAllBytes(stripped);
+        var expected = new List<byte>();
+        expected.AddRange(strippedBytes.AsSpan(0, (int)sections.CentralDirectoryOffset).ToArray());
+        expected.AddRange(block);
+        expected.AddRange(strippedBytes.AsSpan((int)sections.CentralDirectoryOffset, (int)sections.CentralDirectorySize).ToArray());
+        expected.AddRange(patchedEocd);
+
+        Assert.Equal(expected.ToArray(), File.ReadAllBytes(signed));
     }
 
     [Fact]

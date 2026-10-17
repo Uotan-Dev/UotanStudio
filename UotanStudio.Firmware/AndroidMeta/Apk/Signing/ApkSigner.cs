@@ -1,5 +1,7 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Compression;
+using System.Runtime.ExceptionServices;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Hash.Digests;
 
@@ -14,6 +16,9 @@ namespace UotanStudio.Firmware.AndroidMeta.Apk.Signing;
 /// </summary>
 public static class ApkSigner
 {
+    private const int CopyBufferBytes = 81920;
+    private const int MaximumHashWorkers = 8;
+
     /// <summary>
     /// Signs an APK file with the given custom key material and writes the result to the
     /// output path (atomic replace). The input file is never modified.
@@ -81,42 +86,21 @@ public static class ApkSigner
         var tempPath = Path.Combine(directory!, Path.GetRandomFileName());
         try
         {
-            var working = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-            try
+            if (resolvedOptions.EnableV1)
             {
-                if (resolvedOptions.StripExistingSignatures)
-                {
-                    ApkEntryStripper.Rewrite(inputApk, working, new ApkEntryStripper.RewriteRequest
-                    {
-                        StripV1SignatureEntries = true,
-                    }, cancellationToken);
-                }
-                else
-                {
-                    File.Copy(inputApk, working, overwrite: true);
-                }
-
-                if (resolvedOptions.EnableV1)
-                {
-                    AppendV1Artifacts(working, keyMaterial, resolvedOptions, cancellationToken);
-                }
-
-                if (resolvedOptions.EnableV2 || resolvedOptions.EnableV3)
-                {
-                    InsertSigningBlock(working, tempPath, keyMaterial, resolvedOptions, cancellationToken);
-                }
-                else
-                {
-                    File.Copy(working, tempPath, overwrite: true);
-                }
-
-                cancellationToken.ThrowIfCancellationRequested();
-                AtomicPublish.Publish(tempPath, outputApk);
+                WriteV1SignedApk(inputApk, tempPath, keyMaterial, resolvedOptions, cancellationToken);
             }
-            finally
+            else if (resolvedOptions.StripExistingSignatures)
             {
-                try { File.Delete(working); } catch { }
+                WriteStrippedApkWithSigningBlock(inputApk, tempPath, keyMaterial, resolvedOptions, cancellationToken);
             }
+            else
+            {
+                InsertSigningBlock(inputApk, tempPath, keyMaterial, resolvedOptions, cancellationToken);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            AtomicPublish.Publish(tempPath, outputApk);
         }
         catch
         {
@@ -125,8 +109,9 @@ public static class ApkSigner
         }
     }
 
-    private static void AppendV1Artifacts(
-        string apkPath,
+    private static void WriteV1SignedApk(
+        string inputApk,
+        string outputApk,
         ApkSignerKeyMaterial keyMaterial,
         ApkSigningOptions options,
         CancellationToken cancellationToken)
@@ -142,43 +127,15 @@ public static class ApkSigner
             protectedSchemes.Add(3);
         }
 
-        var entries = new List<(string Name, byte[] Content)>();
-        long totalUncompressed = 0;
-        long manifestBudget = 0;
-        using (var stream = new FileStream(apkPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan))
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false))
-        {
-            foreach (var entry in archive.Entries)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (string.IsNullOrEmpty(entry.Name) && entry.FullName.EndsWith('/'))
-                {
-                    continue;
-                }
-
-                if (entry.FullName.Contains('\r') || entry.FullName.Contains('\n') || entry.FullName.Contains('\0'))
-                    throw new InvalidDataException("Invalid JAR entry name. JAR 条目名称无效。");
-                totalUncompressed = checked(totalUncompressed + entry.Length);
-                manifestBudget = checked(manifestBudget + System.Text.Encoding.UTF8.GetByteCount(entry.FullName) * 2L + 256);
-                if (totalUncompressed > 64L * 1024 * 1024 * 1024 || manifestBudget > 32 * 1024 * 1024)
-                    throw new InvalidDataException("APK signing input exceeds the decompression or manifest budget. APK 签名输入超过解压或清单预算。");
-                using var entryStream = entry.Open();
-                var digest = HashEntry(entryStream, entry.Length, cancellationToken);
-                entries.Add((entry.FullName, digest));
-            }
-        }
-
-        entries.Sort(static (a, b) => string.CompareOrdinal(a.Name, b.Name));
-
-        var manifest = ApkV1Signer.BuildManifest(entries);
-        var signatureFile = ApkV1Signer.BuildSignatureFile(manifest, protectedSchemes);
+        var entries = CollectEntryDigests(inputApk, options, cancellationToken);
+        var (manifest, signatureFile) = ApkV1Signer.BuildManifestAndSignatureFile(entries, protectedSchemes);
         var signatureBlock = ApkV1Signer.SignSignatureFile(signatureFile, keyMaterial);
         var extension = ApkV1Signer.SignatureBlockExtension(keyMaterial.Key);
         var signerName = string.IsNullOrWhiteSpace(options.SignerName)
             ? ApkV1Signer.DefaultSignerName
             : options.SignerName;
 
-        ApkEntryStripper.Rewrite(apkPath, apkPath + ".v1", new ApkEntryStripper.RewriteRequest
+        ApkEntryStripper.RewriteRequest request = new()
         {
             StripV1SignatureEntries = true,
             EntriesToAppend =
@@ -187,25 +144,192 @@ public static class ApkSigner
                 ($"META-INF/{signerName}.SF", signatureFile),
                 ($"META-INF/{signerName}{extension}", signatureBlock),
             ],
-        }, cancellationToken);
-        File.Move(apkPath + ".v1", apkPath, overwrite: true);
+        };
+
+        if (options.EnableV2 || options.EnableV3)
+        {
+            var algorithm = ApkSignatureAlgorithmSelector.Select(keyMaterial.Key, options.MinSdkVersion);
+            ApkEntryStripper.RewriteWithSigningBlock(
+                inputApk,
+                outputApk,
+                request,
+                ApkSignatureConstants.HashNameFor(algorithm),
+                digest => BuildSigningBlock(keyMaterial, options, algorithm, digest),
+                cancellationToken);
+        }
+        else
+        {
+            ApkEntryStripper.Rewrite(inputApk, outputApk, request, cancellationToken);
+        }
     }
 
-    private static byte[] HashEntry(Stream input, long expectedLength, CancellationToken cancellationToken)
+    private static void WriteStrippedApkWithSigningBlock(
+        string inputApk,
+        string outputApk,
+        ApkSignerKeyMaterial keyMaterial,
+        ApkSigningOptions options,
+        CancellationToken cancellationToken)
     {
-        using var hash = Sha256.CreateAccumulator();
-        var buffer = new byte[81920];
-        var remaining = expectedLength;
-        while (remaining > 0)
+        var algorithm = ApkSignatureAlgorithmSelector.Select(keyMaterial.Key, options.MinSdkVersion);
+        ApkEntryStripper.RewriteWithSigningBlock(
+            inputApk,
+            outputApk,
+            new ApkEntryStripper.RewriteRequest { StripV1SignatureEntries = true },
+            ApkSignatureConstants.HashNameFor(algorithm),
+            digest => BuildSigningBlock(keyMaterial, options, algorithm, digest),
+            cancellationToken);
+    }
+
+    private static byte[] BuildSigningBlock(
+        ApkSignerKeyMaterial keyMaterial,
+        ApkSigningOptions options,
+        ApkSignatureConstants.SignatureAlgorithm algorithm,
+        byte[] contentDigest)
+    {
+        return ApkSigningBlock.Build(BuildSignaturePairs(keyMaterial, options, algorithm, contentDigest));
+    }
+
+    private static List<(string Name, byte[] Sha256Digest)> CollectEntryDigests(
+        string apkPath,
+        ApkSigningOptions options,
+        CancellationToken cancellationToken)
+    {
+        var descriptors = new List<EntryDescriptor>();
+        long totalUncompressed = 0;
+        long manifestBudget = 0;
+        using (var stream = new FileStream(apkPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferBytes, FileOptions.SequentialScan))
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var read = input.Read(buffer.AsSpan(0, (int)Math.Min(buffer.Length, remaining)));
-            if (read == 0) throw new EndOfStreamException("Truncated APK entry. APK 条目被截断。");
-            hash.Append(buffer.AsSpan(0, read));
-            remaining -= read;
+            var archiveIndex = 0;
+            foreach (var entry in archive.Entries)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (string.IsNullOrEmpty(entry.Name) && entry.FullName.EndsWith('/'))
+                {
+                    archiveIndex++;
+                    continue;
+                }
+
+                if (entry.FullName.Contains('\r') || entry.FullName.Contains('\n') || entry.FullName.Contains('\0'))
+                    throw new InvalidDataException("Invalid JAR entry name. JAR 条目名称无效。");
+                if (options.StripExistingSignatures && ApkEntryStripper.IsV1SignatureEntry(entry.FullName))
+                {
+                    archiveIndex++;
+                    continue;
+                }
+
+                totalUncompressed = checked(totalUncompressed + entry.Length);
+                manifestBudget = checked(manifestBudget + System.Text.Encoding.UTF8.GetByteCount(entry.FullName) * 2L + 256);
+                if (totalUncompressed > 64L * 1024 * 1024 * 1024 || manifestBudget > 32 * 1024 * 1024)
+                    throw new InvalidDataException("APK signing input exceeds the decompression or manifest budget. APK 签名输入超过解压或清单预算。");
+                descriptors.Add(new EntryDescriptor(archiveIndex, entry.FullName, entry.Length));
+                archiveIndex++;
+            }
         }
-        if (input.ReadByte() != -1) throw new InvalidDataException("APK entry exceeds its declared size. APK 条目超过声明长度。");
-        return hash.GetHashAndReset();
+
+        var digests = HashEntries(apkPath, descriptors, cancellationToken);
+        var entries = new List<(string Name, byte[] Sha256Digest)>(descriptors.Count);
+        for (var i = 0; i < descriptors.Count; i++)
+        {
+            entries.Add((descriptors[i].Name, digests[i]));
+        }
+
+        entries.Sort(static (a, b) => string.CompareOrdinal(a.Name, b.Name));
+        return entries;
+    }
+
+    private static byte[][] HashEntries(
+        string apkPath,
+        IReadOnlyList<EntryDescriptor> descriptors,
+        CancellationToken cancellationToken)
+    {
+        var digests = new byte[descriptors.Count][];
+        if (descriptors.Count == 0)
+        {
+            return digests;
+        }
+
+        var workers = Math.Min(Environment.ProcessorCount, MaximumHashWorkers);
+        if (workers <= 1 || descriptors.Count == 1)
+        {
+            using var stream = new FileStream(apkPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferBytes, FileOptions.SequentialScan);
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+            HashEntryRange(archive, descriptors, 0, descriptors.Count, digests, cancellationToken);
+            return digests;
+        }
+
+        try
+        {
+            Parallel.For(0, workers, new ParallelOptions
+            {
+                MaxDegreeOfParallelism = workers,
+                CancellationToken = cancellationToken,
+            }, worker =>
+            {
+                var start = (int)((long)worker * descriptors.Count / workers);
+                var end = (int)((long)(worker + 1) * descriptors.Count / workers);
+                if (start >= end)
+                {
+                    return;
+                }
+
+                using var stream = new FileStream(apkPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferBytes, FileOptions.SequentialScan);
+                using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+                HashEntryRange(archive, descriptors, start, end, digests, cancellationToken);
+            });
+        }
+        catch (AggregateException exception)
+        {
+            ExceptionDispatchInfo.Capture(exception.Flatten().InnerExceptions[0]).Throw();
+            throw;
+        }
+
+        return digests;
+    }
+
+    private static void HashEntryRange(
+        ZipArchive archive,
+        IReadOnlyList<EntryDescriptor> descriptors,
+        int start,
+        int end,
+        byte[][] digests,
+        CancellationToken cancellationToken)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(CopyBufferBytes);
+        using var hash = Sha256.CreateAccumulator();
+        try
+        {
+            for (var i = start; i < end; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var descriptor = descriptors[i];
+                var entry = archive.Entries[descriptor.ArchiveIndex];
+                if (!string.Equals(entry.FullName, descriptor.Name, StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException("APK entries changed while signing. 签名期间 APK 条目发生变化。");
+                }
+
+                using var entryStream = entry.Open();
+                var remaining = descriptor.Length;
+                while (remaining > 0)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var read = entryStream.Read(buffer.AsSpan(0, (int)Math.Min(buffer.Length, remaining)));
+                    if (read == 0) throw new EndOfStreamException("Truncated APK entry. APK 条目被截断。");
+                    hash.Append(buffer.AsSpan(0, read));
+                    remaining -= read;
+                }
+                if (entryStream.ReadByte() != -1) throw new InvalidDataException("APK entry exceeds its declared size. APK 条目超过声明长度。");
+
+                var digest = new byte[hash.HashLengthInBytes];
+                hash.GetHashAndReset(digest);
+                digests[i] = digest;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     private static void InsertSigningBlock(
@@ -215,7 +339,7 @@ public static class ApkSigner
         ApkSigningOptions options,
         CancellationToken cancellationToken)
     {
-        using var input = new FileStream(inputApk, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
+        using var input = new FileStream(inputApk, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferBytes, FileOptions.SequentialScan);
         var sections = ApkZipSections.Locate(input);
 
         var zipContentLength = sections.CentralDirectoryOffset;
@@ -236,13 +360,21 @@ public static class ApkSigner
         var newCentralDirectoryOffset = checked((uint)(zipContentLength + block.Length));
 
         var patchedEocd = (byte[])eocd.Clone();
-        BinaryPrimitives.WriteUInt32LittleEndian(patchedEocd.AsSpan(16, 4), (uint)newCentralDirectoryOffset);
+        BinaryPrimitives.WriteUInt32LittleEndian(patchedEocd.AsSpan(16, 4), newCentralDirectoryOffset);
 
-        using var output = new FileStream(outputApk, FileMode.Create, FileAccess.Write, FileShare.None, 81920, FileOptions.SequentialScan);
-        CopyRange(input, output, 0, zipContentLength, cancellationToken);
-        output.Write(block);
-        CopyRange(input, output, sections.CentralDirectoryOffset, sections.CentralDirectorySize, cancellationToken);
-        output.Write(patchedEocd);
+        var buffer = ArrayPool<byte>.Shared.Rent(CopyBufferBytes);
+        try
+        {
+            using var output = new FileStream(outputApk, FileMode.Create, FileAccess.Write, FileShare.None, CopyBufferBytes, FileOptions.SequentialScan);
+            CopyRange(input, output, 0, zipContentLength, buffer, cancellationToken);
+            output.Write(block);
+            CopyRange(input, output, sections.CentralDirectoryOffset, sections.CentralDirectorySize, buffer, cancellationToken);
+            output.Write(patchedEocd);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     private static List<(uint Id, byte[] Value)> BuildSignaturePairs(
@@ -269,10 +401,9 @@ public static class ApkSigner
         return pairs;
     }
 
-    private static void CopyRange(Stream input, Stream output, long offset, long length, CancellationToken cancellationToken)
+    private static void CopyRange(Stream input, Stream output, long offset, long length, byte[] buffer, CancellationToken cancellationToken)
     {
         input.Seek(offset, SeekOrigin.Begin);
-        var buffer = new byte[81920];
         var remaining = length;
         while (remaining > 0)
         {
@@ -287,4 +418,6 @@ public static class ApkSigner
             remaining -= read;
         }
     }
+
+    private readonly record struct EntryDescriptor(int ArchiveIndex, string Name, long Length);
 }

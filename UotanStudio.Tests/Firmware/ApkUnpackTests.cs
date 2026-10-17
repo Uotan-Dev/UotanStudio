@@ -44,6 +44,29 @@ public class ApkUnpackTests
     }
 
     [Fact]
+    public async Task Unpack_WithUnparsableResourceTable_ExtractsEntriesWithoutReadingIt()
+    {
+        var path = CreateApk(archive =>
+        {
+            using (var entry = archive.CreateEntry("classes.dex").Open()) entry.Write([1, 2, 3, 4]);
+            using (var entry = archive.CreateEntry("resources.arsc").Open()) entry.Write(new byte[64]);
+        });
+        var output = Path.Combine(Path.GetTempPath(), "apk-unpack-out-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var result = await new ApkFormatHandler().UnpackAsync(path, output, cancellationToken: TestContext.Current.CancellationToken);
+            Assert.True(result.Success, result.Summary);
+            Assert.Equal([1, 2, 3, 4], await File.ReadAllBytesAsync(Path.Combine(output, "classes.dex"), TestContext.Current.CancellationToken));
+            Assert.True(File.Exists(Path.Combine(output, "apk-metadata.txt")));
+        }
+        finally
+        {
+            File.Delete(path);
+            if (Directory.Exists(output)) Directory.Delete(output, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Unpack_RejectsEntryEscapingOutputDirectory()
     {
         var path = CreateApk(archive =>

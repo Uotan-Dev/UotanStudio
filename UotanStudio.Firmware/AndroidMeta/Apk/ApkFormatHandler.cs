@@ -116,7 +116,7 @@ internal sealed class ApkFormatHandler : IFormatHandler
                 return FirmwareOpResult.Fail("Output directory is empty");
             }
 
-            var info = ApkParser.Analyze(filePath);
+            var info = ApkParser.AnalyzeForUnpack(filePath);
             Directory.CreateDirectory(outputDirectory);
             var metadataDirectory = RepackMetadata.DefaultMetadataRoot is { Length: > 0 } root
                 ? Path.Combine(root, RepackMetadata.DetectPartitionName(Path.GetFileName(filePath)))

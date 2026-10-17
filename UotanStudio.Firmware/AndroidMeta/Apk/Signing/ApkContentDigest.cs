@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using UotanStudio.Hash.Digests;
@@ -67,40 +68,26 @@ internal static class ApkContentDigest
         var patchedEocd = (byte[])eocd.Clone();
         BinaryPrimitives.WriteUInt32LittleEndian(patchedEocd.AsSpan(16, 4), (uint)patchedCentralDirectoryOffset);
 
-        var chunkCountZip = CountChunks(zipContentLength);
-        var chunkCountCd = CountChunks(centralDirectoryLength);
-        var chunkCountEocd = CountChunks(patchedEocd.Length);
-        var totalChunks = checked((int)(chunkCountZip + chunkCountCd + chunkCountEocd));
-
-        using var topLevel = CreateAccumulator(hashName);
-        var digestSize = topLevel.HashLengthInBytes;
-        var perChunkDigests = new byte[checked(totalChunks * digestSize)];
-        var filled = 0;
-
-        filled = AppendSectionDigests(apkStream, 0, zipContentLength, hashName, perChunkDigests, filled, cancellationToken);
-        filled = AppendSectionDigests(apkStream, centralDirectoryReadOffset, centralDirectoryLength, hashName, perChunkDigests, filled, cancellationToken);
-        filled = AppendDigestOf(patchedEocd, 0, patchedEocd.Length, hashName, perChunkDigests, filled);
-        if (filled != perChunkDigests.Length)
-        {
-            throw new InvalidOperationException("Chunk digest buffer was not filled exactly. 分块摘要缓冲区未被精确填满。");
-        }
-
-        topLevel.Append(TopPrefix(totalChunks));
-        topLevel.Append(perChunkDigests);
-        return topLevel.GetHashAndReset();
+        using var builder = new ApkContentDigestBuilder(hashName);
+        AppendStreamSection(builder, apkStream, 0, zipContentLength, cancellationToken);
+        builder.BeginSection();
+        AppendStreamSection(builder, apkStream, centralDirectoryReadOffset, centralDirectoryLength, cancellationToken);
+        builder.BeginSection();
+        builder.Append(patchedEocd);
+        return builder.Complete();
     }
 
     /// <summary>
     /// Creates the accumulator whose algorithm matches the APK signer's hash name, keeping the
-    /// unsupported-name failure identical to the algorithm lookup it replaces.
-    /// <para>创建与 APK 签名器哈希名称同算法的累加器，名称不受支持时的失败与被替换的算法查找完全一致。</para>
+    /// unsupported-name failure identical for every digest consumer.
+    /// <para>创建与 APK 签名器哈希名称同算法的累加器，使所有摘要调用方得到一致的不支持名称失败。</para>
     /// </summary>
     /// <param name="hashName">Hash algorithm name ("SHA256"/"SHA512").
     /// <para>哈希算法名称（"SHA256"/"SHA512"）。</para></param>
     /// <returns>An accumulator fixed to that algorithm. <para>固定为该算法的累加器。</para></returns>
     /// <exception cref="CryptographicException">The name is outside the known hash algorithm set.
     /// <para>该名称不在已知哈希算法集合内。</para></exception>
-    private static DigestAccumulator CreateAccumulator(string hashName) => hashName switch
+    internal static DigestAccumulator CreateAccumulator(string hashName) => hashName switch
     {
         "MD5" => Md5.CreateAccumulator(),
         "SHA1" => Sha1.CreateAccumulator(),
@@ -110,109 +97,35 @@ internal static class ApkContentDigest
         _ => throw new CryptographicException($"'{hashName}' is not a known hash algorithm."),
     };
 
-    private static long CountChunks(long length) =>
-        (length + ApkSignatureConstants.ContentDigestChunkSize - 1) / ApkSignatureConstants.ContentDigestChunkSize;
-
-    private static byte[] TopPrefix(int count)
-    {
-        var prefix = new byte[5];
-        prefix[0] = 0x5a;
-        BinaryPrimitives.WriteUInt32LittleEndian(prefix.AsSpan(1, 4), (uint)count);
-        return prefix;
-    }
-
-    /// <summary>
-    /// Appends per-chunk digests of a stream section into the digest buffer, returning the new fill position.
-    /// <para>把流区段的各分块摘要写入摘要缓冲区，返回新的填充位置。</para>
-    /// </summary>
-    private static int AppendSectionDigests(
-        Stream stream, long offset, long length, string hashName, byte[] digests, int filled, CancellationToken cancellationToken)
+    private static void AppendStreamSection(
+        ApkContentDigestBuilder builder, Stream stream, long offset, long length, CancellationToken cancellationToken)
     {
         if (length == 0)
         {
-            return filled;
+            return;
         }
 
-        const long chunkSize = ApkSignatureConstants.ContentDigestChunkSize;
-        var buffer = new byte[chunkSize];
-        var remaining = length;
-        var position = offset;
-        while (remaining > 0)
+        var buffer = ArrayPool<byte>.Shared.Rent(81920);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var chunkLength = (int)Math.Min(buffer.Length, remaining);
-            filled = AppendChunkDigest(stream, position, chunkLength, hashName, digests, filled, buffer);
-            position += chunkLength;
-            remaining -= chunkLength;
-        }
-
-        return filled;
-    }
-
-    /// <summary>
-    /// Appends per-chunk digests of an in-memory section into the digest buffer.
-    /// <para>把内存区段的各分块摘要写入摘要缓冲区。</para>
-    /// </summary>
-    private static int AppendDigestOf(
-        byte[] data, long offset, long length, string hashName, byte[] digests, int filled)
-    {
-        if (length == 0)
-        {
-            return filled;
-        }
-
-        const long chunkSize = ApkSignatureConstants.ContentDigestChunkSize;
-        var remaining = length;
-        var position = offset;
-        while (remaining > 0)
-        {
-            var chunkLength = (int)Math.Min(chunkSize, remaining);
-            filled = AppendChunkDigest(data, position, chunkLength, hashName, digests, filled);
-            position += chunkLength;
-            remaining -= chunkLength;
-        }
-
-        return filled;
-    }
-
-    private static int AppendChunkDigest(
-        Stream stream, long offset, int chunkLength, string hashName, byte[] digests, int filled, byte[]? buffer = null)
-    {
-        using var hash = CreateAccumulator(hashName);
-        hash.Append(ChunkPrefix(chunkLength));
-        if (chunkLength > 0)
-        {
-            var scratch = buffer ?? new byte[chunkLength];
             stream.Seek(offset, SeekOrigin.Begin);
-            stream.ReadExactly(scratch.AsSpan(0, chunkLength));
-            hash.Append(scratch.AsSpan(0, chunkLength));
+            var remaining = length;
+            while (remaining > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = stream.Read(buffer.AsSpan(0, (int)Math.Min(buffer.Length, remaining)));
+                if (read == 0)
+                {
+                    throw new EndOfStreamException("Unexpected end of stream while hashing APK sections. 计算 APK 区段摘要时流意外结束。");
+                }
+
+                builder.Append(buffer.AsSpan(0, read));
+                remaining -= read;
+            }
         }
-
-        var written = hash.GetHashAndReset();
-        written.CopyTo(digests, filled);
-        return checked(filled + written.Length);
-    }
-
-    private static int AppendChunkDigest(
-        byte[] data, long offset, int chunkLength, string hashName, byte[] digests, int filled)
-    {
-        using var hash = CreateAccumulator(hashName);
-        hash.Append(ChunkPrefix(chunkLength));
-        if (chunkLength > 0)
+        finally
         {
-            hash.Append(data.AsSpan(checked((int)offset), chunkLength));
+            ArrayPool<byte>.Shared.Return(buffer);
         }
-
-        var written = hash.GetHashAndReset();
-        written.CopyTo(digests, filled);
-        return checked(filled + written.Length);
-    }
-
-    private static byte[] ChunkPrefix(int length)
-    {
-        var prefix = new byte[5];
-        prefix[0] = 0xa5;
-        BinaryPrimitives.WriteUInt32LittleEndian(prefix.AsSpan(1, 4), (uint)length);
-        return prefix;
     }
 }

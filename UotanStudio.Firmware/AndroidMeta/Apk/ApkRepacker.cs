@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
@@ -187,30 +188,37 @@ internal static class ApkRepacker
     {
         using var centralDirectory = new MemoryStream();
         var entryCount = 0;
-
-        foreach (var (entryName, filePath, store, alignment) in entries)
+        var buffer = ArrayPool<byte>.Shared.Rent(81920);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var nameBytes = Encoding.UTF8.GetBytes(entryName);
-            var localHeaderOffset = checked((uint)output.Position);
-            (uint Crc, uint CompressedSize, uint UncompressedSize) sizes;
-
-            var extraBytes = BuildAlignmentExtra(output.Position + 30 + nameBytes.Length, alignment);
-
-            WriteLocalHeader(output, nameBytes, extraBytes, store, localHeaderOffset);
-            if (store)
+            foreach (var (entryName, filePath, store, alignment) in entries)
             {
-                sizes = CopyStored(output, filePath, cancellationToken);
-            }
-            else
-            {
-                sizes = CopyDeflated(output, filePath, options.CompressionLevel, cancellationToken);
-            }
+                cancellationToken.ThrowIfCancellationRequested();
+                var nameBytes = Encoding.UTF8.GetBytes(entryName);
+                var localHeaderOffset = checked((uint)output.Position);
+                (uint Crc, uint CompressedSize, uint UncompressedSize) sizes;
 
-            PatchLocalHeader(output, localHeaderOffset, sizes);
+                var extraBytes = BuildAlignmentExtra(output.Position + 30 + nameBytes.Length, alignment);
 
-            WriteCentralEntry(centralDirectory, entryName, nameBytes, store, localHeaderOffset, sizes);
-            entryCount++;
+                WriteLocalHeader(output, nameBytes, extraBytes, store, localHeaderOffset);
+                if (store)
+                {
+                    sizes = CopyStored(output, filePath, buffer, cancellationToken);
+                }
+                else
+                {
+                    sizes = CopyDeflated(output, filePath, options.CompressionLevel, buffer, cancellationToken);
+                }
+
+                PatchLocalHeader(output, localHeaderOffset, sizes);
+
+                WriteCentralEntry(centralDirectory, entryName, nameBytes, store, localHeaderOffset, sizes);
+                entryCount++;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
 
         var centralDirectoryOffset = output.Position;
@@ -296,7 +304,8 @@ internal static class ApkRepacker
         centralDirectory.Write(nameBytes);
     }
 
-    private static (uint Crc, uint CompressedSize, uint UncompressedSize) CopyStored(Stream output, string filePath, CancellationToken cancellationToken)
+    private static (uint Crc, uint CompressedSize, uint UncompressedSize) CopyStored(
+        Stream output, string filePath, byte[] buffer, CancellationToken cancellationToken)
     {
         using var input = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
         if (input.Length > uint.MaxValue)
@@ -305,7 +314,6 @@ internal static class ApkRepacker
         }
 
         var crc = new Crc32IeeeAccumulator();
-        var buffer = new byte[81920];
         int read;
         while ((read = input.Read(buffer)) > 0)
         {
@@ -318,7 +326,7 @@ internal static class ApkRepacker
     }
 
     private static (uint Crc, uint CompressedSize, uint UncompressedSize) CopyDeflated(
-        Stream output, string filePath, CompressionLevel level, CancellationToken cancellationToken)
+        Stream output, string filePath, CompressionLevel level, byte[] buffer, CancellationToken cancellationToken)
     {
         using var input = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
         if (input.Length > uint.MaxValue)
@@ -331,7 +339,6 @@ internal static class ApkRepacker
         var start = output.Position;
         using (var deflate = CompressionService.CreateCompressionStream(output, CompressionFormat.Deflate, new CompressionOptions { Level = ToUnifiedLevel(level) }))
         {
-            var buffer = new byte[81920];
             int read;
             while ((read = input.Read(buffer)) > 0)
             {

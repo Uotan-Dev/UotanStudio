@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.AndroidMeta.Apk.Signing;
@@ -18,6 +19,8 @@ public static class ApkEntryStripper
     private const ushort Utf8Flag = 0x0800;
     private const ushort DataDescriptorFlag = 0x0008;
     private const long MaximumCentralDirectoryBytes = 256L * 1024 * 1024;
+    private const int CopyBufferBytes = 81920;
+    private const int MaximumAlignmentPadding = 16384;
 
     /// <summary>
     /// Describes one rewrite pass over an APK's ZIP layer.
@@ -64,9 +67,9 @@ public static class ApkEntryStripper
         var tempPath = TempFileHelper.CreateAdjacentPath(outputApk);
         try
         {
-            using var input = new FileStream(inputApk, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
-            using var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, FileOptions.SequentialScan);
-            RewriteCore(input, output, request, cancellationToken);
+            using var input = new FileStream(inputApk, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferBytes, FileOptions.SequentialScan);
+            using var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, CopyBufferBytes, FileOptions.SequentialScan);
+            RewriteCore(input, output, request, cancellationToken, signing: null);
         }
         catch
         {
@@ -77,7 +80,73 @@ public static class ApkEntryStripper
         AtomicPublish.Publish(tempPath, outputApk);
     }
 
-    private static void RewriteCore(Stream input, Stream output, RewriteRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// Rewrites the input APK and inserts an APK Signing Block before the central directory in the
+    /// same pass: the v2/v3 content digest is folded from the bytes actually written, so the output
+    /// never has to be read back.
+    /// <para>在同一次重写中把 APK 签名分块插入中央目录之前：v2/v3 内容摘要由实际写出的字节累计，
+    /// 因此无需回读输出。</para>
+    /// </summary>
+    /// <param name="inputApk">Existing APK to read. <para>待读取的已存在 APK。</para></param>
+    /// <param name="outputApk">Destination path replaced atomically on success. <para>成功后原子替换的目标路径。</para></param>
+    /// <param name="request">Rewrite request describing stripping and appended entries.
+    /// <para>描述剔除与追加条目的重写请求。</para></param>
+    /// <param name="hashName">Hash algorithm name of the content digest ("SHA256"/"SHA512").
+    /// <para>内容摘要的哈希算法名称（"SHA256"/"SHA512"）。</para></param>
+    /// <param name="signingBlockFactory">Builds the complete signing block from the computed content digest.
+    /// <para>由已计算的内容摘要构建完整签名分块。</para></param>
+    /// <param name="cancellationToken">Observed between entry copies and appended writes.
+    /// <para>在条目复制与追加写入之间生效。</para></param>
+    /// <exception cref="InvalidDataException">The central directory is corrupt or exceeds 256 MiB, a local
+    /// header signature is missing, or the archive exceeds the 32-bit ZIP limits.
+    /// <para>中央目录损坏或超过 256 MiB、本地文件头签名缺失，或归档超出 32 位 ZIP 上限。</para></exception>
+    /// <exception cref="OverflowException">A signing block shifts the central directory past 4 GiB.
+    /// <para>签名分块把中央目录推移到 4 GiB 之外。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
+    internal static void RewriteWithSigningBlock(
+        string inputApk,
+        string outputApk,
+        RewriteRequest request,
+        string hashName,
+        Func<byte[], byte[]> signingBlockFactory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(signingBlockFactory);
+        if (!File.Exists(inputApk))
+        {
+            throw new FileNotFoundException($"APK file not found: {inputApk}. 未找到 APK 文件：{inputApk}", inputApk);
+        }
+
+        var directory = Path.GetDirectoryName(Path.GetFullPath(outputApk));
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var tempPath = TempFileHelper.CreateAdjacentPath(outputApk);
+        try
+        {
+            using var input = new FileStream(inputApk, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferBytes, FileOptions.SequentialScan);
+            using var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, CopyBufferBytes, FileOptions.SequentialScan);
+            using var digest = new ApkContentDigestBuilder(hashName);
+            RewriteCore(input, output, request, cancellationToken, new SigningInsertion(digest, signingBlockFactory));
+        }
+        catch
+        {
+            try { File.Delete(tempPath); } catch { }
+            throw;
+        }
+
+        AtomicPublish.Publish(tempPath, outputApk);
+    }
+
+    private static void RewriteCore(
+        Stream input,
+        Stream output,
+        RewriteRequest request,
+        CancellationToken cancellationToken,
+        SigningInsertion? signing)
     {
         var sections = ApkZipSections.Locate(input);
         if (sections.CentralDirectorySize > MaximumCentralDirectoryBytes)
@@ -133,37 +202,111 @@ public static class ApkEntryStripper
 
         kept.Sort(static (a, b) => a.LocalHeaderOffset.CompareTo(b.LocalHeaderOffset));
 
-        var newOffsets = new Dictionary<CentralRecord, uint>(kept.Count);
-        Span<byte> lengths = stackalloc byte[4];
-        foreach (var record in kept)
+        var scratch = ArrayPool<byte>.Shared.Rent(CopyBufferBytes);
+        var paddingZeros = ArrayPool<byte>.Shared.Rent(MaximumAlignmentPadding);
+        paddingZeros.AsSpan().Clear();
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (record.Method == 0)
+            var newOffsets = new Dictionary<CentralRecord, uint>(kept.Count);
+            Span<byte> lengths = stackalloc byte[4];
+            foreach (var record in kept)
             {
-                input.Position = record.LocalHeaderOffset + 26;
-                input.ReadExactly(lengths);
-                var headerLength = 30 + BinaryPrimitives.ReadUInt16LittleEndian(lengths)
-                    + BinaryPrimitives.ReadUInt16LittleEndian(lengths[2..]);
-                var oldDataOffset = record.LocalHeaderOffset + headerLength;
-                var alignment = record.Name.EndsWith(".so", StringComparison.Ordinal) ? 16384 : 4;
-                while (alignment > 1 && oldDataOffset % alignment != 0) alignment /= 2;
-                var padding = (int)((alignment - (output.Position + headerLength) % alignment) % alignment);
-                if (padding > 0) output.Write(new byte[padding]);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (record.Method == 0)
+                {
+                    input.Position = record.LocalHeaderOffset + 26;
+                    input.ReadExactly(lengths);
+                    var headerLength = 30 + BinaryPrimitives.ReadUInt16LittleEndian(lengths)
+                        + BinaryPrimitives.ReadUInt16LittleEndian(lengths[2..]);
+                    var oldDataOffset = record.LocalHeaderOffset + headerLength;
+                    var alignment = record.Name.EndsWith(".so", StringComparison.Ordinal) ? 16384 : 4;
+                    while (alignment > 1 && oldDataOffset % alignment != 0) alignment /= 2;
+                    var padding = (int)((alignment - (output.Position + headerLength) % alignment) % alignment);
+                    if (padding > 0)
+                    {
+                        WriteAndDigest(output, paddingZeros.AsSpan(0, padding), signing?.Digest);
+                    }
+                }
+                newOffsets[record] = checked((uint)output.Position);
+                CopyRawEntry(input, output, record, cancellationToken, scratch, signing?.Digest);
             }
-            newOffsets[record] = checked((uint)output.Position);
-            CopyRawEntry(input, output, record, cancellationToken);
-        }
 
-        var appended = new List<byte[]>();
-        foreach (var (name, content) in request.EntriesToAppend)
+            var appended = new List<byte[]>();
+            foreach (var (name, content) in request.EntriesToAppend)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var record = AppendStoredEntry(output, name, content, signing?.Digest);
+                appended.Add(BuildCentralRecord(record.name, record.crc, (uint)content.Length, (uint)content.Length, record.offset));
+            }
+
+            var centralDirectoryStart = output.Position;
+            var centralDirectorySize = SumCentralDirectoryBytes(records, request, appended);
+            if (centralDirectoryStart > uint.MaxValue || centralDirectorySize > uint.MaxValue)
+            {
+                throw new InvalidDataException("Rewritten APK exceeds the 32-bit ZIP size limit. 重写后的 APK 超出 32 位 ZIP 大小上限。");
+            }
+
+            var entryCount = kept.Count + appended.Count;
+            if (signing is null)
+            {
+                WriteCentralDirectory(output, records, request, newOffsets, centralDirectory, appended);
+                output.Write(BuildEocd(entryCount, centralDirectorySize, centralDirectoryStart));
+            }
+            else
+            {
+                using var centralDirectoryBuffer = new MemoryStream(checked((int)centralDirectorySize));
+                WriteCentralDirectory(centralDirectoryBuffer, records, request, newOffsets, centralDirectory, appended);
+                var centralDirectoryBytes = centralDirectoryBuffer.GetBuffer().AsSpan(0, (int)centralDirectoryBuffer.Length);
+
+                signing.Digest.BeginSection();
+                signing.Digest.Append(centralDirectoryBytes);
+                signing.Digest.BeginSection();
+                signing.Digest.Append(BuildEocd(entryCount, centralDirectorySize, centralDirectoryStart));
+                var block = signing.BuildBlock(signing.Digest.Complete());
+
+                var signedCentralDirectoryOffset = checked((uint)(centralDirectoryStart + block.Length));
+                output.Write(block);
+                output.Write(centralDirectoryBytes);
+                output.Write(BuildEocd(entryCount, centralDirectorySize, signedCentralDirectoryOffset));
+            }
+        }
+        finally
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var record = AppendStoredEntry(output, name, content);
-            appended.Add(BuildCentralRecord(record.name, record.crc, (uint)content.Length, (uint)content.Length, record.offset));
+            ArrayPool<byte>.Shared.Return(scratch);
+            ArrayPool<byte>.Shared.Return(paddingZeros);
+        }
+    }
+
+    private static long SumCentralDirectoryBytes(List<CentralRecord> records, RewriteRequest request, List<byte[]> appended)
+    {
+        long size = 0;
+        foreach (var record in records)
+        {
+            if (request.StripV1SignatureEntries && IsV1SignatureEntry(record.Name))
+            {
+                continue;
+            }
+
+            size += 46 + record.NameLength + record.ExtraLength + record.CommentLength;
         }
 
-        var centralDirectoryStart = output.Position;
-        long centralDirectorySize = 0;
+        foreach (var record in appended)
+        {
+            size += record.Length;
+        }
+
+        return size;
+    }
+
+    private static void WriteCentralDirectory(
+        Stream output,
+        List<CentralRecord> records,
+        RewriteRequest request,
+        Dictionary<CentralRecord, uint> newOffsets,
+        byte[] centralDirectory,
+        List<byte[]> appended)
+    {
+        Span<byte> patchedOffset = stackalloc byte[4];
         foreach (var record in records)
         {
             if (request.StripV1SignatureEntries && IsV1SignatureEntry(record.Name))
@@ -172,37 +315,40 @@ public static class ApkEntryStripper
             }
 
             var recordLength = 46 + record.NameLength + record.ExtraLength + record.CommentLength;
-            var patched = (byte[])centralDirectory.AsSpan(record.RecordStart, recordLength).ToArray();
-            BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(42, 4), newOffsets[record]);
-            output.Write(patched);
-            centralDirectorySize += recordLength;
+            var stored = centralDirectory.AsSpan(record.RecordStart, recordLength);
+            BinaryPrimitives.WriteUInt32LittleEndian(patchedOffset, newOffsets[record]);
+            output.Write(stored[..42]);
+            output.Write(patchedOffset);
+            output.Write(stored[46..]);
         }
 
         foreach (var appendedRecord in appended)
         {
             output.Write(appendedRecord);
-            centralDirectorySize += appendedRecord.Length;
         }
-
-        if (centralDirectoryStart > uint.MaxValue || centralDirectorySize > uint.MaxValue)
-        {
-            throw new InvalidDataException("Rewritten APK exceeds the 32-bit ZIP size limit. 重写后的 APK 超出 32 位 ZIP 大小上限。");
-        }
-
-        var entryCount = kept.Count + appended.Count;
-        Span<byte> eocd = stackalloc byte[22];
-        BinaryPrimitives.WriteUInt32LittleEndian(eocd, 0x06054b50);
-        BinaryPrimitives.WriteUInt16LittleEndian(eocd.Slice(4, 2), 0);
-        BinaryPrimitives.WriteUInt16LittleEndian(eocd.Slice(6, 2), 0);
-        BinaryPrimitives.WriteUInt16LittleEndian(eocd.Slice(8, 2), (ushort)entryCount);
-        BinaryPrimitives.WriteUInt16LittleEndian(eocd.Slice(10, 2), (ushort)entryCount);
-        BinaryPrimitives.WriteUInt32LittleEndian(eocd.Slice(12, 4), (uint)centralDirectorySize);
-        BinaryPrimitives.WriteUInt32LittleEndian(eocd.Slice(16, 4), (uint)centralDirectoryStart);
-        BinaryPrimitives.WriteUInt16LittleEndian(eocd.Slice(20, 2), 0);
-        output.Write(eocd);
     }
 
-    private static void CopyRawEntry(Stream input, Stream output, CentralRecord record, CancellationToken cancellationToken)
+    private static byte[] BuildEocd(int entryCount, long centralDirectorySize, long centralDirectoryOffset)
+    {
+        var eocd = new byte[22];
+        BinaryPrimitives.WriteUInt32LittleEndian(eocd, 0x06054b50);
+        BinaryPrimitives.WriteUInt16LittleEndian(eocd.AsSpan(4, 2), 0);
+        BinaryPrimitives.WriteUInt16LittleEndian(eocd.AsSpan(6, 2), 0);
+        BinaryPrimitives.WriteUInt16LittleEndian(eocd.AsSpan(8, 2), (ushort)entryCount);
+        BinaryPrimitives.WriteUInt16LittleEndian(eocd.AsSpan(10, 2), (ushort)entryCount);
+        BinaryPrimitives.WriteUInt32LittleEndian(eocd.AsSpan(12, 4), checked((uint)centralDirectorySize));
+        BinaryPrimitives.WriteUInt32LittleEndian(eocd.AsSpan(16, 4), checked((uint)centralDirectoryOffset));
+        BinaryPrimitives.WriteUInt16LittleEndian(eocd.AsSpan(20, 2), 0);
+        return eocd;
+    }
+
+    private static void CopyRawEntry(
+        Stream input,
+        Stream output,
+        CentralRecord record,
+        CancellationToken cancellationToken,
+        byte[] scratch,
+        ApkContentDigestBuilder? digest)
     {
         input.Seek(record.LocalHeaderOffset, SeekOrigin.Begin);
         Span<byte> header = stackalloc byte[30];
@@ -215,7 +361,7 @@ public static class ApkEntryStripper
         var nameLength = BinaryPrimitives.ReadUInt16LittleEndian(header.Slice(26, 2));
         var extraLength = BinaryPrimitives.ReadUInt16LittleEndian(header.Slice(28, 2));
         var rawLength = 30L + nameLength + extraLength + record.CompressedSize;
-        CopyRange(input, output, record.LocalHeaderOffset, rawLength, cancellationToken);
+        CopyRange(input, output, record.LocalHeaderOffset, rawLength, cancellationToken, scratch, digest);
 
         if ((record.Flags & DataDescriptorFlag) != 0)
         {
@@ -224,33 +370,47 @@ public static class ApkEntryStripper
             input.ReadExactly(peek);
             input.Seek(position, SeekOrigin.Begin);
             var descriptorLength = BinaryPrimitives.ReadUInt32LittleEndian(peek) == DataDescriptorSignature ? 16 : 12;
-            CopyRange(input, output, position, descriptorLength, cancellationToken);
+            CopyRange(input, output, position, descriptorLength, cancellationToken, scratch, digest);
         }
     }
 
-    private static void CopyRange(Stream input, Stream output, long offset, long length, CancellationToken cancellationToken)
+    private static void CopyRange(
+        Stream input,
+        Stream output,
+        long offset,
+        long length,
+        CancellationToken cancellationToken,
+        byte[] scratch,
+        ApkContentDigestBuilder? digest)
     {
         input.Seek(offset, SeekOrigin.Begin);
-        var buffer = new byte[81920];
         var remaining = length;
         while (remaining > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var read = input.Read(buffer.AsSpan(0, (int)Math.Min(buffer.Length, remaining)));
+            var read = input.Read(scratch.AsSpan(0, (int)Math.Min(scratch.Length, remaining)));
             if (read == 0)
             {
                 throw new EndOfStreamException("Unexpected EOF while copying APK entries. 复制 APK 条目时流意外结束。");
             }
 
-            output.Write(buffer.AsSpan(0, read));
+            WriteAndDigest(output, scratch.AsSpan(0, read), digest);
             remaining -= read;
         }
     }
 
-    private static (string name, uint crc, uint offset) AppendStoredEntry(Stream output, string entryName, byte[] content)
+    private static void WriteAndDigest(Stream output, ReadOnlySpan<byte> data, ApkContentDigestBuilder? digest)
+    {
+        output.Write(data);
+        digest?.Append(data);
+    }
+
+    private static (string name, uint crc, uint offset) AppendStoredEntry(
+        Stream output, string entryName, byte[] content, ApkContentDigestBuilder? digest)
     {
         var nameBytes = Encoding.UTF8.GetBytes(entryName);
         var localHeaderOffset = checked((uint)output.Position);
+        var crc = Crc32Of(content);
 
         Span<byte> header = stackalloc byte[30];
         BinaryPrimitives.WriteUInt32LittleEndian(header, LocalHeaderSignature);
@@ -258,16 +418,16 @@ public static class ApkEntryStripper
         BinaryPrimitives.WriteUInt16LittleEndian(header.Slice(6, 2), Utf8Flag);
         BinaryPrimitives.WriteUInt16LittleEndian(header.Slice(8, 2), 0);
         WriteDosTimestamp(header.Slice(10, 4));
-        BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(14, 4), Crc32Of(content));
+        BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(14, 4), crc);
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(18, 4), (uint)content.Length);
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(22, 4), (uint)content.Length);
         BinaryPrimitives.WriteUInt16LittleEndian(header.Slice(26, 2), (ushort)nameBytes.Length);
         BinaryPrimitives.WriteUInt16LittleEndian(header.Slice(28, 2), 0);
-        output.Write(header);
-        output.Write(nameBytes);
-        output.Write(content);
+        WriteAndDigest(output, header, digest);
+        WriteAndDigest(output, nameBytes, digest);
+        WriteAndDigest(output, content, digest);
 
-        return (entryName, Crc32Of(content), localHeaderOffset);
+        return (entryName, crc, localHeaderOffset);
     }
 
     private static byte[] BuildCentralRecord(string entryName, uint crc, uint compressedSize, uint uncompressedSize, uint localHeaderOffset)
@@ -325,6 +485,13 @@ public static class ApkEntryStripper
             || name.EndsWith(".RSA", StringComparison.OrdinalIgnoreCase)
             || name.EndsWith(".DSA", StringComparison.OrdinalIgnoreCase)
             || name.EndsWith(".EC", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class SigningInsertion(ApkContentDigestBuilder digest, Func<byte[], byte[]> buildBlock)
+    {
+        public ApkContentDigestBuilder Digest { get; } = digest;
+
+        public Func<byte[], byte[]> BuildBlock { get; } = buildBlock;
     }
 
     private sealed class CentralRecord

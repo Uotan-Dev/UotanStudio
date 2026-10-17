@@ -32,6 +32,24 @@ public static class ApkParser
     /// <para>分析指定路径的 APK 文件。</para>
     /// </example>
     public static ApkInfo Analyze(string apkPath, string? preferredLanguage = null)
+        => AnalyzeCore(apkPath, preferredLanguage, includeResourceMetadata: true);
+
+    /// <summary>
+    /// Reads only the manifest metadata, entry names, signature schemes and hardening markers of an
+    /// APK, skipping the resource table and icon reads that unpack does not consume.
+    /// <para>只读取 APK 的清单元数据、条目名、签名方案与加固标记，跳过解包不会消费的资源表与图标读取。</para>
+    /// </summary>
+    /// <param name="apkPath">Path to the APK on disk. <para>磁盘上的 APK 路径。</para></param>
+    /// <returns>A populated <see cref="ApkInfo"/> whose label and icon fields stay unresolved.
+    /// <para>已填充的 <see cref="ApkInfo"/>；其标签与图标字段保持未解析状态。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="apkPath"/> is <see langword="null"/>. <para><paramref name="apkPath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="FileNotFoundException">No file exists at <paramref name="apkPath"/>. <para><paramref name="apkPath"/> 处没有文件。</para></exception>
+    /// <exception cref="InvalidDataException">The ZIP is malformed, or the manifest entry exceeds its read limit. <para>ZIP 结构非法，或清单条目超出读取上限。</para></exception>
+    /// <exception cref="AXmlException">The embedded binary-XML manifest cannot be parsed. <para>内嵌的二进制 XML 清单无法解析。</para></exception>
+    internal static ApkInfo AnalyzeForUnpack(string apkPath)
+        => AnalyzeCore(apkPath, preferredLanguage: null, includeResourceMetadata: false);
+
+    private static ApkInfo AnalyzeCore(string apkPath, string? preferredLanguage, bool includeResourceMetadata)
     {
         ArgumentNullException.ThrowIfNull(apkPath);
         var info = new ApkInfo { FilePath = apkPath };
@@ -71,6 +89,10 @@ public static class ApkParser
             ExtractManifest(doc, info);
         }
 
+        if (!includeResourceMetadata)
+        {
+            return info;
+        }
 
         var arscEntry = zip.GetEntry("resources.arsc");
         if (arscEntry is not null)
