@@ -12,9 +12,9 @@ namespace UotanStudio.Mcp.Tools;
 /// flashing/wiping/rebooting tools registered only under <c>--allow-flash</c>.
 /// <para>构建设备域 MCP 工具：默认仅注册发现与只读操作；刷写/擦除/重启类工具仅在
 /// <c>--allow-flash</c> 下注册。</para>
-/// ADB operations go through the local adb server (<see cref="UotanStudio.Comm.Protocols.Adb.AdbServerServices"/>)
+/// ADB operations go through the local adb server (<see cref="Comm.Protocols.Adb.AdbServerServices"/>)
 /// so the MCP process and the desktop app never fight over direct USB sessions for the same device.
-/// <para>ADB 操作走本地 adb server（<see cref="UotanStudio.Comm.Protocols.Adb.AdbServerServices"/>），MCP 进程与桌面应用不会
+/// <para>ADB 操作走本地 adb server（<see cref="Comm.Protocols.Adb.AdbServerServices"/>），MCP 进程与桌面应用不会
 /// 争抢同一设备的原生 USB 会话。</para>
 /// Every delegate ends with the ambient <see cref="CancellationToken"/> the MCP server binds itself, and
 /// the flashing tool adds the ambient <see cref="IProgress{T}"/> because its Fastboot download reports byte

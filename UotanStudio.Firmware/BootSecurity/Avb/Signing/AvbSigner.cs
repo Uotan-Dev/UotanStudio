@@ -432,11 +432,11 @@ public static partial class AvbSigner
     /// <para>从 PEM 或 DER 文件加载 RSA 私钥。</para>
     /// </summary>
     /// <param name="path">
-    /// Key file path; PEM is tried first through <see cref="RSA.ImportFromPem(System.ReadOnlySpan{char})"/>, then DER limited to 4 MiB through
-    /// <see cref="RSA.ImportRSAPrivateKey(System.ReadOnlySpan{byte}, out int)"/> and <see cref="RSA.ImportPkcs8PrivateKey(System.ReadOnlySpan{byte}, out int)"/>.
+    /// Key file path; PEM is tried first through <see cref="RSA.ImportFromPem(ReadOnlySpan{char})"/>, then DER limited to 4 MiB through
+    /// <see cref="RSA.ImportRSAPrivateKey(ReadOnlySpan{byte}, out int)"/> and <see cref="RSA.ImportPkcs8PrivateKey(ReadOnlySpan{byte}, out int)"/>.
     /// A blank or missing path yields <see langword="null"/>.
-    /// <para>密钥文件路径；先按 PEM 经 <see cref="RSA.ImportFromPem(System.ReadOnlySpan{char})"/> 尝试，再按至多 4 MiB 的 DER 经
-    /// <see cref="RSA.ImportRSAPrivateKey(System.ReadOnlySpan{byte}, out int)"/> 与 <see cref="RSA.ImportPkcs8PrivateKey(System.ReadOnlySpan{byte}, out int)"/> 尝试。
+    /// <para>密钥文件路径；先按 PEM 经 <see cref="RSA.ImportFromPem(ReadOnlySpan{char})"/> 尝试，再按至多 4 MiB 的 DER 经
+    /// <see cref="RSA.ImportRSAPrivateKey(ReadOnlySpan{byte}, out int)"/> 与 <see cref="RSA.ImportPkcs8PrivateKey(ReadOnlySpan{byte}, out int)"/> 尝试。
     /// 空白或不存在的路径返回 <see langword="null"/>。</para>
     /// </param>
     /// <returns>The private key, or <see langword="null"/> when the file cannot be read or is not a parseable RSA private key; no exception escapes.

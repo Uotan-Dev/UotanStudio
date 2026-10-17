@@ -137,7 +137,7 @@ public sealed partial class MtkSession
     /// <para><paramref name="hostInfo"/> 为 null。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="hostInfo"/> exceeds 256 characters.
     /// <para><paramref name="hostInfo"/> 超过 256 个字符。</para></exception>
-    /// <exception cref="System.Xml.XmlException"><paramref name="hostInfo"/> contains characters invalid in XML.
+    /// <exception cref="XmlException"><paramref name="hostInfo"/> contains characters invalid in XML.
     /// <para><paramref name="hostInfo"/> 包含 XML 非法字符。</para></exception>
     /// <exception cref="InvalidOperationException">No attached XML DA control stage is available.
     /// <para>没有可用的 XML DA 控制阶段。</para></exception>

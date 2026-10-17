@@ -75,12 +75,12 @@ internal static class ToolJson
 /// </summary>
 /// <remarks>
 /// <see cref="ToResult"/> publishes the envelope twice: the JSON text stays for clients that already
-/// parse it, while <see cref="ModelContextProtocol.Protocol.CallToolResult.IsError"/> and
-/// <see cref="ModelContextProtocol.Protocol.CallToolResult.StructuredContent"/> give conforming clients
+/// parse it, while <see cref="CallToolResult.IsError"/> and
+/// <see cref="CallToolResult.StructuredContent"/> give conforming clients
 /// an authoritative failure flag and typed data without string parsing.
 /// <para><see cref="ToResult"/> 双写该信封：JSON 文本保留给已按文本解析的客户端，而
-/// <see cref="ModelContextProtocol.Protocol.CallToolResult.IsError"/> 与
-/// <see cref="ModelContextProtocol.Protocol.CallToolResult.StructuredContent"/> 让合规客户端获得权威的失败标志
+/// <see cref="CallToolResult.IsError"/> 与
+/// <see cref="CallToolResult.StructuredContent"/> 让合规客户端获得权威的失败标志
 /// 与无需解析字符串的结构化数据。</para>
 /// </remarks>
 internal sealed record ToolResult(bool Success, string Summary, JsonElement? Data = null)

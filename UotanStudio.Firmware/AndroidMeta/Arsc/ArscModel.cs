@@ -160,7 +160,7 @@ public sealed class ResValue
     /// Invariant-culture display text, never <see langword="null"/>; complex values render as a map-count stub.
     /// <para>固定区域设置的显示文本，永不为 <see langword="null"/>；复杂值输出映射数量摘要。</para>
     /// </returns>
-    /// <exception cref="System.OverflowException">
+    /// <exception cref="OverflowException">
     /// The value is a string whose pool index exceeds <see cref="int.MaxValue"/>.
     /// <para>该值为字符串且其字符串池索引超出 <see cref="int.MaxValue"/>。</para>
     /// </exception>

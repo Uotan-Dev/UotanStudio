@@ -64,8 +64,8 @@ public sealed partial class OppReader
     /// <para>文件不存在。</para>
     /// </exception>
     /// <exception cref="OppException">
-    /// The package is unreadable, unrecognized or cannot be decrypted; concrete failures surface as subclasses such as <see cref="InvalidOppFormatException"/>, <see cref="UnsupportedOppVersionException"/> or <see cref="UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions.OppDecryptionException"/>.
-    /// <para>包不可读、无法识别或无法解密；具体失败以 <see cref="InvalidOppFormatException"/>、<see cref="UnsupportedOppVersionException"/> 或 <see cref="UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions.OppDecryptionException"/> 等子类抛出。</para>
+    /// The package is unreadable, unrecognized or cannot be decrypted; concrete failures surface as subclasses such as <see cref="InvalidOppFormatException"/>, <see cref="UnsupportedOppVersionException"/> or <see cref="OppDecryptionException"/>.
+    /// <para>包不可读、无法识别或无法解密；具体失败以 <see cref="InvalidOppFormatException"/>、<see cref="UnsupportedOppVersionException"/> 或 <see cref="OppDecryptionException"/> 等子类抛出。</para>
     /// </exception>
     public OppMetadata ReadMetadata(string filePath)
     {

@@ -36,7 +36,7 @@ public sealed class Extent : IMessage<Extent>
     /// <para>创建 <paramref name="other"/> 的副本，并包含其未知字段。</para></summary>
     /// <param name="other">Message whose field values and unknown fields are copied.
     /// <para>被复制字段值与未知字段的消息。</para></param>
-    /// <exception cref="System.NullReferenceException"><paramref name="other"/> is <see langword="null"/>.
+    /// <exception cref="NullReferenceException"><paramref name="other"/> is <see langword="null"/>.
     /// <para><paramref name="other"/> 为 <see langword="null"/>。</para></exception>
     public Extent(Extent other) : this()
     {
@@ -262,7 +262,7 @@ public sealed class PartitionInfo : IMessage<PartitionInfo>
     /// <para>创建 <paramref name="other"/> 的副本，并包含其未知字段。</para></summary>
     /// <param name="other">Message whose field values and unknown fields are copied.
     /// <para>被复制字段值与未知字段的消息。</para></param>
-    /// <exception cref="System.NullReferenceException"><paramref name="other"/> is <see langword="null"/>.
+    /// <exception cref="NullReferenceException"><paramref name="other"/> is <see langword="null"/>.
     /// <para><paramref name="other"/> 为 <see langword="null"/>。</para></exception>
     public PartitionInfo(PartitionInfo other) : this()
     {

@@ -321,8 +321,8 @@ public sealed class MetadataBuilder
     {
         /// <summary>Gets the partition name. <para>获取分区名称。</para></summary>
         /// <value>
-        /// The validated ASCII name passed to <see cref="MetadataBuilder.AddPartition"/>.
-        /// <para>即传给 <see cref="MetadataBuilder.AddPartition"/> 的已校验 ASCII 名称。</para>
+        /// The validated ASCII name passed to <see cref="AddPartition"/>.
+        /// <para>即传给 <see cref="AddPartition"/> 的已校验 ASCII 名称。</para>
         /// </value>
         public string Name { get; }
 

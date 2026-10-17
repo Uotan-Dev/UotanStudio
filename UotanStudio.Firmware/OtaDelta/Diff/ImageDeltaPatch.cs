@@ -171,11 +171,11 @@ internal static class ImageDeltaPatch
     /// <remarks>
     /// A DEFLATE chunk stores its compressor parameters next to the patch, and the applier has to reproduce the very
     /// same compressed bytes because the assembled image is checked against the recorded target hash. The in-box
-    /// <see cref="System.IO.Compression.DeflateStream"/> cannot honour that contract: on the recorded fixtures it emits
+    /// <see cref="DeflateStream"/> cannot honour that contract: on the recorded fixtures it emits
     /// 160 bytes at the chunk's level 6 where the patch records 87, so this single site stays on
     /// <see cref="SharpCompress.Compressors.Deflate.DeflateStream"/>, which the assembly already depends on for bzip2.
     /// <para>DEFLATE 数据块把压缩参数与补丁一并存储，应用端必须复现完全相同的压缩字节，因为组装后的镜像要与记录的目标
-    /// 哈希校验。内置的 <see cref="System.IO.Compression.DeflateStream"/> 无法满足该契约：在记录的夹具上，数据块等级 6
+    /// 哈希校验。内置的 <see cref="DeflateStream"/> 无法满足该契约：在记录的夹具上，数据块等级 6
     /// 会输出 160 字节，而补丁记录的是 87 字节；因此此唯一位点保留
     /// <see cref="SharpCompress.Compressors.Deflate.DeflateStream"/>，程序集本就为 bzip2 依赖它。</para>
     /// </remarks>

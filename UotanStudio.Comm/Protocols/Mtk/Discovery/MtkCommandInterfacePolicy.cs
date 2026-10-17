@@ -10,9 +10,9 @@ public enum MtkCommandInterfaceStatus
 {
     /// <summary>
     /// Exactly one interface passed every shape, class, and bound-endpoint check; its
-    /// <see cref="Transports.Usb.Abstractions.UsbInterfaceInfo.InterfaceNumber"/> is authoritative.
+    /// <see cref="UsbInterfaceInfo.InterfaceNumber"/> is authoritative.
     /// <para>恰好有一个接口通过全部形状、类与绑定端点检查；其
-    /// <see cref="Transports.Usb.Abstractions.UsbInterfaceInfo.InterfaceNumber"/> 即为权威结果。</para>
+    /// <see cref="UsbInterfaceInfo.InterfaceNumber"/> 即为权威结果。</para>
     /// </summary>
     Selected,
 

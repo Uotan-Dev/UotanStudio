@@ -77,8 +77,8 @@ public sealed class UfsProvisionProfile
     /// <param name="bodies">The per-LUN body descriptors, one command each; at least one is required.<para>每 LUN 主体描述符，每个生成一条命令；至少需要一条。</para></param>
     /// <param name="epilogue">The epilogue descriptor carrying the LUN to grow.<para>携带待扩容 LUN 的结语描述符。</para></param>
     /// <param name="commit">Whether the target persists the descriptors when the sequence completes; <see langword="false"/> leaves them pending until a later commit.<para>目标是否在序列完成时持久化描述符；<see langword="false"/> 表示待后续提交后才生效。</para></param>
-    /// <exception cref="System.ArgumentNullException"><paramref name="common"/>, <paramref name="bodies"/> or <paramref name="epilogue"/> is <see langword="null"/>, or one element of <paramref name="bodies"/> is <see langword="null"/>.<para><paramref name="common"/>、<paramref name="bodies"/> 或 <paramref name="epilogue"/> 为 <see langword="null"/>，或 <paramref name="bodies"/> 中某个元素为 <see langword="null"/>。</para></exception>
-    /// <exception cref="System.IO.InvalidDataException">A descriptor exceeds a bound on this type or a range the protocol enforces when it frames the commands.<para>某个描述符超出本类型的上限，或超出协议成帧时强制的范围。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="common"/>, <paramref name="bodies"/> or <paramref name="epilogue"/> is <see langword="null"/>, or one element of <paramref name="bodies"/> is <see langword="null"/>.<para><paramref name="common"/>、<paramref name="bodies"/> 或 <paramref name="epilogue"/> 为 <see langword="null"/>，或 <paramref name="bodies"/> 中某个元素为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidDataException">A descriptor exceeds a bound on this type or a range the protocol enforces when it frames the commands.<para>某个描述符超出本类型的上限，或超出协议成帧时强制的范围。</para></exception>
     public UfsProvisionProfile(UfsCommon common, IReadOnlyList<UfsBody> bodies, UfsEpilogue epilogue,
         bool commit = false)
     {
@@ -145,9 +145,9 @@ public sealed class UfsProvisionProfile
     /// </summary>
     /// <param name="lunZeroGeometry">The geometry read from the device for physical partition 0.
     /// <para>从设备读取的 0 号物理分区几何信息。</para></param>
-    /// <exception cref="System.ArgumentNullException"><paramref name="lunZeroGeometry"/> is <see langword="null"/>.
+    /// <exception cref="ArgumentNullException"><paramref name="lunZeroGeometry"/> is <see langword="null"/>.
     /// <para><paramref name="lunZeroGeometry"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="System.IO.InvalidDataException">The reported block width is not a UFS width, or a
+    /// <exception cref="InvalidDataException">The reported block width is not a UFS width, or a
     /// declared LUN size is not a whole number of the reported blocks.
     /// <para>上报的块宽度不是 UFS 宽度，或已声明的 LUN 大小不是上报块数的整数倍。</para></exception>
     public void ValidateAgainstGeometry(FirehoseStorageGeometry lunZeroGeometry)
@@ -179,9 +179,9 @@ public sealed class UfsProvisionProfile
     /// <param name="slot">The Firehose slot the sequence would be framed for. <para>该序列将成帧所使用的 Firehose 槽位。</para></param>
     /// <returns>The framed packets in send order: the common command, one body per LUN, then the epilogue.
     /// <para>按发送顺序排列的成帧数据包：公共命令、每 LUN 一条主体命令，最后是结语。</para></returns>
-    /// <exception cref="System.ArgumentOutOfRangeException"><paramref name="slot"/> is negative.
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="slot"/> is negative.
     /// <para><paramref name="slot"/> 为负数。</para></exception>
-    /// <exception cref="System.IO.InvalidDataException">The profile violates a protocol range.
+    /// <exception cref="InvalidDataException">The profile violates a protocol range.
     /// <para>配置文件违反协议范围。</para></exception>
     public IReadOnlyList<string> FrameCommands(int slot)
     {

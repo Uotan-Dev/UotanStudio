@@ -241,7 +241,7 @@ public interface IHdcForwardManager
     /// </param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="localPort"/> is outside the
     /// 1 to 65535 range. <para><paramref name="localPort"/> 不在 1 至 65535 范围内。</para></exception>
-    /// <exception cref="System.IO.IOException">The listen key already has a different open mapping.
+    /// <exception cref="IOException">The listen key already has a different open mapping.
     /// <para>该监听键已存在另一个不同的打开映射。</para></exception>
     void Add(int localPort, int remotePort, bool reverse = false, CancellationToken cancellationToken = default);
 

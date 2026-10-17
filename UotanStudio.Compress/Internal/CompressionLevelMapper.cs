@@ -14,9 +14,9 @@ internal static class CompressionLevelMapper
     /// <para>统一的 0-9 等级，为 <see langword="null"/> 时沿用 <paramref name="default"/>；不超过 0 选择不压缩，
     /// 1 至 3 选最快，9 及以上选最小体积，4 至 8 选最优。</para></param>
     /// <param name="default">Result returned when <paramref name="level"/> is <see langword="null"/>;
-    /// defaults to <see cref="System.IO.Compression.CompressionLevel.Optimal"/>.
+    /// defaults to <see cref="CompressionLevel.Optimal"/>.
     /// <para>当 <paramref name="level"/> 为 <see langword="null"/> 时的返回值；默认为
-    /// <see cref="System.IO.Compression.CompressionLevel.Optimal"/>。</para></param>
+    /// <see cref="CompressionLevel.Optimal"/>。</para></param>
     /// <returns>The equivalent built-in compression level.
     /// <para>等价的内置压缩等级。</para></returns>
     public static CompressionLevel ToBclCompressionLevel(int? level, CompressionLevel @default = CompressionLevel.Optimal)

@@ -10,11 +10,11 @@ namespace UotanStudio.Hash.Crc32Ieee;
 /// 本类型转发硬件加速实现，使产品中每种格式读到的数值一致。</para>
 /// </summary>
 /// <remarks>
-/// Use <see cref="UotanStudio.Hash.Crc32Register.Crc32Register"/> when a format needs a non-default register seed or
+/// Use <see cref="Crc32Register.Crc32Register"/> when a format needs a non-default register seed or
 /// must skip the final complement; the two families differ by exactly one bitwise complement and are separate types
 /// on purpose.
 /// <para>格式需要非默认寄存器初值或要求跳过末异或时，改用
-/// <see cref="UotanStudio.Hash.Crc32Register.Crc32Register"/>；两族恰好差一次按位取反，因此刻意拆成两个类型。</para>
+/// <see cref="Crc32Register.Crc32Register"/>；两族恰好差一次按位取反，因此刻意拆成两个类型。</para>
 /// </remarks>
 public static class Crc32Ieee
 {

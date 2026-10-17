@@ -15,7 +15,7 @@ namespace UotanStudio.Firmware.OtaDelta.Diff.Zucchini;
 /// operation-type classification a payload extractor can do up front cannot see it. This scanner therefore seeks to
 /// each <see cref="InstallOperation.Types.Type.Zucchini"/> blob, decodes it through
 /// <see cref="StrictBrotliReadStream"/>, and walks the header plus the element-header table using exactly the layout
-/// <see cref="ZucchiniPatchApplier.Apply(System.ReadOnlySpan{byte}, System.ReadOnlySpan{byte}, System.Span{byte})"/>
+/// <see cref="ZucchiniPatchApplier.Apply(ReadOnlySpan{byte}, ReadOnlySpan{byte}, Span{byte})"/>
 /// reads. It touches only the blob: it never opens the base image, never writes a destination extent, and keeps one
 /// reusable fixed-size buffer instead of materializing the decoded container. Decoding is capped at
 /// <see cref="MaximumDecodedBlobBytes"/>, the same ceiling the applying path enforces, and each element is charged at
@@ -24,7 +24,7 @@ namespace UotanStudio.Firmware.OtaDelta.Diff.Zucchini;
 /// <para>可执行类型位于 Brotli 压缩的 Zucchini 数据块内部，从不出现在 protobuf 清单里，因此提取器在事前能做的操作
 /// 类型分类看不到它。本扫描器于是定位到每个 <see cref="InstallOperation.Types.Type.Zucchini"/> 数据块，
 /// 经 <see cref="StrictBrotliReadStream"/> 解码，并按
-/// <see cref="ZucchiniPatchApplier.Apply(System.ReadOnlySpan{byte}, System.ReadOnlySpan{byte}, System.Span{byte})"/>
+/// <see cref="ZucchiniPatchApplier.Apply(ReadOnlySpan{byte}, ReadOnlySpan{byte}, Span{byte})"/>
 /// 读取的完全相同布局走一遍头部与元素头表。它只触碰数据块：从不打开基座镜像、从不写入目标 extent，
 /// 并保留一个可复用的固定大小缓冲区，而不是把解码后的容器整体物化。解码上限为
 /// <see cref="MaximumDecodedBlobBytes"/>，与应用路径强制的上限一致；每个元素至少按

@@ -63,11 +63,11 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
     /// <param name="checkSources">Whether source images must exist. <para>是否检查源镜像存在。</para></param>
     /// <returns>The first validation error message, or <see langword="null"/> when the plan is valid.
     /// <para>首条校验错误消息；计划合法时返回 <see langword="null"/>。</para></returns>
-    /// <exception cref="System.ArgumentException"><paramref name="planJson"/> is null, empty or whitespace.
+    /// <exception cref="ArgumentException"><paramref name="planJson"/> is null, empty or whitespace.
     /// <para><paramref name="planJson"/> 为 null、空或仅空白。</para></exception>
-    /// <exception cref="System.IO.InvalidDataException"><paramref name="planJson"/> is not a parsable delivery plan.
+    /// <exception cref="InvalidDataException"><paramref name="planJson"/> is not a parsable delivery plan.
     /// <para><paramref name="planJson"/> 不是可解析的交付计划。</para></exception>
-    /// <exception cref="System.OperationCanceledException">Validation observed a cancellation request; it is rethrown.
+    /// <exception cref="OperationCanceledException">Validation observed a cancellation request; it is rethrown.
     /// <para>校验过程中收到取消请求；该异常会被重新抛出。</para></exception>
     public static string? Validate(string planJson, bool checkSources = true)
     {
@@ -89,9 +89,9 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
     /// <para>描述预期输出的序列化 <c>DeliveryPlan</c> JSON。</para></param>
     /// <returns>A tuple of every planned output path and the subset already present on disk.
     /// <para>包含所有计划输出路径以及其中已存在于磁盘子集的元组。</para></returns>
-    /// <exception cref="System.ArgumentException"><paramref name="planJson"/> is null, empty or whitespace.
+    /// <exception cref="ArgumentException"><paramref name="planJson"/> is null, empty or whitespace.
     /// <para><paramref name="planJson"/> 为 null、空或仅空白。</para></exception>
-    /// <exception cref="System.IO.InvalidDataException"><paramref name="planJson"/> is not a parsable delivery plan.
+    /// <exception cref="InvalidDataException"><paramref name="planJson"/> is not a parsable delivery plan.
     /// <para><paramref name="planJson"/> 不是可解析的交付计划。</para></exception>
     public static (IReadOnlyList<string> Planned, IReadOnlyList<string> Existing) ListOutputs(string planJson)
     {
@@ -113,11 +113,11 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
     /// <param name="cancellationToken">Cancels an in-flight download or copy. <para>取消进行中的下载或复制。</para></param>
     /// <returns>A task that completes once the tools are materialized under the target <c>bin/</c> layout.
     /// <para>在目标 <c>bin/</c> 布局下完成工具物化后结束的任务。</para></returns>
-    /// <exception cref="System.ArgumentException"><paramref name="planJson"/> is null, empty or whitespace.
+    /// <exception cref="ArgumentException"><paramref name="planJson"/> is null, empty or whitespace.
     /// <para><paramref name="planJson"/> 为 null、空或仅空白。</para></exception>
-    /// <exception cref="System.IO.InvalidDataException">The plan cannot be parsed, or resolves to no writable target directory.
+    /// <exception cref="InvalidDataException">The plan cannot be parsed, or resolves to no writable target directory.
     /// <para>计划无法解析，或解析后没有可写的目标目录。</para></exception>
-    /// <exception cref="System.OperationCanceledException">The operation was canceled via <paramref name="cancellationToken"/>.
+    /// <exception cref="OperationCanceledException">The operation was canceled via <paramref name="cancellationToken"/>.
     /// <para>通过 <paramref name="cancellationToken"/> 取消了操作。</para></exception>
     public async Task PrepareToolsAsync(string planJson, string? directory = null,
         IProgress<string>? log = null, CancellationToken cancellationToken = default)
@@ -145,14 +145,14 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
     /// <param name="cancellationToken">Cancels an in-flight build or tool download. <para>取消进行中的构建或工具下载。</para></param>
     /// <returns>The absolute paths of the outputs produced by the build.
     /// <para>本次构建产出的输出绝对路径。</para></returns>
-    /// <exception cref="System.ArgumentException"><paramref name="planJson"/> is null, empty or whitespace.
+    /// <exception cref="ArgumentException"><paramref name="planJson"/> is null, empty or whitespace.
     /// <para><paramref name="planJson"/> 为 null、空或仅空白。</para></exception>
-    /// <exception cref="System.IO.InvalidDataException">The plan cannot be parsed.
+    /// <exception cref="InvalidDataException">The plan cannot be parsed.
     /// <para>计划无法解析。</para></exception>
-    /// <exception cref="System.InvalidOperationException">The plan requires signed output but no
+    /// <exception cref="InvalidOperationException">The plan requires signed output but no
     /// <see cref="IDeliverySigningKeyProvider"/> was injected.
     /// <para>计划需要签名输出，但未注入 <see cref="IDeliverySigningKeyProvider"/>。</para></exception>
-    /// <exception cref="System.OperationCanceledException">The operation was canceled via <paramref name="cancellationToken"/>.
+    /// <exception cref="OperationCanceledException">The operation was canceled via <paramref name="cancellationToken"/>.
     /// <para>通过 <paramref name="cancellationToken"/> 取消了操作。</para></exception>
     public async Task<IReadOnlyList<string>> BuildAsync(string planJson, IReadOnlySet<string>? overwrite = null,
         IProgress<DeliveryBuildProgress>? log = null, CancellationToken cancellationToken = default)

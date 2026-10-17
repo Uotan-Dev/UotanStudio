@@ -46,14 +46,14 @@ public sealed record DeviceCommunicationConfiguration
     }
 
     /// <summary>
-    /// Local ADB server host; the single definition lives in <see cref="Routing.DebugBridgeEndpoints"/>.
-    /// <para>本机 ADB server 主机；唯一定义位于 <see cref="Routing.DebugBridgeEndpoints"/>。</para>
+    /// Local ADB server host; the single definition lives in <see cref="DebugBridgeEndpoints"/>.
+    /// <para>本机 ADB server 主机；唯一定义位于 <see cref="DebugBridgeEndpoints"/>。</para>
     /// </summary>
     public const string ServerHost = DebugBridgeEndpoints.ServerHost;
 
     /// <summary>
-    /// Local ADB server port; the single definition lives in <see cref="Routing.DebugBridgeEndpoints"/>.
-    /// <para>本机 ADB server 端口；唯一定义位于 <see cref="Routing.DebugBridgeEndpoints"/>。</para>
+    /// Local ADB server port; the single definition lives in <see cref="DebugBridgeEndpoints"/>.
+    /// <para>本机 ADB server 端口；唯一定义位于 <see cref="DebugBridgeEndpoints"/>。</para>
     /// </summary>
     public const int AdbServerPort = DebugBridgeEndpoints.AdbServerPort;
 

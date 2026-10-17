@@ -29,8 +29,8 @@ public sealed class OppExtractOptions
     /// <summary>Exact archive entry names to extract; null extracts every entry.
     /// <para>要提取的归档条目全名；为 null 时提取全部条目。</para></summary>
     /// <value>
-    /// Exact archive entry names to extract, matched case-insensitively; <see langword="null"/> extracts every entry. A name matching no archive entry makes extraction fail with <see cref="UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions.InvalidOppFormatException"/>.
-    /// <para>要提取的归档条目全名，匹配时不区分大小写；为 <see langword="null"/> 时提取全部条目。若某个名称与任何归档条目都不匹配，提取将以 <see cref="UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions.InvalidOppFormatException"/> 失败。</para>
+    /// Exact archive entry names to extract, matched case-insensitively; <see langword="null"/> extracts every entry. A name matching no archive entry makes extraction fail with <see cref="Exceptions.InvalidOppFormatException"/>.
+    /// <para>要提取的归档条目全名，匹配时不区分大小写；为 <see langword="null"/> 时提取全部条目。若某个名称与任何归档条目都不匹配，提取将以 <see cref="Exceptions.InvalidOppFormatException"/> 失败。</para>
     /// </value>
     public IReadOnlyCollection<string>? SelectedEntries { get; init; }
 }

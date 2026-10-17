@@ -29,14 +29,14 @@ namespace UotanStudio.Comm.Transports.Tcp;
 /// CNXN 开始）交给 ADB 协议层。先宣告再读取，使无论设备先说还是我们先说都不会卡住，也让明文
 /// A_CNXN 不会落在设备仍当作握手来读的线路上。用非 A_STLS 头应答的设备没有提供 TLS，该头原样
 /// 交给协议层。按 AOSP trust-on-first-use 语义接受设备的自签服务端证书，不做校验。</para>
-/// <para>On Windows the platform stack (Schannel) rejects the pairing certificate because its private key is an
-/// ephemeral CNG key, so the handshake falls back to BouncyCastle TLS there. That fallback keeps the connection
-/// working but degrades <see cref="ReadAsync(byte[], int, int, int, CancellationToken)"/> and
+/// <para>On Windows the platform stack (Schannel) rejects the in-memory host identity certificate because its
+/// private key is an ephemeral CNG key, so the handshake falls back to BouncyCastle TLS there. That fallback keeps
+/// the connection working but degrades <see cref="ReadAsync(byte[], int, int, int, CancellationToken)"/> and
 /// <see cref="WriteAsync(byte[], int, int, int, CancellationToken)"/> to async-over-sync, because the BouncyCastle
 /// TLS stream exposes only synchronous reads and writes and therefore occupies a thread-pool thread per operation.
 /// Disconnecting or disposing the transport sends the TLS close_notify alert on that fallback path just as the
 /// platform stack does, ignoring teardown failures so that releasing the transport never fails.</para>
-/// <para>在 Windows 上平台栈（Schannel）会拒绝配对证书，因为其私钥是临时 CNG 密钥，因此该平台回退到
+/// <para>在 Windows 上平台栈（Schannel）会拒绝内存中派生的主机身份证书，因为其私钥是临时 CNG 密钥，因此该平台回退到
 /// BouncyCastle TLS。该回退保证连接可用，但会让 <see cref="ReadAsync(byte[], int, int, int, CancellationToken)"/>
 /// 与 <see cref="WriteAsync(byte[], int, int, int, CancellationToken)"/> 退化为 async-over-sync：
 /// BouncyCastle 的 TLS 流只提供同步读写，每次操作都会占用一个线程池线程。断开或释放传输时该回退路径与平台栈一样
@@ -86,8 +86,8 @@ internal sealed class AdbTlsTransport : ICommTransport
     /// <param name="host">Host name or IP address of the device. 设备的主机名或 IP 地址。</param>
     /// <param name="port">TCP port of the secure adbd service. adbd 安全服务的 TCP 端口。</param>
     /// <param name="clientCertificate">
-    /// The certificate registered on the device during pairing.
-    /// <para>配对阶段登记到设备上的证书。</para>
+    /// The certificate derived from the host identity key for this handshake.
+    /// <para>本次握手由主机身份密钥派生的证书。</para>
     /// </param>
     /// <param name="connectTimeoutMs">Connection timeout in milliseconds.
     /// 连接超时（毫秒）。</param>
@@ -352,15 +352,16 @@ internal sealed class AdbTlsTransport : ICommTransport
 
     /// <summary>
     /// Determines whether the platform TLS stack can present <paramref name="certificate"/>.
-    /// Windows Schannel rejects certificates whose private key is an ephemeral CNG key, which is exactly what the
-    /// pairing keystore produces, so the handshake is delegated to BouncyCastle there. The decision is taken before
-    /// any handshake byte is exchanged, because a failed handshake may already have written to the socket.
+    /// Windows Schannel rejects certificates whose private key is an ephemeral CNG key, which is exactly what a
+    /// certificate derived in memory from the host identity key carries, so the handshake is delegated to
+    /// BouncyCastle there. The decision is taken before any handshake byte is exchanged, because a failed
+    /// handshake may already have written to the socket.
     /// <para>判断平台 TLS 栈能否出示 <paramref name="certificate"/>。Windows Schannel 拒绝私钥为临时 CNG
-    /// 密钥的证书，而这正是配对密钥库产生的证书，因此该平台把握手交给 BouncyCastle。判定在任何握手字节交换
-    /// 之前完成，因为失败的握手可能已向套接字写入数据。</para>
+    /// 密钥的证书，而在内存中由主机身份密钥派生的证书正是如此，因此该平台把握手交给 BouncyCastle。判定在任何
+    /// 握手字节交换之前完成，因为失败的握手可能已向套接字写入数据。</para>
     /// </summary>
-    /// <param name="certificate">The client certificate registered during pairing.
-    /// <para>配对阶段登记的客户端证书。</para></param>
+    /// <param name="certificate">The client certificate derived from the host identity key.
+    /// <para>由主机身份密钥派生的客户端证书。</para></param>
     /// <returns><see langword="true"/> when the BouncyCastle TLS stack must be used.
     /// <para>必须使用 BouncyCastle TLS 栈时为 <see langword="true"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="certificate"/> is <see langword="null"/>.

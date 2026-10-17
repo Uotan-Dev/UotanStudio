@@ -58,7 +58,7 @@ public sealed partial class MtkSession
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="expectedEnvelopeName"/> is longer than 128 characters
     /// or <paramref name="timeoutMs"/> is out of bounds.
     /// <para><paramref name="expectedEnvelopeName"/> 超过 128 个字符，或 <paramref name="timeoutMs"/> 越界。</para></exception>
-    /// <exception cref="System.Xml.XmlException"><paramref name="expectedEnvelopeName"/> fails XML name validation.
+    /// <exception cref="XmlException"><paramref name="expectedEnvelopeName"/> fails XML name validation.
     /// <para><paramref name="expectedEnvelopeName"/> 未通过 XML 名称校验。</para></exception>
     public async Task<MtkXmlSlaReport> QueryXmlSlaStatusAsync(string? expectedEnvelopeName, int timeoutMs = 120000,
         CancellationToken cancellationToken = default)

@@ -53,11 +53,11 @@ public static class QcnReader
     /// The file exceeds the size limit.
     /// <para>文件超过大小上限。</para>
     /// </exception>
-    /// <exception cref="UotanStudio.Firmware.CompoundFile.InvalidCompoundFileMagicException">
+    /// <exception cref="InvalidCompoundFileMagicException">
     /// The file is not an OLE2/CFB container.
     /// <para>文件不是 OLE2/CFB 容器。</para>
     /// </exception>
-    /// <exception cref="UotanStudio.Firmware.CompoundFile.CompoundFileException">
+    /// <exception cref="CompoundFileException">
     /// The container structure is corrupted or unsupported.
     /// <para>容器结构损坏或不受支持。</para>
     /// </exception>

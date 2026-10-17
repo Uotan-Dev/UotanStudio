@@ -2,7 +2,7 @@ namespace UotanStudio.Firmware.Application.Equivalence;
 
 /// <summary>
 /// Tri-state outcome of one equivalence dimension, following the repository precedent where a
-/// <see cref="System.Nullable{T}"/> verification flag stays null when the check never ran: a dimension
+/// <see cref="Nullable{T}"/> verification flag stays null when the check never ran: a dimension
 /// that was not computed is reported as <see cref="NotEvaluated"/> and never defaults to
 /// <see cref="Equivalent"/>.
 /// <para>单一等价维度的三态结果，沿用仓库中“未执行的校验其可空标记保持为 null”的先例：未计算的维度报告为

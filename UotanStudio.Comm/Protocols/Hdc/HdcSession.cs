@@ -116,9 +116,9 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
 
     /// <summary>
     /// Creates a new HDC session over the specified device transport, using the
-    /// persistent default key (loaded from ~/.hdc/keys, generated when absent).
+    /// persistent default key (the upstream host identity at ~/.harmony/hdckey, generated when absent).
     /// <para>在指定设备传输上创建新的 HDC 会话，使用持久化的默认密钥
-    /// （从 ~/.hdc/keys 加载，不存在时生成）。</para>
+    /// （上游主机身份 ~/.harmony/hdckey，不存在时生成）。</para>
     /// </summary>
     /// <param name="transport">The device transport.<para>设备传输。</para></param>
     public HdcSession(ICommTransport transport)
@@ -134,7 +134,7 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
     /// 拥有并释放该身份。</para>
     /// </summary>
     /// <param name="transport">The device transport.<para>设备传输。</para></param>
-    /// <param name="authentication">The RSA-3072 authentication identity.<para>RSA-3072 认证身份。</para></param>
+    /// <param name="authentication">The HDC host authentication identity.<para>HDC 主机认证身份。</para></param>
     public HdcSession(ICommTransport transport, HdcAuthentication authentication)
     {
         if (transport is null) throw new ArgumentNullException(nameof(transport));

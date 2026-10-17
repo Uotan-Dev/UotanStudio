@@ -36,7 +36,7 @@ public sealed class RecoveryRamdiskMergeService
     /// <para>输出路径解析后与源 boot 镜像相同。</para></exception>
     /// <exception cref="InvalidDataException">An image lacks a ramdisk, or a ramdisk compression is
     /// unsupported, corrupt, or cannot be reproduced. <para>某镜像不含 ramdisk，或 ramdisk 压缩不受支持、已损坏、无法复现。</para></exception>
-    /// <exception cref="UotanStudio.Firmware.BootSecurity.BootImage.ImageParseException">
+    /// <exception cref="ImageParseException">
     /// Either boot image cannot be parsed. <para>任一 boot 镜像无法解析。</para></exception>
     public async Task<RecoveryRamdiskMergeResult> MergeAsync(
         string sourceBootPath, string recoveryPath, string outputPath,

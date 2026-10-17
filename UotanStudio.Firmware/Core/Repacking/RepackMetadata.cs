@@ -672,7 +672,7 @@ public sealed class RepackMetadata
     /// keeps its historical meaning and the ambient <see cref="DefaultMetadataRoot"/> applies;
     /// an explicit context supersedes <paramref name="metadataRoot"/> (mutually exclusive).
     /// <para><paramref name="context"/> 未指定（默认）时 <paramref name="metadataRoot"/> 保持原有
-    /// 语义并应用环境 <see cref="RepackMetadata.DefaultMetadataRoot"/>；显式上下文优先于
+    /// 语义并应用环境 <see cref="DefaultMetadataRoot"/>；显式上下文优先于
     /// <paramref name="metadataRoot"/>（两者互斥）。</para>
     /// </remarks>
     /// <param name="handler">

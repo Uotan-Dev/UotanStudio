@@ -11,9 +11,9 @@ namespace UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 /// Routing of an explicit key identifier follows its prefix: <c>MTK</c> selects the MediaTek provider,
 /// <c>mbox</c> the OPS provider, <c>OZ</c> the OZIP provider, and any other identifier the Qualcomm
 /// provider. A missing provider for the selected format is reported as
-/// <see cref="UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions.OppDecryptionException"/>.
+/// <see cref="Exceptions.OppDecryptionException"/>.
 /// <para>显式密钥标识符按前缀路由：<c>MTK</c> 选择联发科提供者，<c>mbox</c> 选择 OPS 提供者，<c>OZ</c> 选择 OZIP 提供者，
-/// 其余标识符选择高通提供者。所选格式没有注册提供者时报告为 <see cref="UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions.OppDecryptionException"/>。</para>
+/// 其余标识符选择高通提供者。所选格式没有注册提供者时报告为 <see cref="Exceptions.OppDecryptionException"/>。</para>
 /// </remarks>
 public interface IOppCryptoProvider
 {
@@ -28,9 +28,9 @@ public interface IOppCryptoProvider
     /// <para>按前缀路由的密钥标识符；为 <see langword="null"/> 时由已注册提供者推断密钥。</para></param>
     /// <returns>The plaintext as a newly allocated array.
     /// <para>以新分配数组返回的明文。</para></returns>
-    /// <exception cref="System.ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions.OppDecryptionException">No provider is registered for the format the
+    /// <exception cref="Exceptions.OppDecryptionException">No provider is registered for the format the
     /// identifier routes to, no key matches, or automatic inference found no key.
     /// <para>标识符路由到的格式未注册提供者、没有匹配的密钥，或自动推断未找到密钥。</para></exception>
     byte[] Decrypt(byte[] data, string? keyId = null);
@@ -46,9 +46,9 @@ public interface IOppCryptoProvider
     /// <para>按前缀路由的密钥标识符；为 <see langword="null"/> 会被拒绝，因为加密无法推断格式。</para></param>
     /// <returns>The ciphertext as a newly allocated array.
     /// <para>以新分配数组返回的密文。</para></returns>
-    /// <exception cref="System.ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions.OppDecryptionException"><paramref name="keyId"/> is
+    /// <exception cref="Exceptions.OppDecryptionException"><paramref name="keyId"/> is
     /// <see langword="null"/>, the target format is decryption-only, or no key matches.
     /// <para><paramref name="keyId"/> 为 <see langword="null"/>、目标格式仅支持解密，或没有匹配的密钥。</para></exception>
     byte[] Encrypt(byte[] data, string? keyId = null);
@@ -67,10 +67,10 @@ public interface IOppCryptoProvider
     /// <param name="cancellationToken">Observed by providers whose transformation supports cancellation;
     /// a provider that buffers the whole payload checks it, if at all, before reading.
     /// <para>由支持取消的转换实现负责观察；整体缓冲负载的提供者至多在读取前检查一次。</para></param>
-    /// <exception cref="System.ArgumentNullException"><paramref name="input"/> or
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or
     /// <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions.OppDecryptionException">No provider or no key matches the routed
+    /// <exception cref="Exceptions.OppDecryptionException">No provider or no key matches the routed
     /// format, or inference found no key.
     /// <para>路由格式没有匹配的提供者或密钥，或推断未找到密钥。</para></exception>
     void Decrypt(Stream input, Stream output, string? keyId = null, CancellationToken cancellationToken = default);
@@ -88,10 +88,10 @@ public interface IOppCryptoProvider
     /// <para>按前缀路由的密钥标识符；为 <see langword="null"/> 会被拒绝，因为加密无法推断格式。</para></param>
     /// <param name="cancellationToken">Observed by providers whose transformation supports cancellation.
     /// <para>由支持取消的转换实现负责观察。</para></param>
-    /// <exception cref="System.ArgumentNullException"><paramref name="input"/> or
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or
     /// <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions.OppDecryptionException"><paramref name="keyId"/> is
+    /// <exception cref="Exceptions.OppDecryptionException"><paramref name="keyId"/> is
     /// <see langword="null"/>, the target format is decryption-only, or no key matches.
     /// <para><paramref name="keyId"/> 为 <see langword="null"/>、目标格式仅支持解密，或没有匹配的密钥。</para></exception>
     void Encrypt(Stream input, Stream output, string? keyId = null, CancellationToken cancellationToken = default);
@@ -105,11 +105,11 @@ public interface IOppCryptoProvider
     /// <para>依次用各已注册提供者探测的密文缓冲，直到某个提供者产出被接受的明文；不会就地修改。</para></param>
     /// <returns>The plaintext from the first provider that accepts the buffer.
     /// <para>第一个接受该缓冲的提供者所产出的明文。</para></returns>
-    /// <exception cref="System.ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions.OppDecryptionException">No provider is registered, or none accepted
+    /// <exception cref="Exceptions.OppDecryptionException">No provider is registered, or none accepted
     /// the buffer. <para>未注册任何提供者，或没有任何提供者接受该缓冲。</para></exception>
-    /// <exception cref="System.ObjectDisposedException">The facade was disposed and rejects further work.
+    /// <exception cref="ObjectDisposedException">The facade was disposed and rejects further work.
     /// <para>门面已释放，拒绝后续操作。</para></exception>
     byte[] AutoDecrypt(byte[] data);
 
@@ -125,10 +125,10 @@ public interface IOppCryptoProvider
     /// <param name="cancellationToken">Declared for signature symmetry; this overload performs a single
     /// uncancellable copy and inference pass.
     /// <para>仅为签名对称而保留；该重载执行一次不可取消的复制与推断过程。</para></param>
-    /// <exception cref="System.ArgumentNullException"><paramref name="input"/> or
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or
     /// <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions.OppDecryptionException">No registered provider accepted the buffered
+    /// <exception cref="Exceptions.OppDecryptionException">No registered provider accepted the buffered
     /// payload. <para>没有任何已注册提供者接受缓冲后的负载。</para></exception>
     void AutoDecrypt(Stream input, Stream output, CancellationToken cancellationToken = default);
 
@@ -154,9 +154,9 @@ public interface IOppCryptoProvider
     /// <para><see cref="QcKeyEntry"/>、<see cref="MtkKeyEntry"/>、
     /// <see cref="OpsKeyEntry"/> 或 <see cref="OzipKeyEntry"/>；
     /// 所有接受该条目类型的提供者都会存储它。</para></param>
-    /// <exception cref="System.ArgumentNullException"><paramref name="keyEntry"/> is
+    /// <exception cref="ArgumentNullException"><paramref name="keyEntry"/> is
     /// <see langword="null"/>. <para><paramref name="keyEntry"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="System.ArgumentException"><paramref name="keyEntry"/> is of a type no registered
+    /// <exception cref="ArgumentException"><paramref name="keyEntry"/> is of a type no registered
     /// provider accepts. <para><paramref name="keyEntry"/> 的类型没有任何已注册提供者接受。</para></exception>
     void AddCustomKey(object keyEntry);
 
@@ -168,9 +168,9 @@ public interface IOppCryptoProvider
     /// discovered key material write nothing, and a provider that does write replaces any existing file at
     /// this path.
     /// <para>传给所有已注册提供者的目标路径；没有已探测密钥的提供者不写入内容，会写入的提供者则替换该路径上的已有文件。</para></param>
-    /// <exception cref="System.ArgumentException"><paramref name="filePath"/> is empty or consists only of
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is empty or consists only of
     /// white space. <para><paramref name="filePath"/> 为空或仅由空白字符组成。</para></exception>
-    /// <exception cref="System.ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>.
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>.
     /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
     void ExportDiscoveredKey(string filePath);
 

@@ -7,12 +7,12 @@ namespace UotanStudio.Firmware.FileSystem.Native;
 /// LGPL-2.1 terms apply to the shipped tool, not to this assembly); this class never writes a policy, never
 /// recompiles CIL, and every mutation path stays with <c>SelinuxSwitchService</c> in the boot-security workflow.
 /// CIL recompilation is deliberately out of scope. Captured output is bounded by the runner at 16384 characters
-/// and the parsed rule count is bounded by <see cref="NativeSepolicyTools.MaximumRules"/>.
+/// and the parsed rule count is bounded by <see cref="MaximumRules"/>.
 /// <para>通过外部的 <c>sesearch</c> 与 <c>seinfo</c> 二进制对 SELinux 策略做只读分析，组合（而非继承）
 /// <see cref="NativeFileSystemTools"/>，因此 Windows 在配置的 WSL 发行版内运行工具，且不存在第二条进程启动路径。
 /// 基于 libsepol 的二进制仅作为外部进程消费（其 LGPL-2.1 条款约束随附的工具而非本程序集）；本类从不写策略、
 /// 从不重编译 CIL，所有变更路径都保留在 boot-security 工作流的 <c>SelinuxSwitchService</c>。CIL 重编译明确不在范围内。
-/// 捕获输出由运行器限制在 16384 字符内，解析的规则数量受 <see cref="NativeSepolicyTools.MaximumRules"/> 约束。</para>
+/// 捕获输出由运行器限制在 16384 字符内，解析的规则数量受 <see cref="MaximumRules"/> 约束。</para>
 /// </summary>
 /// <param name="tools">Runner and path translator shared with the filesystem tools.
 /// <para>与文件系统工具共用的运行器与路径转换器。</para></param>

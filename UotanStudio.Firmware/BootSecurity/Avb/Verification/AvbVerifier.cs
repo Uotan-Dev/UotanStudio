@@ -67,8 +67,8 @@ public static class AvbVerifier
     /// Complete image bytes; fewer than one footer length never match. <para>完整镜像字节；不足一个尾部长度时永不匹配。</para>
     /// </param>
     /// <returns>
-    /// <see langword="true"/> when a footer of the supported layout loads from the buffer; otherwise <see langword="false"/>. Reading a <see langword="null"/> buffer raises <see cref="System.NullReferenceException"/>.
-    /// <para>当受支持布局的尾部能从缓冲区加载时为 <see langword="true"/>，否则为 <see langword="false"/>。对 <see langword="null"/> 缓冲区取值会引发 <see cref="System.NullReferenceException"/>。</para>
+    /// <see langword="true"/> when a footer of the supported layout loads from the buffer; otherwise <see langword="false"/>. Reading a <see langword="null"/> buffer raises <see cref="NullReferenceException"/>.
+    /// <para>当受支持布局的尾部能从缓冲区加载时为 <see langword="true"/>，否则为 <see langword="false"/>。对 <see langword="null"/> 缓冲区取值会引发 <see cref="NullReferenceException"/>。</para>
     /// </returns>
     public static bool IsSigned(byte[] imageData) => imageData.Length >= AvbFooter.Size && AvbFooter.TryLoad(imageData) != null;
 

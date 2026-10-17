@@ -43,12 +43,12 @@ public sealed partial class MtkSession
     /// </summary>
     /// <remarks>
     /// Only progress-report handling is advertised by default. When
-    /// <see cref="MtkSession.HostFileStore"/> is attached, the file transfer and filesystem
+    /// <see cref="HostFileStore"/> is attached, the file transfer and filesystem
     /// size callbacks are also declared and device-initiated requests are served through it;
     /// otherwise an unexpected request faults the session.
     /// Both complete command exchanges must succeed before advancing. This is the agent's
     /// acknowledgement, not a storage readiness or hardware interoperability guarantee.
-    /// <para>默认只声明进度上报处理能力。当附加了 <see cref="MtkSession.HostFileStore"/> 时，
+    /// <para>默认只声明进度上报处理能力。当附加了 <see cref="HostFileStore"/> 时，
     /// 文件传输和文件系统大小回调也会被声明，设备发起的请求会通过它得到服务；否则意外请求会使会话进入故障状态。
     /// 两次完整的命令交换都必须成功才能推进状态。这只是代理的确认，并非存储就绪或硬件互操作性的保证。</para>
     /// </remarks>

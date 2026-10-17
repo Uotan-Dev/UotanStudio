@@ -6,10 +6,10 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// Classification of a rejected Firehose response.
 /// <para>对被拒绝的 Firehose 响应所作的分类。</para>
 /// No oracle assigns a meaning to a numeric Firehose <c>value</c> attribute, so numeric and
-/// otherwise unknown values are reported as <see cref="FirehoseErrorKind.Unrecognized"/> with the
+/// otherwise unknown values are reported as <see cref="Unrecognized"/> with the
 /// raw text preserved instead of being mapped onto an invented table.
 /// <para>没有任何本地权威实现为 Firehose 的数值 <c>value</c> 属性赋予含义，因此数值与未知取值一律
-/// 报告为 <see cref="FirehoseErrorKind.Unrecognized"/> 并原样保留文本，而不是套用臆造的对照表。</para>
+/// 报告为 <see cref="Unrecognized"/> 并原样保留文本，而不是套用臆造的对照表。</para>
 /// </summary>
 public enum FirehoseErrorKind
 {

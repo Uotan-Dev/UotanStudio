@@ -123,8 +123,8 @@ public sealed class ProjectSettingsDto
     public Ext4CapacityPolicy? Ext4CapacityPolicy { get; set; }
 
     /// <summary>
-    /// Exact EXT4 capacity when <see cref="Ext4CapacityPolicy"/> is <see cref="Services.Projects.Ext4CapacityPolicy.Explicit"/>.
-    /// <para>当 <see cref="Ext4CapacityPolicy"/> 为 <see cref="Services.Projects.Ext4CapacityPolicy.Explicit"/> 时的精确 EXT4 容量。</para>
+    /// Exact EXT4 capacity when <see cref="Ext4CapacityPolicy"/> is <see cref="Ext4CapacityPolicy.Explicit"/>.
+    /// <para>当 <see cref="Ext4CapacityPolicy"/> 为 <see cref="Ext4CapacityPolicy.Explicit"/> 时的精确 EXT4 容量。</para>
     /// </summary>
     /// <value>
     /// Byte size applied in explicit mode; <see langword="null"/> under the other policies.

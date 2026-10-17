@@ -30,7 +30,7 @@ internal static class DeliverySigning
     /// Loads the RSA private key for a path; throws InvalidOperationException when no provider is configured, indicating signed output needs a key provider.
     /// <para>从路径加载 RSA 私钥；未配置 provider 时抛出 InvalidOperationException，表明签名输出需要密钥供应器。</para>
     /// </summary>
-    /// <exception cref="System.InvalidOperationException"><paramref name="provider"/> is <see langword="null"/>,
+    /// <exception cref="InvalidOperationException"><paramref name="provider"/> is <see langword="null"/>,
     /// so signed output cannot be produced.
     /// <para><paramref name="provider"/> 为 <see langword="null"/>，无法产出签名输出。</para></exception>
     internal static RSA Load(IDeliverySigningKeyProvider? provider, string path)

@@ -5,10 +5,10 @@ namespace UotanStudio.Hash.Crc32Register;
 /// <summary>
 /// Reflected CRC-32 (polynomial <c>0xEDB88320</c>) with register seed semantics and no final XOR, so non-standard
 /// initial values such as the F2FS superblock magic seed stay expressible.
-/// <see cref="UotanStudio.Hash.Crc32Ieee.Crc32Ieee"/> covers the IEEE 802.3 form instead; the two differ by exactly
+/// <see cref="Crc32Ieee.Crc32Ieee"/> covers the IEEE 802.3 form instead; the two differ by exactly
 /// one complement: <c>Crc32Ieee.Compute(data) == ~Compute(data, 0xFFFF_FFFF)</c>.
 /// <para>反射式 CRC-32（多项式 <c>0xEDB88320</c>），寄存器 seed 语义且无最终异或，因此可以表达 F2FS 超级块魔数种子
-/// 这类非标准初值。IEEE 802.3 标准式由 <see cref="UotanStudio.Hash.Crc32Ieee.Crc32Ieee"/> 承担，两者只差一次取反：
+/// 这类非标准初值。IEEE 802.3 标准式由 <see cref="Crc32Ieee.Crc32Ieee"/> 承担，两者只差一次取反：
 /// <c>Crc32Ieee.Compute(data) == ~Compute(data, 0xFFFF_FFFF)</c>。</para>
 /// </summary>
 /// <remarks>

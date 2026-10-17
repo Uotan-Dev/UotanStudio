@@ -37,7 +37,7 @@ internal sealed class SelinuxSwitchService
     /// <para>包含原始与更新后命令行的方案；先移除既有的 <c>androidboot.selinux=…</c> 和 <c>selinux=0</c>
     /// 标记，非 <see cref="SelinuxSwitchMode.Disable"/> 模式再追加对应的 <c>androidboot.selinux=…</c> 标记。</para>
     /// </returns>
-    /// <exception cref="UotanStudio.Firmware.BootSecurity.BootImage.ImageParseException">
+    /// <exception cref="ImageParseException">
     /// The boot image at <paramref name="bootPath"/> has an invalid header or magic.
     /// <para><paramref name="bootPath"/> 处的 boot 镜像头部或魔数无效。</para></exception>
     /// <exception cref="FileNotFoundException">No boot image exists at <paramref name="bootPath"/>.
@@ -67,7 +67,7 @@ internal sealed class SelinuxSwitchService
     /// <param name="cancellationToken">Cancels the write; the temporary file is deleted and the cancellation is rethrown.
     /// <para>取消写出；临时文件会被删除，取消异常会重新抛出。</para></param>
     /// <returns>A task completed once the repacked image is published. <para>重新打包的镜像发布完成后完成的任务。</para></returns>
-    /// <exception cref="UotanStudio.Firmware.BootSecurity.BootImage.ImageParseException">
+    /// <exception cref="ImageParseException">
     /// The boot image at <c>plan.BootPath</c> cannot be parsed.
     /// <para><c>plan.BootPath</c> 处的 boot 镜像无法解析。</para></exception>
     /// <exception cref="IOException">The temporary write or the move onto <paramref name="outputPath"/> failed.

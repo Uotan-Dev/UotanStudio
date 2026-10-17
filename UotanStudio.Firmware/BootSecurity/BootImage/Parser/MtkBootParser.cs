@@ -79,7 +79,7 @@ public class MtkBootParser : IDisposable
     /// <para>镜像文件路径，以 <c>FileShare.Read</c> 只读方式打开，返回前即关闭。</para></param>
     /// <exception cref="ImageParseException">The file is shorter than the 512-byte header or its magic does not match.
     /// <para>文件小于 512 字节头部或魔数不匹配。</para></exception>
-    /// <exception cref="System.IO.FileNotFoundException">The file does not exist.
+    /// <exception cref="FileNotFoundException">The file does not exist.
     /// <para>文件不存在。</para></exception>
     public void ParseFile(string filePath)
     {

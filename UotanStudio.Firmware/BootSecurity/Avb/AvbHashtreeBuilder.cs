@@ -280,9 +280,9 @@ internal static class AvbHashtreeBuilder
     /// <para><paramref name="stream"/> 不可读或不可定位。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">A block size is outside the supported power-of-two range.
     /// <para>某个块大小不在支持的二次幂范围内。</para></exception>
-    /// <exception cref="System.Security.Cryptography.CryptographicException">The SHA-256 digest could not be written.
+    /// <exception cref="CryptographicException">The SHA-256 digest could not be written.
     /// <para>无法写入 SHA-256 摘要。</para></exception>
-    /// <exception cref="System.OverflowException">The image or tree size exceeds the addressable range.
+    /// <exception cref="OverflowException">The image or tree size exceeds the addressable range.
     /// <para>镜像或哈希树大小超出可表示范围。</para></exception>
     public static AvbHashtreeResult Build(Stream stream, byte[]? salt, int dataBlockSize = 4096, int hashBlockSize = 4096)
         => BuildCore(stream, salt, dataBlockSize, hashBlockSize, SpillThresholdBytes);

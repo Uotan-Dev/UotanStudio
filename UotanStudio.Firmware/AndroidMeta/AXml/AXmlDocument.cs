@@ -45,8 +45,8 @@ public enum AXmlValueType : byte
 }
 
 /// <summary>
-/// A single decoded attribute on an element: its name plus a typed value held either as raw text or as the <see cref="AXmlAttribute.ValueType"/>/<see cref="AXmlAttribute.ValueData"/> pair.
-/// <para>元素上的单个已解码属性：其名称，以及以原始文本或 <see cref="AXmlAttribute.ValueType"/>/<see cref="AXmlAttribute.ValueData"/> 组合保存的类型化值。</para>
+/// A single decoded attribute on an element: its name plus a typed value held either as raw text or as the <see cref="ValueType"/>/<see cref="ValueData"/> pair.
+/// <para>元素上的单个已解码属性：其名称，以及以原始文本或 <see cref="ValueType"/>/<see cref="ValueData"/> 组合保存的类型化值。</para>
 /// </summary>
 public sealed class AXmlAttribute
 {

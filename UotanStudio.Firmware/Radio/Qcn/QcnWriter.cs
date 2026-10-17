@@ -37,7 +37,7 @@ public static class QcnWriter
     /// Post-patch verification failed; the source file is left untouched.
     /// <para>补丁后的校验失败；源文件保持原样。</para>
     /// </exception>
-    /// <exception cref="UotanStudio.Firmware.CompoundFile.CompoundFileException">
+    /// <exception cref="CompoundFileException">
     /// The container structure is corrupted or unsupported.
     /// <para>容器结构损坏或不受支持。</para>
     /// </exception>

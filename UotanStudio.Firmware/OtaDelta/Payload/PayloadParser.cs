@@ -469,7 +469,7 @@ public static partial class PayloadParser
     /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
     /// <exception cref="PartitionExtractionException">A partition escapes the output directory, exceeds the byte cap, or lacks its required base image.
     /// <para>分区逃逸输出目录、超出字节上限，或缺少所需的基座镜像。</para></exception>
-    /// <exception cref="UotanStudio.Firmware.OtaDelta.Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
+    /// <exception cref="Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
     /// <para>Zucchini 操作数据块无法解码，或声明了本库无法应用的可执行类型；该异常在创建任何分区输出之前抛出。</para></exception>
     public static void Extract(string filePath, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
         => ExtractFileCore(filePath, extractFiles, outputDir, sourcePayloadPath, sourceImages, maximumPartitionBytes, null, PayloadExtractor.DefaultMaximumZstdDictBytes);
@@ -566,7 +566,7 @@ public static partial class PayloadParser
     /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
     /// <exception cref="PartitionExtractionException">A partition escapes the output directory, exceeds the byte cap, or lacks its required base image.
     /// <para>分区逃逸输出目录、超出字节上限，或缺少所需的基座镜像。</para></exception>
-    /// <exception cref="UotanStudio.Firmware.OtaDelta.Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
+    /// <exception cref="Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
     /// <para>Zucchini 操作数据块无法解码，或声明了本库无法应用的可执行类型；该异常在创建任何分区输出之前抛出。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
     public static async Task ExtractAsync(string filePath, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
@@ -633,7 +633,7 @@ public static partial class PayloadParser
     /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
     /// <exception cref="PartitionExtractionException">A partition escapes the output directory, exceeds the byte cap, or lacks its required base image.
     /// <para>分区逃逸输出目录、超出字节上限，或缺少所需的基座镜像。</para></exception>
-    /// <exception cref="UotanStudio.Firmware.OtaDelta.Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
+    /// <exception cref="Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
     /// <para>Zucchini 操作数据块无法解码，或声明了本库无法应用的可执行类型；该异常在创建任何分区输出之前抛出。</para></exception>
     public static void Extract(Stream stream, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
     {
@@ -688,7 +688,7 @@ public static partial class PayloadParser
     /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
     /// <exception cref="PartitionExtractionException">A partition escapes the output directory, exceeds the byte cap, or lacks its required base image.
     /// <para>分区逃逸输出目录、超出字节上限，或缺少所需的基座镜像。</para></exception>
-    /// <exception cref="UotanStudio.Firmware.OtaDelta.Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
+    /// <exception cref="Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
     /// <para>Zucchini 操作数据块无法解码，或声明了本库无法应用的可执行类型；该异常在创建任何分区输出之前抛出。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
     public static async Task ExtractAsync(Stream stream, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)

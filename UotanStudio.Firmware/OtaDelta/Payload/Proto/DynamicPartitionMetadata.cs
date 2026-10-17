@@ -40,7 +40,7 @@ public sealed class DynamicPartitionGroup : IMessage<DynamicPartitionGroup>
     /// <para>创建 <paramref name="other"/> 的副本，并包含其未知字段。</para></summary>
     /// <param name="other">Message whose field values, partition names and unknown fields are copied.
     /// <para>被复制字段值、分区名与未知字段的消息。</para></param>
-    /// <exception cref="System.NullReferenceException"><paramref name="other"/> is <see langword="null"/>.
+    /// <exception cref="NullReferenceException"><paramref name="other"/> is <see langword="null"/>.
     /// <para><paramref name="other"/> 为 <see langword="null"/>。</para></exception>
     public DynamicPartitionGroup(DynamicPartitionGroup other) : this()
     {
@@ -302,7 +302,7 @@ public sealed class DynamicPartitionMetadata : IMessage<DynamicPartitionMetadata
     /// <para>创建 <paramref name="other"/> 的副本，包含其分区组与未知字段。</para></summary>
     /// <param name="other">Message whose field values, cloned groups and unknown fields are copied.
     /// <para>被复制字段值、克隆后的分区组与未知字段的消息。</para></param>
-    /// <exception cref="System.NullReferenceException"><paramref name="other"/> is <see langword="null"/>.
+    /// <exception cref="NullReferenceException"><paramref name="other"/> is <see langword="null"/>.
     /// <para><paramref name="other"/> 为 <see langword="null"/>。</para></exception>
     public DynamicPartitionMetadata(DynamicPartitionMetadata other) : this()
     {

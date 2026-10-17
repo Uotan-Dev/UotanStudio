@@ -17,8 +17,10 @@ public enum AdbQrPairingRoute
     /// </summary>
     AdbServer,
     /// <summary>
-    /// Paired and connected by the toolbox itself (credentials in the local pairing keystore).
-    /// <para>由工具箱直接配对并连接（凭据保存在本工具箱的配对密钥库）。</para>
+    /// Paired and connected by the toolbox itself: pairing registers this host's ADB public key on the
+    /// device and the remembered endpoint stays in toolbox settings, with no stored certificate.
+    /// <para>由工具箱直接配对并连接：配对把本主机的 ADB 公钥登记到设备，记住的地址仍存放在工具箱设置中，
+    /// 不保存任何证书。</para>
     /// </summary>
     Direct,
 }

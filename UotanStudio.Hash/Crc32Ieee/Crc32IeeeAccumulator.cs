@@ -8,9 +8,9 @@ namespace UotanStudio.Hash.Crc32Ieee;
 /// </summary>
 /// <remarks>
 /// The accumulator cannot be seeded: a format that resumes from an arbitrary register value needs
-/// <see cref="UotanStudio.Hash.Crc32Register.Crc32Register"/> with the previous result as its seed instead.
+/// <see cref="Crc32Register.Crc32Register"/> with the previous result as its seed instead.
 /// <para>本累加器不接受种子：需要从任意寄存器值续算的格式，应改为把上次结果作为 seed 传给
-/// <see cref="UotanStudio.Hash.Crc32Register.Crc32Register"/>。</para>
+/// <see cref="Crc32Register.Crc32Register"/>。</para>
 /// </remarks>
 public sealed class Crc32IeeeAccumulator
 {
