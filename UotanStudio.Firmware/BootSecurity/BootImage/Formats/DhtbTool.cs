@@ -312,13 +312,7 @@ public static class DhtbTool
             throw new CompressionException("Invalid DHTB format");
         }
 
-        if (result.Kernel.Length == 0)
-        {
-            return [];
-        }
-
-        var compType = BootCompressor.Detect(result.Kernel);
-        return compType == CompressionType.None ? result.Kernel : BootCompressor.TryDecompress(result.Kernel, compType) ?? result.Kernel;
+        return Decompress(result.Kernel);
     }
 
     /// <summary>
@@ -341,21 +335,15 @@ public static class DhtbTool
             throw new CompressionException("Invalid DHTB format");
         }
 
-        if (result.Ramdisk.Length == 0)
-        {
-            return [];
-        }
-
-        var compType = BootCompressor.Detect(result.Ramdisk);
-        return compType == CompressionType.None ? result.Ramdisk : BootCompressor.TryDecompress(result.Ramdisk, compType) ?? result.Ramdisk;
+        return Decompress(result.Ramdisk);
     }
 
     /// <summary>
     /// Extracts kernel data.
     /// <para>提取内核数据。</para>
     /// </summary>
-    /// <param name="data">Whole DHTB container; it is parsed on every call.
-    /// <para>完整的 DHTB 容器；每次调用都会重新解析。</para></param>
+    /// <param name="data">Whole DHTB container; it is parsed once per call and the extracted components are reused.
+    /// <para>完整的 DHTB 容器；每次调用只解析一次，并复用提取出的组件。</para></param>
     /// <param name="decompress">When <see langword="true"/> the extracted bytes are run through container
     /// detection and decompression; <see langword="false"/> returns them exactly as stored.
     /// <para>为 <see langword="true"/> 时对提取字节执行容器检测与解压；为 <see langword="false"/> 时按存储原样返回。</para></param>
@@ -365,15 +353,15 @@ public static class DhtbTool
     public static byte[] ExtractKernel(byte[] data, bool decompress = true)
     {
         var result = Parse(data);
-        return !result.IsValid ? [] : !decompress ? result.Kernel : DecompressKernel(data);
+        return !result.IsValid ? [] : !decompress ? result.Kernel : Decompress(result.Kernel);
     }
 
     /// <summary>
     /// Extracts ramdisk data.
     /// <para>提取 ramdisk 数据。</para>
     /// </summary>
-    /// <param name="data">Whole DHTB container; it is parsed on every call.
-    /// <para>完整的 DHTB 容器；每次调用都会重新解析。</para></param>
+    /// <param name="data">Whole DHTB container; it is parsed once per call and the extracted components are reused.
+    /// <para>完整的 DHTB 容器；每次调用只解析一次，并复用提取出的组件。</para></param>
     /// <param name="decompress">When <see langword="true"/> the extracted bytes are run through container
     /// detection and decompression; <see langword="false"/> returns them exactly as stored.
     /// <para>为 <see langword="true"/> 时对提取字节执行容器检测与解压；为 <see langword="false"/> 时按存储原样返回。</para></param>
@@ -383,7 +371,18 @@ public static class DhtbTool
     public static byte[] ExtractRamdisk(byte[] data, bool decompress = true)
     {
         var result = Parse(data);
-        return !result.IsValid ? [] : !decompress ? result.Ramdisk : DecompressRamdisk(data);
+        return !result.IsValid ? [] : !decompress ? result.Ramdisk : Decompress(result.Ramdisk);
+    }
+
+    private static byte[] Decompress(byte[] stored)
+    {
+        if (stored.Length == 0)
+        {
+            return [];
+        }
+
+        var compType = BootCompressor.Detect(stored);
+        return compType == CompressionType.None ? stored : BootCompressor.TryDecompress(stored, compType) ?? stored;
     }
 
     private static void ExtractComponents(byte[] data, DhtbResult result)

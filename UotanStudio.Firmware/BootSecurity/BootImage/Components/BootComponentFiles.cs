@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
@@ -41,15 +42,22 @@ internal sealed class BootComponentFiles(string directory, string outputPath, Ca
         if (_inputs[key] is { } input)
         {
             input.Position = 0;
-            var buffer = new byte[65536];
-            var remaining = input.Length;
-            while (remaining > 0)
+            var buffer = ArrayPool<byte>.Shared.Rent(65536);
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var count = (int)Math.Min(remaining, buffer.Length);
-                input.ReadExactly(buffer.AsSpan(0, count));
-                hash.Append(buffer.AsSpan(0, count));
-                remaining -= count;
+                var remaining = input.Length;
+                while (remaining > 0)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var count = (int)Math.Min(remaining, buffer.Length);
+                    input.ReadExactly(buffer.AsSpan(0, count));
+                    hash.Append(buffer.AsSpan(0, count));
+                    remaining -= count;
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
             }
         }
         Span<byte> size = stackalloc byte[4];

@@ -184,7 +184,7 @@ internal static class ZImageTool
         for (var i = HeaderSize; i + 4 <= data.Length; i++)
         {
             var probeLength = Math.Min(8, data.Length - i);
-            if (BootCompressor.Detect(data.Slice(i, probeLength).ToArray()) != CompressionType.None)
+            if (BootCompressor.Detect(data.Slice(i, probeLength)) != CompressionType.None)
                 return i;
         }
         return HeaderSize;

@@ -679,6 +679,85 @@ internal class BootImagePacker
         byte[]? second = null,
         byte[]? dtb = null)
     {
+        using var ms = new MemoryStream();
+        RepackToStream(original, ms, kernel, ramdisk, second, dtb);
+        return ms.ToArray();
+    }
+
+    /// <summary>
+    /// Repacks a parsed boot image into a caller-supplied stream, avoiding the intermediate byte array that
+    /// <see cref="Repack"/> must materialize.
+    /// <para>将已解析的 Boot 镜像重打包到调用方提供的流，避免 <see cref="Repack"/> 必须物化的中间字节数组。</para>
+    /// </summary>
+    /// <param name="original">Parsed boot image supplying the header and every component that is not replaced.
+    /// <para>提供头部以及所有未被替换组件的已解析 Boot 镜像。</para></param>
+    /// <param name="output">Writable stream positioned at the start of the image; it is left open.
+    /// <para>位于镜像起始处的可写流；写出后保持打开。</para></param>
+    /// <param name="kernel">Replacement kernel bytes, or <see langword="null"/> to keep the parsed kernel.
+    /// <para>替换的 kernel 字节；为 <see langword="null"/> 时保留解析所得的 kernel。</para></param>
+    /// <param name="ramdisk">Replacement ramdisk bytes, or <see langword="null"/> to keep the parsed ramdisk.
+    /// <para>替换的 ramdisk 字节；为 <see langword="null"/> 时保留解析所得的 ramdisk。</para></param>
+    /// <param name="second">Replacement second-stage bytes, or <see langword="null"/> to keep the parsed section.
+    /// <para>替换的 second-stage 字节；为 <see langword="null"/> 时保留解析所得区段。</para></param>
+    /// <param name="dtb">Replacement DTB bytes, or <see langword="null"/> to keep the parsed DTB.
+    /// <para>替换的 DTB 字节；为 <see langword="null"/> 时保留解析所得 DTB。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="original"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="original"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException">The header version, page size or command line is invalid; see <see cref="PackToStream"/>.
+    /// <para>头部版本、页大小或命令行无效；参见 <see cref="PackToStream"/>。</para></exception>
+    public static void RepackToStream(
+        BootImageParser original,
+        Stream output,
+        byte[]? kernel = null,
+        byte[]? ramdisk = null,
+        byte[]? second = null,
+        byte[]? dtb = null)
+    {
+        CreateRepackPacker(original, kernel, ramdisk, second, dtb).PackToStream(output);
+    }
+
+    /// <summary>
+    /// Repacks a parsed boot image directly to a file through the atomic temporary-file publish used by
+    /// <see cref="PackToFile"/>.
+    /// <para>通过 <see cref="PackToFile"/> 使用的原子临时文件发布，将已解析的 Boot 镜像直接重打包到文件。</para>
+    /// </summary>
+    /// <param name="original">Parsed boot image supplying the header and every component that is not replaced.
+    /// <para>提供头部以及所有未被替换组件的已解析 Boot 镜像。</para></param>
+    /// <param name="outputPath">Destination path replaced only after the write completes.
+    /// <para>仅在写入完成后才替换的目标文件路径。</para></param>
+    /// <param name="kernel">Replacement kernel bytes, or <see langword="null"/> to keep the parsed kernel.
+    /// <para>替换的 kernel 字节；为 <see langword="null"/> 时保留解析所得的 kernel。</para></param>
+    /// <param name="ramdisk">Replacement ramdisk bytes, or <see langword="null"/> to keep the parsed ramdisk.
+    /// <para>替换的 ramdisk 字节；为 <see langword="null"/> 时保留解析所得的 ramdisk。</para></param>
+    /// <param name="second">Replacement second-stage bytes, or <see langword="null"/> to keep the parsed section.
+    /// <para>替换的 second-stage 字节；为 <see langword="null"/> 时保留解析所得区段。</para></param>
+    /// <param name="dtb">Replacement DTB bytes, or <see langword="null"/> to keep the parsed DTB.
+    /// <para>替换的 DTB 字节；为 <see langword="null"/> 时保留解析所得 DTB。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="original"/> is <see langword="null"/>.
+    /// <para><paramref name="original"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException">The header version, page size or command line is invalid; see <see cref="PackToStream"/>.
+    /// <para>头部版本、页大小或命令行无效；参见 <see cref="PackToStream"/>。</para></exception>
+    /// <exception cref="InvalidDataException">The target or one of its parent directories is a symbolic link or reparse point.
+    /// <para>目标或其任一上级目录为符号链接或重解析点。</para></exception>
+    public static void RepackToFile(
+        BootImageParser original,
+        string outputPath,
+        byte[]? kernel = null,
+        byte[]? ramdisk = null,
+        byte[]? second = null,
+        byte[]? dtb = null)
+    {
+        CreateRepackPacker(original, kernel, ramdisk, second, dtb).PackToFile(outputPath);
+    }
+
+    private static BootImagePacker CreateRepackPacker(
+        BootImageParser original,
+        byte[]? kernel,
+        byte[]? ramdisk,
+        byte[]? second,
+        byte[]? dtb)
+    {
+        ArgumentNullException.ThrowIfNull(original);
         var packer = FromParser(original);
 
         if (kernel != null)
@@ -705,9 +784,7 @@ internal class BootImagePacker
             packer.Header.DtbSize = (uint)dtb.Length;
         }
 
-        using var ms = new MemoryStream();
-        packer.PackToStream(ms);
-        return ms.ToArray();
+        return packer;
     }
 
     private byte[] EncodeCommandLine(int maximumBytes)

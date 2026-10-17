@@ -57,9 +57,8 @@ public sealed class BootCmdlineService
             ValidateValue(normalizedValue);
         }
 
-        using var parser = new BootImageParser();
-        parser.ParseFile(bootPath);
-        var original = parser.Header.CommandLine ?? string.Empty;
+        var header = BootHeaderSource.Read(bootPath);
+        var original = header.CommandLine ?? string.Empty;
         var tokens = original.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(token => !MatchesKey(token, key))
             .ToList();

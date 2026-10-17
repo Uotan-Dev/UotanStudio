@@ -44,9 +44,8 @@ internal sealed class SelinuxSwitchService
     /// <para><paramref name="bootPath"/> 处不存在 boot 镜像。</para></exception>
     public SelinuxSwitchPlan CreatePlan(string bootPath, SelinuxSwitchMode mode)
     {
-        using var parser = new BootImageParser();
-        parser.ParseFile(bootPath);
-        var original = parser.Header.CommandLine ?? string.Empty;
+        var header = BootHeaderSource.Read(bootPath);
+        var original = header.CommandLine ?? string.Empty;
         var tokens = original.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(x => !x.StartsWith("androidboot.selinux=", StringComparison.OrdinalIgnoreCase)
                      && !x.Equals("selinux=0", StringComparison.OrdinalIgnoreCase))

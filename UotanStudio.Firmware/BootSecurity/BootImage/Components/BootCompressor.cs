@@ -22,9 +22,22 @@ public static class BootCompressor
     /// The container whose magic matched (gzip, LZ4, legacy LZ4, XZ, bzip2, Zstd, LZOP, Brotli, raw LZMA), otherwise <c>CompressionType.None</c>. Magic matching alone does not prove the payload decodes.
     /// <para>魔数匹配的容器类型（gzip、LZ4、传统 LZ4 帧、XZ、bzip2、Zstd、LZOP、Brotli、原始 LZMA），否则为 <c>CompressionType.None</c>。仅魔数匹配并不能保证数据可以解码。</para>
     /// </returns>
-    public static CompressionType Detect(byte[] data)
+    public static CompressionType Detect(byte[] data) => data is null ? CompressionType.None : Detect(data.AsSpan());
+
+    /// <summary>
+    /// Detects the compression format of a span without copying it, so scanning callers can probe successive
+    /// offsets over one buffer.
+    /// <para>检测切片的压缩格式而不复制数据，扫描调用方因此可以在同一缓冲区上逐个偏移探测。</para>
+    /// </summary>
+    /// <param name="data">
+    /// Candidate bytes; fewer than 4 bytes always yields <c>CompressionType.None</c>.
+    /// <para>候选字节；不足 4 字节时始终返回 <c>CompressionType.None</c>。</para>
+    /// </param>
+    /// <returns>The container whose magic matched, otherwise <c>CompressionType.None</c>.
+    /// <para>魔数匹配的容器类型，否则为 <c>CompressionType.None</c>。</para></returns>
+    internal static CompressionType Detect(ReadOnlySpan<byte> data)
     {
-        if (data is null || data.Length < 4)
+        if (data.Length < 4)
         {
             return CompressionType.None;
         }
@@ -151,7 +164,7 @@ public static class BootCompressor
     /// <para>便捷重载：自动检测并尝试解压。</para>
     /// </summary>
     /// <param name="data">
-    /// Candidate compressed buffer inspected by <see cref="Detect"/>. <para>由 <see cref="Detect"/> 检查的候选压缩缓冲区。</para>
+    /// Candidate compressed buffer inspected by <see cref="Detect(byte[])"/>. <para>由 <see cref="Detect(byte[])"/> 检查的候选压缩缓冲区。</para>
     /// </param>
     /// <returns>
     /// The decompressed bytes; the input array itself when no magic is detected or decompression fails.
@@ -224,11 +237,11 @@ public static class BootCompressor
     /// <see cref="CompressionType.Lz4Legacy"/> 与 <see cref="CompressionType.Lz4Lg"/> 存在 boot 家族合法编码。</para>
     /// </param>
     /// <returns>
-    /// The compressed bytes whose leading magic is recognized back by <see cref="Detect"/> for a non-empty payload;
+    /// The compressed bytes whose leading magic is recognized back by <see cref="Detect(byte[])"/> for a non-empty payload;
     /// an empty payload yields the codec's empty-stream encoding, which carries no magic and detects as
     /// <see cref="CompressionType.None"/>. Returns <see langword="null"/> when the label has no boot-family encoding
     /// or the codec fails; all codec exceptions are swallowed.
-    /// <para>非空输入时返回压缩字节，其首部魔数可被 <see cref="Detect"/> 重新识别；空输入产生编解码器的空流编码，
+    /// <para>非空输入时返回压缩字节，其首部魔数可被 <see cref="Detect(byte[])"/> 重新识别；空输入产生编解码器的空流编码，
     /// 不含魔数，检测结果为 <see cref="CompressionType.None"/>。标签没有 boot 家族编码或编解码失败时返回
     /// <see langword="null"/>，编解码器异常全部被吞没。</para>
     /// </returns>
@@ -299,10 +312,10 @@ public static class BootCompressor
     /// <para>目标标签；仅接受 gzip 家族与传统 LZ4 家族标签。</para>
     /// </param>
     /// <returns>
-    /// The compressed bytes; for a non-empty payload the stream magic is recognized back by <see cref="Detect"/>,
+    /// The compressed bytes; for a non-empty payload the stream magic is recognized back by <see cref="Detect(byte[])"/>,
     /// while an empty payload yields the codec's empty-stream encoding without magic, matching how boot images
     /// store empty components as size-0 sections instead of compressed streams.
-    /// <para>压缩后的字节；非空输入的流魔数可被 <see cref="Detect"/> 重新识别，而空输入产生编解码器的空流编码且
+    /// <para>压缩后的字节；非空输入的流魔数可被 <see cref="Detect(byte[])"/> 重新识别，而空输入产生编解码器的空流编码且
     /// 不含魔数，与 boot 镜像将空组件存为 0 长度区段而非压缩流的方式一致。</para>
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.

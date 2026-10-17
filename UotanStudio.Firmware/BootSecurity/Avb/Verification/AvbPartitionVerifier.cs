@@ -10,8 +10,11 @@ namespace UotanStudio.Firmware.BootSecurity.Avb.Verification;
 /// </summary>
 /// <remarks>
 /// Descriptors must be authenticated separately. Sparse containers must first be exposed as a logical raw stream.
-/// Persistent digests, zeroed trees and FEC parity are not silently accepted as verified.
-/// <para>描述符须单独认证。Sparse 容器必须先暴露为逻辑原始流。持久化摘要、清零树和 FEC 校验码不会被静默视为已验证。</para>
+/// Persistent digests, zeroed trees and FEC parity are not silently accepted as verified. Hashtree content is read
+/// through one bounded prefetch window per cursor (data blocks and stored tree blocks keep separate windows), while
+/// every data block is still hashed individually.
+/// <para>描述符须单独认证。Sparse 容器必须先暴露为逻辑原始流。持久化摘要、清零树和 FEC 校验码不会被静默视为已验证。
+/// 哈希树内容按每个游标一个有界预取窗口读取（数据块与存储树块各自持有窗口），但每个数据块仍单独哈希。</para>
 /// </remarks>
 internal static class AvbPartitionVerifier
 {
@@ -116,12 +119,20 @@ internal static class AvbPartitionVerifier
             {
                 return Result("Stored tree size does not match the descriptor geometry.");
             }
-            var sourceBlock = new byte[Math.Max(descriptor.DataBlockSize, descriptor.HashBlockSize)];
-            var computedBlock = new byte[descriptor.HashBlockSize];
+            var dataBlockSize = (int)descriptor.DataBlockSize;
+            var treeBlockSize = (int)descriptor.HashBlockSize;
+            var imageSize = (long)descriptor.ImageSize;
+            var treeLimit = checked((long)descriptor.TreeOffset + (long)descriptor.TreeSize);
+            var computedBlock = new byte[treeBlockSize];
             var digestBytes = new byte[hasher.HashLengthInBytes];
+            var slotsPerHashBlock = Math.Max(1, treeBlockSize / slotSize);
+            var dataWindowSize = (int)Math.Min(AvbWindowedReader.MaximumWindowBytes,
+                Math.Max(Math.Max(dataBlockSize, treeBlockSize), (long)slotsPerHashBlock * dataBlockSize));
+            using var dataReader = new AvbWindowedReader(image, Math.Max(imageSize, treeLimit), dataWindowSize);
+            using var treeReader = new AvbWindowedReader(image, treeLimit, treeBlockSize);
             var sourceOffset = 0L;
-            var sourceSize = (long)descriptor.ImageSize;
-            var sourceBlockSize = (int)descriptor.DataBlockSize;
+            var sourceSize = imageSize;
+            var sourceBlockSize = dataBlockSize;
             foreach (var level in levels)
             {
                 var blocks = sourceSize / sourceBlockSize;
@@ -132,25 +143,26 @@ internal static class AvbPartitionVerifier
                     Array.Clear(computedBlock);
                     for (var slot = 0; slot < computedBlock.Length && blockIndex < blocks; slot += slotSize, blockIndex++)
                     {
-                        image.Position = sourceOffset + blockIndex * sourceBlockSize;
-                        await image.ReadExactlyAsync(sourceBlock.AsMemory(0, sourceBlockSize), cancellationToken).ConfigureAwait(false);
-                        HashBlock(hasher, salt, sourceBlock.AsSpan(0, sourceBlockSize), digestBytes);
+                        var source = await dataReader.ReadBlockAsync(
+                            checked(sourceOffset + blockIndex * sourceBlockSize), sourceBlockSize, cancellationToken).ConfigureAwait(false);
+                        HashBlock(hasher, salt, source.Span, digestBytes);
                         digestBytes.CopyTo(computedBlock.AsSpan(slot));
                     }
-                    image.Position = checked((long)descriptor.TreeOffset + level.Offset + destination);
-                    await image.ReadExactlyAsync(sourceBlock.AsMemory(0, computedBlock.Length), cancellationToken).ConfigureAwait(false);
-                    if (!CryptographicOperations.FixedTimeEquals(computedBlock, sourceBlock.AsSpan(0, computedBlock.Length)))
+                    var stored = await treeReader.ReadBlockAsync(
+                        checked((long)descriptor.TreeOffset + level.Offset + destination), computedBlock.Length, cancellationToken).ConfigureAwait(false);
+                    if (!CryptographicOperations.FixedTimeEquals(computedBlock, stored.Span))
                     {
                         return Result("Stored hashtree block mismatch.", false);
                     }
                 }
                 sourceOffset = checked((long)descriptor.TreeOffset + level.Offset);
                 sourceSize = level.Size;
-                sourceBlockSize = (int)descriptor.HashBlockSize;
+                sourceBlockSize = treeBlockSize;
             }
-            image.Position = sourceOffset;
-            await image.ReadExactlyAsync(sourceBlock.AsMemory(0, (int)sourceSize), cancellationToken).ConfigureAwait(false);
-            HashBlock(hasher, salt, sourceBlock.AsSpan(0, (int)sourceSize), digestBytes);
+            var rootBlock = new byte[(int)sourceSize];
+            var rootReader = levels.Count == 0 ? dataReader : treeReader;
+            await rootReader.ReadExactlyAsync(sourceOffset, rootBlock, cancellationToken).ConfigureAwait(false);
+            HashBlock(hasher, salt, rootBlock, digestBytes);
             cancellationToken.ThrowIfCancellationRequested();
             return Result(CryptographicOperations.FixedTimeEquals(digestBytes, expectedDigest) ? null : "Hashtree root digest mismatch.", true);
         }

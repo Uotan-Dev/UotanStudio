@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Text;
 
 namespace UotanStudio.Firmware.BootSecurity.BootImage.Formats;
 
@@ -9,10 +8,10 @@ namespace UotanStudio.Firmware.BootSecurity.BootImage.Formats;
 /// </summary>
 internal static class ChromeOsTool
 {
-    private const string ChromeOsMagic = "CHROMEOS";
-    private const int KeyblockHeaderSize = 112;
     private const int SignatureDescriptorSize = 24;
     private const int PackedKeyHeaderSize = 32;
+    internal const int KeyblockHeaderSize = 112;
+    internal const int MaximumPreambleHeaderSize = 116;
 
     /// <summary>
     /// Parses a complete vboot2 keyblock and validates every declared range before publishing metadata.
@@ -25,6 +24,22 @@ internal static class ChromeOsTool
     /// <exception cref="InvalidDataException">The header, declared size, or referenced range is invalid.
     /// <para>头部、声明长度或引用范围非法。</para></exception>
     public static ChromeOsKeyblockMetadata ParseKeyblock(ReadOnlySpan<byte> data)
+        => ParseKeyblock(data, data.Length);
+
+    /// <summary>
+    /// Parses a keyblock header that may be a bounded prefix of a larger container: declared sizes are validated
+    /// against <paramref name="containerLength"/> instead of the supplied span length.
+    /// <para>解析可能只是更大容器有界前缀的 keyblock 头部：声明大小按 <paramref name="containerLength"/> 校验，
+    /// 而不是按所提供切片的长度。</para>
+    /// </summary>
+    /// <param name="data">Prefix holding at least the keyblock header; only the fixed header fields are read.
+    /// <para>至少包含 keyblock 头部的前缀；只读取定长头部字段。</para></param>
+    /// <param name="containerLength">Total length of the container the prefix was read from.
+    /// <para>前缀所在容器的总长度。</para></param>
+    /// <returns>The validated keyblock metadata. <para>经过校验的 keyblock 元数据。</para></returns>
+    /// <exception cref="InvalidDataException">The header, declared size, or referenced range is invalid.
+    /// <para>头部、声明长度或引用范围非法。</para></exception>
+    internal static ChromeOsKeyblockMetadata ParseKeyblock(ReadOnlySpan<byte> data, long containerLength)
     {
         if (data.Length < KeyblockHeaderSize || !data[..8].SequenceEqual("CHROMEOS"u8))
         {
@@ -38,7 +53,7 @@ internal static class ChromeOsTool
         }
 
         var keyblockSize = ReadUInt32(data, 16);
-        if (keyblockSize < KeyblockHeaderSize || keyblockSize > data.Length)
+        if (keyblockSize < KeyblockHeaderSize || keyblockSize > containerLength)
         {
             throw new InvalidDataException("ChromeOS keyblock size is outside the supplied data.");
         }
@@ -83,12 +98,36 @@ internal static class ChromeOsTool
             throw new InvalidDataException("ChromeOS kernel preamble header is truncated.");
         }
 
-        var preamble = data[(int)preambleOffset..];
+        return ParsePreamble(keyblock, data[(int)preambleOffset..], data.Length - preambleOffset);
+    }
+
+    /// <summary>
+    /// Parses a kernel preamble whose header was read separately from the keyblock, validating declared sizes
+    /// against the total container length rather than the supplied span.
+    /// <para>解析头部与 keyblock 分开读取的内核 preamble：声明大小按容器总长度校验，而不是按所提供切片的长度。</para>
+    /// </summary>
+    /// <param name="keyblock">Already validated keyblock that the preamble follows.
+    /// <para>preamble 之前已校验的 keyblock。</para></param>
+    /// <param name="preamble">Bytes starting at the preamble; at least the version-dependent header must be present.
+    /// <para>从 preamble 起始的字节；至少包含与版本相关的头部。</para></param>
+    /// <param name="availablePreambleLength">Bytes available from the preamble start to the end of the container.
+    /// <para>从 preamble 起始到容器末尾的可用字节数。</para></param>
+    /// <returns>The validated vblock metadata. <para>经过校验的 vblock 元数据。</para></returns>
+    /// <exception cref="InvalidDataException">The preamble version or a declared range is invalid.
+    /// <para>preamble 版本或声明范围非法。</para></exception>
+    internal static ChromeOsVblockMetadata ParsePreamble(
+        ChromeOsKeyblockMetadata keyblock, ReadOnlySpan<byte> preamble, long availablePreambleLength)
+    {
+        if (availablePreambleLength < 96 || preamble.Length < 96)
+        {
+            throw new InvalidDataException("ChromeOS kernel preamble header is truncated.");
+        }
+
         var preambleSize = ReadUInt32(preamble, 0);
         var preambleMajor = ReadUInt32(preamble, 32);
         var preambleMinor = ReadUInt32(preamble, 36);
         var requiredPreambleSize = GetPreambleHeaderSize(preambleMajor, preambleMinor);
-        if (preambleSize < requiredPreambleSize || preambleSize > preamble.Length)
+        if (preambleSize < requiredPreambleSize || preambleSize > availablePreambleLength)
         {
             throw new InvalidDataException("ChromeOS kernel preamble size is outside the supplied data.");
         }
@@ -102,7 +141,7 @@ internal static class ChromeOsTool
         return new ChromeOsVblockMetadata
         {
             Keyblock = keyblock,
-            PreambleOffset = preambleOffset,
+            PreambleOffset = keyblock.KeyblockSize,
             PreambleSize = preambleSize,
             PreambleVersionMajor = preambleMajor,
             PreambleVersionMinor = preambleMinor,
@@ -228,8 +267,8 @@ internal static class ChromeOsTool
         Vblock,
 
         /// <summary>
-        /// A ChromeOS image that is not a kernel image; <see cref="Detect"/> never assigns it.
-        /// <para>非内核镜像的 ChromeOS 镜像；<see cref="Detect"/> 不会赋值此项。</para>
+        /// A ChromeOS image that is not a kernel image; <see cref="Detect(byte[])"/> never assigns it.
+        /// <para>非内核镜像的 ChromeOS 镜像；<see cref="Detect(byte[])"/> 不会赋值此项。</para>
         /// </summary>
         Other
     }
@@ -312,47 +351,118 @@ internal static class ChromeOsTool
             };
         }
 
-        if (!HasMagic(data, 0, ChromeOsMagic))
+        return Detect(data.AsSpan(), data.LongLength);
+    }
+
+    /// <summary>
+    /// Detects a ChromeOS image from a span that may hold only the keyblock header, using
+    /// <paramref name="totalLength"/> for the length comparisons the classification performs.
+    /// <para>从可能只包含 keyblock 头部的切片检测 ChromeOS 镜像；分类所需长度比较使用
+    /// <paramref name="totalLength"/>。</para>
+    /// </summary>
+    /// <param name="data">Prefix starting at the container offset zero; it must contain the keyblock header and,
+    /// for a vblock, the kernel preamble header at the declared keyblock size.
+    /// <para>从容器零偏移开始的前缀；必须包含 keyblock 头部，vblock 还须包含声明 keyblock 大小处的内核 preamble 头部。</para>
+    /// </param>
+    /// <param name="totalLength">Full container length. <para>容器完整长度。</para></param>
+    /// <returns>A populated result that is never <see langword="null"/>; malformed candidates are unknown.
+    /// <para>始终返回非 <see langword="null"/>；结构非法的候选为 unknown。</para></returns>
+    internal static ChromeOsDetectionResult Detect(ReadOnlySpan<byte> data, long totalLength)
+    {
+        if (!HasMagic(data))
         {
-            return new ChromeOsDetectionResult
-            {
-                ImageType = ChromeOsImageType.Unknown,
-                Description = "Not a ChromeOS image"
-            };
+            return NotChromeOs();
         }
 
         try
         {
-            var keyblock = ParseKeyblock(data);
-            if (data.LongLength == keyblock.KeyblockSize)
+            var keyblock = ParseKeyblock(data, totalLength);
+            if (totalLength == keyblock.KeyblockSize)
             {
-                return CreateResult(
-                    ChromeOsImageType.Keyblock,
-                    checked((int)keyblock.KeyblockSize),
-                    "ChromeOS keyblock structure recognized; signature verification is not implemented.");
+                return CreateKeyblockResult(keyblock);
             }
 
-            var vblock = ParseVblock(data);
-            var vblockEnd = checked((ulong)vblock.PreambleOffset + vblock.PreambleSize);
-            var bodyEnd = checked(vblockEnd + vblock.BodySignature.DataSize);
-            var hasBody = (ulong)data.LongLength >= bodyEnd;
-            return CreateResult(
-                hasBody ? ChromeOsImageType.Kernel : ChromeOsImageType.Vblock,
-                checked((int)vblockEnd),
-                hasBody
-                    ? "ChromeOS keyblock, kernel preamble and bounded body structure recognized; signature verification is not implemented."
-                    : "ChromeOS keyblock and kernel preamble structure recognized; kernel body is not present in the supplied data.");
+            if (data.Length < keyblock.KeyblockSize)
+            {
+                throw new InvalidDataException("ChromeOS kernel preamble header is truncated.");
+            }
+
+            return CreateVblockResult(keyblock, data[(int)keyblock.KeyblockSize..], totalLength);
         }
         catch (InvalidDataException ex)
         {
-            return new ChromeOsDetectionResult
-            {
-                ImageType = ChromeOsImageType.Unknown,
-                Description = "Not a structurally recognized ChromeOS image",
-                ErrorMessage = ex.Message
-            };
+            return CreateUnknownResult(ex);
         }
     }
+
+    /// <summary>
+    /// Detects a ChromeOS image from separately read keyblock and preamble headers, so neither the keyblock body
+    /// nor the kernel body has to be materialized.
+    /// <para>从分开读取的 keyblock 与 preamble 头部检测 ChromeOS 镜像，无需物化 keyblock 主体或内核主体。</para>
+    /// </summary>
+    /// <param name="keyblockHeader">Leading bytes of the container, at least <see cref="KeyblockHeaderSize"/> long.
+    /// <para>容器起始字节，至少 <see cref="KeyblockHeaderSize"/> 字节。</para></param>
+    /// <param name="preambleHeader">Bytes starting at the declared keyblock size, or empty when the container ends there.
+    /// <para>从声明 keyblock 大小处开始的字节；容器在此结束时为空。</para></param>
+    /// <param name="totalLength">Full container length. <para>容器完整长度。</para></param>
+    /// <returns>A populated result that is never <see langword="null"/>; malformed candidates are unknown.
+    /// <para>始终返回非 <see langword="null"/>；结构非法的候选为 unknown。</para></returns>
+    internal static ChromeOsDetectionResult Detect(
+        ReadOnlySpan<byte> keyblockHeader, ReadOnlySpan<byte> preambleHeader, long totalLength)
+    {
+        if (!HasMagic(keyblockHeader))
+        {
+            return NotChromeOs();
+        }
+
+        try
+        {
+            var keyblock = ParseKeyblock(keyblockHeader, totalLength);
+            return totalLength == keyblock.KeyblockSize
+                ? CreateKeyblockResult(keyblock)
+                : CreateVblockResult(keyblock, preambleHeader, totalLength);
+        }
+        catch (InvalidDataException ex)
+        {
+            return CreateUnknownResult(ex);
+        }
+    }
+
+    private static ChromeOsDetectionResult CreateVblockResult(
+        ChromeOsKeyblockMetadata keyblock, ReadOnlySpan<byte> preamble, long totalLength)
+    {
+        var vblock = ParsePreamble(keyblock, preamble, totalLength - keyblock.KeyblockSize);
+        var vblockEnd = checked((ulong)vblock.PreambleOffset + vblock.PreambleSize);
+        var bodyEnd = checked(vblockEnd + vblock.BodySignature.DataSize);
+        var hasBody = (ulong)totalLength >= bodyEnd;
+        return CreateResult(
+            hasBody ? ChromeOsImageType.Kernel : ChromeOsImageType.Vblock,
+            checked((int)vblockEnd),
+            hasBody
+                ? "ChromeOS keyblock, kernel preamble and bounded body structure recognized; signature verification is not implemented."
+                : "ChromeOS keyblock and kernel preamble structure recognized; kernel body is not present in the supplied data.");
+    }
+
+    private static ChromeOsDetectionResult CreateKeyblockResult(ChromeOsKeyblockMetadata keyblock)
+        => CreateResult(
+            ChromeOsImageType.Keyblock,
+            checked((int)keyblock.KeyblockSize),
+            "ChromeOS keyblock structure recognized; signature verification is not implemented.");
+
+    private static ChromeOsDetectionResult NotChromeOs()
+        => new()
+        {
+            ImageType = ChromeOsImageType.Unknown,
+            Description = "Not a ChromeOS image"
+        };
+
+    private static ChromeOsDetectionResult CreateUnknownResult(InvalidDataException ex)
+        => new()
+        {
+            ImageType = ChromeOsImageType.Unknown,
+            Description = "Not a structurally recognized ChromeOS image",
+            ErrorMessage = ex.Message
+        };
 
     private static ChromeOsDetectionResult CreateResult(
         ChromeOsImageType imageType, int structureSize, string description)
@@ -364,9 +474,8 @@ internal static class ChromeOsTool
             Description = description
         };
 
-    private static bool HasMagic(byte[] data, int offset, string magic)
-        => offset >= 0 && offset <= data.Length - magic.Length &&
-            Encoding.ASCII.GetString(data, offset, magic.Length) == magic;
+    internal static bool HasMagic(ReadOnlySpan<byte> data)
+        => data.Length >= 8 && data[..8].SequenceEqual("CHROMEOS"u8);
 
     /// <summary>
     /// Extracts the kernel data. This entry point performs no extraction and rejects every call.

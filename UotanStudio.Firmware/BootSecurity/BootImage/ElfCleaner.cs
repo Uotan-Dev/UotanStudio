@@ -321,21 +321,12 @@ public static class ElfCleaner
 
         try
         {
-            var sections = ElfTool.GetSections(data);
-            var toRemove = sections
+            var toRemove = ElfTool.GetSections(data)
                 .Where(s => ShouldRemove(s.Name, options))
                 .ToList();
 
-            if (toRemove.Count == 0)
-            {
-                result.Success = true;
-                result.CleanedSize = data.Length;
-                return result;
-            }
-
-            var cleaned = ElfTool.StripSectionsByName(data, toRemove.Select(s => s.Name));
             result.Success = true;
-            result.CleanedSize = cleaned.Length;
+            result.CleanedSize = data.Length;
             result.SectionsRemoved = toRemove.Count;
             result.RemovedSectionNames = [.. toRemove.Select(s => s.Name)];
             return result;
@@ -370,13 +361,11 @@ public static class ElfCleaner
         }
 
         options ??= new CleanOptions();
-        var sections = ElfTool.GetSections(data);
-        var toRemove = sections
+        var toRemove = ElfTool.GetSections(data)
             .Where(s => ShouldRemove(s.Name, options))
-            .Select(s => s.Name)
             .ToList();
 
-        return toRemove.Count == 0 ? data : ElfTool.StripSectionsByName(data, toRemove);
+        return toRemove.Count == 0 ? data : ElfTool.StripSections(data, toRemove);
     }
 
     /// <summary>
@@ -412,13 +401,24 @@ public static class ElfCleaner
             return new CleanResult { ErrorMessage = ex.Message };
         }
 
-        var result = Clean(data, options);
-        if (result.Success)
+        var result = new CleanResult { OriginalSize = data.Length };
+        if (!IsCleanable(data))
         {
-            var cleaned = CleanData(data, options);
-            File.WriteAllBytes(outputPath, cleaned);
-            result.CleanedSize = cleaned.Length;
+            result.ErrorMessage = "Not a cleanable ELF file";
+            return result;
         }
+
+        options ??= new CleanOptions();
+        var toRemove = ElfTool.GetSections(data)
+            .Where(s => ShouldRemove(s.Name, options))
+            .ToList();
+        var cleaned = toRemove.Count == 0 ? data : ElfTool.StripSections(data, toRemove);
+
+        File.WriteAllBytes(outputPath, cleaned);
+        result.Success = true;
+        result.CleanedSize = cleaned.Length;
+        result.SectionsRemoved = toRemove.Count;
+        result.RemovedSectionNames = [.. toRemove.Select(s => s.Name)];
         return result;
     }
 

@@ -509,7 +509,7 @@ public static class ElfTool
         return sections.Count == 0 ? (byte[])data.Clone() : StripSections(data, sections);
     }
 
-    private static byte[] StripSections(byte[] data, List<ElfSection> sections)
+    internal static byte[] StripSections(byte[] data, List<ElfSection> sections)
     {
         var result = (byte[])data.Clone();
         var elfType = DetectElfType(result);

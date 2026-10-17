@@ -243,6 +243,74 @@ public sealed class BootImageSpecialFormatTests
     }
 
     [Fact]
+    public void Handler_CanHandleChromeOsKeyblockVblockAndKernelFiles_AllAccepted()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "uotan-chromeos-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var vblock = CreateChromeOsVblock();
+            var vblockPath = Path.Combine(root, "vblock.img");
+            File.WriteAllBytes(vblockPath, vblock);
+
+            var keyblockPath = Path.Combine(root, "keyblock.img");
+            File.WriteAllBytes(keyblockPath, vblock[..192]);
+
+            var kernel = new byte[vblock.Length + 4096];
+            vblock.CopyTo(kernel, 0);
+            var kernelPath = Path.Combine(root, "kernel.img");
+            File.WriteAllBytes(kernelPath, kernel);
+
+            var handler = new BootImageFormatHandler();
+
+            Assert.True(handler.CanHandle(vblockPath));
+            Assert.True(handler.CanHandle(keyblockPath));
+            Assert.True(handler.CanHandle(kernelPath));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Detector_ParseFileVendorBoot_MatchesInMemoryParse()
+    {
+        var packer = new VendorBootPacker
+        {
+            Header = new VendorBootHeader
+            {
+                HeaderVersion = 3,
+                PageSize = 4096,
+                VendorCmdline = "androidboot.vendor.stream",
+            },
+            VendorRamdisk = [1, 2, 3, 4, 5],
+            Dtb = [6, 7, 8],
+        };
+        using var packed = new MemoryStream();
+        packer.PackToStream(packed);
+        var image = packed.ToArray();
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllBytes(path, image);
+
+            var streamed = BootImageDetector.ParseFile(path);
+            var inMemory = BootImageDetector.Parse(image);
+
+            Assert.True(streamed.Success, streamed.ErrorMessage);
+            Assert.True(inMemory.Success, inMemory.ErrorMessage);
+            Assert.Equal(inMemory.Format, streamed.Format);
+            Assert.Equal(inMemory.Ramdisk, streamed.Ramdisk);
+            Assert.Equal(inMemory.Dtb, streamed.Dtb);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void ChromeOsKeyblock_DataKeyRangeBeyondContainer_IsRejected()
     {
         var data = CreateChromeOsVblock()[..192];

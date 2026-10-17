@@ -450,9 +450,10 @@ public static class BootImageDetector
     /// <para>统一解析 boot 镜像文件。</para>
     /// </summary>
     /// <param name="filePath">
-    /// File to read completely into memory before parsing; unlike <see cref="DetectFile"/> the whole
-    /// content is loaded.
-    /// <para>解析前完整读入内存的文件；与 <see cref="DetectFile"/> 不同，会加载全部内容。</para>
+    /// File to parse; vendor boot images are parsed from the file stream through <see cref="VendorBootParser.ParseFile"/>,
+    /// while every other format is read completely into memory before parsing.
+    /// <para>待解析的文件；vendor boot 镜像经 <see cref="VendorBootParser.ParseFile"/> 直接从文件流解析，
+    /// 其余格式在解析前完整读入内存。</para>
     /// </param>
     /// <returns>
     /// Unified result for the file content, following the same success and error semantics as
@@ -466,7 +467,24 @@ public static class BootImageDetector
     /// <exception cref="IOException">The file could not be opened or read. <para>文件无法打开或读取。</para></exception>
     public static UnifiedResult ParseFile(string filePath)
     {
+        var detection = Detect(ReadDetectionPrefix(filePath));
+        if (detection.Format == ImageFormat.VendorBoot)
+        {
+            var result = new UnifiedResult { Format = ImageFormat.VendorBoot };
+            try
+            {
+                using var parser = new VendorBootParser();
+                parser.ParseFile(filePath);
+                ParseVendorBoot(parser, result);
+                result.Success = true;
+            }
+            catch (Exception ex)
+            {
+                result.ErrorMessage = ex.Message;
+            }
 
+            return result;
+        }
 
         var data = File.ReadAllBytes(filePath);
         return Parse(data);
@@ -575,7 +593,11 @@ public static class BootImageDetector
     {
         using var parser = new VendorBootParser();
         parser.Parse(data);
+        ParseVendorBoot(parser, result);
+    }
 
+    private static void ParseVendorBoot(VendorBootParser parser, UnifiedResult result)
+    {
         result.Kernel = [];
         result.Ramdisk = parser.VendorRamdisk;
         result.Second = [];

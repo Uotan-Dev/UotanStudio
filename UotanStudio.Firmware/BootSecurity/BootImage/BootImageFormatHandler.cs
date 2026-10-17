@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Formats;
@@ -93,7 +94,8 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
             var isVendor = header[0] == (byte)'V' && header[1] == (byte)'N' && header[2] == (byte)'D'
                 && header[3] == (byte)'R' && header[4] == (byte)'B' && header[5] == (byte)'O'
                 && header[6] == (byte)'O' && header[7] == (byte)'T';
-            var chromeOs = DetectChromeOsFile(filePath).IsChromeOs;
+            var chromeOs = read >= 8 && header[..8].SequenceEqual("CHROMEOS"u8) &&
+                DetectChromeOsFile(filePath).IsChromeOs;
             return read >= 8 && (isAndroid || isVendor || chromeOs ||
                 MtkBootParser.IsMtkFormat(header[..read].ToArray()) ||
                 DhtbTool.IsDhtbFormat(header[..read].ToArray()) ||
@@ -578,12 +580,12 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
         var header = parser.Header;
 
         var entries = new List<string>();
-        WriteIfNonEmpty(outputDirectory, "vendor_ramdisk", parser.VendorRamdisk, entries);
-        WriteIfNonEmpty(outputDirectory, "dtb", parser.Dtb, entries);
-        WriteIfNonEmpty(outputDirectory, "bootconfig", parser.Bootconfig, entries);
+        WriteVendorComponent(parser, VendorBootComponent.VendorRamdisk, outputDirectory, "vendor_ramdisk", entries);
+        WriteVendorComponent(parser, VendorBootComponent.Dtb, outputDirectory, "dtb", entries);
+        WriteVendorComponent(parser, VendorBootComponent.Bootconfig, outputDirectory, "bootconfig", entries);
 
-
-        if (parser.RamdiskTable.Count > 0 && parser.VendorRamdisk.Length > 0)
+        var ramdiskLength = parser.GetComponentLength(VendorBootComponent.VendorRamdisk);
+        if (parser.RamdiskTable.Count > 0 && ramdiskLength > 0)
         {
             var tableDir = Path.Combine(outputDirectory, "vendor_ramdisks");
             Directory.CreateDirectory(tableDir);
@@ -596,9 +598,8 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
                     continue;
                 }
 
-                long start = entry.RamdiskOffset;
-                var end = start + entry.RamdiskSize;
-                if (start < 0 || end > parser.VendorRamdisk.Length)
+                if (entry.RamdiskOffset > ramdiskLength ||
+                    entry.RamdiskSize > ramdiskLength - entry.RamdiskOffset)
                 {
                     continue;
                 }
@@ -607,7 +608,7 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
                     ? $"ramdisk_{i}"
                     : SanitizeFileName(entry.RamdiskName);
                 var outPath = Path.Combine(tableDir, name);
-                File.WriteAllBytes(outPath, parser.VendorRamdisk.AsSpan((int)start, (int)entry.RamdiskSize).ToArray());
+                parser.ExtractRamdiskToFile(outPath, entry);
                 entries.Add(outPath);
             }
         }
@@ -615,6 +616,23 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
         return FirmwareOpResult.Ok(
             $"Unpacked vendor boot image v{header.HeaderVersion} ({entries.Count} files) to {outputDirectory}",
             entries: entries);
+    }
+
+    private static void WriteVendorComponent(
+        VendorBootParser parser,
+        VendorBootComponent component,
+        string directory,
+        string name,
+        List<string> entries)
+    {
+        if (parser.GetComponentLength(component) == 0)
+        {
+            return;
+        }
+
+        var outPath = Path.Combine(directory, name);
+        parser.ExtractComponentToFile(outPath, component);
+        entries.Add(outPath);
     }
 
     private static FirmwareOpResult UnpackMtkBoot(string filePath, string outputDirectory)
@@ -738,6 +756,12 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
         return buffer;
     }
 
+    /// <summary>
+    /// Reads only the keyblock header and the preamble header placed at the declared keyblock size, passing the
+    /// full file length to the classifier so the verdict matches a whole-file read without materializing it.
+    /// <para>只读取 keyblock 头部与位于声明 keyblock 大小处的 preamble 头部，并把文件完整长度交给分类器，
+    /// 使判定与整文件读取一致而无需物化整个文件。</para>
+    /// </summary>
     private static ChromeOsTool.ChromeOsDetectionResult DetectChromeOsFile(string filePath)
     {
         using var fs = File.OpenRead(filePath);
@@ -751,8 +775,24 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
             };
         }
 
-        var data = new byte[checked((int)fs.Length)];
-        fs.ReadExactly(data);
-        return ChromeOsTool.Detect(data);
+        var totalLength = fs.Length;
+        var head = new byte[(int)Math.Min(totalLength, ChromeOsTool.KeyblockHeaderSize)];
+        fs.ReadExactly(head);
+        if (head.Length < ChromeOsTool.KeyblockHeaderSize || !ChromeOsTool.HasMagic(head))
+        {
+            return ChromeOsTool.Detect(head, totalLength);
+        }
+
+        var keyblockSize = BinaryPrimitives.ReadUInt32LittleEndian(head.AsSpan(16));
+        if (keyblockSize > (ulong)totalLength)
+        {
+            return ChromeOsTool.Detect(head, totalLength);
+        }
+
+        var preambleLength = (int)Math.Min(totalLength - keyblockSize, ChromeOsTool.MaximumPreambleHeaderSize);
+        var preamble = new byte[preambleLength];
+        fs.Position = keyblockSize;
+        fs.ReadExactly(preamble);
+        return ChromeOsTool.Detect(head, preamble, totalLength);
     }
 }
