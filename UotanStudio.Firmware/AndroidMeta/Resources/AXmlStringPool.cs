@@ -15,6 +15,7 @@ public sealed class AXmlStringPool
     private const uint SortedFlag = 1u << 0;
 
     private readonly List<string> _strings = [];
+    private Dictionary<string, int>? _index;
     private bool _isUtf8 = true;
     internal uint[] StyleOffsets { get; private set; } = [];
     internal byte[] StyleData { get; private set; } = [];
@@ -72,6 +73,7 @@ public sealed class AXmlStringPool
 
         _strings.Clear();
         _strings.Capacity = stringCount;
+        _index = null;
 
 
         var offsetsStart = offset + headerSize;
@@ -118,15 +120,24 @@ public sealed class AXmlStringPool
     /// <para>与 <paramref name="value"/> 相等的首个条目索引；无匹配时追加并返回新索引。</para></returns>
     public int Intern(string value)
     {
-        for (var i = 0; i < _strings.Count; i++)
+        var index = _index ??= BuildIndex();
+        if (index.TryGetValue(value, out var existing))
         {
-            if (string.Equals(_strings[i], value, StringComparison.Ordinal))
-            {
-                return i;
-            }
+            return existing;
         }
         _strings.Add(value);
+        index[value] = _strings.Count - 1;
         return _strings.Count - 1;
+    }
+
+    private Dictionary<string, int> BuildIndex()
+    {
+        var index = new Dictionary<string, int>(_strings.Count, StringComparer.Ordinal);
+        for (var i = 0; i < _strings.Count; i++)
+        {
+            index.TryAdd(_strings[i], i);
+        }
+        return index;
     }
 
     private static string ReadUtf8String(byte[] data, int pos, int end)
@@ -148,14 +159,7 @@ public sealed class AXmlStringPool
         var len = DecodeLength16(data, ref pos, end);
         if (len < 0 || len >= (end - pos) / 2 || BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos + len * 2)) != 0)
             throw new AXmlException("Truncated UTF-16 string.");
-        var unitCount = len;
-        var sb = new StringBuilder(unitCount);
-        for (var i = 0; i < unitCount; i++)
-        {
-            var unit = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos + i * 2));
-            sb.Append((char)unit);
-        }
-        return sb.ToString();
+        return Encoding.Unicode.GetString(data.AsSpan(pos, len * 2));
     }
 
     private static int DecodeLength8(byte[] data, ref int pos, int end)

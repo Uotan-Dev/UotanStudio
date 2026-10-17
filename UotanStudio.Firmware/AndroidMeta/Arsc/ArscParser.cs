@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Globalization;
 using System.Text;
 
 namespace UotanStudio.Firmware.AndroidMeta.Arsc;
@@ -69,13 +68,14 @@ public static class ArscParser
         var header = U16(data, 2);
         if (header < 12 || header > end) throw new ArscException("Invalid resource table header.");
         var table = new ResourceTable();
+        var configCache = new ConfigCache();
         for (var pos = (int)header; pos < end;)
         {
             var size = ChunkSize(data, pos, end);
             switch (U16(data, pos))
             {
                 case 1: table.GlobalPool.Parse(data, pos, size); break;
-                case 0x200: table.Packages.Add(ParsePackage(data, pos, size)); break;
+                case 0x200: table.Packages.Add(ParsePackage(data, pos, size, configCache)); break;
                 default: table.ExtraChunks.Add(data.AsSpan(pos, size).ToArray()); break;
             }
             pos += size;
@@ -93,7 +93,7 @@ public static class ArscParser
     /// <para>当 <paramref name="data"/> 的首个小端 <see cref="ushort"/> 等于 2 时返回 true。</para></returns>
     public static bool IsArsc(byte[] data) => data is { Length: >= 12 } && U16(data, 0) == 2;
 
-    private static ResPackage ParsePackage(byte[] data, int offset, int size)
+    private static ResPackage ParsePackage(byte[] data, int offset, int size, ConfigCache configCache)
     {
         var header = U16(data, offset + 2);
         if (header < 284) throw new ArscException("Truncated package header.");
@@ -121,15 +121,20 @@ public static class ArscParser
                     for (var i = 0; i < count; i++) flags[i] = U32(data, pos + 16 + i * 4);
                     pkg.TypeSpecFlags[data[pos + 8]] = flags;
                     break;
-                case 0x201: ParseType(data, pos, subSize, pkg); break;
+                case 0x201: ParseType(data, pos, subSize, pkg, configCache); break;
                 default: pkg.ExtraChunks.Add(data.AsSpan(pos, subSize).ToArray()); break;
             }
             pos += subSize;
         }
+        foreach (var type in pkg.Types)
+        {
+            if (pkg.TypeSpecFlags.TryGetValue(type.Id, out var spec) && type.EntryCount > spec.Length)
+                throw new ArscException("Resource entry index exceeds its type specification.");
+        }
         return pkg;
     }
 
-    private static void ParseType(byte[] data, int offset, int size, ResPackage pkg)
+    private static void ParseType(byte[] data, int offset, int size, ResPackage pkg, ConfigCache configCache)
     {
         Require(data, offset, 24, offset + size);
         var header = U16(data, offset + 2);
@@ -144,10 +149,10 @@ public static class ArscParser
         var type = new ResType
         {
             Id = data[offset + 8],
-            TypeNameIndex = Math.Max(0, data[offset + 8] - 1),
-            ConfigHex = Convert.ToHexString(data.AsSpan(offset + 20, configSize)),
-            ConfigDescription = DescribeConfig(data.AsSpan(offset + 20, configSize))
+            TypeNameIndex = Math.Max(0, data[offset + 8] - 1)
         };
+        var config = configCache.GetOrAdd(data.AsSpan(offset + 20, configSize));
+        type.SetConfig(config.Bytes, config.Description);
         var previousIndex = -1;
         for (var i = 0; i < count; i++)
         {
@@ -168,10 +173,13 @@ public static class ArscParser
             }
             else relative = U32(data, position);
             if (index > ushort.MaxValue) throw new ArscException("Resource entry index exceeds 16 bits.");
-            while (type.Entries.Count <= index) type.Entries.Add(null);
-            if (relative == uint.MaxValue) continue;
+            if (relative == uint.MaxValue)
+            {
+                type.SetEntry(index, null);
+                continue;
+            }
             if (relative > (uint)(size - entriesStart)) throw new ArscException("Entry is outside its type chunk.");
-            type.Entries[index] = ParseEntry(data, offset + entriesStart + (int)relative, offset + size);
+            type.SetEntry(index, ParseEntry(data, offset + entriesStart + (int)relative, offset + size));
         }
         pkg.Types.Add(type);
     }
@@ -219,32 +227,38 @@ public static class ArscParser
         return new ResValue { Type = (ResValueType)data[pos + 3], Data = U32(data, pos + 4) };
     }
 
-    private static string DescribeConfig(ReadOnlySpan<byte> config)
+    private sealed class ConfigCache
     {
-        if (config.Length < 16) return "default";
-        var parts = new List<string>();
-        var mcc = BinaryPrimitives.ReadUInt16LittleEndian(config[4..]);
-        var mnc = BinaryPrimitives.ReadUInt16LittleEndian(config[6..]);
-        if (mcc != 0) parts.Add("mcc" + mcc.ToString("D3", CultureInfo.InvariantCulture));
-        if (mnc != 0) parts.Add("mnc" + mnc.ToString("D3", CultureInfo.InvariantCulture));
-        var language = DecodeLocale(config[8], config[9], 'a');
-        var region = DecodeLocale(config[10], config[11], '0');
-        if (language.Length > 0) parts.Add(language);
-        if (region.Length > 0) parts.Add("r" + region);
-        if (config[12] == 1) parts.Add("port");
-        else if (config[12] == 2) parts.Add("land");
-        var density = BinaryPrimitives.ReadUInt16LittleEndian(config[14..]);
-        if (density != 0) parts.Add(density switch { 0xfffe => "anydpi", 0xffff => "nodpi", _ => "d" + density });
-        return parts.Count > 0 ? string.Join('-', parts) : "default";
+        private readonly Dictionary<byte[], ConfigEntry> _entries = new(ByteArrayComparer.Instance);
+
+        internal ConfigEntry GetOrAdd(ReadOnlySpan<byte> bytes)
+        {
+            var candidate = bytes.ToArray();
+            if (_entries.TryGetValue(candidate, out var existing))
+            {
+                return existing;
+            }
+            var entry = new ConfigEntry(candidate, ResConfig.Describe(candidate));
+            _entries.Add(candidate, entry);
+            return entry;
+        }
     }
 
-    private static string DecodeLocale(byte first, byte second, char basis)
+    private sealed record ConfigEntry(byte[] Bytes, string Description);
+
+    private sealed class ByteArrayComparer : IEqualityComparer<byte[]>
     {
-        if (first == 0) return string.Empty;
-        if ((first & 0x80) == 0) return new string([(char)first, (char)second]).TrimEnd('\0');
-        return new string([(char)(basis + (second & 31)),
-            (char)(basis + ((second & 224) >> 5) + ((first & 3) << 3)),
-            (char)(basis + ((first & 124) >> 2))]);
+        internal static ByteArrayComparer Instance { get; } = new();
+
+        public bool Equals(byte[]? x, byte[]? y) =>
+            ReferenceEquals(x, y) || (x is not null && y is not null && x.AsSpan().SequenceEqual(y));
+
+        public int GetHashCode(byte[] obj)
+        {
+            var hash = new HashCode();
+            hash.AddBytes(obj);
+            return hash.ToHashCode();
+        }
     }
 
     private static int ChunkSize(byte[] data, int pos, int end)

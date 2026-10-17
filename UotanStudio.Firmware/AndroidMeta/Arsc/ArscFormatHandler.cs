@@ -232,9 +232,8 @@ public sealed class ArscFormatHandler : IFormatHandler
                 foreach (var type in group)
                 {
                     sb.Append("    ").Append(type.ConfigDescription).AppendLine();
-                    foreach (var entry in type.Entries)
+                    foreach (var entry in type.EnumerateEntries())
                     {
-                        if (entry is null) continue;
                         var key = pkg.KeyStrings.GetString(entry.KeyIndex);
                         var value = entry.Value?.FormatValue(table.GlobalPool, pkg.Id) ?? string.Empty;
                         sb.Append("      ").Append(key).Append(" = ").Append(value).AppendLine();

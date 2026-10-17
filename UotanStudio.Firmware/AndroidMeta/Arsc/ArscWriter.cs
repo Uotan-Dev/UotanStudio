@@ -25,7 +25,6 @@ public static class ArscWriter
     private const ushort ResTableTypeSpecType = 0x0202;
     private const ushort ResTableTypeType = 0x0201;
 
-    private const uint NoEntry = 0xFFFFFFFF;
     private const ushort EntryFlagComplex = 0x0001;
 
 
@@ -65,16 +64,13 @@ public static class ArscWriter
 
         var global = BuildPool(table.GlobalPool);
 
-
-        var packageSizes = new int[table.Packages.Count];
+        var layouts = new PackageLayout[table.Packages.Count];
+        var totalSize = 12 + global.Size;
         for (var p = 0; p < table.Packages.Count; p++)
         {
-            packageSizes[p] = ComputePackageSize(table.Packages[p]);
+            layouts[p] = BuildPackageLayout(table.Packages[p]);
+            totalSize += layouts[p].Size;
         }
-
-        var totalSize = 12;
-        totalSize += global.Size;
-        foreach (var size in packageSizes) totalSize += size;
         foreach (var chunk in table.ExtraChunks) totalSize += chunk.Length;
 
 
@@ -87,9 +83,9 @@ public static class ArscWriter
 
         WriteStringPool(buffer, ref pos, global);
 
-        foreach (var pkg in table.Packages)
+        for (var p = 0; p < table.Packages.Count; p++)
         {
-            WritePackage(buffer, ref pos, pkg);
+            WritePackage(buffer, ref pos, table.Packages[p], layouts[p]);
         }
 
         foreach (var chunk in table.ExtraChunks)
@@ -100,12 +96,12 @@ public static class ArscWriter
         return buffer;
     }
 
-    private static void WritePackage(byte[] buffer, ref int pos, ResPackage pkg)
+    private static void WritePackage(byte[] buffer, ref int pos, ResPackage pkg, PackageLayout layout)
     {
 
 
         var typeStringsOffset = PackageHeaderSize;
-        var keyStringsOffset = typeStringsOffset + ComputePoolSize(pkg.TypeStrings);
+        var keyStringsOffset = typeStringsOffset + layout.TypeStrings.Size;
         WriteChunkHeader(buffer, ref pos, ResTablePackageType, PackageHeaderSize, 0);
         var packageStart = pos - 8;
 
@@ -126,8 +122,8 @@ public static class ArscWriter
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 16), pkg.TypeIdOffset);
         pos += 20;
 
-        WriteStringPool(buffer, ref pos, BuildPool(pkg.TypeStrings));
-        WriteStringPool(buffer, ref pos, BuildPool(pkg.KeyStrings));
+        WriteStringPool(buffer, ref pos, layout.TypeStrings);
+        WriteStringPool(buffer, ref pos, layout.KeyStrings);
 
 
         foreach (var group in pkg.Types.GroupBy(t => t.Id).OrderBy(g => g.Key))
@@ -135,7 +131,7 @@ public static class ArscWriter
             WriteTypeSpec(buffer, ref pos, group.Key, group, pkg);
             foreach (var type in group)
             {
-                WriteTypeTable(buffer, ref pos, type, pkg);
+                WriteTypeTable(buffer, ref pos, type, layout.Configs[type]);
             }
         }
         foreach (var typeId in pkg.TypeSpecFlags.Keys.Except(pkg.Types.Select(t => t.Id)).Order())
@@ -156,7 +152,7 @@ public static class ArscWriter
 
 
         pkg.TypeSpecFlags.TryGetValue(typeId, out var originalFlags);
-        var entryCount = Math.Max(group.Select(t => t.Entries.Count).DefaultIfEmpty().Max(), originalFlags?.Length ?? 0);
+        var entryCount = Math.Max(group.Select(t => t.EntryCount).DefaultIfEmpty().Max(), originalFlags?.Length ?? 0);
 
         var size = TypeSpecHeaderSize + entryCount * 4;
         WriteChunkHeader(buffer, ref pos, ResTableTypeSpecType, TypeSpecHeaderSize, size);
@@ -174,11 +170,10 @@ public static class ArscWriter
         }
     }
 
-    private static void WriteTypeTable(byte[] buffer, ref int pos, ResType type, ResPackage pkg)
+    private static void WriteTypeTable(byte[] buffer, ref int pos, ResType type, byte[] configBytes)
     {
         var chunkStart = pos;
-        var entryCount = type.Entries.Count;
-        var configBytes = GetConfig(type);
+        var entryCount = type.EntryCount;
         var typeHeaderSize = checked((ushort)(20 + configBytes.Length));
         var entriesStart = typeHeaderSize + entryCount * 4;
         var size = entriesStart + ComputeEntriesSize(type);
@@ -196,25 +191,40 @@ public static class ArscWriter
 
 
         var offsetsBase = pos;
+        buffer.AsSpan(offsetsBase, entryCount * 4).Fill(0xFF);
         pos += entryCount * 4;
 
-        for (var i = 0; i < entryCount; i++)
+        if (type.MaterializedEntries is { } entries)
         {
-            var entry = i < type.Entries.Count ? type.Entries[i] : null;
-            if (entry is null)
+            for (var i = 0; i < entries.Count; i++)
             {
-                BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(offsetsBase + i * 4), NoEntry);
-                continue;
+                var entry = entries[i];
+                if (entry is null)
+                {
+                    continue;
+                }
+                WriteEntryOffsetAndBody(buffer, ref pos, chunkStart, entriesStart, offsetsBase, i, entry);
             }
+            return;
+        }
 
-
-            BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(offsetsBase + i * 4),
-                (uint)(pos - (chunkStart + entriesStart)));
-            WriteEntry(buffer, ref pos, entry, pkg);
+        var compactCount = type.CompactEntryCount;
+        for (var i = 0; i < compactCount; i++)
+        {
+            WriteEntryOffsetAndBody(buffer, ref pos, chunkStart, entriesStart, offsetsBase,
+                type.CompactEntryIndex(i), type.CompactEntryValue(i));
         }
     }
 
-    private static void WriteEntry(byte[] buffer, ref int pos, ResEntry entry, ResPackage pkg)
+    private static void WriteEntryOffsetAndBody(byte[] buffer, ref int pos, int chunkStart, int entriesStart,
+        int offsetsBase, int index, ResEntry entry)
+    {
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(offsetsBase + index * 4),
+            (uint)(pos - (chunkStart + entriesStart)));
+        WriteEntry(buffer, ref pos, entry);
+    }
+
+    private static void WriteEntry(byte[] buffer, ref int pos, ResEntry entry)
     {
         var value = entry.Value;
         if (value is null || !value.IsComplex)
@@ -253,53 +263,74 @@ public static class ArscWriter
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(offset + 4), value.Data);
     }
 
-    private static int ComputePackageSize(ResPackage pkg)
+    private static PackageLayout BuildPackageLayout(ResPackage pkg)
     {
-        var size = PackageHeaderSize;
-        size += ComputePoolSize(pkg.TypeStrings);
-        size += ComputePoolSize(pkg.KeyStrings);
+        var typeStrings = BuildPool(pkg.TypeStrings);
+        var keyStrings = BuildPool(pkg.KeyStrings);
+        var configs = new Dictionary<ResType, byte[]>(pkg.Types.Count);
+        foreach (var type in pkg.Types)
+        {
+            configs[type] = PrepareConfig(type);
+        }
+
+        var size = PackageHeaderSize + typeStrings.Size + keyStrings.Size;
         foreach (var group in pkg.Types.GroupBy(t => t.Id))
         {
-            var entryCount = Math.Max(group.Max(t => t.Entries.Count),
+            var entryCount = Math.Max(group.Max(t => t.EntryCount),
                 pkg.TypeSpecFlags.TryGetValue(group.Key, out var flags) ? flags.Length : 0);
             size += TypeSpecHeaderSize + entryCount * 4;
             foreach (var type in group)
             {
-                size += 20 + GetConfig(type).Length + type.Entries.Count * 4 + ComputeEntriesSize(type);
+                size += 20 + configs[type].Length + type.EntryCount * 4 + ComputeEntriesSize(type);
             }
         }
         foreach (var typeId in pkg.TypeSpecFlags.Keys.Except(pkg.Types.Select(t => t.Id)))
             size += TypeSpecHeaderSize + pkg.TypeSpecFlags[typeId].Length * 4;
         foreach (var chunk in pkg.ExtraChunks) size += chunk.Length;
-        return size;
+        return new PackageLayout(typeStrings, keyStrings, configs, size);
     }
 
-    private static byte[] GetConfig(ResType type)
+    private static byte[] PrepareConfig(ResType type)
     {
-        var bytes = string.IsNullOrEmpty(type.ConfigHex) ? new byte[ConfigSize] : Convert.FromHexString(type.ConfigHex);
-        if (bytes.Length < 4 || bytes.Length > ushort.MaxValue - 20 || (bytes.Length & 3) != 0)
+        var stored = type.ConfigBytes;
+        if (stored.Length == 0)
+        {
+            var bytes = new byte[ConfigSize];
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes, (uint)bytes.Length);
+            return bytes;
+        }
+        if (stored.Length < 4 || stored.Length > ushort.MaxValue - 20 || (stored.Length & 3) != 0)
             throw new ArscException("Invalid resource config length.");
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes, (uint)bytes.Length);
-        return bytes;
+        if (BinaryPrimitives.ReadUInt32LittleEndian(stored) == (uint)stored.Length)
+            return stored;
+        var patched = (byte[])stored.Clone();
+        BinaryPrimitives.WriteUInt32LittleEndian(patched, (uint)patched.Length);
+        return patched;
     }
 
     private static int ComputeEntriesSize(ResType type)
     {
         var size = 0;
-        foreach (var entry in type.Entries)
+        if (type.MaterializedEntries is { } entries)
         {
-            if (entry is null) continue;
-            if (entry.Value is { IsComplex: true } complex)
+            foreach (var entry in entries)
             {
-                size += 16 + complex.Maps.Count * 12;
+                if (entry is not null)
+                {
+                    size += EntrySize(entry);
+                }
             }
-            else
-            {
-                size += 16;
-            }
+            return size;
+        }
+        for (var i = 0; i < type.CompactEntryCount; i++)
+        {
+            size += EntrySize(type.CompactEntryValue(i));
         }
         return size;
     }
+
+    private static int EntrySize(ResEntry entry) =>
+        entry.Value is { IsComplex: true } complex ? 16 + complex.Maps.Count * 12 : 16;
 
     private static void WriteChunkHeader(byte[] buffer, ref int pos, ushort type, ushort headerSize, int size)
     {
@@ -353,43 +384,39 @@ public static class ArscWriter
         return new PoolLayout(offsets, payloads, stringsStart, dataSize + pool.StyleData.Length, pool.StyleOffsets, pool.StyleData);
     }
 
-    private static int ComputePoolSize(AXmlStringPool pool)
-    {
-        var size = 28 + (pool.Count + pool.StyleOffsets.Length) * 4 + pool.StyleData.Length;
-        for (var i = 0; i < pool.Count; i++)
-        {
-            size += EncodeUtf8String(pool.GetString(i)).Length;
-        }
-        return size;
-    }
-
     /// <summary>
     /// Encodes one UTF-8 pool string (AOSP length header: UTF-16 length then UTF-8 length, 4-byte aligned).
     /// <para>编码一个 UTF-8 池字符串（AOSP 长度头：先 UTF-16 长度后 UTF-8 长度，4 字节对齐）。</para>
     /// </summary>
     private static byte[] EncodeUtf8String(string value)
     {
-        var utf16Len = value.Length;
-        var utf8Bytes = Encoding.UTF8.GetBytes(value);
-        var utf16Header = EncodeLength(utf16Len);
-        var utf8Header = EncodeLength(utf8Bytes.Length);
-        var payloadLen = utf16Header.Length + utf8Header.Length + utf8Bytes.Length + 1;
-        var padded = (payloadLen + 3) & ~3;
+        var utf16Length = value.Length;
+        var utf8ByteCount = Encoding.UTF8.GetByteCount(value);
+        var utf16HeaderLength = utf16Length < 0x80 ? 1 : 2;
+        var utf8HeaderLength = utf8ByteCount < 0x80 ? 1 : 2;
+        var payloadLength = utf16HeaderLength + utf8HeaderLength + utf8ByteCount + 1;
+        var padded = (payloadLength + 3) & ~3;
         var payload = new byte[padded];
-        utf16Header.CopyTo(payload, 0);
-        utf8Header.CopyTo(payload, utf16Header.Length);
-        utf8Bytes.CopyTo(payload, utf16Header.Length + utf8Header.Length);
+        var cursor = WriteLength(payload, 0, utf16Length);
+        cursor = WriteLength(payload, cursor, utf8ByteCount);
+        Encoding.UTF8.GetBytes(value, payload.AsSpan(cursor));
         return payload;
     }
 
-    private static byte[] EncodeLength(int length)
+    private static int WriteLength(byte[] buffer, int offset, int length)
     {
         if (length < 0x80)
         {
-            return [(byte)length];
+            buffer[offset] = (byte)length;
+            return offset + 1;
         }
-        return [(byte)(0x80 | (length >> 8)), (byte)(length & 0xFF)];
+        buffer[offset] = (byte)(0x80 | (length >> 8));
+        buffer[offset + 1] = (byte)(length & 0xFF);
+        return offset + 2;
     }
+
+    private sealed record PackageLayout(PoolLayout TypeStrings, PoolLayout KeyStrings,
+        Dictionary<ResType, byte[]> Configs, int Size);
 
     private sealed record PoolLayout(int[] Offsets, byte[][] Payloads, int StringsStart, int Size, uint[] StyleOffsets, byte[] StyleData);
 }

@@ -50,14 +50,18 @@ public static class AXmlWriter
         ArgumentNullException.ThrowIfNull(doc);
         if (doc.Root is null) throw new AXmlException("AXML document has no root element");
 
-        var pool = Enumerable.Range(0, doc.StringPool.Count)
-            .Select(doc.StringPool.GetString).ToList();
+        var pool = new List<string>(doc.StringPool.Count);
+        var poolIndex = new Dictionary<string, int>(doc.StringPool.Count, StringComparer.Ordinal);
+        for (var i = 0; i < doc.StringPool.Count; i++)
+        {
+            var value = doc.StringPool.GetString(i);
+            poolIndex.TryAdd(value, pool.Count);
+            pool.Add(value);
+        }
         int Intern(string s)
         {
-            for (var i = 0; i < pool.Count; i++)
-            {
-                if (string.Equals(pool[i], s, StringComparison.Ordinal)) return i;
-            }
+            if (poolIndex.TryGetValue(s, out var existing)) return existing;
+            poolIndex[s] = pool.Count;
             pool.Add(s);
             return pool.Count - 1;
         }
@@ -66,11 +70,6 @@ public static class AXmlWriter
         {
             Intern(ns.Prefix);
             Intern(ns.Uri);
-        }
-
-        for (var i = 0; i < doc.StringPool.Count; i++)
-        {
-            Intern(doc.StringPool.GetString(i));
         }
 
         var stack = new Stack<AXmlElement>();
@@ -166,7 +165,7 @@ public static class AXmlWriter
             pos += 16;
         }
 
-        WriteElementTree(buffer, ref pos, doc.Root, pool, 0);
+        WriteElementTree(buffer, ref pos, doc.Root, pool, poolIndex, 0);
 
         foreach (var ns in doc.Namespaces)
         {
@@ -181,7 +180,8 @@ public static class AXmlWriter
         return buffer;
     }
 
-    private static void WriteStartElement(byte[] buffer, ref int pos, AXmlElement el, List<string> pool, int line)
+    private static void WriteStartElement(byte[] buffer, ref int pos, AXmlElement el, List<string> pool,
+        Dictionary<string, int> poolIndex, int line)
     {
         var attrCount = el.Attributes.Count;
         var attrStart = 20;
@@ -190,8 +190,8 @@ public static class AXmlWriter
         WriteChunkHeader(buffer, ref pos, ResXmlStartElementType, 16, size);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), (uint)(line > 0 ? line : 1));
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), NoIndex);
-        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8), (uint)PoolIndex(pool, el.Namespace));
-        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 12), (uint)PoolIndex(pool, el.Name));
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8), (uint)PoolIndex(poolIndex, el.Namespace));
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 12), (uint)PoolIndex(poolIndex, el.Name));
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 16), (ushort)attrStart);
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 18), (ushort)attrSize);
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 20), (ushort)attrCount);
@@ -202,12 +202,12 @@ public static class AXmlWriter
 
         foreach (var attr in el.Attributes)
         {
-            BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), (uint)PoolIndex(pool, attr.Namespace));
+            BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), (uint)PoolIndex(poolIndex, attr.Namespace));
             var nameIndex = attr.OriginalNameIndex is int original && original >= 0
-                && original < pool.Count && pool[original] == attr.Name ? original : PoolIndex(pool, attr.Name);
+                && original < pool.Count && pool[original] == attr.Name ? original : PoolIndex(poolIndex, attr.Name);
             BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), (uint)nameIndex);
             BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8),
-                attr.RawValue is null ? NoIndex : (uint)PoolIndex(pool, attr.RawValue));
+                attr.RawValue is null ? NoIndex : (uint)PoolIndex(poolIndex, attr.RawValue));
             BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 12), 8);
             buffer[pos + 14] = 0;
             buffer[pos + 15] = (byte)attr.ValueType;
@@ -216,45 +216,46 @@ public static class AXmlWriter
         }
     }
 
-    private static void WriteEndElement(byte[] buffer, ref int pos, AXmlElement el, List<string> pool, int line)
+    private static void WriteEndElement(byte[] buffer, ref int pos, AXmlElement el, Dictionary<string, int> poolIndex, int line)
     {
         WriteChunkHeader(buffer, ref pos, ResXmlEndElementType, 16, 24);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), (uint)(line > 0 ? line : 1));
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), NoIndex);
-        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8), (uint)PoolIndex(pool, el.Namespace));
-        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 12), (uint)PoolIndex(pool, el.Name));
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8), (uint)PoolIndex(poolIndex, el.Namespace));
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 12), (uint)PoolIndex(poolIndex, el.Name));
         pos += 16;
     }
 
-    private static void WriteElementTree(byte[] buffer, ref int pos, AXmlElement el, List<string> pool, int depth)
+    private static void WriteElementTree(byte[] buffer, ref int pos, AXmlElement el, List<string> pool,
+        Dictionary<string, int> poolIndex, int depth)
     {
-        WriteStartElement(buffer, ref pos, el, pool, el.LineNumber > 0 ? el.LineNumber : depth + 1);
+        WriteStartElement(buffer, ref pos, el, pool, poolIndex, el.LineNumber > 0 ? el.LineNumber : depth + 1);
 
         if (el.Text is not null && el.Children.Count == 0)
         {
-            WriteCdata(buffer, ref pos, el.Text, pool, el.LineNumber > 0 ? el.LineNumber : depth + 1);
+            WriteCdata(buffer, ref pos, el.Text, poolIndex, el.LineNumber > 0 ? el.LineNumber : depth + 1);
         }
         else
         {
             foreach (var child in el.Children)
             {
-                WriteElementTree(buffer, ref pos, child, pool, depth + 1);
+                WriteElementTree(buffer, ref pos, child, pool, poolIndex, depth + 1);
             }
         }
 
-        WriteEndElement(buffer, ref pos, el, pool, el.LineNumber > 0 ? el.LineNumber : depth + 1);
+        WriteEndElement(buffer, ref pos, el, poolIndex, el.LineNumber > 0 ? el.LineNumber : depth + 1);
     }
 
-    private static void WriteCdata(byte[] buffer, ref int pos, string text, List<string> pool, int line)
+    private static void WriteCdata(byte[] buffer, ref int pos, string text, Dictionary<string, int> poolIndex, int line)
     {
         WriteChunkHeader(buffer, ref pos, ResXmlCdataType, 16, 28);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), (uint)(line > 0 ? line : 1));
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), NoIndex);
-        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8), (uint)PoolIndex(pool, text));
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8), (uint)PoolIndex(poolIndex, text));
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 12), 8);
         buffer[pos + 14] = 0;
         buffer[pos + 15] = (byte)AXmlValueType.String;
-        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 16), (uint)PoolIndex(pool, text));
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 16), (uint)PoolIndex(poolIndex, text));
         pos += 20;
     }
 
@@ -276,14 +277,12 @@ public static class AXmlWriter
         return size;
     }
 
-    private static int PoolIndex(List<string> pool, string? value)
+    private static int PoolIndex(Dictionary<string, int> poolIndex, string? value)
     {
         if (value is null) return -1;
-        for (var i = 0; i < pool.Count; i++)
-        {
-            if (string.Equals(pool[i], value, StringComparison.Ordinal)) return i;
-        }
-        throw new AXmlException($"String '{value}' not found in the rebuilt pool");
+        return poolIndex.TryGetValue(value, out var index)
+            ? index
+            : throw new AXmlException($"String '{value}' not found in the rebuilt pool");
     }
 
     /// <summary>
@@ -294,28 +293,30 @@ public static class AXmlWriter
     /// <returns>The padded payload and its total byte count. <para>补齐后的载荷及其总字节数。</para></returns>
     private static (byte[] Payload, int Total) EncodeUtf8String(string value)
     {
-        var utf16Len = value.Length;
-        var utf8Bytes = Encoding.UTF8.GetBytes(value);
-
-        var utf16Header = EncodeLength(utf16Len);
-        var utf8Header = EncodeLength(utf8Bytes.Length);
-        var payloadLen = utf16Header.Length + utf8Header.Length + utf8Bytes.Length + 1;
-        var padded = (payloadLen + 3) & ~3;
+        var utf16Length = value.Length;
+        var utf8ByteCount = Encoding.UTF8.GetByteCount(value);
+        var utf16HeaderLength = utf16Length < 0x80 ? 1 : 2;
+        var utf8HeaderLength = utf8ByteCount < 0x80 ? 1 : 2;
+        var payloadLength = utf16HeaderLength + utf8HeaderLength + utf8ByteCount + 1;
+        var padded = (payloadLength + 3) & ~3;
         var payload = new byte[padded];
-        utf16Header.CopyTo(payload, 0);
-        utf8Header.CopyTo(payload, utf16Header.Length);
-        utf8Bytes.CopyTo(payload, utf16Header.Length + utf8Header.Length);
+        var cursor = WriteLength(payload, 0, utf16Length);
+        cursor = WriteLength(payload, cursor, utf8ByteCount);
+        Encoding.UTF8.GetBytes(value, payload.AsSpan(cursor));
 
         return (payload, padded);
     }
 
-    private static byte[] EncodeLength(int length)
+    private static int WriteLength(byte[] buffer, int offset, int length)
     {
         if (length < 0x80)
         {
-            return [(byte)length];
+            buffer[offset] = (byte)length;
+            return offset + 1;
         }
-        return [(byte)(0x80 | (length >> 8)), (byte)(length & 0xFF)];
+        buffer[offset] = (byte)(0x80 | (length >> 8));
+        buffer[offset + 1] = (byte)(length & 0xFF);
+        return offset + 2;
     }
 
     private static void WriteChunkHeader(byte[] buffer, ref int pos, ushort type, ushort headerSize, int size)

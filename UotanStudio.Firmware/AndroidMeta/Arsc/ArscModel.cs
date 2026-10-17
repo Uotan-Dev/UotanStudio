@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Globalization;
 using UotanStudio.Firmware.AndroidMeta.AXml;
 using UotanStudio.Firmware.AndroidMeta.Resources;
@@ -137,11 +138,15 @@ public sealed class ResValue
     /// <para>复杂值的属性映射，按序列化顺序。</para>
     /// </summary>
     /// <value>
-    /// Each map occupies 12 bytes (a uint32 name reference plus an 8-byte value); empty for
-    /// non-complex values and never <see langword="null"/>.
-    /// <para>每个映射占 12 字节（uint32 名称引用加 8 字节值）；非复杂值时为空，且永不为 <see langword="null"/>。</para>
+    /// Each map occupies 12 bytes (a uint32 name reference plus an 8-byte value); the backing list is
+    /// created on first access so simple values carry no map storage, and the property is never
+    /// <see langword="null"/>.
+    /// <para>每个映射占 12 字节（uint32 名称引用加 8 字节值）；底层列表在首次访问时创建，因此简单值不占用映射存储，
+    /// 且该属性永不为 <see langword="null"/>。</para>
     /// </value>
-    public List<ResMap> Maps { get; } = [];
+    public List<ResMap> Maps => _maps ??= [];
+
+    private List<ResMap>? _maps;
 
     /// <summary>
     /// Formats the value as readable text (strings decoded via globalPool; references as resource IDs).
@@ -308,8 +313,27 @@ public sealed class ResEntry
 /// One type table chunk: all entries of a single resource type under one device configuration.
 /// <para>单个类型表块：某一设备配置下单一资源类型的全部条目。</para>
 /// </summary>
+/// <remarks>
+/// Parsed entries are stored as two parallel arrays keyed by ascending entry index, so a chunk whose
+/// highest index is far above its entry count costs one index and one reference per present entry
+/// instead of one list slot per index. <see cref="Entries"/> materializes the sparse list on demand
+/// for callers that need slot-based access.
+/// <para>解析出的条目以按索引升序排列的两个平行数组保存，因此最高索引远高于条目数的块只为每个存在的条目
+/// 付出一个索引和一个引用的代价，而不是为每个索引保留一个列表槽。<see cref="Entries"/> 按需为需要槽位访问的
+/// 调用方物化该稀疏列表。</para>
+/// </remarks>
 public sealed class ResType
 {
+    private const int MaxEntrySlotCount = ushort.MaxValue + 1;
+
+    private int[] _entryIndices = [];
+    private ResEntry[] _entryValues = [];
+    private int _compactCount;
+    private int _slotCount;
+    private List<ResEntry?>? _entriesView;
+    private byte[] _configBytes = [];
+    private string? _configDescription;
+
     /// <summary>Package-local resource type identifier. <para>包内资源类型标识。</para></summary>
     /// <value>
     /// 1-based byte from the type chunk header, occupying bits 16-23 of every resource id it defines.
@@ -329,11 +353,17 @@ public sealed class ResType
 
     /// <summary>Readable description of the configuration this table applies to. <para>此表所适用配置的可读描述。</para></summary>
     /// <value>
-    /// Built from the mcc, mnc, locale, orientation and density fields of the raw config;
-    /// <c>default</c> when no qualifier is set or the config is shorter than 16 bytes.
-    /// <para>由原始配置的 mcc、mnc、语言区域、方向与密度字段构建；无限定符或配置短于 16 字节时为 <c>default</c>。</para>
+    /// Derived from the mcc, mnc, locale, orientation and density fields of the raw config when no
+    /// explicit value was assigned; <c>default</c> when no qualifier is set or the config is shorter
+    /// than 16 bytes, and empty for a type that has no config bytes.
+    /// <para>未显式赋值时由原始配置的 mcc、mnc、语言区域、方向与密度字段推导；无限定符或配置短于 16 字节时为
+    /// <c>default</c>，没有配置字节的类型则为空字符串。</para>
     /// </value>
-    public string ConfigDescription { get; set; } = string.Empty;
+    public string ConfigDescription
+    {
+        get => _configDescription ?? (_configBytes.Length == 0 ? string.Empty : ResConfig.Describe(_configBytes));
+        set => _configDescription = value;
+    }
 
     /// <summary>
     /// Upper-case hexadecimal copy of the raw little-endian configuration bytes.
@@ -344,7 +374,11 @@ public sealed class ResType
     /// serializes a zero-filled default configuration.
     /// <para>写出器还原这些字节并重写内嵌长度字段；空字符串会序列化为全零的默认配置。</para>
     /// </value>
-    public string ConfigHex { get; set; } = string.Empty;
+    public string ConfigHex
+    {
+        get => _configBytes.Length == 0 ? string.Empty : Convert.ToHexString(_configBytes);
+        set => _configBytes = string.IsNullOrEmpty(value) ? [] : Convert.FromHexString(value);
+    }
 
     /// <summary>
     /// Sparse entry slots indexed by resource entry index.
@@ -352,10 +386,185 @@ public sealed class ResType
     /// </summary>
     /// <value>
     /// A <see langword="null"/> slot marks an absent entry (the writer emits the 0xFFFFFFFF offset
-    /// sentinel); parsing grows the list past the highest index seen, and indices must fit 16 bits.
-    /// <para><see langword="null"/> 槽表示条目缺失（写出器输出 0xFFFFFFFF 偏移哨兵值）；解析会把列表扩展到最大索引之后，且索引必须能容纳于 16 位。</para>
+    /// sentinel); the list covers every index up to the highest one seen, and indices must fit
+    /// 16 bits. Parsing keeps entries in compact arrays and materializes this list on first access.
+    /// <para><see langword="null"/> 槽表示条目缺失（写出器输出 0xFFFFFFFF 偏移哨兵值）；列表覆盖到最大索引为止的
+    /// 每个索引，且索引必须能容纳于 16 位。解析时条目保存在紧凑数组中，本列表在首次访问时才物化。</para>
     /// </value>
-    public List<ResEntry?> Entries { get; } = [];
+    public List<ResEntry?> Entries => _entriesView ??= MaterializeEntries();
+
+    internal byte[] ConfigBytes => _configBytes;
+
+    internal int EntryCount => _entriesView?.Count ?? _slotCount;
+
+    internal int PresentEntryCount
+    {
+        get
+        {
+            if (_entriesView is not { } view)
+            {
+                return _compactCount;
+            }
+            var count = 0;
+            foreach (var entry in view)
+            {
+                if (entry is not null)
+                {
+                    count++;
+                }
+            }
+            return count;
+        }
+    }
+
+    internal List<ResEntry?>? MaterializedEntries => _entriesView;
+
+    internal int CompactEntryCount => _compactCount;
+
+    internal int CompactEntryIndex(int ordinal) => _entryIndices[ordinal];
+
+    internal ResEntry CompactEntryValue(int ordinal) => _entryValues[ordinal];
+
+    internal IEnumerable<ResEntry> EnumerateEntries()
+    {
+        if (_entriesView is { } view)
+        {
+            foreach (var entry in view)
+            {
+                if (entry is not null)
+                {
+                    yield return entry;
+                }
+            }
+            yield break;
+        }
+        for (var i = 0; i < _compactCount; i++)
+        {
+            yield return _entryValues[i];
+        }
+    }
+
+    internal void SetConfig(byte[] bytes, string description)
+    {
+        _configBytes = bytes;
+        _configDescription = description;
+    }
+
+    internal void SetEntry(int index, ResEntry? entry)
+    {
+        if (_entriesView is { } view)
+        {
+            while (view.Count <= index)
+            {
+                view.Add(null);
+            }
+            view[index] = entry;
+            return;
+        }
+        if (index >= _slotCount)
+        {
+            _slotCount = index + 1;
+        }
+        if (entry is null)
+        {
+            return;
+        }
+        if (_compactCount == _entryIndices.Length)
+        {
+            var capacity = _entryIndices.Length == 0
+                ? 4
+                : Math.Min(_entryIndices.Length * 2, MaxEntrySlotCount);
+            Array.Resize(ref _entryIndices, capacity);
+            Array.Resize(ref _entryValues, capacity);
+        }
+        _entryIndices[_compactCount] = index;
+        _entryValues[_compactCount] = entry;
+        _compactCount++;
+    }
+
+    internal ResEntry? FindEntry(int index)
+    {
+        if (_entriesView is { } view)
+        {
+            return (uint)index < (uint)view.Count ? view[index] : null;
+        }
+        var low = 0;
+        var high = _compactCount - 1;
+        while (low <= high)
+        {
+            var middle = low + ((high - low) >> 1);
+            var candidate = _entryIndices[middle];
+            if (candidate == index)
+            {
+                return _entryValues[middle];
+            }
+            if (candidate < index)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+        return null;
+    }
+
+    private List<ResEntry?> MaterializeEntries()
+    {
+        var entries = new List<ResEntry?>(_slotCount);
+        var next = 0;
+        for (var i = 0; i < _compactCount; i++)
+        {
+            while (next < _entryIndices[i])
+            {
+                entries.Add(null);
+                next++;
+            }
+            entries.Add(_entryValues[i]);
+            next++;
+        }
+        while (entries.Count < _slotCount)
+        {
+            entries.Add(null);
+        }
+        return entries;
+    }
+}
+
+/// <summary>
+/// Derives the readable configuration qualifier string from raw little-endian config bytes.
+/// <para>从原始小端配置字节推导可读的配置限定符字符串。</para>
+/// </summary>
+internal static class ResConfig
+{
+    internal static string Describe(ReadOnlySpan<byte> config)
+    {
+        if (config.Length < 16) return "default";
+        var parts = new List<string>();
+        var mcc = BinaryPrimitives.ReadUInt16LittleEndian(config[4..]);
+        var mnc = BinaryPrimitives.ReadUInt16LittleEndian(config[6..]);
+        if (mcc != 0) parts.Add("mcc" + mcc.ToString("D3", CultureInfo.InvariantCulture));
+        if (mnc != 0) parts.Add("mnc" + mnc.ToString("D3", CultureInfo.InvariantCulture));
+        var language = DecodeLocale(config[8], config[9], 'a');
+        var region = DecodeLocale(config[10], config[11], '0');
+        if (language.Length > 0) parts.Add(language);
+        if (region.Length > 0) parts.Add("r" + region);
+        if (config[12] == 1) parts.Add("port");
+        else if (config[12] == 2) parts.Add("land");
+        var density = BinaryPrimitives.ReadUInt16LittleEndian(config[14..]);
+        if (density != 0) parts.Add(density switch { 0xfffe => "anydpi", 0xffff => "nodpi", _ => "d" + density });
+        return parts.Count > 0 ? string.Join('-', parts) : "default";
+    }
+
+    private static string DecodeLocale(byte first, byte second, char basis)
+    {
+        if (first == 0) return string.Empty;
+        if ((first & 0x80) == 0) return new string([(char)first, (char)second]).TrimEnd('\0');
+        return new string([(char)(basis + (second & 31)),
+            (char)(basis + ((second & 224) >> 5) + ((first & 3) << 3)),
+            (char)(basis + ((first & 124) >> 2))]);
+    }
 }
 
 /// <summary>
@@ -480,7 +689,7 @@ public sealed class ResourceTable
         {
             sb.AppendLine();
             sb.Append("  package 0x").Append(pkg.Id.ToString("x2")).Append(' ').Append(pkg.Name);
-            var entryCount = pkg.Types.Sum(t => t.Entries.Count(e => e is not null));
+            var entryCount = pkg.Types.Sum(t => t.PresentEntryCount);
             var typeCount = pkg.Types.Select(t => (int)t.Id).Distinct().Count();
             sb.Append(" | types: ").Append(typeCount).Append(" | tables: ").Append(pkg.Types.Count);
             sb.Append(" | entries: ").Append(entryCount);

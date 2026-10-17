@@ -344,48 +344,6 @@ public sealed class AXmlDocument
             return result;
         }
     }
-
-    private static void AppendElement(System.Text.StringBuilder sb, AXmlDocument doc, AXmlElement element, int depth)
-    {
-        var indent = new string(' ', depth * 2);
-        sb.Append(indent).Append('<').Append(element.Name);
-
-        foreach (var attr in element.Attributes)
-        {
-            sb.Append(' ').Append(attr.Name).Append("=\"")
-              .Append(Escape(attr.FormatValue(doc.StringPool, doc.ResourceMap))).Append('"');
-        }
-
-        if (element.Text is not null && element.Children.Count == 0)
-        {
-            sb.Append('>').Append(Escape(element.Text)).Append("</").Append(element.Name).Append(">\n");
-            return;
-        }
-
-        if (element.Children.Count == 0)
-        {
-            sb.Append("/>\n");
-            return;
-        }
-
-        sb.Append(">\n");
-        foreach (var child in element.Children)
-        {
-            AppendElement(sb, doc, child, depth + 1);
-        }
-        sb.Append(indent).Append("</").Append(element.Name).Append(">\n");
-    }
-
-    private static string Escape(string value)
-    {
-        if (string.IsNullOrEmpty(value)) return value;
-        return value
-            .Replace("&", "&amp;")
-            .Replace("<", "&lt;")
-            .Replace(">", "&gt;")
-            .Replace("\"", "&quot;")
-            .Replace("'", "&apos;");
-    }
 }
 
 /// <summary>
