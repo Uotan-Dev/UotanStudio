@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
 
@@ -110,9 +111,28 @@ internal static class MyPartitionPreservationFold
 
         var payload = JsonSerializer.SerializeToNode(system, FileSystemPreservationJsonContext.Default.FileSystemPreservationData)!.AsObject();
         systemMetadata.FileSystemPreservation = payload;
-        payload["configurationHash"] = FileSystemPreservation.HashConfiguration(systemMetadata);
+        payload.Remove("configurationHash");
+        payload["configurationHash"] = HashConfiguration(systemMetadata);
         await systemMetadata.SaveAsync(systemMetadataDirectory, cancellationToken).ConfigureAwait(false);
         return (true, rekeyedEntries.Count);
+    }
+
+    /// <summary>
+    /// Hashes the metadata document in one streaming pass with the preservation digest removed, using the same compact
+    /// camel-cased JSON text <see cref="FileSystemPreservation.HashConfiguration"/> derives through a node graph, so the
+    /// recorded digest stays verifiable by the existing reader.
+    /// <para>以单趟流式方式对移除保留摘要后的元数据文档计算哈希，输出与 <see cref="FileSystemPreservation.HashConfiguration"/>
+    /// 经节点图得到的紧凑驼峰 JSON 文本一致，因此记录的摘要仍可由既有读取方校验。</para>
+    /// </summary>
+    private static string HashConfiguration(RepackMetadata metadata)
+    {
+        using var hashing = new HashingWriteStream(Stream.Null, leaveOpen: true);
+        using (var writer = new Utf8JsonWriter(hashing))
+        {
+            JsonSerializer.Serialize(writer, metadata, WorkflowJsonContext.Default.RepackMetadata);
+        }
+
+        return Convert.ToHexString(hashing.GetHashAndReset());
     }
 
     private static void FoldTable<TSource>(IEnumerable<KeyValuePair<string, TSource>> source,

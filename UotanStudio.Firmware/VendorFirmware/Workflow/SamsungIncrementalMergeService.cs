@@ -2,8 +2,10 @@ using System.IO.Compression;
 using UotanStudio.Compress;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Firmware.OtaDelta.Payload.Models;
 
 namespace UotanStudio.Firmware.VendorFirmware.Workflow;
 
@@ -136,6 +138,15 @@ internal sealed class SamsungIncrementalMergeService
 
     private static async Task<SamsungPayloadMergePlan> ListPayloadCoreAsync(string payloadPath,
         CancellationToken cancellationToken)
+        => (await BuildPayloadPlanAsync(payloadPath, cancellationToken).ConfigureAwait(false)).Plan;
+
+    /// <summary>
+    /// Parses the payload manifest once and projects its named partitions, returning the parsed metadata so a later raw
+    /// payload extraction can reuse it instead of re-reading the manifest.
+    /// <para>只解析一次载荷清单并投影其有名字分区，同时返回已解析元数据，使后续原始载荷提取可以复用而无需重读清单。</para>
+    /// </summary>
+    private static async Task<(SamsungPayloadMergePlan Plan, PayloadMetadata Metadata)> BuildPayloadPlanAsync(
+        string payloadPath, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(payloadPath);
         var path = Path.GetFullPath(payloadPath);
@@ -151,7 +162,7 @@ internal sealed class SamsungIncrementalMergeService
                 partition.Operations.Count,
                 partition.Operations.Any(operation => PayloadExtractor.IsSourceDependent(operation.Type))))
             .ToList();
-        return new SamsungPayloadMergePlan(metadata.BlockSize, entries);
+        return (new SamsungPayloadMergePlan(metadata.BlockSize, entries), metadata);
     }
 
     /// <summary>
@@ -282,8 +293,8 @@ internal sealed class SamsungIncrementalMergeService
             throw new InvalidDataException("The incremental OTA source contains no mergeable DAT triple.");
 
         progress?.Report(15, "Resolving base partition images");
-        var bases = await ResolveBaseImagesAsync(baseFile,
-            [.. processed.Select(item => item.Plain)], scratch, options, cancellationToken).ConfigureAwait(false);
+        var bases = ResolveBaseImages(baseFile,
+            [.. processed.Select(item => item.Plain)], scratch, options, cancellationToken);
 
         var staging = Path.Combine(output, ".samsung-merge-" + Guid.NewGuid().ToString("N"));
         try
@@ -403,7 +414,7 @@ internal sealed class SamsungIncrementalMergeService
             && magic[2] is 0x03 or 0x05 or 0x07 && magic[3] is 0x04 or 0x06 or 0x08;
     }
 
-    private static async Task<Dictionary<string, string>> ResolveBaseImagesAsync(string baseFile,
+    private static Dictionary<string, string> ResolveBaseImages(string baseFile,
         IReadOnlyList<string> plainStems, SamsungMergeScratch scratch, SamsungIncrementalMergeOptions options,
         CancellationToken cancellationToken)
     {
@@ -419,65 +430,137 @@ internal sealed class SamsungIncrementalMergeService
         }
 
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var metadata = TryReadLpMetadata(effective);
-        if (metadata is null)
-        {
-            var plainBase = StripSlotSuffix(WithoutImageExtension(Path.GetFileName(effective)));
-            foreach (var stem in plainStems)
-                if (string.Equals(stem, plainBase, StringComparison.OrdinalIgnoreCase))
-                    result[stem] = effective;
-            return result;
-        }
-
-        var extractionDirectory = scratch.NewDirectory("samsung-super");
-        var wanted = new List<string>();
-        var names = metadata.Partitions.Select(partition => partition.NameString).ToArray();
-        foreach (var stem in plainStems)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var exact = names
-                .Where(name => string.Equals(name, stem, StringComparison.OrdinalIgnoreCase))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            if (exact.Length == 1)
-            {
-                result[stem] = Path.Combine(extractionDirectory, exact[0] + ".img");
-                wanted.Add(exact[0]);
-                continue;
-            }
-
-            var stripMatches = names
-                .Where(name => string.Equals(StripSlotSuffix(name), stem, StringComparison.OrdinalIgnoreCase))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            if (stripMatches.Length > 1)
-                throw new InvalidDataException(
-                    $"The slot layout for partition '{stem}' is ambiguous in the super image.");
-            if (stripMatches.Length == 1)
-            {
-                result[stem] = Path.Combine(extractionDirectory, stripMatches[0] + ".img");
-                wanted.Add(stripMatches[0]);
-            }
-        }
-
-        if (wanted.Count == 0)
-            return result;
-        var extraction = await new LpFormatHandler()
-            .ExtractSelectedAsync(effective, extractionDirectory, wanted, cancellationToken).ConfigureAwait(false);
-        if (!extraction.Success)
-            throw new InvalidDataException($"Logical partition extraction failed: {extraction.Summary}");
-        return result;
-    }
-
-    private static LpMetadata? TryReadLpMetadata(string path)
-    {
+        Stream? image = null;
+        LpMetadata? metadata = null;
         try
         {
-            return MetadataReader.ReadFromImageFile(path);
+            try
+            {
+                image = MetadataReader.OpenImage(effective);
+                metadata = MetadataReader.ReadFromImageStream(image);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                image?.Dispose();
+                image = null;
+                metadata = null;
+            }
+
+            if (metadata is null)
+            {
+                var plainBase = StripSlotSuffix(WithoutImageExtension(Path.GetFileName(effective)));
+                foreach (var stem in plainStems)
+                    if (string.Equals(stem, plainBase, StringComparison.OrdinalIgnoreCase))
+                        result[stem] = effective;
+                return result;
+            }
+
+            var extractionDirectory = scratch.NewDirectory("samsung-super");
+            var wanted = new List<string>();
+            var names = metadata.Partitions.Select(partition => partition.NameString).ToArray();
+            foreach (var stem in plainStems)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var exact = names
+                    .Where(name => string.Equals(name, stem, StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (exact.Length == 1)
+                {
+                    result[stem] = Path.Combine(extractionDirectory, exact[0] + ".img");
+                    wanted.Add(exact[0]);
+                    continue;
+                }
+
+                var stripMatches = names
+                    .Where(name => string.Equals(StripSlotSuffix(name), stem, StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (stripMatches.Length > 1)
+                    throw new InvalidDataException(
+                        $"The slot layout for partition '{stem}' is ambiguous in the super image.");
+                if (stripMatches.Length == 1)
+                {
+                    result[stem] = Path.Combine(extractionDirectory, stripMatches[0] + ".img");
+                    wanted.Add(stripMatches[0]);
+                }
+            }
+
+            if (wanted.Count == 0)
+                return result;
+            ExtractLpPartitions(image!, metadata, extractionDirectory, wanted, cancellationToken);
+            return result;
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        finally
         {
-            return null;
+            image?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Extracts the requested LP partitions from the already parsed super image, reusing both the open image stream and
+    /// its metadata so the merge does not read and parse the metadata a second time.
+    /// <para>从已解析的 super 镜像提取所需 LP 分区，复用已打开的镜像流及其元数据，使合并不再二次读取并解析元数据。</para>
+    /// </summary>
+    private static void ExtractLpPartitions(Stream image, LpMetadata metadata, string outputDirectory,
+        IReadOnlyCollection<string> partitions, CancellationToken cancellationToken)
+    {
+        var wanted = new HashSet<string>(partitions,
+            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        var plans = new List<(string Path, long Length, LpMetadataExtent[] Extents)>();
+        foreach (var partition in metadata.Partitions)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var name = partition.NameString;
+            if (string.IsNullOrWhiteSpace(name) || name.AsSpan().ContainsAny('/', '\\'))
+                throw new InvalidDataException("Invalid LP partition name.");
+            if (!wanted.Contains(name))
+                continue;
+            var target = FileExtraction.ResolvePath(outputDirectory, name + ".img");
+            var extents = metadata.Extents
+                .GetRange(checked((int)partition.FirstExtentIndex), checked((int)partition.NumExtents))
+                .ToArray();
+            long length = 0;
+            foreach (var extent in extents)
+            {
+                var bytes = checked((long)extent.NumSectors * MetadataFormat.LP_SECTOR_SIZE);
+                length = checked(length + bytes);
+                if (extent.TargetType == MetadataFormat.LP_TARGET_TYPE_ZERO)
+                    continue;
+                if (extent.TargetType != MetadataFormat.LP_TARGET_TYPE_LINEAR || extent.TargetSource != 0)
+                    throw new InvalidDataException("LP extraction requires a supplied primary-device linear extent or a zero extent.");
+                var offset = checked((long)extent.TargetData * MetadataFormat.LP_SECTOR_SIZE);
+                FileExtraction.ValidateRange(offset, bytes, image.Length, "LP extent");
+            }
+            plans.Add((target, length, extents));
+        }
+
+        if (plans.Count != wanted.Count)
+            throw new InvalidDataException("A selected LP partition does not exist in the image.");
+
+        foreach (var plan in plans)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            FileExtraction.WriteAtomic(plan.Path, output =>
+            {
+                output.SetLength(plan.Length);
+                foreach (var extent in plan.Extents)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var length = checked((long)extent.NumSectors * MetadataFormat.LP_SECTOR_SIZE);
+                    if (extent.TargetType == MetadataFormat.LP_TARGET_TYPE_ZERO)
+                    {
+                        output.Position = checked(output.Position + length);
+                        continue;
+                    }
+
+                    image.Position = checked((long)extent.TargetData * MetadataFormat.LP_SECTOR_SIZE);
+                    StreamCopy.CopyExactly(image, output, length, cancellationToken: cancellationToken);
+                }
+
+                if (output.Position != plan.Length)
+                    throw new InvalidDataException("LP partition length mismatch.");
+            }, overwrite: false, cancellationToken: cancellationToken);
         }
     }
 
@@ -520,7 +603,7 @@ internal sealed class SamsungIncrementalMergeService
         var output = Path.GetFullPath(outputDirectory);
 
         progress?.Report(5, "Listing payload partitions");
-        var plan = await ListPayloadCoreAsync(payload, cancellationToken).ConfigureAwait(false);
+        var (plan, payloadMetadata) = await BuildPayloadPlanAsync(payload, cancellationToken).ConfigureAwait(false);
         var requested = selectedPartitions is { Count: > 0 }
             ? selectedPartitions.ToArray()
             : [.. plan.Partitions.Select(partition => partition.PartitionName)];
@@ -562,8 +645,8 @@ internal sealed class SamsungIncrementalMergeService
             Directory.CreateDirectory(output);
             Directory.CreateDirectory(staging);
             progress?.Report(40, "Merging payload partitions");
-            await PayloadParser.ExtractAsync(payload, [.. selected], staging, cancellationToken,
-                sourceImages: sourceImages).ConfigureAwait(false);
+            await ExtractPayloadAsync(payload, [.. selected], staging, sourceImages, payloadMetadata, cancellationToken)
+                .ConfigureAwait(false);
             progress?.Report(90, "Publishing merged images");
             var published = await PublishAsync(staging, output, options, cancellationToken).ConfigureAwait(false);
             progress?.Report(100, $"Merged {published.Count} partitions");
@@ -596,6 +679,37 @@ internal sealed class SamsungIncrementalMergeService
             throw new InvalidDataException(
                 $"The slot layout for partition '{manifestName}' is ambiguous in the old-image directory.");
         return matches[0];
+    }
+
+    /// <summary>
+    /// Extracts the selected payload partitions, reusing the manifest parsed for listing when the source is a raw payload;
+    /// ZIP packages keep the container-aware path that materializes the embedded payload.
+    /// <para>提取所选载荷分区：原始载荷复用列表阶段已解析的清单；ZIP 包仍走会物化内嵌载荷的容器路径。</para>
+    /// </summary>
+    private static async Task ExtractPayloadAsync(string payload, string[] selected, string staging,
+        IReadOnlyDictionary<string, string>? sourceImages, PayloadMetadata metadata,
+        CancellationToken cancellationToken)
+    {
+        PayloadType payloadType;
+        using (var probe = File.OpenRead(payload))
+        {
+            payloadType = PayloadParser.DetectPayloadTypeFromStream(probe);
+        }
+
+        if (payloadType != PayloadType.RawPayload)
+        {
+            await PayloadParser.ExtractAsync(payload, selected, staging, cancellationToken,
+                sourceImages: sourceImages).ConfigureAwait(false);
+            return;
+        }
+
+        await using var stream = new FileStream(payload, FileMode.Open, FileAccess.Read, FileShare.Read,
+            BufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        var extractor = new PayloadExtractor(PayloadExtractor.DefaultMaximumPartitionBytes, null,
+            PayloadExtractor.DefaultMaximumZstdDictBytes);
+        await extractor.ExtractPartitionsAsync(metadata.Manifest, stream, metadata.BaseOffset, selected, staging,
+            cancellationToken, sourceImages, openPayloadStream: () => new FileStream(payload, FileMode.Open,
+                FileAccess.Read, FileShare.Read, BufferSize, FileOptions.RandomAccess)).ConfigureAwait(false);
     }
 
     private static async Task<List<SamsungMergedPartitionImage>> PublishAsync(string staging, string output,
