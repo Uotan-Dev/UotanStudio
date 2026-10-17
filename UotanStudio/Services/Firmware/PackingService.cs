@@ -40,7 +40,7 @@ internal static class PackingService
         {
             var hasExplicitSettings = settings is not null;
             using var metadataScope = RepackMetadata.UseContext(
-                UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(sourceDirectory));
+                ProjectContextService.Instance.CaptureMetadataContext(sourceDirectory));
             var metadata = RepackMetadata.Read(sourceDirectory);
             var imageProgress = FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
             if (metadata is not null)
@@ -214,14 +214,10 @@ internal static class PackingService
         System.Diagnostics.Stopwatch sw,
         IProgress<(long Processed, long Total)>? progress)
     {
-        var options = new ErofsOptions
-        {
-            LegacyCompatibility = UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility,
-        };
+        var options = new ErofsOptions();
         (options.Algorithm, options.Lz4HighCompression) = ErofsAlgorithmSelectors.Parse(settings.SelectedErofsAlgorithm);
         if (options.Algorithm != ErofsCompressionAlgorithm.Lz4 || options.Lz4HighCompression)
         {
-            options.LegacyCompatibility = false;
             options.MaxPclusterSize = ErofsOptions.MaximumPclusterSize;
         }
 

@@ -177,23 +177,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Gets or sets whether newly built EROFS images use the legacy (pre-5.13) layout for older kernels.
-    /// <para>获取或设置新建 EROFS 镜像是否使用 legacy（pre-5.13）布局，供旧内核挂载。</para>
-    /// </summary>
-    public bool ErofsLegacyCompatibility
-    {
-        get;
-        set
-        {
-            if (SetProperty(ref field, value))
-            {
-                global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = value;
-                DebouncedSaveSettings();
-            }
-        }
-    }
-
-    /// <summary>
     /// Gets or sets whether a preserved EROFS rebuild searches the compression estimates captured at extraction
     /// for the smallest image.
     /// <para>获取或设置 EROFS 受保留重建是否在解包时采集的压缩估算之间搜索最小镜像。</para>
@@ -205,7 +188,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref field, value))
             {
-                global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.RebuildOptimization = value;
+                Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.RebuildOptimization = value;
                 DebouncedSaveSettings();
             }
         }
@@ -443,11 +426,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _loading = true;
         try
         {
-            global::UotanStudio.Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
-            global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = settings.ErofsLegacyCompatibility;
-            global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.RebuildOptimization = settings.ErofsRebuildOptimization;
+            Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
+            Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.RebuildOptimization = settings.ErofsRebuildOptimization;
 
-            ErofsLegacyCompatibility = settings.ErofsLegacyCompatibility;
             ErofsRebuildOptimization = settings.ErofsRebuildOptimization;
             SelectedLanguage = string.IsNullOrEmpty(settings.CultureName)
                 ? LanguageInfo.SystemLanguage
@@ -562,7 +543,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.AutoSave = AutoSave;
         _appSettings.AutoBackupBeforeFlash = FlashAutoBackup;
         _appSettings.DebugMode = DebugMode;
-        _appSettings.ErofsLegacyCompatibility = ErofsLegacyCompatibility;
         _appSettings.ErofsRebuildOptimization = ErofsRebuildOptimization;
 
         var latest = SettingsPersistenceService.Instance.LoadSettings();

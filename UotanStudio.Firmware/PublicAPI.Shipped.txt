@@ -1,7 +1,4 @@
 #nullable enable
-const UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultLegacyCompatibility = true -> bool
-static UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility.get -> bool
-static UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility.set -> void
 UotanStudio.Firmware.AndroidMeta.AXml.AXmlAttribute
 UotanStudio.Firmware.AndroidMeta.AXml.AXmlAttribute.AXmlAttribute() -> void
 UotanStudio.Firmware.AndroidMeta.AXml.AXmlAttribute.FormatRawData() -> string!

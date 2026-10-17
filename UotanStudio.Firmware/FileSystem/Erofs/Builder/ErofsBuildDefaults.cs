@@ -9,12 +9,6 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
 public static class ErofsBuildDefaults
 {
     /// <summary>
-    /// Default legacy (pre-5.13) compatibility for newly built images, so they can be mounted without the big-pcluster feature.
-    /// <para>新建镜像的默认 legacy（pre-5.13）兼容值：启用后镜像无需 big-pcluster 特性即可被旧版实现挂载。</para>
-    /// </summary>
-    public const bool DefaultLegacyCompatibility = true;
-
-    /// <summary>
     /// Default for the EROFS rebuild compression search: when enabled, a preserved rebuild may build the
     /// whole image up to three times to keep the smallest candidate, and only for snapshots that already
     /// carried compression estimates at extraction time.
@@ -23,20 +17,7 @@ public static class ErofsBuildDefaults
     /// </summary>
     public const bool DefaultRebuildOptimization = false;
 
-    private static bool _legacyCompatibility = DefaultLegacyCompatibility;
     private static bool _rebuildOptimization = DefaultRebuildOptimization;
-
-    /// <summary>Legacy (pre-5.13) layout for EROFS images built without explicit options.
-    /// <para>未显式给出选项时构建的 EROFS 镜像采用 legacy（pre-5.13）布局。</para></summary>
-    /// <value>Process-wide flag read and written with volatile access so host settings synced at startup
-    /// are observed by concurrent builds; seeded from <see cref="DefaultLegacyCompatibility"/>.
-    /// <para>进程级标志，以 volatile 方式读写，使启动时同步的宿主设置能被并发构建观察到；初值来自
-    /// <see cref="DefaultLegacyCompatibility"/>。</para></value>
-    public static bool LegacyCompatibility
-    {
-        get => Volatile.Read(ref _legacyCompatibility);
-        set => Volatile.Write(ref _legacyCompatibility, value);
-    }
 
     /// <summary>Searches for the smallest EROFS rebuild among the compression estimates captured at
     /// extraction instead of publishing the single inherited-profile build.

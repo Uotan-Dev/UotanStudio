@@ -27,7 +27,7 @@ internal partial class ImageViewModel
 
     private static async Task<FirmwareOpResult> ConvertToRawAsync(string sourcePath, string outputDir, string name)
     {
-        return await Task.Run<FirmwareOpResult>(() =>
+        return await Task.Run(() =>
         {
             var outputPath = Path.Combine(outputDir, name + ".raw");
             using var sparseFile = SparseReader.ImportAuto(sourcePath);
@@ -46,7 +46,7 @@ internal partial class ImageViewModel
     /// 级联解出内部文件系统内容；未命中则回退为原 raw 字节流复制。头部探测与解包目录规则
     /// （<see cref="ImageOperationPaths"/>）语义不变。</para>
     /// </summary>
-    private static async Task<FirmwareOpResult> ExtractRawAsync(string sourcePath, string outputDir, string name, IProgress<(int processed, int total)>? progress = null, IProgress<UotanStudio.Firmware.Core.FileSystemByteProgress>? byteProgress = null, IReadOnlyList<string>? erofsExtraDevicePaths = null, CancellationToken cancellationToken = default)
+    private static async Task<FirmwareOpResult> ExtractRawAsync(string sourcePath, string outputDir, string name, IProgress<(int processed, int total)>? progress = null, IProgress<Firmware.Core.FileSystemByteProgress>? byteProgress = null, IReadOnlyList<string>? erofsExtraDevicePaths = null, CancellationToken cancellationToken = default)
     {
         var layout = ImageInputService.ProbeFilesystemHeader(sourcePath);
         if (layout is RawImageLayout.Ext4 or RawImageLayout.Erofs or RawImageLayout.F2fs)

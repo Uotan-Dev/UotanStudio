@@ -42,4 +42,18 @@ public sealed class ErofsRebuildOptimizationSettingsTests
         Assert.False(JsonSerializer.Deserialize(document.ToJsonString(),
             AppSettingsJsonContext.Default.AppSettings)!.ErofsRebuildOptimization);
     }
+
+    [Fact]
+    public void AppSettings_RetiredErofsLegacyCompatibilityKey_IsDiscardedInsteadOfRewritten()
+    {
+        var document = JsonSerializer.SerializeToNode(new AppSettings(),
+            AppSettingsJsonContext.Default.AppSettings)!.AsObject();
+        document["erofsLegacyCompatibility"] = true;
+
+        var settings = JsonSerializer.Deserialize(document.ToJsonString(),
+            AppSettingsJsonContext.Default.AppSettings)!;
+
+        Assert.DoesNotContain("erofsLegacyCompatibility", JsonSerializer.Serialize(settings,
+            AppSettingsJsonContext.Default.AppSettings));
+    }
 }

@@ -184,7 +184,7 @@ internal partial class ProjectSettingViewModel : Tool
             throw new InvalidDataException($"Unsupported EXT4 capacity policy '{ext4Policy}'.");
         }
 
-        var blockSharingMode = global::UotanStudio.Firmware.FileSystem.Ext4.Ext4BlockSharingMode.Independent;
+        var blockSharingMode = Ext4BlockSharingMode.Independent;
         if (dto.Ext4BlockSharingMode is { } blockSharingValue
             && (!Enum.TryParse(blockSharingValue, ignoreCase: true, out blockSharingMode)
                 || !Enum.IsDefined(blockSharingMode)))
@@ -213,8 +213,8 @@ internal partial class ProjectSettingViewModel : Tool
         EXT4NoCompress = dto.Ext4Compress != true;
         EXT4Compress = dto.Ext4Compress == true;
         Ext4CapacityPolicy = dto.Ext4CapacityPolicy ?? (dto.Ext4Compress == true
-            ? global::UotanStudio.Services.Projects.Ext4CapacityPolicy.Minimize
-            : global::UotanStudio.Services.Projects.Ext4CapacityPolicy.Inherit);
+            ? Ext4CapacityPolicy.Minimize
+            : Ext4CapacityPolicy.Inherit);
         Ext4TargetSizeBytes = dto.Ext4TargetSizeBytes;
         Ext4BlockSharingMode = blockSharingMode;
         HasExt4PolicyOverride = dto.Ext4CapacityPolicy.HasValue
@@ -292,8 +292,8 @@ internal partial class ProjectSettingViewModel : Tool
         }
 
         Ext4CapacityPolicy = value
-            ? global::UotanStudio.Services.Projects.Ext4CapacityPolicy.Minimize
-            : global::UotanStudio.Services.Projects.Ext4CapacityPolicy.Inherit;
+            ? Ext4CapacityPolicy.Minimize
+            : Ext4CapacityPolicy.Inherit;
         MarkExt4PolicyOverride();
     }
 
@@ -359,7 +359,7 @@ internal partial class ProjectSettingViewModel : Tool
             return;
         }
 
-        bool isDefaultState = TypeEROFS && !TypeEXT4 && !TypeF2FS && FormatRAW && !FormatSPARSE;
+        var isDefaultState = TypeEROFS && !TypeEXT4 && !TypeF2FS && FormatRAW && !FormatSPARSE;
 
         if (!isDefaultState)
         {

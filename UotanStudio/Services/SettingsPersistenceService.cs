@@ -14,11 +14,12 @@ namespace UotanStudio.Services;
 /// </summary>
 public class AppSettings : IJsonOnDeserialized
 {
-    /// <summary>Discards the HDC path keys kept in extension data and initializes missing collections.<para>移除扩展数据里残留的 HDC 路径键，并初始化缺失的集合。</para></summary>
+    /// <summary>Discards the HDC path keys and the retired EROFS legacy layout switch kept in extension data, and initializes missing collections.<para>移除扩展数据里残留的 HDC 路径键与已退役的 EROFS legacy 布局开关，并初始化缺失的集合。</para></summary>
     void IJsonOnDeserialized.OnDeserialized()
     {
         AdditionalSettings?.Remove("hdcPath");
         AdditionalSettings?.Remove("HdcPath");
+        AdditionalSettings?.Remove("erofsLegacyCompatibility");
         DeviceCommunication ??= new();
         FavoriteNodeTypes ??= [];
         RecentNodeTypes ??= [];
@@ -32,7 +33,7 @@ public class AppSettings : IJsonOnDeserialized
     /// </summary>
     /// <value>The persisted device-communication policy. <para>持久化的设备通信策略。</para></value>
     [JsonPropertyName("deviceCommunication")]
-    public global::UotanStudio.Comm.DeviceCommunicationConfiguration DeviceCommunication { get; set; } = new();
+    public Comm.DeviceCommunicationConfiguration DeviceCommunication { get; set; } = new();
 
     /// <summary>
     /// Maximum concurrent firmware workers. Missing or invalid persisted values use the detected physical core count.
@@ -43,9 +44,9 @@ public class AppSettings : IJsonOnDeserialized
     public int FirmwareParallelism
     {
         get;
-        set => field = value is >= 1 and <= global::UotanStudio.Firmware.Core.FirmwareParallelism.MaximumWorkers
-            ? value : global::UotanStudio.Firmware.Core.FirmwareParallelism.DefaultWorkers;
-    } = global::UotanStudio.Firmware.Core.FirmwareParallelism.DefaultWorkers;
+        set => field = value is >= 1 and <= UotanStudio.Firmware.Core.FirmwareParallelism.MaximumWorkers
+            ? value : UotanStudio.Firmware.Core.FirmwareParallelism.DefaultWorkers;
+    } = UotanStudio.Firmware.Core.FirmwareParallelism.DefaultWorkers;
 
     /// <summary>Copies settings with independently editable collections.<para>复制设置，隔离可编辑集合。</para></summary>
     /// <returns>The copied settings instance. <para>复制出的设置实例。</para></returns>
@@ -63,22 +64,13 @@ public class AppSettings : IJsonOnDeserialized
     }
 
     /// <summary>
-    /// Gets or sets whether newly built EROFS images use the legacy (pre-5.13) layout for older kernels.
-    /// <para>获取或设置新建 EROFS 镜像是否使用 legacy（pre-5.13）布局，供旧内核挂载。</para>
-    /// </summary>
-    /// <value>True when new images use the legacy layout. <para>为真时新镜像采用 legacy 布局。</para></value>
-    [JsonPropertyName("erofsLegacyCompatibility")]
-    public bool ErofsLegacyCompatibility { get; set; } =
-        global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultLegacyCompatibility;
-
-    /// <summary>
     /// Gets or sets whether a preserved EROFS rebuild searches the captured compression estimates for the smallest image.
     /// <para>获取或设置 EROFS 受保留重建是否在采集到的压缩估算之间搜索最小镜像。</para>
     /// </summary>
     /// <value>True when the smallest-image search runs. <para>为真时执行最小镜像搜索。</para></value>
     [JsonPropertyName("erofsRebuildOptimization")]
     public bool ErofsRebuildOptimization { get; set; } =
-        global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultRebuildOptimization;
+        UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultRebuildOptimization;
 
     /// <summary>
     /// Gets or sets the culture name of the current language, such as "en-US" or "zh-CN"; empty follows the system.
@@ -306,19 +298,19 @@ public class AppSettings : IJsonOnDeserialized
     /// <para>获取或设置视频解码后端。</para>
     /// </summary>
     /// <value>The selected video decoder backend. <para>选定的视频解码后端。</para></value>
-    public UotanStudio.Media.Decoding.VideoDecoderBackend ScreenMirrorDecoderBackend { get; set; }
+    public Media.Decoding.VideoDecoderBackend ScreenMirrorDecoderBackend { get; set; }
     /// <summary>
     /// Gets or sets the source color matrix override.
     /// <para>获取或设置源色彩矩阵覆盖。</para>
     /// </summary>
     /// <value>The color matrix override. <para>色彩矩阵的覆盖值。</para></value>
-    public UotanStudio.Media.Decoding.VideoColorMatrix ScreenMirrorColorMatrix { get; set; }
+    public Media.Decoding.VideoColorMatrix ScreenMirrorColorMatrix { get; set; }
     /// <summary>
     /// Gets or sets the source color range override.
     /// <para>获取或设置源色彩范围覆盖。</para>
     /// </summary>
     /// <value>The color range override. <para>色彩范围的覆盖值。</para></value>
-    public UotanStudio.Media.Decoding.VideoColorRange ScreenMirrorColorRange { get; set; }
+    public Media.Decoding.VideoColorRange ScreenMirrorColorRange { get; set; }
     /// <summary>
     /// Gets or sets the audio codec name.
     /// <para>获取或设置音频编码格式。</para>
@@ -330,7 +322,7 @@ public class AppSettings : IJsonOnDeserialized
     /// <para>获取或设置音频解码后端。</para>
     /// </summary>
     /// <value>The selected audio decoder backend. <para>选定的音频解码后端。</para></value>
-    public UotanStudio.Media.Audio.AudioDecoderBackend ScreenMirrorAudioBackend { get; set; }
+    public Media.Audio.AudioDecoderBackend ScreenMirrorAudioBackend { get; set; }
     /// <summary>
     /// Gets or sets the playback volume.
     /// <para>获取或设置播放音量。</para>
@@ -432,7 +424,7 @@ public sealed record PairedNetworkTarget(string Address, bool RequiresTls);
 [JsonSerializable(typeof(ThemeMode))]
 [JsonSerializable(typeof(McpServerConfig))]
 [JsonSerializable(typeof(McpTransportKind))]
-[JsonSerializable(typeof(UotanStudio.Services.Logging.LogFileRecord))]
+[JsonSerializable(typeof(Logging.LogFileRecord))]
 [JsonSerializable(typeof(Dictionary<string, bool>))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
