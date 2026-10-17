@@ -667,3 +667,28 @@ UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.CompressHints.set -> void
 UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.DedupeMode.get -> UotanStudio.Firmware.FileSystem.Erofs.ErofsDedupeMode
 UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.DedupeMode.set -> void
 static UotanStudio.Firmware.BlockImage.Gpt.GptReader.ReadWithPartitionEntryOverridesAsync(UotanStudio.Firmware.BlockImage.Gpt.GptBlockReader! readBlocks, int blockSize, ulong blockCount, ulong? partitionEntryLba, uint? partitionEntryCount, uint? partitionEntrySize, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BlockImage.Gpt.GptTable!>!
+UotanStudio.Firmware.Core.EquivalenceMetadataKeys
+const UotanStudio.Firmware.Core.EquivalenceMetadataKeys.Byte = "EquivalentBytes" -> string!
+const UotanStudio.Firmware.Core.EquivalenceMetadataKeys.Structure = "EquivalentStructure" -> string!
+const UotanStudio.Firmware.Core.EquivalenceMetadataKeys.Content = "EquivalentContent" -> string!
+const UotanStudio.Firmware.Core.EquivalenceMetadataKeys.Capacity = "FitsSourceFilesystemSize" -> string!
+UotanStudio.Firmware.BlockImage.Sparse.SparseRawZeroMode
+UotanStudio.Firmware.BlockImage.Sparse.SparseRawZeroMode.Seek = 1 -> UotanStudio.Firmware.BlockImage.Sparse.SparseRawZeroMode
+UotanStudio.Firmware.BlockImage.Sparse.SparseRawZeroMode.Write = 0 -> UotanStudio.Firmware.BlockImage.Sparse.SparseRawZeroMode
+UotanStudio.Firmware.BlockImage.Sparse.Models.SparseFile.WriteRawToStream(System.IO.Stream! stream, UotanStudio.Firmware.BlockImage.Sparse.SparseRawZeroMode zeroMode) -> void
+UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo
+UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.<Clone>$() -> UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo!
+UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.Architecture.get -> string?
+UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.Architecture.init -> void
+UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.BootKernelInfo(string? Architecture, string? Kmi) -> void
+UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.Deconstruct(out string? Architecture, out string? Kmi) -> void
+UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.Equals(UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo? other) -> bool
+UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.Kmi.get -> string?
+UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.Kmi.init -> void
+override UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.Equals(object? obj) -> bool
+override UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.GetHashCode() -> int
+override UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.ToString() -> string!
+static UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.operator !=(UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo? left, UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo? right) -> bool
+static UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo.operator ==(UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo? left, UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo? right) -> bool
+static UotanStudio.Firmware.BootSecurity.Patcher.BootPatchAnalyzer.DetectBootKernelAsync(string! bootPath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Patcher.BootKernelInfo!>!
+UotanStudio.Firmware.BootSecurity.Patcher.BootPatchService.PatchWithDetectionAsync(string! packagePath, string! bootPath, string! outputPath, UotanStudio.Firmware.BootSecurity.Patcher.BootPatchOptions? options, UotanStudio.Firmware.BootSecurity.Patcher.BootPatchDetection! detection, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BootSecurity.Patcher.BootPatchResult!>!
