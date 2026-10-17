@@ -4,6 +4,40 @@ namespace UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 
 public static partial class Disassembler
 {
+    private sealed class AnnotationIndex
+    {
+        public static readonly AnnotationIndex Empty = new(null);
+        private readonly Dictionary<int, AnnotationSet> _fields = [];
+        private readonly Dictionary<int, AnnotationSet> _methods = [];
+        private readonly Dictionary<int, AnnotationSetRefList> _parameters = [];
+
+        public AnnotationIndex(AnnotationsDirectory? directory)
+        {
+            if (directory is null)
+            {
+                return;
+            }
+            foreach (var row in directory.FieldAnnotations)
+            {
+                _fields.TryAdd(row.FieldIndex, row.Annotations);
+            }
+            foreach (var row in directory.MethodAnnotations)
+            {
+                _methods.TryAdd(row.MethodIndex, row.Annotations);
+            }
+            foreach (var row in directory.ParameterAnnotations)
+            {
+                _parameters.TryAdd(row.MethodIndex, row.Parameters);
+            }
+        }
+
+        public AnnotationSet? Field(int fieldIndex) => _fields.GetValueOrDefault(fieldIndex);
+
+        public AnnotationSet? Method(int methodIndex) => _methods.GetValueOrDefault(methodIndex);
+
+        public AnnotationSetRefList? Parameters(int methodIndex) => _parameters.GetValueOrDefault(methodIndex);
+    }
+
     private static string?[] ReadParameterNames(DexFile dex, CodeItem? code, int parameterCount)
     {
         var names = new string?[parameterCount];

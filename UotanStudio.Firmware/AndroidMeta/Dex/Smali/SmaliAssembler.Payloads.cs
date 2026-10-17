@@ -22,7 +22,14 @@ public static partial class SmaliAssembler
         });
     }
 
-    private sealed record LayoutEntry(int Address, string Line, PayloadBlock? Payload = null, int SourceIndex = -1);
+    private sealed record LayoutEntry(int Address, string Line, PayloadBlock? Payload = null, int SourceIndex = -1)
+    {
+        public string Mnemonic { get; init; } = string.Empty;
+        public byte Opcode { get; init; }
+        public OpCodeInfo? Info { get; init; }
+        public string OperandText { get; init; } = string.Empty;
+        public string[] Args { get; init; } = [];
+    }
 
     private sealed class MethodLayout
     {
@@ -153,6 +160,12 @@ public static partial class SmaliAssembler
         }
     }
 
+    private static LayoutEntry NopEntry(int address)
+    {
+        var op = OpCodes.Find("nop")!.Value;
+        return new LayoutEntry(address, "nop") { Mnemonic = "nop", Opcode = op.Opcode, Info = op.Info };
+    }
+
     private static MethodLayout LayoutMethod(MethodState state, Func<string, int> stringIndex)
     {
         var replacements = new Dictionary<int, string>();
@@ -166,31 +179,29 @@ public static partial class SmaliAssembler
                 {
                     continue;
                 }
-                var parts = entry.Line.Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length == 2 && parts[0] == "const-string")
+                if (entry.Mnemonic == "const-string")
                 {
-                    var operands = SmaliSyntax.Operands(parts[1]);
-                    if (operands.Length != 2)
+                    if (entry.Args.Length != 2)
                     {
                         throw new FormatException("const-string requires a register and a string literal.");
                     }
-                    if (stringIndex(operands[1]) > ushort.MaxValue)
+                    if (stringIndex(entry.Args[1]) > ushort.MaxValue)
                     {
-                        replacements[entry.SourceIndex] = "const-string/jumbo " + parts[1];
+                        replacements[entry.SourceIndex] = "const-string/jumbo " + entry.OperandText;
                         changed = true;
                     }
                     continue;
                 }
-                if (parts.Length != 2 || parts[0] is not ("goto" or "goto/16"))
+                if (entry.Mnemonic is not ("goto" or "goto/16") || entry.Args.Length != 1)
                 {
                     continue;
                 }
-                var offset = (long)ResolveAddress(parts[1], entry.Address, layout) - entry.Address;
+                var offset = (long)ResolveAddress(entry.Args[^1], entry.Address, layout) - entry.Address;
                 var widened = offset is < short.MinValue or > short.MaxValue ? "goto/32"
-                    : offset is < sbyte.MinValue or > sbyte.MaxValue ? "goto/16" : parts[0];
-                if (widened != parts[0])
+                    : offset is < sbyte.MinValue or > sbyte.MaxValue ? "goto/16" : entry.Mnemonic;
+                if (widened != entry.Mnemonic)
                 {
-                    replacements[entry.SourceIndex] = widened + " " + parts[1];
+                    replacements[entry.SourceIndex] = widened + " " + entry.OperandText;
                     changed = true;
                 }
             }
@@ -230,7 +241,7 @@ public static partial class SmaliAssembler
                 {
                     result.Boundaries.Add(result.Size);
                     result.Instructions.Add(result.Size);
-                    result.Entries.Add(new LayoutEntry(result.Size++, "nop"));
+                    result.Entries.Add(NopEntry(result.Size++));
                     foreach (var name in pendingLabels)
                     {
                         result.Labels[name] = result.Size;
@@ -242,11 +253,20 @@ public static partial class SmaliAssembler
             }
             else
             {
-                var name = line.Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries)[0];
-                var op = OpCodes.Find(name) ?? throw new FormatException($"Unknown instruction: {line}");
+                var parts = line.Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
+                var mnemonic = parts[0];
+                var operandText = parts.Length == 2 ? parts[1] : string.Empty;
+                var op = OpCodes.Find(mnemonic) ?? throw new FormatException($"Unknown instruction: {line}");
                 result.Boundaries.Add(result.Size);
                 result.Instructions.Add(result.Size);
-                result.Entries.Add(new LayoutEntry(result.Size, line, SourceIndex: index));
+                result.Entries.Add(new LayoutEntry(result.Size, line, SourceIndex: index)
+                {
+                    Mnemonic = mnemonic,
+                    Opcode = op.Opcode,
+                    Info = op.Info,
+                    OperandText = operandText,
+                    Args = operandText.Length == 0 ? [] : SmaliSyntax.Operands(operandText)
+                });
                 result.Size = checked(result.Size + OpCodes.GetSize(op.Opcode));
             }
             pendingLabels.Clear();
@@ -259,12 +279,11 @@ public static partial class SmaliAssembler
     {
         foreach (var entry in layout.Entries)
         {
-            if (entry.Payload is not null)
+            if (entry.Payload is not null || entry.Info is not { } info)
             {
                 continue;
             }
-            var parts = entry.Line.Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
-            var format = OpCodes.Find(parts[0])!.Value.Info.Format;
+            var format = info.Format;
             var count = format switch
             {
                 InstructionFormat.Format10t or InstructionFormat.Format20t or InstructionFormat.Format30t => 1,
@@ -276,12 +295,11 @@ public static partial class SmaliAssembler
             {
                 continue;
             }
-            var operands = parts.Length == 1 ? [] : SmaliSyntax.Operands(parts[1]);
-            if (operands.Length != count)
+            if (entry.Args.Length != count)
             {
                 throw new FormatException("Invalid branch operand count.");
             }
-            var target = ResolveAddress(operands[^1], entry.Address, layout);
+            var target = ResolveAddress(entry.Args[^1], entry.Address, layout);
             if (!layout.Instructions.Contains(target) || target == entry.Address && format != InstructionFormat.Format30t)
             {
                 throw new FormatException("A branch must target an executable instruction and use a permitted nonzero offset.");
@@ -295,23 +313,16 @@ public static partial class SmaliAssembler
         var result = new PayloadBindings();
         foreach (var entry in layout.Entries.ToArray())
         {
-            if (entry.Payload is not null)
+            if (entry.Payload is not null || entry.Info is not { } info || info.Format != InstructionFormat.Format31t)
             {
                 continue;
             }
-            var parts = entry.Line.Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
-            var op = OpCodes.Find(parts[0])!.Value;
-            if (op.Info.Format != InstructionFormat.Format31t)
-            {
-                continue;
-            }
-            var operands = parts.Length == 1 ? [] : SmaliSyntax.Operands(parts[1]);
-            if (operands.Length != 2)
+            if (entry.Args.Length != 2)
             {
                 throw new FormatException("A payload instruction requires a register and a target.");
             }
-            var target = ResolveAddress(operands[1], entry.Address, layout);
-            var kind = op.Opcode switch { 0x26 => "array-data", 0x2b => "packed-switch", _ => "sparse-switch" };
+            var target = ResolveAddress(entry.Args[1], entry.Address, layout);
+            var kind = entry.Opcode switch { 0x26 => "array-data", 0x2b => "packed-switch", _ => "sparse-switch" };
             if (!payloads.TryGetValue(target, out var payload) || payload.Kind != kind)
             {
                 throw new FormatException("The instruction does not reference a payload of the required kind.");
@@ -322,7 +333,7 @@ public static partial class SmaliAssembler
                 {
                     layout.Boundaries.Add(layout.Size);
                     layout.Instructions.Add(layout.Size);
-                    layout.Entries.Add(new LayoutEntry(layout.Size++, "nop"));
+                    layout.Entries.Add(NopEntry(layout.Size++));
                 }
                 var clone = layout.Size;
                 layout.Boundaries.Add(clone);

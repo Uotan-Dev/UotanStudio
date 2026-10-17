@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -9,6 +10,7 @@ internal static class DexReader
 {
     private const uint LittleEndianTag = 0x12345678;
     private const uint NoIndex = 0xFFFFFFFF;
+    private const int MaximumPreallocatedEntries = 1 << 20;
 
     /// <summary>
     /// Parses a DEX byte array into the object model.
@@ -181,6 +183,7 @@ internal static class DexReader
     {
         var count = dex.Header.StringIdsSize;
         var offset = (int)dex.Header.StringIdsOffset;
+        dex.Strings.EnsureCapacity(PreallocatedCapacity(count));
         for (var i = 0; i < count; i++)
         {
             var itemOff = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + i * 4)));
@@ -190,15 +193,92 @@ internal static class DexReader
             var start = p;
             while (p < data.Length && data[p] != 0) p++;
             if (p >= data.Length) throw new DexException($"String data {i} is not NUL-terminated");
-            dex.Strings.Add(Mutf8.Decode(data, start, p - start));
-            _ = utf16Size;
+            dex.Strings.Add(ReadStringValue(data, start, p - start, utf16Size));
         }
     }
+
+    /// <summary>
+    /// Decodes one MUTF-8 string with a single decoding pass, using the <c>utf16_size</c> declared by
+    /// <c>string_data_item</c> as the allocation size, and falls back to the length-agnostic decoder whenever
+    /// the declared character count and the encoded bytes disagree.
+    /// <para>以 <c>string_data_item</c> 声明的 <c>utf16_size</c> 作为分配长度，单遍解码一条 MUTF-8 字符串；
+    /// 声明字符数与编码字节不一致时回退到不依赖长度的解码器。</para>
+    /// </summary>
+    private static string ReadStringValue(byte[] data, int start, int byteCount, uint utf16Size)
+    {
+        if (byteCount == 0) return string.Empty;
+        if (utf16Size == 0 || utf16Size > (uint)byteCount)
+        {
+            return Mutf8.Decode(data, start, byteCount);
+        }
+
+        var buffer = ArrayPool<char>.Shared.Rent((int)utf16Size);
+        try
+        {
+            var written = DecodeMutf8(data.AsSpan(start, byteCount), buffer, out var consumed);
+            if (written != utf16Size || consumed != byteCount)
+            {
+                return Mutf8.Decode(data, start, byteCount);
+            }
+            return new string(buffer, 0, written);
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Decodes MUTF-8 bytes into a character buffer with the same per-lead-byte behavior as
+    /// <see cref="Mutf8.Decode(byte[], int, int)"/>, reporting how many characters were written and how many
+    /// bytes were consumed so the caller can detect a declared-length mismatch.
+    /// <para>按与 <see cref="Mutf8.Decode(byte[], int, int)"/> 相同的逐首字节规则把 MUTF-8 字节解码到字符缓冲区，
+    /// 并报告写入字符数与消费字节数，供调用方判断声明长度是否不一致。</para>
+    /// </summary>
+    private static int DecodeMutf8(ReadOnlySpan<byte> data, Span<char> output, out int consumed)
+    {
+        var i = 0;
+        var pos = 0;
+        while (i < data.Length && pos < output.Length)
+        {
+            var b0 = data[i++];
+            if (b0 < 0x80)
+            {
+                output[pos++] = (char)b0;
+            }
+            else if ((b0 & 0xe0) == 0xc0)
+            {
+                var b1 = i < data.Length ? data[i++] : (byte)0;
+                output[pos++] = (char)(((b0 & 0x1f) << 6) | (b1 & 0x3f));
+            }
+            else if ((b0 & 0xf0) == 0xe0)
+            {
+                var b1 = i < data.Length ? data[i++] : (byte)0;
+                var b2 = i < data.Length ? data[i++] : (byte)0;
+                output[pos++] = (char)(((b0 & 0x0f) << 12) | ((b1 & 0x3f) << 6) | (b2 & 0x3f));
+            }
+            else
+            {
+                i += 3;
+                output[pos++] = '\uFFFD';
+            }
+        }
+        consumed = i;
+        return pos;
+    }
+
+    /// <summary>
+    /// Converts a declared table count into a preallocation size, capped so a damaged header cannot request a
+    /// list backing array far larger than the input that carries it.
+    /// <para>把声明的表数量转换为预分配容量，并设上限，避免损坏的头部申请远大于其输入体积的列表底层数组。</para>
+    /// </summary>
+    private static int PreallocatedCapacity(uint count) => (int)Math.Min(count, MaximumPreallocatedEntries);
 
     private static void ReadTypeIds(byte[] data, DexFile dex)
     {
         var count = dex.Header.TypeIdsSize;
         var offset = (int)dex.Header.TypeIdsOffset;
+        dex.Types.EnsureCapacity(PreallocatedCapacity(count));
         for (var i = 0; i < count; i++)
         {
             var descriptorIdx = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + i * 4));
@@ -210,6 +290,7 @@ internal static class DexReader
     {
         var count = dex.Header.ProtoIdsSize;
         var offset = (int)dex.Header.ProtoIdsOffset;
+        dex.Protos.EnsureCapacity(PreallocatedCapacity(count));
         for (var i = 0; i < count; i++)
         {
             var baseOffset = offset + i * 12;
@@ -256,6 +337,7 @@ internal static class DexReader
     {
         var count = dex.Header.FieldIdsSize;
         var offset = (int)dex.Header.FieldIdsOffset;
+        dex.Fields.EnsureCapacity(PreallocatedCapacity(count));
         for (var i = 0; i < count; i++)
         {
             var baseOffset = offset + i * 8;
@@ -272,6 +354,7 @@ internal static class DexReader
     {
         var count = dex.Header.MethodIdsSize;
         var offset = (int)dex.Header.MethodIdsOffset;
+        dex.Methods.EnsureCapacity(PreallocatedCapacity(count));
         for (var i = 0; i < count; i++)
         {
             var baseOffset = offset + i * 8;
@@ -288,6 +371,7 @@ internal static class DexReader
     {
         var count = dex.Header.ClassDefsSize;
         var offset = (int)dex.Header.ClassDefsOffset;
+        dex.Classes.EnsureCapacity(PreallocatedCapacity(count));
         for (var i = 0; i < count; i++)
         {
             var baseOffset = offset + i * 32;
@@ -315,7 +399,11 @@ internal static class DexReader
             {
                 var p = (int)staticValuesOff;
                 var size = Leb128.ReadUleb128(data, ref p);
-                var values = new List<EncodedValue>(checked((int)size));
+                if (size > (uint)(data.Length - p))
+                {
+                    throw new InvalidDataException("The static value count exceeds the remaining input.");
+                }
+                var values = new List<EncodedValue>(PreallocatedCapacity(size));
                 for (var j = 0; j < size; j++)
                 {
                     values.Add(ReadEncodedValue(data, ref p, dex));
@@ -340,6 +428,19 @@ internal static class DexReader
         var instanceFieldsSize = Leb128.ReadUleb128(data, ref p);
         var directMethodsSize = Leb128.ReadUleb128(data, ref p);
         var virtualMethodsSize = Leb128.ReadUleb128(data, ref p);
+
+        var fieldBudget = (uint)((data.Length - p) / 2);
+        var methodBudget = (uint)((data.Length - p) / 3);
+        if (staticFieldsSize > fieldBudget || instanceFieldsSize > fieldBudget
+            || directMethodsSize > methodBudget || virtualMethodsSize > methodBudget)
+        {
+            throw new InvalidDataException("The class_data member count exceeds the remaining input.");
+        }
+
+        cls.StaticFields.EnsureCapacity(PreallocatedCapacity(staticFieldsSize));
+        cls.InstanceFields.EnsureCapacity(PreallocatedCapacity(instanceFieldsSize));
+        cls.DirectMethods.EnsureCapacity(PreallocatedCapacity(directMethodsSize));
+        cls.VirtualMethods.EnsureCapacity(PreallocatedCapacity(virtualMethodsSize));
 
         var fieldIdx = 0u;
         for (var i = 0; i < staticFieldsSize; i++)
@@ -431,7 +532,9 @@ internal static class DexReader
 
         if (debugInfoOff != 0)
         {
-            code.DebugInfo = ReadDebugInfoRaw(data, (int)debugInfoOff);
+            var debugStart = checked((int)debugInfoOff);
+            EnsureRange(data, debugStart, 1, "debug_info_item");
+            code.SetDebugInfoSlice(data, debugStart, ReadDebugInfoLength(data, debugStart));
         }
 
         return code;
@@ -445,8 +548,12 @@ internal static class DexReader
     {
         var handlersListOffset = triesOffset + triesSize * 8;
         var p = handlersListOffset;
-        var handlerCount = checked((int)Leb128.ReadUleb128(data, ref p));
-        var handlerByOffset = new Dictionary<int, int>(handlerCount);
+        var handlerCount = Leb128.ReadUleb128(data, ref p);
+        if (handlerCount > (uint)((data.Length - p) / 2))
+        {
+            throw new InvalidDataException("The catch handler count exceeds the remaining input.");
+        }
+        var handlerByOffset = new Dictionary<int, int>(PreallocatedCapacity(handlerCount));
         for (var i = 0; i < handlerCount; i++)
         {
             var handlerStart = p;
@@ -483,10 +590,10 @@ internal static class DexReader
     }
 
     /// <summary>
-    /// Reads the raw debug_info_item bytes (walking the state machine to END_SEQUENCE) for verbatim rewrite.
-    /// <para>读取 debug_info_item 的原始字节（按状态机扫描至 END_SEQUENCE），供重建时原样回写。</para>
+    /// Measures the raw debug_info_item bytes (walking the state machine to END_SEQUENCE) for verbatim rewrite.
+    /// <para>测量 debug_info_item 的原始字节长度（按状态机扫描至 END_SEQUENCE），供重建时原样回写。</para>
     /// </summary>
-    private static byte[] ReadDebugInfoRaw(byte[] data, int offset)
+    private static int ReadDebugInfoLength(byte[] data, int offset)
     {
         var start = offset;
         var p = offset;
@@ -503,7 +610,7 @@ internal static class DexReader
             switch (opcode)
             {
                 case 0x00:
-                    return data.AsSpan(start, p - start).ToArray();
+                    return p - start;
                 case 0x01: _ = Leb128.ReadUleb128(data, ref p); break;
                 case 0x02: _ = Leb128.ReadSleb128(data, ref p); break;
                 case 0x03:
@@ -537,6 +644,7 @@ internal static class DexReader
     private static AnnotationsDirectory ReadAnnotationsDirectory(byte[] data, int offset, DexFile dex)
     {
         var dir = new AnnotationsDirectory();
+        EnsureRange(data, offset, 16, "annotations_directory_item");
         var classAnnotationsOff = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset));
         var fieldsSize = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4));
         var methodsSize = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 8));
@@ -548,6 +656,13 @@ internal static class DexReader
         }
 
         var p = offset + 16;
+        if ((ulong)fieldsSize + methodsSize + paramsSize > (ulong)((data.Length - p) / 8))
+        {
+            throw new DexException("annotations_directory_item entry count exceeds the remaining input.");
+        }
+        dir.FieldAnnotations.EnsureCapacity(PreallocatedCapacity(fieldsSize));
+        dir.MethodAnnotations.EnsureCapacity(PreallocatedCapacity(methodsSize));
+        dir.ParameterAnnotations.EnsureCapacity(PreallocatedCapacity(paramsSize));
         for (var i = 0; i < fieldsSize; i++)
         {
             var fieldIdx = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(p));
@@ -590,13 +705,19 @@ internal static class DexReader
     /// </summary>
     private static AnnotationSet ReadAnnotationSet(byte[] data, int offset, DexFile dex)
     {
+        EnsureRange(data, offset, 4, "annotation_set_item");
         var size = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset));
+        if (size > (uint)((data.Length - offset - 4) / 4))
+        {
+            throw new DexException("annotation_set_item entry count exceeds the remaining input.");
+        }
         var set = new AnnotationSet();
+        set.Annotations.EnsureCapacity(PreallocatedCapacity(size));
         for (var i = 0; i < size; i++)
         {
-
             var itemOff = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4 + i * 4));
             var p = (int)itemOff;
+            EnsureRange(data, p, 1, "annotation_item");
             var visibility = data[p++];
             var item = ReadEncodedAnnotation(data, ref p, dex);
             item.Visibility = visibility;
@@ -611,8 +732,14 @@ internal static class DexReader
     /// </summary>
     private static AnnotationSetRefList ReadAnnotationSetRefList(byte[] data, int offset, DexFile dex)
     {
+        EnsureRange(data, offset, 4, "annotation_set_ref_list");
         var size = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset));
+        if (size > (uint)((data.Length - offset - 4) / 4))
+        {
+            throw new DexException("annotation_set_ref_list entry count exceeds the remaining input.");
+        }
         var list = new AnnotationSetRefList();
+        list.Sets.EnsureCapacity(PreallocatedCapacity(size));
         for (var i = 0; i < size; i++)
         {
             var setOff = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4 + i * 4));

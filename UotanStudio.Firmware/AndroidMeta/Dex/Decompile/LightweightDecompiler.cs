@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using UotanStudio.Firmware.AndroidMeta.Dex.Models;
 
@@ -12,6 +13,8 @@ namespace UotanStudio.Firmware.AndroidMeta.Dex.Decompile;
 /// </example>
 public static class LightweightDecompiler
 {
+    private static readonly ConditionalWeakTable<DexFile, CachedIndex> Indexes = [];
+
     /// <summary>
     /// Decompiles every class in the DEX file.
     /// <para>反编译 DEX 中的全部类。</para>
@@ -53,8 +56,8 @@ public static class LightweightDecompiler
     /// <param name="cls">Class definition to render. <para>待渲染的类定义。</para></param>
     /// <param name="options">Emission options; <see langword="null"/> uses <c>DecompileOptions.Default</c>.
     /// <para>输出选项；为 <see langword="null"/> 时使用 <c>DecompileOptions.Default</c>。</para></param>
-    /// <returns>Rendered source of the class, built with a fresh whole-DEX overload index.
-    /// <para>使用全新全 DEX 重载索引生成的类源码。</para></returns>
+    /// <returns>Rendered source of the class, built with the whole-DEX overload index cached for the file.
+    /// <para>使用按文件缓存的整份 DEX 重载索引生成的类源码。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="dex"/> or <paramref name="cls"/> is null.
     /// <para><paramref name="dex"/> 或 <paramref name="cls"/> 为 null。</para></exception>
     public static string DecompileClass(DexFile dex, ClassDefinition cls, DecompileOptions? options = null)
@@ -62,7 +65,7 @@ public static class LightweightDecompiler
         ArgumentNullException.ThrowIfNull(dex);
         ArgumentNullException.ThrowIfNull(cls);
         options ??= DecompileOptions.Default;
-        return JavaCodegen.RenderClass(dex, cls, new MethodResolver(dex), options);
+        return JavaCodegen.RenderClass(dex, cls, CachedResolver(dex), options);
     }
 
     /// <summary>
@@ -75,8 +78,8 @@ public static class LightweightDecompiler
     /// <para>声明类；未知时为 <see langword="null"/>，提供后可启用含属主名在内的类级上下文。</para></param>
     /// <param name="options">Emission options; <see langword="null"/> uses <c>DecompileOptions.Default</c>.
     /// <para>输出选项；为 <see langword="null"/> 时使用 <c>DecompileOptions.Default</c>。</para></param>
-    /// <returns>Rendered source of the method, built with a fresh whole-DEX overload index.
-    /// <para>使用全新全 DEX 重载索引生成的方法源码。</para></returns>
+    /// <returns>Rendered source of the method, built with the whole-DEX overload index cached for the file.
+    /// <para>使用按文件缓存的整份 DEX 重载索引生成的方法源码。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="dex"/> or <paramref name="method"/> is null.
     /// <para><paramref name="dex"/> 或 <paramref name="method"/> 为 null。</para></exception>
     public static string DecompileMethod(DexFile dex, EncodedMethod method, ClassDefinition? cls = null, DecompileOptions? options = null)
@@ -84,6 +87,34 @@ public static class LightweightDecompiler
         ArgumentNullException.ThrowIfNull(dex);
         ArgumentNullException.ThrowIfNull(method);
         options ??= DecompileOptions.Default;
-        return JavaCodegen.RenderMethod(dex, method, cls, new MethodResolver(dex), options);
+        return JavaCodegen.RenderMethod(dex, method, cls, CachedResolver(dex), options);
+    }
+
+    private static MethodResolver CachedResolver(DexFile dex)
+    {
+        var version = new IndexVersion(dex.Classes.Count, dex.Methods.Count, dex.Protos.Count, dex.Types.Count, dex.Strings.Count);
+        return Indexes.GetValue(dex, _ => new CachedIndex(new MethodResolver(dex), version)).Resolver(dex, version);
+    }
+
+    private readonly record struct IndexVersion(int Classes, int Methods, int Protos, int Types, int Strings);
+
+    private sealed class CachedIndex(MethodResolver resolver, IndexVersion version)
+    {
+        private readonly Lock _gate = new();
+        private MethodResolver _resolver = resolver;
+        private IndexVersion _version = version;
+
+        public MethodResolver Resolver(DexFile dex, IndexVersion version)
+        {
+            lock (_gate)
+            {
+                if (_version != version)
+                {
+                    _resolver = new MethodResolver(dex);
+                    _version = version;
+                }
+                return _resolver;
+            }
+        }
     }
 }

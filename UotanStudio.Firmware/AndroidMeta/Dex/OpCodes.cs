@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace UotanStudio.Firmware.AndroidMeta.Dex;
 
 /// <summary>
@@ -219,6 +221,7 @@ internal static class OpCodes
 {
     private static readonly OpCodeInfo?[] Table = BuildTable();
     private static readonly byte[] Sizes = BuildSizes();
+    private static readonly FrozenDictionary<string, (byte Opcode, OpCodeInfo Info)> Mnemonics = BuildMnemonics();
 
     /// <summary>
     /// Gets metadata for the given opcode; returns null for unknown opcodes.
@@ -246,14 +249,7 @@ internal static class OpCodes
     /// <para>首个匹配表项的操作码字节及其元数据；无匹配时返回 <see langword="null"/>。</para>
     /// </returns>
     public static (byte Opcode, OpCodeInfo Info)? Find(string mnemonic)
-    {
-        for (var i = 0; i < Table.Length; i++)
-        {
-            if (Table[i]?.Mnemonic.Equals(mnemonic, StringComparison.OrdinalIgnoreCase) == true)
-                return ((byte)i, Table[i]!);
-        }
-        return null;
-    }
+        => mnemonic is not null && Mnemonics.TryGetValue(mnemonic, out var entry) ? entry : null;
 
     /// <summary>
     /// Gets the instruction size in 16-bit code units.
@@ -274,6 +270,19 @@ internal static class OpCodes
             sizes[i] = Table[i] is { } info ? SizeOf(info.Format) : (byte)1;
         }
         return sizes;
+    }
+
+    private static FrozenDictionary<string, (byte Opcode, OpCodeInfo Info)> BuildMnemonics()
+    {
+        var mnemonics = new Dictionary<string, (byte Opcode, OpCodeInfo Info)>(Table.Length, StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < Table.Length; index++)
+        {
+            if (Table[index] is { } info)
+            {
+                mnemonics.TryAdd(info.Mnemonic, ((byte)index, info));
+            }
+        }
+        return mnemonics.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
     }
 
     private static byte SizeOf(InstructionFormat format) => format switch

@@ -212,6 +212,12 @@ public static partial class SmaliAssembler
         public List<MethodHandleDefinition> MethodHandles { get; } = [];
         private List<MethodState> MethodStates { get; } = [];
         private Dictionary<string, int> StringIndices { get; } = new(StringComparer.Ordinal);
+        private Dictionary<string, int> TypeIndices { get; } = new(StringComparer.Ordinal);
+        private Dictionary<(int ClassIndex, int NameIndex, int TypeIndex), int> FieldIndices { get; } = [];
+        private Dictionary<(int ClassIndex, int NameIndex, int ProtoIndex), int> MethodIndices { get; } = [];
+        private Dictionary<ProtoKey, int> ProtoIndices { get; } = [];
+        private Dictionary<(int Kind, int MemberIndex), int> MethodHandleIndices { get; } = [];
+        private List<ClassDefinition>? OrderedClassResult { get; set; }
         public int String(string value)
         {
             if (!StringIndices.TryGetValue(value, out var index))
@@ -221,9 +227,37 @@ public static partial class SmaliAssembler
             }
             return index;
         }
-        public int Type(string value) { var d = Descriptor(value); var i = Types.IndexOf(d); if (i < 0) { i = Types.Count; Types.Add(d); String(d); } return i; }
-        public int Field(FieldId value) { var i = Fields.FindIndex(x => x.ClassIndex == value.ClassIndex && x.NameIndex == value.NameIndex && x.TypeIndex == value.TypeIndex); if (i < 0) { i = Fields.Count; Fields.Add(value); } return i; }
-        public int Method(MethodId value) { var i = Methods.FindIndex(x => x.ClassIndex == value.ClassIndex && x.NameIndex == value.NameIndex && x.ProtoIndex == value.ProtoIndex); if (i < 0) { i = Methods.Count; Methods.Add(value); } return i; }
+        public int Type(string value)
+        {
+            var descriptor = Descriptor(value);
+            if (!TypeIndices.TryGetValue(descriptor, out var index))
+            {
+                TypeIndices.Add(descriptor, index = Types.Count);
+                Types.Add(descriptor);
+                String(descriptor);
+            }
+            return index;
+        }
+        public int Field(FieldId value)
+        {
+            var key = (value.ClassIndex, value.NameIndex, value.TypeIndex);
+            if (!FieldIndices.TryGetValue(key, out var index))
+            {
+                FieldIndices.Add(key, index = Fields.Count);
+                Fields.Add(value);
+            }
+            return index;
+        }
+        public int Method(MethodId value)
+        {
+            var key = (value.ClassIndex, value.NameIndex, value.ProtoIndex);
+            if (!MethodIndices.TryGetValue(key, out var index))
+            {
+                MethodIndices.Add(key, index = Methods.Count);
+                Methods.Add(value);
+            }
+            return index;
+        }
         public ClassState StartClass(string line) { var p = line[6..].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries); var state = new ClassState(new ClassDefinition { TypeIndex = Type(p[^1]), AccessFlags = Access(p[..^1]) }); Classes.Add(state); return state; }
         public EncodedField ParseField(ClassState cls, string line)
         {
@@ -350,22 +384,23 @@ public static partial class SmaliAssembler
                     EmitPayload(raw, payload, bindings.Owners.TryGetValue(entry.Address, out var owner) ? owner : null, layout);
                     continue;
                 }
-                var parts = entry.Line.Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
-                var op = OpCodes.Find(parts[0])!.Value;
-                var args = parts.Length == 1 ? [] : SmaliSyntax.Operands(parts[1]);
+                var opcode = entry.Opcode;
+                var info = entry.Info ?? throw new FormatException($"Unknown instruction: {entry.Line}");
+                var args = entry.Args;
                 if (bindings.Targets.TryGetValue(entry.Address, out var payloadTarget))
                 {
+                    args = [.. entry.Args];
                     args[^1] = (payloadTarget - entry.Address).ToString(CultureInfo.InvariantCulture);
                 }
-                if (op.Opcode >= 0xfe)
+                if (opcode >= 0xfe)
                 {
                     MinimumVersion = "039";
                 }
-                else if (op.Opcode >= 0xfa && MinimumVersion == "035")
+                else if (opcode >= 0xfa && MinimumVersion == "035")
                 {
                     MinimumVersion = "038";
                 }
-                Emit(raw, op.Opcode, op.Info, args, layout.Labels, entry.Address, state.Code, Types[state.Class.Definition.TypeIndex]);
+                Emit(raw, opcode, info, args, layout.Labels, entry.Address, state.Code, Types[state.Class.Definition.TypeIndex]);
             }
             state.Encoded.Code!.RawInsns = [.. raw];
             EncodeCatches(state, layout.Labels, layout.Boundaries, layout.Instructions);
@@ -581,6 +616,24 @@ public static partial class SmaliAssembler
                     Wide(Branch(32), 2);
                     break;
             }
+        }
+    }
+    private readonly struct ProtoKey(int returnTypeIndex, int[] parameterTypeIndices) : IEquatable<ProtoKey>
+    {
+        private int ReturnTypeIndex { get; } = returnTypeIndex;
+        private int[] ParameterTypeIndices { get; } = parameterTypeIndices;
+        public bool Equals(ProtoKey other) => ReturnTypeIndex == other.ReturnTypeIndex
+            && ParameterTypeIndices.AsSpan().SequenceEqual(other.ParameterTypeIndices);
+        public override bool Equals(object? obj) => obj is ProtoKey other && Equals(other);
+        public override int GetHashCode()
+        {
+            var hash = new HashCode();
+            hash.Add(ReturnTypeIndex);
+            foreach (var index in ParameterTypeIndices)
+            {
+                hash.Add(index);
+            }
+            return hash.ToHashCode();
         }
     }
     private sealed class ClassState(ClassDefinition definition)

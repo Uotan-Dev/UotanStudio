@@ -13,11 +13,6 @@ public static partial class SmaliAssembler
                 throw new FormatException("DEX type and prototype tables cannot exceed 65535 entries.");
             }
             var strings = Reorder(Strings, StringComparer.Ordinal.Compare);
-            StringIndices.Clear();
-            for (var i = 0; i < Strings.Count; i++)
-            {
-                StringIndices.Add(Strings[i], i);
-            }
             var types = Reorder(Types, StringComparer.Ordinal.Compare);
             foreach (var proto in Protos)
             {
@@ -99,6 +94,7 @@ public static partial class SmaliAssembler
                 cls.VirtualMethods.Sort((left, right) => left.MethodIndex.CompareTo(right.MethodIndex));
                 RelocateAnnotations(cls.Annotations, strings, types, fields, methods, protos, handles);
             }
+            RebuildLookups();
             CallSites.Clear();
             var methodStates = MethodStates.ToDictionary(state => state.Encoded.MethodIndex);
             foreach (var method in OrderedClasses().SelectMany(cls => cls.AllMethods))
@@ -107,6 +103,44 @@ public static partial class SmaliAssembler
                 {
                     Encode(methodStates[method.MethodIndex]);
                 }
+            }
+        }
+
+        private void RebuildLookups()
+        {
+            StringIndices.Clear();
+            for (var index = 0; index < Strings.Count; index++)
+            {
+                StringIndices.TryAdd(Strings[index], index);
+            }
+            TypeIndices.Clear();
+            for (var index = 0; index < Types.Count; index++)
+            {
+                TypeIndices.TryAdd(Types[index], index);
+            }
+            FieldIndices.Clear();
+            for (var index = 0; index < Fields.Count; index++)
+            {
+                var field = Fields[index];
+                FieldIndices.TryAdd((field.ClassIndex, field.NameIndex, field.TypeIndex), index);
+            }
+            MethodIndices.Clear();
+            for (var index = 0; index < Methods.Count; index++)
+            {
+                var method = Methods[index];
+                MethodIndices.TryAdd((method.ClassIndex, method.NameIndex, method.ProtoIndex), index);
+            }
+            ProtoIndices.Clear();
+            for (var index = 0; index < Protos.Count; index++)
+            {
+                var proto = Protos[index];
+                ProtoIndices.TryAdd(new ProtoKey(proto.ReturnTypeIndex, proto.ParameterTypeIndices), index);
+            }
+            MethodHandleIndices.Clear();
+            for (var index = 0; index < MethodHandles.Count; index++)
+            {
+                var handle = MethodHandles[index];
+                MethodHandleIndices.TryAdd((handle.Kind, handle.MemberIndex), index);
             }
         }
 
@@ -176,7 +210,9 @@ public static partial class SmaliAssembler
             directory.ParameterAnnotations.Sort((left, right) => left.MethodIndex.CompareTo(right.MethodIndex));
         }
 
-        private IEnumerable<ClassDefinition> OrderedClasses()
+        private List<ClassDefinition> OrderedClasses() => OrderedClassResult ??= ComputeOrderedClasses();
+
+        private List<ClassDefinition> ComputeOrderedClasses()
         {
             var definitions = new Dictionary<int, ClassDefinition>();
             foreach (var state in Classes)

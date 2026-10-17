@@ -8,6 +8,8 @@ namespace UotanStudio.Firmware.AndroidMeta.Dex;
 internal static partial class DexWriter
 {
     private const uint NoIndex = 0xFFFFFFFF;
+    private const int HashChunkSize = 64 * 1024;
+    private const long MaximumInitialCapacity = 512L * 1024 * 1024;
 
     /// <summary>
     /// Serializes the model into a DEX byte array.
@@ -30,7 +32,7 @@ internal static partial class DexWriter
         var version = NormalizeVersion(dex.Header.Version);
         if ((dex.MethodHandles.Count > 0 || dex.CallSites.Count > 0) && string.CompareOrdinal(version, "038") < 0)
             throw new DexException("Method handles and call sites require DEX 038 or newer.");
-        using var ms = new MemoryStream();
+        using var ms = new MemoryStream(EstimateCapacity(dex));
         using var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true);
 
         var headerStart = (int)ms.Position;
@@ -229,7 +231,7 @@ internal static partial class DexWriter
 
         var codeItemCount = 0;
         var firstCodeItem = 0u;
-        var debugPatches = new List<(int FieldPos, byte[] Bytes)>();
+        var debugPatches = new List<(int FieldPos, CodeItem Code)>();
         var methodCodeOffsets = new Dictionary<EncodedMethod, uint>();
         foreach (var method in dex.Classes.SelectMany(c => c.AllMethods))
         {
@@ -238,7 +240,7 @@ internal static partial class DexWriter
             if (codeItemCount++ == 0) firstCodeItem = (uint)ms.Position;
             methodCodeOffsets[method] = (uint)ms.Position;
             var codeStart = WriteCodeItem(w, method.Code);
-            if (method.Code.DebugInfo is { Length: > 0 } debug) debugPatches.Add((codeStart + 8, debug));
+            if (method.Code.DebugInfoBytes.Length > 0) debugPatches.Add((codeStart + 8, method.Code));
         }
         for (var i = 0; i < dex.Classes.Count; i++)
         {
@@ -280,12 +282,12 @@ internal static partial class DexWriter
 
         var debugInfoCount = 0;
         var firstDebugInfo = 0u;
-        foreach (var (fieldPos, dbgBytes) in debugPatches)
+        foreach (var (fieldPos, code) in debugPatches)
         {
             if (debugInfoCount == 0) firstDebugInfo = (uint)ms.Position;
             debugInfoCount++;
             var debugOff = (uint)ms.Position;
-            w.Write(dbgBytes);
+            w.Write(code.DebugInfoBytes);
             var cur = (int)ms.Position;
             ms.Position = fieldPos;
             w.Write(debugOff);
@@ -297,6 +299,9 @@ internal static partial class DexWriter
         var allSets = new List<AnnotationSet>();
         var allRefLists = new List<AnnotationSetRefList>();
         var allDirs = new List<AnnotationsDirectory>();
+        var seenItems = new HashSet<AnnotationItem>(ReferenceEqualityComparer.Instance);
+        var seenSets = new HashSet<AnnotationSet>(ReferenceEqualityComparer.Instance);
+        var seenRefLists = new HashSet<AnnotationSetRefList>(ReferenceEqualityComparer.Instance);
         foreach (var cls in dex.Classes)
         {
             var dir = cls.Annotations;
@@ -305,10 +310,10 @@ internal static partial class DexWriter
             void AddSet(AnnotationSet? set)
             {
                 if (set == null || set.IsEmpty) return;
-                if (!allSets.Contains(set)) allSets.Add(set);
+                if (seenSets.Add(set)) allSets.Add(set);
                 foreach (var item in set.Annotations)
                 {
-                    if (!allItems.Contains(item)) allItems.Add(item);
+                    if (seenItems.Add(item)) allItems.Add(item);
                 }
             }
             AddSet(dir.ClassAnnotations);
@@ -316,7 +321,7 @@ internal static partial class DexWriter
             foreach (var ma in dir.MethodAnnotations) AddSet(ma.Annotations);
             foreach (var pa in dir.ParameterAnnotations)
             {
-                if (!allRefLists.Contains(pa.Parameters)) allRefLists.Add(pa.Parameters);
+                if (seenRefLists.Add(pa.Parameters)) allRefLists.Add(pa.Parameters);
                 foreach (var s in pa.Parameters.Sets) AddSet(s);
             }
         }
@@ -488,14 +493,97 @@ internal static partial class DexWriter
         Patch(headerStart + 104, (uint)(fileSize - dataStart));
         Patch(headerStart + 108, (uint)dataStart);
 
-        var bytes = ms.ToArray();
+        var length = checked((int)ms.Length);
+        var buffer = ms.GetBuffer();
 
-        var signature = Sha1.ComputeHash(bytes.AsSpan(32));
-        signature.CopyTo(bytes, 12);
+        var signature = new byte[Sha1.HashSizeInBytes];
+        using (var sha1 = Sha1.CreateAccumulator())
+        {
+            for (var pos = 32; pos < length; pos += HashChunkSize)
+            {
+                sha1.Append(buffer.AsSpan(pos, Math.Min(HashChunkSize, length - pos)));
+            }
+            sha1.GetHashAndReset(signature);
+        }
+        signature.CopyTo(buffer, 12);
 
-        var checksum = Adler32(bytes.AsSpan(12));
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), checksum);
+        var checksum = Hash.Adler32.Adler32.Compute(buffer.AsSpan(12, 20));
+        for (var pos = 32; pos < length; pos += HashChunkSize)
+        {
+            checksum = Hash.Adler32.Adler32.Compute(buffer.AsSpan(pos, Math.Min(HashChunkSize, length - pos)), checksum);
+        }
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(8), checksum);
 
+        var bytes = new byte[length];
+        buffer.AsSpan(0, length).CopyTo(bytes);
         return bytes;
+    }
+
+    /// <summary>
+    /// Estimates an initial output capacity from the model's table counts, string payloads, type lists and
+    /// code items so the output stream rarely has to grow and copy; annotations and deeply nested encoded
+    /// values are not measured, and the stream grows on demand when the estimate falls short.
+    /// <para>按模型的表数量、字符串负载、类型列表与代码项估算初始输出容量，使输出流基本无需扩容复制；
+    /// 注解与深层嵌套的编码值不计入，估算不足时输出流按需扩容。</para>
+    /// </summary>
+    private static int EstimateCapacity(DexFile dex)
+    {
+        long strings = 0;
+        foreach (var value in dex.Strings)
+        {
+            strings += Leb128.MaxEncodedBytes + Mutf8.EncodedLength(value) + 1;
+        }
+
+        var code = 0L;
+        var handlers = 0L;
+        var debug = 0L;
+        var classData = 0L;
+        foreach (var cls in dex.Classes)
+        {
+            classData += 4L * Leb128.MaxEncodedBytes
+                + 2L * Leb128.MaxEncodedBytes * (cls.StaticFields.Count + cls.InstanceFields.Count)
+                + 3L * Leb128.MaxEncodedBytes * (cls.DirectMethods.Count + cls.VirtualMethods.Count);
+            foreach (var method in cls.AllMethods)
+            {
+                if (method.Code is not { } item) continue;
+                code += 16 + 2L * item.RawInsns.Length + 8L * item.Tries.Count + 4;
+                foreach (var handler in item.Handlers)
+                {
+                    handlers += (2L + 2L * handler.Entries.Count) * Leb128.MaxEncodedBytes;
+                }
+                debug += item.DebugInfoBytes.Length + 2L * Leb128.MaxEncodedBytes;
+            }
+        }
+
+        var tables = 4L * dex.Strings.Count + 4L * dex.Types.Count + 12L * dex.Protos.Count
+            + 8L * dex.Fields.Count + 8L * dex.Methods.Count + 32L * dex.Classes.Count
+            + 4L * dex.CallSites.Count + 8L * dex.MethodHandles.Count;
+
+        var typeLists = 0L;
+        foreach (var proto in dex.Protos)
+        {
+            typeLists += proto.ParameterTypeIndices.Length > 0 ? 8L + 2L * proto.ParameterTypeIndices.Length : 0;
+        }
+        foreach (var cls in dex.Classes)
+        {
+            typeLists += cls.InterfaceTypeIndices.Length > 0 ? 8L + 2L * cls.InterfaceTypeIndices.Length : 0;
+        }
+
+        var values = 0L;
+        foreach (var site in dex.CallSites)
+        {
+            values += Leb128.MaxEncodedBytes * (1L + site.Count);
+        }
+        foreach (var cls in dex.Classes)
+        {
+            if (cls.StaticValues is { Count: > 0 } staticValues)
+            {
+                values += Leb128.MaxEncodedBytes * (1L + staticValues.Count);
+            }
+        }
+
+        var total = 0x70 + tables + strings + typeLists + code + handlers + debug + classData + values + 0x400;
+        total += total / 16 + 4L * (dex.Protos.Count + dex.Classes.Count);
+        return (int)Math.Min(total, MaximumInitialCapacity);
     }
 }

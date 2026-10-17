@@ -108,10 +108,11 @@ public static partial class Disassembler
             sb.Append(".source \"").Append(EscapeString(dex.GetString(cls.SourceFileIndex))).AppendLine("\"");
         }
 
+        var index = new AnnotationIndex(cls.Annotations);
 
         if (cls.Annotations?.ClassAnnotations is { IsEmpty: false } classAnnotations)
         {
-            sb.Append(FormatAnnotationSet(dex, classAnnotations, string.Empty));
+            AppendAnnotationSet(sb, dex, classAnnotations, string.Empty);
         }
 
 
@@ -128,7 +129,7 @@ public static partial class Disassembler
                 sb.Append(" = ").Append(FormatEncodedValue(dex, staticValues[i]));
             }
             sb.AppendLine();
-            AppendFieldAnnotations(sb, dex, cls, f.FieldIndex);
+            AppendFieldAnnotations(sb, dex, index, f.FieldIndex);
         }
         foreach (var f in cls.InstanceFields)
         {
@@ -137,22 +138,27 @@ public static partial class Disassembler
             var fieldAccess = AccessFlags.FormatField(f.AccessFlags);
             sb.Append(".field ").Append(fieldAccess).Append(fieldAccess.Length > 0 ? " " : string.Empty)
               .Append(dex.GetString(field.NameIndex)).Append(':').AppendLine(dex.GetType(field.TypeIndex));
-            AppendFieldAnnotations(sb, dex, cls, f.FieldIndex);
+            AppendFieldAnnotations(sb, dex, index, f.FieldIndex);
         }
 
-        foreach (var m in cls.DirectMethods.Concat(cls.VirtualMethods))
+        foreach (var m in cls.DirectMethods)
         {
             sb.AppendLine();
-            AppendDisassembleMethod(sb, dex, m, cls);
+            AppendDisassembleMethod(sb, dex, m, index);
+        }
+        foreach (var m in cls.VirtualMethods)
+        {
+            sb.AppendLine();
+            AppendDisassembleMethod(sb, dex, m, index);
         }
     }
 
-    private static void AppendFieldAnnotations(StringBuilder sb, DexFile dex, ClassDefinition cls, int fieldIndex)
+    private static void AppendFieldAnnotations(StringBuilder sb, DexFile dex, AnnotationIndex index, int fieldIndex)
     {
-        var annotations = cls.Annotations?.FieldAnnotations.FirstOrDefault(fa => fa.FieldIndex == fieldIndex)?.Annotations;
+        var annotations = index.Field(fieldIndex);
         if (annotations is { IsEmpty: false })
         {
-            sb.Append(FormatAnnotationSet(dex, annotations, "    "));
+            AppendAnnotationSet(sb, dex, annotations, "    ");
             sb.AppendLine(".end field");
         }
     }
@@ -203,11 +209,11 @@ public static partial class Disassembler
         if (method == null) return string.Empty;
 
         var sb = new StringBuilder(512);
-        AppendDisassembleMethod(sb, dex, encodedMethod, cls);
+        AppendDisassembleMethod(sb, dex, encodedMethod, new AnnotationIndex(cls?.Annotations));
         return sb.ToString();
     }
 
-    private static void AppendDisassembleMethod(StringBuilder sb, DexFile dex, EncodedMethod encodedMethod, ClassDefinition? cls)
+    private static void AppendDisassembleMethod(StringBuilder sb, DexFile dex, EncodedMethod encodedMethod, AnnotationIndex index)
     {
         var method = dex.GetMethod(encodedMethod.MethodIndex);
         if (method == null) return;
@@ -230,7 +236,7 @@ public static partial class Disassembler
         var code = encodedMethod.Code;
         if (code == null)
         {
-            AppendMethodAnnotations(sb, dex, cls, encodedMethod.MethodIndex, encodedMethod.AccessFlags, code: null);
+            AppendMethodAnnotations(sb, dex, index, encodedMethod.MethodIndex, encodedMethod.AccessFlags, code: null);
             sb.AppendLine(".end method");
             return;
         }
@@ -243,7 +249,7 @@ public static partial class Disassembler
         sb.Append("    .registers ").AppendLine(code.RegistersSize.ToString());
 
 
-        AppendMethodAnnotations(sb, dex, cls, encodedMethod.MethodIndex, encodedMethod.AccessFlags, code);
+        AppendMethodAnnotations(sb, dex, index, encodedMethod.MethodIndex, encodedMethod.AccessFlags, code);
         var debugDirectives = ReadDebugDirectives(dex, code, instructions);
 
 
@@ -301,6 +307,12 @@ public static partial class Disassembler
             }
         }
 
+        var labelTexts = new Dictionary<int, string>(labels.Count);
+        foreach (var offset in labels)
+        {
+            labelTexts[offset] = ":label_" + offset.ToString("X4");
+        }
+
         foreach (var insn in instructions)
         {
             if (labels.Contains(insn.Offset))
@@ -313,7 +325,7 @@ public static partial class Disassembler
                 {
                     sb.Append("  ").AppendLine(catchLabel);
                 }
-                sb.Append("  :label_").Append(insn.Offset.ToString("X4")).AppendLine();
+                sb.Append("  ").AppendLine(labelTexts[insn.Offset]);
                 if (tryEnds.TryGetValue(insn.Offset, out var ends))
                 {
                     foreach (var e in ends.Labels) sb.Append("  ").AppendLine(e);
@@ -370,15 +382,15 @@ public static partial class Disassembler
     /// Emits method-level and parameter annotations (.annotation / .param).
     /// <para>输出方法级注解与参数注解（.annotation / .param）。</para>
     /// </summary>
-    private static void AppendMethodAnnotations(StringBuilder sb, DexFile dex, ClassDefinition? cls, int methodIndex, uint flags, CodeItem? code)
+    private static void AppendMethodAnnotations(StringBuilder sb, DexFile dex, AnnotationIndex index, int methodIndex, uint flags, CodeItem? code)
     {
-        var methodAnns = cls?.Annotations?.MethodAnnotations.FirstOrDefault(ma => ma.MethodIndex == methodIndex)?.Annotations;
+        var methodAnns = index.Method(methodIndex);
         if (methodAnns is { IsEmpty: false })
         {
-            sb.Append(FormatAnnotationSet(dex, methodAnns, "    "));
+            AppendAnnotationSet(sb, dex, methodAnns, "    ");
         }
 
-        var paramAnns = cls?.Annotations?.ParameterAnnotations.FirstOrDefault(pa => pa.MethodIndex == methodIndex)?.Parameters;
+        var paramAnns = index.Parameters(methodIndex);
         var method = dex.GetMethod(methodIndex)!;
         var proto = dex.GetProto(method.ProtoIndex);
         if (proto is null)
@@ -404,7 +416,7 @@ public static partial class Disassembler
                 sb.AppendLine();
                 if (set is { IsEmpty: false })
                 {
-                    sb.Append(FormatAnnotationSet(dex, set, "        "));
+                    AppendAnnotationSet(sb, dex, set, "        ");
                     sb.AppendLine("    .end param");
                 }
             }
@@ -416,9 +428,8 @@ public static partial class Disassembler
     /// Formats an annotation set as smali-style .annotation blocks (with visibility).
     /// <para>把注解集合格式化为 smali 风格 .annotation 块（含可见性）。</para>
     /// </summary>
-    private static string FormatAnnotationSet(DexFile dex, AnnotationSet set, string indent)
+    private static void AppendAnnotationSet(StringBuilder sb, DexFile dex, AnnotationSet set, string indent)
     {
-        var sb = new StringBuilder();
         foreach (var item in set.Annotations)
         {
             sb.Append(indent).Append(".annotation ").Append(VisibilityName(item.Visibility))
@@ -430,7 +441,6 @@ public static partial class Disassembler
             }
             sb.Append(indent).AppendLine(".end annotation");
         }
-        return sb.ToString();
     }
 
     private static string VisibilityName(int visibility) => visibility switch
@@ -651,9 +661,20 @@ public static partial class Disassembler
 
     private static string EscapeString(string value)
     {
-        var sb = new StringBuilder(value.Length + 4);
-        foreach (var c in value)
+        var start = 0;
+        while (start < value.Length && !NeedsEscape(value[start]))
         {
+            start++;
+        }
+        if (start == value.Length)
+        {
+            return value;
+        }
+        var sb = new StringBuilder(value.Length + 4);
+        sb.Append(value, 0, start);
+        for (var i = start; i < value.Length; i++)
+        {
+            var c = value[i];
             switch (c)
             {
                 case '\\': sb.Append("\\\\"); break;
@@ -675,4 +696,6 @@ public static partial class Disassembler
         }
         return sb.ToString();
     }
+
+    private static bool NeedsEscape(char value) => value is '\\' or '"' or '\n' or '\r' or '\t' || value < 0x20;
 }

@@ -82,11 +82,11 @@ public static partial class SmaliAssembler
             {
                 MinimumVersion = "038";
             }
-            var existing = MethodHandles.FindIndex(handle => handle.Kind == kind && handle.MemberIndex == member);
-            if (existing >= 0)
+            if (MethodHandleIndices.TryGetValue((kind, member), out var existing))
             {
                 return existing;
             }
+            MethodHandleIndices.Add((kind, member), MethodHandles.Count);
             MethodHandles.Add(new MethodHandleDefinition { Kind = kind, MemberIndex = (ushort)member });
             return MethodHandles.Count - 1;
         }
@@ -101,12 +101,12 @@ public static partial class SmaliAssembler
             var args = SmaliTypes.Parameters(signature[1..close]).Select(Type).ToArray();
             var returnDescriptor = SmaliTypes.Single(signature[(close + 1)..], allowVoid: true);
             var ret = Type(returnDescriptor);
-            var existing = Protos.FindIndex(p => p.ReturnTypeIndex == ret && p.ParameterTypeIndices.SequenceEqual(args));
-            if (existing >= 0)
+            if (ProtoIndices.TryGetValue(new ProtoKey(ret, args), out var existing))
             {
                 return existing;
             }
             var shorty = new string([SmaliTypes.Shorty(returnDescriptor), .. args.Select(i => SmaliTypes.Shorty(Types[i]))]);
+            ProtoIndices.Add(new ProtoKey(ret, args), Protos.Count);
             Protos.Add(new ProtoDefinition { ReturnTypeIndex = ret, ParameterTypeIndices = args, ShortyIndex = String(shorty) });
             return Protos.Count - 1;
         }

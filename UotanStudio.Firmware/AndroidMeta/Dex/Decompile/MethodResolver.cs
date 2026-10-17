@@ -78,6 +78,9 @@ internal sealed class MethodResolver
 {
     private readonly DexFile _dex;
     private readonly Dictionary<(string Owner, string Name, int Arity), List<MethodCandidate>> _index = new();
+    private readonly Dictionary<(string Owner, string Name, int Arity), List<MethodCandidate>> _candidates = new();
+    private readonly Dictionary<string, int> _typeIndices = new(StringComparer.Ordinal);
+    private readonly Dictionary<int, ClassDefinition> _classes = [];
 
     /// <summary>
     /// Creates an overload resolver and builds the whole-DEX method index.
@@ -91,6 +94,14 @@ internal sealed class MethodResolver
     {
         ArgumentNullException.ThrowIfNull(dex);
         _dex = dex;
+        for (var index = 0; index < dex.Types.Count; index++)
+        {
+            _typeIndices.TryAdd(dex.Types[index], index);
+        }
+        foreach (var cls in dex.Classes)
+        {
+            _classes.TryAdd(cls.TypeIndex, cls);
+        }
         BuildIndex();
     }
 
@@ -217,6 +228,12 @@ internal sealed class MethodResolver
 
     private List<MethodCandidate> CollectCandidates(string owner, string name, int arity)
     {
+        var key = (owner, name, arity);
+        if (_candidates.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
         var result = new List<MethodCandidate>();
         var visited = new HashSet<string>(StringComparer.Ordinal);
 
@@ -237,6 +254,7 @@ internal sealed class MethodResolver
             AddFromClass(result, iface, name, arity);
         }
 
+        _candidates.Add(key, result);
         return result;
     }
 
@@ -298,23 +316,9 @@ internal sealed class MethodResolver
     private ClassDefinition? FindClass(string readableName)
     {
         var descriptor = DescriptorRenderer.ToDescriptor(readableName);
-        var typeIndex = -1;
-        for (var i = 0; i < _dex.Types.Count; i++)
-        {
-            if (_dex.Types[i] == descriptor)
-            {
-                typeIndex = i;
-                break;
-            }
-        }
-
-        if (typeIndex < 0) return null;
-        foreach (var cls in _dex.Classes)
-        {
-            if (cls.TypeIndex == typeIndex) return cls;
-        }
-
-        return null;
+        return _typeIndices.TryGetValue(descriptor, out var typeIndex) && _classes.TryGetValue(typeIndex, out var cls)
+            ? cls
+            : null;
     }
 
     private static bool SameParameters(string[] left, string[] right)

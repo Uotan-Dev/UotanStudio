@@ -98,6 +98,12 @@ public sealed class DexFile
     public List<List<EncodedValue>> CallSites { get; } = [];
 
     /// <summary>
+    /// Memoized operand names shared by the instruction decoders of this model.
+    /// <para>本模型的指令解码器共享的操作数名称记忆缓存。</para>
+    /// </summary>
+    internal InstructionOperandCache InstructionOperands { get; } = new();
+
+    /// <summary>
     /// Loads a DEX from a file.
     /// <para>从文件加载 DEX。</para>
     /// </summary>

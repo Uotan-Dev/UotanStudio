@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using UotanStudio.Firmware.AndroidMeta.Dex.Models;
 
 namespace UotanStudio.Firmware.AndroidMeta.Dex;
@@ -36,7 +37,10 @@ internal static partial class DexWriter
 
     /// <summary>
     /// Writes a code_item (including tries and the catch handler list); returns the code_item start position so the caller can patch debug_info_off.
-    /// <para>写出 code_item（含异常保护块与处理器列表）；返回 code_item 起始位置，供回填 debug_info_off。</para>
+    /// The instruction array is copied into the output in one block on little-endian hosts, which is the same byte
+    /// sequence as one <see cref="BinaryWriter.Write(ushort)"/> call per code unit.
+    /// <para>写出 code_item（含异常保护块与处理器列表）；返回 code_item 起始位置，供回填 debug_info_off。
+    /// 在小端主机上指令数组整块复制到输出，与先前逐单元调用 <see cref="BinaryWriter.Write(ushort)"/> 的字节序列完全一致。</para>
     /// </summary>
     private static int WriteCodeItem(BinaryWriter w, CodeItem code)
     {
@@ -47,9 +51,16 @@ internal static partial class DexWriter
         w.Write((ushort)code.Tries.Count);
         w.Write(0u);
         w.Write((uint)code.RawInsns.Length);
-        foreach (var unit in code.RawInsns)
+        if (BitConverter.IsLittleEndian)
         {
-            w.Write(unit);
+            w.Write(MemoryMarshal.AsBytes(code.RawInsns.AsSpan()));
+        }
+        else
+        {
+            foreach (var unit in code.RawInsns)
+            {
+                w.Write(unit);
+            }
         }
 
         if (code.Tries.Count > 0)
@@ -310,7 +321,4 @@ internal static partial class DexWriter
         var pad = (alignment - ((int)w.BaseStream.Position % alignment)) % alignment;
         for (var i = 0; i < pad; i++) w.Write((byte)0);
     }
-
-    private static uint Adler32(ReadOnlySpan<byte> data)
-        => Hash.Adler32.Adler32.Compute(data);
 }

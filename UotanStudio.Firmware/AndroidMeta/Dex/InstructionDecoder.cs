@@ -48,7 +48,7 @@ internal static class InstructionDecoder
         ArgumentNullException.ThrowIfNull(dex);
 
 
-        var instructions = new List<Instruction>();
+        var instructions = new List<Instruction>(Math.Max(4, raw.Length / 2));
         var index = 0;
         while (index < raw.Length)
         {
@@ -353,58 +353,138 @@ internal static class InstructionDecoder
 
     private static object? ResolveRef(DexFile dex, int index, RefKind kind, bool descriptors)
     {
-        string TypeName(int typeIndex) => descriptors ? dex.GetType(typeIndex) : dex.FormatType(typeIndex);
+        var cache = dex.InstructionOperands;
         switch (kind)
         {
             case RefKind.String:
                 return dex.GetString(index);
             case RefKind.Type:
-                return new TypeRefOperand(dex.GetType(index));
+                return cache.ResolveType(dex, index);
             case RefKind.Proto:
-                return ResolveProtoRef(dex, index);
+                return (object?)cache.ResolveProto(dex, index) ?? index;
             case RefKind.MethodHandle:
                 return new MethodHandleRefOperand(index);
             case RefKind.CallSite:
                 return new CallSiteRefOperand(index);
             case RefKind.Field:
-                {
-                    var field = dex.GetField(index);
-                    if (field == null) return index;
-                    return new FieldRefOperand(TypeName(field.ClassIndex), dex.GetString(field.NameIndex), TypeName(field.TypeIndex));
-                }
+                return (object?)cache.ResolveField(dex, index, descriptors) ?? index;
             case RefKind.Method:
-                {
-                    var method = dex.GetMethod(index);
-                    if (method == null) return index;
-                    var proto = dex.GetProto(method.ProtoIndex);
-                    string[] parameters;
-                    if (proto == null)
-                    {
-                        parameters = [];
-                    }
-                    else
-                    {
-
-
-                        var indices = proto.ParameterTypeIndices;
-                        parameters = new string[indices.Length];
-                        for (var i = 0; i < indices.Length; i++)
-                        {
-                            parameters[i] = TypeName(indices[i]);
-                        }
-                    }
-                    var returnType = proto == null ? "?" : TypeName(proto.ReturnTypeIndex);
-                    return new MethodRefOperand(TypeName(method.ClassIndex), dex.GetString(method.NameIndex), returnType, parameters);
-                }
+                return (object?)cache.ResolveMethod(dex, index, descriptors) ?? index;
             default:
                 return index;
         }
     }
 
     private static object? ResolveProtoRef(DexFile dex, int index)
+        => (object?)dex.InstructionOperands.ResolveProto(dex, index) ?? index;
+}
+
+/// <summary>
+/// Per-model memo of resolved reference operands, so decoding a large image formats each type, field, method
+/// and prototype name once instead of once per referencing instruction. Entries are rebuilt whenever the
+/// string, type, prototype, field or method table count changes; the cached operands are immutable records.
+/// <para>每个模型一份已解析引用操作数的记忆缓存，使解码大型镜像时每个类型、字段、方法与原型名称只格式化一次，
+/// 而不是每条引用指令各格式化一次。字符串、类型、原型、字段或方法表的数量变化时缓存重建；
+/// 缓存内容是记录类型，本身不可变。</para>
+/// </summary>
+internal sealed class InstructionOperandCache
+{
+    private (int Strings, int Types, int Protos, int Fields, int Methods) _stamp;
+    private TypeRefOperand?[] _types = [];
+    private ProtoRefOperand?[] _protos = [];
+    private FieldRefOperand?[] _fieldDescriptors = [];
+    private FieldRefOperand?[] _fieldNames = [];
+    private MethodRefOperand?[] _methodDescriptors = [];
+    private MethodRefOperand?[] _methodNames = [];
+
+    /// <summary>
+    /// Resolves a <c>type_ids</c> reference, keeping the tolerant <c>"?"</c> descriptor of the index lookup.
+    /// <para>解析 <c>type_ids</c> 引用，保留索引查询原有的宽松 <c>"?"</c> 描述符行为。</para>
+    /// </summary>
+    public TypeRefOperand ResolveType(DexFile dex, int index)
     {
-        var proto = dex.GetProto(index);
-        if (proto == null) return index;
-        return new ProtoRefOperand(dex.GetType(proto.ReturnTypeIndex), [.. proto.ParameterTypeIndices.Select(dex.GetType)]);
+        if ((uint)index < (uint)dex.Types.Count)
+        {
+            Sync(dex);
+            return _types[index] ??= new TypeRefOperand(dex.GetType(index));
+        }
+        return new TypeRefOperand(dex.GetType(index));
+    }
+
+    /// <summary>
+    /// Resolves a <c>field_ids</c> reference, or <see langword="null"/> when the index is out of range.
+    /// <para>解析 <c>field_ids</c> 引用；索引越界时返回 <see langword="null"/>。</para>
+    /// </summary>
+    public FieldRefOperand? ResolveField(DexFile dex, int index, bool descriptors)
+    {
+        if ((uint)index >= (uint)dex.Fields.Count) return null;
+        Sync(dex);
+        var cache = descriptors ? _fieldDescriptors : _fieldNames;
+        if (cache[index] is { } cached) return cached;
+        var field = dex.Fields[index];
+        var owner = descriptors ? dex.GetType(field.ClassIndex) : dex.FormatType(field.ClassIndex);
+        var type = descriptors ? dex.GetType(field.TypeIndex) : dex.FormatType(field.TypeIndex);
+        return cache[index] = new FieldRefOperand(owner, dex.GetString(field.NameIndex), type);
+    }
+
+    /// <summary>
+    /// Resolves a <c>method_ids</c> reference, or <see langword="null"/> when the index is out of range.
+    /// <para>解析 <c>method_ids</c> 引用；索引越界时返回 <see langword="null"/>。</para>
+    /// </summary>
+    public MethodRefOperand? ResolveMethod(DexFile dex, int index, bool descriptors)
+    {
+        if ((uint)index >= (uint)dex.Methods.Count) return null;
+        Sync(dex);
+        var cache = descriptors ? _methodDescriptors : _methodNames;
+        if (cache[index] is { } cached) return cached;
+        var method = dex.Methods[index];
+        var proto = dex.GetProto(method.ProtoIndex);
+        string[] parameters;
+        if (proto == null)
+        {
+            parameters = [];
+        }
+        else
+        {
+            var indices = proto.ParameterTypeIndices;
+            parameters = new string[indices.Length];
+            for (var i = 0; i < indices.Length; i++)
+            {
+                parameters[i] = descriptors ? dex.GetType(indices[i]) : dex.FormatType(indices[i]);
+            }
+        }
+        var owner = descriptors ? dex.GetType(method.ClassIndex) : dex.FormatType(method.ClassIndex);
+        var returnType = proto == null
+            ? "?"
+            : descriptors ? dex.GetType(proto.ReturnTypeIndex) : dex.FormatType(proto.ReturnTypeIndex);
+        return cache[index] = new MethodRefOperand(owner, dex.GetString(method.NameIndex), returnType, parameters);
+    }
+
+    /// <summary>
+    /// Resolves a <c>proto_ids</c> reference, or <see langword="null"/> when the index is out of range. The
+    /// operand always carries raw descriptors, matching the disassembly text of prototype references.
+    /// <para>解析 <c>proto_ids</c> 引用；索引越界时返回 <see langword="null"/>。操作数始终携带原始描述符，
+    /// 与原型引用的反汇编文本一致。</para>
+    /// </summary>
+    public ProtoRefOperand? ResolveProto(DexFile dex, int index)
+    {
+        if ((uint)index >= (uint)dex.Protos.Count) return null;
+        Sync(dex);
+        if (_protos[index] is { } cached) return cached;
+        var proto = dex.Protos[index];
+        return _protos[index] = new ProtoRefOperand(dex.GetType(proto.ReturnTypeIndex), [.. proto.ParameterTypeIndices.Select(dex.GetType)]);
+    }
+
+    private void Sync(DexFile dex)
+    {
+        var stamp = (dex.Strings.Count, dex.Types.Count, dex.Protos.Count, dex.Fields.Count, dex.Methods.Count);
+        if (stamp == _stamp) return;
+        _stamp = stamp;
+        _types = new TypeRefOperand?[dex.Types.Count];
+        _protos = new ProtoRefOperand?[dex.Protos.Count];
+        _fieldDescriptors = new FieldRefOperand?[dex.Fields.Count];
+        _fieldNames = new FieldRefOperand?[dex.Fields.Count];
+        _methodDescriptors = new MethodRefOperand?[dex.Methods.Count];
+        _methodNames = new MethodRefOperand?[dex.Methods.Count];
     }
 }

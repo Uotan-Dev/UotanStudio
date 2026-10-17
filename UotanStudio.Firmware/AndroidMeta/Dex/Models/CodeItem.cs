@@ -75,6 +75,37 @@ public sealed class CodeItem
     /// <para>原样保留的 <c>debug_info_item</c> 字节，解析时按状态机扫描到 <c>END_SEQUENCE</c> 操作码。</para>
     /// </summary>
     /// <value><see langword="null"/> when the method declares no debug information; otherwise written back unchanged.
-    /// <para>方法未声明调试信息时为 <see langword="null"/>；否则回写时保持字节不变。</para></value>
-    public byte[]? DebugInfo { get; set; }
+    /// A value parsed from an input image is materialized from that image on read, while <see cref="DebugInfoBytes"/>
+    /// exposes the same bytes without copying. <para>方法未声明调试信息时为 <see langword="null"/>；否则回写时保持字节不变。
+    /// 从输入镜像解析得到的取值在读取时才从该镜像生成，而 <see cref="DebugInfoBytes"/> 以不复制的方式暴露同样的字节。</para></value>
+    public byte[]? DebugInfo
+    {
+        get => _debugInfoBuffer is null
+            ? _debugInfo
+            : _debugInfoBuffer.AsSpan(_debugInfoStart, _debugInfoLength).ToArray();
+        set
+        {
+            _debugInfo = value;
+            _debugInfoBuffer = null;
+            _debugInfoStart = 0;
+            _debugInfoLength = 0;
+        }
+    }
+
+    private byte[]? _debugInfo;
+    private byte[]? _debugInfoBuffer;
+    private int _debugInfoStart;
+    private int _debugInfoLength;
+
+    internal ReadOnlySpan<byte> DebugInfoBytes => _debugInfoBuffer is null
+        ? _debugInfo
+        : _debugInfoBuffer.AsSpan(_debugInfoStart, _debugInfoLength);
+
+    internal void SetDebugInfoSlice(byte[] source, int start, int length)
+    {
+        _debugInfo = null;
+        _debugInfoBuffer = source;
+        _debugInfoStart = start;
+        _debugInfoLength = length;
+    }
 }
