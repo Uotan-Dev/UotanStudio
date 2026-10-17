@@ -1,4 +1,5 @@
-﻿using System.Buffers.Binary;
+﻿using System.Buffers;
+using System.Buffers.Binary;
 using System.Text;
 
 namespace UotanStudio.Firmware.Core;
@@ -172,40 +173,68 @@ public static class BinaryReaderHelpers
         /// <exception cref="NotSupportedException">The stream does not support reading. <para>流不支持读取。</para></exception>
         public byte[] ReadUntil(ReadOnlySpan<byte> endMarker, int maxBytes = 1 << 20)
         {
-            using var ms = new MemoryStream();
-            var window = new byte[endMarker.Length];
-            var count = 0;
-            while (count < maxBytes)
+            if (maxBytes <= 0)
             {
-                var b = stream.ReadByte();
-                if (b < 0)
-                {
-                    break;
-                }
-                ms.WriteByte((byte)b);
-                count++;
-                if (count >= endMarker.Length)
-                {
-
-                    var pos = ms.Position;
-                    ms.Position = pos - endMarker.Length;
-                    var tail = new byte[endMarker.Length];
-                    var n = ms.Read(tail, 0, endMarker.Length);
-                    ms.Position = pos;
-                    if (n == endMarker.Length && tail.AsSpan().SequenceEqual(endMarker))
-                    {
-
-                        var bytes = ms.ToArray();
-                        var end = bytes.Length - endMarker.Length;
-                        while (end > 0 && bytes[end - 1] == 0)
-                        {
-                            end--;
-                        }
-                        return bytes.AsSpan(0, end).ToArray();
-                    }
-                }
+                return [];
             }
-            return ms.ToArray();
+
+            if (endMarker.IsEmpty)
+            {
+                var single = stream.ReadByte();
+                if (single < 0)
+                {
+                    return [];
+                }
+
+                var one = new[] { (byte)single };
+                var oneEnd = one.Length;
+                while (oneEnd > 0 && one[oneEnd - 1] == 0)
+                {
+                    oneEnd--;
+                }
+
+                return one.AsSpan(0, oneEnd).ToArray();
+            }
+
+            var markerLength = endMarker.Length;
+            var buffer = ArrayPool<byte>.Shared.Rent(Math.Min(maxBytes, 8192));
+            using var ms = new MemoryStream();
+            var scanned = 0;
+            try
+            {
+                while (ms.Length < maxBytes)
+                {
+                    var want = (int)Math.Min(buffer.Length, maxBytes - ms.Length);
+                    var read = stream.Read(buffer, 0, want);
+                    if (read <= 0)
+                    {
+                        break;
+                    }
+
+                    var chunkStart = (int)ms.Length;
+                    ms.Write(buffer, 0, read);
+                    var total = chunkStart + read;
+                    var source = ms.GetBuffer();
+                    var scanFrom = Math.Max(chunkStart - markerLength + 1, scanned);
+                    for (var start = scanFrom; start + markerLength <= total; start++)
+                    {
+                        if (source.AsSpan(start, markerLength).SequenceEqual(endMarker))
+                        {
+                            var payload = source.AsSpan(0, start);
+                            var length = payload.LastIndexOfAnyExcept((byte)0) + 1;
+                            return payload[..length].ToArray();
+                        }
+                    }
+
+                    scanned = Math.Max(scanned, total - markerLength + 1);
+                }
+
+                return ms.ToArray();
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
     }
 

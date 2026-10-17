@@ -52,7 +52,15 @@ public sealed record FormatDetectionResult(
 /// </summary>
 public static class FormatDetector
 {
-    private static readonly List<IReadonlyFormatHandler> Handlers = [];
+    /// <summary>
+    /// Header prefix read once per detection pass; covers every fixed-offset probe in the built-in registry,
+    /// including the LP metadata geometry at 8196 bytes and the splash window ending at 16396 bytes.
+    /// <para>每次检测过程只读取一次的头部前缀；覆盖内置注册表中全部固定偏移探测，包括 8196 字节处的 LP 元数据几何
+    /// 与结束于 16396 字节的 splash 窗口。</para>
+    /// </summary>
+    private const int RegistryProbeLength = 32 * 1024;
+
+    private static IReadonlyFormatHandler[] Handlers = [];
     private static readonly Lock Gate = new();
 
     /// <summary>
@@ -71,25 +79,31 @@ public static class FormatDetector
         ArgumentNullException.ThrowIfNull(handler);
         lock (Gate)
         {
-            if (Handlers.All(h => h.FormatName != handler.FormatName))
+            var current = Handlers;
+            foreach (var existing in current)
             {
-                Handlers.Add(handler);
+                if (existing.FormatName == handler.FormatName)
+                {
+                    return;
+                }
             }
+
+            var next = new IReadonlyFormatHandler[current.Length + 1];
+            Array.Copy(current, next, current.Length);
+            next[^1] = handler;
+            Volatile.Write(ref Handlers, next);
         }
     }
 
     /// <summary>
-    /// Snapshot of the registered handlers, taken under the registry lock.
-    /// <para>已注册处理器的快照，在注册表锁内取得。</para>
+    /// Immutable snapshot of the registered handlers, published when a registration completes.
+    /// <para>已注册处理器的不可变快照，在注册完成时发布。</para>
     /// </summary>
     /// <value>
-    /// A newly allocated list reflecting registration at call time; later registrations do not change it.
-    /// <para>调用时刻的新分配列表；之后的注册不会改变它。</para>
+    /// The array published at call time; later registrations replace it and never mutate the returned value.
+    /// <para>调用时刻发布的数组；之后的注册会替换它，但绝不会修改已返回的值。</para>
     /// </value>
-    public static IReadOnlyList<IReadonlyFormatHandler> RegisteredHandlers
-    {
-        get { lock (Gate) { return [.. Handlers]; } }
-    }
+    public static IReadOnlyList<IReadonlyFormatHandler> RegisteredHandlers => Volatile.Read(ref Handlers);
 
     /// <summary>
     /// Detects the format handler for a file by extension + header sniffing.
@@ -109,58 +123,88 @@ public static class FormatDetector
     /// <example>
     /// <code>var handler = FormatDetector.Detect(Path.Combine(input, "boot.img"));</code>
     /// </example>
-    public static IReadonlyFormatHandler? Detect(string filePath)
+    public static IReadonlyFormatHandler? Detect(string filePath) => DetectCore(filePath, 0, out _, out _);
+
+    private static IReadonlyFormatHandler? DetectCore(string filePath, int minimumHeaderLength, out byte[] header, out bool headerAvailable)
     {
+        header = [];
+        headerAvailable = false;
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
         {
             return null;
         }
 
-
-        var fileExt = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-        if (!string.IsNullOrEmpty(fileExt))
+        var probeLength = Math.Max(RegistryProbeLength, minimumHeaderLength);
+        long totalLength = 0;
+        try
         {
-            List<IReadonlyFormatHandler> snapshot;
-            lock (Gate) { snapshot = [.. Handlers]; }
-
-            foreach (var handler in snapshot)
+            using var stream = File.OpenRead(filePath);
+            totalLength = stream.Length;
+            headerAvailable = true;
+            var capacity = (int)Math.Min(probeLength, totalLength);
+            if (capacity > 0)
             {
-                if (handler.FileExtensions.Contains(fileExt))
+                header = new byte[capacity];
+                var read = 0;
+                while (read < capacity)
                 {
-                    try
+                    var n = stream.Read(header, read, capacity - read);
+                    if (n <= 0)
                     {
-                        if (handler.CanHandle(filePath))
-                        {
-                            return handler;
-                        }
+                        break;
                     }
-                    catch
-                    {
 
-                    }
+                    read += n;
+                }
+
+                if (read != capacity)
+                {
+                    Array.Resize(ref header, read);
                 }
             }
         }
-
-
-        List<IReadonlyFormatHandler> sniffSnapshot;
-        lock (Gate) { sniffSnapshot = [.. Handlers]; }
-
-        foreach (var handler in sniffSnapshot)
+        catch
         {
-            try
+            header = [];
+            headerAvailable = false;
+        }
+
+        using var session = headerAvailable ? HeaderProbeSession.Enter(filePath, header, totalLength) : null;
+        var fileExt = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
+        if (!string.IsNullOrEmpty(fileExt))
+        {
+            foreach (var handler in RegisteredHandlers)
             {
-                if (handler.CanHandle(filePath))
+                if (handler.FileExtensions.Contains(fileExt) && TryCanHandle(handler, header, filePath))
                 {
                     return handler;
                 }
             }
-            catch
-            {
+        }
 
+        foreach (var handler in RegisteredHandlers)
+        {
+            if (TryCanHandle(handler, header, filePath))
+            {
+                return handler;
             }
         }
+
         return null;
+    }
+
+    private static bool TryCanHandle(IReadonlyFormatHandler handler, ReadOnlySpan<byte> header, string filePath)
+    {
+        try
+        {
+            return handler is IHeaderFormatHandler headerHandler
+                ? headerHandler.CanHandle(header, filePath)
+                : handler.CanHandle(filePath);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -189,26 +233,34 @@ public static class FormatDetector
     /// <para>探测期间文件无法读取。</para></exception>
     public static FormatDetectionResult? DetectDetailed(string filePath, int probeLength = 65536)
     {
-        var handler = Detect(filePath);
+        var requested = Math.Clamp(probeLength, 4, 1024 * 1024);
+        var handler = DetectCore(filePath, requested, out var header, out var headerAvailable);
         if (handler is null) return null;
-        var header = ReadHeader(filePath, Math.Clamp(probeLength, 4, 1024 * 1024));
-        var magic = Magic.FileMagic.Describe(header);
+        if (!headerAvailable)
+        {
+            header = ReadHeader(filePath, requested);
+        }
+
+        var reported = Math.Min(header.Length, requested);
+        var magic = Magic.FileMagic.Describe(header.AsSpan(0, reported));
         var extension = Path.GetExtension(filePath).TrimStart('.');
         var extensionClaim = !string.IsNullOrEmpty(extension)
             && handler.FileExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
         return new FormatDetectionResult(handler,
             magic is not null ? DetectionConfidence.StrongMagic
                 : extensionClaim ? DetectionConfidence.ExtensionOnly : DetectionConfidence.ValidatedStructure,
-            magic ?? (extensionClaim ? $"extension:{extension}" : "handler-validation"), header.Length);
+            magic ?? (extensionClaim ? $"extension:{extension}" : "handler-validation"), reported);
     }
 
     /// <summary>
-    /// Reads up to <paramref name="count"/> bytes from the start of a file in one buffered pass.
-    /// <para>从文件起始处一次性缓冲读取最多 <paramref name="count"/> 字节。</para>
+    /// Reads up to <paramref name="count"/> bytes from the start of a file in one buffered pass, serving them
+    /// from the header snapshot of the active detection pass when that snapshot covers the request.
+    /// <para>从文件起始处一次性缓冲读取最多 <paramref name="count"/> 字节；活动检测过程的头部快照覆盖请求时直接由该快照提供。</para>
     /// </summary>
     /// <param name="filePath">
-    /// Path to the file; the handle is opened for reading and closed before returning.
-    /// <para>文件路径；句柄以只读方式打开，并在返回前关闭。</para>
+    /// Path to the file; the handle is opened for reading and closed before returning, unless the active
+    /// detection snapshot already holds the requested prefix.
+    /// <para>文件路径；句柄以只读方式打开并在返回前关闭，但活动检测快照已持有请求的前缀时不再打开。</para>
     /// </param>
     /// <param name="count">
     /// Maximum number of bytes to read; the caller is responsible for keeping this bounded, and no
@@ -216,9 +268,9 @@ public static class FormatDetector
     /// <para>读取字节数上限；上限由调用方负责约束，此处不做检查。传入 <c>0</c> 时返回空数组。</para>
     /// </param>
     /// <returns>
-    /// The bytes read, shortened to the actual length when the file is smaller than
+    /// A fresh array holding the bytes read, shortened to the actual length when the file is smaller than
     /// <paramref name="count"/>; never longer than requested.
-    /// <para>已读取的字节；文件小于 <paramref name="count"/> 时会缩短为实际长度，绝不会长于请求值。</para>
+    /// <para>持有已读取字节的新数组；文件小于 <paramref name="count"/> 时会缩短为实际长度，绝不会长于请求值。</para>
     /// </returns>
     /// <exception cref="FileNotFoundException">
     /// <paramref name="filePath"/> does not exist. <para><paramref name="filePath"/> 不存在。</para></exception>
@@ -227,6 +279,11 @@ public static class FormatDetector
     /// <para>调用方没有读取 <paramref name="filePath"/> 的权限。</para></exception>
     public static byte[] ReadHeader(string filePath, int count)
     {
+        if (HeaderProbeSession.TryReadHeader(filePath, count, out var cached))
+        {
+            return cached;
+        }
+
         using var fs = File.OpenRead(filePath);
         var buffer = new byte[count];
         var read = 0;

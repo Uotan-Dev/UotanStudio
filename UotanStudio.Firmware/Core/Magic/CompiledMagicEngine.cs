@@ -28,8 +28,16 @@ public static class CompiledMagicEngine
 
     private static readonly List<CompiledRule> TopLevel = new();
     private static FrozenDictionary<string, CompiledRule> Named = FrozenDictionary<string, CompiledRule>.Empty;
+    private static FrozenDictionary<(int Offset, byte FirstByte), CompiledRule[]> Indexed =
+        FrozenDictionary<(int Offset, byte FirstByte), CompiledRule[]>.Empty;
+    private static int[] IndexedOffsets = [];
+    private static CompiledRule[] FallbackRules = [];
+    private static CompiledRule[] AllTopLevelRules = [];
+    private static int _indexedRuleCount;
     private static bool _loaded;
     private static readonly Lock Gate = new();
+
+    private static readonly SearchValues<byte> TrimBytes = SearchValues.Create(" \t\r\n\v\f"u8);
 
     /// <summary>Loaded top-level rule count, valid after <see cref="EnsureLoaded"/> has run.
     /// <para>已加载的顶层规则数，在 <see cref="EnsureLoaded"/> 执行后有效。</para></summary>
@@ -68,7 +76,134 @@ public static class CompiledMagicEngine
             var named = new Dictionary<string, CompiledRule>(StringComparer.Ordinal);
             BuildNameIndex(TopLevel, named);
             Named = named.ToFrozenDictionary(StringComparer.Ordinal);
+            BuildMatchIndex();
             _loaded = true;
+        }
+    }
+
+    private static void BuildMatchIndex()
+    {
+        var buckets = new Dictionary<(int Offset, byte FirstByte), List<CompiledRule>>();
+        var fallback = new List<CompiledRule>();
+        var all = new List<CompiledRule>();
+        for (var order = 0; order < TopLevel.Count; order++)
+        {
+            var rule = TopLevel[order];
+            rule.TopLevelOrder = order;
+            if (rule.Name is not null)
+            {
+                continue;
+            }
+
+            all.Add(rule);
+            if (!TryGetIndexKey(rule, out var key))
+            {
+                fallback.Add(rule);
+                continue;
+            }
+
+            if (!buckets.TryGetValue(key, out var bucket))
+            {
+                bucket = [];
+                buckets[key] = bucket;
+            }
+
+            bucket.Add(rule);
+        }
+
+        Indexed = buckets.ToFrozenDictionary(static pair => pair.Key, static pair => pair.Value.ToArray());
+        IndexedOffsets = [.. buckets.Keys.Select(static key => key.Offset).Distinct().Order()];
+        FallbackRules = [.. fallback];
+        AllTopLevelRules = [.. all];
+        _indexedRuleCount = all.Count - fallback.Count;
+    }
+
+    private static bool TryGetIndexKey(CompiledRule rule, out (int Offset, byte FirstByte) key)
+    {
+        key = default;
+        const MagicFlags unsupported =
+            MagicFlags.Indirect | MagicFlags.FromEnd | MagicFlags.Default;
+        if ((rule.Flags & unsupported) != 0 || rule.Relation != MagicRelation.Equal)
+        {
+            return false;
+        }
+
+        if (rule.Offset < 0 || rule.Offset > int.MaxValue - 8)
+        {
+            return false;
+        }
+
+        var offset = (int)rule.Offset;
+        if (rule.Kind == MagicKind.String)
+        {
+            if (rule.Pattern is not { Length: > 0 } pattern)
+            {
+                return false;
+            }
+
+            if ((rule.StringFlags & (MagicStringFlags.CompactWhitespace | MagicStringFlags.OptionalWhitespace)) != 0)
+            {
+                return false;
+            }
+
+            key = (offset, ToLower(pattern[0]));
+            return true;
+        }
+
+        if (rule.Kind == MagicKind.Number && !rule.HasMask && !rule.MaskInvert)
+        {
+            var width = WidthOf(rule.NumberType);
+            if (width is <= 0 or > 8)
+            {
+                return false;
+            }
+
+            var mask = width >= 8 ? ulong.MaxValue : (1UL << (width * 8)) - 1UL;
+            var expected = (ulong)rule.Value & mask;
+            var first = IsBigEndian(rule.NumberType) ? (byte)(expected >> ((width - 1) * 8)) : (byte)expected;
+            key = (offset, ToLower(first));
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Number of top-level rules carried by the fixed-offset index, valid after <see cref="EnsureLoaded"/>.
+    /// <para>固定偏移索引承载的顶层规则数量，在 <see cref="EnsureLoaded"/> 执行后有效。</para>
+    /// </summary>
+    internal static int IndexedRuleCount
+    {
+        get
+        {
+            EnsureLoaded();
+            return _indexedRuleCount;
+        }
+    }
+
+    /// <summary>
+    /// Number of top-level rules that stay in the ordered fallback list, valid after <see cref="EnsureLoaded"/>.
+    /// <para>保留在有序兜底列表中的顶层规则数量，在 <see cref="EnsureLoaded"/> 执行后有效。</para>
+    /// </summary>
+    internal static int FallbackRuleCount
+    {
+        get
+        {
+            EnsureLoaded();
+            return FallbackRules.Length;
+        }
+    }
+
+    /// <summary>
+    /// Number of distinct offsets addressed by the fixed-offset index, valid after <see cref="EnsureLoaded"/>.
+    /// <para>固定偏移索引涉及的不同偏移数量，在 <see cref="EnsureLoaded"/> 执行后有效。</para>
+    /// </summary>
+    internal static int IndexedOffsetCount
+    {
+        get
+        {
+            EnsureLoaded();
+            return IndexedOffsets.Length;
         }
     }
 
@@ -161,7 +296,22 @@ public static class CompiledMagicEngine
     /// string? mime = info?.MimeType;
     /// </code>
     /// </example>
-    public static MagicInfo? Match(ReadOnlySpan<byte> data)
+    public static MagicInfo? Match(ReadOnlySpan<byte> data) => MatchCore(data, useIndex: true);
+
+    /// <summary>
+    /// Matches every top-level rule in load order without consulting the fixed-offset index; retained for the
+    /// equivalence test that compares both evaluation paths.
+    /// <para>不查询固定偏移索引、按加载顺序逐条匹配全部顶层规则；保留给比较两种求值路径的等价性测试。</para>
+    /// </summary>
+    /// <param name="data">
+    /// File bytes to probe, with the same empty-span and ranking rules as <see cref="Match"/>.
+    /// <para>待探测的文件字节，空区间与排序规则与 <see cref="Match"/> 相同。</para>
+    /// </param>
+    /// <returns>The same result the indexed path must produce for identical input.
+    /// <para>对相同输入，索引路径必须产出的同一结果。</para></returns>
+    internal static MagicInfo? MatchWithoutIndex(ReadOnlySpan<byte> data) => MatchCore(data, useIndex: false);
+
+    private static MagicInfo? MatchCore(ReadOnlySpan<byte> data, bool useIndex)
     {
         EnsureLoaded();
         if (data.IsEmpty)
@@ -174,7 +324,7 @@ public static class CompiledMagicEngine
         try
         {
             data.CopyTo(file);
-            return MatchRules(file, len);
+            return MatchRules(file, len, useIndex);
         }
         finally
         {
@@ -182,60 +332,123 @@ public static class CompiledMagicEngine
         }
     }
 
-    private static MagicInfo? MatchRules(byte[] file, int len)
+    private static MagicInfo? MatchRules(byte[] file, int len, bool useIndex)
     {
         MagicInfo? best = null;
-
-        foreach (var rule in TopLevel)
+        var context = new MatchContext(file, len);
+        if (!useIndex)
         {
-            if (rule.Name is not null)
+            foreach (var rule in AllTopLevelRules)
             {
-                continue;
+                if (TryEvaluateCandidate(rule, context, ref best))
+                {
+                    break;
+                }
             }
 
-            var ctx = new MatchContext(file, len);
-            if (TryEvaluate(rule, ctx, parentStart: 0, parentEnd: 0, top: true, depth: 0))
+            return best;
+        }
+
+        var bucket = CollectIndexedCandidates(file, len);
+        var bucketCount = bucket?.Count ?? 0;
+        var fallback = FallbackRules;
+        var fi = 0;
+        var bi = 0;
+        while (fi < fallback.Length && bi < bucketCount)
+        {
+            var rule = fallback[fi].TopLevelOrder < bucket![bi].TopLevelOrder
+                ? fallback[fi++]
+                : bucket[bi++];
+            if (TryEvaluateCandidate(rule, context, ref best))
             {
-                if (ctx.Parts.Count == 0)
-                {
-                    continue;
-                }
+                return best;
+            }
+        }
 
-                var desc = string.Concat(ctx.Parts);
-                if (string.IsNullOrEmpty(desc.Trim()))
-                {
-                    continue;
-                }
+        while (fi < fallback.Length)
+        {
+            if (TryEvaluateCandidate(fallback[fi++], context, ref best))
+            {
+                return best;
+            }
+        }
 
-                var strength = ctx.Strength;
-                if (best is null || strength > best.Strength)
-                {
-                    var resolvedDesc = ResolveConditionals(desc)!;
-                    best = new MagicInfo
-                    {
-                        Description = Sanitize(resolvedDesc),
-                        Source = ctx.Source,
-                        MimeType = ResolveConditionals(FirstNonEmpty(ctx.Mime)),
-                        Extensions = ResolveConditionals(FirstNonEmpty(ctx.Ext)),
-                        Encoding = FirstNonEmpty(ctx.Encoding),
-                        IsText = FirstNonEmpty(ctx.Encoding) is { } e && e is not ("binary" or "unknown"),
-                        Strength = strength,
-                    };
-
-                    if (DebugMatch)
-                    {
-                        DebugMatches.Add($"[{strength}] src={rule.Source} kind={rule.Kind} num={rule.NumberType} rel={rule.Relation} off={rule.Offset} val={rule.Value} desc='{rule.Description}' => '{Sanitize(resolvedDesc)}'");
-                    }
-
-                    if (strength >= 100)
-                    {
-                        break;
-                    }
-                }
+        while (bi < bucketCount)
+        {
+            if (TryEvaluateCandidate(bucket![bi++], context, ref best))
+            {
+                return best;
             }
         }
 
         return best;
+    }
+
+    private static bool TryEvaluateCandidate(CompiledRule rule, MatchContext ctx, ref MagicInfo? best)
+    {
+        ctx.Reset();
+        if (!TryEvaluate(rule, ctx, parentStart: 0, parentEnd: 0, top: true, depth: 0))
+        {
+            return false;
+        }
+
+        if (ctx.Parts.Count == 0)
+        {
+            return false;
+        }
+
+        var desc = string.Concat(ctx.Parts);
+        if (string.IsNullOrEmpty(desc.Trim()))
+        {
+            return false;
+        }
+
+        var strength = ctx.Strength;
+        if (best is not null && strength <= best.Strength)
+        {
+            return false;
+        }
+
+        var resolvedDesc = ResolveConditionals(desc)!;
+        best = new MagicInfo
+        {
+            Description = Sanitize(resolvedDesc),
+            Source = ctx.Source,
+            MimeType = ResolveConditionals(FirstNonEmpty(ctx.Mime)),
+            Extensions = ResolveConditionals(FirstNonEmpty(ctx.Ext)),
+            Encoding = FirstNonEmpty(ctx.Encoding),
+            IsText = FirstNonEmpty(ctx.Encoding) is { } e && e is not ("binary" or "unknown"),
+            Strength = strength,
+        };
+
+        if (DebugMatch)
+        {
+            DebugMatches.Add($"[{strength}] src={rule.Source} kind={rule.Kind} num={rule.NumberType} rel={rule.Relation} off={rule.Offset} val={rule.Value} desc='{rule.Description}' => '{Sanitize(resolvedDesc)}'");
+        }
+
+        return strength >= 100;
+    }
+
+    private static List<CompiledRule>? CollectIndexedCandidates(byte[] file, int len)
+    {
+        List<CompiledRule>? candidates = null;
+        var offsets = IndexedOffsets;
+        for (var i = 0; i < offsets.Length; i++)
+        {
+            var offset = offsets[i];
+            if (offset >= len)
+            {
+                continue;
+            }
+
+            if (Indexed.TryGetValue((offset, ToLower(file[offset])), out var rules))
+            {
+                (candidates ??= []).AddRange(rules);
+            }
+        }
+
+        candidates?.Sort(static (left, right) => left.TopLevelOrder.CompareTo(right.TopLevelOrder));
+        return candidates;
     }
 
     /// <summary>
@@ -572,14 +785,9 @@ public static class CompiledMagicEngine
                 return true;
             }
 
-            var cap = offset;
-            while (cap < len && f[cap] != 0 && f[cap] != (byte)'\n')
-            {
-                cap++;
-            }
-
-            strValue = DecodeString(rule, f, offset, cap - offset);
-            matchEnd = cap;
+            var cap = f.AsSpan(offset, len - offset).IndexOfAny((byte)0, (byte)'\n');
+            matchEnd = cap < 0 ? len : offset + cap;
+            strValue = DecodeString(rule, f, offset, matchEnd - offset);
             return true;
         }
 
@@ -759,8 +967,22 @@ public static class CompiledMagicEngine
         }
 
         var range = rule.SearchRange > 0 ? rule.SearchRange : 100;
-        var limit = Math.Min(len, offset + range);
+        var limit = (int)Math.Min((long)len, (long)offset + range);
         var ic = (rule.StringFlags & MagicStringFlags.IgnoreCase) != 0;
+        if (!ic && !p.AsSpan().Contains((byte)0xFF))
+        {
+            var found = f.AsSpan(offset, limit - offset).IndexOf(p);
+            if (found < 0)
+            {
+                return false;
+            }
+
+            var start = offset + found;
+            matchEnd = start + p.Length;
+            strValue = DecodeString(rule, f, start, p.Length);
+            return true;
+        }
+
         for (var s = offset; s + p.Length <= limit; s++)
         {
             var ok = true;
@@ -1049,18 +1271,11 @@ public static class CompiledMagicEngine
 
     private static string DecodeString(CompiledRule rule, byte[] f, int offset, int count)
     {
-        var n = count;
-        while (n > 0 && f[offset + n - 1] == 0)
+        var window = f.AsSpan(offset, count);
+        var n = window.LastIndexOfAnyExcept((byte)0) + 1;
+        if ((rule.StringFlags & MagicStringFlags.Trim) != 0 && n > 0)
         {
-            n--;
-        }
-
-        if ((rule.StringFlags & MagicStringFlags.Trim) != 0)
-        {
-            while (n > 0 && IsSpace(f[offset + n - 1]))
-            {
-                n--;
-            }
+            n = window[..n].LastIndexOfAnyExcept(TrimBytes) + 1;
         }
 
         return Encoding.UTF8.GetString(f, offset, n);
@@ -1212,5 +1427,17 @@ public static class CompiledMagicEngine
         public bool LastLevelMatched;
         public int Strength;
         public HashSet<string>? ActiveUses;
+
+        public void Reset()
+        {
+            Parts.Clear();
+            Source = null;
+            Mime = null;
+            Ext = null;
+            Encoding = null;
+            LastLevelMatched = false;
+            Strength = 0;
+            ActiveUses?.Clear();
+        }
     }
 }

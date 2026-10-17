@@ -56,6 +56,12 @@ internal sealed class CompiledRule
     public System.Text.RegularExpressions.Regex? CompiledRegex;
 
     public int Strength = 50;
+
+    /// <summary>
+    /// Load order of the top-level rule, used to keep index-assisted matching in registration order.
+    /// <para>顶层规则的加载顺序，用于让索引辅助匹配保持注册顺序。</para>
+    /// </summary>
+    public int TopLevelOrder;
 }
 
 /// <summary>

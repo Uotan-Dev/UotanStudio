@@ -112,3 +112,26 @@ internal sealed class FileSystemStageProgress(IProgress<FileSystemByteProgress>?
 {
     public void Report((long Processed, long Total) value) => progress?.Report(new(stage, value.Processed, value.Total));
 }
+
+/// <summary>
+/// Forwards staged measurements while a surrounding container owns one stage itself. A sparse container reports
+/// the image-level verification from its own streams, so the inner filesystem it cascades into must not also
+/// report that stage against its own denominator; every other stage passes through unchanged.
+/// <para>转发分阶段计量，但由上层容器自行负责某一个阶段。稀疏容器用自己的流上报镜像级校验，因此它级联进来的
+/// 内部文件系统不得再用自己的分母上报同一阶段；其余阶段原样通过。</para>
+/// </summary>
+internal sealed class StageSuppressingProgress(IProgress<FileSystemByteProgress>? progress, FileSystemWorkStage suppressed)
+    : IProgress<FileSystemByteProgress>
+{
+    /// <summary>Reports a measurement unless it belongs to the stage the surrounding owner controls.
+    /// <para>除非该计量属于上层拥有者的阶段，否则上报该计量。</para></summary>
+    /// <param name="value">Staged measurement produced by the inner format.
+    /// <para>内部格式产生的分阶段计量。</para></param>
+    public void Report(FileSystemByteProgress value)
+    {
+        if (progress is not null && value.Stage != suppressed)
+        {
+            progress.Report(value);
+        }
+    }
+}

@@ -11,11 +11,17 @@ public class FirmwareArchitectureGuardTests
 {
     private const int MinimumExpectedEdgeCount = 10;
 
+    private static readonly HashSet<string> RevokedCycleEdges =
+    [
+        "FileSystem -> BlockImage",
+        "BootSecurity -> Patching",
+        "Patching -> BootSecurity",
+    ];
+
     private static readonly HashSet<string> AllowedCrossContextEdges =
     [
         "AndroidMeta -> Executable",
         "Archive -> FileSystem",
-        "BlockImage -> FileSystem",
         "BootSecurity -> Archive",
         "BootSecurity -> BlockImage",
         "BootSecurity -> DeviceTree",
@@ -166,9 +172,7 @@ public class FirmwareArchitectureGuardTests
     [Fact]
     public void AllowedCrossContextEdges_RevokedCyclePairs_AreNotPartOfFrozenBaseline()
     {
-        var revoked = new[] { "FileSystem -> BlockImage", "BootSecurity -> Patching", "Patching -> BootSecurity" };
-
-        Assert.All(revoked, key => Assert.False(AllowedCrossContextEdges.Contains(key), $"{key} would recreate a bidirectional context cycle."));
+        Assert.All(RevokedCycleEdges, key => Assert.False(AllowedCrossContextEdges.Contains(key), $"{key} would recreate a bidirectional context cycle."));
     }
 
     [Fact]
@@ -221,8 +225,11 @@ public class FirmwareArchitectureGuardTests
             var cycle = FirmwareContextDependencyScanner.FindContextCycle(contextEdges);
 
             Assert.Equal(2, contextEdges.Count);
-            Assert.Equal("FileSystem -> BlockImage (1 lines)", Assert.Single(violations).ToString());
+            Assert.Equal(2, violations.Count);
+            Assert.Contains("FileSystem -> BlockImage (1 lines)", violations.Select(violation => violation.ToString()));
+            Assert.Contains("BlockImage -> FileSystem (1 lines)", violations.Select(violation => violation.ToString()));
             Assert.NotNull(cycle);
+            Assert.Contains("BlockImage -> FileSystem", contextEdges.Select(edge => edge.Key));
             var nodes = cycle!.Split(" -> ", StringSplitOptions.None);
             Assert.Equal(nodes[0], nodes[^1]);
             Assert.DoesNotContain("Compression", contextEdges.Select(edge => edge.Target), StringComparer.Ordinal);

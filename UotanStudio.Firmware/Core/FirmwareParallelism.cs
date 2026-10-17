@@ -35,8 +35,12 @@ public static partial class FirmwareParallelism
         }
     }
 
-    /// <summary>Per-worker memory budget used by <see cref="BudgetedWorkers"/> to cap worker counts.
-    /// <para><see cref="BudgetedWorkers"/> 用来限制工作者数量的每工作者内存预算。</para></summary>
+    /// <summary>Aggregate memory budget shared by every worker of one operation, as passed to
+    /// <see cref="BudgetedWorkers"/>'s <c>budgetBytes</c> parameter by the payload builder and the F2FS parser.
+    /// A single work item whose worst case reaches this value therefore reduces the worker count to one.
+    /// <para>单次操作中所有工作者共享的内存预算总量，由 payload 构建器与 F2FS 解析器作为
+    /// <see cref="BudgetedWorkers"/> 的 <c>budgetBytes</c> 参数传入。因此当单个工作项的最坏情况达到该值时，
+    /// 工作者数量会降为 1。</para></summary>
     internal const long WorkerMemoryBudgetBytes = 128L * 1024 * 1024;
 
     internal static void ForEach<T>(IReadOnlyList<T> items, Action<T> action, int? workers = null)
@@ -102,7 +106,11 @@ public static partial class FirmwareParallelism
     /// <para>所有工作者合计可占用的字节上限，至少为 <c>1</c>。</para></param>
     /// <param name="requestedWorkers">Worker count the caller would like to use. <para>调用方期望使用的工作者数量。</para></param>
     /// <returns>The worker count to run with, never below <c>1</c> and never above <see cref="MaximumWorkers"/>.
-    /// <para>实际使用的工作者数量，不小于 <c>1</c>，也不大于 <see cref="MaximumWorkers"/>。</para></returns>
+    /// When <paramref name="bytesPerWorker"/> is at least <paramref name="budgetBytes"/> the budget affords no
+    /// parallelism value above one, so the result is <c>1</c> without an error or diagnostic.
+    /// <para>实际使用的工作者数量，不小于 <c>1</c>，也不大于 <see cref="MaximumWorkers"/>。
+    /// 当 <paramref name="bytesPerWorker"/> 不小于 <paramref name="budgetBytes"/> 时，预算不支持大于一的分工，
+    /// 结果静默为 <c>1</c>，不报错也不发出诊断。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="bytesPerWorker"/> or <paramref name="budgetBytes"/> is below <c>1</c>.
     /// <para><paramref name="bytesPerWorker"/> 或 <paramref name="budgetBytes"/> 小于 <c>1</c>。</para>
