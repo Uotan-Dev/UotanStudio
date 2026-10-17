@@ -3,8 +3,10 @@ using SharpCompress.Readers;
 using UotanStudio.Compress;
 using UotanStudio.Compress.Detection;
 using UotanStudio.Firmware.Archive.Extraction;
+using UotanStudio.Firmware.Archive.Formats.Cpio;
 using UotanStudio.Firmware.Archive.Models;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.Archive.Browsing;
 
@@ -18,6 +20,7 @@ public sealed class ArchiveBrowser : IDisposable
     private readonly ArchiveFormat? _archiveFormat;
     private readonly IArchive? _sharpArchive;
     private readonly string _memberName;
+    private readonly List<IndexedCpioEntry>? _cpioIndex;
 
     /// <summary>
     /// Maximum decompressed scratch-file size; the file is deleted when the browser closes.
@@ -66,9 +69,10 @@ public sealed class ArchiveBrowser : IDisposable
         _memberName = memberName;
         FormatName = formatName;
         var members = new List<Member>();
+        var cpioIndex = IsCpioFormat(archiveFormat) ? new List<IndexedCpioEntry>() : null;
         var nameCharacters = 0L;
         var expandedBytes = 0L;
-        foreach (var entry in ReadEntries(cancellationToken))
+        foreach (var (entry, payloadOffset) in ReadMembers(cancellationToken))
         {
             if (entry.Name.Length == 0) continue;
             if (entry.DataLength > maximumMemberBytes)
@@ -81,9 +85,63 @@ public sealed class ArchiveBrowser : IDisposable
             if (members.Count >= 100_000 || nameCharacters > 8 * 1024 * 1024)
                 throw new ArchiveCorruptedException("Archive directory exceeds the browsing limit.");
             members.Add(new(entry.Name, entry.DataLength, entry.Metadata.FileType));
+            cpioIndex?.Add(new IndexedCpioEntry(entry.Name, payloadOffset, entry.DataLength,
+                entry.Metadata, entry.LinkName));
         }
+        _cpioIndex = cpioIndex;
         Members = members;
     }
+
+    private static bool IsCpioFormat(ArchiveFormat? format) => format is ArchiveFormat.NewAscii
+        or ArchiveFormat.CrcAscii or ArchiveFormat.OldAscii or ArchiveFormat.Binary;
+
+    private sealed class IndexedCpioEntry(string name, long payloadOffset, long dataLength,
+        ArchiveEntryMetadata metadata, string? linkName)
+    {
+        internal string Name { get; } = name;
+
+        internal long PayloadOffset { get; } = payloadOffset;
+
+        internal long DataLength { get; } = dataLength;
+
+        internal ArchiveEntryMetadata Metadata { get; } = metadata;
+
+        internal string? LinkName { get; } = linkName;
+    }
+
+    /// <summary>
+    /// Enumerates the archive members in archive order, reporting the absolute payload offset for CPIO
+    /// containers whose entries can later be read by seeking.
+    /// <para>按归档顺序枚举成员；对可由定位直接读取条目的 CPIO 容器同时报告负载的绝对偏移。</para>
+    /// </summary>
+    private IEnumerable<(ArchiveEntry Entry, long PayloadOffset)> ReadMembers(CancellationToken cancellationToken)
+    {
+        if (_sharpArchive is null && IsCpioFormat(_archiveFormat))
+        {
+            foreach (var item in new CpioArchiveReader().ReadEntriesWithOffsetsStreaming(
+                _source, _archiveFormat, MaximumExpandedBytes, cancellationToken))
+            {
+                yield return (WithNormalizedName(item.Entry), item.PayloadOffset);
+            }
+            yield break;
+        }
+
+        foreach (var entry in ReadEntries(cancellationToken))
+        {
+            yield return (entry, 0L);
+        }
+    }
+
+    private static ArchiveEntry WithNormalizedName(ArchiveEntry entry) => new()
+    {
+        Name = Normalize(entry.Name),
+        Metadata = entry.Metadata,
+        Data = entry.Data,
+        DataStream = entry.DataStream,
+        DataStreamFactory = entry.DataStreamFactory,
+        DeclaredDataLength = entry.DeclaredDataLength,
+        LinkName = entry.LinkName,
+    };
 
     /// <summary>
     /// Recognizes archive extensions and compression extensions supported by the backend.
@@ -276,13 +334,36 @@ public sealed class ArchiveBrowser : IDisposable
     public void Extract(string relativePath, string destination, CancellationToken cancellationToken = default)
     {
         var selected = Normalize(relativePath);
-        var entries = ReadEntries(cancellationToken).Where(entry => entry.Name.Length > 0 &&
-            (selected.Length == 0 || entry.Name == selected || entry.Name.StartsWith(selected + "/", StringComparison.Ordinal)));
+        var entries = _cpioIndex is not null
+            ? EnumerateIndexed(selected, cancellationToken)
+            : ReadEntries(cancellationToken).Where(entry => entry.Name.Length > 0 &&
+                (selected.Length == 0 || entry.Name == selected || entry.Name.StartsWith(selected + "/", StringComparison.Ordinal)));
         new CpioExtractor().ExtractToDirectory(entries, destination, new ExtractOptions
         {
             RestoreModificationTime = _archiveFormat is not null,
             RestorePermissions = _archiveFormat is not null
         });
+    }
+
+    private IEnumerable<ArchiveEntry> EnumerateIndexed(string selected, CancellationToken cancellationToken)
+    {
+        foreach (var item in _cpioIndex!)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (item.Name.Length == 0) continue;
+            if (selected.Length != 0 && item.Name != selected
+                && !item.Name.StartsWith(selected + "/", StringComparison.Ordinal)) continue;
+            yield return new ArchiveEntry
+            {
+                Name = item.Name,
+                Data = [],
+                DataStreamFactory = () => new BoundedReadStream(_source, item.PayloadOffset, item.DataLength,
+                    leaveOpen: true),
+                DeclaredDataLength = item.DataLength,
+                LinkName = item.LinkName,
+                Metadata = item.Metadata,
+            };
+        }
     }
 
     private IEnumerable<ArchiveEntry> ReadEntries(CancellationToken cancellationToken)

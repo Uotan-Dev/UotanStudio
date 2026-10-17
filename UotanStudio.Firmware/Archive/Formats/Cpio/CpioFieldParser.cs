@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Globalization;
 using System.Text;
 using UotanStudio.Firmware.Archive.Models;
 
@@ -13,26 +12,121 @@ internal static class CpioFieldParser
 
     public static uint ParseHex(ReadOnlySpan<byte> data)
     {
-        var text = ReadAsciiString(data);
-        return uint.Parse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+        var span = TrimAsciiWhiteSpace(data);
+        if (span.IsEmpty)
+        {
+            throw new FormatException("The CPIO hexadecimal field is empty.");
+        }
+
+        uint value = 0;
+        foreach (var current in span)
+        {
+            value = checked((value << 4) | ParseHexDigit(current));
+        }
+
+        return value;
     }
 
     public static ulong ParseHex64(ReadOnlySpan<byte> data)
     {
-        var text = ReadAsciiString(data);
-        return ulong.Parse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+        var span = TrimAsciiWhiteSpace(data);
+        if (span.IsEmpty)
+        {
+            throw new FormatException("The CPIO hexadecimal field is empty.");
+        }
+
+        ulong value = 0;
+        foreach (var current in span)
+        {
+            value = checked((value << 4) | ParseHexDigit(current));
+        }
+
+        return value;
     }
 
     public static uint ParseOctal(ReadOnlySpan<byte> data)
     {
-        var text = ReadAsciiString(data).TrimEnd('\0', ' ');
-        return text.Length == 0 ? 0U : Convert.ToUInt32(text, 8);
+        var end = data.Length;
+        while (end > 0 && data[end - 1] is 0 or (byte)' ')
+        {
+            end--;
+        }
+
+        uint value = 0;
+        for (var i = 0; i < end; i++)
+        {
+            var digit = data[i];
+            if (digit is < (byte)'0' or > (byte)'7')
+            {
+                throw new FormatException("The CPIO octal field contains a non-octal digit.");
+            }
+
+            value = checked((value * 8) + (uint)(digit - '0'));
+        }
+
+        return value;
     }
 
     public static long ParseOctal64(ReadOnlySpan<byte> data)
     {
-        var text = ReadAsciiString(data).TrimEnd('\0', ' ');
-        return text.Length == 0 ? 0L : Convert.ToInt64(text, 8);
+        var end = data.Length;
+        while (end > 0 && data[end - 1] is 0 or (byte)' ')
+        {
+            end--;
+        }
+
+        long value = 0;
+        for (var i = 0; i < end; i++)
+        {
+            var digit = data[i];
+            if (digit is < (byte)'0' or > (byte)'7')
+            {
+                throw new FormatException("The CPIO octal field contains a non-octal digit.");
+            }
+
+            value = checked((value * 8) + (digit - '0'));
+        }
+
+        return value;
+    }
+
+    private static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> data)
+    {
+        var start = 0;
+        var end = data.Length;
+        while (start < end && IsAsciiWhiteSpace(data[start]))
+        {
+            start++;
+        }
+
+        while (end > start && IsAsciiWhiteSpace(data[end - 1]))
+        {
+            end--;
+        }
+
+        return data[start..end];
+    }
+
+    private static bool IsAsciiWhiteSpace(byte value) => value is (byte)' ' or (>= 0x09 and <= 0x0D);
+
+    private static uint ParseHexDigit(byte value)
+    {
+        if (value is >= (byte)'0' and <= (byte)'9')
+        {
+            return (uint)(value - '0');
+        }
+
+        if (value is >= (byte)'a' and <= (byte)'f')
+        {
+            return (uint)(value - 'a' + 10);
+        }
+
+        if (value is >= (byte)'A' and <= (byte)'F')
+        {
+            return (uint)(value - 'A' + 10);
+        }
+
+        throw new FormatException("The CPIO hexadecimal field contains a non-hexadecimal digit.");
     }
 
     public static ushort ReadUInt16(ReadOnlySpan<byte> data, bool byteSwap)

@@ -29,6 +29,7 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
     }
 
     private readonly CpioArchive _archive = new();
+    private readonly CpioExtractor _extractor = new();
 
     /// <summary>
     /// Display name of the handled format family.
@@ -160,21 +161,20 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var summaries = new List<ArchiveEntrySummary>();
-                using (var fs = OpenArchiveForRead(filePath, cancellationToken))
+                ArchiveFormat format;
+                List<ArchiveEntrySummary> summaries;
+                if (TryGetArchiveSnapshot(filePath) is { } snapshot)
                 {
-                    foreach (var summary in _archive.ListEntries(fs))
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        summaries.Add(summary);
-                    }
+                    cancellationToken.ThrowIfCancellationRequested();
+                    format = snapshot.Format;
+                    summaries = [.. snapshot.Entries];
                 }
-
-                var metadata = new Dictionary<string, string>
+                else
                 {
-                    ["Format"] = DetectFormatName(filePath),
-                    ["EntryCount"] = summaries.Count.ToString(),
-                };
+                    using var fs = OpenArchiveForRead(filePath, cancellationToken);
+                    format = _archive.DetectFormat(fs);
+                    summaries = ReadSummaries(fs, format, cancellationToken);
+                }
 
                 var components = summaries
                     .Select(s => FirmwareComponent.Of(s.Name, s.DataLength))
@@ -183,7 +183,11 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
                 return FirmwareOpResult.Ok(
                     $"{summaries.Count} entries in '{filePath}'.",
                     [.. summaries.Select(s => s.Name)],
-                    metadata,
+                    new Dictionary<string, string>
+                    {
+                        ["Format"] = format.ToString(),
+                        ["EntryCount"] = summaries.Count.ToString(),
+                    },
                     components);
             }
             catch (OperationCanceledException)
@@ -241,8 +245,18 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
                 IReadOnlyList<string> entries;
                 using (var fs = OpenArchiveForRead(filePath, cancellationToken))
                 {
-                    ValidateBeforeExtraction(fs, cancellationToken);
-                    _archive.ExtractToDirectory(fs, outputDirectory, extractOptions, null, out entries);
+                    var format = _archive.DetectFormat(fs);
+                    if (format is ArchiveFormat.Tar or ArchiveFormat.Ustar)
+                    {
+                        _archive.ExtractToDirectory(fs, outputDirectory, extractOptions, format, out entries);
+                    }
+                    else
+                    {
+                        var validated = CollectValidatedEntries(fs, format, cancellationToken);
+                        _extractor.ExtractToDirectory(validated, outputDirectory, extractOptions);
+                        entries = [.. validated.Select(entry => entry.Name)];
+                        RememberArchiveSnapshot(filePath, format, [.. validated.Select(Summarize)]);
+                    }
                 }
 
                 return FirmwareOpResult.Ok(
@@ -336,11 +350,25 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
         }, cancellationToken);
     }
 
-    private string DetectFormatName(string filePath)
+    private List<ArchiveEntrySummary> ReadSummaries(Stream source, ArchiveFormat format,
+        CancellationToken cancellationToken)
     {
-        using var fs = OpenArchiveForRead(filePath, CancellationToken.None);
-        return _archive.DetectFormat(fs).ToString();
+        var summaries = new List<ArchiveEntrySummary>();
+        foreach (var entry in _archive.ReadEntriesStreaming(source, format))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            summaries.Add(Summarize(entry));
+        }
+        return summaries;
     }
+
+    private static ArchiveEntrySummary Summarize(ArchiveEntry entry) => new()
+    {
+        Name = entry.Name,
+        LinkName = entry.LinkName,
+        DataLength = entry.DataLength,
+        Metadata = entry.Metadata,
+    };
 
     private static List<ArchiveEntry> EnumerateDirectoryEntries(string sourceRoot,
         IReadOnlyDictionary<string, FsConfigEntry> fsConfig, CancellationToken cancellationToken = default)

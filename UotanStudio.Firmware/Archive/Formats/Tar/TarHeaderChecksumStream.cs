@@ -227,18 +227,7 @@ internal sealed class TarHeaderChecksumStream(Stream inner) : Stream
 
     private static long RoundUpToBlocks(long size) => size <= 0 ? 0 : (size + BlockSize - 1) / BlockSize * BlockSize;
 
-    private static bool IsZeroBlock(byte[] block)
-    {
-        foreach (var value in block)
-        {
-            if (value != 0)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+    private static bool IsZeroBlock(byte[] block) => block.AsSpan().IndexOfAnyExcept((byte)0) < 0;
 
     /// <summary>
     /// Decodes a tar octal field, accepting both the space- or NUL-terminated classic form and the

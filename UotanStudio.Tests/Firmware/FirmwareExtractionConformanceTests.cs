@@ -287,6 +287,52 @@ public sealed class FirmwareExtractionConformanceTests : IDisposable
         return (ushort)(crc ^ 0xFFFF);
     }
 
+    [Fact]
+    public async Task DzBuilder_RebuildFromDecodedChunks_PreservesContentAndDigests()
+    {
+        var payloads = new[]
+        {
+            (Name: "one.bin", Payload: "one payload"u8.ToArray(), Sector: 10u),
+            (Name: "two.bin", Payload: "second payload"u8.ToArray(), Sector: 12u)
+        };
+        var sourceBytes = BuildDz(payloads);
+        var fileHeader = sourceBytes[..DzFileHeader.Size];
+        BinaryPrimitives.WriteUInt32LittleEndian(fileHeader.AsSpan(4), 2);
+        BinaryPrimitives.WriteUInt32LittleEndian(fileHeader.AsSpan(8), 1);
+        var source = Write("rebuild-source.dz", sourceBytes);
+        var (_, chunks) = DzExtractor.Parse(source);
+        var decoded = Path.Combine(_root, "rebuild-decoded");
+        Assert.Equal(payloads.Length, DzExtractor.Extract(source, decoded, cancellationToken: TestContext.Current.CancellationToken));
+
+        using var sourceStream = File.OpenRead(source);
+        var headerBytes = new byte[DzChunkHeader.Size];
+        var sources = new List<DzChunkSource>();
+        foreach (var chunk in chunks)
+        {
+            sourceStream.Position = chunk.DataOffset - DzChunkHeader.Size;
+            sourceStream.ReadExactly(headerBytes);
+            sources.Add(new DzChunkSource(headerBytes.ToArray(), Path.Combine(decoded, chunk.Name)));
+        }
+
+        var rebuilt = Path.Combine(_root, "rebuild-output.dz");
+        await DzBuilder.BuildAsync(fileHeader, sources, rebuilt, cancellationToken: TestContext.Current.CancellationToken);
+
+        var extracted = Path.Combine(_root, "rebuild-extracted");
+        Assert.Equal(payloads.Length, DzExtractor.Extract(rebuilt, extracted, cancellationToken: TestContext.Current.CancellationToken));
+        foreach (var (name, payload, _) in payloads)
+        {
+            Assert.Equal(payload, File.ReadAllBytes(Path.Combine(extracted, name)));
+        }
+
+        var (rebuiltHeader, rebuiltChunks) = DzExtractor.Parse(rebuilt);
+        Assert.Equal((uint)payloads.Length, rebuiltHeader.ChunkCount);
+        foreach (var chunk in rebuiltChunks)
+        {
+            Assert.NotEqual(0u, chunk.Header.Crc32);
+            Assert.Equal(chunk.Header.Md5, MD5.HashData(File.ReadAllBytes(Path.Combine(extracted, chunk.Name))));
+        }
+    }
+
     private static byte[] BuildDz((string Name, byte[] Payload, uint Sector)[] chunks, bool zstd = false)
     {
         using var result = new MemoryStream();

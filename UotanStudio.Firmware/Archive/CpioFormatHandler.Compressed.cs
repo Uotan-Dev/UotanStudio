@@ -141,17 +141,13 @@ public sealed partial class CpioFormatHandler
         FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920,
         FileOptions.SequentialScan | FileOptions.DeleteOnClose);
 
-    private void ValidateBeforeExtraction(Stream source, CancellationToken cancellationToken)
+    private List<ArchiveEntry> CollectValidatedEntries(Stream source, ArchiveFormat format,
+        CancellationToken cancellationToken)
     {
-        var format = _archive.DetectFormat(source);
-        if (format is ArchiveFormat.Tar or ArchiveFormat.Ustar)
-        {
-            return;
-        }
         var names = new HashSet<string>(StringComparer.Ordinal);
         long expanded = 0;
-        foreach (var entry in new CpioArchiveReader().ReadEntriesStreaming(source, format,
-            MaximumArchiveBytes, cancellationToken))
+        var entries = new List<ArchiveEntry>();
+        foreach (var entry in _archive.ReadEntriesStreaming(source, format))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var name = PathPatternMatcher.NormalizeArchivePath(entry.Name);
@@ -164,19 +160,31 @@ public sealed partial class CpioFormatHandler
             {
                 throw new ArchiveCorruptedException("CPIO entry payloads exceed the 8 GiB limit.");
             }
+            entries.Add(entry);
         }
-        source.Position = 0;
+        return entries;
     }
 
     private void CaptureArchiveConfiguration(RepackMetadata metadata, string sourcePath, string outputDirectory,
         string metadataDirectory, CancellationToken cancellationToken)
     {
-        using var source = OpenArchiveForRead(sourcePath, cancellationToken);
-        var format = _archive.DetectFormat(source);
-        if (format is ArchiveFormat.Tar or ArchiveFormat.Ustar)
+        ArchiveFormat format;
+        IReadOnlyList<ArchiveEntrySummary> sourceEntries;
+        if (TryGetArchiveSnapshot(sourcePath) is { } snapshot)
         {
-            metadata.PackingNotes = " TAR entries use the archive writer.";
-            return;
+            format = snapshot.Format;
+            sourceEntries = snapshot.Entries;
+        }
+        else
+        {
+            using var source = OpenArchiveForRead(sourcePath, cancellationToken);
+            format = _archive.DetectFormat(source);
+            if (format is ArchiveFormat.Tar or ArchiveFormat.Ustar)
+            {
+                metadata.PackingNotes = " TAR entries use the archive writer.";
+                return;
+            }
+            sourceEntries = ReadSummaries(source, format, cancellationToken);
         }
 
         var compression = CompressionFormat.None;
@@ -188,7 +196,7 @@ public sealed partial class CpioFormatHandler
 
         var entries = new JsonArray();
         Dictionary<string, PreservedInodeEntry> preserved = new(StringComparer.Ordinal);
-        foreach (var entry in new CpioArchiveReader().ReadEntriesStreaming(source, format, MaximumArchiveBytes, cancellationToken))
+        foreach (var entry in sourceEntries)
         {
             if (entries.Count >= MaximumEntries || entry.Name.Length > MaximumNameLength)
             {

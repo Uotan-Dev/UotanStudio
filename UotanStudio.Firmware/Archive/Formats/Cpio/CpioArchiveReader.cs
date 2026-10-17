@@ -113,6 +113,22 @@ internal sealed class CpioArchiveReader
     public IEnumerable<ArchiveEntry> ReadEntriesStreaming(Stream stream, ArchiveFormat? formatHint,
         long maximumSpoolBytes, CancellationToken cancellationToken = default)
     {
+        foreach (var item in ReadEntriesWithOffsetsStreaming(stream, formatHint, maximumSpoolBytes, cancellationToken))
+        {
+            yield return item.Entry;
+        }
+    }
+
+    /// <summary>
+    /// Reads the same bounded payload views as <see cref="ReadEntriesStreaming(Stream, ArchiveFormat?, long, CancellationToken)"/>
+    /// together with the absolute offset each view reads from, so a caller can seek to one entry later without
+    /// parsing every header again.
+    /// <para>读取与 <see cref="ReadEntriesStreaming(Stream, ArchiveFormat?, long, CancellationToken)"/> 相同的
+    /// 有界负载视图，并附带每个视图读取的绝对偏移，使调用方之后可以定位单个条目而无需再次解析全部头部。</para>
+    /// </summary>
+    internal IEnumerable<CpioEntryOffset> ReadEntriesWithOffsetsStreaming(Stream stream, ArchiveFormat? formatHint,
+        long maximumSpoolBytes, CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentOutOfRangeException.ThrowIfNegative(maximumSpoolBytes);
         cancellationToken.ThrowIfCancellationRequested();
@@ -138,7 +154,7 @@ internal sealed class CpioArchiveReader
                 }
             }
             temporary.Position = 0;
-            foreach (var entry in ReadEntriesStreaming(temporary, formatHint, maximumSpoolBytes, cancellationToken)) yield return entry;
+            foreach (var entry in ReadEntriesWithOffsetsStreaming(temporary, formatHint, maximumSpoolBytes, cancellationToken)) yield return entry;
             yield break;
         }
 
@@ -169,8 +185,9 @@ internal sealed class CpioArchiveReader
                 break;
             }
 
+            var payloadOffset = PayloadOffsetFor(stream, entry, detected);
             var nextPosition = stream.Position;
-            foreach (var transformed in TransformHardlinkEntry(entry, hardlinkState))
+            foreach (var transformed in TransformHardlinkEntry(entry, hardlinkState, payloadOffset))
             {
                 yield return transformed;
             }
@@ -499,6 +516,18 @@ internal sealed class CpioArchiveReader
         return Encoding.UTF8.GetString(data, 0, data.Length - 1);
     }
 
+    private static long PayloadOffsetFor(Stream stream, ArchiveEntry entry, ArchiveFormat format)
+    {
+        if (format is ArchiveFormat.OldAscii or ArchiveFormat.HpOldAscii)
+        {
+            return stream.Position - entry.DataLength;
+        }
+
+        var alignment = format is ArchiveFormat.Binary or ArchiveFormat.HpBinary ? 2 : 4;
+        var padding = (alignment - entry.DataLength % alignment) % alignment;
+        return stream.Position - entry.DataLength - padding;
+    }
+
     private static void SkipPadding(Stream stream, long offset, int align)
     {
         var pad = (align - (offset % align)) % align;
@@ -516,13 +545,14 @@ internal sealed class CpioArchiveReader
         }
     }
 
-    private static IEnumerable<ArchiveEntry> TransformHardlinkEntry(
+    private static IEnumerable<CpioEntryOffset> TransformHardlinkEntry(
         ArchiveEntry entry,
-        Dictionary<(ulong Inode, uint DevMaj, uint DevMin), HardlinkGroupState> state)
+        Dictionary<(ulong Inode, uint DevMaj, uint DevMin), HardlinkGroupState> state,
+        long payloadOffset)
     {
         if (entry.Metadata.Inode == 0 || entry.Metadata.LinkCount <= 1 || entry.Metadata.FileType != CpioFileType.Regular)
         {
-            yield return entry;
+            yield return new CpioEntryOffset(entry, payloadOffset);
             yield break;
         }
 
@@ -537,13 +567,14 @@ internal sealed class CpioArchiveReader
         {
             groupState.DataCarrierName = entry.Name;
             groupState.DataCarrier = entry;
-            yield return entry;
+            groupState.DataCarrierOffset = payloadOffset;
+            yield return new CpioEntryOffset(entry, payloadOffset);
 
             if (groupState.PendingEntries.Count > 0)
             {
                 foreach (var pending in groupState.PendingEntries)
                 {
-                    yield return ToHardlinkEntry(pending, entry.Name, entry);
+                    yield return new CpioEntryOffset(ToHardlinkEntry(pending.Entry, entry.Name, entry), payloadOffset);
                 }
 
                 groupState.PendingEntries.Clear();
@@ -554,14 +585,15 @@ internal sealed class CpioArchiveReader
 
         if (groupState.DataCarrierName is { Length: > 0 } carrierName)
         {
-            yield return ToHardlinkEntry(entry, carrierName, groupState.DataCarrier!);
+            yield return new CpioEntryOffset(ToHardlinkEntry(entry, carrierName, groupState.DataCarrier!),
+                groupState.DataCarrierOffset);
             yield break;
         }
 
-        groupState.PendingEntries.Add(entry);
+        groupState.PendingEntries.Add(new CpioEntryOffset(entry, payloadOffset));
     }
 
-    private static IEnumerable<ArchiveEntry> FlushPendingHardlinks(
+    private static IEnumerable<CpioEntryOffset> FlushPendingHardlinks(
         Dictionary<(ulong Inode, uint DevMaj, uint DevMin), HardlinkGroupState> state)
     {
         foreach (var (_, groupState) in state)
@@ -609,6 +641,14 @@ internal sealed class CpioArchiveReader
 
         public ArchiveEntry? DataCarrier { get; set; }
 
-        public List<ArchiveEntry> PendingEntries { get; } = [];
+        public long DataCarrierOffset { get; set; }
+
+        public List<CpioEntryOffset> PendingEntries { get; } = [];
     }
 }
+
+/// <summary>
+/// One CPIO entry together with the absolute offset of the payload its stream factory reads from.
+/// <para>单个 CPIO 条目，以及其流工厂读取的负载绝对偏移。</para>
+/// </summary>
+internal readonly record struct CpioEntryOffset(ArchiveEntry Entry, long PayloadOffset);
