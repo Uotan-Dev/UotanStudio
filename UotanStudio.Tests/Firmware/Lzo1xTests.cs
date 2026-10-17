@@ -41,6 +41,27 @@ public class Lzo1xTests
     }
 
     [Fact]
+    public void Compress_RepeatedCallsWithDifferentPayloads_ReuseBuffersWithoutChangingBytes()
+    {
+        var data = new byte[131072];
+        for (var i = 0; i < data.Length; i++)
+        {
+            data[i] = (byte)(i % 251);
+        }
+
+        var first = Lzo1x.Compress(data);
+
+        var other = new byte[70000];
+        new Random(7).NextBytes(other);
+        _ = Lzo1x.Compress(other);
+
+        var second = Lzo1x.Compress(data);
+
+        Assert.Equal(first, second);
+        Assert.Equal(data, Lzo1x.Decompress(second, data.Length));
+    }
+
+    [Fact]
     public void RoundTrip_AllZeros_MatchOriginal()
     {
         var data = new byte[70_000];

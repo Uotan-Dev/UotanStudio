@@ -26,10 +26,10 @@ internal static partial class Lz4DestinationCodec
     /// <param name="consumed">Bytes the encoder consumed from <paramref name="source"/>.
     /// <para>编码器从 <paramref name="source"/> 消费的字节数。</para></param>
     /// <param name="state">
-    /// Native context from <see cref="RentState"/>; pass <see langword="null"/> to allocate and release a
-    /// private context for this call alone.
-    /// <para>来自 <see cref="RentState"/> 的原生上下文；传 <see langword="null"/> 表示仅为本调用分配并在结束时
-    /// 释放私有上下文。</para></param>
+    /// Native context from <see cref="RentState"/>; pass <see langword="null"/> to borrow the shared cached context
+    /// for this call alone, which removes the native allocation from a per-block loop.
+    /// <para>来自 <see cref="RentState"/> 的原生上下文；传 <see langword="null"/> 表示仅为本调用借用共享缓存上下文，
+    /// 使逐块循环不再承担原生分配。</para></param>
     /// <returns>Bytes written into <paramref name="target"/>.
     /// <para>写入 <paramref name="target"/> 的字节数。</para></returns>
     /// <remarks>
@@ -62,20 +62,17 @@ internal static partial class Lz4DestinationCodec
             stateSize = algorithm == 1 ? sizeof(LZ4_stream_t) : sizeof(LZ4_streamHC_t);
         }
 
-        // A caller-supplied context is owned by the caller and only borrowed here; a private one is allocated
-        // up front and released on the way out, so the single-call path keeps the old behaviour exactly.
-        var ownedState = state is not null ? state : NativeMemory.AllocZeroed((nuint)stateSize);
-        var releaseOwned = state is null;
+        // A caller-supplied context is owned by the caller and only borrowed here; the cached one is rented for the
+        // call, so the single-call path keeps the old byte behaviour without paying a native allocation per block.
+        var borrowedFromCache = state is null;
+        var ownedState = borrowedFromCache ? ContextCache.Rent(algorithm == 2) : state;
         try
         {
             // A reused context still carries the previous block's currentOffset and dictionary pointers, and the
             // fast path derives its match base from currentOffset, so those stale values would aim the encoder at
             // memory it no longer owns. Clearing the whole context before every use starts each call from exactly
             // the state a freshly allocated one has, which is what keeps reuse byte-identical and memory-safe.
-            if (state is not null)
-            {
-                new Span<byte>(ownedState, stateSize).Clear();
-            }
+            new Span<byte>(ownedState, stateSize).Clear();
 
             var sourceLength = source.Length;
             int result;
@@ -107,9 +104,9 @@ internal static partial class Lz4DestinationCodec
         }
         finally
         {
-            if (releaseOwned)
+            if (borrowedFromCache)
             {
-                NativeMemory.Free(ownedState);
+                ContextCache.Return(algorithm == 2, ownedState);
             }
         }
     }
@@ -139,6 +136,75 @@ internal static partial class Lz4DestinationCodec
         if (state is not null)
         {
             NativeMemory.Free(state);
+        }
+    }
+
+    /// <summary>
+    /// Keeps one idle native context per algorithm so the parameterless-context overload reuses it instead of
+    /// paying a native allocation and zero-fill for every block.
+    /// <para>为每种算法保留一个空闲原生上下文，使不带上下文的重载复用它，而不必每块承担原生分配与清零。</para>
+    /// </summary>
+    /// <remarks>
+    /// Renting removes the slot under the lock, so a context is exclusively owned until it is returned and an idle
+    /// slot never contains a context another caller is still using. The context is cleared before every use, so the
+    /// bytes do not depend on which block previously occupied it. A displaced idle context is freed outside the lock.
+    /// <para>借用会在锁内移除槽位，因此上下文在归还前被独占，空闲槽位中也绝不会出现其他调用方仍在使用的上下文。
+    /// 每次使用前都会清零，因此输出字节不取决于此前占用它的块。被挤出的空闲上下文在锁外释放。</para>
+    /// </remarks>
+    private static class ContextCache
+    {
+        private static readonly Lock Gate = new();
+        private static unsafe void* FastIdle;
+        private static unsafe void* HighCompressionIdle;
+
+        internal static unsafe void* Rent(bool highCompression)
+        {
+            lock (Gate)
+            {
+                if (highCompression)
+                {
+                    var idle = HighCompressionIdle;
+                    HighCompressionIdle = null;
+                    if (idle is not null)
+                    {
+                        return idle;
+                    }
+                }
+                else
+                {
+                    var idle = FastIdle;
+                    FastIdle = null;
+                    if (idle is not null)
+                    {
+                        return idle;
+                    }
+                }
+            }
+
+            return NativeMemory.AllocZeroed((nuint)(highCompression ? sizeof(LZ4_streamHC_t) : sizeof(LZ4_stream_t)));
+        }
+
+        internal static unsafe void Return(bool highCompression, void* state)
+        {
+            void* displaced;
+            lock (Gate)
+            {
+                if (highCompression)
+                {
+                    displaced = HighCompressionIdle;
+                    HighCompressionIdle = state;
+                }
+                else
+                {
+                    displaced = FastIdle;
+                    FastIdle = state;
+                }
+            }
+
+            if (displaced is not null)
+            {
+                NativeMemory.Free(displaced);
+            }
         }
     }
 

@@ -38,13 +38,13 @@ public static class GzipCompressor
         {
 
             var parallel = ParallelCompression.TryCompressChunks(data, options?.MaxDegreeOfParallelism,
-                (start, count) => CompressChunk(data, start, count, options));
+                (start, count, destination) => CompressChunk(data, start, count, options, destination));
             if (parallel != null)
             {
                 return parallel;
             }
 
-            using var output = new MemoryStream();
+            using var output = new MemoryStream(Math.Min(data.Length, ParallelCompression.DefaultChunkSize));
             using (var gzip = new GZipStream(output, CompressionLevelMapper.ToBclCompressionLevel(options?.Level), leaveOpen: true))
             {
                 gzip.Write(data, 0, data.Length);
@@ -61,14 +61,12 @@ public static class GzipCompressor
     /// Compresses [start, start+count) into an independent gzip member (for parallel chunking).
     /// <para>把 [start, start+count) 压缩为独立的 gzip 成员（并行分块用）。</para>
     /// </summary>
-    private static byte[] CompressChunk(byte[] data, int start, int count, CompressionOptions? options)
+    private static void CompressChunk(byte[] data, int start, int count, CompressionOptions? options, Stream destination)
     {
-        using var output = new MemoryStream();
-        using (var gzip = new GZipStream(output, CompressionLevelMapper.ToBclCompressionLevel(options?.Level), leaveOpen: true))
+        using (var gzip = new GZipStream(destination, CompressionLevelMapper.ToBclCompressionLevel(options?.Level), leaveOpen: true))
         {
             gzip.Write(data, start, count);
         }
-        return output.ToArray();
     }
 
     /// <summary>

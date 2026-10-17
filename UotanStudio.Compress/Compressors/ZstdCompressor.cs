@@ -33,7 +33,7 @@ public static class ZstdCompressor
         {
 
             var parallel = ParallelCompression.TryCompressChunks(data, options?.MaxDegreeOfParallelism,
-                (start, count) => CompressChunk(data, start, count, options));
+                (start, count, destination) => CompressChunk(data, start, count, options, destination));
             if (parallel != null)
             {
                 return parallel;
@@ -52,10 +52,10 @@ public static class ZstdCompressor
     /// Compresses [start, start+count) into an independent zstd frame (for parallel chunking).
     /// <para>把 [start, start+count) 压缩为独立的 zstd 帧（并行分块用）。</para>
     /// </summary>
-    private static byte[] CompressChunk(byte[] data, int start, int count, CompressionOptions? options)
+    private static void CompressChunk(byte[] data, int start, int count, CompressionOptions? options, Stream destination)
     {
         using var compressor = new Compressor(options?.Level ?? 3);
-        return compressor.Wrap(data.AsSpan(start, count)).ToArray();
+        destination.Write(compressor.Wrap(data.AsSpan(start, count)));
     }
 
     /// <summary>

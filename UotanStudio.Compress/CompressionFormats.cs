@@ -42,6 +42,9 @@ public static class CompressionFormats
     private static readonly FrozenDictionary<string, CompressionFormat> ByName =
         BuildNameIndex();
 
+    private static readonly FrozenDictionary<string, CompressionFormat> ByExtension =
+        BuildExtensionIndex();
+
 
 
     private static FrozenDictionary<string, CompressionFormat> BuildNameIndex()
@@ -53,6 +56,26 @@ public static class CompressionFormats
             foreach (var alias in info.Aliases)
             {
                 index[alias] = info.Format;
+            }
+        }
+        return index.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Builds the extension index with the first registration winning, so <c>.gz</c> stays with gzip even though
+    /// zopfli also claims it.
+    /// <para>构建扩展名索引，首次注册者胜出，因此即使 zopfli 也声明了 <c>.gz</c>，它仍归属 gzip。</para>
+    /// </summary>
+    /// <returns>A case-insensitive extension index keyed by the leading-dot suffix.
+    /// <para>以带点后缀为键、不区分大小写的扩展名索引。</para></returns>
+    private static FrozenDictionary<string, CompressionFormat> BuildExtensionIndex()
+    {
+        var index = new Dictionary<string, CompressionFormat>(StringComparer.OrdinalIgnoreCase);
+        foreach (var info in AllFormats)
+        {
+            foreach (var extension in info.Extensions)
+            {
+                index.TryAdd(extension, info.Format);
             }
         }
         return index.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
@@ -107,18 +130,7 @@ public static class CompressionFormats
             return CompressionFormat.None;
         }
 
-        foreach (var info in AllFormats)
-        {
-            foreach (var candidate in info.Extensions)
-            {
-                if (string.Equals(ext, candidate, StringComparison.OrdinalIgnoreCase))
-                {
-                    return info.Format;
-                }
-            }
-        }
-
-        return CompressionFormat.None;
+        return ByExtension.TryGetValue(ext, out var format) ? format : CompressionFormat.None;
     }
 
     /// <summary>

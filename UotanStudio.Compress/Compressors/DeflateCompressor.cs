@@ -40,13 +40,13 @@ public static class DeflateCompressor
         {
 
             var parallel = ParallelCompression.TryCompressChunks(data, options?.MaxDegreeOfParallelism,
-                (start, count) => CompressChunk(data, start, count, options));
+                (start, count, destination) => CompressChunk(data, start, count, options, destination));
             if (parallel != null)
             {
                 return parallel;
             }
 
-            using var output = new MemoryStream();
+            using var output = new MemoryStream(Math.Min(data.Length, ParallelCompression.DefaultChunkSize));
             using (var deflate = new DeflateStream(output, CompressionLevelMapper.ToBclCompressionLevel(options?.Level), leaveOpen: true))
             {
                 deflate.Write(data, 0, data.Length);
@@ -63,14 +63,12 @@ public static class DeflateCompressor
     /// Compresses [start, start+count) into an independent raw deflate stream (for parallel chunking).
     /// <para>把 [start, start+count) 压缩为独立的 raw deflate 流（并行分块用）。</para>
     /// </summary>
-    private static byte[] CompressChunk(byte[] data, int start, int count, CompressionOptions? options)
+    private static void CompressChunk(byte[] data, int start, int count, CompressionOptions? options, Stream destination)
     {
-        using var output = new MemoryStream();
-        using (var deflate = new DeflateStream(output, CompressionLevelMapper.ToBclCompressionLevel(options?.Level), leaveOpen: true))
+        using (var deflate = new DeflateStream(destination, CompressionLevelMapper.ToBclCompressionLevel(options?.Level), leaveOpen: true))
         {
             deflate.Write(data, start, count);
         }
-        return output.ToArray();
     }
 
     /// <summary>

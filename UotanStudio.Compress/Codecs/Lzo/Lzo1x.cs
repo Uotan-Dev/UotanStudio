@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 
 namespace UotanStudio.Compress.Codecs.Lzo;
@@ -533,18 +534,27 @@ internal static class Lzo1x
     public static byte[] Compress(ReadOnlySpan<byte> input)
     {
         var worst = input.Length + (input.Length / 16) + 64 + 3;
-        var output = new byte[worst];
-        var status = TryCompress(input, output, out var written);
-        if (status != LzoStatus.Ok)
+        var output = ArrayPool<byte>.Shared.Rent(worst);
+        var dictionary = ArrayPool<ushort>.Shared.Rent(DSize);
+        try
         {
-            throw new InvalidOperationException(
-                $"LZO1X compression failed ({status}).  LZO1X 压缩失败（{status}）。");
-        }
+            var status = TryCompress(input, output.AsSpan(0, worst), dictionary, out var written);
+            if (status != LzoStatus.Ok)
+            {
+                throw new InvalidOperationException(
+                    $"LZO1X compression failed ({status}).  LZO1X 压缩失败（{status}）。");
+            }
 
-        return output.AsSpan(0, written).ToArray();
+            return output.AsSpan(0, written).ToArray();
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(output);
+            ArrayPool<ushort>.Shared.Return(dictionary);
+        }
     }
 
-    private static LzoStatus TryCompress(ReadOnlySpan<byte> input, Span<byte> output, out int bytesWritten)
+    private static LzoStatus TryCompress(ReadOnlySpan<byte> input, Span<byte> output, ushort[] dictionary, out int bytesWritten)
     {
         var inSpan = input;
         var outSpan = output;
@@ -564,14 +574,13 @@ internal static class Lzo1x
         var ti = 0;
         var litStart = 0;
 
-        var dict = new ushort[DSize];
         while (l > 20)
         {
             var ll = Math.Min(l, m4MaxOffset + 1);
 
 
-            Array.Clear(dict, 0, dict.Length);
-            var status = CompressBlock(ip, ll, dict, inSpan, outSpan, ref ti, ref litStart);
+            Array.Clear(dictionary, 0, DSize);
+            var status = CompressBlock(ip, ll, dictionary, inSpan, outSpan, ref ti, ref litStart);
             if (status != LzoStatus.Ok)
             {
                 return status;

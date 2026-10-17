@@ -37,13 +37,13 @@ internal static class Bzip2Compressor
         try
         {
             var parallel = ParallelCompression.TryCompressChunks(data, options?.MaxDegreeOfParallelism,
-                (start, count) => CompressChunk(data, start, count));
+                (start, count, destination) => CompressChunk(data, start, count, destination));
             if (parallel != null)
             {
                 return parallel;
             }
 
-            using var output = new MemoryStream();
+            using var output = new MemoryStream(Math.Min(data.Length, ParallelCompression.DefaultChunkSize));
             using (var bzip2 = BZip2Stream.Create(output, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
             {
                 bzip2.Write(data, 0, data.Length);
@@ -60,14 +60,12 @@ internal static class Bzip2Compressor
     /// Compresses [start, start+count) into an independent bzip2 stream (for parallel chunking).
     /// <para>把 [start, start+count) 压缩为独立的 bzip2 流（并行分块用）。</para>
     /// </summary>
-    private static byte[] CompressChunk(byte[] data, int start, int count)
+    private static void CompressChunk(byte[] data, int start, int count, Stream destination)
     {
-        using var output = new MemoryStream();
-        using (var bzip2 = BZip2Stream.Create(output, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
+        using (var bzip2 = BZip2Stream.Create(destination, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
         {
             bzip2.Write(data, start, count);
         }
-        return output.ToArray();
     }
 
     /// <summary>

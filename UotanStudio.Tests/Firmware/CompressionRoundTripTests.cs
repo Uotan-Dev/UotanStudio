@@ -43,6 +43,60 @@ public class CompressionRoundTripTests
         Assert.Equal(payload, restored);
     }
 
+    public static TheoryData<CompressionFormat> ChunkedFormats => new()
+    {
+        CompressionFormat.Gzip,
+        CompressionFormat.Zlib,
+        CompressionFormat.Deflate,
+        CompressionFormat.Bzip2,
+        CompressionFormat.Zstd,
+    };
+
+    [Theory]
+    [MemberData(nameof(ChunkedFormats))]
+    public void ParallelChunkCompression_MatchesConcatenatedSequentialMembers(CompressionFormat format)
+    {
+        const int chunkSize = 1 << 20;
+        var payload = BuildPayload((2 * chunkSize) + 4097);
+        var chunked = CompressionService.Compress(payload, format,
+            new CompressionOptions { MaxDegreeOfParallelism = 4 });
+
+        using var expected = new MemoryStream();
+        for (var offset = 0; offset < payload.Length; offset += chunkSize)
+        {
+            var length = Math.Min(chunkSize, payload.Length - offset);
+            var member = CompressSlice(payload.AsSpan(offset, length).ToArray(), format);
+            expected.Write(member, 0, member.Length);
+        }
+
+        Assert.Equal(expected.ToArray(), chunked);
+        Assert.Equal(payload, CompressionService.Decompress(chunked, format));
+    }
+
+    [Theory]
+    [InlineData("archive.tar.gz", CompressionFormat.Gzip)]
+    [InlineData("DATA.GZ", CompressionFormat.Gzip)]
+    [InlineData("payload.zst", CompressionFormat.Zstd)]
+    [InlineData("payload.ZSTD", CompressionFormat.Zstd)]
+    [InlineData("disk.img.lz4", CompressionFormat.Lz4)]
+    [InlineData("archive.tar.bz2", CompressionFormat.Bzip2)]
+    [InlineData("unknown.xyz", CompressionFormat.None)]
+    [InlineData("noextension", CompressionFormat.None)]
+    public void FromExtension_RegisteredSuffix_ResolvesFirstRegisteredOwner(string filename, CompressionFormat expected)
+    {
+        Assert.Equal(expected, CompressionFormats.FromExtension(filename));
+    }
+
+    private static byte[] CompressSlice(byte[] data, CompressionFormat format) => format switch
+    {
+        CompressionFormat.Gzip => GzipCompressor.Compress(data),
+        CompressionFormat.Zlib => ZlibCompressor.Compress(data),
+        CompressionFormat.Deflate => DeflateCompressor.Compress(data),
+        CompressionFormat.Bzip2 => Bzip2Compressor.Compress(data),
+        CompressionFormat.Zstd => ZstdCompressor.Compress(data),
+        _ => throw new ArgumentOutOfRangeException(nameof(format)),
+    };
+
     [Fact]
     public void Gzip_Detection_IdentifiesMagic()
     {

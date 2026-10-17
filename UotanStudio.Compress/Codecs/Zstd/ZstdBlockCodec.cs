@@ -8,12 +8,11 @@ namespace UotanStudio.Compress.Codecs.Zstd;
 /// <para>基于 ZstdSharp、以 span 交换数据的帧级 Zstd 块原语，供按块存储完整 zstd 帧而非带头部与校验和容器的文件系统格式使用。</para>
 /// </summary>
 /// <remarks>
-/// <para>Only the compression side is exposed. The F2FS cluster reader still calls ZstdSharp's
-/// <c>Unwrap(compressed, expectedSize)</c> directly because it depends on that overload's size-hint semantics: it
-/// returns the array the library allocated for the hint and hands it back verbatim, so the stored array length is a
-/// property of the hint rather than of the decoded content, and the coverage of that path assumes hint equals
-/// content. A span-based decompress would silently change those array lengths with nothing in the suite catching the
-/// difference, so it is intentionally absent until that reader is reworked around an explicit buffer.</para>
+/// <para>Both directions are span-based. <see cref="Decompress"/> reuses a cached zstd decompression context so a
+/// per-cluster loop does not rebuild a native context for every block, and it returns the number of bytes it
+/// actually wrote because a span destination has no implicit size hint like the array-level
+/// <c>Unwrap(compressed, expectedSize)</c> overload; readers that rely on that hint's array length stay on their
+/// own path.</para>
 /// <para>The bytes <see cref="Compress"/> writes match the single-frame path of the array-level compressor for the
 /// same level and payload: a zstd frame is destination-independent, so no content-size flag, content checksum or
 /// window override is applied here and no frame is emitted for an empty payload.</para>
@@ -89,6 +88,43 @@ internal static class ZstdBlockCodec
     }
 
     /// <summary>
+    /// Decompresses one standalone zstd frame into a caller-owned span and reports the produced byte count.
+    /// <para>把一个独立的 zstd 帧解压到调用方持有的 span，并报告实际产出的字节数。</para>
+    /// </summary>
+    /// <param name="source">Complete frame bytes; an empty source produces nothing and returns <c>0</c> without
+    /// touching a decompression context. <para>完整的帧字节；空源不产出内容，也不接触解压上下文，直接返回 <c>0</c>。</para></param>
+    /// <param name="destination">Destination span written from its start; it must be large enough for the whole
+    /// decoded frame, and the caller uses the returned length rather than <paramref name="destination"/>'s length
+    /// because the span carries no size hint. <para>从起始处写入的目标 span；其容量必须容纳整个解码帧，调用方应以返回长度
+    /// 而非 <paramref name="destination"/> 的长度为准，因为 span 不携带尺寸提示。</para></param>
+    /// <returns>The number of decoded bytes written into <paramref name="destination"/>.
+    /// <para>写入 <paramref name="destination"/> 的解码字节数。</para></returns>
+    /// <exception cref="CompressionException">The frame is malformed or the destination is too small; the
+    /// underlying ZstdSharp error is the inner exception.
+    /// <para>帧无效或目标容量不足；ZstdSharp 的原始错误为内部异常。</para></exception>
+    internal static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination)
+    {
+        if (source.IsEmpty)
+        {
+            return 0;
+        }
+
+        var lease = DecompressorCache.Rent();
+        try
+        {
+            return lease.Unwrap(source, destination);
+        }
+        catch (ZstdException ex)
+        {
+            throw new CompressionException("ZSTD block decompression failed. ZSTD 块解压失败。", ex);
+        }
+        finally
+        {
+            DecompressorCache.Return(lease);
+        }
+    }
+
+    /// <summary>
     /// Caches one zstd compression context per level so a per-cluster loop reuses the context instead of
     /// rebuilding it for every block.
     /// <para>按级别各缓存一个 zstd 压缩上下文，使逐 cluster 的循环复用上下文而不必每块重建。</para>
@@ -97,10 +133,11 @@ internal static class ZstdBlockCodec
     /// A zstd context carries the level's window state, so constructing one per block repeats that setup for every
     /// cluster of an image. The cache hands out an exclusive owner per call and stores it back on return; a second
     /// caller arriving while one is checked out constructs its own, so no caller ever waits on another. A context is
-    /// never shared concurrently and is therefore never observed in a half-consumed state.
+    /// never shared concurrently and is therefore never observed in a half-consumed state. A context displaced from
+    /// a slot is idle by construction, because renting removes the slot entry under the same lock.
     /// <para>zstd 上下文承载该级别的窗口状态，每块新建就会让镜像的每个 cluster 重复一次搭建。该缓存每次借出
     /// 独占所有者并在归还时存回；借用期间来的第二个调用方自行新建，因此不会有调用方等待他人。上下文从不并发共享，
-    /// 也就不会出现处于半消费状态被观测到的情况。</para>
+    /// 也就不会出现处于半消费状态被观测到的情况。被挤出槽位的上下文按构造必为空闲，因为借用会在同一把锁内移除槽位条目。</para>
     /// </remarks>
     private static class CompressorCache
     {
@@ -111,36 +148,68 @@ internal static class ZstdBlockCodec
         {
             lock (Gate)
             {
-                return Idle.TryGetValue(level, out var holder) && holder.TryTake()
-                    ? holder.Value
-                    : new Compressor(level);
+                if (Idle.Remove(level, out var holder))
+                {
+                    return holder.Value;
+                }
             }
+
+            return new Compressor(level);
         }
 
         internal static void Return(int level, Compressor compressor)
         {
+            Holder? displaced;
             lock (Gate)
             {
+                Idle.Remove(level, out displaced);
                 Idle[level] = new Holder(compressor);
             }
+
+            displaced?.Value.Dispose();
         }
 
         private sealed class Holder(Compressor value)
         {
-            private Compressor? _value = value;
-
             internal Compressor Value { get; } = value;
+        }
+    }
 
-            internal bool TryTake()
+    /// <summary>
+    /// Reuses one zstd decompression context across calls, with the same exclusive-rental contract as
+    /// <see cref="CompressorCache"/>.
+    /// <para>跨调用复用同一个 zstd 解压上下文，独占借用契约与 <see cref="CompressorCache"/> 相同。</para>
+    /// </summary>
+    private static class DecompressorCache
+    {
+        private static readonly Lock Gate = new();
+        private static Decompressor? Idle;
+
+        internal static Decompressor Rent()
+        {
+            lock (Gate)
             {
-                if (_value is null)
+                var idle = Idle;
+                if (idle is not null)
                 {
-                    return false;
+                    Idle = null;
+                    return idle;
                 }
-
-                _value = null;
-                return true;
             }
+
+            return new Decompressor();
+        }
+
+        internal static void Return(Decompressor decompressor)
+        {
+            Decompressor? displaced;
+            lock (Gate)
+            {
+                displaced = Idle;
+                Idle = decompressor;
+            }
+
+            displaced?.Dispose();
         }
     }
 }

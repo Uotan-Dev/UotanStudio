@@ -33,6 +33,30 @@ public class XzStreamingOutputTests
         Assert.Equal(data, XzCompressor.Decompress(compressed));
     }
 
+    [Fact]
+    public void ParallelWindowEncoding_ProducesSameContainerAsSequential()
+    {
+        var data = new byte[(2 * 1024 * 1024) + 12345];
+        for (var i = 0; i < data.Length; i++)
+        {
+            data[i] = (byte)(i % 251);
+        }
+
+        var sequential = CompressStreaming(data, 1);
+        var parallel = CompressStreaming(data, 8);
+
+        Assert.Equal(sequential, parallel);
+        Assert.Equal(data, XzCompressor.Decompress(parallel));
+    }
+
+    private static byte[] CompressStreaming(byte[] data, int degree)
+    {
+        using var input = new MemoryStream(data);
+        using var output = new MemoryStream();
+        XzCompressor.Compress(input, output, maxDegreeOfParallelism: degree);
+        return output.ToArray();
+    }
+
     private static void AssertSpooling(int length, byte check, bool verifyRoundTrip)
     {
         var data = new byte[length];

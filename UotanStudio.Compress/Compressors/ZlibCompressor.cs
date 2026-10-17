@@ -33,13 +33,13 @@ public static class ZlibCompressor
         {
 
             var parallel = ParallelCompression.TryCompressChunks(data, options?.MaxDegreeOfParallelism,
-                (start, count) => CompressChunk(data, start, count, options));
+                (start, count, destination) => CompressChunk(data, start, count, options, destination));
             if (parallel != null)
             {
                 return parallel;
             }
 
-            using var output = new MemoryStream();
+            using var output = new MemoryStream(Math.Min(data.Length, ParallelCompression.DefaultChunkSize));
             using (var zlib = new ZlibStream(new NonDisposingStream(output), CompressionMode.Compress, CompressionLevelMapper.ToSharpCompressDeflate(options?.Level)))
             {
                 zlib.Write(data, 0, data.Length);
@@ -56,14 +56,12 @@ public static class ZlibCompressor
     /// Compresses [start, start+count) into an independent zlib stream (for parallel chunking).
     /// <para>把 [start, start+count) 压缩为独立的 zlib 流（并行分块用）。</para>
     /// </summary>
-    private static byte[] CompressChunk(byte[] data, int start, int count, CompressionOptions? options)
+    private static void CompressChunk(byte[] data, int start, int count, CompressionOptions? options, Stream destination)
     {
-        using var output = new MemoryStream();
-        using (var zlib = new ZlibStream(new NonDisposingStream(output), CompressionMode.Compress, CompressionLevelMapper.ToSharpCompressDeflate(options?.Level)))
+        using (var zlib = new ZlibStream(new NonDisposingStream(destination), CompressionMode.Compress, CompressionLevelMapper.ToSharpCompressDeflate(options?.Level)))
         {
             zlib.Write(data, start, count);
         }
-        return output.ToArray();
     }
 
     /// <summary>

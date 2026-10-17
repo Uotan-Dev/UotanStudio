@@ -9,6 +9,14 @@ internal static class Lzma2Encoder
 
     private const byte Lclppb = 0x5D;
 
+    private const long WindowEncoderDictionaryMemoryFactor = 12L;
+
+    private const long WindowEncoderFixedMemoryBytes = 8L * 1024 * 1024;
+
+    private const long WindowEncoderMinimumMemoryBytes = 16L * 1024 * 1024;
+
+    private const long WindowEncoderBudgetBytes = 512L * 1024 * 1024;
+
     public const uint DefaultDictionarySize = 1u << 23;
 
     /// <summary>
@@ -116,10 +124,11 @@ internal static class Lzma2Encoder
     /// defaulting to <see cref="DefaultDictionarySize"/> (8 MiB).
     /// <para>交给每个窗口编码器的字典大小（字节），默认为 <see cref="DefaultDictionarySize"/>（8 MiB）。</para></param>
     /// <param name="maxDegreeOfParallelism">
-    /// <see langword="null"/> or 1 and below reads and encodes sequentially; above 1 that many windows
-    /// (at most 2) are encoded concurrently while staying in input order.
-    /// <para>为 <see langword="null"/> 或小于等于 1 时串行读取与编码；大于 1 时并发编码相应数量的窗口（最多 2 个），
-    /// 窗口仍按输入顺序写出。</para></param>
+    /// <see langword="null"/> or 1 and below reads and encodes sequentially; above 1 that many windows are
+    /// encoded concurrently, bounded by the window count, the detected physical core count and a 512 MiB budget
+    /// for the dictionary-sized window encoders, while staying in input order.
+    /// <para>为 <see langword="null"/> 或小于等于 1 时串行读取与编码；大于 1 时并发编码相应数量的窗口，上限由窗口数量、
+    /// 探测到的物理核心数以及字典大小的窗口编码器所占 512 MiB 预算共同决定，窗口仍按输入顺序写出。</para></param>
     /// <param name="onOriginalWindow">Optional callback invoked once per window with the freshly read
     /// uncompressed bytes; <see langword="null"/> reports nothing.
     /// <para>可选回调，每个窗口以刚读取的未压缩字节调用一次；为 <see langword="null"/> 时不上报。</para></param>
@@ -128,7 +137,7 @@ internal static class Lzma2Encoder
     public static long Encode(Stream input, Stream output, uint dictionarySize = DefaultDictionarySize,
         int? maxDegreeOfParallelism = null, Action<byte[], int, int>? onOriginalWindow = null)
     {
-        var dop = Parallelism.Resolve(maxDegreeOfParallelism, 2);
+        var dop = ResolveStreamingDegree(maxDegreeOfParallelism, dictionarySize);
         var windows = new List<byte[]>(dop);
         var encoders = new Encoder?[dop];
         long total = 0;
@@ -199,6 +208,36 @@ internal static class Lzma2Encoder
 
         output.WriteByte(0x00);
         return total;
+    }
+
+    /// <summary>
+    /// Resolves how many windows the streaming encoder may hold concurrently. Each window encoder owns a
+    /// dictionary-sized match finder whose buffer, hash and son tables keep roughly twelve dictionary copies
+    /// resident, so the degree is capped by the request, the physical core count and the budget; the encoded
+    /// bytes do not depend on it because every window resets its encoder and declares the dictionary reset in
+    /// its chunk header.
+    /// <para>解析流式编码器可同时持有的窗口数量。每个窗口编码器都拥有与字典同规模的匹配查找器，其缓冲、哈希与
+    /// 子表合计约占用十二份字典大小的常驻内存，因此并行度受请求、物理核心数与预算共同限制；编码字节不取决于该值，
+    /// 因为每个窗口都会重置编码器并在块头中宣告字典重置。</para>
+    /// </summary>
+    /// <param name="requested">Caller request; <see langword="null"/> or 1 and below resolves to 1.
+    /// <para>调用方请求；<see langword="null"/> 或不大于 1 时解析为 1。</para></param>
+    /// <param name="dictionarySize">Dictionary size each window encoder is configured with.
+    /// <para>每个窗口编码器配置的字典大小。</para></param>
+    /// <returns>The degree to encode with, never below <c>1</c>.
+    /// <para>实际使用的编码并行度，不小于 <c>1</c>。</para></returns>
+    private static int ResolveStreamingDegree(int? requested, uint dictionarySize)
+    {
+        if (requested is null or <= 1)
+        {
+            return 1;
+        }
+
+        var perWindow = Math.Max(
+            ((long)dictionarySize * WindowEncoderDictionaryMemoryFactor) + WindowEncoderFixedMemoryBytes,
+            WindowEncoderMinimumMemoryBytes);
+        var affordable = (int)Math.Clamp(WindowEncoderBudgetBytes / perWindow, 1L, 64L);
+        return Parallelism.Resolve(requested, affordable);
     }
 
     /// <summary>
