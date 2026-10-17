@@ -33,6 +33,74 @@ VID/PID or enumeration order is not sufficient. ADB and HDC server
 serial/connect keys are authoritative. An offline or unauthorized server target
 must not silently become a direct USB target.
 
+## Host signing identity
+
+A server route performs no host-side signing: the running `adb`/`hdc` server owns
+the identity and the serial is authoritative. Only the direct USB/TCP routes sign
+the peer challenge, and both use the same upstream host identity the official
+clients use, so authorizing one authorizes all of them:
+
+| Protocol | Private key | Public sidecar | Signing |
+| --- | --- | --- | --- |
+| ADB | `~/.android/adbkey`, RSA-2048, PKCS#8 PEM | `adbkey.pub`: base64 `RSAPublicKey` + `" "` + `login@host`, no trailing newline | RSA PKCS#1 + SHA-1 over the 20-byte token |
+| HDC | `~/.harmony/hdckey`, RSA-3072, PKCS#8 PEM | `hdckey.pub`: PEM `SubjectPublicKeyInfo` with one trailing newline | RSA-PSS + SHA-512 over the daemon token, or the legacy private-key encryption |
+
+Paths and widths follow upstream, per platform. Generation follows the same split as
+upstream: only the **user identity** is created when its file is absent
+(`LoadOrCreate()`, mirroring `load_userkey()`/`LoadHostUserKey()`), while an
+`ADB_VENDOR_KEYS` entry is read-only (`Load()`, mirroring `load_keys()`) and a key
+file that exists but cannot be parsed fails instead of being replaced. The one
+deliberate addition is sidecar repair: a missing or stale `.pub` is rewritten from
+the private key, because the HDC handshake reads `hdckey.pub` and upstream aborts
+with `E000005` when it is unusable.
+
+Upstream `adb_get_homedir_path()`
+resolves `SHGetFolderPathW(CSIDL_PROFILE)` on Windows and `$HOME`, then the passwd
+entry, on Linux and macOS; `uv_os_homedir()` in HDC's `GetUserKeyPath` follows the
+same shape. Both key directories are created with mode `0750` and key files with
+mode `0600` on Unix; on Windows the files inherit the parent directory ACL. The
+ADB public-key label reads `USERNAME`/`COMPUTERNAME` first on Windows and
+`LOGNAME`/`HOSTNAME` first on the other platforms, matching
+`sysdeps::GetLoginNameUTF8()`/`GetHostNameUTF8()`; adbd compares only the base64
+material before the first space, so the label is informational. HDC's handshake
+`buf` is `hostname` + `0x0C` + PEM, exactly as upstream `GetPublicKeyinfo` builds
+it, because `GetHostPubkeyInfo` splits on the first `0x0C` and stores the remainder
+verbatim as the daemon's known-hosts record.
+
+ADB offers more than one identity, like upstream: `AdbAuthentication.LoadIdentityChain()`
+loads the user identity first and then every identity named by `ADB_VENDOR_KEYS`,
+split on `;` on Windows and `:` elsewhere, where a directory entry contributes only
+files named `*.adb_key` and duplicates collapse by the SHA-256 fingerprint of the
+DER `SubjectPublicKeyInfo`. Each AUTH token is answered with the next identity, and
+once the chain is exhausted the `RSAPUBLICKEY` announcement carries the public half
+of the **user** identity, the same key upstream `adb_auth_get_userkey()` reads.
+
+There is no separate host certificate identity. The TLS client certificate that
+secure (Android 11+) sessions present is regenerated for each handshake by
+`AdbHostCertificate` from the same RSA key that signs AUTH tokens, in the shape
+upstream `GenerateX509Certificate()` emits: subject and issuer
+`C=US, O=Android, CN=Adb`, ten-year validity, critical `basicConstraints CA:TRUE`,
+critical `keyCertSign, cRLSign, digitalSignature`, a subject key identifier, and a
+SHA-256 self-signature. adbd authenticates the SHA-256 fingerprint of the public key
+inside that certificate (`adbd_tls_verify_cert`), never its subject, serial or
+storage location, so nothing certificate-shaped is persisted.
+
+Legacy HDC `RsaEncrypt` and the MTK Boot ROM SLA responder share
+`RsaTypeOneSignature` (PKCS#1 v1.5 type-1 over an unframed payload). That helper
+is deliberately not a digesting signer: both peers recover `00 01 FF..FF 00 ||
+payload` with the host public exponent, so inserting a DigestInfo prefix would
+break them.
+
+Not surfaced from upstream, and deliberately not implemented here:
+
+- HDC `AuthVerifyType.PskTlsAes128GcmSha256` (`AUTH_SSL_TLS_PSK`, where the daemon
+  RSA-OAEP-encrypts a session PSK to the host public key). It is negotiated only in
+  builds with `HDC_SUPPORT_ENCRYPT_TCP`, and `SignToken` fails closed on it. Such a
+  daemon also rejects a plaintext `AUTH_SIGNATURE`, which this client cannot answer.
+- ADB's client-certificate selection against the device's `AdbKey-0` CA-issuer list
+  (`adb_tls_set_certificate`), which matters only when a device authorizes several
+  host keys and the TLS session must pick the matching one.
+
 ## Automatic server routing
 
 Server liveness is probed over plain TCP only — the library never starts, stops
