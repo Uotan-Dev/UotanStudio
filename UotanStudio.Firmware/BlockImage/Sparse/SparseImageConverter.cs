@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using UotanStudio.Firmware.BlockImage.Sparse.DataProviders;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
@@ -569,14 +570,11 @@ public static class SparseImageConverter
     private static bool IsUniformFill(ReadOnlySpan<byte> block, out uint value)
     {
         value = BinaryPrimitives.ReadUInt32LittleEndian(block);
-        for (var i = 4; i + 4 <= block.Length; i += 4)
+        if ((block.Length & 3) != 0)
         {
-            if (BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(i, 4)) != value)
-            {
-                return false;
-            }
+            return false;
         }
-        return true;
+        return MemoryMarshal.Cast<byte, uint>(block).IndexOfAnyExcept(value) < 0;
     }
 
     /// <summary>

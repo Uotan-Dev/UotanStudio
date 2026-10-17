@@ -73,14 +73,24 @@ public static partial class GptReader
             var backup = ReadHeader(source, blockSize, blockCount, blockCount - 1, cancellationToken);
             ValidatePair(primary, backup);
             using var builder = new TableBuilder(primary, backup, blockSize, blockCount);
-            var left = new byte[(int)primary.Size];
-            var right = new byte[left.Length];
-            for (var index = 0; index < primary.Count; index++)
+            const int BatchBytes = 65536;
+            var entrySize = (int)primary.Size;
+            var left = new byte[BatchBytes];
+            var right = new byte[BatchBytes];
+            var total = (long)primary.Count * primary.Size;
+            for (long offset = 0; offset < total;)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                ReadAt(source, checked((long)(primary.ArrayLba * (uint)blockSize + (ulong)index * primary.Size)), left);
-                ReadAt(source, checked((long)(backup.ArrayLba * (uint)blockSize + (ulong)index * primary.Size)), right);
-                builder.Append(index, left, right);
+                var used = (int)Math.Min(BatchBytes, total - offset);
+                var transfer = checked((used + blockSize - 1) / blockSize * blockSize);
+                ReadAt(source, checked((long)(primary.ArrayLba * (uint)blockSize) + offset), left.AsSpan(0, transfer));
+                ReadAt(source, checked((long)(backup.ArrayLba * (uint)blockSize) + offset), right.AsSpan(0, transfer));
+                for (var position = 0; position < used; position += entrySize)
+                {
+                    builder.Append(checked((int)((offset + position) / entrySize)),
+                        left.AsSpan(position, entrySize), right.AsSpan(position, entrySize));
+                }
+                offset += used;
             }
             cancellationToken.ThrowIfCancellationRequested();
             return builder.Finish();

@@ -469,7 +469,6 @@ public static class SparseReader
         }
     }
 
-    [System.Runtime.CompilerServices.SkipLocalsInit]
     private static void AppendZeros(Crc32IeeeAccumulator? crc, long totalBytes, CancellationToken cancellationToken)
     {
         if (crc is null)
@@ -477,15 +476,23 @@ public static class SparseReader
             return;
         }
 
-        Span<byte> buf = stackalloc byte[4096];
-        buf.Clear();
-        var remaining = totalBytes;
-        while (remaining > 0)
+        var rented = ArrayPool<byte>.Shared.Rent(64 * 1024);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var n = (int)Math.Min(buf.Length, remaining);
-            crc.Append(buf[..n]);
-            remaining -= n;
+            var buf = rented.AsSpan(0, 64 * 1024);
+            buf.Clear();
+            var remaining = totalBytes;
+            while (remaining > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var n = (int)Math.Min(buf.Length, remaining);
+                crc.Append(buf[..n]);
+                remaining -= n;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
         }
     }
 
@@ -611,9 +618,6 @@ public static class SparseReader
     /// <para><paramref name="count"/> 为负。</para></exception>
     public static byte[] PeekLogicalRange(string filePath, long offset, int count)
     {
-
-
-        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan);
         using var sparseFile = FromImageFile(filePath);
         using var logical = new SparseReadStream(sparseFile);
         logical.Seek(offset, SeekOrigin.Begin);

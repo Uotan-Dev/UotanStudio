@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
@@ -129,10 +130,9 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider, I
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var header = FormatDetector.ReadHeader(filePath, sizeof(uint));
-            var isSparse = header.Length >= sizeof(uint)
-                && BinaryPrimitives.ReadUInt32LittleEndian(header) == SparseMagic;
-            var metadata = MetadataReader.ReadFromImageFile(filePath);
+            using var image = MetadataReader.OpenImage(filePath);
+            var isSparse = image is SparseReadStream;
+            var metadata = MetadataReader.ReadFromImageStream(image);
             cancellationToken.ThrowIfCancellationRequested();
             var result = new Dictionary<string, string>
             {

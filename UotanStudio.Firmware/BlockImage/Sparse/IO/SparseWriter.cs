@@ -19,11 +19,11 @@ internal static class SparseWriter
     /// Kept as a multiple of the 4-byte pattern so every full-width append ends on a pattern boundary and the final
     /// short append still starts at pattern offset 0; a length that is not a multiple of the table width therefore
     /// needs no separate tail arithmetic. 64 KiB matches the tables used by <see cref="SparseReader"/> and
-    /// <see cref="SparseFile.WriteRawToStream"/>, and is pooled rather than <c>stackalloc</c>-ed because a per-chunk
+    /// <see cref="SparseFile.WriteRawToStream(Stream)"/>, and is pooled rather than <c>stackalloc</c>-ed because a per-chunk
     /// 64 KiB stack frame exceeds the small-buffer convention used elsewhere in this library.
     /// <para>宽度保持为 4 字节模式的整数倍，使每次满宽追加都结束在模式边界上，末段不足宽度的追加仍从模式偏移 0 开始；
     /// 因此不是表宽度整数倍的长度无需单独的尾部算术。64 KiB 与 <see cref="SparseReader"/> 和
-    /// <see cref="SparseFile.WriteRawToStream"/> 使用的表一致，并采用池化而非 <c>stackalloc</c>：
+    /// <see cref="SparseFile.WriteRawToStream(Stream)"/> 使用的表一致，并采用池化而非 <c>stackalloc</c>：
     /// 每块 64 KiB 的栈帧超出本库其他位置的小缓冲惯例。</para>
     /// </remarks>
     private const int FillPatternWidth = 64 * 1024;
@@ -130,104 +130,111 @@ internal static class SparseWriter
         }
 
         Crc32IeeeAccumulator? crc = includeCrc ? new Crc32IeeeAccumulator() : null;
-        var buffer = new byte[BufferSize];
+        var buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
         var headerBuf = new byte[outHeader.ChunkHeaderSize];
         var fillValData = new byte[4];
 
-        foreach (var chunk in finalChunks)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var expectedTotal = ChunkHelper.GetExpectedTotalSize(chunk.Header.ChunkType, chunk.Header.ChunkSize, outHeader.ChunkHeaderSize, outHeader.BlockSize);
-            var headerToWrite = chunk.Header.TotalSize == expectedTotal
-                ? chunk.Header
-                : new ChunkHeader
-                {
-                    ChunkType = chunk.Header.ChunkType,
-                    Reserved = chunk.Header.Reserved,
-                    ChunkSize = chunk.Header.ChunkSize,
-                    TotalSize = expectedTotal
-                };
-
-            headerToWrite.WriteTo(headerBuf);
-            stream.Write(headerBuf, 0, outHeader.ChunkHeaderSize);
-
-            switch ((ChunkType)chunk.Header.ChunkType)
+            foreach (var chunk in finalChunks)
             {
-                case ChunkType.Raw when chunk.DataProvider != null:
+                cancellationToken.ThrowIfCancellationRequested();
+                var expectedTotal = ChunkHelper.GetExpectedTotalSize(chunk.Header.ChunkType, chunk.Header.ChunkSize, outHeader.ChunkHeaderSize, outHeader.BlockSize);
+                var headerToWrite = chunk.Header.TotalSize == expectedTotal
+                    ? chunk.Header
+                    : new ChunkHeader
                     {
+                        ChunkType = chunk.Header.ChunkType,
+                        Reserved = chunk.Header.Reserved,
+                        ChunkSize = chunk.Header.ChunkSize,
+                        TotalSize = expectedTotal
+                    };
 
+                headerToWrite.WriteTo(headerBuf);
+                stream.Write(headerBuf, 0, outHeader.ChunkHeaderSize);
 
-                        var expectedDataSize = (long)chunk.Header.ChunkSize * outHeader.BlockSize;
-                        long written = 0;
-                        while (written < expectedDataSize)
+                switch ((ChunkType)chunk.Header.ChunkType)
+                {
+                    case ChunkType.Raw when chunk.DataProvider != null:
                         {
-                            var toRead = (int)Math.Min(buffer.Length, expectedDataSize - written);
-                            var n = chunk.DataProvider.Read(written, buffer.AsSpan(0, toRead));
-                            if (n <= 0)
+
+
+                            var expectedDataSize = (long)chunk.Header.ChunkSize * outHeader.BlockSize;
+                            long written = 0;
+                            while (written < expectedDataSize)
                             {
+                                var toRead = (int)Math.Min(buffer.Length, expectedDataSize - written);
+                                var n = chunk.DataProvider.Read(written, buffer.AsSpan(0, toRead));
+                                if (n <= 0)
+                                {
 
 
-                                buffer.AsSpan(n, toRead - n).Clear();
-                                n = toRead;
+                                    buffer.AsSpan(n, toRead - n).Clear();
+                                    n = toRead;
+                                }
+                                stream.Write(buffer, 0, n);
+                                crc?.Append(buffer.AsSpan(0, n));
+                                written += n;
                             }
-                            stream.Write(buffer, 0, n);
-                            crc?.Append(buffer.AsSpan(0, n));
-                            written += n;
+                            break;
                         }
+                    case ChunkType.Fill:
+                        {
+
+
+                            BinaryPrimitives.WriteUInt32LittleEndian(fillValData, chunk.FillValue);
+                            stream.Write(fillValData, 0, 4);
+                            AppendRepeated(crc, chunk.FillValue, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
+                            break;
+                        }
+
+                    case ChunkType.Raw:
                         break;
-                    }
-                case ChunkType.Fill:
-                    {
-
-
-                        BinaryPrimitives.WriteUInt32LittleEndian(fillValData, chunk.FillValue);
-                        stream.Write(fillValData, 0, 4);
-                        AppendRepeated(crc, chunk.FillValue, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
-                        break;
-                    }
-
-                case ChunkType.Raw:
-                    break;
-                case ChunkType.DontCare:
-                    AppendZeros(crc, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
-                    break;
-                case ChunkType.Crc32:
-                    break;
-                default:
-                    {
+                    case ChunkType.DontCare:
                         AppendZeros(crc, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
                         break;
-                    }
+                    case ChunkType.Crc32:
+                        break;
+                    default:
+                        {
+                            AppendZeros(crc, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
+                            break;
+                        }
+                }
+            }
+
+            if (needsTrailingSkip)
+            {
+                var trailingBlocks = outHeader.TotalBlocks - sumBlocks;
+                var trailingHeader = new ChunkHeader
+                {
+                    ChunkType = (ushort)ChunkType.DontCare,
+                    ChunkSize = trailingBlocks,
+                    TotalSize = SparseFormat.ChunkHeaderSize
+                };
+                trailingHeader.WriteTo(headerBuf);
+                stream.Write(headerBuf, 0, outHeader.ChunkHeaderSize);
+                AppendZeros(crc, (long)trailingBlocks * outHeader.BlockSize);
+            }
+
+            if (includeCrc && crc is not null)
+            {
+                var crcHeader = new ChunkHeader
+                {
+                    ChunkType = (ushort)ChunkType.Crc32,
+                    ChunkSize = 0,
+                    TotalSize = SparseFormat.ChunkHeaderSize + 4
+                };
+                crcHeader.WriteTo(headerBuf);
+                stream.Write(headerBuf, 0, outHeader.ChunkHeaderSize);
+                var crcBuf = new byte[4];
+                BinaryPrimitives.WriteUInt32LittleEndian(crcBuf, crc.GetCurrentHash());
+                stream.Write(crcBuf);
             }
         }
-
-        if (needsTrailingSkip)
+        finally
         {
-            var trailingBlocks = outHeader.TotalBlocks - sumBlocks;
-            var trailingHeader = new ChunkHeader
-            {
-                ChunkType = (ushort)ChunkType.DontCare,
-                ChunkSize = trailingBlocks,
-                TotalSize = SparseFormat.ChunkHeaderSize
-            };
-            trailingHeader.WriteTo(headerBuf);
-            stream.Write(headerBuf, 0, outHeader.ChunkHeaderSize);
-            AppendZeros(crc, (long)trailingBlocks * outHeader.BlockSize);
-        }
-
-        if (includeCrc && crc is not null)
-        {
-            var crcHeader = new ChunkHeader
-            {
-                ChunkType = (ushort)ChunkType.Crc32,
-                ChunkSize = 0,
-                TotalSize = SparseFormat.ChunkHeaderSize + 4
-            };
-            crcHeader.WriteTo(headerBuf);
-            stream.Write(headerBuf, 0, outHeader.ChunkHeaderSize);
-            var crcBuf = new byte[4];
-            BinaryPrimitives.WriteUInt32LittleEndian(crcBuf, crc.GetCurrentHash());
-            stream.Write(crcBuf);
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 
@@ -309,13 +316,22 @@ internal static class SparseWriter
             return;
         }
 
-        Span<byte> buf = stackalloc byte[4096];
-        var remaining = totalBytes;
-        while (remaining > 0)
+        var rented = ArrayPool<byte>.Shared.Rent(FillPatternWidth);
+        try
         {
-            var n = (int)Math.Min(buf.Length, remaining);
-            crc.Append(buf[..n]);
-            remaining -= n;
+            var buf = rented.AsSpan(0, FillPatternWidth);
+            buf.Clear();
+            var remaining = totalBytes;
+            while (remaining > 0)
+            {
+                var n = (int)Math.Min(buf.Length, remaining);
+                crc.Append(buf[..n]);
+                remaining -= n;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
         }
     }
 }

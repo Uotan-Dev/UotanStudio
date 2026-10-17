@@ -86,23 +86,31 @@ public static class GptDeviceImage
         var entryArray = GptTableWriter.BuildEntryArray(table);
         var arrayCrc = Crc32Ieee.Compute(entryArray);
         var primaryBlocks = checked(table.PrimaryEntryArrayLba + arrayBlocks);
-        var primaryBytes = new byte[checked((int)primaryBlocks * table.BlockSize)];
-        GptTableWriter.BuildProtectiveMbr(table.BlockCount).CopyTo(primaryBytes, 0);
-        GptTableWriter.BuildHeaderBlock(table, 1, table.BlockCount - 1, table.PrimaryEntryArrayLba, arrayCrc)
-            .CopyTo(primaryBytes, table.BlockSize);
-        entryArray.CopyTo(primaryBytes, checked((int)table.PrimaryEntryArrayLba * table.BlockSize));
         var backupBlocks = checked(table.BlockCount - table.BackupEntryArrayLba);
-        var backupBytes = new byte[checked((int)backupBlocks * table.BlockSize)];
-        entryArray.CopyTo(backupBytes, 0);
-        GptTableWriter.BuildHeaderBlock(table, table.BlockCount - 1, 1, table.BackupEntryArrayLba, arrayCrc)
-            .CopyTo(backupBytes, checked((int)(backupBlocks - 1) * table.BlockSize));
-        var primary = new GptDeviceExtent(0, (uint)primaryBlocks, primaryBytes);
-        var backup = new GptDeviceExtent(table.BackupEntryArrayLba, (uint)backupBlocks, backupBytes);
+        GptDeviceExtent? primary = null;
+        GptDeviceExtent? backup = null;
+        if (copies != GptCopySelection.Backup)
+        {
+            var primaryBytes = new byte[checked((int)primaryBlocks * table.BlockSize)];
+            GptTableWriter.BuildProtectiveMbr(table.BlockCount).CopyTo(primaryBytes, 0);
+            GptTableWriter.BuildHeaderBlock(table, 1, table.BlockCount - 1, table.PrimaryEntryArrayLba, arrayCrc)
+                .CopyTo(primaryBytes, table.BlockSize);
+            entryArray.CopyTo(primaryBytes, checked((int)table.PrimaryEntryArrayLba * table.BlockSize));
+            primary = new GptDeviceExtent(0, (uint)primaryBlocks, primaryBytes);
+        }
+        if (copies != GptCopySelection.Primary)
+        {
+            var backupBytes = new byte[checked((int)backupBlocks * table.BlockSize)];
+            entryArray.CopyTo(backupBytes, 0);
+            GptTableWriter.BuildHeaderBlock(table, table.BlockCount - 1, 1, table.BackupEntryArrayLba, arrayCrc)
+                .CopyTo(backupBytes, checked((int)(backupBlocks - 1) * table.BlockSize));
+            backup = new GptDeviceExtent(table.BackupEntryArrayLba, (uint)backupBlocks, backupBytes);
+        }
         return copies switch
         {
-            GptCopySelection.Primary => [primary],
-            GptCopySelection.Backup => [backup],
-            _ => [primary, backup]
+            GptCopySelection.Primary => [primary!],
+            GptCopySelection.Backup => [backup!],
+            _ => [primary!, backup!]
         };
     }
 }

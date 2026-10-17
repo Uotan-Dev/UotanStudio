@@ -1,3 +1,4 @@
+using System.Buffers;
 using UotanStudio.Firmware.BlockImage.Sparse.DataProviders;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 namespace UotanStudio.Firmware.BlockImage.Sparse.Models;
@@ -234,79 +235,157 @@ public sealed class SparseFile : IDisposable
     /// </summary>
     /// <param name="stream">Caller-owned writable destination; it is not flushed or closed here. Every chunk is expanded in list order and written back-to-back — RAW payloads copied, FILL patterns repeated, don't-care and unknown types zeroed — then the output is padded with zeros up to total blocks times block size. Gaps between chunk start blocks receive no bytes at their position, so content after a gap is shifted earlier in the output.
     /// <para>调用方持有的可写目标；此处不刷新也不关闭。按列表顺序逐块展开并连续写入——复制 RAW 载荷、重复 FILL 模式、将 don't-care 与未知类型置零——随后用零补齐到总块数乘以块大小。块起始索引之间的空隙在对应位置不写入任何字节，因此空隙之后的内容在输出中前移。</para></param>
-    public void WriteRawToStream(Stream stream)
+    public void WriteRawToStream(Stream stream) => WriteRawToStream(stream, SparseRawZeroMode.Write);
+
+    /// <summary>
+    /// Writes the raw (unsparsified) image to the stream, optionally skipping zero runs with seeks.
+    /// <para>将原始(非稀疏)镜像写入流，可选地以寻址跳过零段。</para>
+    /// </summary>
+    /// <param name="stream">Caller-owned writable destination; it is not flushed or closed here. The byte sequence is identical for both modes: RAW payloads are copied, FILL patterns repeated, don't-care, zero-pattern and unknown chunks expanded to zeros, and the tail padded to total blocks times block size. Chunk start blocks that leave a gap shift later content earlier exactly as the write mode does.
+    /// <para>调用方持有的可写目标；此处不刷新也不关闭。两种模式产生的字节序列完全一致：复制 RAW 载荷、重复 FILL 模式、把 don't-care、零填充模式与未知块展开为零，并将尾部补齐到总块数乘以块大小。块起始索引留下空隙时，后续内容与逐块写模式一样前移。</para></param>
+    /// <param name="zeroMode">
+    /// <see cref="SparseRawZeroMode.Write"/> writes every zero byte; <see cref="SparseRawZeroMode.Seek"/> skips zero runs only when the destination is an empty seekable <see cref="FileStream"/> at position zero and the chunks cover the image contiguously from block zero, and otherwise falls back to writing. Skipped bytes still advance the logical byte count, and the final length is fixed with <see cref="Stream.SetLength"/>, so the caller observes the same length as the write mode even though no zero bytes reach the stream.
+    /// <para><see cref="SparseRawZeroMode.Write"/> 写出每个零字节；<see cref="SparseRawZeroMode.Seek"/> 仅在目标是位于位置零的空可寻址
+    /// <see cref="FileStream"/> 且各块从块零开始连续覆盖镜像时跳过零段，否则回退为写出。被跳过的字节仍然计入逻辑字节数，最终长度由
+    /// <see cref="Stream.SetLength"/> 固定，因此调用方观察到的长度与逐块写模式相同，尽管没有零字节到达流。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="zeroMode"/> is not a defined value.
+    /// <para><paramref name="zeroMode"/> 不是已定义的值。</para></exception>
+    /// <exception cref="InvalidDataException">The seek mode was selected and a RAW chunk wrote fewer bytes than its declared block range, which would place later chunks at the wrong offset.
+    /// <para>选择了寻址模式且某 RAW 块写出的字节少于其声明块范围，这会把后续块放到错误偏移。</para></exception>
+    public void WriteRawToStream(Stream stream, SparseRawZeroMode zeroMode)
     {
+        ArgumentNullException.ThrowIfNull(stream);
+        if (!Enum.IsDefined(zeroMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(zeroMode));
+        }
+
+        var skipZeroRuns = zeroMode == SparseRawZeroMode.Seek && CanSkipZeroRuns(stream);
         var blockSize = Header.BlockSize;
-        var zeros = new byte[64 * 1024];
+        var zeros = ArrayPool<byte>.Shared.Rent(64 * 1024);
+        zeros.AsSpan().Clear();
         byte[]? fillBuffer = null;
         var written = 0L;
         var logicalLength = (long)Header.TotalBlocks * blockSize;
-
-        foreach (var chunk in _chunks)
+        try
         {
-            switch ((ChunkType)chunk.Header.ChunkType)
+            foreach (var chunk in _chunks)
             {
-                case ChunkType.Raw when chunk.DataProvider != null:
-                    chunk.DataProvider.WriteTo(stream);
-                    written += (long)chunk.Header.ChunkSize * blockSize;
-                    break;
-                case ChunkType.Fill:
-                    {
-                        var total = (long)chunk.Header.ChunkSize * blockSize;
-                        fillBuffer ??= new byte[64 * 1024];
-                        SparseFill.Fill(fillBuffer, chunk.FillValue);
-                        while (total > 0)
+                var chunkBytes = (long)chunk.Header.ChunkSize * blockSize;
+                switch ((ChunkType)chunk.Header.ChunkType)
+                {
+                    case ChunkType.Raw when chunk.DataProvider != null:
+                        if (skipZeroRuns)
                         {
-                            var n = (int)Math.Min(fillBuffer.Length, total);
-                            stream.Write(fillBuffer, 0, n);
-                            total -= n;
+                            stream.Position = written;
                         }
-                        written += (long)chunk.Header.ChunkSize * blockSize;
-                        break;
-                    }
-
-                case ChunkType.Raw:
-                    break;
-                case ChunkType.DontCare:
-                    {
-
-
-                        var total = (long)chunk.Header.ChunkSize * blockSize;
-                        while (total > 0)
+                        chunk.DataProvider.WriteTo(stream);
+                        if (skipZeroRuns && stream.Position != written + chunkBytes)
                         {
-                            var n = (int)Math.Min(zeros.Length, total);
-                            stream.Write(zeros, 0, n);
-                            total -= n;
+                            throw new InvalidDataException(
+                                "A sparse RAW chunk wrote fewer bytes than its declared block range.");
                         }
-                        written += (long)chunk.Header.ChunkSize * blockSize;
+                        written += chunkBytes;
                         break;
-                    }
-                case ChunkType.Crc32:
-                    break;
-                default:
-                    {
-
-
-                        var total = (long)chunk.Header.ChunkSize * blockSize;
-                        while (total > 0)
+                    case ChunkType.Fill when skipZeroRuns && chunk.FillValue == 0:
+                        written += chunkBytes;
+                        break;
+                    case ChunkType.Fill:
                         {
-                            var n = (int)Math.Min(zeros.Length, total);
-                            stream.Write(zeros, 0, n);
-                            total -= n;
+                            fillBuffer ??= new byte[64 * 1024];
+                            SparseFill.Fill(fillBuffer, chunk.FillValue);
+                            WriteRepeated(stream, skipZeroRuns ? written : null, chunkBytes, fillBuffer);
+                            written += chunkBytes;
+                            break;
                         }
-                        written += (long)chunk.Header.ChunkSize * blockSize;
+
+                    case ChunkType.Raw:
                         break;
-                    }
+                    case ChunkType.Crc32:
+                        break;
+                    default:
+                        if (!skipZeroRuns)
+                        {
+                            WriteRepeated(stream, null, chunkBytes, zeros);
+                        }
+                        written += chunkBytes;
+                        break;
+                }
+            }
+
+            if (skipZeroRuns)
+            {
+                var finalLength = Math.Max(written, logicalLength);
+                if (stream.Length < finalLength)
+                {
+                    stream.SetLength(finalLength);
+                }
+            }
+            else
+            {
+                while (written < logicalLength)
+                {
+                    var n = (int)Math.Min(zeros.Length, logicalLength - written);
+                    stream.Write(zeros, 0, n);
+                    written += n;
+                }
             }
         }
-
-
-        while (written < logicalLength)
+        finally
         {
-            var n = (int)Math.Min(zeros.Length, logicalLength - written);
-            stream.Write(zeros, 0, n);
-            written += n;
+            ArrayPool<byte>.Shared.Return(zeros);
         }
+    }
+
+    private static void WriteRepeated(Stream stream, long? position, long total, byte[] buffer)
+    {
+        if (position is { } start)
+        {
+            stream.Position = start;
+        }
+        while (total > 0)
+        {
+            var n = (int)Math.Min(buffer.Length, total);
+            stream.Write(buffer, 0, n);
+            total -= n;
+        }
+    }
+
+    private bool CanSkipZeroRuns(Stream stream)
+    {
+        if (stream is not FileStream || !stream.CanSeek || !stream.CanWrite || stream.Length != 0 || stream.Position != 0)
+        {
+            return false;
+        }
+        var blockSize = Header.BlockSize;
+        long nextBlock = 0;
+        foreach (var chunk in _chunks)
+        {
+            if (chunk.StartBlock != nextBlock)
+            {
+                return false;
+            }
+            var chunkBytes = (long)chunk.Header.ChunkSize * blockSize;
+            switch ((ChunkType)chunk.Header.ChunkType)
+            {
+                case ChunkType.Raw:
+                    if (chunk.DataProvider is null || chunk.DataProvider.Length != chunkBytes)
+                    {
+                        return false;
+                    }
+                    break;
+                case ChunkType.Crc32:
+                    if (chunkBytes != 0)
+                    {
+                        return false;
+                    }
+                    break;
+            }
+            nextBlock += chunk.Header.ChunkSize;
+        }
+        return true;
     }
 
     private static uint DivideRoundUpToUInt32(long value, uint divisor)

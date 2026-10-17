@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -405,57 +406,64 @@ public static class SparseChunkSplitter
     private static async Task MergeRawAsync(SparseChunkSet set, string temporary,
         IProgress<(long Processed, long Total)>? progress, CancellationToken token)
     {
-        var buffer = new byte[BufferSize];
+        var buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
         long processed = 0;
         long? referenceSize = null;
-        await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                       BufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
+        try
         {
-            for (var index = 0; index < set.Parts.Count; index++)
+            await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                           BufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
-                token.ThrowIfCancellationRequested();
-                var path = set.Parts[index];
-                var isLast = index == set.Parts.Count - 1;
-                await using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
-                               BufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
+                for (var index = 0; index < set.Parts.Count; index++)
                 {
-                    var length = input.Length;
-                    if (length <= 0 || length > MaximumBytes - processed)
+                    token.ThrowIfCancellationRequested();
+                    var path = set.Parts[index];
+                    var isLast = index == set.Parts.Count - 1;
+                    await using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+                                   BufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
                     {
-                        throw new InvalidDataException("The sparsechunk length changed after inspection.");
-                    }
-                    if (set.Parts.Count > 1 && !isLast)
-                    {
-                        referenceSize ??= length;
-                        if (length != referenceSize)
+                        var length = input.Length;
+                        if (length <= 0 || length > MaximumBytes - processed)
                         {
-                            throw new InvalidDataException($"Sparsechunk piece {Path.GetFileName(path)} is not the fixed split size.");
+                            throw new InvalidDataException("The sparsechunk length changed after inspection.");
                         }
-                    }
-
-                    var remaining = length;
-                    while (remaining > 0)
-                    {
-                        var count = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), token)
-                            .ConfigureAwait(false);
-                        if (count == 0)
+                        if (set.Parts.Count > 1 && !isLast)
                         {
-                            throw new EndOfStreamException($"Sparsechunk piece was truncated: {Path.GetFileName(path)}");
+                            referenceSize ??= length;
+                            if (length != referenceSize)
+                            {
+                                throw new InvalidDataException($"Sparsechunk piece {Path.GetFileName(path)} is not the fixed split size.");
+                            }
                         }
-                        await output.WriteAsync(buffer.AsMemory(0, count), token).ConfigureAwait(false);
-                        remaining -= count;
-                    }
 
-                    if (input.ReadByte() != -1)
-                    {
-                        throw new InvalidDataException($"Sparsechunk piece grew during merge: {Path.GetFileName(path)}");
-                    }
+                        var remaining = length;
+                        while (remaining > 0)
+                        {
+                            var count = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), token)
+                                .ConfigureAwait(false);
+                            if (count == 0)
+                            {
+                                throw new EndOfStreamException($"Sparsechunk piece was truncated: {Path.GetFileName(path)}");
+                            }
+                            await output.WriteAsync(buffer.AsMemory(0, count), token).ConfigureAwait(false);
+                            remaining -= count;
+                        }
 
-                    processed += length;
-                    progress?.Report((processed, set.TotalInputBytes));
+                        if (input.ReadByte() != -1)
+                        {
+                            throw new InvalidDataException($"Sparsechunk piece grew during merge: {Path.GetFileName(path)}");
+                        }
+
+                        processed += length;
+                        progress?.Report((processed, set.TotalInputBytes));
+                    }
                 }
+                await output.FlushAsync(token).ConfigureAwait(false);
             }
-            await output.FlushAsync(token).ConfigureAwait(false);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

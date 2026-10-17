@@ -1,6 +1,7 @@
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.BlockImage.Sparse;
 
@@ -73,11 +74,41 @@ public sealed class SparseFormatHandler : IFormatHandler, IRepackMetadataProvide
     void Core.Bridges.ISparseContainerBridge.ConvertRawToSparseValidated(Stream input, Stream output, uint blockSize, long length, CancellationToken cancellationToken, Stream? validationOutput)
         => SparseImageConverter.ConvertRawToSparseValidated(input, output, blockSize, length, cancellationToken, validationOutput);
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
-        => FileSystem.Rebuilding.FileSystemRepackMetadata.Configure(metadata, sourcePath, outputDirectory, sparse: true);
+        => Core.Bridges.SparsePreservationAccess.Resolve().ConfigurePreservedMetadata(metadata, sourcePath, outputDirectory);
 
     Task IRepackMetadataProvider.CaptureRepackMetadataAsync(RepackMetadata metadata, string sourcePath, string outputDirectory,
         string metadataDirectory, CancellationToken cancellationToken)
-        => FileSystem.Rebuilding.FileSystemRepackMetadata.CaptureAsync(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken, sparse: true);
+        => Core.Bridges.SparsePreservationAccess.Resolve()
+            .CapturePreservedMetadataAsync(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken);
+
+    /// <summary>
+    /// Forwards the preserved-filesystem unpack to the filesystem context through its registered preservation
+    /// provider, so this context never names the filesystem preservation classes.
+    /// <para>通过文件系统上下文注册的保留提供方转发保留文件系统解包，使本上下文绝不指名文件系统保留类。</para>
+    /// </summary>
+    /// <param name="handler">Format handler whose metadata describes the source.
+    /// <para>元数据描述该源镜像的格式处理器。</para></param>
+    /// <param name="sourcePath">Source container file. <para>源容器文件。</para></param>
+    /// <param name="outputDirectory">Directory that receives the extraction output.
+    /// <para>接收解包输出的目录。</para></param>
+    /// <param name="options">Unpack options forwarded to the lifecycle; may be <see langword="null"/>.
+    /// <para>转发给生命周期的解包选项；可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Cancels snapshot copying and extraction.
+    /// <para>取消快照复制与解包。</para></param>
+    /// <param name="unpack">Extraction delegate invoked with the frozen copy path.
+    /// <para>以冻结副本路径调用的解包委托。</para></param>
+    /// <returns>The delegate's result with the snapshot path replaced by the original source path.
+    /// <para>委托结果，其中快照路径被替换为原始源路径。</para></returns>
+    private static Task<FirmwareOpResult> UnpackPreservedAsync(IReadonlyFormatHandler handler,
+        string sourcePath, string outputDirectory, UnpackOptions? options, CancellationToken cancellationToken,
+        Func<string, Task<FirmwareOpResult>> unpack)
+        => Core.Bridges.SparsePreservationAccess.Resolve().UnpackPreservedAsync(handler, sourcePath, outputDirectory,
+            options, cancellationToken, unpack);
+
+    private static bool TryRestorePreserved(string inputDirectory, string outputPath,
+        string format, CancellationToken cancellationToken, Action<IReadOnlyDictionary<string, string>>? rebuildReport)
+        => Core.Bridges.SparsePreservationAccess.Resolve().TryRestorePreserved(inputDirectory, outputPath, format,
+            cancellationToken, rebuildReport);
 
     /// <summary>Display name published with every operation result of this handler.
     /// <para>本处理器每次操作结果随附的显示名称。</para></summary>
@@ -171,7 +202,7 @@ public sealed class SparseFormatHandler : IFormatHandler, IRepackMetadataProvide
     /// <exception cref="OperationCanceledException">Cancellation was requested during the source freeze or the metadata write.
     /// <para>源冻结或元数据写入期间请求了取消。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => FileSystem.Rebuilding.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
+        => UnpackPreservedAsync(this, filePath, outputDirectory, options,
             cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
 
     private async Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
@@ -248,17 +279,72 @@ public sealed class SparseFormatHandler : IFormatHandler, IRepackMetadataProvide
                 return null;
             }
 
-            var inner = await innerHandler.UnpackLogicalStreamAsync(logicalStream, outputDirectory, byteProgress, overwrite, cancellationToken).ConfigureAwait(false);
-            if (!inner.Success)
+            if (byteProgress is null)
             {
-                return inner;
+                var inner = await innerHandler.UnpackLogicalStreamAsync(logicalStream, outputDirectory, null, overwrite, cancellationToken).ConfigureAwait(false);
+                return inner.Success
+                    ? FirmwareOpResult.Ok(
+                        $"Extracted {inner.Entries.Count} entries from '{filePath}' to '{outputDirectory}'.",
+                        inner.Entries,
+                        metadata: inner.Metadata)
+                    : inner;
             }
 
-            return FirmwareOpResult.Ok(
-                $"Extracted {inner.Entries.Count} entries from '{filePath}' to '{outputDirectory}'.",
-                inner.Entries,
-                metadata: inner.Metadata);
+            var imageTotal = new FileInfo(filePath).Length;
+            var imageCounter = new ExtractionByteCounter(imageTotal,
+                FileSystemByteProgress.ForStage(byteProgress, FileSystemWorkStage.VerifyingImage), cancellationToken);
+            string digest;
+            FirmwareOpResult extracted;
+            var innerProgress = new StageSuppressingProgress(byteProgress, FileSystemWorkStage.VerifyingImage);
+            using var measured = new ReadThroughHashingStream(logicalStream, leaveOpen: true);
+            extracted = await innerHandler.UnpackLogicalStreamAsync(measured, outputDirectory, innerProgress, overwrite, cancellationToken).ConfigureAwait(false);
+            digest = measured.DigestHex;
+
+            using (var published = File.OpenRead(filePath))
+            {
+                var buffer = new byte[65536];
+                int read;
+                while ((read = published.Read(buffer, 0, buffer.Length)) != 0)
+                {
+                    imageCounter.Add((long)read);
+                }
+            }
+
+            imageCounter.Complete();
+            return extracted.Success
+                ? FirmwareOpResult.Ok(
+                    $"Extracted {extracted.Entries.Count} entries from '{filePath}' to '{outputDirectory}'.",
+                    extracted.Entries,
+                    metadata: MergeVerificationDigest(extracted.Metadata, digest))
+                : extracted;
         }
+    }
+
+    /// <summary>
+    /// Records the digest of the extracted logical filesystem in the result metadata, so the verification stage
+    /// the cascade reports describes the bytes that were actually read out of the container.
+    /// <para>把解出的逻辑文件系统摘要写入结果元数据，使级联上报的校验阶段对应真正从容器读出的字节。</para>
+    /// </summary>
+    /// <param name="metadata">Inner handler metadata; may be <see langword="null"/>.
+    /// <para>内层处理器的元数据；可为 <see langword="null"/>。</para></param>
+    /// <param name="digest">Digest of the logical filesystem bytes the inner handler read.
+    /// <para>内层处理器读出的逻辑文件系统字节摘要。</para></param>
+    /// <returns>The metadata carrying <c>ExtractedLogicalDigest</c>, or <see langword="null"/> when the inner
+    /// handler published none. <para>携带 <c>ExtractedLogicalDigest</c> 的元数据；内层处理器未发布元数据时为
+    /// <see langword="null"/>。</para></returns>
+    private static IReadOnlyDictionary<string, string>? MergeVerificationDigest(
+        IReadOnlyDictionary<string, string>? metadata, string digest)
+    {
+        if (metadata is null)
+        {
+            return null;
+        }
+
+        var merged = new Dictionary<string, string>(metadata, StringComparer.Ordinal)
+        {
+            ["ExtractedLogicalDigest"] = digest
+        };
+        return merged;
     }
 
     /// <summary>
@@ -326,7 +412,7 @@ public sealed class SparseFormatHandler : IFormatHandler, IRepackMetadataProvide
     private FirmwareOpResult PackCore(string inputPath, string outputPath, SparseWriteOptions? options, CancellationToken cancellationToken)
     {
         IReadOnlyDictionary<string, string>? rebuildReport = null;
-        if (Directory.Exists(inputPath) && FileSystem.Rebuilding.FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken,
+        if (Directory.Exists(inputPath) && TryRestorePreserved(inputPath, outputPath, FormatName, cancellationToken,
             report => rebuildReport = report))
         {
             return FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes.",

@@ -390,11 +390,11 @@ internal static class GptTableWriter
         var arrayCrc = Crc32Ieee.Compute(array);
         var primary = BuildHeaderBlock(table, 1, table.BlockCount - 1, table.PrimaryEntryArrayLba, arrayCrc);
         var backup = BuildHeaderBlock(table, table.BlockCount - 1, 1, table.BackupEntryArrayLba, arrayCrc);
-        return Convert.ToHexString(Sha256.ComputeHash([
-            .. Sha256.ComputeHash(primary),
-            .. Sha256.ComputeHash(backup),
-            .. array
-        ]));
+        using var hash = Sha256.CreateAccumulator();
+        hash.Append(Sha256.ComputeHash(primary));
+        hash.Append(Sha256.ComputeHash(backup));
+        hash.Append(array);
+        return Convert.ToHexString(hash.GetHashAndReset());
     }
 
     internal static long ValidateTable(GptTable table)

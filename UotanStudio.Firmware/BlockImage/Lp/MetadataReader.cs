@@ -41,10 +41,34 @@ public static class MetadataReader
     /// The file ends before the structures its sparse headers declare. <para>文件在稀疏头部声明的结构结束之前就已结束。</para></exception>
     public static Stream OpenImage(string path)
     {
-        var header = Core.FormatDetector.ReadHeader(path, 4);
-        return header.AsSpan().SequenceEqual((ReadOnlySpan<byte>)[0x3a, 0xff, 0x26, 0xed])
-            ? new SparseReadStream(SparseReader.FromImageFile(path))
-            : new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous);
+        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous);
+        try
+        {
+            Span<byte> header = stackalloc byte[4];
+            var read = 0;
+            while (read < header.Length)
+            {
+                var count = stream.Read(header[read..]);
+                if (count == 0)
+                {
+                    break;
+                }
+                read += count;
+            }
+            stream.Position = 0;
+            if (read == header.Length && header.SequenceEqual((ReadOnlySpan<byte>)[0x3a, 0xff, 0x26, 0xed]))
+            {
+                var sparse = SparseReader.FromStream(stream, validateCrc: false, verbose: false);
+                sparse.Own(stream);
+                return new SparseReadStream(sparse);
+            }
+            return stream;
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
     }
 
     internal const int MaximumMetadataBytes = 64 * 1024 * 1024;

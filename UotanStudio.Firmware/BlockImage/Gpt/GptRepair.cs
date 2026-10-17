@@ -316,12 +316,11 @@ internal static class GptRepair
             backupValid = ValidateBackupArray(source, blockSize, backup, issues, cancellationToken, out backupArray);
         }
 
+        byte[]? primaryArray = null;
         var primaryArrayOk = primary is not null && ValidatePrimaryArray(source, blockSize, primary,
-            issues, cancellationToken);
+            issues, cancellationToken, out primaryArray);
         if (primary is not null && backupValid && primaryArrayOk && backupArray is not null)
         {
-            var primaryArray = TryReadArray(source, blockSize, primary.ArrayLba,
-                checked((ulong)primary.Count * primary.EntrySize), cancellationToken);
             if (primaryArray is null || !primaryArray.SequenceEqual(backupArray))
             {
                 issues.Add(new GptValidationIssue(GptValidationIssueCode.ArraysDiffer,
@@ -464,14 +463,22 @@ internal static class GptRepair
 
     private static bool HasSignatureAt(Stream source, int blockSize, ulong lba, CancellationToken cancellationToken)
     {
-        var block = ReadBlockSafe(source, lba, blockSize, cancellationToken);
-        return block is not null && block.AsSpan(0, 8).SequenceEqual("EFI PART"u8);
+        cancellationToken.ThrowIfCancellationRequested();
+        var offset = (long)(lba * (uint)blockSize);
+        if (offset < 0 || blockSize > source.Length - offset)
+        {
+            return false;
+        }
+        Span<byte> signature = stackalloc byte[8];
+        source.Position = offset;
+        source.ReadExactly(signature);
+        return signature.SequenceEqual("EFI PART"u8);
     }
 
     private static bool ValidatePrimaryArray(Stream source, int blockSize, ParsedHeader header,
-        List<GptValidationIssue> issues, CancellationToken cancellationToken)
+        List<GptValidationIssue> issues, CancellationToken cancellationToken, out byte[]? array)
     {
-        var array = TryReadArray(source, blockSize, header.ArrayLba,
+        array = TryReadArray(source, blockSize, header.ArrayLba,
             checked((ulong)header.Count * header.EntrySize), cancellationToken);
         if (array is null)
         {
@@ -483,6 +490,7 @@ internal static class GptRepair
         {
             issues.Add(new GptValidationIssue(GptValidationIssueCode.PrimaryEntryArrayCrcMismatch,
                 "The primary entry array CRC does not match the stored value."));
+            array = null;
             return false;
         }
         return true;
