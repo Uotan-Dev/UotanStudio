@@ -24,7 +24,7 @@ public sealed class ErofsPatchReadLimitsTests : IDisposable
         new ErofsBuilder().Build(source, image, new ErofsOptions { Compress = false });
         using var input = File.OpenRead(image);
         using var parser = new ErofsParser(input, entries, characters, TestContext.Current.CancellationToken);
-        Assert.Throws<FileSystemCorruptedException>(() => parser.EnumerateFiles());
+        Assert.Throws<FileSystemCorruptedException>(parser.EnumerateFiles);
     }
 
     [Theory]
@@ -44,7 +44,7 @@ public sealed class ErofsPatchReadLimitsTests : IDisposable
         using var output = new CancellingOutput(cancellation);
         Assert.Throws<OperationCanceledException>(() => parser.ReadFile("large", output));
         Assert.InRange(output.Length, 1, 1024 * 1024);
-        Assert.Throws<OperationCanceledException>(() => parser.EnumerateFiles());
+        Assert.Throws<OperationCanceledException>(parser.EnumerateFiles);
     }
 
     private sealed class CancellingOutput(CancellationTokenSource cancellation) : MemoryStream

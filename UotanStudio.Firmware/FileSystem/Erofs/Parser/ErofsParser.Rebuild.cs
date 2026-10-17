@@ -42,17 +42,23 @@ public sealed partial class ErofsParser
 
     /// <summary>
     /// Reads the source compression contracts, inode timestamps, declared superblock feature words,
-    /// dot-omitted advise dimension and device table for an edited rebuild. The legacy baseline follows
+    /// dot-omitted advise dimension, device table and extended-superblock geometry for an edited rebuild. The
+    /// legacy baseline follows
     /// the upstream matrix (task 1.6a): mark legacy only when every observable modern signal is absent
     /// AND none of the eight modern feature bits are set. Modern erofs-utils defaults advertise only the
     /// lz4_0padding incompatibility and no layout-carrying feature bit, so treating "8 features all
     /// missing" as sufficient would misclassify them as legacy and force-off Fragments, TailPacking,
-    /// Metabox, Dedup and DotOmitted downstream.
-    /// <para>读取编辑重建所需的源压缩契约、inode 时间戳、已声明的超级块特性字、目录省略 advise 维度和设备表。
-    /// legacy 判定按上游矩阵（任务 1.6a）：仅当所有可观察到的现代迹象均缺失且 8 个现代特性位全部未声明时
-    /// 才把源标记为 legacy。现代 erofs-utils 默认镜像通常只带 lz4_0padding incompatibility 而非承载布局的
-    /// 特性位，因此以「8 位全部未声明」作为充分条件会把它们误判为 legacy，进而在下游强制关闭
+    /// Metabox, Dedup and DotOmitted downstream. Device slot tags are captured as raw bytes, without UTF-8
+    /// decoding or NUL truncation, because upstream stores digests in that field, and the extended-superblock
+    /// geometry <c>s_sb_extslots</c> together with <c>dirblkbits</c> is captured as well, so the compression
+    /// configuration offset and the directory blocking unit the source used survive a rebuild.
+    /// <para>读取编辑重建所需的源压缩契约、inode 时间戳、已声明的超级块特性字、目录省略 advise 维度、设备表
+    /// 与扩展超级块几何。legacy 判定按上游矩阵（任务 1.6a）：仅当所有可观察到的现代迹象均缺失且 8 个现代特性位
+    /// 全部未声明时才把源标记为 legacy。现代 erofs-utils 默认镜像通常只带 lz4_0padding incompatibility 而非
+    /// 承载布局的特性位，因此以「8 位全部未声明」作为充分条件会把它们误判为 legacy，进而在下游强制关闭
     /// Fragments/TailPacking/Metabox/Dedup 与 DotOmitted。</para>
+    /// <para>设备槽的 tag 按原始字节采集，不做 UTF-8 解码或 NUL 截断，因为上游会把摘要写进该字段；几何则采集
+    /// <c>s_sb_extslots</c> 与 <c>dirblkbits</c>，使源所用的压缩配置区偏移与目录分块单位在重建后仍保持一致。</para>
     /// </summary>
     internal ErofsOptions ReadRebuildOptions()
     {
@@ -132,6 +138,8 @@ public sealed partial class ErofsParser
         }
 
         selected.SourceMetaBlkAddr = _superblock.MetaBlkAddr;
+        selected.SourceSbExtSlots = _superblock.SbExtSlots;
+        selected.SourceDirBlkBits = _superblock.DirBlkBits;
         selected.SourceDeviceTable = _deviceSlots?.Skip(1)
             .Select(slot => new ErofsSourceDevice([.. slot.Tag], slot.Blocks, slot.UniAddr))
             .ToArray();
@@ -214,10 +222,15 @@ public sealed partial class ErofsParser
     /// Replays the source device table as builder descriptors. A declared <c>device_table</c> bit is only
     /// honoured when every extra slot yields a descriptor that passes <see cref="ErofsOptions.Validate"/>'s
     /// device rules, because the writer would otherwise advertise a table it cannot emit; note the shared
-    /// incompat bit also names <c>compr_head2</c>, so dropping the table drops that alias too.
+    /// incompat bit also names <c>compr_head2</c>, so dropping the table drops that alias too. Every descriptor
+    /// carries the slot's raw 64-byte tag field in <see cref="ErofsDeviceSpec.TagBytes"/>, so the field replays
+    /// even when it holds a digest rather than text; the descriptor's <see cref="ErofsDeviceSpec.Tag"/> text is
+    /// only a label in that case.
     /// <para>把源设备表重放为打包器描述符。已声明的 <c>device_table</c> 位只有在每个额外槽位都能通过
     /// <see cref="ErofsOptions.Validate"/> 设备规则时才被兑现，否则写入方会宣称一个无法写出的设备表；注意该
-    /// incompat 位与 <c>compr_head2</c> 共用，移除设备表也会一并移除该别名。</para>
+    /// incompat 位与 <c>compr_head2</c> 共用，移除设备表也会一并移除该别名。每个描述符都在
+    /// <see cref="ErofsDeviceSpec.TagBytes"/> 中携带槽位的原始 64 字节 tag，因此即使该字段存放摘要而非文本也
+    /// 可重放；此时描述符的 <see cref="ErofsDeviceSpec.Tag"/> 文本只是标签。</para>
     /// </summary>
     /// <param name="devices">One descriptor per extra slot, sized in bytes; empty when the source declares no
     /// extra devices. <para>每个额外槽位一个描述符，以字节表示大小；源未声明额外设备时为空。</para></param>
@@ -242,39 +255,75 @@ public sealed partial class ErofsParser
         for (var i = 0; i < count; i++)
         {
             var slot = slots[i + 1];
-            var tag = Encoding.UTF8.GetStringTrimNul(slot.Tag);
-            if (tag.Length == 0)
-            {
-                tag = $"dev{i + 1}";
-            }
-
-            if (Encoding.UTF8.GetByteCount(tag) >= ErofsDeviceSlot.TagSize
-                || slot.Blocks == 0
-                || slot.Blocks > (ulong)(long.MaxValue / _blockSize))
+            if (slot.Blocks == 0 || slot.Blocks > (ulong)(long.MaxValue / _blockSize))
             {
                 return false;
             }
 
-            synthesized[i] = new ErofsDeviceSpec(tag, checked((long)slot.Blocks * _blockSize));
+            synthesized[i] = new ErofsDeviceSpec(
+                DeviceSlotTagName(slot.Tag, i + 1),
+                checked((long)slot.Blocks * _blockSize))
+            {
+                TagBytes = [.. slot.Tag],
+            };
         }
 
         devices = synthesized;
         return true;
     }
 
+    /// <summary>
+    /// Labels one source device slot for the builder descriptor. The on-disk tag field is a fixed 64-byte array
+    /// that upstream fills with a digest for blob-backed devices, so a label is derived from the bytes before
+    /// the first NUL only while they decode as valid UTF-8 and fit the field; otherwise a positional placeholder
+    /// is used. The slot bytes always travel verbatim in <see cref="ErofsDeviceSpec.TagBytes"/>, so a binary tag
+    /// is neither rejected nor re-encoded.
+    /// <para>为构建器描述符标注一个源设备槽。磁盘 tag 字段是固定 64 字节数组，上游会为 blob 支撑的设备填入
+    /// 摘要，因此仅当首个 NUL 之前的字节能解码为合法 UTF-8 且落在字段宽度内时才取其文本作为标签，否则使用位置
+    /// 占位名。槽位字节始终按原样经 <see cref="ErofsDeviceSpec.TagBytes"/> 传递，因此二进制 tag 既不会被拒绝
+    /// 也不会被重新编码。</para>
+    /// </summary>
+    /// <param name="slotTag">Raw tag field of the source slot.
+    /// <para>源槽的原始 tag 字段。</para></param>
+    /// <param name="ordinal">One-based position of the extra device, used for the placeholder label.
+    /// <para>额外设备从 1 开始的位置，用于占位标签。</para></param>
+    /// <returns>A non-empty label shorter than the on-disk tag field.
+    /// <para>非空且短于磁盘 tag 字段的标签。</para></returns>
+    private static string DeviceSlotTagName(ReadOnlySpan<byte> slotTag, int ordinal)
+    {
+        var text = NulText.ReadCString(slotTag, Encoding.UTF8);
+        if (text.Length == 0
+            || text.IndexOf('\uFFFD') >= 0
+            || Encoding.UTF8.GetByteCount(text) >= ErofsDeviceSlot.TagSize)
+        {
+            return $"dev{ordinal}";
+        }
+
+        return text;
+    }
+
     /// <summary>Decodes one inode's storage strategy; thread-safe because all source reads take the stream lock.
     /// Only the compacted index form folds lcluster bits into a packed 4-byte slot and is therefore capped at
     /// 14 bits; the full 8-byte index form has no such bound, so its logical cluster
-    /// size is taken as stored, limited only by the range an <see cref="int"/> shift can hold.
+    /// size is taken as stored, limited only by the range an <see cref="int"/> shift can hold. It also attaches
+    /// the source map header to a compressed inode and the source index table to a chunk-based inode, which is
+    /// what leaves the per-inode advise word, the compacted 2-byte and interlaced index forms and the full
+    /// chunk format word reachable by the metadata capture, and it marks the decoded node as carrying the
+    /// format word read from the image; the existing checks for undefined chunk format bits and for an
+    /// unsupported logical cluster shift are unchanged.
     /// <para>解码单个 inode 的存储策略；所有源读取都在流锁下进行，因此线程安全。只有紧凑索引形式会把
     /// lcluster 位数折算进紧凑的 4 字节槽位，因此以 14 位为上限；完整 8 字节索引
-    /// 没有该限制，其逻辑簇大小按存储值取用，仅受 <see cref="int"/> 位移可表示范围的约束。</para></summary>
+    /// 没有该限制，其逻辑簇大小按存储值取用，仅受 <see cref="int"/> 位移可表示范围的约束。</para>
+    /// <para>同时把源映射头挂到压缩 inode、把源索引表挂到 chunk-based inode，这正是逐 inode 的 advise 字、
+    /// 紧凑 2 字节与交错索引形态以及完整 chunk 格式字能被元数据采集到的原因，并把该解码节点标记为携带读自镜像
+    /// 的格式字；未定义 chunk 格式位与逻辑簇位移的既有校验保持不变。</para></summary>
     private UnifiedInode ReadRebuildInodeRecord(
         ErofsFileEntry entry,
         Dictionary<ErofsCompressionAlgorithm, ErofsOptions> codecs,
         ErofsCompressionAlgorithm fallbackAlgorithm)
     {
         var inode = ReadInode(entry.Nid);
+        inode.SourceIFormatRecorded = true;
         var algorithm = fallbackAlgorithm;
         var isCompressed = inode.IsCompressed;
         var logicalClusterSize = _blockSize;
@@ -452,12 +501,17 @@ public sealed partial class ErofsParser
     /// than the primary image keeps its device-relative block, while device 0 keeps the filesystem-wide
     /// address that the extraction path resolves through the device table. A preserved rebuild re-emits
     /// exactly these values, which is what lets a blob-backed image be rebuilt without relocating its
-    /// payload into the primary image.
+    /// payload into the primary image. The decoded table is also the cross-session source of the index: its
+    /// entry count together with the chunk format word, which selects the 4-byte block map or the 8-byte index
+    /// form and carries INDEXES 0x20 / 48BIT 0x40, reproduces the on-disk table byte for byte for the metadata
+    /// document to record.
     /// <para>把 chunk-based 源 inode 的索引表记录到解码节点上：逐 chunk 首块以及这些块所在的设备。每条索引表项
     /// 都携带相同的 <c>device_id</c>，因此设备号取自
     /// 第一条表项，其余表项必须一致。记录的首块是磁盘原值：主镜像之外的设备保留其设备内相对块号，device 0 则
     /// 保留解包路径经设备表解析的文件系统范围内地址。保留式重建逐字重新输出这些值，这正是 blob 支撑的镜像
     /// 能在不把负载迁移进主镜像的前提下被重建的原因。</para>
+    /// <para>解码得到的索引表也是该索引跨会话的来源：其表项数量与 chunk 格式字（决定 4 字节块映射还是 8 字节
+    /// 索引形态，并携带 INDEXES 0x20 / 48BIT 0x40）合起来可逐字节复现磁盘上的索引表，供元数据文档记录。</para>
     /// </summary>
     /// <param name="nid">Inode number whose index table is read.
     /// <para>待读取索引表的 inode 编号。</para></param>

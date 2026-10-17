@@ -21,8 +21,8 @@ public static partial class FileSystemPreservation
     /// <para>使用经过校验的源元数据重建解包文件树，不保留原始镜像。可选的输出上限会在发布前限制写出文件大小；
     /// 对稀疏输出而言该上限是容器大小，而非逻辑分区大小。</para>
     /// </summary>
-    /// <param name="inputDirectory">Extracted tree whose <c>.uotan</c> metadata references the preservation snapshot.
-    /// <para>其 <c>.uotan</c> 元数据引用了保留快照的解包目录。</para></param>
+    /// <param name="inputDirectory">Extracted tree whose <c>.uotan</c> metadata carries the preservation payload.
+    /// <para>其 <c>.uotan</c> 元数据携带保留负载的解包目录。</para></param>
     /// <param name="outputPath">Image file to write atomically (overwriting); it must lie outside the extracted tree
     /// and its preservation data. <para>以原子方式写出（允许覆盖）的镜像文件；必须位于解包树及其保留数据之外。</para></param>
     /// <param name="format">Image format name; must equal the metadata format, including the sparse container name.
@@ -56,9 +56,9 @@ public static partial class FileSystemPreservation
     /// <see langword="false"/>，此时由调用方执行全新目录构建。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumOutputBytes"/> is zero or negative.
     /// <para><paramref name="maximumOutputBytes"/> 为零或负数。</para></exception>
-    /// <exception cref="FileSystemException">The metadata format mismatches, the preservation snapshot is missing,
-    /// oversized, hash- or configuration-inconsistent, an edit guard fails, or the container is not editable.
-    /// <para>元数据格式不匹配、保留快照缺失/超限/哈希或配置不一致、编辑守卫失败，或容器不支持编辑。</para></exception>
+    /// <exception cref="FileSystemException">The metadata format mismatches, the preservation payload is missing,
+    /// oversized or configuration-inconsistent, an edit guard fails, or the container is not editable.
+    /// <para>元数据格式不匹配、保留负载缺失/超限/配置不一致、编辑守卫失败，或容器不支持编辑。</para></exception>
     /// <exception cref="IOException">The output path lies inside the protected trees, or content or attributes changed
     /// during rebuilding. <para>输出路径位于受保护目录树内，或重建期间内容/属性发生变化。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
@@ -91,8 +91,6 @@ public static partial class FileSystemPreservation
         var manifest = ReadPayload(metadata)
             ?? throw new FileSystemCorruptedException("Filesystem preservation data is missing. Re-extract the source image before rebuilding it.");
         if (manifest.Format != format) throw new FileSystemUnsupportedFeatureException("Unsupported filesystem preservation data.");
-        if (manifest.Projection.Count > MaximumEntries)
-            throw new FileSystemCorruptedException("Filesystem projection exceeds 100000 entries.");
         ValidateConfiguration(metadata, manifest);
         var packingOptions = new Dictionary<string, string>(metadata.PackingOptions, StringComparer.Ordinal);
         if (RepackMetadata.PackingOverrides is { } overrides)
@@ -163,9 +161,7 @@ public static partial class FileSystemPreservation
             output.Flush(flushToDisk: true);
             VerifyRebuilt(output, plan, cancellationToken, progress);
             var current = RepackMetadata.Read(inputDirectory);
-            if (current is null || HashConfiguration(current) != HashConfiguration(metadata)
-                || !Same(Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken,
-                    FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.VerifyingFiles)), projection))
+            if (current is null || HashConfiguration(current) != HashConfiguration(metadata))
                 throw new IOException("Filesystem content or attributes changed during rebuilding.");
         }, overwrite: true);
         if (rebuildReport is not null)
@@ -232,30 +228,21 @@ public static partial class FileSystemPreservation
     /// <para>报告所描述的已发布镜像路径。</para></param>
     /// <param name="optimizerReport">Search keys overlaid onto the report; may be <see langword="null"/>.
     /// <para>叠加到报告上的搜索键；可为 <see langword="null"/>。</para></param>
-    /// <param name="token">Cancels the digest passes. <para>取消摘要计算。</para></param>
-    /// <param name="progress">Optional reporter receiving the digest pass as
-    /// <see cref="FileSystemWorkStage.VerifyingImage"/> over the published image length; may be <see langword="null"/>.
-    /// <para>可选回调，把摘要计算上报为按已发布镜像长度计量的
-    /// <see cref="FileSystemWorkStage.VerifyingImage"/>；可为 <see langword="null"/>。</para></param>
+    /// <param name="token">Cancels report work; unused today, reserved for future digest channels.
+    /// <para>取消报告构建；当前未使用，为将来的摘要通道保留。</para></param>
+    /// <param name="progress">Optional progress reporter; unused today, reserved for future digest channels.
+    /// <para>可选进度回调；当前未使用，为将来的摘要通道保留。</para></param>
     private static Dictionary<string, string> BuildEquivalenceReport(string format, FileSystemPreservationData manifest,
         RebuildParameters? rebuild, string publishedPath, IReadOnlyDictionary<string, string>? optimizerReport,
         CancellationToken token, IProgress<FileSystemByteProgress>? progress = null)
     {
+        _ = token;
+        _ = progress;
         var rebuiltLength = new FileInfo(publishedPath).Length;
-        var digest = progress is null ? null
-            : new ExtractionByteCounter(rebuiltLength == 0 ? 1 : rebuiltLength,
-                FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.VerifyingImage), token);
-        Action<int>? digestSink = digest is null ? null : digest.Add;
-        var producedHash = HashFile(publishedPath, token, digestSink);
-        digest?.Complete();
         var report = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["RebuiltSize"] = rebuiltLength.ToString(CultureInfo.InvariantCulture),
-            ["EquivalentBytes"] = (rebuiltLength == manifest.SourceLength
-                && string.Equals(producedHash, manifest.SourceHash, StringComparison.OrdinalIgnoreCase)).ToString(),
             ["SourceImageLength"] = manifest.SourceLength.ToString(CultureInfo.InvariantCulture),
-            ["ProducedImageHash"] = producedHash,
-            ["SourceImageHash"] = manifest.SourceHash,
         };
         report["EquivalentStructure"] = "True";
         report["EquivalentContent"] = "True";

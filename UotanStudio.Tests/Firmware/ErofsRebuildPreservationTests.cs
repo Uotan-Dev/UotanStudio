@@ -135,7 +135,7 @@ public class ErofsRebuildPreservationTests
 
     private static ErofsOptions Restore(UotanStudio.Firmware.FileSystem.Metadata.ErofsRebuildParameters document)
     {
-        var method = typeof(UotanStudio.Firmware.FileSystem.Erofs.ErofsRebuildMetadata)
+        var method = typeof(ErofsRebuildMetadata)
             .GetMethod("Restore", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
         Assert.NotNull(method);
         return (ErofsOptions)method!.Invoke(null, [document])!;

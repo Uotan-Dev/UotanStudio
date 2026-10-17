@@ -47,8 +47,8 @@ public sealed class ErofsRebuildFeatureReplayTests
         Assert.Equal(ModernIncompat, sourceSuperblock.FeatureIncompat);
 
         var replay = Replay(image, source.Path);
-        uint? profileIncompat = replay.Profile.FeatureIncompat;
-        uint? profileCompat = replay.Profile.FeatureCompat;
+        var profileIncompat = replay.Profile.FeatureIncompat;
+        var profileCompat = replay.Profile.FeatureCompat;
         Assert.Equal(sourceSuperblock.FeatureIncompat, profileIncompat);
         Assert.Equal(sourceSuperblock.FeatureCompat, profileCompat);
 
@@ -112,7 +112,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, sourceSuperblock.FeatureIncompat);
 
         var replay = Replay(image, source.Path);
-        uint? profileIncompat = replay.Profile.FeatureIncompat;
+        var profileIncompat = replay.Profile.FeatureIncompat;
         Assert.Equal(sourceSuperblock.FeatureIncompat, profileIncompat);
 
         var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
@@ -150,7 +150,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         Assert.Equal(FragmentedLegacyIncompat, sourceSuperblock.FeatureIncompat);
 
         var replay = Replay(image, source.Path);
-        uint? profileIncompat = replay.Profile.FeatureIncompat;
+        var profileIncompat = replay.Profile.FeatureIncompat;
         Assert.Equal(sourceSuperblock.FeatureIncompat, profileIncompat);
 
         var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
@@ -191,7 +191,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         }
 
         var replay = Replay(image, source.Path);
-        uint? profileIncompat = replay.Profile.FeatureIncompat;
+        var profileIncompat = replay.Profile.FeatureIncompat;
         Assert.Equal(sourceSuperblock.FeatureIncompat, profileIncompat);
         Assert.True(replay.Restored.FeaturesAuthoritative);
 
@@ -456,9 +456,94 @@ public sealed class ErofsRebuildFeatureReplayTests
         Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
     }
 
+    [Fact]
+    public void Capture_Restore_NonZeroSourceIno_ReplaysEveryInodeNumber()
+    {
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x6D, 20 * 1024).ToArray());
+        source.WriteBytes("meta/small.txt", "tiny"u8.ToArray());
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            MaxPclusterSize = BlockSize,
+            Features = DeclareWithoutSuperblockChecksum(ErofsFeature.Lz4ZeroPadding),
+        });
+        var sourceNumbers = ErofsInodeNumberFixture.Stamp(image);
+        Assert.Equal(
+            new[] { ".", "data.bin", "meta", "meta/small.txt" },
+            sourceNumbers.Keys.OrderBy(path => path, StringComparer.Ordinal));
+        Assert.All(sourceNumbers.Values, number => Assert.True(number > 0));
+
+        var replay = Replay(image, source.Path);
+
+        foreach (var (path, expected) in sourceNumbers)
+        {
+            var record = Assert.Single(replay.Profile.Inodes, inode => inode.Path == path);
+            Assert.Equal((uint?)expected, record.Ino);
+        }
+
+        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuiltNumbers = ErofsInodeNumberFixture.Read(rebuilt);
+
+        Assert.Equal(sourceNumbers, rebuiltNumbers);
+        Assert.Equal(0x1000u, sourceNumbers["."]);
+        Assert.Equal(0x1000u, rebuiltNumbers["."]);
+    }
+
+    [Fact]
+    public void Restore_SnapshotWithoutRecordedIno_LeavesRebuiltInodeNumbersAtZero()
+    {
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x2E, 8 * 1024).ToArray());
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            MaxPclusterSize = BlockSize,
+            Features = DeclareWithoutSuperblockChecksum(ErofsFeature.Lz4ZeroPadding),
+        });
+        var sourceNumbers = ErofsInodeNumberFixture.Stamp(image);
+        Assert.All(sourceNumbers.Values, number => Assert.True(number > 0));
+
+        var extracted = Path.Combine(source.Path, "extracted");
+        ErofsRebuildParameters captured;
+        using (var parser = new ErofsParser(image))
+        {
+            parser.ExtractToDirectory(extracted);
+            captured = ErofsRebuildMetadata.Capture(parser.ReadRebuildOptions());
+        }
+
+        var document = JsonNode.Parse(ToJson(captured))!.AsObject();
+        var records = document["inodes"]!.AsArray();
+        Assert.NotEmpty(records);
+        Assert.All(records, record => Assert.True(record!.AsObject().Remove("ino")));
+
+        var legacy = FromJson(document.ToJsonString());
+        Assert.All(legacy.Inodes, record => Assert.Null(record.Ino));
+
+        var rebuilt = new ErofsBuilder().Build(extracted, ErofsRebuildMetadata.Restore(legacy));
+        var rebuiltNumbers = ErofsInodeNumberFixture.Read(rebuilt);
+
+        Assert.Equal(
+            sourceNumbers.Keys.OrderBy(path => path, StringComparer.Ordinal),
+            rebuiltNumbers.Keys.OrderBy(path => path, StringComparer.Ordinal));
+        Assert.All(rebuiltNumbers.Values, number => Assert.Equal(0u, number));
+        Assert.Equal(0u, rebuiltNumbers["."]);
+    }
+
     private static ErofsFeatureSet Declare(params ErofsFeature[] features)
     {
         var set = ErofsFeatureSet.FromWords(ErofsSuperblock.CompatSbChecksum, 0u);
+        foreach (var feature in features)
+        {
+            set = set.With(feature);
+        }
+
+        return set;
+    }
+
+    private static ErofsFeatureSet DeclareWithoutSuperblockChecksum(params ErofsFeature[] features)
+    {
+        var set = ErofsFeatureSet.FromWords(0u, 0u);
         foreach (var feature in features)
         {
             set = set.With(feature);
@@ -655,7 +740,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         => JsonSerializer.Serialize(parameters, FileSystemPreservationJsonContext.Default.ErofsRebuildParameters);
 
     private static ErofsRebuildParameters FromJson(string json)
-        => JsonSerializer.Deserialize<ErofsRebuildParameters>(json,
+        => JsonSerializer.Deserialize(json,
             FileSystemPreservationJsonContext.Default.ErofsRebuildParameters)!;
 
     private sealed record ReplayProfile(string Extracted, ErofsOptions Restored, ErofsRebuildParameters Profile);

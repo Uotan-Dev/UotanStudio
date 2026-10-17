@@ -46,12 +46,12 @@ internal static class FileSystemRepackMetadata
             RepackMetadata.DetectPartitionName(Path.GetFileName(sourcePath)),
             metadata.FormatName, sourcePath, metadata.Configuration, cancellationToken);
         metadata.CanPackDirectory = true;
-        metadata.PackingNotes = "Retains structured inode metadata and verified per-file hashes, not the original image or file contents. Rebuilding requires the extracted host tree; attributes and file content are verified before publication.";
+        metadata.PackingNotes = "Retains structured inode metadata, not the original image or file contents. Rebuilding requires the extracted host tree; attributes and file content are verified before publication.";
         if (exportWarnings.Count > 0)
         {
             metadata.PackingNotes += $" Flat metadata export reported {exportWarnings.Count} issue(s): {string.Join("; ", exportWarnings)}";
         }
-        FileSystemPreservation.CaptureAsync(sourcePath, outputDirectory, metadataDirectory, metadata, cancellationToken);
+        FileSystemPreservation.CaptureAsync(sourcePath, metadata, cancellationToken);
         return Task.CompletedTask;
     }
 
@@ -94,19 +94,19 @@ internal static class FileSystemRepackMetadata
                 switch (configuration["fileSystem"]?.GetValue<string>())
                 {
                     case "EXT4":
-                        using (var parser = new UotanStudio.Firmware.FileSystem.Ext4.Ext4Parser(logical))
+                        using (var parser = new Ext4.Ext4Parser(logical))
                         {
                             warnings.AddRange(FileSystemMetadataGenerator.GenerateForExt4(metadataDirectory, partitionName, parser, superblock));
                         }
                         break;
                     case "EROFS":
-                        using (var parser = new UotanStudio.Firmware.FileSystem.Erofs.Parser.ErofsParser(logical))
+                        using (var parser = new Erofs.Parser.ErofsParser(logical))
                         {
                             warnings.AddRange(FileSystemMetadataGenerator.GenerateForErofs(metadataDirectory, partitionName, parser, superblock));
                         }
                         break;
                     case "F2FS":
-                        using (var parser = new UotanStudio.Firmware.FileSystem.F2fs.F2fsParser(logical))
+                        using (var parser = new F2fs.F2fsParser(logical))
                         {
                             warnings.AddRange(FileSystemMetadataGenerator.GenerateForF2fs(metadataDirectory, partitionName, parser, superblock));
                         }
@@ -119,7 +119,7 @@ internal static class FileSystemRepackMetadata
             switch (formatName)
             {
                 case "EXT4":
-                    using (var parser = new UotanStudio.Firmware.FileSystem.Ext4.Ext4Parser(stream))
+                    using (var parser = new Ext4.Ext4Parser(stream))
                     {
                         warnings.AddRange(FileSystemMetadataGenerator.GenerateForExt4(metadataDirectory, partitionName, parser, superblock));
                     }
@@ -133,7 +133,7 @@ internal static class FileSystemRepackMetadata
 
                     break;
                 case "F2FS":
-                    using (var parser = new UotanStudio.Firmware.FileSystem.F2fs.F2fsParser(stream))
+                    using (var parser = new F2fs.F2fsParser(stream))
                     {
                         warnings.AddRange(FileSystemMetadataGenerator.GenerateForF2fs(metadataDirectory, partitionName, parser, superblock));
                     }

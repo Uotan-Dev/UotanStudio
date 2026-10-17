@@ -22,20 +22,20 @@ public static partial class FileSystemPreservation
     private static readonly AsyncLocal<IProgress<FileSystemByteProgress>?> ActiveProgress = new();
 
     /// <summary>
-    /// Opens the frozen EROFS device set for the current preservation operation.
-    /// <para>为当前保留操作打开已冻结的 EROFS 设备集。</para>
+    /// Opens the EROFS external device set for the current preservation operation.
+    /// <para>为当前保留操作打开 EROFS 外部设备集。</para>
     /// </summary>
     /// <param name="source">Main EROFS image stream; ownership transfers to the returned parser.
     /// <para>主 EROFS 镜像流；所有权转移给返回的解析器。</para></param>
     /// <param name="token">Cancels parser reads; <para>取消解析器读取。</para></param>
     /// <param name="requireCompleteMetadata">When <see langword="true"/>, the parser demands complete metadata coverage.
     /// <para>为 <see langword="true"/> 时，解析器要求元数据完整覆盖。</para></param>
-    /// <returns>A parser over <paramref name="source"/> alone, or over the source plus the frozen external device
-    /// files captured by the active <see cref="UnpackAsync"/> operation when one is in scope on this async flow.
+    /// <returns>A parser over <paramref name="source"/> alone, or over the source plus the external device
+    /// files registered by the active <see cref="UnpackAsync"/> operation when one is in scope on this async flow.
     /// <para>仅基于 <paramref name="source"/> 的解析器；若当前异步流上存在活动的 <see cref="UnpackAsync"/> 操作，
-    /// 则返回基于源镜像及其冻结外部设备文件的解析器。</para></returns>
-    /// <exception cref="IOException">A frozen external device file cannot be opened; already-opened device streams are disposed.
-    /// <para>无法打开冻结的外部设备文件；已打开的设备流会被释放。</para></exception>
+    /// 则返回基于源镜像及其外部设备文件的解析器。</para></returns>
+    /// <exception cref="IOException">An external device file cannot be opened; already-opened device streams are disposed.
+    /// <para>无法打开外部设备文件；已打开的设备流会被释放。</para></exception>
     public static ErofsParser OpenErofsParser(Stream source, CancellationToken token = default,
         bool requireCompleteMetadata = false)
     {
@@ -99,7 +99,7 @@ public static partial class FileSystemPreservation
         }
 
         return data is null || data.Version != 1 || data.PartitionInfo is null || data.FsConfig is null
-            || data.FileContexts is null || data.Projection is null || data.ParsedEntries is null
+            || data.FileContexts is null || data.ParsedEntries is null
             || string.IsNullOrWhiteSpace(data.Partition)
             ? null
             : data;
@@ -107,67 +107,51 @@ public static partial class FileSystemPreservation
 
     /// <summary>
     /// Captures the preservation payload of an extracted filesystem image: rebuild parameters and inode entries
-    /// are read back from the source image itself, and the capture is verified against it.
-    /// <para>采集已解包文件系统镜像的保留负载：重建参数与 inode 条目都从源镜像本身读回，并据此校验采集结果。</para>
+    /// are read back from the source image itself.
+    /// <para>采集已解包文件系统镜像的保留负载：重建参数与 inode 条目都从源镜像本身读回。</para>
     /// </summary>
     /// <param name="source">Source image file the extraction was taken from.
     /// <para>解包所依据的源镜像文件。</para></param>
-    /// <param name="extraction">Extraction output tree that is projected. <para>被投影的解包输出目录树。</para></param>
-    /// <param name="metadataDirectory">Directory receiving <c>metadata.json</c>.
-    /// <para>接收 <c>metadata.json</c> 的目录。</para></param>
     /// <param name="metadata">Metadata instance the payload is attached to.
     /// <para>负载所附加到的元数据实例。</para></param>
-    /// <param name="cancellationToken">Cancels hashing, projection and verification.
-    /// <para>取消摘要计算、投影与校验。</para></param>
-    internal static void CaptureAsync(string source, string extraction, string metadataDirectory,
+    /// <param name="cancellationToken">Cancels metadata reading. <para>取消元数据读取。</para></param>
+    internal static void CaptureAsync(string source,
         RepackMetadata metadata, CancellationToken cancellationToken)
     {
         var rebuild = BuildRebuildParameters(source, metadata.FormatName, cancellationToken);
         var parsedEntries = ReadEntries(source, metadata.FormatName);
         ValidateInodeFlags(parsedEntries, rebuild?.InnerFormat ?? metadata.FormatName);
-        CapturePayload(source, extraction, metadataDirectory, metadata, rebuild, parsedEntries,
-            verifyContents: true, cancellationToken);
+        CapturePayload(source, metadata, rebuild, parsedEntries, cancellationToken);
     }
 
     /// <summary>
     /// Captures the preservation payload of an extracted archive container, whose per-entry ownership, group and
     /// permission bits are supplied by the caller from the archive headers rather than from a filesystem parser.
-    /// No rebuild parameters exist for a container, and its contents are not re-read from the source image here:
-    /// the projected host tree and the recorded header table are the preserved record.
+    /// No rebuild parameters exist for a container: the recorded header table is the preserved record.
     /// <para>为已解包的归档容器采集保留负载：每个条目的属主、属组与权限位由调用方从归档头提供，而非来自文件系统
-    /// 解析器。容器没有重建参数，其内容也不在此从源镜像重新读取：宿主投影与记录的条目表就是保留记录。</para>
+    /// 解析器。容器没有重建参数，记录的条目表就是保留记录。</para>
     /// </summary>
     /// <param name="source">Source archive file the extraction was taken from.
     /// <para>解包所依据的源归档文件。</para></param>
-    /// <param name="extraction">Extraction output tree that is projected.
-    /// <para>被投影的解包输出目录树。</para></param>
-    /// <param name="metadataDirectory">Directory receiving <c>metadata.json</c>.
-    /// <para>接收 <c>metadata.json</c> 的目录。</para></param>
     /// <param name="metadata">Metadata instance the payload is attached to.
     /// <para>负载所附加到的元数据实例。</para></param>
     /// <param name="entries">Per-entry POSIX attributes read from the archive headers.
     /// <para>从归档头读出的每条目 POSIX 属性。</para></param>
-    /// <param name="cancellationToken">Cancels hashing and projection. <para>取消摘要计算与投影。</para></param>
-    internal static void CaptureArchivePayload(string source, string extraction, string metadataDirectory,
+    /// <param name="cancellationToken">Cancels metadata reading. <para>取消元数据读取。</para></param>
+    internal static void CaptureArchivePayload(string source,
         RepackMetadata metadata, IReadOnlyList<PreservedInodeEntry> entries, CancellationToken cancellationToken)
-        => CapturePayload(source, extraction, metadataDirectory, metadata, null, entries,
-            verifyContents: false, cancellationToken);
+        => CapturePayload(source, metadata, null, entries, cancellationToken);
 
-    private static void CapturePayload(string source, string extraction, string metadataDirectory,
+    private static void CapturePayload(string source,
         RepackMetadata metadata, RebuildParameters? rebuild, IReadOnlyList<PreservedInodeEntry> parsedEntries,
-        bool verifyContents, CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
     {
-        var imageBytes = new ExtractionByteCounter(new FileInfo(source).Length,
-            FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.VerifyingImage), cancellationToken);
-        var sourceHash = HashFile(source, cancellationToken, imageBytes.Add);
-        imageBytes.Complete();
         var data = new FileSystemPreservationData
         {
             Version = 1,
             Format = metadata.FormatName,
             Partition = RepackMetadata.DetectPartitionName(metadata.SourceFileName),
             SourceLength = new FileInfo(source).Length,
-            SourceHash = sourceHash,
             ConfigurationJson = JsonSerializer.Serialize(metadata, RepackJsonContext.Default.RepackMetadata),
             Rebuild = rebuild,
             PartitionInfo = metadata.Configuration["superblock"] is JsonObject superblock
@@ -180,22 +164,13 @@ public static partial class FileSystemPreservation
                 .ToDictionary(entry => FileSystemEditPlan.Normalize(entry.Path),
                     entry => Encoding.UTF8.GetStringTrimNul(entry.Xattrs!["security.selinux"]), StringComparer.Ordinal),
             ImagePaths = CapturedPaths.Value is { } paths ? new(paths, StringComparer.Ordinal) : [],
-            ParsedEntries = [.. parsedEntries],
-            Projection = Scan(extraction, metadataDirectory, metadata.SourceFileName, cancellationToken,
-                ActiveProgress.Value is null ? null : FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.VerifyingFiles))
+            ParsedEntries = [.. parsedEntries]
         };
-        if (verifyContents)
-        {
-            VerifyCapturedContents(source, data, cancellationToken);
-        }
         var payload = JsonSerializer.SerializeToNode(data,
             FileSystemPreservationJsonContext.Default.FileSystemPreservationData)!.AsObject();
         metadata.FileSystemPreservation = payload;
         payload["configurationHash"] = HashConfiguration(metadata);
     }
-
-    private static bool Same(Dictionary<string, string> actual, Dictionary<string, string> expected)
-        => actual.Count == expected.Count && actual.All(pair => expected.TryGetValue(pair.Key, out var value) && value == pair.Value);
 
     /// <summary>
     /// Hashes the metadata document with the preservation payload's own digest removed, so the digest

@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Json.Nodes;
+using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
@@ -198,6 +200,42 @@ public class ErofsMetadataReplayTests
         Assert.Equal(sourceSuperblock.BlockSizeBits, rebuiltSuperblock.BlockSizeBits);
         Assert.Equal(sourceSuperblock.VolumeName, rebuiltSuperblock.VolumeName);
         Assert.Equal(sourceSuperblock.BuildTime, rebuiltSuperblock.BuildTime);
+    }
+
+    [Fact]
+    public async Task FormatHandlerUnpackPack_ReplaysRecordedInodeNumbersThroughTheMetadataDocument()
+    {
+        using var temp = new TempDirectory();
+        WriteTree(temp);
+        var imagePath = Path.Combine(temp.Path, "source.img");
+        var sourceOptions = OptionsFor(SourceAttributes(), FileXattrs());
+        sourceOptions.SuperblockChecksum = false;
+        var image = new ErofsBuilder().Build(temp.Path, sourceOptions);
+        var sourceNumbers = ErofsInodeNumberFixture.Stamp(image);
+        Assert.Equal(5, sourceNumbers.Count);
+        await File.WriteAllBytesAsync(imagePath, image, TestContext.Current.CancellationToken);
+
+        var extracted = Path.Combine(temp.Path, "extracted");
+        var handler = new ErofsFormatHandler();
+        var unpacked = await handler.UnpackAsync(imagePath, extracted, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(unpacked.Success, unpacked.Summary);
+
+        var document = JsonNode.Parse(await File.ReadAllTextAsync(
+            Path.Combine(extracted, RepackMetadata.FileName), TestContext.Current.CancellationToken))!.AsObject();
+        var records = document["fileSystemPreservation"]!["rebuild"]!["erofs"]!["inodes"]!.AsArray();
+        foreach (var (path, expected) in sourceNumbers)
+        {
+            Assert.Contains(records, record => (string?)record!["path"] == path
+                && record["ino"] is { } recorded && recorded.GetValue<uint>() == expected);
+        }
+
+        File.Delete(imagePath);
+        var rebuiltPath = Path.Combine(temp.Path, "rebuilt.img");
+        var packed = await handler.PackAsync(extracted, rebuiltPath, TestContext.Current.CancellationToken);
+        Assert.True(packed.Success, packed.Summary);
+
+        Assert.Equal(sourceNumbers, ErofsInodeNumberFixture.Read(
+            await File.ReadAllBytesAsync(rebuiltPath, TestContext.Current.CancellationToken)));
     }
 
     private static ErofsSuperblock SuperblockOf(string imagePath)

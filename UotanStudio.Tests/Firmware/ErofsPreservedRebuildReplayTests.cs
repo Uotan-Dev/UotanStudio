@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
@@ -76,7 +75,7 @@ public class ErofsPreservedRebuildReplayTests
     }
 
     [Fact]
-    public void PreservedRebuild_RejectsStorageStrategyDowngrade()
+    public void PreservedRebuild_IncompressibleContent_KeepsTheRecordedCompressedStrategy()
     {
         using var temp = new TempDirectory();
         var payload = new byte[40 * 1024];
@@ -100,12 +99,37 @@ public class ErofsPreservedRebuildReplayTests
             ["heavy.bin"] = record,
         };
 
-        var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(temp.Path, options));
+        var image = new ErofsBuilder().Build(temp.Path, options);
 
-        Assert.Contains("heavy.bin", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("recorded compressed=True", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("planned layout is compressed=False", exception.Message, StringComparison.Ordinal);
+        using var parser = new ErofsParser(image);
+        var entry = parser.EnumerateFiles().Single(file => file.Path == "heavy.bin");
+        Assert.Equal(payload, parser.ReadFileBytes("heavy.bin"));
+        var offset = checked((int)((long)parser.Superblock.MetaBlkAddr * parser.BlockSize + (long)entry.Nid * 32));
+        var advise = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(offset));
+        var layout = (advise >> 1) & 7;
+        Assert.True(layout is 1 or 3,
+            $"the rebuild must keep the recorded compressed strategy, but the layout is {layout}.");
+    }
+
+    [Fact]
+    public void PreservedRebuild_WholeFileShrinkWithoutSourceRecord_StillDropsCompression()
+    {
+        using var temp = new TempDirectory();
+        var payload = new byte[40 * 1024];
+        new Random(20260816).NextBytes(payload);
+        temp.WriteBytes("heavy.bin", payload);
+
+        var options = SourceOptions();
+        Assert.Null(options.SourceInodes);
+
+        var image = new ErofsBuilder().Build(temp.Path, options);
+
+        using var parser = new ErofsParser(image);
+        var entry = parser.EnumerateFiles().Single(file => file.Path == "heavy.bin");
+        var offset = checked((int)((long)parser.Superblock.MetaBlkAddr * parser.BlockSize + (long)entry.Nid * 32));
+        var advise = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(offset));
+        var layout = (advise >> 1) & 7;
+        Assert.Equal(0, layout);
     }
 
     [Fact]

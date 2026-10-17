@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace UotanStudio.Firmware.FileSystem.Metadata;
 
 /// <summary>
@@ -65,6 +67,18 @@ internal sealed class ErofsRebuildParameters
     public string Algorithm { get; set; } = "Lz4";
     /// <summary>Gets the primary encoder level.<para>获取主编码级别。</para></summary>
     public int CompressionLevel { get; set; } = 1;
+    /// <summary>
+    /// Gets whether the primary LZ4 payload uses the HC encoder. EROFS records no encoder identity on disk,
+    /// so a source captured from an actual image never carries a meaningful value; a caller-authored
+    /// preservation snapshot records it so the restore keeps the same builder inputs.
+    /// <para>获取主 LZ4 负载是否使用 HC 编码器。EROFS 磁盘格式不记录编码器身份，因此从实际镜像采集的源
+    /// 不会携带有效值；调用方构造的保留快照可记录它，使还原保持相同的构建参数。</para>
+    /// </summary>
+    /// <value>The recorded encoder identity, or <see langword="null"/> when the snapshot predates this
+    /// field or was captured from a real image; a null value is inferred from <see cref="CompressionLevel"/>.
+    /// <para>记录的编码器身份；快照早于该字段或来自真实镜像时为 <see langword="null"/>，
+    /// 此时按 <see cref="CompressionLevel"/> 推断。</para></value>
+    public bool? Lz4HighCompression { get; set; }
     /// <summary>Gets whether uncompressed tail data may be stored inline.<para>获取未压缩尾部数据是否可内联存储。</para></summary>
     public bool TailPacking { get; set; }
     /// <summary>Gets whether the final compressed cluster may be stored beside its indexes.<para>获取最后一个压缩簇是否可与其索引同块存储。</para></summary>
@@ -168,21 +182,6 @@ internal sealed class ErofsRebuildParameters
     /// 字段时为 <see langword="null"/>，此时编解码器由写入方自行解析。</para></value>
     public string? SourceMetaboxAlgorithm { get; set; }
     /// <summary>
-    /// Gets the resolved <c>ErofsDataLayout</c> member name of the storage layout the source image recorded
-    /// for its metabox container inode, so a rebuild can tell an inline or flat container from a compressed one
-    /// instead of inferring the shape from the compression flag alone.
-    /// <para>获取源镜像为 metabox 容器 inode 记录的存储布局解析后的 <c>ErofsDataLayout</c> 成员名，使重建能区分
-    /// 内联、平坦与压缩容器，而不是只凭压缩标志推断其形态。</para>
-    /// </summary>
-    /// <value><c>Flat</c>, <c>Compressed</c>, <c>Inline</c>, <c>CompactIndexes</c> or <c>ChunkBased</c>, or
-    /// <see langword="null"/> when the source declares no metabox container or when the snapshot predates this
-    /// field. The value is recorded so the container shape survives the document; no writer-side option
-    /// consumes it yet, and the compression flag beside it stays the dimension a rebuild replays.
-    /// <para>取值为 <c>Flat</c>、<c>Compressed</c>、<c>Inline</c>、<c>CompactIndexes</c> 或 <c>ChunkBased</c>；
-    /// 源未声明 metabox 容器或快照早于该字段时为 <see langword="null"/>。记录该值是为了让容器形态随文档留存；
-    /// 目前尚无写入侧选项消费它，重建重放的仍是与之并列的压缩标志。</para></value>
-    public string? SourceMetaboxDataLayout { get; set; }
-    /// <summary>
     /// Gets the start block of the source image's metadata area (<c>s_meta_blkaddr</c>), so a rebuild places
     /// its inode table in the same separate zone the source used instead of silently returning the metadata
     /// to the head of the image.
@@ -193,6 +192,29 @@ internal sealed class ErofsRebuildParameters
     /// a null value is restored as no metadata zone, which is the repository's existing behavior.
     /// <para>记录的块号；快照早于该字段时为 <see langword="null"/>，此时还原为无元数据区，即仓库既有行为。</para></value>
     public uint? MetaBlkAddr { get; set; }
+    /// <summary>
+    /// Gets the number of extra 4-byte slots the source superblock reserved beyond its own structure
+    /// (<c>sb_extslots</c>), so a rebuild reserves the same tail instead of collapsing it to zero and shifting
+    /// everything the superblock points at.
+    /// <para>获取源超级块在自身结构之外额外保留的 4 字节槽数量（<c>sb_extslots</c>），使重建保留同一尾部空间，
+    /// 而不是把它压成零并移动超级块所指向的一切。</para>
+    /// </summary>
+    /// <value>The recorded slot count, or <see langword="null"/> when the snapshot predates this field; a null
+    /// value is restored as no extra slots, which is the repository's existing behavior.
+    /// <para>记录的槽数量；快照早于该字段时为 <see langword="null"/>，此时还原为无额外槽，即仓库既有行为。</para></value>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public byte? SbExtSlots { get; set; }
+    /// <summary>
+    /// Gets the log2 of the block size the source superblock used for directory data (<c>dirblkbits</c>), which
+    /// may exceed the filesystem block size. It is captured so a rebuild does not assume the two are equal.
+    /// <para>获取源超级块用于目录数据的块大小 log2（<c>dirblkbits</c>），它可能大于文件系统块大小。捕获该值使
+    /// 重建不会假定两者相等。</para>
+    /// </summary>
+    /// <value>The recorded log2, or <see langword="null"/> when the snapshot predates this field; a null value
+    /// is restored as the filesystem block size's own log2.
+    /// <para>记录的 log2；快照早于该字段时为 <see langword="null"/>，此时还原为文件系统块大小自身的 log2。</para></value>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public byte? DirBlkBits { get; set; }
     /// <summary>Gets the superblock epoch in seconds.<para>获取超级块 epoch（秒）。</para></summary>
     public ulong? BuildTime { get; set; }
     /// <summary>Gets the superblock fixed nanosecond component.<para>获取超级块固定纳秒分量。</para></summary>
@@ -313,11 +335,31 @@ internal sealed class ErofsRebuildCodec
     public int Lz4MaxDistance { get; set; }
     /// <summary>Gets the encoder level.<para>获取编码级别。</para></summary>
     public int CompressionLevel { get; set; } = 1;
+    /// <summary>
+    /// Gets whether the LZ4 payload uses the HC encoder. See <see cref="ErofsRebuildParameters.Lz4HighCompression"/>;
+    /// a null value is inferred from <see cref="CompressionLevel"/>.
+    /// <para>获取 LZ4 负载是否使用 HC 编码器。见 <see cref="ErofsRebuildParameters.Lz4HighCompression"/>；
+    /// 空值按 <see cref="CompressionLevel"/> 推断。</para>
+    /// </summary>
+    public bool? Lz4HighCompression { get; set; }
 }
 
 internal sealed class ErofsRebuildDevice
 {
     public byte[] Tag { get; set; } = [];
+    /// <summary>
+    /// Gets the raw device-slot tag bytes as base64, preserving the slot's on-disk 64-byte identity so a rebuild
+    /// can replay it instead of deriving a textual tag, which a summarising tag cannot round-trip.
+    /// <para>获取设备槽 tag 原始字节的 base64，保留槽位在磁盘上的 64 字节身份，使重建可重放它，而不是推导出
+    /// 文本 tag——摘要型 tag 无法经文本往返。</para>
+    /// </summary>
+    /// <value>Standard base64 of the recorded tag, or <see langword="null"/> when the source recorded no tag or
+    /// the snapshot predates this field; a null value is omitted from the document, so the tag is left to
+    /// <see cref="Tag"/>.
+    /// <para>所记录 tag 的标准 base64；源未记录 tag 或快照早于该字段时为 <see langword="null"/>，空值不会写入
+    /// 文档，此时 tag 由 <see cref="Tag"/> 承担。</para></value>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TagBase64 { get; set; }
     public ulong Blocks { get; set; }
     public ulong UniAddr { get; set; }
 }
@@ -327,6 +369,21 @@ internal sealed class ErofsRebuildInode
 {
     /// <summary>Gets the source node id.<para>获取源节点号。</para></summary>
     public ulong Nid { get; set; }
+    /// <summary>
+    /// Gets the <c>i_ino</c> the source inode recorded. The format reserves the field for 32-bit <c>stat</c>
+    /// compatibility, and a rebuild replays it so the output publishes the inode number the source published
+    /// instead of leaving every rebuilt inode number at zero.
+    /// <para>获取源 inode 记录的 <c>i_ino</c>。该字段是格式为 32 位 <c>stat</c> 兼容保留的，重建会重放它，
+    /// 使输出发布源所发布的 inode 编号，而不是让每个重建 inode 编号都为零。</para>
+    /// </summary>
+    /// <value>The recorded number, or <see langword="null"/> when the snapshot predates this field or the
+    /// source recorded zero; a null value keeps the rebuilt inode number zero, which is the repository's
+    /// existing behavior. A null value is omitted from the document, so a profile whose source recorded no
+    /// inode number keeps its existing document shape.
+    /// <para>记录的值；快照早于该字段或源记录为零时为 <see langword="null"/>，此时重建 inode 编号保持为零，
+    /// 即仓库既有行为。空值不会写入文档，因此源未记录 inode 编号的档案保持其既有的文档形态。</para></value>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public uint? Ino { get; set; }
     /// <summary>Gets the image-absolute path of the inode, when known. The path is the stable
     /// cross-session key; the nid drifts when files are added or removed.
     /// <para>获取 inode 的镜像内绝对路径（已知时）。路径是跨会话的稳定主键；nid 会随文件增删漂移。</para></summary>
@@ -381,6 +438,72 @@ internal sealed class ErofsRebuildInode
     /// <value>The chunk-size log2, or <c>0</c> for a file that was not chunk-based.
     /// <para>chunk 大小的 log2，或非 chunk-based 文件的 <c>0</c>。</para></value>
     public int ChunkBits { get; set; }
+    /// <summary>
+    /// Gets the complete <c>chunkformat</c> word of a chunk-based source inode, including the high bits that
+    /// select the chunk index format (<c>0x20</c> for chunk indexes, <c>0x40</c> for 48-bit addresses), which
+    /// <see cref="ChunkBits"/> cannot express.
+    /// <para>获取分块源 inode 的完整 <c>chunkformat</c> 字，含选择 chunk 索引格式的高位（chunk 索引为
+    /// <c>0x20</c>、48 位地址为 <c>0x40</c>），这些位无法由 <see cref="ChunkBits"/> 表达。</para>
+    /// </summary>
+    /// <value>The recorded 16-bit word, or <see langword="null"/> when the snapshot predates this field; a null
+    /// value leaves the dimension to <see cref="ChunkBits"/>, which is the repository's existing behavior.
+    /// <para>记录的 16 位字；快照早于该字段时为 <see langword="null"/>，此时该维度由 <see cref="ChunkBits"/>
+    /// 承担，即仓库既有行为。</para></value>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ushort? ChunkFormat { get; set; }
+    /// <summary>
+    /// Gets the raw chunk index table of a chunk-based source inode as base64. The table maps logical cluster
+    /// ranges onto device slots and addresses, so replaying its bytes is what keeps a chunk-based rebuild
+    /// addressable by the same layout.
+    /// <para>获取分块源 inode 的原始 chunk 索引表的 base64。该表把逻辑簇范围映射到设备槽与地址，重放其字节
+    /// 正是让分块重建保持同一可寻址布局的关键。</para>
+    /// </summary>
+    /// <value>Standard base64 of the index table bytes, or <see langword="null"/> when the source inode was not
+    /// chunk-based or the snapshot predates this field; a null value is omitted from the document, so a rebuilt
+    /// inode keeps the indexes derived from the layout.
+    /// <para>索引表字节的标准 base64；源 inode 非分块或快照早于该字段时为 <see langword="null"/>，空值不会写入
+    /// 文档，此时重建 inode 保留由布局推导出的索引。</para></value>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ChunkIndexBase64 { get; set; }
+    /// <summary>
+    /// Gets the source inode's <c>i_format</c> bits, including the inode advise bits such as <c>0x10</c> that
+    /// have to be replayed per inode instead of being resolved once for the whole image.
+    /// <para>获取源 inode 的 <c>i_format</c> 位，含 <c>0x10</c> 一类 inode advise 位；这些位必须逐 inode 重放，
+    /// 而不是为整幅镜像解析一次。</para>
+    /// </summary>
+    /// <value>The recorded 16-bit format word, or <see langword="null"/> when the snapshot predates this field;
+    /// a null value leaves the format to the rebuild's own derivation.
+    /// <para>记录的 16 位格式字；快照早于该字段时为 <see langword="null"/>，此时格式由重建自行推导。</para></value>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ushort? SourceIFormat { get; set; }
+    /// <summary>
+    /// Gets whether the source map header declared the COMPACTED_2B advise, which packs two 4-byte index slots
+    /// into one 8-byte slot. It is captured so a rebuild either reproduces that shape or rejects it explicitly
+    /// rather than silently emitting the default 4-byte index layout.
+    /// <para>获取源映射头是否声明 COMPACTED_2B advise，即把两个 4 字节索引槽压进一个 8 字节槽。捕获该维度使
+    /// 重建或复现该形态、或显式拒绝它，而不是静默发出默认的 4 字节索引布局。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when the source declared it, <see langword="false"/> when the source
+    /// explicitly did not, or <see langword="null"/> when the snapshot carries no entry for it; a null value is
+    /// restored as the default 4-byte layout.
+    /// <para>源声明时为 <see langword="true"/>，源显式未声明时为 <see langword="false"/>，档案未携带该项时为
+    /// <see langword="null"/>；空值还原为默认的 4 字节布局。</para></value>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Compacted2B { get; set; }
+    /// <summary>
+    /// Gets whether the source map header declared the INTERLACED_PCLUSTER advise, which stores a physical
+    /// cluster's address and its partial-reference count interleaved. The dimension is read-only: it is captured
+    /// so a rebuild can report or refuse the shape instead of encoding a plain pcluster list for it.
+    /// <para>获取源映射头是否声明 INTERLACED_PCLUSTER advise，即把物理簇地址与其部分引用计数交错存放。该维度
+    /// 只读：捕获它是为了让重建报告或拒绝该形态，而不是为其编码普通的物理簇列表。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when the source declared it, <see langword="false"/> when the source
+    /// explicitly did not, or <see langword="null"/> when the snapshot carries no entry for it; a null value is
+    /// restored as the plain (non-interlaced) layout.
+    /// <para>源声明时为 <see langword="true"/>，源显式未声明时为 <see langword="false"/>，档案未携带该项时为
+    /// <see langword="null"/>；空值还原为非交错的普通布局。</para></value>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? InterlacedPcluster { get; set; }
     /// <summary>
     /// Gets the attribute sets the source image recorded for this inode, as name/value pairs. They are carried
     /// as resolved entries rather than as the raw inline body because a body may reference a slot in the source
