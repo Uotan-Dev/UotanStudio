@@ -36,6 +36,7 @@ public static class FirmwareFormatRegistry
 
             Register(new BlockImage.Sparse.SparseFormatHandler());
             Register(new BlockImage.Gpt.GptFormatHandler());
+            Core.Bridges.SparsePreservationAccess.Register(FileSystem.Rebuilding.FileSystemSparsePreservation.Instance);
             Register(new FileSystem.Ext4.Ext4FormatHandler());
             Register(new FileSystem.Erofs.ErofsFormatHandler());
             Register(new FileSystem.F2fs.F2fsFormatHandler());

@@ -11,20 +11,20 @@ public sealed class FilesystemEquivalenceReport
 {
     /// <summary>Metadata flag name carrying the byte-identity verdict emitted by the preserved rebuild path.
     /// <para>受保留重建路径写出的字节一致判定所使用的元数据标记名。</para></summary>
-    public const string ByteEquivalenceKey = "EquivalentBytes";
+    public const string ByteEquivalenceKey = EquivalenceMetadataKeys.Byte;
 
     /// <summary>Metadata flag name carrying the inode-structure verdict emitted by the preserved rebuild path.
     /// <para>受保留重建路径写出的 inode 结构判定所使用的元数据标记名。</para></summary>
-    public const string StructureEquivalenceKey = "EquivalentStructure";
+    public const string StructureEquivalenceKey = EquivalenceMetadataKeys.Structure;
 
     /// <summary>Metadata flag name carrying the file-content verdict emitted by the preserved rebuild path.
     /// <para>受保留重建路径写出的文件内容判定所使用的元数据标记名。</para></summary>
-    public const string ContentEquivalenceKey = "EquivalentContent";
+    public const string ContentEquivalenceKey = EquivalenceMetadataKeys.Content;
 
     /// <summary>Metadata flag name carrying the capacity verdict; the same key predates this façade and is kept
     /// for result-dictionary compatibility.
     /// <para>容量判定所使用的元数据标记名；该键在本门面出现之前已存在，为兼容结果字典保持不变。</para></summary>
-    public const string CapacityEquivalenceKey = "FitsSourceFilesystemSize";
+    public const string CapacityEquivalenceKey = EquivalenceMetadataKeys.Capacity;
 
     /// <summary>Byte identity of the produced image against the recorded source digest and length.
     /// <para>产出镜像相对记录的源摘要与长度的字节一致性。</para></summary>
