@@ -116,19 +116,54 @@ public static class BootPatchAnalyzer
             return kernel is null ? null : KernelVersionExtractor.ExtractKmi(kernel);
         }, cancellationToken);
 
+    /// <summary>
+    /// Detects the architecture and KernelSU KMI of the kernel embedded in an Android boot image in one parse
+    /// and one decompression.
+    /// <para>在一次解析与一次解压中同时检测 Android boot 镜像内嵌内核的架构与 KernelSU KMI。</para>
+    /// </summary>
+    /// <param name="bootPath">Boot image file path parsed from disk. <para>从磁盘解析的 boot 镜像文件路径。</para></param>
+    /// <param name="cancellationToken">
+    /// Honored by the thread-pool scheduling and checked after parsing.
+    /// <para>由线程池调度遵守，并在解析完成后检查。</para>
+    /// </param>
+    /// <returns>
+    /// The detected ABI name and KMI string; each is <c>null</c> when the kernel cannot be decompressed or
+    /// carries no matching marker. <para>检测到的 ABI 名称与 KMI 字符串；内核无法解压或不含对应标记时分别为 <c>null</c>。</para>
+    /// </returns>
+    /// <exception cref="OperationCanceledException">The token was canceled before or during the scheduled work.
+    /// <para>令牌在调度任务期间或之前被取消。</para></exception>
+    public static Task<BootKernelInfo> DetectBootKernelAsync(string bootPath, CancellationToken cancellationToken = default)
+        => Task.Run(() =>
+        {
+            using var parser = new BootImageParser();
+            parser.ParseFile(bootPath);
+            cancellationToken.ThrowIfCancellationRequested();
+            var kernel = parser.Header.KernelCompression == CompressionType.None
+                ? parser.Kernel
+                : BootCompressor.TryDecompress(parser.Kernel, parser.Header.KernelCompression);
+            return kernel is null
+                ? new BootKernelInfo(null, null)
+                : new BootKernelInfo(DetectKernelArchitecture(kernel), KernelVersionExtractor.ExtractKmi(kernel));
+        }, cancellationToken);
+
     internal static string? DetectKernelArchitecture(ReadOnlySpan<byte> kernel)
     {
         var headerLength = Math.Min(kernel.Length, 1024 * 1024);
-        var header = kernel[..headerLength].ToArray();
-        if (FileMagic.Identify(header)?.Description is { } rootDescription && TryMapArchitecture(rootDescription) is { } detected) return detected;
+        if (FileMagic.Identify(kernel[..headerLength])?.Description is { } rootDescription && TryMapArchitecture(rootDescription) is { } detected) return detected;
 
-        for (var offset = 0; offset <= kernel.Length - 4 && offset < 64 * 1024 * 1024; offset++)
+        ReadOnlySpan<byte> elfMagic = [0x7F, (byte)'E', (byte)'L', (byte)'F'];
+        var startLimit = Math.Min(kernel.Length, 64 * 1024 * 1024);
+        var scan = kernel[..Math.Min(kernel.Length, startLimit + elfMagic.Length - 1)];
+        var searched = 0;
+        while (searched < startLimit)
         {
-            if (!FileMagic.IsElf(kernel[offset..])) continue;
+            var relative = scan[searched..].IndexOf(elfMagic);
+            if (relative < 0) break;
+            var offset = searched + relative;
             var length = Math.Min(kernel.Length - offset, 4096);
-            var elfHeader = kernel.Slice(offset, length).ToArray();
-            var description = FileMagic.Describe(elfHeader);
+            var description = FileMagic.Describe(kernel.Slice(offset, length));
             if (description is not null && TryMapArchitecture(description) is { } elfArchitecture) return elfArchitecture;
+            searched = offset + 1;
         }
         return null;
     }

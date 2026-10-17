@@ -79,6 +79,7 @@ internal static class KernelElfWriter
     private const int SectionHeaderSize = 64;
     private const int SymbolSize = 24;
     private const int PageSize = 4096;
+    private const long MaximumBufferedTableSize = 64L * 1024 * 1024;
     private static readonly byte[] NullByte = [0];
     private static readonly byte[] SectionNames = "\0.text\0.strtab\0.symtab\0.shstrtab\0"u8.ToArray();
 
@@ -111,6 +112,7 @@ internal static class KernelElfWriter
             .ToArray();
         var localCount = ordered.Count(symbol => !char.IsUpper(symbol.Type));
         var stringOffsets = new uint[ordered.Length];
+        var nameLengths = new int[ordered.Length];
         long stringTableSize = 1;
         for (var index = 0; index < ordered.Length; index++)
         {
@@ -119,8 +121,9 @@ internal static class KernelElfWriter
             {
                 throw new InvalidDataException("kallsyms contains an invalid ELF symbol name.");
             }
+            nameLengths[index] = Encoding.UTF8.GetByteCount(ordered[index].Name);
             stringOffsets[index] = checked((uint)stringTableSize);
-            stringTableSize = checked(stringTableSize + Encoding.UTF8.GetByteCount(ordered[index].Name) + 1);
+            stringTableSize = checked(stringTableSize + nameLengths[index] + 1);
         }
 
         var textOffset = (long)PageSize;
@@ -145,28 +148,30 @@ internal static class KernelElfWriter
             await PadToAsync(stream, textOffset, cancellationToken).ConfigureAwait(false);
             await stream.WriteAsync(kernel, cancellationToken).ConfigureAwait(false);
             await PadToAsync(stream, stringOffset, cancellationToken).ConfigureAwait(false);
-            await stream.WriteAsync(NullByte, cancellationToken).ConfigureAwait(false);
-            foreach (var symbol in ordered)
+            if (stringTableSize <= MaximumBufferedTableSize && symbolTableSize <= MaximumBufferedTableSize)
             {
-                var name = Encoding.UTF8.GetBytes(symbol.Name);
-                await stream.WriteAsync(name, cancellationToken).ConfigureAwait(false);
-                await stream.WriteAsync(NullByte, cancellationToken).ConfigureAwait(false);
+                await WriteStringTableBufferedAsync(stream, ordered, nameLengths, stringTableSize, cancellationToken).ConfigureAwait(false);
+                await PadToAsync(stream, symbolOffset, cancellationToken).ConfigureAwait(false);
+                await WriteSymbolTableBufferedAsync(stream, ordered, stringOffsets, loadAddress, kernel.Length,
+                    symbolTableSize, cancellationToken).ConfigureAwait(false);
             }
-
-            await PadToAsync(stream, symbolOffset, cancellationToken).ConfigureAwait(false);
-            await stream.WriteAsync(new byte[SymbolSize], cancellationToken).ConfigureAwait(false);
-            for (var index = 0; index < ordered.Length; index++)
+            else
             {
-                var symbol = ordered[index];
-                var entry = new byte[SymbolSize];
-                BinaryPrimitives.WriteUInt32LittleEndian(entry, stringOffsets[index]);
-                var global = char.IsUpper(symbol.Type);
-                entry[4] = checked((byte)((global ? 1 : 0) << 4));
-                var inText = symbol.Address >= loadAddress && symbol.Address - loadAddress < (ulong)kernel.Length;
-                BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(6),
-                    symbol.Type is 'A' or 'a' || !inText ? (ushort)0xFFF1 : (ushort)1);
-                BinaryPrimitives.WriteUInt64LittleEndian(entry.AsSpan(8), symbol.Address);
-                await stream.WriteAsync(entry, cancellationToken).ConfigureAwait(false);
+                await stream.WriteAsync(NullByte, cancellationToken).ConfigureAwait(false);
+                for (var index = 0; index < ordered.Length; index++)
+                {
+                    var name = Encoding.UTF8.GetBytes(ordered[index].Name);
+                    await stream.WriteAsync(name, cancellationToken).ConfigureAwait(false);
+                    await stream.WriteAsync(NullByte, cancellationToken).ConfigureAwait(false);
+                }
+
+                await PadToAsync(stream, symbolOffset, cancellationToken).ConfigureAwait(false);
+                await stream.WriteAsync(new byte[SymbolSize], cancellationToken).ConfigureAwait(false);
+                for (var index = 0; index < ordered.Length; index++)
+                {
+                    await stream.WriteAsync(BuildSymbolEntry(ordered[index], stringOffsets[index], loadAddress, kernel.Length),
+                        cancellationToken).ConfigureAwait(false);
+                }
             }
 
             await PadToAsync(stream, sectionNameOffset, cancellationToken).ConfigureAwait(false);
@@ -189,6 +194,60 @@ internal static class KernelElfWriter
         }, overwrite: true, cancellationToken).ConfigureAwait(false);
 
         return new(output, machine, loadAddress, entryAddress, ordered.Length, outputLength);
+    }
+
+    private static async Task WriteStringTableBufferedAsync(
+        Stream output,
+        KernelSymbol[] ordered,
+        int[] nameLengths,
+        long size,
+        CancellationToken cancellationToken)
+    {
+        var table = new byte[checked((int)size)];
+        var offset = 1;
+        for (var index = 0; index < ordered.Length; index++)
+        {
+            Encoding.UTF8.GetBytes(ordered[index].Name, table.AsSpan(offset));
+            offset += nameLengths[index] + 1;
+        }
+        await output.WriteAsync(table, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task WriteSymbolTableBufferedAsync(
+        Stream output,
+        KernelSymbol[] ordered,
+        uint[] stringOffsets,
+        ulong loadAddress,
+        int kernelLength,
+        long size,
+        CancellationToken cancellationToken)
+    {
+        var table = new byte[checked((int)size)];
+        for (var index = 0; index < ordered.Length; index++)
+        {
+            BuildSymbolEntry(ordered[index], stringOffsets[index], loadAddress, kernelLength,
+                table.AsSpan((index + 1) * SymbolSize, SymbolSize));
+        }
+        await output.WriteAsync(table, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static byte[] BuildSymbolEntry(KernelSymbol symbol, uint stringOffset, ulong loadAddress, int kernelLength)
+    {
+        var entry = new byte[SymbolSize];
+        BuildSymbolEntry(symbol, stringOffset, loadAddress, kernelLength, entry);
+        return entry;
+    }
+
+    private static void BuildSymbolEntry(KernelSymbol symbol, uint stringOffset, ulong loadAddress, int kernelLength,
+        Span<byte> entry)
+    {
+        BinaryPrimitives.WriteUInt32LittleEndian(entry, stringOffset);
+        var global = char.IsUpper(symbol.Type);
+        entry[4] = checked((byte)((global ? 1 : 0) << 4));
+        var inText = symbol.Address >= loadAddress && symbol.Address - loadAddress < (ulong)kernelLength;
+        BinaryPrimitives.WriteUInt16LittleEndian(entry[6..],
+            symbol.Type is 'A' or 'a' || !inText ? (ushort)0xFFF1 : (ushort)1);
+        BinaryPrimitives.WriteUInt64LittleEndian(entry[8..], symbol.Address);
     }
 
     private static async Task WriteHeaderAsync(

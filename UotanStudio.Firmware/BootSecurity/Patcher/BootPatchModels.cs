@@ -94,6 +94,16 @@ public sealed record KernelSuPackageInfo(IReadOnlyList<string> Architectures, IR
     IReadOnlyList<KernelSuKmiAsset> Assets);
 
 /// <summary>
+/// Architecture and KMI read from the kernel of a boot image in one pass.
+/// <para>在一次遍历中从 boot 镜像内核读取到的架构与 KMI。</para>
+/// </summary>
+/// <param name="Architecture">ABI name such as <c>arm64</c>, or <c>null</c> when the kernel image is
+/// unrecognized or cannot be decompressed. <para>形如 <c>arm64</c> 的 ABI 名称；内核镜像无法识别或无法解压时为 <c>null</c>。</para></param>
+/// <param name="Kmi">KernelSU KMI string, or <c>null</c> when the kernel carries no extractable release.
+/// <para>KernelSU KMI 字符串；内核不含可提取的版本号时为 <c>null</c>。</para></param>
+public sealed record BootKernelInfo(string? Architecture, string? Kmi);
+
+/// <summary>
 /// Detection outcome describing a package's family, ABIs, options and KMIs.
 /// <para>描述包类型族、ABI、可选项与 KMI 的检测结果。</para>
 /// </summary>

@@ -178,6 +178,174 @@ public sealed class BootPatchModelsTests
         Assert.Equal("android13-5.15-2024", KernelVersionExtractor.ExtractKmi(kernel));
     }
 
+    [Fact]
+    public void KernelVersionExtractor_UtsReleaseMarker_IsUsedWhenNoBannerExists()
+    {
+        var kernel = "junk\0UTS_RELEASE=\"5.10.1-android12-5.10\"\0trailing"u8.ToArray();
+
+        Assert.Equal("5.10.1-android12-5.10", KernelVersionExtractor.ExtractRelease(kernel));
+        Assert.Equal("android12-5.10", KernelVersionExtractor.ExtractKmi(kernel));
+    }
+
+    [Fact]
+    public void KernelVersionExtractor_BannerWinsOverUtsMarkerRegardlessOfOrder()
+    {
+        var kernel = "UTS_RELEASE=\"android12-5.10\"\0linux VERSION 6.1.1-android14-11\0"u8.ToArray();
+
+        Assert.Equal("6.1.1-android14-11", KernelVersionExtractor.ExtractRelease(kernel));
+    }
+
+    [Fact]
+    public void KernelVersionExtractor_MissingBannerAndMarker_ReturnsNull()
+    {
+        Assert.Null(KernelVersionExtractor.ExtractRelease("no version marker here"u8));
+        Assert.Null(KernelVersionExtractor.ExtractKmi("no version marker here"u8));
+    }
+
+    [Fact]
+    public void MagiskKernelPatcher_Apply_MatchesSequentialPatternReplacement()
+    {
+        var kernel = BuildPatternKernel();
+        foreach (var forceRootfs in new[] { false, true })
+        {
+            var expected = ReferenceApply(kernel, forceRootfs);
+            var changes = new List<string>();
+
+            var actual = MagiskKernelPatcher.Apply(kernel, forceRootfs, changes);
+
+            Assert.Equal(expected.Image, actual);
+            Assert.Equal(expected.Changes, changes);
+        }
+    }
+
+    [Fact]
+    public void MagiskKernelPatcher_ApplyDetectingRootfs_MatchesNeedsLegacyRootfsCall()
+    {
+        var kernel = BuildPatternKernel();
+        foreach (var forceRootfs in new[] { false, true })
+        {
+            var detected = forceRootfs || kernel.AsSpan().IndexOf("skip_initramfs"u8) >= 0;
+            var expected = ReferenceApply(kernel, detected);
+            var changes = new List<string>();
+
+            var actual = MagiskKernelPatcher.ApplyDetectingRootfs(kernel, forceRootfs, changes);
+
+            Assert.Equal(expected.Image, actual);
+            Assert.Equal(expected.Changes, changes);
+        }
+    }
+
+    [Fact]
+    public void SplitEmbeddedKernelDtb_V1CompleteBlob_SplitsAtTheBlobStart()
+    {
+        var kernel = new byte[0x400];
+        kernel.AsSpan().Fill(0x21);
+        WriteDtb(kernel, 0x200, 0x48);
+        using var parser = new UotanStudio.Firmware.BootSecurity.BootImage.Parser.BootImageParser();
+        parser.Parse(PackBootImage(kernel, UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageVersion.V1));
+
+        BootPatchService.SplitEmbeddedKernelDtb(parser, parser.Kernel, out var body, out var dtb);
+
+        Assert.Equal(kernel[..0x200], body.ToArray());
+        Assert.Equal(kernel[0x200..], dtb);
+    }
+
+    [Fact]
+    public void SplitEmbeddedKernelDtb_V1IncompleteBlobBeforeCompleteOne_SplitsAtTheCompleteBlob()
+    {
+        var kernel = new byte[0x600];
+        kernel.AsSpan().Fill(0x22);
+        WriteDtb(kernel, 0x100, 4);
+        WriteDtb(kernel, 0x300, 0x180);
+        using var parser = new UotanStudio.Firmware.BootSecurity.BootImage.Parser.BootImageParser();
+        parser.Parse(PackBootImage(kernel, UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageVersion.V1));
+
+        BootPatchService.SplitEmbeddedKernelDtb(parser, parser.Kernel, out var body, out var dtb);
+
+        Assert.Equal(kernel[..0x300], body.ToArray());
+        Assert.Equal(kernel[0x300..], dtb);
+    }
+
+    [Fact]
+    public void SplitEmbeddedKernelDtb_V2Image_KeepsTheWholeKernel()
+    {
+        var kernel = new byte[0x400];
+        kernel.AsSpan().Fill(0x23);
+        WriteDtb(kernel, 0x200, 0x48);
+        using var parser = new UotanStudio.Firmware.BootSecurity.BootImage.Parser.BootImageParser();
+        parser.Parse(PackBootImage(kernel, UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageVersion.V2));
+
+        BootPatchService.SplitEmbeddedKernelDtb(parser, parser.Kernel, out var body, out var dtb);
+
+        Assert.Equal(kernel, body.ToArray());
+        Assert.Null(dtb);
+    }
+
+    [Fact]
+    public async Task DetectBootKernelAsync_ElfKernel_ReportsArchitectureAndKmi()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "uotan-bootkernel-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            var kernel = new byte[0x800];
+            kernel[0] = 0x7f; kernel[1] = (byte)'E'; kernel[2] = (byte)'L'; kernel[3] = (byte)'F';
+            kernel[4] = 2; kernel[5] = 1; kernel[6] = 1;
+            BitConverter.GetBytes((ushort)2).CopyTo(kernel, 16);
+            BitConverter.GetBytes((ushort)183).CopyTo(kernel, 18);
+            "Linux version 5.15.123-android13-5.15-2024 (builder)\0"u8.CopyTo(kernel.AsSpan(0x100));
+            var bootPath = Path.Combine(work, "boot.img");
+            File.WriteAllBytes(bootPath, PackBootImage(kernel, UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageVersion.V3));
+
+            var info = await BootPatchAnalyzer.DetectBootKernelAsync(bootPath, TestContext.Current.CancellationToken);
+
+            Assert.Equal("arm64", info.Architecture);
+            Assert.Equal("android13-5.15-2024", info.Kmi);
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task PatchWithDetectionAsync_PrecomputedDetection_ProducesTheSameImageAsPatchAsync()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "uotan-bootdetect-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            var kernel = "\0Linux version 5.15.123-android13-5.15 (builder)\0"u8.ToArray();
+            var ramdisk = BuildCpio([("init", "stock-init"u8.ToArray())]);
+            var bootPath = Path.Combine(work, "boot.img");
+            var packagePath = Path.Combine(work, "kernelsu.apk");
+            var first = Path.Combine(work, "first.img");
+            var second = Path.Combine(work, "second.img");
+            File.WriteAllBytes(bootPath, PackBootImage(kernel, UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageVersion.V3, ramdisk));
+            File.WriteAllBytes(Path.Combine(work, "ksuinit.bin"), "ksu-init"u8.ToArray());
+            File.WriteAllBytes(Path.Combine(work, "lkm.bin"), "fake-kernelsu-ko"u8.ToArray());
+            using (var zip = ZipFile.Open(packagePath, ZipArchiveMode.Create))
+            {
+                zip.CreateEntryFromFile(Path.Combine(work, "ksuinit.bin"), "lib/arm64-v8a/init");
+                zip.CreateEntryFromFile(Path.Combine(work, "lkm.bin"), "lib/arm64-v8a/android13-5.15/kernelsu.ko");
+            }
+
+            var service = new BootPatchService();
+            var detection = await service.DetectAsync(packagePath, TestContext.Current.CancellationToken);
+            var direct = await service.PatchAsync(packagePath, bootPath, first, cancellationToken: TestContext.Current.CancellationToken);
+            var reused = await service.PatchWithDetectionAsync(packagePath, bootPath, second, null, detection,
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(File.ReadAllBytes(first), File.ReadAllBytes(second));
+            Assert.Equal(direct.Changes, reused.Changes);
+            Assert.Equal(direct.Detection.Kind, reused.Detection.Kind);
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("lib/modules/android12-5.10/kernelsu.ko", "android12-5.10")]
     [InlineData("android13_5.15_kernelsu.ko", "android13-5.15")]
@@ -274,6 +442,89 @@ public sealed class BootPatchModelsTests
             }
         })], UotanStudio.Firmware.Archive.Models.ArchiveFormat.NewAscii);
         return stream.ToArray();
+    }
+
+    private static readonly (string Find, string Replace, string Name)[] ReferencePatches =
+    [
+        ("49010054011440B93FA00F71E9000054010840B93FA00F7189000054001840B91FA00F7188010054",
+            "A1020054011440B93FA00F7140020054010840B93FA00F71E0010054001840B91FA00F7181010054", "remove Samsung RKP"),
+        ("821B8012", "E2FF8F12", "remove Samsung defex"),
+        ("006044B91F040071802F005460DE41F9", "006044B91F00006B802F005460DE41F9", "remove Samsung defex A8 variant"),
+        ("603A46B91F0400710030005460C642F9", "603A46B91F00006B0030005460C642F9", "remove Samsung defex N9 variant"),
+        ("70726F63615F636F6E66696700", "70726F63615F6D616769736B00", "disable Samsung PROCA")
+    ];
+
+    private const string ReferenceForceFind = "736B69705F696E697472616D667300";
+    private const string ReferenceForceReplace = "77616E745F696E697472616D667300";
+
+    private static byte[] BuildPatternKernel()
+    {
+        var kernel = new byte[0x1000];
+        kernel.AsSpan().Fill(0x11);
+        PlacePattern(kernel, 0x100, ReferencePatches[0].Find);
+        PlacePattern(kernel, 0x200, "821B8012");
+        PlacePattern(kernel, 0x300, "821B8012");
+        PlacePattern(kernel, 0x400, ReferencePatches[2].Find);
+        PlacePattern(kernel, 0x500, ReferencePatches[3].Find);
+        PlacePattern(kernel, 0x600, ReferencePatches[4].Find);
+        PlacePattern(kernel, 0x700, ReferenceForceFind);
+        return kernel;
+    }
+
+    private static void PlacePattern(byte[] kernel, int offset, string hex)
+        => Convert.FromHexString(hex).CopyTo(kernel, offset);
+
+    private static void WriteDtb(byte[] kernel, int offset, int total)
+    {
+        ReadOnlySpan<byte> magic = [0xD0, 0x0D, 0xFE, 0xED];
+        magic.CopyTo(kernel.AsSpan(offset));
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(kernel.AsSpan(offset + 4), (uint)total);
+    }
+
+    private static (byte[] Image, List<string> Changes) ReferenceApply(byte[] kernel, bool forceRootfs)
+    {
+        var image = (byte[])kernel.Clone();
+        var changes = new List<string>();
+        foreach (var (find, replace, name) in ReferencePatches)
+        {
+            if (ReferencePatch(image, find, replace))
+                changes.Add($"Magisk kernel: {name}");
+        }
+        if (forceRootfs && ReferencePatch(image, ReferenceForceFind, ReferenceForceReplace))
+            changes.Add("Magisk kernel: force legacy rootfs initialization");
+        return (image, changes);
+    }
+
+    private static bool ReferencePatch(byte[] image, string find, string replace)
+    {
+        var pattern = Convert.FromHexString(find);
+        var replacement = Convert.FromHexString(replace);
+        if (replacement.Length > pattern.Length) return false;
+        var offset = image.AsSpan().IndexOf(pattern);
+        if (offset < 0) return false;
+        replacement.CopyTo(image.AsSpan(offset));
+        if (replacement.Length < pattern.Length)
+            image.AsSpan(offset + replacement.Length, pattern.Length - replacement.Length).Clear();
+        return true;
+    }
+
+    private static byte[] PackBootImage(byte[] kernel, UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageVersion version,
+        byte[]? ramdisk = null)
+    {
+        var packer = new UotanStudio.Firmware.BootSecurity.BootImage.BootImagePacker
+        {
+            Header = new UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageHeader
+            {
+                HeaderVersion = version,
+                OsVersion = 0x01030000,
+                CommandLine = "androidboot.slot_suffix=_a",
+            },
+            Kernel = kernel,
+            Ramdisk = ramdisk ?? [],
+        };
+        using var ms = new MemoryStream();
+        packer.PackToStream(ms);
+        return ms.ToArray();
     }
 
     private static byte[] PackBootImage(byte[] kernel, byte[] ramdisk)

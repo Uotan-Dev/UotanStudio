@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text.RegularExpressions;
 using UotanStudio.Compress;
+using ScDeflateStream = SharpCompress.Compressors.Deflate.DeflateStream;
 using ZlibException = SharpCompress.Compressors.Deflate.ZlibException;
 
 namespace UotanStudio.Firmware.BootSecurity.Patcher;
@@ -410,36 +411,21 @@ public static partial class Extractor
         return outMs.ToArray();
     }
 
-    private static int ProduceLength(byte[] data, int off, int len, int capOut)
-    {
-        try
-        {
-            using var ms = new MemoryStream(data, off, len);
-            using var ds = CompressionService.CreateDecompressionStream(ms, CompressionFormat.Deflate);
-            return ReadCapped(ds, capOut).Length;
-        }
-        catch (Exception ex) when (ex is InvalidDataException or ZlibException)
-        {
-            return -1;
-        }
-    }
-
     /// <summary>
-    /// Binary-searches how many input bytes the deflate stream actually consumes.
-    /// <para>二分查找被 deflate 流实际消耗的输入字节数。</para>
+    /// Decodes one raw RFC 1951 DEFLATE stream and reports how many input bytes the inflater consumed.
+    /// <para>解码单个原始 RFC 1951 DEFLATE 流，并报告解压器实际消耗的输入字节数。</para>
     /// </summary>
-    private static int FindConsumed(byte[] data, int off, int chunkLen, int outputLen, int capOut)
+    private static (byte[] Output, int Consumed)? DecodeDeflate(byte[] data, int off, int chunkLen, int cap)
     {
-        int lo = 0, hi = chunkLen;
-        while (lo < hi)
-        {
-            var mid = (lo + hi) / 2;
-            if (ProduceLength(data, off, mid, capOut) >= outputLen)
-                hi = mid;
-            else
-                lo = mid + 1;
-        }
-        return lo;
+        using var ms = new MemoryStream(data, off, chunkLen, writable: false);
+        using var ds = CompressionService.CreateDecompressionStream(ms, CompressionFormat.Deflate);
+        var output = ReadCapped(ds, cap + 1);
+        if (output.Length > cap)
+            return null;
+        var consumed = ds is ScDeflateStream inflater
+            ? checked((int)inflater.TotalIn)
+            : checked((int)ms.Position);
+        return (output, consumed);
     }
 
     /// <summary>
@@ -467,25 +453,21 @@ public static partial class Extractor
         var chunkLen = Math.Min(cap, data.Length - off);
         if (chunkLen <= 0)
             return null;
-        byte[] output;
+        (byte[] Output, int Consumed) decoded;
         try
         {
-            using var ms = new MemoryStream(data, off, chunkLen);
-            using var ds = CompressionService.CreateDecompressionStream(ms, CompressionFormat.Deflate);
-            output = ReadCapped(ds, cap + 1);
-            if (output.Length > cap)
+            var attempt = DecodeDeflate(data, off, chunkLen, cap);
+            if (attempt is null)
                 return null;
+            decoded = attempt.Value;
         }
         catch (Exception ex) when (ex is InvalidDataException or ZlibException)
         {
             return null;
         }
-        if (output.Length == 0)
+        if (decoded.Output.Length == 0 || decoded.Consumed <= 0)
             return null;
-        var consumed = FindConsumed(data, off, chunkLen, output.Length, cap + 1);
-        if (consumed <= 0)
-            return null;
-        return (consumed, output);
+        return (decoded.Consumed, decoded.Output);
     }
 
     /// <summary>
@@ -663,6 +645,27 @@ public static partial class Extractor
 
         var assets = new List<Asset>();
         var entryFns = entries.Select(e => e.FnVa).OrderBy(f => f).ToList();
+        var probes = new Dictionary<int, (int Consumed, byte[] Output)?>();
+        var retainedBytes = 0L;
+
+        (int Consumed, byte[] Output)? Probe(int offset)
+        {
+            if (probes.TryGetValue(offset, out var cached))
+                return cached;
+            var got = TryDeflate(data, offset);
+            if (got is null)
+            {
+                probes[offset] = null;
+                return null;
+            }
+            if (retainedBytes + got.Value.Output.Length <= 64L * 1024 * 1024)
+            {
+                probes[offset] = got;
+                retainedBytes += got.Value.Output.Length;
+            }
+            return got;
+        }
+
         foreach (var (name, fnVa, tableOff) in entries)
         {
             var nxt = entryFns.FirstOrDefault(f => f > fnVa);
@@ -674,6 +677,7 @@ public static partial class Extractor
             var dataRefs = refs.Where(elf.IsWritableVa).ToList();
 
             var result = new Asset { Name = name, FnVa = fnVa, TableOff = tableOff };
+            byte[]? located = null;
 
             foreach (var r in dataRefs)
             {
@@ -684,7 +688,7 @@ public static partial class Extractor
                         var off2 = elf.ResolveRef(r2);
                         if (off2 is null)
                             continue;
-                        var got = TryDeflate(data, (int)off2.Value);
+                        var got = Probe((int)off2.Value);
                         if (got is not null && got.Value.Output.Length >= 4096)
                         {
                             result.DataOff = (int)off2.Value;
@@ -692,6 +696,7 @@ public static partial class Extractor
                             result.Size = got.Value.Output.Length;
                             result.Sha256 = Sha256Hex(got.Value.Output);
                             result.Method = "entry-factory";
+                            located = got.Value.Output;
                             break;
                         }
                     }
@@ -709,7 +714,7 @@ public static partial class Extractor
                     var off = elf.ResolveRef(r);
                     if (off is null)
                         continue;
-                    var got = TryDeflate(data, (int)off.Value);
+                    var got = Probe((int)off.Value);
                     if (got is not null && got.Value.Output.Length >= 4096)
                     {
                         result.DataOff = (int)off.Value;
@@ -717,6 +722,7 @@ public static partial class Extractor
                         result.Size = got.Value.Output.Length;
                         result.Sha256 = Sha256Hex(got.Value.Output);
                         result.Method = "entry-ref";
+                        located = got.Value.Output;
                         break;
                     }
                 }
@@ -740,7 +746,7 @@ public static partial class Extractor
                         .Concat(elf.Machine == 62 ? EnumerateX86InlineHashes(elf, fnVa, extWindow) : [])
                         .Any(candidate => Convert.ToHexStringLower(candidate) == result.Sha256));
                 result.HashInBinary = hashHit is not null || inlineHash;
-                var outBytes = GetOutBytes(data, result);
+                var outBytes = located ?? [];
                 result.Verified =
                     result.HashInBinary &&
                     outBytes.Length >= 4 &&

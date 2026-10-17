@@ -138,6 +138,16 @@ public sealed class BootCmdlineServiceTests : IDisposable
             .CreatePlan(Path.Combine(_root, "absent.img"), "androidboot.selinux", "permissive"));
     }
 
+    [Fact]
+    public void CreatePlan_UnparsableImage_ThrowsImageParseException()
+    {
+        var path = Path.Combine(_root, "garbage.img");
+        File.WriteAllBytes(path, new byte[4096]);
+
+        Assert.Throws<ImageParseException>(() => new BootCmdlineService()
+            .CreatePlan(path, "androidboot.selinux", "permissive"));
+    }
+
     private string CreateBoot(string commandLine, string name = "boot.img")
     {
         var path = Path.Combine(_root, name);

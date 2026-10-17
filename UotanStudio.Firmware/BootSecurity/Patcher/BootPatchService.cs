@@ -76,6 +76,48 @@ public sealed class BootPatchService
     /// </example>
     public async Task<BootPatchResult> PatchAsync(string packagePath, string bootPath, string outputPath,
         BootPatchOptions? options = null, CancellationToken cancellationToken = default)
+        => await PatchCoreAsync(packagePath, bootPath, outputPath, options, detection: null, cancellationToken)
+            .ConfigureAwait(false);
+
+    /// <summary>
+    /// Applies an already analyzed root package to an Android boot image, skipping the package re-analysis.
+    /// <para>把已分析过的 root 包应用到 Android boot 镜像，跳过对包的再次分析。</para>
+    /// </summary>
+    /// <param name="packagePath">Path to the package the detection was produced from.
+    /// <para>生成检测结果所用的包路径。</para></param>
+    /// <param name="bootPath">Source boot image; it is read only and never overwritten.
+    /// <para>源 boot 镜像；只读取，不会被覆盖。</para></param>
+    /// <param name="outputPath">Destination image path published atomically after the full image is packed.
+    /// <para>目标镜像路径；完整镜像打包完成后原子发布。</para></param>
+    /// <param name="options">Patch options such as architecture, KMI override and verity flags.
+    /// <para>补丁选项（架构、KMI 覆盖、verity 开关等）。</para></param>
+    /// <param name="detection">Detection produced by <see cref="DetectAsync"/> for <paramref name="packagePath"/>.
+    /// <para>由 <see cref="DetectAsync"/> 针对 <paramref name="packagePath"/> 生成的检测结果。</para></param>
+    /// <param name="cancellationToken">Cancels package reads and the output write.
+    /// <para>取消包的读取与输出写入。</para></param>
+    /// <returns>The published output path, the applied detection and the ordered change list.
+    /// <para>已发布的输出路径、实际应用的检测结果与有序的变更列表。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="detection"/> is <see langword="null"/>.
+    /// <para><paramref name="detection"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidOperationException"><paramref name="bootPath"/> and <paramref name="outputPath"/>
+    /// resolve to the same file. <para><paramref name="bootPath"/> 与 <paramref name="outputPath"/> 解析为同一文件。</para></exception>
+    /// <exception cref="InvalidDataException">The detection is unsupported, the APatch SuperKey is invalid,
+    /// the boot image lacks a kernel or a required ramdisk, kernel or ramdisk decompression fails, the
+    /// KernelSU package has no module for the selected KMI, or the image is already Magisk-patched.
+    /// <para>检测结果不受支持、APatch SuperKey 无效、boot 镜像缺少内核或必需的 ramdisk、内核或 ramdisk 解压失败、
+    /// KernelSU 包不含所选 KMI 的模块，或镜像已被 Magisk 打过补丁。</para></exception>
+    /// <exception cref="OperationCanceledException">The token is cancelled during a read or write.
+    /// <para>读取或写入期间令牌被取消。</para></exception>
+    public async Task<BootPatchResult> PatchWithDetectionAsync(string packagePath, string bootPath, string outputPath,
+        BootPatchOptions? options, BootPatchDetection detection, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(detection);
+        return await PatchCoreAsync(packagePath, bootPath, outputPath, options, detection, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<BootPatchResult> PatchCoreAsync(string packagePath, string bootPath, string outputPath,
+        BootPatchOptions? options, BootPatchDetection? detection, CancellationToken cancellationToken)
     {
         options ??= new BootPatchOptions();
         options.Progress?.Report(0d);
@@ -83,7 +125,7 @@ public sealed class BootPatchService
         var destinationFullPath = Path.GetFullPath(outputPath);
         if (string.Equals(sourceFullPath, destinationFullPath, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The patched image must be written to a different file.");
-        var detection = await DetectAsync(packagePath, cancellationToken).ConfigureAwait(false);
+        detection ??= await DetectAsync(packagePath, cancellationToken).ConfigureAwait(false);
         if (!detection.IsSupported) throw new InvalidDataException("The selected file is not a supported Magisk, KernelSU or APatch package.");
         if (detection.Kind == BootPatchKind.APatch && !APatchSuperKey.IsValid(options.SuperPassword))
             throw new InvalidDataException("APatch SuperKey must be 8-63 characters and contain both a letter and a digit.");
@@ -137,7 +179,7 @@ public sealed class BootPatchService
                 : BootCompressor.TryDecompress(parser.Kernel, parser.Header.KernelCompression)
                     ?? throw new InvalidDataException("The boot kernel compression is unsupported or corrupt.");
             SplitEmbeddedKernelDtb(parser, rawKernel, out var kernelBody, out kernelDtb);
-            var injected = KernelPatchInjector.Patch(kernelBody, kpimg, options.SuperPassword!);
+            var injected = KernelPatchInjector.Patch(kernelBody.Span, kpimg, options.SuperPassword!);
             if (kernelDtb is { Length: > 0 }) injected = [.. injected, .. kernelDtb];
             patchedKernel = parser.Header.KernelCompression == CompressionType.None
                 ? injected
@@ -152,8 +194,7 @@ public sealed class BootPatchService
                     ?? throw new InvalidDataException("The boot kernel compression is unsupported or corrupt.");
             SplitEmbeddedKernelDtb(parser, rawKernel, out var kernelBody, out kernelDtb);
             var beforeKernelChanges = changes.Count;
-            var patched = MagiskKernelPatcher.Apply(kernelBody,
-                options.ForceRootfs || MagiskKernelPatcher.NeedsLegacyRootfs(kernelBody), changes);
+            var patched = MagiskKernelPatcher.ApplyDetectingRootfs(kernelBody.Span, options.ForceRootfs, changes);
             if (changes.Count == beforeKernelChanges)
                 patchedKernel = parser.Kernel;
             else
@@ -385,21 +426,31 @@ public sealed class BootPatchService
             || name.Equals("libmagiskinit.so", StringComparison.OrdinalIgnoreCase)
             || name.Equals("libinit-ld.so", StringComparison.OrdinalIgnoreCase);
 
-    private static void SplitEmbeddedKernelDtb(BootImageParser parser, ReadOnlySpan<byte> rawKernel,
-        out byte[] kernelBody, out byte[]? kernelDtb)
+    internal static void SplitEmbeddedKernelDtb(BootImageParser parser, ReadOnlyMemory<byte> rawKernel,
+        out ReadOnlyMemory<byte> kernelBody, out byte[]? kernelDtb)
     {
-        kernelBody = rawKernel.ToArray();
+        kernelBody = rawKernel;
         kernelDtb = null;
         if (parser.Header.HeaderVersion != BootImageVersion.V1) return;
         ReadOnlySpan<byte> dtbMagic = [0xD0, 0x0D, 0xFE, 0xED];
-        for (var offset = Math.Max(0, rawKernel.Length - 8 * 1024 * 1024); offset <= rawKernel.Length - 40; offset++)
+        var firstOffset = Math.Max(0, rawKernel.Length - 8 * 1024 * 1024);
+        var lastOffset = rawKernel.Length - 40;
+        if (lastOffset < firstOffset) return;
+        var window = rawKernel.Span[firstOffset..(lastOffset + dtbMagic.Length)];
+        var searched = 0;
+        while (searched <= window.Length - dtbMagic.Length)
         {
-            if (!rawKernel.Slice(offset, 4).SequenceEqual(dtbMagic)) continue;
-            var total = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(rawKernel.Slice(offset + 4, 4));
-            if (total < 40 || total > rawKernel.Length - offset) continue;
-            kernelBody = rawKernel[..offset].ToArray();
-            kernelDtb = rawKernel[offset..].ToArray();
-            return;
+            var relative = window[searched..].IndexOf(dtbMagic);
+            if (relative < 0) return;
+            var offset = firstOffset + searched + relative;
+            var total = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(rawKernel.Span.Slice(offset + 4, 4));
+            if (total >= 40 && total <= rawKernel.Length - offset)
+            {
+                kernelBody = rawKernel[..offset];
+                kernelDtb = rawKernel[offset..].ToArray();
+                return;
+            }
+            searched += relative + 1;
         }
     }
 

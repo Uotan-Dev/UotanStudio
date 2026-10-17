@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -5,8 +6,20 @@ namespace UotanStudio.Firmware.BootSecurity.Patcher.Kernel;
 
 /// <summary>Extracts Linux kernel release and Android KMI identifiers from kernel bytes.
 /// <para>从内核字节中提取 Linux 内核版本号与 Android KMI 标识。</para></summary>
+/// <remarks>
+/// The banner scan works directly on the Latin-1 bytes so a 64 MiB kernel is never materialized as a
+/// 128 MiB UTF-16 string; only the matched release token is decoded.
+/// <para>横幅扫描直接在 Latin-1 字节上进行，64 MiB 内核不会被物化为 128 MiB 的 UTF-16 字符串；只解码命中的版本标记。</para>
+/// </remarks>
 internal static partial class KernelVersionExtractor
 {
+    private const int MaximumScanLength = 64 * 1024 * 1024;
+    private static ReadOnlySpan<byte> LinuxVersionToken => "Linux version"u8;
+    private static ReadOnlySpan<byte> UtsReleaseToken => "UTS_RELEASE"u8;
+    private static ReadOnlySpan<byte> ConfigLocalVersionToken => "CONFIG_LOCALVERSION"u8;
+    private static readonly SearchValues<byte> LinuxVersionFirstBytes = SearchValues.Create("lL"u8);
+    private static readonly SearchValues<byte> UtsReleaseFirstBytes = SearchValues.Create("uUcC"u8);
+
     /// <summary>
     /// Reads the kernel release string from the first 64 MiB of <paramref name="data"/>, preferring a
     /// "Linux version" banner and falling back to UTS_RELEASE/CONFIG_LOCALVERSION tokens.
@@ -21,11 +34,8 @@ internal static partial class KernelVersionExtractor
     /// <para>去除首尾空白后的版本号；两种模式均未匹配时返回 <see langword="null"/>。</para></returns>
     public static string? ExtractRelease(ReadOnlySpan<byte> data)
     {
-        var text = Encoding.Latin1.GetString(data[..Math.Min(data.Length, 64 * 1024 * 1024)]);
-        var match = LinuxVersionRegex().Match(text);
-        if (match.Success) return match.Groups[1].Value.Trim();
-        match = UtsReleaseRegex().Match(text);
-        return match.Success ? match.Groups[1].Value.Trim() : null;
+        var window = data.Length > MaximumScanLength ? data[..MaximumScanLength] : data;
+        return ExtractLinuxVersion(window) ?? ExtractUtsRelease(window);
     }
 
     /// <summary>
@@ -48,10 +58,126 @@ internal static partial class KernelVersionExtractor
         return match.Success ? match.Groups[1].Value : null;
     }
 
-    [GeneratedRegex(@"Linux version\s+([^\x00\s]+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex LinuxVersionRegex();
-    [GeneratedRegex("(?:UTS_RELEASE|CONFIG_LOCALVERSION)[^\\x00\\r\\n]{0,32}[=:]\\s*[\\\"']?([0-9][^\\x00\\r\\n\\\"']+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex UtsReleaseRegex();
+    private static string? ExtractLinuxVersion(ReadOnlySpan<byte> text)
+    {
+        var pos = 0;
+        while (pos < text.Length)
+        {
+            var index = FindAsciiIgnoreCase(text, pos, LinuxVersionToken, LinuxVersionFirstBytes);
+            if (index < 0)
+                return null;
+            var valueStart = index + LinuxVersionToken.Length;
+            var start = valueStart;
+            while (valueStart < text.Length && IsLatin1Whitespace(text[valueStart]))
+                valueStart++;
+            if (valueStart == start)
+            {
+                pos = index + 1;
+                continue;
+            }
+            var end = valueStart;
+            while (end < text.Length && text[end] != 0 && !IsLatin1Whitespace(text[end]))
+                end++;
+            if (end == valueStart)
+            {
+                pos = index + 1;
+                continue;
+            }
+            return Encoding.Latin1.GetString(text[valueStart..end]);
+        }
+        return null;
+    }
+
+    private static string? ExtractUtsRelease(ReadOnlySpan<byte> text)
+    {
+        var pos = 0;
+        while (pos < text.Length)
+        {
+            var index = FindAsciiIgnoreCase(text, pos, UtsReleaseToken, UtsReleaseFirstBytes);
+            var configIndex = FindAsciiIgnoreCase(text, pos, ConfigLocalVersionToken, UtsReleaseFirstBytes);
+            var tokenLength = UtsReleaseToken.Length;
+            if (configIndex >= 0 && (index < 0 || configIndex < index))
+            {
+                index = configIndex;
+                tokenLength = ConfigLocalVersionToken.Length;
+            }
+            if (index < 0)
+                return null;
+            pos = index + 1;
+            var value = TryMatchUtsSuffix(text, index + tokenLength);
+            if (value is not null)
+                return value;
+        }
+        return null;
+    }
+
+    private static string? TryMatchUtsSuffix(ReadOnlySpan<byte> text, int tokenEnd)
+    {
+        var horizon = tokenEnd;
+        while (horizon < text.Length && text[horizon] is not (0 or (byte)'\r' or (byte)'\n'))
+            horizon++;
+        var separator = Math.Min(tokenEnd + 32, horizon - 1);
+        if (separator >= text.Length)
+            separator = text.Length - 1;
+        for (; separator >= tokenEnd; separator--)
+        {
+            if (text[separator] is not ((byte)'=' or (byte)':'))
+                continue;
+            var position = separator + 1;
+            while (position < text.Length && IsLatin1Whitespace(text[position]))
+                position++;
+            if (position < text.Length && text[position] is (byte)'"' or (byte)'\'')
+                position++;
+            if (position >= text.Length || text[position] is < (byte)'0' or > (byte)'9')
+                continue;
+            var start = position;
+            position++;
+            while (position < text.Length && text[position] is not (0 or (byte)'\r' or (byte)'\n' or (byte)'"' or (byte)'\''))
+                position++;
+            if (position - start < 2)
+                continue;
+            return Encoding.Latin1.GetString(text[start..position]).Trim();
+        }
+        return null;
+    }
+
+    private static int FindAsciiIgnoreCase(ReadOnlySpan<byte> text, int start, ReadOnlySpan<byte> value,
+        SearchValues<byte> firstBytes)
+    {
+        var pos = start;
+        while (pos <= text.Length - value.Length)
+        {
+            var relative = text[pos..].IndexOfAny(firstBytes);
+            if (relative < 0)
+                return -1;
+            var index = pos + relative;
+            if (index > text.Length - value.Length)
+                return -1;
+            if (StartsWithAsciiIgnoreCase(text[index..], value))
+                return index;
+            pos = index + 1;
+        }
+        return -1;
+    }
+
+    private static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<byte> span, ReadOnlySpan<byte> value)
+    {
+        if (span.Length < value.Length)
+            return false;
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (ToLowerAscii(span[index]) != ToLowerAscii(value[index]))
+                return false;
+        }
+        return true;
+    }
+
+    private static byte ToLowerAscii(byte value)
+        => value is >= (byte)'A' and <= (byte)'Z' ? (byte)(value + ('a' - 'A')) : value;
+
+    private static bool IsLatin1Whitespace(byte value)
+        => value is 0x09 or 0x0A or 0x0B or 0x0C or 0x0D or 0x20 or 0x85 or 0xA0;
+
     [GeneratedRegex(@"(?i)(android\d+(?:\.\d+)?[-_]\d+\.\d+(?:[-_][0-9A-Za-z.]+)?)")]
     private static partial Regex KmiRegex();
     [GeneratedRegex(@"(\d+\.\d+(?:\.\d+)?)")]

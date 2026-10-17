@@ -87,6 +87,22 @@ public class KsudExtractorCharacterizationTests
     }
 
     [Fact]
+    public void TryDeflate_TrailingBytes_ReportsExactlyTheDeflateStreamLength()
+    {
+        var payload = Encoding.UTF8.GetBytes(new string('K', 8192));
+        var stream = Deflate(payload);
+        var data = new byte[stream.Length + 4096];
+        stream.CopyTo(data, 0);
+        data.AsSpan(stream.Length).Fill(0x5A);
+
+        var result = KsudExtractor.TryDeflate(data, 0);
+
+        Assert.NotNull(result);
+        Assert.Equal(stream.Length, result!.Value.Consumed);
+        Assert.Equal(payload, result.Value.Output);
+    }
+
+    [Fact]
     public void TryDeflate_GzipContainerHeader_IsRejected()
     {
         var payload = Encoding.UTF8.GetBytes(new string('G', 4096));
