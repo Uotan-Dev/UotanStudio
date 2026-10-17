@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.FileSystem.F2fs.Models;
@@ -465,6 +466,10 @@ public sealed class F2fsParser : IDisposable
             .Sum(e => e.Kind == F2fsEntryKind.Symlink ? Encoding.UTF8.GetByteCount(e.SymlinkTarget ?? string.Empty)
                 : (e.Mode & 0xF000) == 0x8000 ? e.Size : 0L);
         var bytes = new Core.ExtractionByteCounter(totalBytes, byteProgress, cancellationToken);
+        // The host publishes entry progress on the UI thread, so per-entry reports are coalesced to one
+        // notification per window; the terminal report still carries the full entry count.
+        var entrySink = progress is null ? null : new Core.EntryCountProgress(progress);
+        var entryProgress = entrySink is null ? null : new Core.ProgressThrottle(totalCount, entrySink, cancellationToken);
         var processedCount = 0;
         foreach (var entry in entries)
         {
@@ -474,7 +479,7 @@ public sealed class F2fsParser : IDisposable
             {
                 Directory.CreateDirectory(targetPath);
                 processedCount++;
-                progress?.Report((processedCount, totalCount));
+                entryProgress?.Report((processedCount, totalCount));
                 continue;
             }
 
@@ -490,22 +495,23 @@ public sealed class F2fsParser : IDisposable
                     output => { using var counted = bytes.Wrap(output); counted.Write(Encoding.UTF8.GetBytes(entry.SymlinkTarget ?? string.Empty)); }, overwrite);
 
                 processedCount++;
-                progress?.Report((processedCount, totalCount));
+                entryProgress?.Report((processedCount, totalCount));
                 continue;
             }
 
             if (File.Exists(targetPath) && !overwrite)
             {
                 processedCount++;
-                progress?.Report((processedCount, totalCount));
+                entryProgress?.Report((processedCount, totalCount));
                 continue;
             }
 
             Core.FileExtraction.WriteAtomic(targetPath, output => { using var counted = bytes.Wrap(output); ReadFile(entry.Path, counted); }, overwrite);
 
             processedCount++;
-            progress?.Report((processedCount, totalCount));
+            entryProgress?.Report((processedCount, totalCount));
         }
+        entryProgress?.Complete();
         bytes.Complete();
     }
 
@@ -1096,17 +1102,29 @@ public sealed class F2fsParser : IDisposable
         if (physical != uint.MaxValue - 1)
         {
             var clusterBuffer = new byte[clusterSize];
-            for (var b = 0; b < clusterBlocks; b++)
+            var page = 0;
+            while (page < clusterBlocks)
             {
-                var blkAddr = MapBlock(inode, logical + (uint)b);
+                var blkAddr = MapBlock(inode, logical + (uint)page);
                 if (blkAddr is null or 0 or uint.MaxValue)
                 {
+                    page++;
                     continue;
                 }
 
-                var blockData = ReadBlockChecked((ulong)blkAddr, $"Uncompressed cluster block {b} (logical {logical + (uint)b})");
-                blockData.AsSpan(0, Math.Min(blockSize, clusterBuffer.Length - b * blockSize))
-                    .CopyTo(clusterBuffer.AsSpan(b * blockSize));
+                // Cluster pages are usually allocated contiguously, so one positioned read serves the
+                // whole run instead of one seek/read/allocation per page.
+                var first = (uint)blkAddr;
+                var run = 1;
+                while (page + run < clusterBlocks
+                       && MapBlock(inode, logical + (uint)(page + run)) == first + (long)run)
+                {
+                    run++;
+                }
+
+                ReadBlockRunInto(first, clusterBuffer.AsSpan(page * blockSize, run * blockSize),
+                    $"Uncompressed cluster block {page} (logical {logical + (uint)page})");
+                page += run;
             }
 
             return new GatheredCluster(clusterBuffer, logical, writeLength, false, Header: null);
@@ -1121,34 +1139,44 @@ public sealed class F2fsParser : IDisposable
         if (compressedBytes <= 0 || compressedBytes > (clusterPages - 1) * blockSize - F2fsCompressedCluster.HeaderSize)
             throw new FileSystemCorruptedException("F2FS compressed cluster length exceeds its reserved blocks.");
         var compressed = new byte[compressedBytes];
-        var copied = 0;
+        var headerPayload = firstBlock.AsSpan(F2fsCompressedCluster.HeaderSize);
+        var copied = Math.Min(headerPayload.Length, compressedBytes);
+        headerPayload[..copied].CopyTo(compressed);
         var blocksToRead = (F2fsCompressedCluster.HeaderSize + compressedBytes + blockSize - 1) / blockSize;
-        for (var b = 0; b < blocksToRead && copied < compressedBytes; b++)
+        var b = 1;
+        while (b < blocksToRead && copied < compressedBytes)
         {
-            byte[] blockData;
-            if (b == 0)
-            {
-                blockData = firstBlock;
-            }
-            else
-            {
-                var blkAddr = MapBlock(inode, logical + 1 + (uint)b);
-                if (blkAddr is null or <= 0 or >= uint.MaxValue - 1)
-                    throw new FileSystemCorruptedException("F2FS compressed payload block is missing.");
+            var blkAddr = MapBlock(inode, logical + 1 + (uint)b);
+            if (blkAddr is null or <= 0 or >= uint.MaxValue - 1)
+                throw new FileSystemCorruptedException("F2FS compressed payload block is missing.");
 
-                blockData = ReadBlockChecked((ulong)blkAddr, $"Compressed cluster block {b} (logical {logical + (uint)b})");
+            var first = (uint)blkAddr;
+            var run = 1;
+            while (b + run < blocksToRead
+                   && MapBlock(inode, logical + 1 + (uint)(b + run)) == first + (long)run)
+            {
+                run++;
             }
 
-            var srcOffset = b == 0 ? F2fsCompressedCluster.HeaderSize : 0;
-            var available = blockData.Length - srcOffset;
-            if (available <= 0)
+            var runBytes = checked(run * blockSize);
+            var runBuffer = ArrayPool<byte>.Shared.Rent(runBytes);
+            try
             {
-                break;
+                ReadBlockRunInto(first, runBuffer.AsSpan(0, runBytes),
+                    $"Compressed cluster block {b} (logical {logical + 1u + (uint)b})");
+                for (var k = 0; k < run && copied < compressedBytes; k++)
+                {
+                    var toCopy = Math.Min(blockSize, compressedBytes - copied);
+                    runBuffer.AsSpan(k * blockSize, toCopy).CopyTo(compressed.AsSpan(copied));
+                    copied += toCopy;
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(runBuffer);
             }
 
-            var toCopy = Math.Min(available, compressedBytes - copied);
-            blockData.AsSpan(srcOffset, toCopy).CopyTo(compressed.AsSpan(copied));
-            copied += toCopy;
+            b += run;
         }
 
         if (copied < compressedBytes)
@@ -1263,6 +1291,33 @@ public sealed class F2fsParser : IDisposable
         {
             _stream.Position = offset;
             _stream.ReadExactly(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Reads a run of physically contiguous blocks directly into a destination span with one positioned
+    /// read, so a cluster whose pages are contiguous costs a single seek and syscall.
+    /// <para>以一次定位读取把一段物理连续块直接读入目标跨度，使页连续的簇只需一次 seek 与一次系统调用。</para>
+    /// </summary>
+    /// <param name="firstAddress">Physical block address of the first block in the run.
+    /// <para>该段首个块的物理块地址。</para></param>
+    /// <param name="destination">Destination receiving exactly the run's bytes.
+    /// <para>接收该段全部字节的目标跨度。</para></param>
+    /// <param name="what">Description used in the corruption message.
+    /// <para>损坏消息中使用的描述。</para></param>
+    /// <exception cref="FileSystemCorruptedException">The run lies outside the image. <para>该段越出镜像边界。</para></exception>
+    private void ReadBlockRunInto(uint firstAddress, Span<byte> destination, string what)
+    {
+        var offset = checked((long)firstAddress * _blockSize);
+        if (offset < 0 || offset > _imageSize || destination.Length > _imageSize - offset)
+        {
+            throw new FileSystemCorruptedException($"{what} exceeds the image bounds.");
+        }
+
+        lock (_streamLock)
+        {
+            _stream.Position = offset;
+            _stream.ReadExactly(destination);
         }
     }
 

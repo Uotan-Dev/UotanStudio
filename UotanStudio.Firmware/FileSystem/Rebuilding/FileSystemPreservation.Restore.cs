@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.Metadata;
 
@@ -228,24 +229,24 @@ public static partial class FileSystemPreservation
     /// <para>报告所描述的已发布镜像路径。</para></param>
     /// <param name="optimizerReport">Search keys overlaid onto the report; may be <see langword="null"/>.
     /// <para>叠加到报告上的搜索键；可为 <see langword="null"/>。</para></param>
-    /// <param name="token">Cancels report work; unused today, reserved for future digest channels.
-    /// <para>取消报告构建；当前未使用，为将来的摘要通道保留。</para></param>
-    /// <param name="progress">Optional progress reporter; unused today, reserved for future digest channels.
-    /// <para>可选进度回调；当前未使用，为将来的摘要通道保留。</para></param>
+    /// <param name="token">Cancels the byte identity digest scan.
+    /// <para>取消字节一致性摘要扫描。</para></param>
+    /// <param name="progress">Optional staged reporter; the byte identity digest scan is reported as
+    /// <see cref="FileSystemWorkStage.VerifyingImage"/> and may be <see langword="null"/>.
+    /// <para>可选的分阶段回调；字节一致性摘要扫描上报为
+    /// <see cref="FileSystemWorkStage.VerifyingImage"/>，可为 <see langword="null"/>。</para></param>
     private static Dictionary<string, string> BuildEquivalenceReport(string format, FileSystemPreservationData manifest,
         RebuildParameters? rebuild, string publishedPath, IReadOnlyDictionary<string, string>? optimizerReport,
         CancellationToken token, IProgress<FileSystemByteProgress>? progress = null)
     {
-        _ = token;
-        _ = progress;
         var rebuiltLength = new FileInfo(publishedPath).Length;
         var report = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["RebuiltSize"] = rebuiltLength.ToString(CultureInfo.InvariantCulture),
             ["SourceImageLength"] = manifest.SourceLength.ToString(CultureInfo.InvariantCulture),
         };
-        report["EquivalentStructure"] = "True";
-        report["EquivalentContent"] = "True";
+        report[EquivalenceMetadataKeys.Structure] = "True";
+        report[EquivalenceMetadataKeys.Content] = "True";
 
         var capacityLength = rebuiltLength;
         if (format == "Android Sparse Image (simg)")
@@ -253,6 +254,12 @@ public static partial class FileSystemPreservation
             using var container = SparseContainerAccess.Resolve().OpenLogicalView(publishedPath);
             capacityLength = container.Logical.Length;
             report["RebuiltLogicalSize"] = capacityLength.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (manifest.SourceDigest.Length > 0)
+        {
+            report[EquivalenceMetadataKeys.Byte] =
+                EvaluateByteIdentity(manifest, publishedPath, report, token, progress).ToString();
         }
 
         if (format == "EROFS" && rebuild?.Erofs is { } erofsProfile)
@@ -270,7 +277,7 @@ public static partial class FileSystemPreservation
         if (target is > 0)
         {
             report["SourceFilesystemSize"] = target.Value.ToString(CultureInfo.InvariantCulture);
-            report["FitsSourceFilesystemSize"] = (capacityLength <= target.Value).ToString();
+            report[EquivalenceMetadataKeys.Capacity] = (capacityLength <= target.Value).ToString();
             report["SizeExcess"] = Math.Max(0, capacityLength - target.Value).ToString(CultureInfo.InvariantCulture);
             if (paddedFallback)
             {
@@ -287,5 +294,73 @@ public static partial class FileSystemPreservation
         }
 
         return report;
+    }
+
+    /// <summary>
+    /// Compares the published image with the source identity recorded at extraction and records both digests.
+    /// The comparison streams the published file, so an edited rebuild reports byte difference while an
+    /// untouched round trip reports identity; a capture that recorded no digest leaves the dimension
+    /// unevaluated instead of guessing.
+    /// <para>把已发布镜像与解包时记录的源身份比较，并记下两侧摘要。比较对已发布文件流式计算，因此编辑过的重建报告
+    /// 字节不同，而未经编辑的往返报告完全一致；采集时未记录摘要则让该维度保持不评估，而不是猜测。</para>
+    /// </summary>
+    /// <param name="manifest">Preservation payload carrying the recorded source digest and length.
+    /// <para>携带记录的源摘要与长度的保留负载。</para></param>
+    /// <param name="publishedPath">Published image the report describes.
+    /// <para>报告所描述的已发布镜像。</para></param>
+    /// <param name="report">Report dictionary receiving <c>SourceImageHash</c> and <c>ProducedImageHash</c>.
+    /// <para>接收 <c>SourceImageHash</c> 与 <c>ProducedImageHash</c> 的报告字典。</para></param>
+    /// <param name="token">Cancels the digest read. <para>取消摘要读取。</para></param>
+    /// <param name="progress">Reporter receiving the digest scan as
+    /// <see cref="FileSystemWorkStage.VerifyingImage"/>; <see langword="null"/> reports nothing.
+    /// <para>把摘要扫描上报为 <see cref="FileSystemWorkStage.VerifyingImage"/> 的回调；<see langword="null"/> 时不报告。</para></param>
+    /// <returns><see langword="true"/> when the published image matches the recorded
+    /// source digest and length, otherwise <see langword="false"/>.
+    /// <para>已发布镜像与记录的源摘要及长度一致时返回 <see langword="true"/>，否则返回 <see langword="false"/>。</para></returns>
+    private static bool EvaluateByteIdentity(FileSystemPreservationData manifest,
+        string publishedPath, IDictionary<string, string> report, CancellationToken token,
+        IProgress<FileSystemByteProgress>? progress)
+    {
+        using var published = File.OpenRead(publishedPath);
+        var length = published.Length;
+        var digest = DigestPublished(published, length, token, progress);
+        report["SourceImageHash"] = manifest.SourceDigest;
+        report["ProducedImageHash"] = digest;
+        return length == manifest.SourceLength
+            && string.Equals(digest, manifest.SourceDigest, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Hashes the published image while reporting the scan as <see cref="FileSystemWorkStage.VerifyingImage"/>.
+    /// The published bytes are hashed as written, so a sparse container is compared as its container file rather
+    /// than as the logical filesystem it carries.
+    /// <para>对已发布镜像计算摘要，并把该扫描上报为 <see cref="FileSystemWorkStage.VerifyingImage"/>。摘要针对写出的
+    /// 已发布字节，因此稀疏容器按容器文件比较，而不是按它承载的逻辑文件系统比较。</para>
+    /// </summary>
+    /// <param name="published">Readable stream over the published image, positioned at its start; the caller
+    /// keeps ownership. <para>已发布镜像的可读流，定位在起始处；所有权仍归调用方。</para></param>
+    /// <param name="length">Published length used as the progress denominator.
+    /// <para>已发布长度，用作进度分母。</para></param>
+    /// <param name="token">Cancels the scan between blocks. <para>在数据块之间取消扫描。</para></param>
+    /// <param name="progress">Optional staged reporter; <see langword="null"/> reports nothing.
+    /// <para>可选的分阶段回调；<see langword="null"/> 时不报告。</para></param>
+    /// <returns>The published image digest, lowercase hexadecimal.
+    /// <para>已发布镜像摘要，小写十六进制。</para></returns>
+    private static string DigestPublished(Stream published, long length, CancellationToken token,
+        IProgress<FileSystemByteProgress>? progress)
+    {
+        var counter = progress is null ? null
+            : new ExtractionByteCounter(Math.Max(1, length),
+                FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.VerifyingImage), token);
+        using var hashing = new HashingReadStream(published, leaveOpen: true);
+        var buffer = new byte[65536];
+        int read;
+        while ((read = hashing.Read(buffer, 0, buffer.Length)) != 0)
+        {
+            token.ThrowIfCancellationRequested();
+            counter?.Add(read);
+        }
+        counter?.Complete();
+        return hashing.GetHashHex();
     }
 }

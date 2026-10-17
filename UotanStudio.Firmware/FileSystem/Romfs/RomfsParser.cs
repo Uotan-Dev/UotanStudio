@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Text;
@@ -20,11 +21,16 @@ internal sealed class RomfsParser
     private const uint ModeMask = 0x0000_000F;
     private const int SuperblockSize = 16;
     private const int ChecksumRegionBytes = 512;
+    private const int MetadataWindowBytes = 64 * 1024;
+    private const int CopyChunkBytes = 81_920;
     private static readonly ReadOnlyMemory<byte> Magic = "-rom1fs-"u8.ToArray();
 
     private readonly Stream _input;
     private readonly long _volumeSize;
     private readonly Dictionary<long, RomfsEntry> _entriesByHeader = [];
+    private readonly byte[] _window = new byte[MetadataWindowBytes];
+    private long _windowStart = -1;
+    private int _windowLength;
 
     /// <summary>
     /// Parses the superblock and the full directory tree.
@@ -187,9 +193,19 @@ internal sealed class RomfsParser
         var results = new List<string>();
         var total = TotalDataBytes;
         var processed = 0L;
-        ExtractNode(Root);
-        byteProgress?.Report((processed, total));
-        return results;
+        var throttle = new ProgressThrottle(total, byteProgress, cancellationToken);
+        var buffer = ArrayPool<byte>.Shared.Rent(CopyChunkBytes);
+        try
+        {
+            throttle.Report((0, total));
+            ExtractNode(Root);
+            throttle.Complete();
+            return results;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
 
         void ExtractNode(RomfsEntry entry)
         {
@@ -223,7 +239,6 @@ internal sealed class RomfsParser
                     $"RomFS extraction of '{entry.Path}' would exceed the {maximumOutputBytes}-byte output budget.");
             }
 
-            var chunk = new byte[Math.Min(size, 81920)];
             FileExtraction.WriteAtomic(target, stream =>
             {
                 _input.Position = offset;
@@ -231,18 +246,18 @@ internal sealed class RomfsParser
                 while (written < size)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var read = _input.Read(chunk, 0, (int)Math.Min(chunk.Length, size - written));
+                    var read = _input.Read(buffer, 0, (int)Math.Min((long)buffer.Length, size - written));
                     if (read <= 0)
                     {
                         throw new FileSystemCorruptedException($"RomFS entry '{entry.Path}' ends before its declared size.");
                     }
 
-                    stream.Write(chunk, 0, read);
+                    stream.Write(buffer, 0, read);
                     written += read;
                 }
             }, overwrite, cancellationToken);
             processed = checked(processed + size);
-            byteProgress?.Report((processed, total));
+            throttle.Report((processed, total));
         }
     }
 
@@ -289,8 +304,7 @@ internal sealed class RomfsParser
             _ => throw new UnreachableException(),
         };
 
-        var nameBytes = ReadPaddedName(headerOffset + 16, out var nameRegionBytes);
-        var name = DecodeName(nameBytes);
+        var name = ReadEntryName(headerOffset + 16, out var nameRegionBytes);
         var dataOffset = checked(headerOffset + 16 + nameRegionBytes);
         ValidateChecksum(headerOffset, 16 + nameRegionBytes, storedChecksum);
 
@@ -379,43 +393,76 @@ internal sealed class RomfsParser
         }
     }
 
-    private byte[] ReadPaddedName(long nameOffset, out int nameRegionBytes)
+    /// <summary>
+    /// Reads the NUL-terminated entry name at <paramref name="nameOffset"/> and returns it as text, reporting
+    /// the 16-byte-aligned region the name occupies including its terminator.
+    /// <para>读取 <paramref name="nameOffset"/> 处 NUL 结尾的条目名并返回文本，同时报告名称连同终止符占用的
+    /// 16 字节对齐区间。</para>
+    /// </summary>
+    /// <param name="nameOffset">First name byte inside the volume. <para>卷内的名称首字节。</para></param>
+    /// <param name="nameRegionBytes">Receives the aligned name region length.
+    /// <para>接收对齐后的名称区间长度。</para></param>
+    /// <returns>The decoded name without the terminator. <para>不含终止符的解码名称。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The name is unterminated or exceeds the supported length.
+    /// <para>名称未终止或超出支持长度时抛出。</para></exception>
+    private string ReadEntryName(long nameOffset, out int nameRegionBytes)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(MaximumNameBytes);
+        try
+        {
+            var length = ReadNameBytes(nameOffset, buffer.AsSpan(0, MaximumNameBytes));
+            nameRegionBytes = checked((int)RoundTo16(length + 1L));
+            return Encoding.UTF8.GetString(buffer, 0, length);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Reads name bytes up to the terminating NUL through the buffered metadata window.
+    /// <para>通过缓冲的元数据窗口读取名称字节直到终止 NUL。</para>
+    /// </summary>
+    /// <param name="nameOffset">First name byte inside the volume. <para>卷内的名称首字节。</para></param>
+    /// <param name="destination">Buffer receiving the bytes before the terminator.
+    /// <para>接收终止符之前字节的缓冲区。</para></param>
+    /// <returns>The number of name bytes stored. <para>保存的名称字节数。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The name starts outside the volume, is unterminated, or
+    /// exceeds <see cref="MaximumNameBytes"/>. <para>名称起点在卷外、未终止或超出
+    /// <see cref="MaximumNameBytes"/> 时抛出。</para></exception>
+    private int ReadNameBytes(long nameOffset, Span<byte> destination)
     {
         if (nameOffset >= _volumeSize)
         {
             throw new FileSystemCorruptedException("The RomFS entry name starts outside the volume.");
         }
 
-        var collected = new List<byte>();
-        var terminator = -1;
+        var filled = 0;
         var position = nameOffset;
         while (position < _volumeSize)
         {
-            var chunk = new byte[(int)Math.Min(16, _volumeSize - position)];
-            _input.Position = position;
-            _input.ReadExactly(chunk);
-            var nul = Array.IndexOf(chunk, (byte)0);
-            collected.AddRange(nul >= 0 ? chunk[..nul] : chunk);
-            if (nul >= 0)
-            {
-                terminator = (int)(position - nameOffset) + nul;
-                break;
-            }
-
-            position += 16;
-            if (collected.Count > MaximumNameBytes)
+            EnsureWindow(position, 1);
+            var start = (int)(position - _windowStart);
+            var available = _window.AsSpan(start, _windowLength - start);
+            var nul = available.IndexOf((byte)0);
+            var take = nul >= 0 ? nul : available.Length;
+            if (filled + take > destination.Length)
             {
                 throw new FileSystemCorruptedException("The RomFS entry name exceeds the supported length.");
             }
+
+            available[..take].CopyTo(destination[filled..]);
+            filled += take;
+            if (nul >= 0)
+            {
+                return filled;
+            }
+
+            position += take;
         }
 
-        if (terminator < 0)
-        {
-            throw new FileSystemCorruptedException("The RomFS entry name is not terminated inside the volume.");
-        }
-
-        nameRegionBytes = checked((int)RoundTo16((long)terminator + 1));
-        return [.. collected];
+        throw new FileSystemCorruptedException("The RomFS entry name is not terminated inside the volume.");
     }
 
     private void ValidateChecksum(long regionOffset, int regionBytes, uint storedChecksum)
@@ -432,49 +479,52 @@ internal sealed class RomfsParser
         }
     }
 
-    private static string DecodeName(byte[] nameBytes) =>
-        Encoding.UTF8.GetString(nameBytes).Replace('\0', ' ');
-
+    /// <summary>
+    /// Reads one big-endian dword through the buffered metadata window, loading a fresh 64 KiB window only
+    /// when the offset falls outside the one already resident.
+    /// <para>通过缓冲的元数据窗口读取一个大端双字，仅在偏移落在当前驻留窗口之外时重新装载 64 KiB 窗口。</para>
+    /// </summary>
+    /// <param name="offset">Absolute volume offset of the dword. <para>双字的卷内绝对偏移。</para></param>
+    /// <returns>The decoded value. <para>解码后的值。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The read exceeds the volume.
+    /// <para>读取超出卷边界时抛出。</para></exception>
     private uint ReadUInt32BE(long offset)
     {
-        if (offset < 0 || offset + 4 > _volumeSize)
+        EnsureWindow(offset, 4);
+        return BinaryPrimitives.ReadUInt32BigEndian(_window.AsSpan((int)(offset - _windowStart), 4));
+    }
+
+    private void EnsureWindow(long offset, int count)
+    {
+        if (offset < 0 || count < 0 || offset > _volumeSize || count > _volumeSize - offset)
         {
             throw new FileSystemCorruptedException($"The RomFS read at {offset} exceeds the volume.");
         }
 
-        Span<byte> buffer = stackalloc byte[4];
+        if (_windowStart >= 0 && offset >= _windowStart && offset - _windowStart <= _windowLength - count)
+        {
+            return;
+        }
+
+        var length = (int)Math.Min(MetadataWindowBytes, _volumeSize - offset);
         _input.Position = offset;
-        _input.ReadExactly(buffer);
-        return BinaryPrimitives.ReadUInt32BigEndian(buffer);
+        _input.ReadExactly(_window.AsSpan(0, length));
+        _windowStart = offset;
+        _windowLength = length;
     }
 
     private string ReadVolumeName()
     {
-        var collected = new List<byte>();
-        var position = (long)SuperblockSize;
-        _input.Position = position;
-        while (position < _volumeSize)
+        var buffer = ArrayPool<byte>.Shared.Rent(MaximumNameBytes);
+        try
         {
-            var b = _input.ReadByte();
-            if (b < 0)
-            {
-                break;
-            }
-
-            position++;
-            if (b == 0)
-            {
-                return Encoding.UTF8.GetString([.. collected]);
-            }
-
-            collected.Add((byte)b);
-            if (collected.Count > MaximumNameBytes)
-            {
-                throw new FileSystemCorruptedException("The RomFS volume name exceeds the supported length.");
-            }
+            var length = ReadNameBytes(SuperblockSize, buffer.AsSpan(0, MaximumNameBytes));
+            return Encoding.UTF8.GetString(buffer, 0, length);
         }
-
-        throw new FileSystemCorruptedException("The RomFS volume name is not terminated inside the volume.");
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     private static long RoundTo16(long value) => (value + 15) & ~15L;

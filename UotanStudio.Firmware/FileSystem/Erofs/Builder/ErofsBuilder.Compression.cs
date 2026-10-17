@@ -228,17 +228,35 @@ public sealed partial class ErofsBuilder
     }
 
     private static ErofsPclusterPlan[]? TryPlanCompressed(ErofsInode node, int blockSize, ErofsOptions options,
-        Core.CompressionPayloadStaging staging)
+        Core.CompressionPayloadStaging staging, ErofsLz4StatePool lz4States)
     {
-        if (options.OptimizeCompression && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
+        using var batch = new ErofsStagingBatch(staging);
+        var lz4 = options.Algorithm == ErofsCompressionAlgorithm.Lz4 ? lz4States.Rent(options.Lz4HighCompression) : null;
+        try
         {
-            var dense = TryPlanDenseCompressed(node, blockSize, options, staging);
-            if (dense is null || ClosesSafely(node, dense, blockSize))
+            if (options.OptimizeCompression && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
             {
-                return dense;
+                var dense = TryPlanDenseCompressed(node, blockSize, options, batch, lz4);
+                if (dense is null || ClosesSafely(node, dense, blockSize))
+                {
+                    return dense;
+                }
+            }
+
+            return PlanClusterRestartCompressed(node, blockSize, options, batch, lz4);
+        }
+        finally
+        {
+            if (lz4 is not null)
+            {
+                lz4States.Return(lz4);
             }
         }
+    }
 
+    private static ErofsPclusterPlan[]? PlanClusterRestartCompressed(ErofsInode node, int blockSize,
+        ErofsOptions options, ErofsStagingBatch batch, ErofsLz4Context? lz4)
+    {
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         var clusterSize = node.LogicalClusterSize;
         if (options.Algorithm == ErofsCompressionAlgorithm.Lz4 && options.Lz4MaxDistance != 0
@@ -248,204 +266,261 @@ public sealed partial class ErofsBuilder
         var fillDestination = bigPcluster && options.Algorithm == ErofsCompressionAlgorithm.Lz4
             && !options.InterlacedPlainPclusters;
         var totalClusters = CeilDiv((long)node.Size, clusterSize);
-        var raw = new byte[clusterSize * 64];
-        var compressed = new byte[ErofsCompression.MaximumOutputSize((ErofsAlgorithm)options.Algorithm, raw.Length)];
-        var accepted = new byte[Math.Clamp(frameLimit, 0, compressed.Length)];
+        var rawLength = (int)Math.Min((long)clusterSize * 64, (long)node.Size);
+        var raw = System.Buffers.ArrayPool<byte>.Shared.Rent(rawLength);
+        var compressedLength = ErofsCompression.MaximumOutputSize((ErofsAlgorithm)options.Algorithm, rawLength);
+        var compressed = System.Buffers.ArrayPool<byte>.Shared.Rent(compressedLength);
+        var acceptedLength = Math.Clamp(frameLimit, 1, compressedLength);
+        var accepted = System.Buffers.ArrayPool<byte>.Shared.Rent(acceptedLength);
         var plans = new List<ErofsPclusterPlan>();
-        var pos = 0L;
-        var clusterIndex = 0L;
-        while (pos < (long)node.Size)
+        try
         {
-            options.CancellationToken.ThrowIfCancellationRequested();
-
-            var acceptedLen = 0;
-            var acceptedOut = 0;
-            var buffered = 0;
-            var maxTake = (int)Math.Min(64, totalClusters - clusterIndex);
-            if (options.Algorithm == ErofsCompressionAlgorithm.Lz4
-                && options.Lz4MaxDistance is > 0 and < ErofsCompression.Lz4DistanceMax)
-                maxTake = (int)Math.Max(1, Math.Min(maxTake, options.Lz4MaxDistance / clusterSize));
-
-            var inputCap = (int)Math.Min((long)node.Size - pos, (long)maxTake * clusterSize);
-
-            bool TrySpan(int candidateLen, out int outLen)
+            var pos = 0L;
+            var clusterIndex = 0L;
+            var windowBase = 0L;
+            var windowFilled = 0;
+            while (pos < (long)node.Size)
             {
-                outLen = 0;
-                if (candidateLen <= 0 || candidateLen > raw.Length)
-                {
-                    return false;
-                }
+                options.CancellationToken.ThrowIfCancellationRequested();
 
-                if (candidateLen > buffered)
-                {
-                    fs.Position = pos + buffered;
-                    fs.ReadExactly(raw, buffered, candidateLen - buffered);
-                    buffered = candidateLen;
-                }
+                var acceptedLen = 0;
+                var acceptedOut = 0;
+                var maxTake = (int)Math.Min(64, totalClusters - clusterIndex);
+                if (options.Algorithm == ErofsCompressionAlgorithm.Lz4
+                    && options.Lz4MaxDistance is > 0 and < ErofsCompression.Lz4DistanceMax)
+                    maxTake = (int)Math.Max(1, Math.Min(maxTake, options.Lz4MaxDistance / clusterSize));
 
-                outLen = ErofsCompression.AlgorithmCompress(
-                    options, raw, 0, candidateLen, compressed, 0, compressed.Length);
-                if (outLen <= 0 || outLen > frameLimit)
-                {
-                    return false;
-                }
+                var inputCap = (int)Math.Min((long)node.Size - pos, (long)maxTake * clusterSize);
 
-                if (outLen > blockSize && pos % clusterSize + candidateLen <= clusterSize)
+                bool TrySpan(int candidateLen, out int outLen)
                 {
-                    return false;
-                }
-
-                if (pos % clusterSize != 0 && pos % clusterSize + candidateLen <= clusterSize)
-                {
-                    return false;
-                }
-
-                if (!AcceptsClosingIndexRow(pos, candidateLen, outLen, clusterSize, (long)node.Size, blockSize))
-                {
-                    return false;
-                }
-
-                compressed.AsSpan(0, outLen).CopyTo(accepted);
-                return true;
-            }
-
-            int ClusterLength(int take)
-            {
-                var candidateLen = (int)Math.Min((long)node.Size - pos, (long)take * clusterSize);
-                if (!bigPcluster)
-                {
-                    var tail = candidateLen % clusterSize;
-                    if (tail != 0)
+                    outLen = 0;
+                    if (candidateLen <= 0 || candidateLen > rawLength)
                     {
-                        candidateLen -= tail;
-                    }
-                }
-
-                return candidateLen;
-            }
-
-            bool TryTake(int take, out int candidateLen, out int outLen)
-            {
-                candidateLen = ClusterLength(take);
-                return TrySpan(candidateLen, out outLen);
-            }
-
-            var lo = 0;
-            var hi = maxTake + 1;
-            for (var probe = 1; probe < hi;)
-            {
-                if (!TryTake(probe, out var probeLen, out var probeOut))
-                {
-                    if (probe == 1 && bigPcluster && probeOut > blockSize)
-                    {
-                        lo = probe;
-                        probe = 2;
-                        continue;
+                        return false;
                     }
 
-                    hi = probe;
-                    break;
-                }
-
-                lo = probe;
-                acceptedLen = probeLen;
-                acceptedOut = probeOut;
-                probe = probe == 1 ? 2 : probe * 2;
-            }
-
-            while (lo + 1 < hi)
-            {
-                var mid = lo + (hi - lo) / 2;
-                if (TryTake(mid, out var midLen, out var midOut))
-                {
-                    lo = mid;
-                    acceptedLen = midLen;
-                    acceptedOut = midOut;
-                }
-                else
-                {
-                    hi = mid;
-                }
-            }
-
-            if (fillDestination)
-            {
-                // lib/compress.c:602-614 hands the encoder a destination budget of one pcluster and takes
-                // whatever input it consumed (`erofs_compress_destsize`, lib/compressor_lz4.c:15-26), so the span
-                // a pcluster covers is neither a whole number of logical clusters nor bounded by the pcluster
-                // size. The cluster search above can therefore only bracket the span: it stops at the first
-                // whole-cluster multiple whose encoding no longer fits. Searching the bracket by byte recovers
-                // the span the destination-filling encoder would have consumed, which is what lets a pcluster
-                // whose compression ratio is below one but whose encoding rounds up to the same block count as
-                // its input still hold more logical bytes than physical ones.
-                // <para>lib/compress.c:602-614 把一整个 pcluster 的输出预算交给编码器，并采纳它消耗掉的输入
-                // （<c>erofs_compress_destsize</c>，lib/compressor_lz4.c:15-26），因此 pcluster 覆盖的跨度既不是
-                // 整数个逻辑簇，也不受 pcluster 大小约束。上面的逐簇搜索只能给出跨度的区间：它在第一个编码放不下的
-                // 整簇倍数处停下。按字节在该区间内搜索即可还原「填满输出」的编码器会消耗掉的跨度，这正是压缩比
-                // 小于一、但编码长度向上取整后与输入同块数的 pcluster 仍能装进比物理块数更多逻辑字节的原因。</para>
-                var high = (int)Math.Min(inputCap, (long)hi * clusterSize);
-                var low = acceptedLen;
-                while (high - low > 1)
-                {
-                    var mid = low + (high - low) / 2;
-                    if (TrySpan(mid, out var midOut))
+                    FillReadWindow(fs, raw, rawLength, pos, candidateLen, ref windowBase, ref windowFilled);
+                    outLen = ErofsPlannerCompression.Compress(
+                        options, lz4, raw, (int)(pos - windowBase), candidateLen, compressed, compressedLength);
+                    if (outLen <= 0 || outLen > frameLimit)
                     {
-                        low = mid;
-                        acceptedLen = mid;
+                        return false;
+                    }
+
+                    if (outLen > blockSize && pos % clusterSize + candidateLen <= clusterSize)
+                    {
+                        return false;
+                    }
+
+                    if (pos % clusterSize != 0 && pos % clusterSize + candidateLen <= clusterSize)
+                    {
+                        return false;
+                    }
+
+                    if (!AcceptsClosingIndexRow(pos, candidateLen, outLen, clusterSize, (long)node.Size, blockSize))
+                    {
+                        return false;
+                    }
+
+                    compressed.AsSpan(0, outLen).CopyTo(accepted);
+                    return true;
+                }
+
+                int ClusterLength(int take)
+                {
+                    var candidateLen = (int)Math.Min((long)node.Size - pos, (long)take * clusterSize);
+                    if (!bigPcluster)
+                    {
+                        var tail = candidateLen % clusterSize;
+                        if (tail != 0)
+                        {
+                            candidateLen -= tail;
+                        }
+                    }
+
+                    return candidateLen;
+                }
+
+                bool TryTake(int take, out int candidateLen, out int outLen)
+                {
+                    candidateLen = ClusterLength(take);
+                    return TrySpan(candidateLen, out outLen);
+                }
+
+                var lo = 0;
+                var hi = maxTake + 1;
+                for (var probe = 1; probe < hi;)
+                {
+                    if (!TryTake(probe, out var probeLen, out var probeOut))
+                    {
+                        if (probe == 1 && bigPcluster && probeOut > blockSize)
+                        {
+                            lo = probe;
+                            probe = 2;
+                            continue;
+                        }
+
+                        hi = probe;
+                        break;
+                    }
+
+                    lo = probe;
+                    acceptedLen = probeLen;
+                    acceptedOut = probeOut;
+                    probe = probe == 1 ? 2 : probe * 2;
+                }
+
+                while (lo + 1 < hi)
+                {
+                    var mid = lo + (hi - lo) / 2;
+                    if (TryTake(mid, out var midLen, out var midOut))
+                    {
+                        lo = mid;
+                        acceptedLen = midLen;
                         acceptedOut = midOut;
                     }
                     else
                     {
-                        high = mid;
+                        hi = mid;
                     }
                 }
-            }
 
-            // lib/compress.c:616-628 rounds an encoded length up to a whole block and keeps the compressed frame
-            // only when that rounded length is strictly smaller than the bytes the frame encodes; otherwise the
-            // span is stored raw one block at a time. The test has to run on the candidate the search settled on:
-            // moving it into the probe would make the very first whole-cluster probe fail on any span whose
-            // encoding rounds up to its own length, and the escalating probe leaves the search at that first
-            // failure, so the file would fall back to raw storage as a whole instead of one block at a time.
-            // <para>lib/compress.c:616-628 把编码长度向上取整到整块，且仅当取整后的长度严格小于该帧编码的
-            // 字节数时才保留压缩帧；否则该跨度按一块一段原样存放。该判定必须作用于搜索最终选定的候选：若把它
-            // 移进探测内部，任何编码长度向上取整后等于自身长度的跨度都会让第一个整簇探测失败，而递增式探测正
-            // 停在这次失败处，于是整份文件会退回整文件原样存放，而不是一块一段地原样存放。</para>
-            if (acceptedLen > 0 && acceptedOut > 0
-                && CeilDiv(acceptedOut, blockSize) * blockSize >= acceptedLen)
-            {
-                acceptedLen = 0;
-                acceptedOut = 0;
-            }
+                if (fillDestination)
+                {
+                    // lib/compress.c:602-614 hands the encoder a destination budget of one pcluster and takes
+                    // whatever input it consumed (`erofs_compress_destsize`, lib/compressor_lz4.c:15-26), so the span
+                    // a pcluster covers is neither a whole number of logical clusters nor bounded by the pcluster
+                    // size. The cluster search above can therefore only bracket the span: it stops at the first
+                    // whole-cluster multiple whose encoding no longer fits. Searching the bracket by byte recovers
+                    // the span the destination-filling encoder would have consumed, which is what lets a pcluster
+                    // whose compression ratio is below one but whose encoding rounds up to the same block count as
+                    // its input still hold more logical bytes than physical ones.
+                    // <para>lib/compress.c:602-614 把一整个 pcluster 的输出预算交给编码器，并采纳它消耗掉的输入
+                    // （<c>erofs_compress_destsize</c>，lib/compressor_lz4.c:15-26），因此 pcluster 覆盖的跨度既不是
+                    // 整数个逻辑簇，也不受 pcluster 大小约束。上面的逐簇搜索只能给出跨度的区间：它在第一个编码放不下的
+                    // 整簇倍数处停下。按字节在该区间内搜索即可还原「填满输出」的编码器会消耗掉的跨度，这正是压缩比
+                    // 小于一、但编码长度向上取整后与输入同块数的 pcluster 仍能装进比物理块数更多逻辑字节的原因。</para>
+                    var high = (int)Math.Min(inputCap, (long)hi * clusterSize);
+                    var low = acceptedLen;
+                    while (high - low > 1)
+                    {
+                        var mid = low + (high - low) / 2;
+                        if (TrySpan(mid, out var midOut))
+                        {
+                            low = mid;
+                            acceptedLen = mid;
+                            acceptedOut = midOut;
+                        }
+                        else
+                        {
+                            high = mid;
+                        }
+                    }
+                }
 
-            if (acceptedLen <= 0 || acceptedOut <= 0)
-            {
-                if (clusterSize != blockSize) return null;
-                var length = (int)Math.Min((long)node.Size - pos, clusterSize);
-                plans.Add(new ErofsPclusterPlan { SourceOffset = pos, SourceLength = length, CompressedLength = length, Plain = true });
-                pos += length;
+                // lib/compress.c:616-628 rounds an encoded length up to a whole block and keeps the compressed frame
+                // only when that rounded length is strictly smaller than the bytes the frame encodes; otherwise the
+                // span is stored raw one block at a time. The test has to run on the candidate the search settled on:
+                // moving it into the probe would make the very first whole-cluster probe fail on any span whose
+                // encoding rounds up to its own length, and the escalating probe leaves the search at that first
+                // failure, so the file would fall back to raw storage as a whole instead of one block at a time.
+                // <para>lib/compress.c:616-628 把编码长度向上取整到整块，且仅当取整后的长度严格小于该帧编码的
+                // 字节数时才保留压缩帧；否则该跨度按一块一段原样存放。该判定必须作用于搜索最终选定的候选：若把它
+                // 移进探测内部，任何编码长度向上取整后等于自身长度的跨度都会让第一个整簇探测失败，而递增式探测正
+                // 停在这次失败处，于是整份文件会退回整文件原样存放，而不是一块一段地原样存放。</para>
+                if (acceptedLen > 0 && acceptedOut > 0
+                    && CeilDiv(acceptedOut, blockSize) * blockSize >= acceptedLen)
+                {
+                    acceptedLen = 0;
+                    acceptedOut = 0;
+                }
+
+                if (acceptedLen <= 0 || acceptedOut <= 0)
+                {
+                    if (clusterSize != blockSize) return null;
+                    var length = (int)Math.Min((long)node.Size - pos, clusterSize);
+                    plans.Add(new ErofsPclusterPlan { SourceOffset = pos, SourceLength = length, CompressedLength = length, Plain = true });
+                    pos += length;
+                    clusterIndex = CeilDiv(pos, clusterSize);
+                    continue;
+                }
+
+                var plan = new ErofsPclusterPlan
+                {
+                    SourceOffset = pos,
+                    SourceLength = acceptedLen,
+                    CompressedLength = acceptedOut,
+                };
+                batch.Append(plan, accepted.AsSpan(0, acceptedOut));
+                plans.Add(plan);
+                pos += acceptedLen;
                 clusterIndex = CeilDiv(pos, clusterSize);
-                continue;
             }
 
-            plans.Add(new ErofsPclusterPlan
+            if (plans.Count > 0 && node.SourceInode is not { SourceCompressed: true }
+                && plans.Sum(p => CeilDiv(p.CompressedLength, blockSize)) >= totalClusters)
             {
-                SourceOffset = pos,
-                SourceLength = acceptedLen,
-                CompressedLength = acceptedOut,
-                StagedOffset = staging.Append(accepted.AsSpan(0, acceptedOut))
-            });
-            pos += acceptedLen;
-            clusterIndex = CeilDiv(pos, clusterSize);
-        }
+                return null;
+            }
 
-        if (plans.Count > 0 && node.SourceInode is not { SourceCompressed: true }
-            && plans.Sum(p => CeilDiv(p.CompressedLength, blockSize)) >= totalClusters)
+            return [.. plans];
+        }
+        finally
         {
-            return null;
+            System.Buffers.ArrayPool<byte>.Shared.Return(raw);
+            System.Buffers.ArrayPool<byte>.Shared.Return(compressed);
+            System.Buffers.ArrayPool<byte>.Shared.Return(accepted);
+        }
+    }
+
+    /// <summary>
+    /// Makes the bytes of one candidate span available in the read window, reading only the part the window
+    /// still lacks. Consecutive pclusters overlap heavily: a pcluster starts where the previous one ended while
+    /// its probes reach up to sixty-four clusters ahead, so refilling from the pcluster start would read the
+    /// same bytes once per pcluster. The window therefore keeps everything already read and only moves its base
+    /// when the candidate would run past the buffer, which is when the surviving bytes are moved to its front.
+    /// Reads stay sequential either way, and the encoder receives exactly the bytes the file holds.
+    /// <para>让一个候选跨度的字节出现在读取窗口中，只读取窗口尚缺的部分。相邻 pcluster 大幅重叠：pcluster 从
+    /// 上一个结束处开始，其探测却向前伸到六十四个簇，因此每次从 pcluster 起点重新读取会让同一批字节被读一遍又
+    /// 一遍。窗口因此保留已读字节，只在候选越过缓冲区时移动基址，并把仍然有用的字节移到窗口前端。两种情况下读取
+    /// 都保持顺序，编码器拿到的正是文件中的那些字节。</para>
+    /// </summary>
+    /// <param name="source">Source payload stream positioned by this method, never by the caller.
+    /// <para>由本方法定位的源负载流，调用方不负责其位置。</para></param>
+    /// <param name="buffer">Read window shared by every probe of the node.
+    /// <para>该节点所有探测共用的读取窗口。</para></param>
+    /// <param name="bufferLength">Usable length of <paramref name="buffer"/>; the rented array may be longer.
+    /// <para><paramref name="buffer"/> 的可用长度；借用的数组可能更长。</para></param>
+    /// <param name="position">File offset the candidate starts at, which becomes the window base when the
+    /// candidate no longer fits. <para>候选的起始文件偏移；候选放不下时它成为窗口基址。</para></param>
+    /// <param name="length">Candidate length in bytes. <para>候选的字节长度。</para></param>
+    /// <param name="windowBase">File offset of the first window byte, updated in place.
+    /// <para>窗口首字节的文件偏移，就地更新。</para></param>
+    /// <param name="windowFilled">Number of valid window bytes from its base, updated in place.
+    /// <para>自窗口基址起的有效字节数，就地更新。</para></param>
+    private static void FillReadWindow(FileStream source, byte[] buffer, int bufferLength, long position,
+        int length, ref long windowBase, ref int windowFilled)
+    {
+        if (position + length > windowBase + bufferLength)
+        {
+            var keep = (int)Math.Clamp(windowBase + windowFilled - position, 0L, bufferLength);
+            if (keep > 0)
+            {
+                Buffer.BlockCopy(buffer, (int)(position - windowBase), buffer, 0, keep);
+            }
+
+            windowBase = position;
+            windowFilled = keep;
         }
 
-        return [.. plans];
+        if (position + length > windowBase + windowFilled)
+        {
+            var need = (int)(position + length - (windowBase + windowFilled));
+            source.Position = windowBase + windowFilled;
+            source.ReadExactly(buffer, windowFilled, need);
+            windowFilled += need;
+        }
     }
 
     /// <summary>

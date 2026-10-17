@@ -411,6 +411,52 @@ internal static class ErofsCompression
     }
 
     /// <summary>
+    /// Encodes one LZ4 block through a caller-owned encoder context, so a planning loop reuses one native
+    /// allocation across its probes instead of allocating a fresh context per probe. The frame bytes are
+    /// identical to the context-free overload, which the shared encoder guarantees by clearing the context
+    /// before every use.
+    /// <para>经调用方持有的编码器上下文输出一个 LZ4 块，使规划循环在各次探测之间复用同一块原生分配，而不是
+    /// 每次探测都新建上下文。帧字节与不带上下文的重载逐字节相同，这一致性由共享编码器在每次使用前清零上下文
+    /// 保证。</para>
+    /// </summary>
+    /// <param name="options">Codec settings of the node being planned, supplying the level and LZ4 encoder
+    /// identity. <para>正在规划的节点的编解码设置，提供级别与 LZ4 编码器身份。</para></param>
+    /// <param name="context">Context borrowed by the calling worker from
+    /// <see cref="ErofsLz4StatePool"/>; <see langword="null"/> allocates a private one for this call.
+    /// <para>调用工作者从 <see cref="ErofsLz4StatePool"/> 借用的上下文；为 <see langword="null"/> 时仅为本调用
+    /// 分配私有上下文。</para></param>
+    /// <param name="source">Buffer holding the uncompressed input. <para>存放未压缩输入的缓冲区。</para></param>
+    /// <param name="sourceIndex">Offset in <paramref name="source"/> where the input region starts.
+    /// <para><paramref name="source"/> 中输入区域的起始偏移。</para></param>
+    /// <param name="sourceLength">Number of input bytes read from <paramref name="sourceIndex"/>.
+    /// <para>自 <paramref name="sourceIndex"/> 起读取的输入字节数。</para></param>
+    /// <param name="target">Buffer the compressed bytes are written into. <para>写入压缩字节的缓冲区。</para></param>
+    /// <param name="targetIndex">Offset in <paramref name="target"/> where the output region starts.
+    /// <para><paramref name="target"/> 中输出区域的起始偏移。</para></param>
+    /// <param name="targetLength">Number of bytes reserved for the output inside <paramref name="target"/>.
+    /// <para><paramref name="target"/> 中为输出预留的字节数。</para></param>
+    /// <returns>The number of compressed bytes written to <paramref name="target"/>, or <c>0</c> when the block
+    /// does not fit the destination. <para>写入 <paramref name="target"/> 的压缩字节数；块放不下目标时为
+    /// <c>0</c>。</para></returns>
+    internal static int AlgorithmCompressLz4(
+        ErofsOptions options,
+        ErofsLz4Context? context,
+        byte[] source,
+        int sourceIndex,
+        int sourceLength,
+        byte[] target,
+        int targetIndex,
+        int targetLength)
+    {
+        ValidateRange(source, sourceIndex, sourceLength, nameof(source));
+        ValidateRange(target, targetIndex, targetLength, nameof(target));
+        return CompressLz4(source, sourceIndex, sourceLength, target, targetIndex, targetLength,
+            Math.Max(1, options.CompressionLevel),
+            options.Algorithm == ErofsCompressionAlgorithm.Lz4 && options.Lz4HighCompression,
+            context);
+    }
+
+    /// <summary>
     /// Encodes one LZ4 block with the managed destination-size encoder ported from liblz4 1.9.4.
     /// <para>用移植自 liblz4 1.9.4 的托管限定目标大小编码器输出一个 LZ4 块。</para>
     /// </summary>
@@ -423,18 +469,40 @@ internal static class ErofsCompression
         int targetLength,
         int compressionLevel,
         bool highCompression)
+        => CompressLz4(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel,
+            highCompression, context: null);
+
+    private static int CompressLz4(
+        byte[] source,
+        int sourceIndex,
+        int sourceLength,
+        byte[] target,
+        int targetIndex,
+        int targetLength,
+        int compressionLevel,
+        bool highCompression,
+        ErofsLz4Context? context)
     {
         if (sourceLength == 0 || targetLength == 0)
         {
             return 0;
         }
 
-        var encoded = Lz4DestinationCodec.Encode(
-            source.AsSpan(sourceIndex, sourceLength),
-            target.AsSpan(targetIndex, targetLength),
-            highCompression ? 2 : 1,
-            highCompression ? compressionLevel : Math.Clamp(10 - compressionLevel, 1, 10),
-            out var consumed);
+        var algorithm = highCompression ? 2 : 1;
+        var level = highCompression ? compressionLevel : Math.Clamp(10 - compressionLevel, 1, 10);
+        var sourceSpan = source.AsSpan(sourceIndex, sourceLength);
+        var targetSpan = target.AsSpan(targetIndex, targetLength);
+        int encoded;
+        int consumed;
+        if (context is null)
+        {
+            encoded = Lz4DestinationCodec.Encode(sourceSpan, targetSpan, algorithm, level, out consumed);
+        }
+        else
+        {
+            encoded = context.Encode(sourceSpan, targetSpan, algorithm, level, out consumed);
+        }
+
         return consumed == sourceLength ? encoded : 0;
     }
 

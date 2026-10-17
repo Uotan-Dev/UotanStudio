@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Codecs.Zstd;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.F2fs.Models;
 using Xunit;
@@ -11,6 +13,31 @@ namespace UotanStudio.Tests.Firmware;
 /// </summary>
 public class F2fsCompressionTests
 {
+    [Fact]
+    public void ZstdBlockCodec_SpanDecompress_ReportsActualLengthAcrossCachedContextReuse()
+    {
+        var original = new byte[65536];
+        for (var i = 0; i < original.Length; i++)
+        {
+            original[i] = (byte)(i * 31 + 7);
+        }
+
+        var frame = new byte[ZstdBlockCodec.MaximumCompressedSize(original.Length)];
+        var written = ZstdBlockCodec.Compress(original, frame, 3);
+        var destination = new byte[original.Length + 512];
+
+        var first = ZstdBlockCodec.Decompress(frame.AsSpan(0, written), destination);
+        Assert.Equal(original.Length, first);
+        Assert.Equal(original, destination.AsSpan(0, first).ToArray());
+
+        var second = ZstdBlockCodec.Decompress(frame.AsSpan(0, written), destination);
+        Assert.Equal(first, second);
+        Assert.Equal(original, destination.AsSpan(0, second).ToArray());
+
+        Assert.Throws<CompressionException>(() =>
+            ZstdBlockCodec.Decompress(frame.AsSpan(0, written), destination.AsSpan(0, original.Length / 2)));
+    }
+
     [Fact]
     public void CompressAndDecompress_Lz4_RoundTrips()
     {

@@ -35,6 +35,12 @@ internal sealed class FileSystemPreservationData
     public string Partition { get; set; } = "";
     /// <summary>Gets the source image length in bytes.<para>获取源镜像字节长度。</para></summary>
     public long SourceLength { get; set; }
+    /// <summary>Gets the digest of the whole source image, recorded so a preserved rebuild can report byte
+    /// identity against the actual input instead of inferring it from its own output; empty when the capture
+    /// recorded none.
+    /// <para>获取整份源镜像的摘要；记录该值使受保留重建能针对真实输入报告字节一致性，而不是从自身产出推断；
+    /// 采集时未记录则为空。</para></summary>
+    public string SourceDigest { get; set; } = "";
     /// <summary>Gets the digest of the metadata document excluding this payload; a mismatch means the
     /// surrounding metadata was edited outside the supported edit paths.
     /// <para>获取不含本负载的元数据文档摘要；不一致表示上层元数据被受支持编辑路径之外的改动修改过。</para></summary>

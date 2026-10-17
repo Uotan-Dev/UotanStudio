@@ -17,6 +17,7 @@ public sealed class FatParser : IDisposable
 
     private readonly FileStream? _ownedStream;
     private readonly FatFileSystem _filesystem;
+    private readonly Stream _imageStream;
     private readonly long _imageLength;
     private readonly long _totalClusters;
     private readonly long _declaredVolumeBytes;
@@ -40,6 +41,7 @@ public sealed class FatParser : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
         _ownedStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read,
             FatVolumeTree.CopyChunkBytes, FileOptions.RandomAccess);
+        _imageStream = _ownedStream;
         _imageLength = _ownedStream.Length;
         _filesystem = Open(_ownedStream, out var boot);
         _totalClusters = ClusterCount(boot, _filesystem);
@@ -69,6 +71,7 @@ public sealed class FatParser : IDisposable
         }
 
         _imageLength = stream.Length;
+        _imageStream = stream;
         _filesystem = Open(stream, out var boot);
         _totalClusters = ClusterCount(boot, _filesystem);
         _declaredVolumeBytes = ReadDeclaredVolumeBytes(boot, _filesystem);
@@ -321,7 +324,15 @@ public sealed class FatParser : IDisposable
             throw new FileNotFoundException($"The FAT volume has no file at '{path}'.", path);
         }
 
-        CopyFile(libraryPath, output, entry.Size);
+        try
+        {
+            FatVolumeTree.CopyExtents(_filesystem, _imageStream, libraryPath, output, entry.Size);
+        }
+        catch (FatVolumeTree.FatVolumeTruncatedException ex)
+        {
+            throw new FileSystemCorruptedException(
+                $"The FAT file '{libraryPath}' stores clusters beyond the end of the image.", ex);
+        }
     }
 
     /// <summary>
@@ -369,7 +380,7 @@ public sealed class FatParser : IDisposable
     {
         ListFiles();
         return FatVolumeTree.Extract(_filesystem, _index, outputDirectory, overwrite, maximumOutputBytes,
-            byteProgress, entry => IsFullyBacked(_index.LibraryPath(entry.Path), entry.Size), cancellationToken);
+            byteProgress, isBacked: null, cancellationToken, _imageStream);
     }
 
     /// <summary>
@@ -480,26 +491,4 @@ public sealed class FatParser : IDisposable
     }
 
     private static bool IsPowerOfTwo(int value) => value > 0 && (value & (value - 1)) == 0;
-
-    private bool IsFullyBacked(string libraryPath, long size)
-    {
-        if (size == 0)
-        {
-            return true;
-        }
-
-        return _filesystem.PathToExtents(libraryPath).All(extent =>
-            extent.Start >= 0 && extent.Start <= _imageLength - extent.Length);
-    }
-
-    private void CopyFile(string libraryPath, Stream output, long size)
-    {
-        if (!IsFullyBacked(libraryPath, size))
-        {
-            throw new FileSystemCorruptedException(
-                $"The FAT file '{libraryPath}' stores clusters beyond the end of the image.");
-        }
-
-        FatVolumeTree.Copy(_filesystem, libraryPath, output, size);
-    }
 }

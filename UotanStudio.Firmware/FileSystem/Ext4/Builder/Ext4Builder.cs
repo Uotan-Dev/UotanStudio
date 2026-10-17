@@ -289,6 +289,7 @@ public sealed partial class Ext4Builder
         var temporaryPath = Path.Combine(directory, $".{Path.GetFileName(fullOutputPath)}.{Guid.NewGuid():N}.tmp");
 
         var plannedRoot = BuildTree(Path.GetFullPath(sourceDirectory), [fullOutputPath, temporaryPath]);
+        var estimatedSourceBytes = progress is null ? 0 : EstimateSourceBytes(plannedRoot);
         Directory.CreateDirectory(directory);
 
         try
@@ -296,7 +297,7 @@ public sealed partial class Ext4Builder
             using (var output = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.None))
             {
                 var counter = progress is null ? null
-                    : new ExtractionByteCounter(EstimateSourceBytes(sourceDirectory), progress);
+                    : new ExtractionByteCounter(estimatedSourceBytes, progress);
                 Stream sink = new CountingWriteStream(output, long.MaxValue, leaveOpen: true,
                     cancellationToken: effective.CancellationToken);
                 if (counter is not null) sink = counter.Wrap(sink);
@@ -314,13 +315,27 @@ public sealed partial class Ext4Builder
         }
     }
 
-    private static long EstimateSourceBytes(string sourceDirectory)
+    /// <summary>
+    /// Sums the sizes already collected by <see cref="BuildTree"/> for every non-directory node, so the progress denominator reuses the single tree scan instead of enumerating the source directory a second time. The value is a reporting hint that the write counter clamps against; it never affects image bytes.
+    /// <para>汇总 <see cref="BuildTree"/> 已为每个非目录节点收集的大小，使进度总量复用同一次目录树扫描而不再次枚举源目录。该值只是写入计数器用于封顶的报告提示，不影响镜像字节。</para>
+    /// </summary>
+    private static long EstimateSourceBytes(Node root)
     {
         long total = 0;
-        foreach (var file in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
+        var pending = new Stack<Node>();
+        pending.Push(root);
+        while (pending.Count > 0)
         {
-            try { total += new FileInfo(file).Length; }
-            catch (IOException) { }
+            var node = pending.Pop();
+            if (!node.IsDirectory)
+            {
+                total += node.Size;
+            }
+
+            foreach (var child in node.Children)
+            {
+                pending.Push(child);
+            }
         }
         return total == 0 ? 1 : total;
     }
@@ -1110,7 +1125,8 @@ public sealed partial class Ext4Builder
             }
 
             var name = Path.GetFileName(childPath);
-            var attributes = File.GetAttributes(childPath);
+            var info = new FileInfo(childPath);
+            var attributes = info.Attributes;
             var isSymlink = (attributes & FileAttributes.ReparsePoint) != 0;
             var isDirectory = (attributes & FileAttributes.Directory) != 0 && !isSymlink;
             var child = new Node
@@ -1124,22 +1140,22 @@ public sealed partial class Ext4Builder
             };
             if (isSymlink)
             {
-                child.SymlinkTarget = new FileInfo(childPath).LinkTarget ?? string.Empty;
+                child.SymlinkTarget = info.LinkTarget ?? string.Empty;
                 child.Size = Encoding.UTF8.GetByteCount(child.SymlinkTarget);
                 child.Mode = ModeSymbolicLink;
-                child.Mtime = ToUnixSeconds(File.GetLastWriteTimeUtc(childPath));
-                child.Ctime = ToUnixSeconds(File.GetCreationTimeUtc(childPath));
+                child.Mtime = ToUnixSeconds(info.LastWriteTimeUtc);
+                child.Ctime = ToUnixSeconds(info.CreationTimeUtc);
             }
             else if (isDirectory)
             {
                 child.Size = 0;
-                ReadUnixAttributes(childPath, child);
+                ReadUnixAttributes(childPath, child, info);
                 child.Mode = (ushort)(child.Mode | 0x4000);
             }
             else
             {
-                child.Size = new FileInfo(childPath).Length;
-                ReadUnixAttributes(childPath, child);
+                child.Size = info.Length;
+                ReadUnixAttributes(childPath, child, info);
                 child.Mode = (ushort)(child.Mode | 0x8000);
             }
 
@@ -1209,14 +1225,13 @@ public sealed partial class Ext4Builder
     }
 
     /// <summary>
-    /// Reads Unix file attributes (mode low12 bits, uid, gid, mtime, ctime).
-    /// <para>从源文件 Unix 属性读取 mode（低12位权限位）、uid、gid、mtime、ctime。</para>
+    /// Reads Unix file attributes (mode low12 bits, uid, gid, mtime, ctime) and the source <c>security.selinux</c> xattr from one already-initialized <see cref="FileInfo"/>, so timestamps and permissions cost one stat instead of several.
+    /// <para>从已初始化的 <see cref="FileInfo"/> 读取 Unix 属性（mode 低12位权限位、uid、gid、mtime、ctime）与源 <c>security.selinux</c> xattr，使时间戳与权限只需一次 stat 而非多次。</para>
     /// </summary>
-    private static void ReadUnixAttributes(string path, Node node)
+    private static void ReadUnixAttributes(string path, Node node, FileInfo info)
     {
-        var fi = new FileInfo(path);
-        node.Mtime = ToUnixSeconds(fi.LastWriteTimeUtc);
-        node.Ctime = ToUnixSeconds(fi.CreationTimeUtc);
+        node.Mtime = ToUnixSeconds(info.LastWriteTimeUtc);
+        node.Ctime = ToUnixSeconds(info.CreationTimeUtc);
         node.Uid = 0;
         node.Gid = 0;
 
@@ -1230,51 +1245,34 @@ public sealed partial class Ext4Builder
             catch
             {
 
-                node.Mode = (fi.Attributes & FileAttributes.ReadOnly) != 0 ? (ushort)0x124 : (ushort)0x1A4;
-                if ((fi.Attributes & FileAttributes.Directory) != 0)
+                node.Mode = (info.Attributes & FileAttributes.ReadOnly) != 0 ? (ushort)0x124 : (ushort)0x1A4;
+                if ((info.Attributes & FileAttributes.Directory) != 0)
                 {
                     node.Mode = 0x1ED;
                 }
             }
 
-            try
+            if (FileSystemEditPlan.Current is null)
             {
-                var psi = new System.Diagnostics.ProcessStartInfo
+                try
                 {
-                    FileName = "getfattr",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                };
-                psi.ArgumentList.Add("-n");
-                psi.ArgumentList.Add("security.selinux");
-                psi.ArgumentList.Add("--only-values");
-                psi.ArgumentList.Add("--");
-                psi.ArgumentList.Add(path);
-                using var process = System.Diagnostics.Process.Start(psi);
-                if (process != null)
-                {
-                    _ = process.StandardError.ReadToEndAsync();
-                    using var ms = new MemoryStream();
-                    process.StandardOutput.BaseStream.CopyTo(ms);
-                    if (process.WaitForExit(2000) && process.ExitCode == 0 && ms.Length > 0)
+                    if (UnixExtendedAttributes.TryRead(path, "security.selinux", out var selinux))
                     {
                         node.Xattrs ??= new Dictionary<string, byte[]>(StringComparer.Ordinal);
-                        node.Xattrs["security.selinux"] = ms.ToArray();
+                        node.Xattrs["security.selinux"] = selinux;
                     }
                 }
-            }
-            catch
-            {
+                catch
+                {
+                }
             }
         }
         else
         {
 
-            node.Mode = (fi.Attributes & FileAttributes.ReadOnly) != 0 ? (ushort)0x124 : (ushort)0x1A4;
+            node.Mode = (info.Attributes & FileAttributes.ReadOnly) != 0 ? (ushort)0x124 : (ushort)0x1A4;
 
-            if ((fi.Attributes & FileAttributes.Directory) != 0)
+            if ((info.Attributes & FileAttributes.Directory) != 0)
             {
                 node.Mode = 0x1ED;
             }

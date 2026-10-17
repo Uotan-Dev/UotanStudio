@@ -1262,6 +1262,8 @@ public sealed partial class F2fsBuilder
             }
             else if (!node.InlineData)
             {
+                var ownerCursor = 0;
+                var ownerLogical = -1;
                 for (var i = 0; i < node.DataBlockAddrs.Count; i++)
                 {
                     if (node.DataBlockAddrs[i] == uint.MaxValue - 2)
@@ -1275,7 +1277,7 @@ public sealed partial class F2fsBuilder
                     }
 
                     node.DataBlockAddrs[i] = AllocateDataBlock(ref dataCursor, layout);
-                    AssignBlock(node.DataBlockAddrs[i], ResolveOwnerNid(node, i, out var ofsInNode), (ushort)ofsInNode);
+                    AssignBlock(node.DataBlockAddrs[i], ResolveOwnerNid(node, i, ref ownerCursor, ref ownerLogical, out var ofsInNode), (ushort)ofsInNode);
                 }
 
                 if (node.Dnodes.Count == 0
@@ -1356,7 +1358,16 @@ public sealed partial class F2fsBuilder
     /// Resolves a data block's owner: the inode itself for the direct (i_addr) range, or the covering direct node beyond it; ofs_in_node is the logical index inside that node's address array.
     /// <para>数据块归属解析：直接区（i_addr）归 inode 自身，dnode 区归对应 direct 节点；ofs_in_node 为该节点地址数组内的逻辑下标。</para>
     /// </summary>
-    private static uint ResolveOwnerNid(BuildNode node, int logical, out int ofsInNode)
+    /// <param name="node">File whose direct nodes are searched. <para>在其 direct 节点中查找的文件。</para></param>
+    /// <param name="logical">Logical data block index to resolve. <para>待解析的逻辑数据块下标。</para></param>
+    /// <param name="cursor">Index of the first direct node that may still cover <paramref name="logical"/>; advanced by each call.
+    /// <para>仍可能覆盖 <paramref name="logical"/> 的首个 direct 节点下标；每次调用都会向前推进。</para></param>
+    /// <param name="lastLogical">Largest logical index resolved so far; a smaller index restarts the cursor.
+    /// <para>已解析过的最大逻辑下标；更小的下标会重置游标。</para></param>
+    /// <param name="ofsInNode">Offset of the block inside the owner's address array.
+    /// <para>块在归属节点地址数组内的偏移。</para></param>
+    /// <returns>The owning nid. <para>归属 nid。</para></returns>
+    private static uint ResolveOwnerNid(BuildNode node, int logical, ref int cursor, ref int lastLogical, out int ofsInNode)
     {
         if (logical < node.InodeAddressCount)
         {
@@ -1364,14 +1375,35 @@ public sealed partial class F2fsBuilder
             return node.Ino;
         }
 
-        foreach (var dnode in node.Dnodes)
+        // Callers walk the logical indexes in ascending order, so the covering direct node only moves
+        // forward and a rescan from the head would repeat work for every block. A descending call resets
+        // the cursor and rescans, which reproduces the full linear search result.
+        if (logical < lastLogical)
         {
-            if (!dnode.IsIndirect && !dnode.IsDoubleIndirect
-                && dnode.LogicalStart <= logical && logical < dnode.LogicalStart + node.DataAddressesPerNode)
+            cursor = 0;
+        }
+
+        lastLogical = logical;
+        var dnodes = node.Dnodes;
+        var addressesPerNode = node.DataAddressesPerNode;
+        while (cursor < dnodes.Count)
+        {
+            var dnode = dnodes[cursor];
+            if (dnode.IsIndirect || dnode.IsDoubleIndirect
+                || logical >= dnode.LogicalStart + addressesPerNode)
+            {
+                cursor++;
+                continue;
+            }
+
+            if (dnode.LogicalStart <= logical)
             {
                 ofsInNode = (int)(logical - dnode.LogicalStart);
                 return dnode.Nid;
             }
+
+            // Direct nodes are laid out in ascending logical order, so nothing later can cover the block.
+            break;
         }
 
         ofsInNode = 0;

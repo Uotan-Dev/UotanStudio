@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Firmware.Core.Streams;
 
@@ -14,13 +15,13 @@ internal sealed class SquashfsMetadataStream
 {
     private const int MaximumWindows = 1 << 20;
 
-    private readonly Stream _input;
     private readonly long _bytesUsed;
     private readonly bool _bigEndian;
     private readonly int _compression;
     private readonly CancellationToken _cancellationToken;
-    private readonly object _readGate;
+    private readonly IndependentReadStream _reader;
     private readonly Dictionary<long, byte[]> _windows = [];
+    private readonly Dictionary<long, int> _windowIndex = [];
     private readonly List<long> _chainOrder = [];
     private long _nextBlockRelative;
     private bool _endReached;
@@ -47,12 +48,11 @@ internal sealed class SquashfsMetadataStream
         CancellationToken cancellationToken,
         object readGate)
     {
-        _input = input;
         _bytesUsed = bytesUsed;
         _bigEndian = bigEndian;
         _compression = compression;
         _cancellationToken = cancellationToken;
-        _readGate = readGate;
+        _reader = new IndependentReadStream(input, readGate);
         TableStart = tableStart;
     }
 
@@ -97,8 +97,7 @@ internal sealed class SquashfsMetadataStream
     internal int IndexOfBlock(long relativeBlock)
     {
         WindowAt(relativeBlock);
-        var index = _chainOrder.IndexOf(relativeBlock);
-        if (index < 0)
+        if (!_windowIndex.TryGetValue(relativeBlock, out var index))
         {
             throw new FileSystemCorruptedException($"The SquashFS metadata block {relativeBlock} lies beyond the window chain.");
         }
@@ -152,9 +151,8 @@ internal sealed class SquashfsMetadataStream
         }
 
         Span<byte> header = stackalloc byte[2];
-        using var reader = new IndependentReadStream(_input, _readGate);
-        reader.Position = absolute;
-        reader.ReadExactly(header);
+        _reader.Position = absolute;
+        _reader.ReadExactly(header);
         var raw = _bigEndian
             ? BinaryPrimitives.ReadUInt16BigEndian(header)
             : BinaryPrimitives.ReadUInt16LittleEndian(header);
@@ -166,10 +164,8 @@ internal sealed class SquashfsMetadataStream
         }
 
         var payload = new byte[size];
-        reader.ReadExactly(payload);
-        var decoded = stored
-            ? payload
-            : SquashfsDecompression.Decompress(_compression, payload, SquashfsSuperblock.MetadataWindowSize, exactOutput: false);
+        _reader.ReadExactly(payload);
+        var decoded = stored ? payload : DecodeWindow(absolute, payload);
         if (decoded.Length is 0 or > SquashfsSuperblock.MetadataWindowSize)
         {
             throw new FileSystemCorruptedException($"The SquashFS metadata block at {absolute} expands to {decoded.Length} bytes.");
@@ -177,6 +173,7 @@ internal sealed class SquashfsMetadataStream
 
         var relative = _nextBlockRelative;
         _windows[relative] = decoded;
+        _windowIndex[relative] = _chainOrder.Count;
         _chainOrder.Add(relative);
         _nextBlockRelative = checked(_nextBlockRelative + 2 + size);
         if (decoded.Length < SquashfsSuperblock.MetadataWindowSize)
@@ -185,6 +182,21 @@ internal sealed class SquashfsMetadataStream
         }
 
         return decoded;
+    }
+
+    private byte[] DecodeWindow(long absolute, byte[] payload)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(SquashfsSuperblock.MetadataWindowSize);
+        using var decoder = new SquashfsBlockDecoder(_compression);
+        try
+        {
+            var written = decoder.Decompress(payload, payload.Length, buffer, SquashfsSuperblock.MetadataWindowSize, exactOutput: false);
+            return buffer.AsSpan(0, written).ToArray();
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     /// <summary>Forward-only byte cursor over one metadata table, crossing window boundaries transparently.

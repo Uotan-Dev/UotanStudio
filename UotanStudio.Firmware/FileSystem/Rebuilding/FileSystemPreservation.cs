@@ -115,13 +115,18 @@ public static partial class FileSystemPreservation
     /// <param name="metadata">Metadata instance the payload is attached to.
     /// <para>负载所附加到的元数据实例。</para></param>
     /// <param name="cancellationToken">Cancels metadata reading. <para>取消元数据读取。</para></param>
+    /// <param name="reportSourceVerification">When <see langword="true"/>, hashing the source image is reported
+    /// as <see cref="FileSystemWorkStage.VerifyingImage"/>; a caller that owns that stage itself, such as the
+    /// sparse container, passes <see langword="false"/>.
+    /// <para>为 <see langword="true"/> 时，源镜像哈希上报为 <see cref="FileSystemWorkStage.VerifyingImage"/>；
+    /// 自身已拥有该阶段的调用方（如稀疏容器）传入 <see langword="false"/>。</para></param>
     internal static void CaptureAsync(string source,
-        RepackMetadata metadata, CancellationToken cancellationToken)
+        RepackMetadata metadata, CancellationToken cancellationToken, bool reportSourceVerification = true)
     {
         var rebuild = BuildRebuildParameters(source, metadata.FormatName, cancellationToken);
         var parsedEntries = ReadEntries(source, metadata.FormatName);
         ValidateInodeFlags(parsedEntries, rebuild?.InnerFormat ?? metadata.FormatName);
-        CapturePayload(source, metadata, rebuild, parsedEntries, cancellationToken);
+        CapturePayload(source, metadata, rebuild, parsedEntries, cancellationToken, reportSourceVerification);
     }
 
     /// <summary>
@@ -144,14 +149,21 @@ public static partial class FileSystemPreservation
 
     private static void CapturePayload(string source,
         RepackMetadata metadata, RebuildParameters? rebuild, IReadOnlyList<PreservedInodeEntry> parsedEntries,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool reportSourceVerification = true)
     {
+        ExtractionByteCounter? sourceCounter = null;
+        if (reportSourceVerification && ActiveProgress.Value is { } captureProgress)
+        {
+            sourceCounter = new ExtractionByteCounter(new FileInfo(source).Length,
+                FileSystemByteProgress.ForStage(captureProgress, FileSystemWorkStage.VerifyingImage), cancellationToken);
+        }
         var data = new FileSystemPreservationData
         {
             Version = 1,
             Format = metadata.FormatName,
             Partition = RepackMetadata.DetectPartitionName(metadata.SourceFileName),
             SourceLength = new FileInfo(source).Length,
+            SourceDigest = HashFile(source, cancellationToken, sourceCounter is null ? null : sourceCounter.Add),
             ConfigurationJson = JsonSerializer.Serialize(metadata, RepackJsonContext.Default.RepackMetadata),
             Rebuild = rebuild,
             PartitionInfo = metadata.Configuration["superblock"] is JsonObject superblock
@@ -166,10 +178,62 @@ public static partial class FileSystemPreservation
             ImagePaths = CapturedPaths.Value is { } paths ? new(paths, StringComparer.Ordinal) : [],
             ParsedEntries = [.. parsedEntries]
         };
+        sourceCounter?.Complete();
         var payload = JsonSerializer.SerializeToNode(data,
             FileSystemPreservationJsonContext.Default.FileSystemPreservationData)!.AsObject();
         metadata.FileSystemPreservation = payload;
         payload["configurationHash"] = HashConfiguration(metadata);
+    }
+
+    /// <summary>
+    /// Hashes every extracted regular file outside the metadata channel and reports the pass as
+    /// <see cref="FileSystemWorkStage.VerifyingFiles"/>, so a caller holding byte progress sees the extracted
+    /// content actually verified instead of only written.
+    /// <para>对元数据通道之外的每个已解出常规文件计算哈希，并把该过程上报为
+    /// <see cref="FileSystemWorkStage.VerifyingFiles"/>，使持有字节进度的调用方看到解出内容确实经过校验，
+    /// 而不只是被写出。</para>
+    /// </summary>
+    /// <param name="extractionDirectory">Directory the extraction wrote to. <para>解包输出目录。</para></param>
+    /// <param name="sourceName">Source image file name the partition prefix is derived from.
+    /// <para>推导分区前缀所用的源镜像文件名。</para></param>
+    /// <param name="token">Cancels the scan and hashing. <para>取消扫描与哈希。</para></param>
+    internal static void VerifyExtractedFiles(string extractionDirectory, string sourceName, CancellationToken token)
+    {
+        if (ActiveProgress.Value is not { } progress) return;
+        var root = Path.GetFullPath(extractionDirectory);
+        var partition = RepackMetadata.DetectPartitionName(sourceName);
+        var exports = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            partition + "_fs_config", partition + "_file_contexts", partition + "_info"
+        };
+        var files = new List<(string Path, long Size)>();
+        var pending = new Stack<string>();
+        pending.Push(root);
+        while (pending.TryPop(out var directory))
+        {
+            foreach (var path in Directory.EnumerateFileSystemEntries(directory))
+            {
+                token.ThrowIfCancellationRequested();
+                var info = new FileInfo(path);
+                if (info.LinkTarget is not null) continue;
+                if ((info.Attributes & FileAttributes.Directory) != 0)
+                {
+                    pending.Push(path);
+                }
+                else if (!RepackMetadata.IsMetadataFile(path) && !exports.Contains(Path.GetFileName(path)))
+                {
+                    files.Add((path, info.Length));
+                }
+            }
+        }
+
+        var bytes = new ExtractionByteCounter(files.Sum(file => file.Size),
+            FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.VerifyingFiles), token);
+        foreach (var (path, _) in files)
+        {
+            HashFile(path, token, bytes.Add);
+        }
+        bytes.Complete();
     }
 
     /// <summary>

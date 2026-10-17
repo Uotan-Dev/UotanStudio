@@ -248,15 +248,31 @@ public sealed partial class Ext4Builder
     }
 
     /// <summary>
-    /// Writes file data blocks to the output stream: directory blocks are written sequentially, symlinks store the encoded target path, and regular files are read from disk block-by-block (skipping sparse holes) and written to their allocated on-disk locations.
-    /// <para>将文件数据块写入输出流：目录块按序写出，符号链接写入目标路径字节，常规文件按逻辑块跳过空洞后从磁盘读取写出。</para>
+    /// Writes file data blocks to the output stream: directory blocks are written sequentially, symlinks store the encoded target path, and regular files are read from disk block-by-block (skipping sparse holes) and written to their allocated on-disk locations. Nodes without any data extent — empty files, fully sparse files and every symlink short enough to live in the inode — return before opening a source stream or allocating a block buffer.
+    /// <para>将文件数据块写入输出流：目录块按序写出，符号链接写入目标路径字节，常规文件按逻辑块跳过空洞后从磁盘读取写出。没有任何数据 extent 的节点（空文件、全空洞文件，以及短到能放进 inode 的符号链接）在打开源流或分配块缓冲之前直接返回。</para>
     /// </summary>
     private static void WriteNodeData(Stream output, long baseOffset, Node node, int blockSize)
     {
         if ((node.IsSymlink && node.Size < 60) || node.IsInlineData) return;
+        if (node.Extents.Count == 0) return;
 
-        using var input = !node.IsDirectory && !node.IsSymlink && node.AttributeValue is null ? File.OpenRead(node.FullPath) : null;
+        if (node.IsDirectory)
+        {
+            foreach (var extent in node.Extents)
+            {
+                for (var i = 0; i < extent.Len; i++)
+                {
+                    var logical = (long)extent.Logical + i;
+                    var offset = checked(((long)extent.Start + i) * blockSize);
+                    WriteAt(output, baseOffset, offset, node.DirectoryBlocks[checked((int)logical)], blockSize);
+                }
+            }
+
+            return;
+        }
+
         var target = node.AttributeValue ?? (node.IsSymlink ? Encoding.UTF8.GetBytes(node.SymlinkTarget ?? string.Empty) : null);
+        using var input = target is null ? File.OpenRead(node.FullPath) : null;
         var buffer = new byte[blockSize];
         foreach (var extent in node.Extents)
         {
@@ -264,12 +280,6 @@ public sealed partial class Ext4Builder
             {
                 var logical = (long)extent.Logical + i;
                 var offset = checked(((long)extent.Start + i) * blockSize);
-                if (node.IsDirectory)
-                {
-                    WriteAt(output, baseOffset, offset, node.DirectoryBlocks[checked((int)logical)], blockSize);
-                    continue;
-                }
-
                 var sourceOffset = checked(logical * blockSize);
                 var count = checked((int)Math.Min(blockSize, node.Size - sourceOffset));
                 if (target is not null)

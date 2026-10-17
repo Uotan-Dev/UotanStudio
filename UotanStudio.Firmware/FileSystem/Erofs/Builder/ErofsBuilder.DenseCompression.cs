@@ -32,7 +32,7 @@ public sealed partial class ErofsBuilder
     /// 该跨度受已声明 pcluster 大小约束，否则受格式上限约束，因为 <see cref="ErofsOptions.MaxPclusterSize"/>
     /// 描述的是镜像的物理 pcluster 大小。</para></summary>
     private static ErofsPclusterPlan[]? TryPlanDenseCompressed(ErofsInode node, int blockSize, ErofsOptions options,
-        Core.CompressionPayloadStaging staging)
+        ErofsStagingBatch batch, ErofsLz4Context? lz4)
     {
         var clusterSize = node.LogicalClusterSize;
         var bigPcluster = DeclaredBigPcluster(options);
@@ -67,8 +67,7 @@ public sealed partial class ErofsBuilder
                         input.ReadExactly(raw, buffered, length - buffered);
                         buffered = length;
                     }
-                    var size = ErofsCompression.AlgorithmCompress(options,
-                        raw, 0, length, encoded, 0, encoded.Length);
+                    var size = ErofsPlannerCompression.Compress(options, lz4, raw, 0, length, encoded, encoded.Length);
                     if (size <= 0 || size > frameLimit) return false;
                     if (size > blockSize && (int)(position % clusterSize) + length < 2 * clusterSize) return false;
                     bestLength = length;
@@ -102,13 +101,14 @@ public sealed partial class ErofsBuilder
                 }
                 else
                 {
-                    plans.Add(new ErofsPclusterPlan
+                    var plan = new ErofsPclusterPlan
                     {
                         SourceOffset = position,
                         SourceLength = bestLength,
                         CompressedLength = bestEncoded,
-                        StagedOffset = staging.Append(accepted.AsSpan(0, bestEncoded))
-                    });
+                    };
+                    batch.Append(plan, accepted.AsSpan(0, bestEncoded));
+                    plans.Add(plan);
                     position += bestLength;
                 }
             }

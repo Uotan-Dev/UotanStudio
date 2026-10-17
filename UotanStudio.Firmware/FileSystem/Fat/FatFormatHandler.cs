@@ -59,10 +59,11 @@ internal sealed class FatFormatHandler : IReadonlyFormatHandler
                 using var parser = new FatParser(filePath);
                 var entries = parser.ListFiles();
                 cancellationToken.ThrowIfCancellationRequested();
+                var metadata = Metadata(parser, entries);
                 return FirmwareOpResult.Ok(
-                    $"{parser.Variant} volume with {entries.Count(e => e.Kind == FatVolumeEntryKind.File)} files.",
+                    $"{parser.Variant} volume with {metadata["FileCount"]} files.",
                     [.. entries.Select(entry => entry.Path)],
-                    Metadata(parser, entries));
+                    metadata);
             }
             catch (OperationCanceledException)
             {
@@ -131,6 +132,17 @@ internal sealed class FatFormatHandler : IReadonlyFormatHandler
     private static Dictionary<string, string> Metadata(FatParser parser, IReadOnlyList<FatVolumeEntry> entries)
     {
         var culture = System.Globalization.CultureInfo.InvariantCulture;
+        var files = 0;
+        var totalDataBytes = 0L;
+        foreach (var entry in entries)
+        {
+            if (entry.Kind == FatVolumeEntryKind.File)
+            {
+                files++;
+                totalDataBytes = checked(totalDataBytes + entry.Size);
+            }
+        }
+
         return new Dictionary<string, string>
         {
             ["Format"] = parser.Variant,
@@ -145,9 +157,8 @@ internal sealed class FatFormatHandler : IReadonlyFormatHandler
             ["TotalClusters"] = parser.TotalClusters.ToString(culture),
             ["ClusterSize"] = checked((long)parser.BytesPerSector * parser.SectorsPerCluster).ToString(culture),
             ["EntryCount"] = entries.Count.ToString(culture),
-            ["FileCount"] = entries.Count(entry => entry.Kind == FatVolumeEntryKind.File).ToString(culture),
-            ["TotalDataBytes"] = entries.Where(entry => entry.Kind == FatVolumeEntryKind.File)
-                .Sum(entry => entry.Size).ToString(culture),
+            ["FileCount"] = files.ToString(culture),
+            ["TotalDataBytes"] = totalDataBytes.ToString(culture),
             ["CapacityEquivalence"] = FatVolumeTree.CapacityText(parser.DeclaredVolumeBytes, parser.ImageBytes),
         };
     }

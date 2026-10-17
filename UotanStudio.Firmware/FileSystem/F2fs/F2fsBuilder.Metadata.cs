@@ -203,55 +203,58 @@ public sealed partial class F2fsBuilder
     {
         var sitBlocks = (long)(layout.SitSegments / 2) * BlocksPerSeg;
         var block = new byte[blockSize];
-        var currentBlockIndex = -1L;
-        foreach (var (segno, usage) in plan.Segments.OrderBy(static kvp => kvp.Key))
+        // Each copy is emitted as one ascending pass. Alternating copies per block would move the
+        // stream position backwards by half the SIT area every block, and a buffered stream flushes
+        // on every such move.
+        for (var copy = 0; copy < 2; copy++)
         {
-            var (count, map, type) = usage;
-            var blockIndex = segno / F2fsNode.SitEntryPerBlock;
-            if (blockIndex != currentBlockIndex)
+            var currentBlockIndex = -1L;
+            foreach (var (segno, usage) in plan.Segments.OrderBy(static kvp => kvp.Key))
             {
-                if (currentBlockIndex >= 0)
+                var (count, map, type) = usage;
+                var blockIndex = segno / F2fsNode.SitEntryPerBlock;
+                if (blockIndex != currentBlockIndex)
                 {
-                    FlushSitBlock(output, baseOffset, layout, sitBlocks, currentBlockIndex, block);
+                    if (currentBlockIndex >= 0)
+                    {
+                        FlushSitBlock(output, baseOffset, layout, sitBlocks, copy, currentBlockIndex, block);
+                    }
+
+                    block.AsSpan().Clear();
+                    currentBlockIndex = blockIndex;
                 }
 
-                block.AsSpan().Clear();
-                currentBlockIndex = blockIndex;
+
+                var vblocks = (ushort)((type << 10) | count);
+                var entryIndex = segno % F2fsNode.SitEntryPerBlock;
+                var entryOffset = checked((int)entryIndex * 74);
+                BinaryPrimitives.WriteUInt16LittleEndian(block.AsSpan(entryOffset, 2), vblocks);
+                map.CopyTo(block, entryOffset + 2);
+
+
             }
 
-
-            var vblocks = (ushort)((type << 10) | count);
-            var entryIndex = segno % F2fsNode.SitEntryPerBlock;
-            var entryOffset = checked((int)entryIndex * 74);
-            BinaryPrimitives.WriteUInt16LittleEndian(block.AsSpan(entryOffset, 2), vblocks);
-            map.CopyTo(block, entryOffset + 2);
-
-
-        }
-
-        if (currentBlockIndex >= 0)
-        {
-            FlushSitBlock(output, baseOffset, layout, sitBlocks, currentBlockIndex, block);
+            if (currentBlockIndex >= 0)
+            {
+                FlushSitBlock(output, baseOffset, layout, sitBlocks, copy, currentBlockIndex, block);
+            }
         }
     }
 
     /// <summary>
-    /// Flushes an accumulated SIT block to its primary and second copies at their layout addresses.
-    /// <para>把累积好的 SIT 块按布局地址写入主副本与第二副本。</para>
+    /// Flushes an accumulated SIT block to one of its two copies at the layout address.
+    /// <para>把累积好的 SIT 块按布局地址写入其两个副本之一。</para>
     /// </summary>
-    private static void FlushSitBlock(Stream output, long baseOffset, Layout layout, long sitBlocks, long blockIndex, byte[] block)
+    private static void FlushSitBlock(Stream output, long baseOffset, Layout layout, long sitBlocks, int copy, long blockIndex, byte[] block)
     {
 
 
-        var primary = (long)layout.SitBlkaddr + blockIndex;
-        WriteAt(output, baseOffset + primary * F2fsNode.NodeSize, block);
-        WriteAt(output, baseOffset + (primary + sitBlocks) * F2fsNode.NodeSize, block);
+        var address = (long)layout.SitBlkaddr + blockIndex + (copy == 1 ? sitBlocks : 0);
+        WriteAt(output, baseOffset + address * F2fsNode.NodeSize, block);
     }
 
     private static void WriteNat(Stream output, long baseOffset, Layout layout, Dictionary<uint, (uint Ino, uint Block)> nat)
     {
-
-
         var grouped = new Dictionary<uint, Dictionary<uint, (uint Ino, uint Block)>>();
         foreach (var (nid, entry) in nat)
         {
@@ -265,23 +268,29 @@ public sealed partial class F2fsBuilder
             entries[nid % F2fsNode.NatEntryPerBlock] = entry;
         }
 
-        foreach (var (blockIndex, entries) in grouped)
+        // Both copies are emitted as one ascending pass each, so the stream position never jumps back
+        // between two writes of the same block.
+        var natBlock = new byte[F2fsNode.NodeSize];
+        for (var copy = 0; copy < 2; copy++)
         {
-            var natBlock = new byte[F2fsNode.NodeSize];
-            foreach (var (entryIndex, entry) in entries)
+            foreach (var (blockIndex, entries) in grouped.OrderBy(static kvp => kvp.Key))
             {
-                var offset = checked((int)entryIndex * F2fsNode.NatEntrySize);
-                natBlock[offset] = 0;
-                BinaryPrimitives.WriteUInt32LittleEndian(natBlock.AsSpan(offset + F2fsNode.NatEntryInoOffset, 4), entry.Ino);
-                BinaryPrimitives.WriteUInt32LittleEndian(natBlock.AsSpan(offset + F2fsNode.NatEntryBlockOffset, 4), entry.Block);
+                natBlock.AsSpan().Clear();
+                foreach (var (entryIndex, entry) in entries)
+                {
+                    var offset = checked((int)entryIndex * F2fsNode.NatEntrySize);
+                    natBlock[offset] = 0;
+                    BinaryPrimitives.WriteUInt32LittleEndian(natBlock.AsSpan(offset + F2fsNode.NatEntryInoOffset, 4), entry.Ino);
+                    BinaryPrimitives.WriteUInt32LittleEndian(natBlock.AsSpan(offset + F2fsNode.NatEntryBlockOffset, 4), entry.Block);
+                }
+
+
+                var segOff = blockIndex / BlocksPerSeg;
+                var inSeg = blockIndex % BlocksPerSeg;
+                var primary = (long)layout.NatBlkaddr + segOff * 2 * BlocksPerSeg + inSeg;
+                var address = copy == 1 ? primary + BlocksPerSeg : primary;
+                WriteAt(output, baseOffset + address * F2fsNode.NodeSize, natBlock);
             }
-
-
-            var segOff = blockIndex / BlocksPerSeg;
-            var inSeg = blockIndex % BlocksPerSeg;
-            var primary = (long)layout.NatBlkaddr + segOff * 2 * BlocksPerSeg + inSeg;
-            WriteAt(output, baseOffset + primary * F2fsNode.NodeSize, natBlock);
-            WriteAt(output, baseOffset + (primary + BlocksPerSeg) * F2fsNode.NodeSize, natBlock);
         }
     }
 
@@ -293,13 +302,16 @@ public sealed partial class F2fsBuilder
         CompressionPayloadStaging compressionStaging,
         CancellationToken cancellationToken)
     {
+        // One block-sized scratch buffer serves every node write: each writer clears the bytes it does
+        // not fill and copies the result into the stream before returning, so no caller keeps a reference.
+        var scratch = new byte[blockSize];
         foreach (var node in ordered)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            WriteInodeNode(output, baseOffset, node, blockSize);
+            WriteInodeNode(output, baseOffset, node, scratch, blockSize);
             if (node.XattrNid != 0)
             {
-                var block = new byte[blockSize];
+                scratch.AsSpan(0, blockSize).Clear();
                 var externalCapacity = F2fsNode.NodeSize - F2fsNodeFooter.FooterSize;
                 if (node.XattrBytes.Length - node.InlineXattrBytes > externalCapacity)
                 {
@@ -307,15 +319,15 @@ public sealed partial class F2fsBuilder
                         $"Xattrs of '{node.Name}' exceed the F2FS external xattr node capacity ({externalCapacity} bytes).");
                 }
 
-                node.XattrBytes.AsSpan(node.InlineXattrBytes).CopyTo(block);
-                F2fsNodeFooter.WriteTo(block, node.XattrNid, node.Ino, 0xFFFF_FFF8, 1, node.XattrBlock + 1);
-                WriteAt(output, baseOffset + node.XattrBlock * blockSize, block);
+                node.XattrBytes.AsSpan(node.InlineXattrBytes).CopyTo(scratch);
+                F2fsNodeFooter.WriteTo(scratch, node.XattrNid, node.Ino, 0xFFFF_FFF8, 1, node.XattrBlock + 1);
+                WriteAt(output, baseOffset + node.XattrBlock * blockSize, scratch.AsSpan(0, blockSize));
             }
             if (!node.IsDirectory && !node.InlineData)
             {
                 foreach (var dnode in node.Dnodes)
                 {
-                    WriteDnode(output, baseOffset, node, dnode, blockSize);
+                    WriteDnode(output, baseOffset, node, dnode, scratch, blockSize);
                 }
 
                 WriteFileDataBlocks(output, baseOffset, node, blockSize, compressionStaging, cancellationToken);
@@ -339,9 +351,12 @@ public sealed partial class F2fsBuilder
 
 
         var mainBase = 0u;
-        foreach (var (segno, entries) in plan.SegmentEntries)
+        var block = new byte[blockSize];
+        // Segments are visited in ascending order so each summary block lands at the next SSA address;
+        // the sorted order changes only the write sequence, not any block's content or address.
+        foreach (var (segno, entries) in plan.SegmentEntries.OrderBy(static kvp => kvp.Key))
         {
-            var block = new byte[blockSize];
+            block.AsSpan(0, blockSize).Clear();
             foreach (var (ofsInSeg, (nid, ofsInNode)) in entries)
             {
                 var offset = ofsInSeg * SummarySize;
@@ -354,7 +369,7 @@ public sealed partial class F2fsBuilder
                 ? (byte)1
                 : (byte)0;
             var ssaBlockAddr = (long)layout.SsaBlkaddr + segno;
-            WriteAt(output, baseOffset + ssaBlockAddr * blockSize, block);
+            WriteAt(output, baseOffset + ssaBlockAddr * blockSize, block.AsSpan(0, blockSize));
         }
     }
 
@@ -366,9 +381,9 @@ public sealed partial class F2fsBuilder
         => segno - mainBase < layout.NodeSegments
             || plan.NodeSegno.Contains(segno);
 
-    private static void WriteInodeNode(Stream output, long baseOffset, BuildNode node, int blockSize)
+    private static void WriteInodeNode(Stream output, long baseOffset, BuildNode node, byte[] block, int blockSize)
     {
-        var block = new byte[blockSize];
+        block.AsSpan(0, blockSize).Clear();
         var inline = node.IsDirectory ? 0 : (node.InlineData ? (F2fsInode.InlineDataFlag | F2fsInode.DataExistFlag) : 0);
         var inode = new F2fsInode
         {
@@ -441,12 +456,12 @@ public sealed partial class F2fsBuilder
             node.XattrBytes.AsSpan(0, node.InlineXattrBytes).CopyTo(block.AsSpan(inode.InlineXattrOffset));
         }
         F2fsNodeFooter.WriteTo(block, node.Ino, node.Ino, 0, 1, node.InodeBlockAddr + 1);
-        WriteAt(output, baseOffset + node.InodeBlockAddr * blockSize, block);
+        WriteAt(output, baseOffset + node.InodeBlockAddr * blockSize, block.AsSpan(0, blockSize));
     }
 
-    private static void WriteDnode(Stream output, long baseOffset, BuildNode file, DnodePlan dnode, int blockSize)
+    private static void WriteDnode(Stream output, long baseOffset, BuildNode file, DnodePlan dnode, byte[] block, int blockSize)
     {
-        var block = new byte[blockSize];
+        block.AsSpan(0, blockSize).Clear();
         var flag = checked(dnode.NodeOffset << F2fsNodeFooter.OffsetBitShift);
         if (dnode.IsIndirect || dnode.IsDoubleIndirect)
         {
@@ -466,7 +481,7 @@ public sealed partial class F2fsBuilder
         }
 
         F2fsNodeFooter.WriteTo(block, dnode.Nid, file.Ino, flag, 1, dnode.BlockAddr + 1);
-        WriteAt(output, baseOffset + dnode.BlockAddr * blockSize, block);
+        WriteAt(output, baseOffset + dnode.BlockAddr * blockSize, block.AsSpan(0, blockSize));
     }
 
     private static void WriteFileDataBlocks(

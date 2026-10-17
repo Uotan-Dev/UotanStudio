@@ -51,7 +51,8 @@ internal static class FileSystemRepackMetadata
         {
             metadata.PackingNotes += $" Flat metadata export reported {exportWarnings.Count} issue(s): {string.Join("; ", exportWarnings)}";
         }
-        FileSystemPreservation.CaptureAsync(sourcePath, metadata, cancellationToken);
+        FileSystemPreservation.CaptureAsync(sourcePath, metadata, cancellationToken, reportSourceVerification: !sparse);
+        FileSystemPreservation.VerifyExtractedFiles(outputDirectory, sourcePath, cancellationToken);
         return Task.CompletedTask;
     }
 
