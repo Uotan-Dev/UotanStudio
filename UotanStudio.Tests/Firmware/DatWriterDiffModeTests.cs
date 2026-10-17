@@ -115,6 +115,72 @@ public sealed class DatWriterDiffModeTests
         AssertRebuilds(temp, source, target, list, dat, patch);
     }
 
+    [Fact]
+    public void WriteIncremental_ShortestWins_EqualLengthImagesMatchBsdiffStyleByteForByte()
+    {
+        var source = Concat(BlockBytes(0xA1), BlockBytes(0xB2), new byte[Block], BlockBytes(0xC3), RandomBlock(7), BlockBytes(0xD4));
+        var target = Concat(BlockBytes(0xA1), RandomBlock(1), new byte[Block], RandomBlock(2), RandomBlock(8), BlockBytes(0xD4));
+        using var shortest = new TempDirectory();
+        using var bsdiff = new TempDirectory();
+        var shortestArtifacts = Run(shortest, source, target, new DatWriteOptions { IncrementalCommandStyle = DatIncrementalCommandStyle.ShortestWins });
+        var bsdiffArtifacts = Run(bsdiff, source, target, new DatWriteOptions { IncrementalCommandStyle = DatIncrementalCommandStyle.Bsdiff });
+        AssertArtifactsEqual(shortestArtifacts, bsdiffArtifacts);
+        AssertRebuilds(shortest, source, target, shortestArtifacts.List, shortestArtifacts.Dat, shortestArtifacts.Patch);
+    }
+
+    [Fact]
+    public void WriteIncremental_ShortestWins_TargetLongerThanSourceMatchesBsdiffStyleByteForByte()
+    {
+        var source = Concat(BlockBytes(0x31), BlockBytes(0x42), RandomBlock(3));
+        var target = Concat(BlockBytes(0x31), RandomBlock(4), RandomBlock(5), BlockBytes(0x99), BlockBytes(0xAA));
+        using var shortest = new TempDirectory();
+        using var bsdiff = new TempDirectory();
+        var shortestArtifacts = Run(shortest, source, target, new DatWriteOptions { IncrementalCommandStyle = DatIncrementalCommandStyle.ShortestWins });
+        var bsdiffArtifacts = Run(bsdiff, source, target, new DatWriteOptions { IncrementalCommandStyle = DatIncrementalCommandStyle.Bsdiff });
+        AssertArtifactsEqual(shortestArtifacts, bsdiffArtifacts);
+        AssertRebuilds(shortest, source, target, shortestArtifacts.List, shortestArtifacts.Dat, shortestArtifacts.Patch);
+    }
+
+    [Fact]
+    public void WriteIncremental_ImgdiffStyle_PrependsOnlyTheContainerHeaderToTheBarePatch()
+    {
+        var source = Concat(BlockBytes(0x21), BlockBytes(0x31), BlockBytes(0x41));
+        var target = Concat(BlockBytes(0x21), BlockBytes(0x39), BlockBytes(0x41));
+        using var imgdiff = new TempDirectory();
+        using var bsdiff = new TempDirectory();
+        var imgdiffArtifacts = Run(imgdiff, source, target, new DatWriteOptions { IncrementalCommandStyle = DatIncrementalCommandStyle.Imgdiff });
+        var bsdiffArtifacts = Run(bsdiff, source, target, new DatWriteOptions { IncrementalCommandStyle = DatIncrementalCommandStyle.Bsdiff });
+        var container = File.ReadAllBytes(imgdiffArtifacts.Patch);
+        var bare = File.ReadAllBytes(bsdiffArtifacts.Patch);
+        Assert.Equal("IMGDIFF2"u8.ToArray(), container[..8]);
+        Assert.Equal(bare, container[40..]);
+        Assert.Equal(bare.Length + 40, container.Length);
+    }
+
+    [Fact]
+    public void WriteIncremental_InterleavedRuns_EmitsCommandsInBlockOrder()
+    {
+        var source = Concat(BlockBytes(0x51), BlockBytes(0x52), BlockBytes(0x53), BlockBytes(0x54), BlockBytes(0x55), BlockBytes(0x56));
+        var target = Concat(BlockBytes(0x51), BlockBytes(0x62), new byte[Block], BlockBytes(0x64), BlockBytes(0x55), BlockBytes(0x66));
+        using var temp = new TempDirectory();
+        var artifacts = Run(temp, source, target, new DatWriteOptions());
+        var lines = File.ReadAllLines(artifacts.List);
+        Assert.Equal(new[] { "4", "6", "0", "0" }, lines[..4]);
+        Assert.Equal(4, lines.Length - 4);
+        Assert.StartsWith("imgdiff ", lines[4], StringComparison.Ordinal);
+        Assert.Equal("zero 2,2,3", lines[5]);
+        Assert.StartsWith("imgdiff ", lines[6], StringComparison.Ordinal);
+        Assert.StartsWith("imgdiff ", lines[7], StringComparison.Ordinal);
+        AssertRebuilds(temp, source, target, artifacts.List, artifacts.Dat, artifacts.Patch);
+    }
+
+    private static void AssertArtifactsEqual((string List, string Dat, string Patch) left, (string List, string Dat, string Patch) right)
+    {
+        Assert.Equal(File.ReadAllText(right.List), File.ReadAllText(left.List));
+        Assert.Equal(File.ReadAllBytes(right.Dat), File.ReadAllBytes(left.Dat));
+        Assert.Equal(File.ReadAllBytes(right.Patch), File.ReadAllBytes(left.Patch));
+    }
+
     private static (string List, string Dat, string Patch) Run(TempDirectory temp, byte[] source, byte[] target, DatWriteOptions options)
     {
         var sourcePath = temp.WriteBytes("src.img", source);

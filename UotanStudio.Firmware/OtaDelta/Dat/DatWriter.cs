@@ -1,7 +1,6 @@
 using System.Text;
 using UotanStudio.Compress;
 using UotanStudio.Compress.Compressors;
-using UotanStudio.Firmware.OtaDelta.Diff;
 
 namespace UotanStudio.Firmware.OtaDelta.Dat;
 
@@ -16,7 +15,7 @@ namespace UotanStudio.Firmware.OtaDelta.Dat;
 /// existing outputs are replaced. Progress reporting is best effort and runs on the calling thread.
 /// <para>写出前会先读取输入文件大小，因此输入缺失或不可读时不会替换已有输出。进度上报为尽力而为，并在调用线程上执行。</para>
 /// </remarks>
-public static class DatWriter
+public static partial class DatWriter
 {
     /// <summary>Block size in bytes used for range accounting and for the data file layout. <para>用于范围统计与数据文件布局的块大小（字节）。</para></summary>
     public const int BlockSize = 4096;
@@ -189,234 +188,6 @@ public static class DatWriter
     }
 
     /// <summary>
-    /// Writes an incremental classic block OTA from a source and target image.
-    /// <para>由源镜像与目标镜像写出增量经典块 OTA。</para>
-    /// </summary>
-    /// <remarks>
-    /// A dataset without source-dependent commands (<c>imgdiff</c>, <c>diff</c>, <c>move</c> or <c>stash</c>)
-    /// cannot be seeded from the base image by the reader, so the writer ships the target as a plain
-    /// full image instead.
-    /// <para>不含源依赖命令（<c>imgdiff</c>、<c>diff</c>、<c>move</c> 或 <c>stash</c>）的数据集无法由
-    /// 读取器从基座镜像预置，因此此时把目标作为普通全量镜像发布。</para>
-    /// </remarks>
-    /// <param name="sourceImagePath">Base image the updater seeds the target from; the file must exist. <para>updater 用于预置目标的基座镜像；文件必须存在。</para></param>
-    /// <param name="targetImagePath">Desired image compared block by block against the source; the file must exist. <para>与源逐块比较的目标镜像；文件必须存在。</para></param>
-    /// <param name="outputDatPath">
-    /// Data file receiving the non-zero blocks of <c>imgdiff</c> runs; on the full-image fallback it holds every
-    /// non-zero target block. <para>接收 <c>imgdiff</c> 区段非零块的数据文件；走全量回退时包含目标的全部非零块。</para>
-    /// </param>
-    /// <param name="outputPatchDatPath">
-    /// File receiving the concatenated bsdiff bytes referenced by the <c>imgdiff</c> commands; written as an empty
-    /// file on the full-image fallback.
-    /// <para>接收各 <c>imgdiff</c> 命令所引用的 bsdiff 字节拼接结果的文件；走全量回退时写为空文件。</para>
-    /// </param>
-    /// <param name="outputTransferListPath">
-    /// Version 4 transfer list carrying the positional <c>imgdiff</c>, <c>zero</c> and <c>new</c> commands.
-    /// <para>包含位置式 <c>imgdiff</c>、<c>zero</c> 与 <c>new</c> 命令的版本 4 传输列表。</para>
-    /// </param>
-    /// <param name="options">
-    /// Compression and per-command block cap settings applied to the emitted data; ownership stays with the caller.
-    /// <para>应用于所写出数据的压缩与单条命令块数上限设置；所有权归调用方。</para>
-    /// </param>
-    /// <param name="progress">Optional byte progress over the target image, coalesced to one notification per 100
-    /// millisecond window and ended by a notification carrying the total. <para>可选的按目标镜像字节进度，按 100
-    /// 毫秒窗口合并，并以一条携带总量的通知结束。</para></param>
-    /// <param name="cancellationToken">
-    /// Cancels between blocks, patch computations and the self-verification pass. <para>在块间、补丁计算与自校验趟之间响应取消。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">One of the paths is empty or contains only whitespace. <para>某个路径为空或仅含空白字符。</para></exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="options"/> is <see langword="null"/>. <para><paramref name="options"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="sourceImagePath"/> or <paramref name="targetImagePath"/> does not exist.
-    /// <para><paramref name="sourceImagePath"/> 或 <paramref name="targetImagePath"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// <see cref="DatWriteOptions.SelfVerifyIncremental"/> is set and the generated triple does not rebuild the
-    /// target image when replayed through <c>DatReader</c>. <para>设置了 <see cref="DatWriteOptions.SelfVerifyIncremental"/>
-    /// 且生成的三元组经 <c>DatReader</c> 回放后未能重建目标镜像。</para>
-    /// </exception>
-    public static void WriteIncremental(string sourceImagePath, string targetImagePath, string outputDatPath, string outputPatchDatPath,
-        string outputTransferListPath, DatWriteOptions options, IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(sourceImagePath);
-        ArgumentException.ThrowIfNullOrWhiteSpace(targetImagePath);
-        ArgumentException.ThrowIfNullOrWhiteSpace(outputDatPath);
-        ArgumentException.ThrowIfNullOrWhiteSpace(outputPatchDatPath);
-        ArgumentException.ThrowIfNullOrWhiteSpace(outputTransferListPath);
-        ArgumentNullException.ThrowIfNull(options);
-
-        var sourceLength = new FileInfo(sourceImagePath).Length;
-        var totalBytes = new FileInfo(targetImagePath).Length;
-        var totalBlocks = (totalBytes + BlockSize - 1) / BlockSize;
-
-        var runs = new List<(long Start, long End, bool Imgdiff)>();
-        var meter = new Core.ProgressThrottle(totalBytes, progress, cancellationToken);
-        using (var source = new FileStream(sourceImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.RandomAccess))
-        using (var target = new FileStream(targetImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.RandomAccess))
-        {
-            var targetBlock = new byte[BlockSize];
-            var sourceBlock = new byte[BlockSize];
-            var zeroBlock = new byte[BlockSize];
-            long block = 0;
-            while (block < totalBlocks)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                ReadAt(target, block * BlockSize, targetBlock);
-                if (block * BlockSize < sourceLength)
-                {
-                    ReadAt(source, block * BlockSize, sourceBlock);
-                }
-                else
-                {
-                    Array.Clear(sourceBlock);
-                }
-
-                bool imgdiff;
-                bool emit;
-                if (targetBlock.AsSpan().SequenceEqual(sourceBlock))
-                {
-                    emit = false; imgdiff = false;
-                }
-                else if (targetBlock.AsSpan().SequenceEqual(zeroBlock))
-                {
-                    emit = true; imgdiff = false;
-                }
-                else
-                {
-                    emit = true; imgdiff = true;
-                }
-
-                if (emit && runs.Count > 0 && runs[^1].End == block && runs[^1].Imgdiff == imgdiff)
-                {
-                    runs[^1] = (runs[^1].Start, block + 1, imgdiff);
-                }
-                else
-                {
-                    if (emit) runs.Add((block, block + 1, imgdiff));
-                }
-
-                block++;
-                meter.Report((Math.Min(checked(block * BlockSize), totalBytes), totalBytes));
-            }
-            meter.Complete();
-        }
-
-        if (!runs.Any(run => run.Imgdiff))
-        {
-            File.WriteAllBytes(outputPatchDatPath, []);
-            Write(targetImagePath, outputDatPath, outputTransferListPath, options, null, cancellationToken);
-            return;
-        }
-
-        var commands = new List<TransferListCommand>();
-        long patchOffset = 0;
-        using (var source = new FileStream(sourceImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.RandomAccess))
-        using (var target = new FileStream(targetImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.RandomAccess))
-        using (var patch = new FileStream(outputPatchDatPath, FileMode.Create, FileAccess.Write, FileShare.None, StreamBufferSize))
-        using (var newData = new FileStream(outputDatPath, FileMode.Create, FileAccess.Write, FileShare.None, StreamBufferSize))
-        {
-            foreach (var (start, end, isImgdiff) in runs)
-            {
-                if (!isImgdiff)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    commands.Add(new TransferListCommand(TransferListCommandKind.Zero, [new BlockRange(start, end)]));
-                    continue;
-                }
-
-                for (var pieceStart = start; pieceStart < end; pieceStart += MaximumBlocksPerPatchCommand)
-                {
-                    var count = Math.Min(MaximumBlocksPerPatchCommand, end - pieceStart);
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var sourceRegion = ReadRegion(source, pieceStart, count);
-                    var targetRegion = ReadRegion(target, pieceStart, count);
-                    var range = new BlockRange(pieceStart, pieceStart + count);
-                    var (kind, patchBytes) = CreateRunPatch(sourceRegion, targetRegion, options.IncrementalCommandStyle, cancellationToken);
-                    if (options.AllowRawNewCommands && targetRegion.LongLength <= patchBytes.LongLength)
-                    {
-                        commands.Add(new TransferListCommand(TransferListCommandKind.New, [range]));
-                        newData.Write(targetRegion);
-                        continue;
-                    }
-
-                    patch.Write(patchBytes);
-                    patchOffset += patchBytes.Length;
-                    commands.Add(new TransferListCommand(kind, [range], sourceRanges: [range])
-                    {
-                        SourceBlockCount = count,
-                        SourceLocations = [new BlockRange(0, count)],
-                        PatchOffset = patchOffset - patchBytes.Length,
-                        PatchLength = patchBytes.Length,
-                        SourceHash = Sha1(sourceRegion),
-                        TargetHash = Sha1(targetRegion),
-                    });
-                }
-            }
-        }
-
-        if (!commands.Any(command => command.Kind is TransferListCommandKind.Imgdiff or TransferListCommandKind.Diff
-            or TransferListCommandKind.Move or TransferListCommandKind.Stash))
-        {
-            File.WriteAllBytes(outputPatchDatPath, []);
-            Write(targetImagePath, outputDatPath, outputTransferListPath, options, null, cancellationToken);
-            return;
-        }
-
-        var list = new TransferList(4, totalBlocks, 0, 0, commands);
-        TransferListSerializer.Write(outputTransferListPath, list);
-        if (options.SelfVerifyIncremental)
-        {
-            SelfVerify(outputTransferListPath, outputDatPath, outputPatchDatPath, sourceImagePath, targetImagePath, cancellationToken);
-        }
-    }
-
-    /// <summary>
-    /// Encodes one differing run with the requested command style and returns the command kind together with
-    /// its patch bytes. <see cref="DatIncrementalCommandStyle.ShortestWins"/> computes both encodings and keeps
-    /// the smaller one; the other styles compute a single encoding.
-    /// <para>按请求的命令风格编码一个差异区段，返回命令类型及其补丁字节。<see cref="DatIncrementalCommandStyle.ShortestWins"/>
-    /// 同时计算两种编码并保留较短者；其余风格只计算一种编码。</para>
-    /// </summary>
-    private static (TransferListCommandKind Kind, byte[] PatchBytes) CreateRunPatch(byte[] sourceRegion, byte[] targetRegion, DatIncrementalCommandStyle style, CancellationToken ct)
-    {
-        byte[]? imgdiffBytes = null;
-        byte[]? bsdiffBytes = null;
-        if (style is DatIncrementalCommandStyle.Imgdiff or DatIncrementalCommandStyle.ShortestWins)
-        {
-            using var container = new MemoryStream();
-            ImageDeltaBuilder.Build(
-                new MemoryStream(sourceRegion, writable: false),
-                new MemoryStream(targetRegion, writable: false),
-                container,
-                ImageDeltaBuilder.DefaultBlockSize,
-                new ImgDiffBuilderOptions { SelfVerify = false },
-                ct);
-            imgdiffBytes = container.ToArray();
-        }
-
-        if (style is DatIncrementalCommandStyle.Bsdiff or DatIncrementalCommandStyle.ShortestWins)
-        {
-            using var raw = new MemoryStream();
-            BinaryDeltaPatch.Create(new MemoryStream(sourceRegion, writable: false), new MemoryStream(targetRegion, writable: false), raw, ct);
-            bsdiffBytes = raw.ToArray();
-        }
-
-        if (imgdiffBytes is null)
-        {
-            return (TransferListCommandKind.Diff, bsdiffBytes!);
-        }
-
-        if (bsdiffBytes is null || imgdiffBytes.LongLength <= bsdiffBytes.LongLength)
-        {
-            return (TransferListCommandKind.Imgdiff, imgdiffBytes);
-        }
-
-        return (TransferListCommandKind.Diff, bsdiffBytes);
-    }
-
-    /// <summary>
     /// Replays the freshly written dataset through <c>DatReader</c> and fails unless the rebuilt image equals
     /// the reference image byte-for-byte (extra block padding must be zero). Generation therefore always implies
     /// an apply-side check when self-verification is enabled.
@@ -484,21 +255,11 @@ public static class DatWriter
         if (read < buffer.Length) Array.Clear(buffer, read, buffer.Length - read);
     }
 
-    private static byte[] ReadRegion(FileStream stream, long startBlock, long count)
-    {
-        var buffer = new byte[checked((int)(count * BlockSize))];
-        stream.Position = startBlock * BlockSize;
-        var read = 0;
-        while (read < buffer.Length)
-        {
-            var n = stream.Read(buffer, read, buffer.Length - read);
-            if (n == 0) break;
-            read += n;
-        }
-        return buffer;
-    }
-
-    private static string Sha1(byte[] data) => Convert.ToHexString(Hash.Digests.Sha1.ComputeHash(data));
+    /// <summary>
+    /// Hashes the first length bytes of a region that may be backed by a larger reusable buffer.
+    /// <para>对区段的前 length 字节计算摘要；该区段可能位于更大的可复用缓冲区中。</para>
+    /// </summary>
+    private static string Sha1(byte[] data, int length) => Convert.ToHexString(Hash.Digests.Sha1.ComputeHash(data.AsSpan(0, length)));
 
     /// <summary>
     /// Writes the new command lines, splitting the merged ranges into multiple commands when maxBlocksPerCommand is greater than zero.
@@ -626,15 +387,5 @@ public static class DatWriter
     /// <para>判断缓冲区前 length 个字节是否全为零。</para>
     /// </summary>
     private static bool IsZeroBlock(byte[] buffer, int length)
-    {
-        for (var i = 0; i < length; i++)
-        {
-            if (buffer[i] != 0)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+        => buffer.AsSpan(0, length).IndexOfAnyExcept((byte)0) < 0;
 }

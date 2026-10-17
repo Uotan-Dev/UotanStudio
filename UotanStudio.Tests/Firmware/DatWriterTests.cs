@@ -90,6 +90,42 @@ public class DatWriterTests
         Assert.Equal(expected, File.ReadAllBytes(datPath));
     }
 
+    [Fact]
+    public void Write_PartialFinalBlockOfZeros_EmitsZeroForTheUnreadTail()
+    {
+        var image = new byte[DatWriter.BlockSize + 1000];
+        Array.Copy(BuildPattern(DatWriter.BlockSize, 3), image, DatWriter.BlockSize);
+        using var temp = new TempDirectory();
+        var imagePath = temp.WriteBytes("input.img", image);
+        var datPath = Path.Combine(temp.Path, "output.new.dat");
+        var listPath = Path.Combine(temp.Path, "output.transfer.list");
+
+        DatWriter.Write(imagePath, datPath, listPath);
+
+        Assert.Equal(new[] { "4", "2", "0", "0", "new 2,0,1", "zero 2,1,2" }, File.ReadAllLines(listPath));
+        Assert.Equal(image[..DatWriter.BlockSize], File.ReadAllBytes(datPath));
+    }
+
+    [Fact]
+    public void Write_PartialFinalBlockWithLastByteSet_EmitsBothBlocks()
+    {
+        var image = new byte[DatWriter.BlockSize + 1000];
+        Array.Copy(BuildPattern(DatWriter.BlockSize, 3), image, DatWriter.BlockSize);
+        image[^1] = 0x01;
+        using var temp = new TempDirectory();
+        var imagePath = temp.WriteBytes("input.img", image);
+        var datPath = Path.Combine(temp.Path, "output.new.dat");
+        var listPath = Path.Combine(temp.Path, "output.transfer.list");
+
+        DatWriter.Write(imagePath, datPath, listPath);
+
+        var lines = File.ReadAllLines(listPath);
+        Assert.Equal("new 2,0,2", lines[4]);
+        var expected = new byte[2 * DatWriter.BlockSize];
+        Array.Copy(image, expected, image.Length);
+        Assert.Equal(expected, File.ReadAllBytes(datPath));
+    }
+
     private static byte[] BuildPattern(int size, int factor)
     {
         var data = new byte[size];

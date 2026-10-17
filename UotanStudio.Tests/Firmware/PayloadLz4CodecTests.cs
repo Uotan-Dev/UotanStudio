@@ -51,6 +51,26 @@ public sealed class PayloadLz4CodecTests
         Assert.Throws<ArgumentException>(() => Lz4DestinationCodec.Encode(buffer, buffer.AsSpan(10), 1, 0, out _));
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void DestinationSize_RepeatedCallsWithDirtyCache_ProduceIdenticalBlocks(int algorithm)
+    {
+        var source = CreateSource(65536, 3);
+        var first = new byte[source.Length];
+        var firstLength = Lz4DestinationCodec.Encode(source, first, algorithm, 9, out _);
+
+        var noise = CreateSource(4096, 2);
+        var noiseTarget = new byte[noise.Length];
+        Assert.True(Lz4DestinationCodec.Encode(noise, noiseTarget, algorithm, 1, out _) > 0);
+
+        var second = new byte[source.Length];
+        var secondLength = Lz4DestinationCodec.Encode(source, second, algorithm, 9, out _);
+
+        Assert.Equal(firstLength, secondLength);
+        Assert.Equal(first.AsSpan(0, firstLength).ToArray(), second.AsSpan(0, secondLength).ToArray());
+    }
+
     private static byte[] CreateSource(int size, int pattern)
     {
         var source = new byte[size];

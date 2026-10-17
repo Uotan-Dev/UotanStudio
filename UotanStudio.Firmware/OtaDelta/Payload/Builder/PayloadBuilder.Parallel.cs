@@ -18,9 +18,11 @@ public sealed partial class PayloadBuilder
     /// </summary>
     /// <param name="workers">
     /// Number of compression slots used per partition batch; the setting is stored until the build reads it and
-    /// applies to every codec, including <c>CompressionType.None</c>, whose slots only copy their chunks.
+    /// applies to every codec, including <c>CompressionType.None</c>, whose slots store their chunks verbatim.
+    /// The effective count is further capped so two resident batches fit the worker memory budget.
     /// <para>每个分区批次使用的压缩槽数量；该设置被保存直至构建时读取，并对所有编解码器生效，包含
-    /// <c>CompressionType.None</c>，其槽位只是复制各自的块。</para>
+    /// <c>CompressionType.None</c>，其槽位原样存储各自的块。实际数量还会被进一步限制，使两批常驻缓冲落在
+    /// 工作者内存预算内。</para>
     /// </param>
     /// <returns>
     /// This builder, so calls can be chained. <para>本构建器，便于链式调用。</para>
@@ -47,9 +49,12 @@ public sealed partial class PayloadBuilder
     /// <remarks>
     /// The emitted operations are byte-for-byte the same as a strictly sequential build, and they are appended in
     /// ascending block order: compression runs on every batch in parallel, but batches are still consumed in the
-    /// order they were read. The caller keeps ownership of the input stream and the data blob.
+    /// order they were read. The caller keeps ownership of the input stream and the data blob. The worker budget
+    /// counts both resident batches of slots, each <c>chunkSize * 3 + 64 KiB</c> bytes, because the reader fills the
+    /// second batch while the consumer compresses the first.
     /// <para>写出的操作与严格串行构建逐字节一致，并按块升序追加：每批压缩并行进行，但各批仍按读取顺序被消费。
-    /// 调用方保有输入流与数据块的属主。</para>
+    /// 调用方保有输入流与数据块的属主。工作者预算按两批常驻槽位计算，每批 <c>chunkSize * 3 + 64 KiB</c> 字节，
+    /// 因为读取方在消费方压缩第一批时正在填充第二批。</para>
     /// </remarks>
     private ulong WritePartitionOperations(Stream input, long? declaredLength, FileStream data,
         PartitionBuildInfo partition, PartitionUpdate update, DigestAccumulator partitionHash,
@@ -59,22 +64,22 @@ public sealed partial class PayloadBuilder
         if (declaredLength is { } size)
             workers = (int)Math.Min(workers, Math.Max(1, size / chunkSize + (size % chunkSize == 0 ? 0 : 1)));
         workers = Core.FirmwareParallelism.BudgetedWorkers(
-            bytesPerWorker: checked(chunkSize * 3L + 65536),
+            bytesPerWorker: checked(2 * (chunkSize * 3L + 65536)),
             budgetBytes: Core.FirmwareParallelism.WorkerMemoryBudgetBytes,
             requestedWorkers: workers);
 
         var pipeline = new PartitionPipeline(chunkSize, workers, BlockSize);
         try
         {
-            pipeline.Prefetch(input, declaredLength, cancellationToken);
-            var position = pipeline.Read(input, declaredLength, ref operationCount, partitionHash, cancellationToken);
+            pipeline.Prefetch(input, declaredLength, partitionHash, cancellationToken);
+            var position = pipeline.Read(ref operationCount, cancellationToken);
             while (pipeline.HasBatch)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                pipeline.Prefetch(input, declaredLength, cancellationToken);
+                pipeline.Prefetch(input, declaredLength, partitionHash, cancellationToken);
                 pipeline.CompressBatch(partition.CompressionType, partition.ZstdDictionary, cancellationToken);
                 pipeline.EmitBatch(data, partition.OperationType, update, BlockSize);
-                position = pipeline.Read(input, declaredLength, ref operationCount, partitionHash, cancellationToken);
+                position = pipeline.Read(ref operationCount, cancellationToken);
             }
             return position;
         }
@@ -93,11 +98,16 @@ public sealed partial class PayloadBuilder
     /// </summary>
     /// <remarks>
     /// Two batches of slots are allocated and swapped, so the pipeline costs one extra batch of buffers on top of
-    /// the compression buffers the build already needed. Reading happens on a task the pipeline owns; the input
-    /// digest is folded on that reader, and compression runs on the consumer thread's parallel loop, which keeps
-    /// every emitted chunk in the exact order the previous barrier-based loop produced.
+    /// the compression buffers the build already needed. Reading happens on a task the pipeline owns, and each
+    /// filled chunk is folded into the input digest there, so the serial digest cost overlaps compression; the
+    /// completed read task orders those appends before the consumer observes the batch. Only the consumer enforces
+    /// the 65536-operation limit, because it is the side that knows how many operations earlier partitions emitted.
+    /// Compression runs on the consumer thread's parallel loop, which keeps every emitted chunk in the exact order
+    /// the previous barrier-based loop produced.
     /// <para>分配并轮换两批槽位，因此流水线在构建本就需要压缩缓冲之上多付出一批缓冲。读取发生在流水线自有的任务上，
-    /// 输入摘要由该读取方折算；压缩运行在消费线程的并行循环中，从而让每个写出的块与原先基于屏障的循环顺序完全一致。</para>
+    /// 每个填充的块都在该任务内并入输入摘要，使串行的摘要代价与压缩重叠；读取任务完成所建立的内存序保证这些追加
+    /// 在消费方观察该批之前已经生效。只有消费方执行 65536 条操作上限检查，因为只有它知道此前分区已输出多少条操作。
+    /// 压缩运行在消费线程的并行循环中，从而让每个写出的块与原先基于屏障的循环顺序完全一致。</para>
     /// </remarks>
     private sealed class PartitionPipeline : IDisposable
     {
@@ -131,18 +141,19 @@ public sealed partial class PayloadBuilder
         /// <para>消费方当前持有的批次中已填充槽位的数量。</para></summary>
         private int _count;
 
-        internal ulong Read(Stream input, long? declaredLength, ref int operationCount, DigestAccumulator partitionHash,
-            CancellationToken cancellationToken)
+        /// <summary>
+        /// Retires the in-flight read and takes ownership of the batch it filled, enforcing the operation limit on
+        /// the consumer because only the consumer knows how many operations earlier partitions emitted.
+        /// <para>结束在途读取并接管它填充的批次，同时在消费方执行操作上限检查，因为只有消费方知道此前分区已输出多少条操作。</para>
+        /// </summary>
+        internal ulong Read(ref int operationCount, CancellationToken cancellationToken)
         {
             var completed = RetirePending(cancellationToken);
             _currentBatch = _pendingBatch;
-            var slots = _batches[_currentBatch];
             for (var i = 0; i < completed.Count; i++)
             {
-                var slot = slots[i];
                 if (++operationCount > 65536)
                     throw new PayloadGenerationException("Payload exceeds the supported 65536 operations.");
-                partitionHash.Append(slot.Input.AsSpan(0, slot.InputLength));
             }
 
             _count = completed.Count;
@@ -156,7 +167,8 @@ public sealed partial class PayloadBuilder
         /// compression of the batch handed over by <see cref="Read"/>.
         /// <para>把下一批读入消费方刚刚腾空的缓冲对，使读取与 <see cref="Read"/> 交付那一批的压缩重叠。</para>
         /// </summary>
-        internal void Prefetch(Stream input, long? declaredLength, CancellationToken cancellationToken)
+        internal void Prefetch(Stream input, long? declaredLength, DigestAccumulator partitionHash,
+            CancellationToken cancellationToken)
         {
             if (_exhausted)
             {
@@ -166,7 +178,9 @@ public sealed partial class PayloadBuilder
             _pendingBatch = _currentBatch ^ 1;
             var target = _batches[_pendingBatch];
             var start = _position;
-            _pending = Task.Run(() => ReadBatch(input, declaredLength, target, start, cancellationToken), cancellationToken);
+            _pending = Task.Run(
+                () => ReadBatch(input, declaredLength, target, start, partitionHash, cancellationToken),
+                cancellationToken);
         }
 
         /// <summary>The result of one batch read: the position reached and whether the stream ended inside it.
@@ -193,8 +207,14 @@ public sealed partial class PayloadBuilder
             }
         }
 
+        /// <summary>
+        /// Reads one batch and folds every filled chunk into the input digest on this task, so the serial digest
+        /// cost overlaps the consumer's compression instead of running between compression batches.
+        /// <para>读取一批并把每个填充的块在本任务内并入输入摘要，使串行的摘要代价与消费方的压缩重叠，
+        /// 而不是在压缩批次之间执行。</para>
+        /// </summary>
         private ReadOutcome ReadBatch(Stream input, long? declaredLength, CompressionSlot[] slots, ulong start,
-            CancellationToken cancellationToken)
+            DigestAccumulator partitionHash, CancellationToken cancellationToken)
         {
             var count = 0;
             var position = start;
@@ -216,6 +236,7 @@ public sealed partial class PayloadBuilder
                 }
                 if (slot.InputLength % _blockSize != 0)
                     throw new PayloadGenerationException("Partition size must be block-aligned.");
+                partitionHash.Append(slot.Input.AsSpan(0, slot.InputLength));
                 slot.StartBlock = position / _blockSize;
                 position = checked(position + (ulong)slot.InputLength);
             }
@@ -248,8 +269,10 @@ public sealed partial class PayloadBuilder
         }
 
         /// <summary>
-        /// Appends the compressed batch to the data blob in block order and records one operation per slot.
-        /// <para>按块顺序把已压缩批次追加到数据块，并为每个槽位记录一条操作。</para>
+        /// Appends each slot's stored bytes to the data blob in block order and records one operation per slot.
+        /// Stored bytes are the compressed output, or the input range itself when the codec keeps blocks verbatim.
+        /// <para>按块顺序把每个槽位的已存储字节追加到数据块，并为每个槽位记录一条操作。已存储字节是压缩输出，
+        /// 当编解码器原样保存块时则是输入区间本身。</para>
         /// </summary>
         internal void EmitBatch(FileStream data, InstallOperation.Types.Type operationType, PartitionUpdate update, uint blockSize)
         {
@@ -266,7 +289,10 @@ public sealed partial class PayloadBuilder
                     DstLength = (ulong)slot.InputLength
                 };
                 operation.DstExtents.Add(new Extent { StartBlock = slot.StartBlock, NumBlocks = (ulong)slot.InputLength / blockSize });
-                data.Write(slot.Output.AsSpan(0, slot.OutputLength));
+                var stored = slot.StoresInput
+                    ? slot.Input.AsSpan(0, slot.OutputLength)
+                    : slot.Output.AsSpan(0, slot.OutputLength);
+                data.Write(stored);
                 update.Operations.Add(operation);
             }
 
@@ -305,6 +331,15 @@ public sealed partial class PayloadBuilder
         internal int OutputLength;
         internal ulong StartBlock;
         internal byte[] Hash = [];
+
+        /// <summary>
+        /// Whether <see cref="OutputLength"/> bytes of <see cref="Input"/> are the stored operation data, because the
+        /// codec keeps blocks verbatim; <see cref="PartitionPipeline.EmitBatch"/> then writes the input range instead
+        /// of the output.
+        /// <para>表示 <see cref="Input"/> 的前 <see cref="OutputLength"/> 字节就是已存储的操作数据，因为编解码器原样
+        /// 保存块；此时 <see cref="PartitionPipeline.EmitBatch"/> 写出输入区间而不是输出区间。</para>
+        /// </summary>
+        internal bool StoresInput;
         private readonly DigestAccumulator _frameHash = Sha256.CreateAccumulator();
         private Compressor? _zstd;
         private byte[]? _zstdDictionary;
@@ -321,10 +356,14 @@ public sealed partial class PayloadBuilder
         /// Compresses the filled input range into <see cref="Output"/>, hashing the produced bytes on the
         /// way out so the operation digest needs no second pass over the buffer.
         /// Zstandard frames are produced straight into <see cref="Output"/> with the slot's own context and hashed
-        /// from there; every other codec keeps the hashing and counting stream chain.
+        /// from there; every other compressed codec keeps the hashing and counting stream chain.
+        /// <see cref="CompressionType.None"/> stores the input bytes themselves: the slot records
+        /// <see cref="StoresInput"/> and digests the input range in place, so neither a copy nor a duplicate output
+        /// pass is paid.
         /// <para>把已填充的输入区间压缩进 <see cref="Output"/>，并在写出链上同步计算输出摘要，
         /// 免去对缓冲的第二遍哈希。Zstd 帧由本槽位的上下文直接写入 <see cref="Output"/> 并就地哈希；
-        /// 其他编解码器保持哈希与计数流链路。</para>
+        /// 其他压缩编解码器保持哈希与计数流链路。<see cref="CompressionType.None"/> 直接存储输入字节本身：
+        /// 槽位记录 <see cref="StoresInput"/> 并就地计算输入区间的摘要，因此既不需要复制，也不需要重复的输出哈希。</para>
         /// </summary>
         /// <param name="compression">Codec selected by the partition. <para>分区选用的编解码器。</para></param>
         /// <param name="dictionary">
@@ -338,6 +377,15 @@ public sealed partial class PayloadBuilder
         internal void Compress(CompressionType compression, byte[]? dictionary, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (compression == CompressionType.None)
+            {
+                OutputLength = InputLength;
+                StoresInput = true;
+                Hash = Sha256.ComputeHash(Input.AsSpan(0, InputLength));
+                return;
+            }
+
+            StoresInput = false;
             if (compression == CompressionType.Zstd)
             {
                 CompressZstd(dictionary);
